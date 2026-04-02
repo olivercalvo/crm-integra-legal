@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User as UserIcon, Menu } from "lucide-react";
+import { ConnectivityIndicator } from "@/components/layout/connectivity-indicator";
 
 interface HeaderProps {
   userName: string;
@@ -55,6 +56,11 @@ export function Header({ userName, userRole, onToggleSidebar }: HeaderProps) {
         <h1 className="font-serif text-xl font-bold text-integra-white">
           Integra <span className="text-integra-gold">Legal</span>
         </h1>
+      </div>
+
+      {/* Centre: connectivity status */}
+      <div className="hidden sm:flex">
+        <ConnectivityIndicator />
       </div>
 
       {/* Right: user menu */}

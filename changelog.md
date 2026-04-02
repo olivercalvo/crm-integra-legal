@@ -1,5 +1,42 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.4.0] — 2026-04-02
+### Admin Panel (Fase 7)
+- CRUD Catálogos: componente CatalogManager reusable para clasificaciones, estados, instituciones, equipo
+- Inline edit, toggle active/inactive, bloqueo de eliminación si hay registros vinculados
+- Gestión de usuarios: crear via Supabase Auth admin API, asignar rol, activar/desactivar
+- Página de configuración con 4 secciones de catálogos
+- 5 API routes admin (/api/admin/catalogs, /api/admin/users)
+
+### Offline-First (Fase 9)
+- Cola persistente en IndexedDB (idb v8) — operaciones FIFO, persisten al cerrar browser
+- SyncService: procesamiento por lotes (max 10), retry con backoff exponencial (1s→30s)
+- Resolución de conflictos: last-write-wins por timestamp
+- ConnectivityService: navigator.onLine + ping /api/health cada 30s
+- Hook useOffline(): isOnline, isSyncing, pendingCount, queueOperation, syncNow
+- Indicador visual en header: verde (en línea) / rojo (sin conexión) / ámbar (sincronizando)
+- Garantía: CERO pérdida de datos — nunca elimina de cola hasta confirmación del servidor
+
+### Audit Log & Exportación (Fase 10)
+- Vista de auditoría con filtros: entidad, usuario, acción, rango de fechas
+- Paginación (20/pág), badges de acción con colores, layout responsive
+- Infraestructura de exportación: exportToCSV, exportToExcel, ExportButton reusable
+- API route /api/admin/audit con joins a users para nombres
+
+### Vistas Asistente (Fase completa)
+- Mis Casos: listado de casos asignados con búsqueda, detalle completo
+- Mis Tareas: todas las tareas del asistente, agrupadas pendientes/cumplidas, alerta overdue
+- Mis Gastos: historial de gastos, resumen mensual, registrar gasto inline
+- Detalle de caso: secciones stacked (mobile-first) — estado, info, gastos, tareas, comentarios
+- Botón MarkTaskButton reutilizable con spinner
+
+### Técnico
+- 34 rutas de página + 17 API routes
+- Build exitoso, 0 errores TypeScript
+- Fix: ENTITY_OPTIONS movido a shared constants para evitar server/client boundary error
+
+---
+
 ## [0.3.0] — 2026-04-02
 ### CRUD Completo (Fase 3-5)
 

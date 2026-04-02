@@ -61,11 +61,11 @@
 ## FASE 7: Catálogos & Admin
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 7.1 | CRUD Clasificaciones | F-010 | ⬜ Pendiente | Con prefijo y descripción |
-| 7.2 | CRUD Estados | F-010 | ⬜ Pendiente | |
-| 7.3 | CRUD Instituciones | F-010 | ⬜ Pendiente | |
-| 7.4 | CRUD Equipo/Responsables | F-010 | ⬜ Pendiente | |
-| 7.5 | Gestión de usuarios (admin) | F-012 | ⬜ Pendiente | Crear usuario, asignar rol |
+| 7.1 | CRUD Clasificaciones | F-010 | ✅ Completo | Inline edit, toggle active, bloqueo si referenciado |
+| 7.2 | CRUD Estados | F-010 | ✅ Completo | Mismo componente reusable CatalogManager |
+| 7.3 | CRUD Instituciones | F-010 | ✅ Completo | Mismo componente reusable |
+| 7.4 | CRUD Equipo/Responsables | F-010 | ✅ Completo | Vinculación con users |
+| 7.5 | Gestión de usuarios (admin) | F-012 | ✅ Completo | Crear via Supabase Auth admin, asignar rol, activar/desactivar |
 
 ## FASE 8: Importación & Migración
 | # | Tarea | Feature | Estado | Notas |
@@ -77,17 +77,17 @@
 ## FASE 9: Offline-First
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 9.1 | Cola persistente en IndexedDB | F-013 | ⬜ Pendiente | Cero pérdida de datos |
-| 9.2 | Detector de conectividad | F-013 | ⬜ Pendiente | |
-| 9.3 | Sync automática con retry y resolución de conflictos | F-013 | ⬜ Pendiente | Last-write-wins |
-| 9.4 | Indicador visual online/offline/sincronizando | F-013 | ⬜ Pendiente | |
+| 9.1 | Cola persistente en IndexedDB | F-013 | ✅ Completo | idb v8, FIFO, persiste al cerrar browser |
+| 9.2 | Detector de conectividad | F-013 | ✅ Completo | navigator.onLine + ping /api/health cada 30s |
+| 9.3 | Sync automática con retry y resolución de conflictos | F-013 | ✅ Completo | Last-write-wins, backoff exponencial, max 5 retries |
+| 9.4 | Indicador visual online/offline/sincronizando | F-013 | ✅ Completo | 3 estados en header, badge pending count |
 
 ## FASE 10: Audit Log & Exportación
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 10.1 | Triggers de audit log en todas las tablas | F-011 | ⬜ Pendiente | Automático vía DB triggers |
-| 10.2 | Vista de consulta de audit log (admin) | F-011 | ⬜ Pendiente | Filtros por entidad, usuario, fecha |
-| 10.3 | Infraestructura de exportación PDF/Excel | F-014 | ⬜ Pendiente | Reportes específicos TBD |
+| 10.1 | Triggers de audit log en todas las tablas | F-011 | 🔶 Parcial | Audit log via API routes (app-level), DB triggers pendiente |
+| 10.2 | Vista de consulta de audit log (admin) | F-011 | ✅ Completo | Filtros por entidad/usuario/acción/fecha, paginación, export CSV |
+| 10.3 | Infraestructura de exportación PDF/Excel | F-014 | ✅ Completo | exportToCSV, exportToExcel, ExportButton reusable |
 
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |

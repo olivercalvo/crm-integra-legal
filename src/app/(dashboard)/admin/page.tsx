@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, FolderOpen, ListTodo, DollarSign, Settings, FileText } from "lucide-react";
@@ -63,33 +64,39 @@ export default async function AdminDashboard() {
 
       {/* Quick access */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="cursor-pointer transition-shadow hover:shadow-md">
-          <CardHeader className="flex flex-row items-center gap-3 pb-2">
-            <Settings size={20} className="text-integra-gold" />
-            <CardTitle className="text-base">Configuración</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">Catálogos, usuarios y ajustes del sistema</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer transition-shadow hover:shadow-md">
-          <CardHeader className="flex flex-row items-center gap-3 pb-2">
-            <FileText size={20} className="text-integra-gold" />
-            <CardTitle className="text-base">Auditoría</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">Registro de todas las operaciones del sistema</p>
-          </CardContent>
-        </Card>
-        <Card className="cursor-pointer transition-shadow hover:shadow-md">
-          <CardHeader className="flex flex-row items-center gap-3 pb-2">
-            <DollarSign size={20} className="text-integra-gold" />
-            <CardTitle className="text-base">Gastos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-500">Control financiero de expedientes</p>
-          </CardContent>
-        </Card>
+        <Link href="/admin/configuracion">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md h-full">
+            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+              <Settings size={20} className="text-integra-gold" />
+              <CardTitle className="text-base">Configuración</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">Catálogos, estados, instituciones y equipo</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/admin/usuarios">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md h-full">
+            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+              <Users size={20} className="text-integra-gold" />
+              <CardTitle className="text-base">Usuarios</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">Gestión de accesos y roles del sistema</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/admin/auditoria">
+          <Card className="cursor-pointer transition-shadow hover:shadow-md h-full">
+            <CardHeader className="flex flex-row items-center gap-3 pb-2">
+              <FileText size={20} className="text-integra-gold" />
+              <CardTitle className="text-base">Auditoría</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-500">Registro de todas las operaciones del sistema</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

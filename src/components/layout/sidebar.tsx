@@ -83,6 +83,12 @@ const navItems: NavItem[] = [
     roles: ["admin", "abogada"],
   },
   {
+    label: "Usuarios",
+    href: "/admin/usuarios",
+    icon: <Users size={20} />,
+    roles: ["admin"],
+  },
+  {
     label: "Auditoría",
     href: "/admin/auditoria",
     icon: <FileText size={20} />,

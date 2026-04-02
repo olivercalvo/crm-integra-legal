@@ -3,7 +3,7 @@
 ## FASE 1: Setup & Infraestructura
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 1.1 | Crear repo con `gh repo create` | — | ⬜ Pendiente | Branch develop como default — git init local hecho |
+| 1.1 | Crear repo con `gh repo create` | — | ✅ Completo | github.com/olivercalvo/crm-integra-legal — branch develop + main |
 | 1.2 | Inicializar Next.js 14 + TypeScript + Tailwind + shadcn/ui | — | ✅ Completo | App Router, Next 14.2.35 |
 | 1.3 | Configurar Supabase proyecto + env vars | — | 🔶 Parcial | Placeholders en .env.local — FALTA: credenciales reales del cliente |
 | 1.4 | Crear schema completo de DB (todas las tablas) | F-001 a F-012 | ✅ Completo | 14 tablas, migraciones SQL listas |
@@ -55,8 +55,8 @@
 ## FASE 6: Dashboards
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 6.1 | Dashboard Abogada: KPIs + expedientes recientes + gastos en rojo | F-006 | ⬜ Pendiente | |
-| 6.2 | Dashboard Asistente: casos asignados + tareas pendientes | F-007 | ⬜ Pendiente | |
+| 6.1 | Dashboard Abogada: KPIs + expedientes recientes + gastos en rojo | F-006 | ✅ Completo | 4 KPIs, expedientes recientes, saldo en rojo |
+| 6.2 | Dashboard Asistente: casos asignados + tareas pendientes | F-007 | ✅ Completo | 3 KPIs, lista de tareas con deadline |
 
 ## FASE 7: Catálogos & Admin
 | # | Tarea | Feature | Estado | Notas |

@@ -3,7 +3,7 @@
 ## 1. PROYECTO
 **Nombre:** CRM Integra Legal
 **Descripción:** CRM web multi-tenant, mobile-first, para bufetes de abogados. MVP para Integra Legal (Panamá). Gestión de clientes, expedientes, gastos, tareas y documentos con acceso por roles y soporte offline-first.
-**Repositorio:** (pendiente — crear con `gh repo create`)
+**Repositorio:** https://github.com/olivercalvo/crm-integra-legal
 **Hosting:** Vercel (producción)
 **Fecha inicio:** 2026-04-02
 

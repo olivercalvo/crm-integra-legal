@@ -1,5 +1,24 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.2.0] — 2026-04-02
+### Git & GitHub
+- Repositorio creado: github.com/olivercalvo/crm-integra-legal (público)
+- Branches: develop (trabajo) + main (producción)
+- Git configurado con usuario olivercalvo
+
+### Correcciones y mejoras
+- Migraciones SQL renombradas con timestamp correcto (20260402000001, 20260402000002)
+- Custom JWT claims hook para inyectar tenant_id y user_role en tokens
+- Triggers de updated_at en users, clients, cases
+- Dashboard Abogada: 4 KPIs (clientes, expedientes, tareas, saldos en rojo), expedientes recientes
+- Dashboard Asistente: 3 KPIs (casos, tareas pendientes, cumplidas), lista de tareas con deadline
+- Dashboard Admin: 3 KPIs, acceso rápido a configuración/auditoría
+- Limpieza de archivos conflicto de OneDrive
+- Fix tipo TypeScript en dashboard asistente
+- .claude/ añadido a .gitignore
+
+---
+
 ## [0.1.0] — 2026-04-02
 ### Setup & Infraestructura (Fase 1 completa)
 - Inicializado Next.js 14.2.35 con App Router, TypeScript, Tailwind CSS, ESLint

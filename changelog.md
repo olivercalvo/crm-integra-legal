@@ -1,5 +1,59 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.3.0] — 2026-04-02
+### CRUD Completo (Fase 3-5)
+
+#### Clientes (F-001)
+- Listado con búsqueda (nombre, RUC, N° cliente) y paginación (10/pág)
+- Cards responsive en mobile, tabla en desktop
+- Formulario wizard 3 pasos: datos principales → contacto → observaciones
+- Auto-generación de client_number (CLI-001, CLI-002, etc.)
+- Detalle con info card + expedientes vinculados + documentos
+- Desactivar cliente (soft delete) con confirmación 2 pasos + audit log
+- API: POST/PATCH/DELETE en /api/clients
+
+#### Expedientes (F-002)
+- Listado con 4 filtros (estado, clasificación, responsable, institución) + búsqueda
+- Status badges con colores: Activo=verde, En trámite=ámbar, Cerrado=gris
+- Formulario wizard 3 pasos: cliente+descripción → institución+responsable → observaciones
+- Auto-generación de case_code (CORP-001, MIG-002, etc.)
+- Detalle con 5 tabs: Información, Gastos, Tareas, Comentarios, Documentos
+- Cambio de estado inline con audit log automático
+- API: POST/PATCH en /api/cases
+
+#### Gastos (F-003)
+- Registrar pagos del cliente y gastos ejecutados
+- Balance en tiempo real: Total Pagado vs Total Gastos
+- Saldo en contra (gastos > pagos) se muestra en ROJO
+- Formularios inline embebidos en tab Gastos del expediente
+- API: POST /api/expenses, POST /api/payments
+
+#### Tareas (F-004)
+- Crear tarea con descripción, deadline, asignación a asistente
+- Lista separada: pendientes vs cumplidas
+- Detección de tareas vencidas (deadline pasado) con alerta visual roja
+- Marcar como cumplida con auto-set de completed_at
+- API: POST /api/tasks, PATCH /api/tasks/[id]
+
+#### Comentarios (F-005)
+- Hilo cronológico inmutable (no edit, no delete)
+- Avatar con iniciales del usuario, nombre, timestamp
+- Formulario de agregar comentario al fondo
+- API: POST /api/comments
+
+### Migración SQL corregida
+- Regenerada sin tocar schema auth (permission denied fix)
+- users.id sin FK a auth.users — relación a nivel de app
+- Helper functions en public schema: get_tenant_id(), get_user_role()
+- Todo en un solo archivo: migration_completa.sql
+
+### Técnico
+- .env.local configurado con credenciales reales de Supabase
+- Build exitoso: 22 rutas, 12 API routes, 0 errores TypeScript
+- 30+ archivos nuevos (pages, components, API routes)
+
+---
+
 ## [0.2.0] — 2026-04-02
 ### Git & GitHub
 - Repositorio creado: github.com/olivercalvo/crm-integra-legal (público)

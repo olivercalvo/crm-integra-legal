@@ -5,7 +5,7 @@
 |---|-------|---------|--------|-------|
 | 1.1 | Crear repo con `gh repo create` | — | ✅ Completo | github.com/olivercalvo/crm-integra-legal — branch develop + main |
 | 1.2 | Inicializar Next.js 14 + TypeScript + Tailwind + shadcn/ui | — | ✅ Completo | App Router, Next 14.2.35 |
-| 1.3 | Configurar Supabase proyecto + env vars | — | 🔶 Parcial | Placeholders en .env.local — FALTA: credenciales reales del cliente |
+| 1.3 | Configurar Supabase proyecto + env vars | — | ✅ Completo | .env.local con credenciales reales del cliente |
 | 1.4 | Crear schema completo de DB (todas las tablas) | F-001 a F-012 | ✅ Completo | 14 tablas, migraciones SQL listas |
 | 1.5 | Aplicar RLS policies (tenant_id) en todas las tablas | Multi-tenant | ✅ Completo | Policies en todas las tablas + helper functions |
 | 1.6 | Configurar Supabase Auth + middleware | F-012 | ✅ Completo | Email+password, 8h timeout, role-based |
@@ -26,31 +26,31 @@
 ## FASE 3: Gestión de Clientes
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 3.1 | Listado de clientes con búsqueda y paginación | F-001 | ⬜ Pendiente | Buscar por nombre, RUC, N° |
-| 3.2 | Formulario crear/editar cliente (wizard) | F-001 | ⬜ Pendiente | Max 5 campos/pantalla |
-| 3.3 | Detalle de cliente con expedientes vinculados | F-001 | ⬜ Pendiente | |
-| 3.4 | Desactivar cliente (soft delete) | F-001 | ⬜ Pendiente | |
-| 3.5 | Documentos adjuntos en cliente | F-008 | ⬜ Pendiente | Upload a Supabase Storage |
+| 3.1 | Listado de clientes con búsqueda y paginación | F-001 | ✅ Completo | Búsqueda por nombre/RUC/N°, paginación 10/pág, cards mobile + tabla desktop |
+| 3.2 | Formulario crear/editar cliente (wizard) | F-001 | ✅ Completo | 3 pasos, auto-genera CLI-NNN, validación |
+| 3.3 | Detalle de cliente con expedientes vinculados | F-001 | ✅ Completo | Info card + expedientes vinculados + status badges |
+| 3.4 | Desactivar cliente (soft delete) | F-001 | ✅ Completo | Confirmación 2 pasos, audit log |
+| 3.5 | Documentos adjuntos en cliente | F-008 | 🔶 Parcial | Sección visible, upload pendiente (necesita Storage config) |
 
 ## FASE 4: Gestión de Expedientes
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 4.1 | Listado de expedientes con filtros y paginación | F-002 | ⬜ Pendiente | Filtrar por estado, clasificación, responsable, cliente, institución |
-| 4.2 | Formulario crear/editar expediente (wizard) | F-002 | ⬜ Pendiente | Código auto con prefijo |
-| 4.3 | Detalle de expediente (tabs: info, gastos, tareas, comentarios, docs) | F-002 | ⬜ Pendiente | |
-| 4.4 | Cambio de estado con historial | F-002 | ⬜ Pendiente | Log automático |
-| 4.5 | Documentos adjuntos en expediente | F-008 | ⬜ Pendiente | |
+| 4.1 | Listado de expedientes con filtros y paginación | F-002 | ✅ Completo | 4 filtros + búsqueda, paginación, status badges con colores |
+| 4.2 | Formulario crear/editar expediente (wizard) | F-002 | ✅ Completo | 3 pasos, auto-genera código (CORP-001), selects para catálogos |
+| 4.3 | Detalle de expediente (tabs: info, gastos, tareas, comentarios, docs) | F-002 | ✅ Completo | 5 tabs completos con datos en tiempo real |
+| 4.4 | Cambio de estado con historial | F-002 | ✅ Completo | Inline status changer + audit log |
+| 4.5 | Documentos adjuntos en expediente | F-008 | 🔶 Parcial | Tab visible, upload pendiente (necesita Storage config) |
 
 ## FASE 5: Gastos, Tareas, Comentarios
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 5.1 | Registrar pago del cliente | F-003 | ⬜ Pendiente | |
-| 5.2 | Registrar gasto ejecutado | F-003 | ⬜ Pendiente | |
-| 5.3 | Balance en tiempo real (pagado vs ejecutado) | F-003 | ⬜ Pendiente | Rojo si saldo en contra |
-| 5.4 | Crear y asignar tarea a asistente | F-004 | ⬜ Pendiente | |
-| 5.5 | Vista de tareas del asistente | F-004 | ⬜ Pendiente | |
-| 5.6 | Marcar tarea como cumplida | F-004 | ⬜ Pendiente | |
-| 5.7 | Comentarios / Bitácora (crear, listar) | F-005 | ⬜ Pendiente | No editar, no eliminar |
+| 5.1 | Registrar pago del cliente | F-003 | ✅ Completo | Formulario inline en tab Gastos |
+| 5.2 | Registrar gasto ejecutado | F-003 | ✅ Completo | Formulario inline en tab Gastos |
+| 5.3 | Balance en tiempo real (pagado vs ejecutado) | F-003 | ✅ Completo | 3 cards resumen, ROJO si saldo en contra |
+| 5.4 | Crear y asignar tarea a asistente | F-004 | ✅ Completo | Select de asistentes, deadline opcional |
+| 5.5 | Vista de tareas del asistente | F-004 | ✅ Completo | Separadas pendientes/cumplidas, alerta overdue |
+| 5.6 | Marcar tarea como cumplida | F-004 | ✅ Completo | Botón con confirmación, auto-sets completed_at |
+| 5.7 | Comentarios / Bitácora (crear, listar) | F-005 | ✅ Completo | Hilo cronológico, inmutable, avatar con iniciales |
 
 ## FASE 6: Dashboards
 | # | Tarea | Feature | Estado | Notas |

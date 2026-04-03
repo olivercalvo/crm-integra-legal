@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const ALLOWED_TABLES = [
   "cat_classifications",
@@ -23,7 +24,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from(table)
       .select("*")
       .eq("tenant_id", profile.tenant_id)
@@ -74,7 +77,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -125,7 +130,7 @@ export async function POST(request: NextRequest) {
       payload.role = body.role?.trim() || null;
     }
 
-    const { data: newItem, error } = await supabase
+    const { data: newItem, error } = await admin
       .from(table)
       .insert(payload)
       .select()
@@ -136,7 +141,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: table,

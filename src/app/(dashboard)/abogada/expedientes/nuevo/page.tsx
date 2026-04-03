@@ -1,37 +1,42 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { CaseForm } from "@/components/cases/case-form";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function NuevoExpedientePage() {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
   const [clientsRes, classificationsRes, institutionsRes, teamRes, statusesRes] =
     await Promise.all([
-      supabase
+      db
         .from("clients")
         .select("id, name, client_number")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_classifications")
         .select("id, name, prefix")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_institutions")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_team")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_statuses")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("created_at", { ascending: true }),
     ]);
@@ -47,11 +52,11 @@ export default async function NuevoExpedientePage() {
           </Link>
         </Button>
         <div>
-          <h1 className="font-serif text-2xl font-bold text-integra-navy">
-            Nuevo Expediente
+          <h1 className="text-2xl font-bold text-integra-navy">
+            Nuevo Caso
           </h1>
           <p className="text-sm text-gray-500">
-            Complete los datos para registrar el expediente
+            Complete los datos para registrar el caso
           </p>
         </div>
       </div>

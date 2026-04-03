@@ -124,17 +124,27 @@
 
 ---
 
-## SOP-005: Carga Masiva (Importación en Lote)
-1. Usuario sube archivo Excel/CSV desde la UI
-2. Parsear archivo y mapear columnas al schema
-3. Ejecutar validaciones (SOP-004 paso 3)
-4. Mostrar pantalla de resumen:
-   - Registros válidos listos para importar
-   - Registros con errores (detalle del error por fila)
-   - Registros duplicados detectados
-5. Usuario confirma → ejecutar importación
-6. Resultado: resumen de importados vs. rechazados
-7. Opción de descargar plantilla vacía con formato correcto
+## SOP-005: Carga Masiva (Importación en Lote) — IMPLEMENTADO
+1. Usuario sube archivo Excel/CSV desde `/abogada/importar`
+2. Parsear archivo con SheetJS (xlsx): detecta hojas Clientes y Expedientes automáticamente
+3. Mapeo flexible de columnas: soporta encabezados en español e inglés, case-insensitive
+4. Ejecutar validaciones (SOP-004 paso 3)
+5. Wizard de 4 pasos:
+   - **Paso 1:** Upload del archivo + descarga de plantilla
+   - **Paso 2:** Preview con tabla de clientes/expedientes, errores, advertencias, duplicados
+   - **Paso 3:** Confirmación con estadísticas finales + opción omitir duplicados
+   - **Paso 4:** Resultado con contadores de creados/omitidos/errores
+6. Auto-genera client_number (CLI-NNN) y case_code (PREFIX-NNN) secuenciales
+7. Si un expediente referencia un cliente inexistente, lo crea automáticamente
+8. Audit log con field="import" y source="bulk_import"
+9. Roles permitidos: admin, abogada
+10. API: POST /api/import (mode=preview | mode=execute)
+
+**Archivos:**
+- Parser: `src/lib/utils/import-parser.ts`
+- API: `src/app/api/import/route.ts`
+- UI: `src/components/import/import-wizard.tsx`
+- Página: `src/app/(dashboard)/abogada/importar/page.tsx`
 
 ---
 

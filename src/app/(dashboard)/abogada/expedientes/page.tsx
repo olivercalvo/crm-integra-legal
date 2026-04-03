@@ -1,10 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import Link from "next/link";
 import { Plus, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CaseFilters } from "@/components/cases/case-filters";
+import { SortableHeader } from "@/components/ui/sortable-header";
 
 const PAGE_SIZE = 10;
 
@@ -22,6 +23,16 @@ function getStatusStyle(statusName: string): string {
   return "border-transparent bg-blue-100 text-blue-800";
 }
 
+const SORTABLE_COLUMNS: Record<string, string> = {
+  case_code: "case_code",
+  description: "description",
+  opened_at: "opened_at",
+  updated_at: "updated_at",
+  status: "status_id",
+  responsible: "responsible_id",
+  classification: "classification_id",
+};
+
 interface PageProps {
   searchParams: {
     q?: string;
@@ -30,42 +41,55 @@ interface PageProps {
     responsible?: string;
     institution?: string;
     page?: string;
+    sort?: string;
+    dir?: string;
   };
 }
 
 export default async function ExpedientesPage({ searchParams }: PageProps) {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
   const currentPage = Number(searchParams.page ?? "1");
   const offset = (currentPage - 1) * PAGE_SIZE;
 
+  const sortColumn = SORTABLE_COLUMNS[searchParams.sort ?? ""] ?? "updated_at";
+  const sortDir = searchParams.sort
+    ? searchParams.dir === "desc"
+      ? false
+      : true
+    : false; // default desc for updated_at
+
   // Load catalogs for filters in parallel
   const [statusesRes, classificationsRes, teamRes, institutionsRes] =
     await Promise.all([
-      supabase
+      db
         .from("cat_statuses")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_classifications")
         .select("id, name, prefix")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_team")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_institutions")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
     ]);
 
   // Build cases query with filters
-  let query = supabase
+  let query = db
     .from("cases")
     .select(
       `
@@ -77,7 +101,8 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     `,
       { count: "exact" }
     )
-    .order("updated_at", { ascending: false })
+    .eq("tenant_id", tenantId)
+    .order(sortColumn, { ascending: sortDir })
     .range(offset, offset + PAGE_SIZE - 1);
 
   // Apply filters
@@ -94,7 +119,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     query = query.eq("institution_id", searchParams.institution);
   }
 
-  // Text search across case_code, description, and client name (via ilike on text fields)
   if (searchParams.q) {
     const q = `%${searchParams.q}%`;
     query = query.or(
@@ -111,6 +135,9 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
   const teamList = teamRes.data ?? [];
   const institutions = institutionsRes.data ?? [];
 
+  const currentSort = searchParams.sort ?? "";
+  const currentDir = searchParams.dir ?? "desc";
+
   // Build pagination URL helper
   const buildPageUrl = (page: number) => {
     const params = new URLSearchParams();
@@ -119,6 +146,8 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     if (searchParams.classification) params.set("classification", searchParams.classification);
     if (searchParams.responsible) params.set("responsible", searchParams.responsible);
     if (searchParams.institution) params.set("institution", searchParams.institution);
+    if (searchParams.sort) params.set("sort", searchParams.sort);
+    if (searchParams.dir) params.set("dir", searchParams.dir);
     params.set("page", String(page));
     return `/abogada/expedientes?${params.toString()}`;
   };
@@ -128,11 +157,11 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-integra-navy">
-            Expedientes
+          <h1 className="text-2xl font-bold text-integra-navy">
+            Casos
           </h1>
           <p className="text-sm text-gray-500">
-            {count ?? 0} expedientes encontrados
+            {count ?? 0} casos encontrados
           </p>
         </div>
         <Button
@@ -141,7 +170,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
         >
           <Link href="/abogada/expedientes/nuevo">
             <Plus size={18} className="mr-1" />
-            Nuevo Expediente
+            Nuevo Caso
           </Link>
         </Button>
       </div>
@@ -161,22 +190,25 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
             <thead className="border-b bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  Código
+                  <SortableHeader column="case_code" label="Código" currentSort={currentSort} currentDir={currentDir} />
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
                   Cliente
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  Descripción
+                  <SortableHeader column="description" label="Descripción" currentSort={currentSort} currentDir={currentDir} />
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  Estado
+                  <SortableHeader column="status" label="Estado" currentSort={currentSort} currentDir={currentDir} />
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  Responsable
+                  <SortableHeader column="responsible" label="Responsable" currentSort={currentSort} currentDir={currentDir} />
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  Clasificación
+                  <SortableHeader column="classification" label="Clasificación" currentSort={currentSort} currentDir={currentDir} />
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                  <SortableHeader column="opened_at" label="Apertura" currentSort={currentSort} currentDir={currentDir} />
                 </th>
               </tr>
             </thead>
@@ -239,17 +271,24 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                           <span className="text-gray-700">{classification?.name ?? "—"}</span>
                         </Link>
                       </td>
+                      <td className="px-4 py-3">
+                        <Link href={`/abogada/expedientes/${c.id}`} className="block w-full">
+                          <span className="text-xs text-gray-500">
+                            {c.opened_at ? new Date(c.opened_at).toLocaleDateString("es-PA") : "—"}
+                          </span>
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-4 py-12 text-center text-gray-400"
                   >
                     <FolderOpen size={40} className="mx-auto mb-2 opacity-40" />
-                    <p>No se encontraron expedientes</p>
+                    <p>No se encontraron casos</p>
                   </td>
                 </tr>
               )}
@@ -305,7 +344,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
         ) : (
           <div className="py-12 text-center text-gray-400">
             <FolderOpen size={40} className="mx-auto mb-2 opacity-40" />
-            <p>No se encontraron expedientes</p>
+            <p>No se encontraron casos</p>
           </div>
         )}
       </div>

@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FolderOpen, ListTodo, Clock, CheckCircle } from "lucide-react";
+import { FolderOpen, ListTodo, Clock, CheckCircle, ChevronRight } from "lucide-react";
+import { formatDate } from "@/lib/utils/format-date";
+import Link from "next/link";
 
 export default async function AsistenteDashboard() {
   const supabase = createClient();
@@ -41,25 +43,28 @@ export default async function AsistenteDashboard() {
       value: casesCount ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
+      href: "/asistente/casos",
     },
     {
       label: "Tareas Pendientes",
       value: pendingCount ?? 0,
       icon: <ListTodo size={24} />,
       color: "text-amber-600 bg-amber-50",
+      href: "/asistente/tareas",
     },
     {
       label: "Tareas Cumplidas",
       value: completedCount ?? 0,
       icon: <CheckCircle size={24} />,
       color: "text-green-600 bg-green-50",
+      href: "/asistente/tareas",
     },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">
+        <h2 className="text-2xl font-bold text-integra-navy">
           Mi Panel
         </h2>
         <p className="text-sm text-gray-500">
@@ -70,15 +75,17 @@ export default async function AsistenteDashboard() {
       {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-3">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex flex-col items-center gap-2 p-4 text-center">
-              <div className={`rounded-lg p-2.5 ${stat.color}`}>
-                {stat.icon}
-              </div>
-              <p className="text-xl font-bold">{stat.value}</p>
-              <p className="text-xs text-gray-500">{stat.label}</p>
-            </CardContent>
-          </Card>
+          <Link key={stat.label} href={stat.href}>
+            <Card className="cursor-pointer transition-shadow hover:shadow-md active:scale-[0.98]">
+              <CardContent className="flex flex-col items-center gap-2 p-4 text-center">
+                <div className={`rounded-lg p-2.5 ${stat.color}`}>
+                  {stat.icon}
+                </div>
+                <p className="text-xl font-bold">{stat.value}</p>
+                <p className="text-xs text-gray-500">{stat.label}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -108,7 +115,7 @@ export default async function AsistenteDashboard() {
                     {deadline ? (
                       <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
                         <Clock size={14} />
-                        <span>Vence: {new Date(deadline).toLocaleDateString("es-PA")}</span>
+                        <span>Vence: {formatDate(deadline)}</span>
                       </div>
                     ) : null}
                   </div>

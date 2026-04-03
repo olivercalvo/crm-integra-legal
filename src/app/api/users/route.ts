@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { UserRole } from "@/types/database";
 
 const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente"];
@@ -14,8 +15,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const admin = createAdminClient();
+
     // Get user's tenant_id
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -29,7 +32,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const roleFilter = searchParams.get("role") as UserRole | null;
 
-    let query = supabase
+    let query = admin
       .from("users")
       .select("id, full_name, email, role, active")
       .eq("tenant_id", profile.tenant_id)

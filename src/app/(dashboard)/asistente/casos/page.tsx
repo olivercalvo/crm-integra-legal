@@ -1,8 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import Link from "next/link";
 import { FolderOpen, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatDate } from "@/lib/utils/format-date";
 
 function getStatusStyle(statusName: string): string {
   const name = statusName.toLowerCase();
@@ -26,32 +27,17 @@ function getStatusStyle(statusName: string): string {
   return "border-transparent bg-blue-100 text-blue-800";
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-PA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 interface PageProps {
   searchParams: { q?: string };
 }
 
 export default async function AsistenteCasosPage({ searchParams }: PageProps) {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const { db, user } = await getAuthenticatedContext();
 
   const q = searchParams.q?.trim() ?? "";
 
   // 1. Find cases where the asistente is in cat_team via responsible_id
-  //    We join through cat_team: cases.responsible_id → cat_team.id AND cat_team.user_id = user.id
-  const { data: teamEntries } = await supabase
+  const { data: teamEntries } = await db
     .from("cat_team")
     .select("id")
     .eq("user_id", user.id);
@@ -59,7 +45,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
   const teamIds = (teamEntries ?? []).map((t) => t.id);
 
   // 2. Find cases where the asistente has an assigned task
-  const { data: taskCases } = await supabase
+  const { data: taskCases } = await db
     .from("tasks")
     .select("case_id")
     .eq("assigned_to", user.id);
@@ -70,7 +56,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
   );
 
   // Fetch cases matching teamIds (responsible_id) and taskCaseIds (id)
-  let query = supabase
+  let query = db
     .from("cases")
     .select(
       `
@@ -127,7 +113,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="font-serif text-2xl font-bold text-integra-navy">
+        <h1 className="text-2xl font-bold text-integra-navy">
           Mis Casos
         </h1>
         <p className="text-sm text-gray-500">

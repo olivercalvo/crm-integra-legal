@@ -1,5 +1,144 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.7.1] — 2026-04-03
+### Mejoras de UX y datos
+
+#### Listado de casos — más columnas sorteables
+- Estado, Responsable y Clasificación ahora son columnas sorteables (además de Código, Descripción y Apertura)
+
+#### Detalle de caso — edición independiente por tab
+- **Tab Gastos:** nuevos botones "Registrar Gasto" y "Registrar Pago" con formularios inline (colores rojo/verde)
+- **Tab Tareas:** nuevo botón "Nueva Tarea" con formulario inline (descripción, deadline, asignar a)
+- **Tab Tareas:** botón para marcar tarea como "Cumplida" directamente desde la vista del caso
+
+#### Fix: error handling mejorado
+- AddCommentForm: error handling robusto — muestra error real del servidor en vez de genérico "Error de conexión"
+- InlineCaseInfoEditor: mismo fix de error handling
+- JSON parse errors manejados correctamente con `.catch(() => ({}))`
+
+#### Datos ficticios ampliados
+- Gastos y pagos añadidos para TODOS los 12 casos (antes solo 6 tenían datos)
+- Tareas añadidas para todos los casos (incluyendo casos 4, 6, 9, 10, 11, 12)
+- Comentarios/avances añadidos para todos los casos (incluyendo casos 4, 6, 8, 10, 11, 12)
+- Documentos ficticios para todos los casos y más clientes
+- Asistentes asignados a todos los casos via assistant_id
+- Saldos variados: positivos, negativos y en cero distribuidos entre todos los casos
+
+### Nuevos componentes
+- `src/components/cases/add-expense-form.tsx` — formulario inline para gastos y pagos
+- `src/components/cases/add-task-form.tsx` — formulario inline para tareas + botón completar
+
+## [0.7.0] — 2026-04-03
+### UX: Dashboard, listados y detalle de caso
+- **Dashboard clickable cards:** las tarjetas KPI (Clientes, Casos, Tareas, Saldo en Contra) ahora navegan a la sección correspondiente en los 3 dashboards (abogada, admin, asistente)
+- **Listado de clientes — columnas sorteables:** clic en el título de columna ordena asc/desc (N° Cliente, Nombre, RUC, Teléfono, Clasificación). Nueva columna "Casos" con badge verde indicando cantidad de casos activos por cliente
+- **Listado de casos — columnas sorteables:** Código, Descripción, Apertura son sorteables. Se añadió columna Fecha Apertura
+- **Componente reusable SortableHeader** creado en src/components/ui/sortable-header.tsx
+
+### Detalle de caso — edición independiente por tab
+- Eliminado botón "Editar" global del header del caso
+- Nuevo componente InlineCaseInfoEditor: botón "Editar Información" dentro del tab Info, abre formulario inline con todos los campos editables sin salir de la vista
+- Cada tab opera de forma independiente (info, gastos, tareas, comentarios, documentos)
+
+### Asignación de responsables en caso
+- Nuevos dropdowns en el editor inline de Info: "Abogado Responsable" y "Asistente Responsable de Seguimiento"
+- Campo assistant_id añadido al tipo Case y al API PATCH
+- Migración SQL: scripts/add-assistant-id.sql (ejecutar en Supabase)
+
+### Documentos — botón Adjuntar
+- Tab de Documentos rediseñado: botón grande "Adjuntar Documento" estilo QuickBooks (dorado, con ícono Upload)
+- Lista de documentos existentes con ícono Paperclip y fecha
+- Funcionalidad de upload pendiente hasta configurar Supabase Storage del cliente
+
+### Fix: Error de conexión al guardar
+- **Causa raíz:** el middleware aplicaba protección de rutas por rol a los endpoints /api/*, redirigiendo las llamadas fetch de usuarios con rol "abogada" lejos de /api/cases/*/comments
+- **Fix:** se excluyen rutas /api/ del control de roles en middleware.ts; solo se verifica autenticación y se retorna 401 JSON si no hay sesión
+
+### Datos ficticios completos para demo
+- Script SQL: scripts/seed-demo-data.sql con datos ficticios realistas panameños
+- 10 clientes completos (corporativos, personas naturales, ONG) con todos los campos
+- 12 casos variados (7 clasificaciones, 3 estados diferentes, responsables asignados)
+- Gastos y pagos: saldos positivos (CORP-001), negativos (MIG-001), en cero (LAB-001), y mixtos
+- Tareas: pendientes y cumplidas con deadlines variados
+- Comentarios/avances con fechas de seguimiento en múltiples casos
+- Documentos ficticios registrados (nombres de archivo realistas)
+- Catálogos completos: 7 clasificaciones, 3 estados, 5 instituciones, 4 miembros de equipo
+
+### Técnico
+- Nuevo componente: src/components/ui/sortable-header.tsx
+- Nuevo componente: src/components/cases/inline-case-editor.tsx
+- Middleware fix: /api/* excluido de role-based routing
+- API PATCH cases: soporta assistant_id
+- TypeScript: Case type actualizado con assistant_id
+- Scripts: scripts/seed-demo-data.sql, scripts/add-assistant-id.sql
+
+## [0.6.0] — 2026-04-03
+### Rediseño UI — Estilo QuickBooks con paleta Integra
+- Header rediseñado: fondo blanco, barra de búsqueda global al centro, menú de usuario a la derecha
+- Sidebar colapsable estilo QuickBooks: fondo navy (#1B2A4A), íconos + texto expandido / solo íconos colapsado
+- Toggle de colapso con estado persistido en localStorage
+- Botones redondeados (rounded-full) al estilo QuickBooks
+- Cards con sombra sutil (shadow-sm) y esquinas redondeadas (rounded-xl)
+- Tipografía cambiada de serif (Playfair Display) a sans-serif (Inter) en toda la app
+- Bottom nav mobile actualizado con nuevos labels
+
+### Renombrar "Expedientes" → "Casos"
+- Todas las referencias UI renombradas: títulos, menú, botones, labels, estados vacíos, placeholders
+- 22+ archivos actualizados (pages, components, API routes, constantes de auditoría)
+- Rutas URL conservadas (/abogada/expedientes/) para no romper bookmarks
+
+### Nuevos campos en Casos
+- 8 nuevos campos en tabla cases: entity, procedure_type, institution_procedure_number, institution_case_number, case_start_date, procedure_start_date, deadline, last_followup_at
+- Campo follow_up_date en tabla comments
+- Trigger DB: auto-actualización de last_followup_at al insertar comentario
+- Wizard de caso expandido de 3 a 4 pasos con todos los nuevos campos
+- Detalle del caso muestra campos calculados: días transcurridos, fechas tope con alerta roja si vencida
+- APIs POST y PATCH actualizadas con nuevos campos + audit logging
+
+### Sección de Comentarios / Avances
+- Date picker para fecha de seguimiento en formulario de comentarios (default: hoy)
+- Comentarios ordenados cronológicamente (más reciente arriba)
+- Cada comentario muestra: fecha DD/MM/AAAA, hora, usuario, texto
+- Comentarios inmutables (no editar/eliminar) para trazabilidad
+
+### Formato de fechas DD/MM/AAAA
+- Utilidad centralizada: src/lib/utils/format-date.ts (formatDate, formatDateTime, daysSince)
+- Reemplazadas 11+ funciones locales de formateo de fecha
+- Todas las fechas de display usan DD/MM/YYYY consistentemente
+
+### Técnico
+- Migración SQL: supabase/migrations/20260403000002_add_case_fields.sql
+- Nueva utilidad: src/lib/utils/format-date.ts
+- Nuevo helper server: src/lib/supabase/server-query.ts (getAuthenticatedContext)
+- Todos los server components y API routes usan admin client para bypass de RLS
+- Fix hydration: use-offline.ts inicializa isOnline con true en SSR
+- Fix RLS: migración SQL para auth.tenant_id() y auth.user_role() (pendiente de aplicar en Dashboard)
+- Build exitoso, 0 errores TypeScript
+
+---
+
+## [0.5.0] — 2026-04-02
+### Importación Masiva (Fase 8)
+- Importación masiva desde Excel/CSV: upload, parseo, validación, preview pre-importación, confirmación y ejecución
+- Parseo inteligente: mapeo flexible de columnas (soporta nombres en español/inglés), detección automática de hojas
+- Validación completa: campos obligatorios, duplicados por nombre/RUC, duplicados intra-archivo, formato de email
+- Normalización automática: fechas (DD/MM/YYYY, YYYY-MM-DD, serial Excel), trim espacios, aliases (Dave→Daveiva, Mile→Milena)
+- Detección de duplicados contra DB existente + dentro del archivo
+- Pantalla de resumen pre-importación con estadísticas, errores, advertencias y opción de omitir duplicados
+- Plantilla descargable generada client-side (SheetJS): hojas Clientes + Expedientes con columnas correctas y ejemplo
+- Auto-creación de clientes faltantes al importar expedientes que referencian clientes inexistentes
+- Audit log completo: cada registro importado se registra con source="bulk_import"
+- Migración seed: 23 clientes + 46 expedientes con datos limpios, 3 team members, 7 instituciones adicionales
+
+### Técnico
+- Dependencia: xlsx (SheetJS) para parseo de Excel/CSV
+- Nuevos archivos: src/lib/utils/import-parser.ts, src/app/api/import/route.ts, src/components/import/import-wizard.tsx, src/app/(dashboard)/abogada/importar/page.tsx
+- Migración SQL: supabase/migrations/20260402000003_seed_clients_cases.sql
+- Build exitoso, 0 errores TypeScript
+- Sidebar ya tenía link "Importar" pre-configurado para admin y abogada
+
+---
+
 ## [0.4.0] — 2026-04-02
 ### Admin Panel (Fase 7)
 - CRUD Catálogos: componente CatalogManager reusable para clasificaciones, estados, instituciones, equipo

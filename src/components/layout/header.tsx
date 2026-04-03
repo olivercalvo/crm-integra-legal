@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User as UserIcon, Menu } from "lucide-react";
+import { LogOut, User as UserIcon, Menu, Search } from "lucide-react";
 import { ConnectivityIndicator } from "@/components/layout/connectivity-indicator";
 
 interface HeaderProps {
@@ -43,52 +43,66 @@ export function Header({ userName, userRole, onToggleSidebar }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-integra-navy px-4 lg:px-6">
+    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
       {/* Left: hamburger + logo */}
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleSidebar}
-          className="rounded-md p-2 text-integra-white/80 hover:bg-white/10 lg:hidden"
+          className="rounded-md p-2 text-gray-500 hover:bg-gray-100 lg:hidden"
           aria-label="Abrir menú"
         >
           <Menu size={24} />
         </button>
-        <h1 className="font-serif text-xl font-bold text-integra-white">
+        <h1 className="text-xl font-bold text-integra-navy">
           Integra <span className="text-integra-gold">Legal</span>
         </h1>
       </div>
 
-      {/* Centre: connectivity status */}
-      <div className="hidden sm:flex">
-        <ConnectivityIndicator />
+      {/* Center: search bar */}
+      <div className="hidden md:flex flex-1 max-w-md mx-8">
+        <div className="relative w-full">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar clientes, casos..."
+            readOnly
+            className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm text-gray-500 placeholder:text-gray-400 focus:outline-none cursor-default"
+          />
+        </div>
       </div>
 
-      {/* Right: user menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2 text-integra-white hover:bg-white/10">
-            <Avatar className="h-8 w-8 border border-integra-gold/30">
-              <AvatarFallback className="bg-integra-gold/20 text-sm text-integra-gold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="hidden text-left sm:block">
-              <p className="text-sm font-medium leading-none">{userName}</p>
-              <p className="text-xs text-integra-white/60">{roleLabels[userRole] || userRole}</p>
-            </div>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem className="cursor-pointer" disabled>
-            <UserIcon size={16} className="mr-2" />
-            Mi perfil
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
-            <LogOut size={16} className="mr-2" />
-            Cerrar sesión
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Right: connectivity + user menu */}
+      <div className="flex items-center gap-3">
+        <div className="hidden sm:flex">
+          <ConnectivityIndicator />
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2 text-integra-navy hover:bg-gray-100">
+              <Avatar className="h-8 w-8 border border-integra-gold/30">
+                <AvatarFallback className="bg-integra-navy/10 text-sm text-integra-navy font-semibold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden text-left sm:block">
+                <p className="text-sm font-medium leading-none text-integra-navy">{userName}</p>
+                <p className="text-xs text-gray-500">{roleLabels[userRole] || userRole}</p>
+              </div>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem className="cursor-pointer" disabled>
+              <UserIcon size={16} className="mr-2" />
+              Mi perfil
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-red-600">
+              <LogOut size={16} className="mr-2" />
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   );
 }

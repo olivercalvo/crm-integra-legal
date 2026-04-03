@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,6 +14,8 @@ import {
   Tag,
   User,
   HardDrive,
+  Hash,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +25,7 @@ import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { TaskList } from "@/components/tasks/task-list";
 import { CommentList } from "@/components/comments/comment-list";
+import { formatDate, daysSince } from "@/lib/utils/format-date";
 
 function getStatusStyle(statusName: string): string {
   const name = statusName.toLowerCase();
@@ -46,14 +49,6 @@ function getStatusStyle(statusName: string): string {
   return "border-transparent bg-blue-100 text-blue-800";
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-PA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("es-PA", {
     style: "currency",
@@ -66,16 +61,10 @@ interface PageProps {
 }
 
 export default async function AsistenteCasoDetailPage({ params }: PageProps) {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const { db, user } = await getAuthenticatedContext();
 
   // Fetch case with related data
-  const { data: caseData, error } = await supabase
+  const { data: caseData, error } = await db
     .from("cases")
     .select(
       `
@@ -122,14 +111,14 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
   } | null;
 
   // Verify asistente has access: either in cat_team with responsible_id OR has an assigned task
-  const { data: teamEntry } = await supabase
+  const { data: teamEntry } = await db
     .from("cat_team")
     .select("id")
     .eq("user_id", user.id)
     .eq("id", caseData.responsible_id ?? "")
     .maybeSingle();
 
-  const { data: assignedTask } = await supabase
+  const { data: assignedTask } = await db
     .from("tasks")
     .select("id")
     .eq("case_id", params.id)
@@ -143,12 +132,12 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
 
   // Fetch all related data in parallel
   const [expensesRes, tasksRes, commentsRes, statusesRes] = await Promise.all([
-    supabase
+    db
       .from("expenses")
       .select("id, amount, concept, date, registered_by, case_id, tenant_id, created_at")
       .eq("case_id", params.id)
       .order("date", { ascending: false }),
-    supabase
+    db
       .from("tasks")
       .select(
         `
@@ -158,17 +147,17 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       )
       .eq("case_id", params.id)
       .order("created_at", { ascending: false }),
-    supabase
+    db
       .from("comments")
       .select(
         `
-        id, text, created_at, case_id, tenant_id, user_id,
+        id, text, created_at, follow_up_date, case_id, tenant_id, user_id,
         author:users!comments_user_id_fkey(id, full_name, role)
       `
       )
       .eq("case_id", params.id)
-      .order("created_at", { ascending: true }),
-    supabase
+      .order("created_at", { ascending: false }),
+    db
       .from("cat_statuses")
       .select("id, name")
       .eq("active", true)
@@ -217,6 +206,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       text: c.text,
       user_id: c.user_id,
       created_at: c.created_at,
+      follow_up_date: ((c as Record<string, unknown>).follow_up_date as string | null) ?? null,
       author: author
         ? {
             id: author.id,
@@ -263,8 +253,8 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <FolderOpen size={18} className="text-integra-navy" />
-          <h2 className="font-serif text-lg font-semibold text-integra-navy">
-            Estado del Expediente
+          <h2 className="text-lg font-semibold text-integra-navy">
+            Estado del Caso
           </h2>
         </div>
         <Card className="border border-gray-100">
@@ -297,7 +287,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <Tag size={18} className="text-integra-navy" />
-          <h2 className="font-serif text-lg font-semibold text-integra-navy">
+          <h2 className="text-lg font-semibold text-integra-navy">
             Información del Caso
           </h2>
         </div>
@@ -306,7 +296,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
           <Card className="border border-gray-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-integra-navy">
-                Datos del Expediente
+                Datos del Caso
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -384,6 +374,131 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
                   </p>
                 </div>
               </div>
+              {caseData.entity && (
+                <>
+                  <Separator />
+                  <div className="flex items-start gap-2">
+                    <Building2 size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">Entidad</p>
+                      <p className="font-medium">{caseData.entity}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              {caseData.procedure_type && (
+                <>
+                  <Separator />
+                  <div className="flex items-start gap-2">
+                    <Tag size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">Tipo de trámite</p>
+                      <p className="font-medium">{caseData.procedure_type}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              {caseData.institution_procedure_number && (
+                <>
+                  <Separator />
+                  <div className="flex items-start gap-2">
+                    <Hash size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">N° trámite institución</p>
+                      <p className="font-mono font-medium">{caseData.institution_procedure_number}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              {caseData.institution_case_number && (
+                <>
+                  <Separator />
+                  <div className="flex items-start gap-2">
+                    <Hash size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div>
+                      <p className="text-xs text-gray-500">N° caso institución</p>
+                      <p className="font-mono font-medium">{caseData.institution_case_number}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+              {caseData.case_start_date && (() => {
+                const d = daysSince(caseData.case_start_date);
+                return (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Calendar size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Fecha inicio caso</p>
+                        <p className="font-medium">
+                          {formatDate(caseData.case_start_date)}
+                          {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              {caseData.procedure_start_date && (() => {
+                const d = daysSince(caseData.procedure_start_date);
+                return (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Calendar size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Fecha inicio trámite</p>
+                        <p className="font-medium">
+                          {formatDate(caseData.procedure_start_date)}
+                          {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              {caseData.deadline && (() => {
+                const d = daysSince(caseData.deadline);
+                const isPastDue = d !== null && d > 0;
+                return (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Clock size={14} className={`mt-0.5 shrink-0 ${isPastDue ? "text-red-500" : "text-gray-400"}`} />
+                      <div>
+                        <p className="text-xs text-gray-500">Fecha tope</p>
+                        <p className="font-medium">
+                          {formatDate(caseData.deadline)}
+                          {isPastDue
+                            ? <Badge className="ml-2 border-transparent bg-red-100 text-red-700 text-xs">Vencido hace {d} días</Badge>
+                            : d !== null
+                              ? <Badge className="ml-2 border-transparent bg-green-100 text-green-700 text-xs">Faltan {Math.abs(d)} días</Badge>
+                              : null}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+              {caseData.last_followup_at && (() => {
+                const d = daysSince(caseData.last_followup_at);
+                return (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <MessageSquare size={14} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Último seguimiento</p>
+                        <p className="font-medium">
+                          {formatDate(caseData.last_followup_at)}
+                          {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">hace {d} días</Badge>}
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
               {caseData.description && (
                 <>
                   <Separator />
@@ -474,7 +589,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-integra-navy" />
-            <h2 className="font-serif text-lg font-semibold text-integra-navy">
+            <h2 className="text-lg font-semibold text-integra-navy">
               Gastos
             </h2>
           </div>
@@ -498,10 +613,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
                         {e.concept}
                       </p>
                       <p className="text-xs text-gray-400">
-                        {new Date(e.date + "T00:00:00").toLocaleDateString(
-                          "es-PA",
-                          { day: "2-digit", month: "short", year: "numeric" }
-                        )}
+                        {formatDate(e.date)}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-red-600">
@@ -514,7 +626,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
           </Card>
         ) : (
           <p className="rounded-lg border border-dashed border-gray-200 py-6 text-center text-sm text-gray-400">
-            Sin gastos registrados en este expediente.
+            Sin gastos registrados en este caso.
           </p>
         )}
 
@@ -537,7 +649,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <ListTodo size={18} className="text-integra-navy" />
-          <h2 className="font-serif text-lg font-semibold text-integra-navy">
+          <h2 className="text-lg font-semibold text-integra-navy">
             Tareas
           </h2>
         </div>
@@ -550,7 +662,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <MessageSquare size={18} className="text-integra-navy" />
-          <h2 className="font-serif text-lg font-semibold text-integra-navy">
+          <h2 className="text-lg font-semibold text-integra-navy">
             Comentarios
           </h2>
         </div>
@@ -563,7 +675,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText size={18} className="text-integra-navy" />
-          <h2 className="font-serif text-lg font-semibold text-integra-navy">
+          <h2 className="text-lg font-semibold text-integra-navy">
             Documentos
           </h2>
         </div>

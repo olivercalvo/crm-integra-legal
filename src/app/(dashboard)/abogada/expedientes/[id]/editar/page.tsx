@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import { CaseForm } from "@/components/cases/case-form";
 import { ArrowLeft } from "lucide-react";
@@ -10,38 +10,43 @@ interface PageProps {
 }
 
 export default async function EditarExpedientePage({ params }: PageProps) {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
   const [caseRes, clientsRes, classificationsRes, institutionsRes, teamRes, statusesRes] =
     await Promise.all([
-      supabase
+      db
         .from("cases")
         .select("*")
         .eq("id", params.id)
         .single(),
-      supabase
+      db
         .from("clients")
         .select("id, name, client_number")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_classifications")
         .select("id, name, prefix")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_institutions")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_team")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
-      supabase
+      db
         .from("cat_statuses")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("created_at", { ascending: true }),
     ]);
@@ -63,8 +68,8 @@ export default async function EditarExpedientePage({ params }: PageProps) {
           </Link>
         </Button>
         <div>
-          <h1 className="font-serif text-2xl font-bold text-integra-navy">
-            Editar Expediente
+          <h1 className="text-2xl font-bold text-integra-navy">
+            Editar Caso
           </h1>
           <p className="font-mono text-sm text-gray-500">{caseData.case_code}</p>
         </div>
@@ -90,6 +95,13 @@ export default async function EditarExpedientePage({ params }: PageProps) {
             observations: caseData.observations,
             has_digital_file: caseData.has_digital_file,
             case_code: caseData.case_code,
+            entity: caseData.entity,
+            procedure_type: caseData.procedure_type,
+            institution_procedure_number: caseData.institution_procedure_number,
+            institution_case_number: caseData.institution_case_number,
+            case_start_date: caseData.case_start_date,
+            procedure_start_date: caseData.procedure_start_date,
+            deadline: caseData.deadline,
           }}
           mode="edit"
         />

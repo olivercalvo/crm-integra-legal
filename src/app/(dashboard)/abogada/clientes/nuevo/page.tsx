@@ -1,22 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ClientForm } from "@/components/clients/client-form";
 import type { CatClassification } from "@/types/database";
 
 export default async function NuevoClientePage() {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: classifications } = await supabase
+  const { data: classifications } = await db
     .from("cat_classifications")
     .select("*")
+    .eq("tenant_id", tenantId)
     .eq("active", true)
     .order("name", { ascending: true });
 
@@ -33,7 +27,7 @@ export default async function NuevoClientePage() {
       </div>
 
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">Nuevo Cliente</h2>
+        <h2 className="text-2xl font-bold text-integra-navy">Nuevo Cliente</h2>
         <p className="text-sm text-gray-500">Completa los datos para registrar el cliente</p>
       </div>
 

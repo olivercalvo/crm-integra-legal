@@ -1,39 +1,41 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FolderOpen, ListTodo, DollarSign, AlertTriangle, Plus } from "lucide-react";
+import { Users, FolderOpen, ListTodo, DollarSign, AlertTriangle, Plus, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default async function AbogadaDashboard() {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
   // Fetch stats
   const [clientsRes, activeCasesRes, pendingTasksRes] = await Promise.all([
-    supabase.from("clients").select("id", { count: "exact", head: true }).eq("active", true),
-    supabase.from("cases").select("id, status_id", { count: "exact", head: true }),
-    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "pendiente"),
+    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("active", true),
+    db.from("cases").select("id, status_id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    db.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "pendiente"),
   ]);
 
   // Fetch recent cases
-  const { data: recentCases } = await supabase
+  const { data: recentCases } = await db
     .from("cases")
     .select(`
       id, case_code, description, updated_at,
       clients!inner(name),
       cat_statuses(name)
     `)
+    .eq("tenant_id", tenantId)
     .order("updated_at", { ascending: false })
     .limit(5);
 
   // Fetch cases with negative balance (gastos > pagos)
-  const { data: casesWithExpenses } = await supabase
+  const { data: casesWithExpenses } = await db
     .from("cases")
     .select(`
       id, case_code,
       clients!inner(name),
       expenses(amount),
       client_payments(amount)
-    `);
+    `)
+    .eq("tenant_id", tenantId);
 
   const casesInRed = (casesWithExpenses || []).filter((c) => {
     const totalExpenses = (c.expenses || []).reduce((sum: number, e: { amount: number }) => sum + Number(e.amount), 0);
@@ -47,24 +49,28 @@ export default async function AbogadaDashboard() {
       value: clientsRes.count ?? 0,
       icon: <Users size={24} />,
       color: "text-blue-600 bg-blue-50",
+      href: "/abogada/clientes",
     },
     {
-      label: "Expedientes",
+      label: "Casos",
       value: activeCasesRes.count ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
+      href: "/abogada/expedientes",
     },
     {
       label: "Tareas Pendientes",
       value: pendingTasksRes.count ?? 0,
       icon: <ListTodo size={24} />,
       color: "text-amber-600 bg-amber-50",
+      href: "/asistente/tareas",
     },
     {
       label: "Saldo en Contra",
       value: casesInRed.length,
       icon: <AlertTriangle size={24} />,
       color: casesInRed.length > 0 ? "text-red-600 bg-red-50" : "text-green-600 bg-green-50",
+      href: "/abogada/expedientes",
     },
   ];
 
@@ -72,11 +78,11 @@ export default async function AbogadaDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-integra-navy">
+          <h2 className="text-2xl font-bold text-integra-navy">
             Dashboard
           </h2>
           <p className="text-sm text-gray-500">
-            Resumen de expedientes y actividad
+            Resumen de casos y actividad
           </p>
         </div>
         <div className="flex gap-2">
@@ -89,7 +95,7 @@ export default async function AbogadaDashboard() {
           <Button asChild size="sm" className="bg-integra-navy hover:bg-integra-navy/90 min-h-[48px] px-4">
             <Link href="/abogada/expedientes/nuevo">
               <Plus size={18} className="mr-1" />
-              Expediente
+              Caso
             </Link>
           </Button>
         </div>
@@ -98,24 +104,27 @@ export default async function AbogadaDashboard() {
       {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex items-center gap-3 p-4 lg:p-6">
-              <div className={`rounded-lg p-2.5 ${stat.color}`}>
-                {stat.icon}
-              </div>
-              <div>
-                <p className="text-xl font-bold lg:text-2xl">{stat.value}</p>
-                <p className="text-xs text-gray-500 lg:text-sm">{stat.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <Link key={stat.label} href={stat.href}>
+            <Card className="cursor-pointer transition-shadow hover:shadow-md active:scale-[0.98]">
+              <CardContent className="flex items-center gap-3 p-4 lg:p-6">
+                <div className={`rounded-lg p-2.5 ${stat.color}`}>
+                  {stat.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-xl font-bold lg:text-2xl">{stat.value}</p>
+                  <p className="text-xs text-gray-500 lg:text-sm">{stat.label}</p>
+                </div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 
       {/* Recent cases */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Expedientes Recientes</CardTitle>
+          <CardTitle className="text-base">Casos Recientes</CardTitle>
         </CardHeader>
         <CardContent>
           {recentCases && recentCases.length > 0 ? (
@@ -136,7 +145,7 @@ export default async function AbogadaDashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">No hay expedientes aún</p>
+            <p className="text-sm text-gray-400">No hay casos aún</p>
           )}
         </CardContent>
       </Card>

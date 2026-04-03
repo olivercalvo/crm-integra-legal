@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,8 +14,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const admin = createAdminClient();
+
     // Get user profile for tenant_id
-    const { data: profile } = await supabase
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -36,6 +39,13 @@ export async function POST(request: NextRequest) {
       physical_location,
       observations,
       has_digital_file,
+      entity,
+      procedure_type,
+      institution_procedure_number,
+      institution_case_number,
+      case_start_date,
+      procedure_start_date,
+      deadline,
     } = body;
 
     if (!client_id) {
@@ -45,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Auto-generate case_code: prefix from classification + sequential number
     let prefix = "EXP";
     if (classification_id) {
-      const { data: classification } = await supabase
+      const { data: classification } = await admin
         .from("cat_classifications")
         .select("prefix")
         .eq("id", classification_id)
@@ -56,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current max case_number for this tenant to assign next number
-    const { data: maxCase } = await supabase
+    const { data: maxCase } = await admin
       .from("cases")
       .select("case_number")
       .eq("tenant_id", profile.tenant_id)
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest) {
     // Get default status if not provided
     let resolvedStatusId = status_id;
     if (!resolvedStatusId) {
-      const { data: firstStatus } = await supabase
+      const { data: firstStatus } = await admin
         .from("cat_statuses")
         .select("id")
         .eq("tenant_id", profile.tenant_id)
@@ -82,7 +92,7 @@ export async function POST(request: NextRequest) {
       resolvedStatusId = firstStatus?.id ?? null;
     }
 
-    const { data: newCase, error } = await supabase
+    const { data: newCase, error } = await admin
       .from("cases")
       .insert({
         tenant_id: profile.tenant_id,
@@ -98,6 +108,13 @@ export async function POST(request: NextRequest) {
         physical_location: physical_location || null,
         observations: observations || null,
         has_digital_file: has_digital_file ?? false,
+        entity: entity || null,
+        procedure_type: procedure_type || null,
+        institution_procedure_number: institution_procedure_number || null,
+        institution_case_number: institution_case_number || null,
+        case_start_date: case_start_date || null,
+        procedure_start_date: procedure_start_date || null,
+        deadline: deadline || null,
       })
       .select()
       .single();
@@ -108,7 +125,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "cases",

@@ -4,15 +4,7 @@ import { ListTodo, Calendar, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarkTaskButton } from "@/components/asistente/mark-task-button";
-
-function formatDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("es-PA", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { formatDate } from "@/lib/utils/format-date";
 
 function isOverdue(deadline: string | null, status: "pendiente" | "cumplida") {
   if (!deadline || status === "cumplida") return false;
@@ -83,7 +75,7 @@ export default async function AsistenteTareasPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="font-serif text-2xl font-bold text-integra-navy">
+        <h1 className="text-2xl font-bold text-integra-navy">
           Mis Tareas
         </h1>
         <p className="text-sm text-gray-500">
@@ -204,10 +196,7 @@ export default async function AsistenteTareasPage() {
                         <span className="flex items-center gap-1 text-green-600">
                           <Calendar size={11} />
                           Cumplida:{" "}
-                          {new Date(task.completed_at).toLocaleDateString(
-                            "es-PA",
-                            { day: "2-digit", month: "short", year: "numeric" }
-                          )}
+                          {formatDate(task.completed_at)}
                         </span>
                       )}
                     </div>

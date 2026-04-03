@@ -33,9 +33,9 @@ export interface UseOfflineReturn {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useOffline(): UseOfflineReturn {
-  const [isOnline, setIsOnline] = useState<boolean>(
-    typeof navigator !== "undefined" ? navigator.onLine : true
-  );
+  // Start with `true` on both server and client to avoid hydration mismatch.
+  // The real value is picked up in the useEffect below.
+  const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -53,7 +53,8 @@ export function useOffline(): UseOfflineReturn {
   // ── Boot: start services, recover stuck ops, seed count ─────────────────
 
   useEffect(() => {
-    // Initialize once on mount
+    // Initialize once on mount — set real connectivity state
+    setIsOnline(navigator.onLine);
     syncService.initialize().catch(console.error);
     connectivityService.start();
     refreshCount().catch(console.error);

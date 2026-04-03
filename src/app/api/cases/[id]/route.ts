@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function PATCH(
   request: NextRequest,
@@ -16,7 +17,9 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -27,7 +30,7 @@ export async function PATCH(
     }
 
     // Verify case exists and belongs to tenant
-    const { data: existingCase } = await supabase
+    const { data: existingCase } = await admin
       .from("cases")
       .select("*")
       .eq("id", caseId)
@@ -35,7 +38,7 @@ export async function PATCH(
       .single();
 
     if (!existingCase) {
-      return NextResponse.json({ error: "Expediente no encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Caso no encontrado" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -51,6 +54,14 @@ export async function PATCH(
       physical_location,
       observations,
       has_digital_file,
+      entity,
+      procedure_type,
+      institution_procedure_number,
+      institution_case_number,
+      case_start_date,
+      procedure_start_date,
+      deadline,
+      assistant_id,
     } = body;
 
     // Handle status change action
@@ -59,21 +70,21 @@ export async function PATCH(
         return NextResponse.json({ error: "El estado es requerido" }, { status: 400 });
       }
 
-      const { data: newStatus } = await supabase
+      const { data: newStatus } = await admin
         .from("cat_statuses")
         .select("name")
         .eq("id", status_id)
         .single();
 
       const { data: oldStatus } = existingCase.status_id
-        ? await supabase
+        ? await admin
             .from("cat_statuses")
             .select("name")
             .eq("id", existingCase.status_id)
             .single()
         : { data: null };
 
-      const { data: updated, error } = await supabase
+      const { data: updated, error } = await admin
         .from("cases")
         .update({ status_id, updated_at: new Date().toISOString() })
         .eq("id", caseId)
@@ -86,7 +97,7 @@ export async function PATCH(
       }
 
       // Audit log for status change
-      await supabase.from("audit_log").insert({
+      await admin.from("audit_log").insert({
         tenant_id: profile.tenant_id,
         user_id: user.id,
         entity: "cases",
@@ -115,8 +126,16 @@ export async function PATCH(
     if (physical_location !== undefined) updatePayload.physical_location = physical_location || null;
     if (observations !== undefined) updatePayload.observations = observations || null;
     if (has_digital_file !== undefined) updatePayload.has_digital_file = has_digital_file;
+    if (entity !== undefined) updatePayload.entity = entity || null;
+    if (procedure_type !== undefined) updatePayload.procedure_type = procedure_type || null;
+    if (institution_procedure_number !== undefined) updatePayload.institution_procedure_number = institution_procedure_number || null;
+    if (institution_case_number !== undefined) updatePayload.institution_case_number = institution_case_number || null;
+    if (case_start_date !== undefined) updatePayload.case_start_date = case_start_date || null;
+    if (procedure_start_date !== undefined) updatePayload.procedure_start_date = procedure_start_date || null;
+    if (deadline !== undefined) updatePayload.deadline = deadline || null;
+    if (assistant_id !== undefined) updatePayload.assistant_id = assistant_id || null;
 
-    const { data: updated, error } = await supabase
+    const { data: updated, error } = await admin
       .from("cases")
       .update(updatePayload)
       .eq("id", caseId)
@@ -133,7 +152,9 @@ export async function PATCH(
     const trackedFields = [
       "client_id", "description", "classification_id", "institution_id",
       "responsible_id", "opened_at", "status_id", "physical_location",
-      "observations", "has_digital_file",
+      "observations", "has_digital_file", "entity", "procedure_type",
+      "institution_procedure_number", "institution_case_number",
+      "case_start_date", "procedure_start_date", "deadline", "assistant_id",
     ];
 
     const auditEntries = trackedFields
@@ -150,7 +171,7 @@ export async function PATCH(
       }));
 
     if (auditEntries.length > 0) {
-      await supabase.from("audit_log").insert(auditEntries);
+      await admin.from("audit_log").insert(auditEntries);
     }
 
     return NextResponse.json({ data: updated });

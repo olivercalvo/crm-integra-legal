@@ -50,6 +50,15 @@ export interface Case {
   physical_location: string | null;
   observations: string | null;
   has_digital_file: boolean;
+  entity: string | null;
+  procedure_type: string | null;
+  institution_procedure_number: string | null;
+  institution_case_number: string | null;
+  case_start_date: string | null;
+  procedure_start_date: string | null;
+  deadline: string | null;
+  last_followup_at: string | null;
+  assistant_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +103,7 @@ export interface Comment {
   case_id: string;
   text: string;
   user_id: string;
+  follow_up_date: string | null;
   created_at: string;
 }
 

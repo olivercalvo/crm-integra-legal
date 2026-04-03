@@ -17,7 +17,9 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -34,7 +36,7 @@ export async function PATCH(
     const targetId = params.id;
 
     // Verify target user belongs to same tenant
-    const { data: targetUser, error: fetchError } = await supabase
+    const { data: targetUser, error: fetchError } = await admin
       .from("users")
       .select("*")
       .eq("id", targetId)
@@ -67,9 +69,7 @@ export async function PATCH(
 
     updates.updated_at = new Date().toISOString();
 
-    const adminClient = createAdminClient();
-
-    const { data: updatedUser, error: updateError } = await adminClient
+    const { data: updatedUser, error: updateError } = await admin
       .from("users")
       .update(updates)
       .eq("id", targetId)
@@ -82,7 +82,7 @@ export async function PATCH(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    await adminClient.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "users",
@@ -114,7 +114,9 @@ export async function DELETE(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -139,7 +141,7 @@ export async function DELETE(
     }
 
     // Verify target user belongs to same tenant
-    const { data: targetUser, error: fetchError } = await supabase
+    const { data: targetUser, error: fetchError } = await admin
       .from("users")
       .select("*")
       .eq("id", targetId)
@@ -150,10 +152,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
     }
 
-    const adminClient = createAdminClient();
-
     // Soft deactivate in public.users
-    const { data: deactivated, error: updateError } = await adminClient
+    const { data: deactivated, error: updateError } = await admin
       .from("users")
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq("id", targetId)
@@ -166,7 +166,7 @@ export async function DELETE(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    await adminClient.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "users",

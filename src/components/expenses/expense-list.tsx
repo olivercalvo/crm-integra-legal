@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { ExpenseForm } from "./expense-form";
 import { PaymentForm } from "./payment-form";
 import { TrendingDown, TrendingUp, Wallet, Plus, X } from "lucide-react";
+import { formatDate } from "@/lib/utils/format-date";
 import type { Expense, ClientPayment } from "@/types/database";
 
 interface ExpenseListProps {
@@ -18,11 +19,6 @@ interface ExpenseListProps {
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("es-PA", { style: "currency", currency: "USD" }).format(amount);
-}
-
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("es-PA", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function ExpenseList({ caseId, expenses, payments }: ExpenseListProps) {

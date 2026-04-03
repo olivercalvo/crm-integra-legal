@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,8 +14,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const admin = createAdminClient();
+
     // Get tenant_id from user profile
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -32,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-generate client_number: CLI-NNN
-    const { data: lastClient } = await supabase
+    const { data: lastClient } = await admin
       .from("clients")
       .select("client_number")
       .eq("tenant_id", profile.tenant_id)
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const client_number = `CLI-${String(nextNumber).padStart(3, "0")}`;
 
-    const { data: newClient, error: insertError } = await supabase
+    const { data: newClient, error: insertError } = await admin
       .from("clients")
       .insert({
         tenant_id: profile.tenant_id,
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Audit log
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "clients",

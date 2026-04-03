@@ -92,7 +92,7 @@ export function UserForm() {
   return (
     <Card className="max-w-xl">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-serif text-lg text-integra-navy">
+        <CardTitle className="flex items-center gap-2 text-lg text-integra-navy">
           <UserPlus size={20} className="text-integra-gold" />
           Crear Nuevo Usuario
         </CardTitle>

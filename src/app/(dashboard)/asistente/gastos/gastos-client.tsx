@@ -60,7 +60,7 @@ export function GastosFormPanel({ cases }: GastosFormPanelProps) {
                 htmlFor="gasto-case-select"
                 className="text-sm font-medium text-integra-navy"
               >
-                Expediente
+                Caso
               </Label>
               <select
                 id="gasto-case-select"

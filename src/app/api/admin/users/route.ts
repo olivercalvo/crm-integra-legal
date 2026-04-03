@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get("includeInactive") === "true";
 
-    let query = supabase
+    let query = admin
       .from("users")
       .select("id, full_name, email, role, active, created_at, updated_at")
       .eq("tenant_id", profile.tenant_id)
@@ -64,7 +66,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -101,8 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create auth user via admin client
-    const adminClient = createAdminClient();
-    const { data: authData, error: authCreateError } = await adminClient.auth.admin.createUser({
+    const { data: authData, error: authCreateError } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
@@ -126,7 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create public.users record
-    const { data: newUser, error: insertError } = await adminClient
+    const { data: newUser, error: insertError } = await admin
       .from("users")
       .insert({
         id: authData.user.id,
@@ -142,11 +145,11 @@ export async function POST(request: NextRequest) {
     if (insertError) {
       console.error("Error inserting public.users record:", insertError);
       // Rollback: delete the auth user
-      await adminClient.auth.admin.deleteUser(authData.user.id);
+      await admin.auth.admin.deleteUser(authData.user.id);
       return NextResponse.json({ error: "Error al crear el perfil del usuario" }, { status: 500 });
     }
 
-    await adminClient.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "users",

@@ -63,6 +63,14 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // API routes — auth checked inside each handler, skip role-based routing
+  if (pathname.startsWith("/api/")) {
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    return response;
+  }
+
   // Protected routes — require auth
   if (!user) {
     const url = request.nextUrl.clone();

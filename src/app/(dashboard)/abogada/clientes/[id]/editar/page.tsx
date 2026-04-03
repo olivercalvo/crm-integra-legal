@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { ClientForm } from "@/components/clients/client-form";
@@ -10,21 +10,16 @@ interface PageProps {
 }
 
 export default async function EditarClientePage({ params }: PageProps) {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { db, tenantId } = await getAuthenticatedContext();
 
   const { id } = params;
 
   const [clientRes, classRes] = await Promise.all([
-    supabase.from("clients").select("*").eq("id", id).single(),
-    supabase
+    db.from("clients").select("*").eq("id", id).single(),
+    db
       .from("cat_classifications")
       .select("*")
+      .eq("tenant_id", tenantId)
       .eq("active", true)
       .order("name", { ascending: true }),
   ]);
@@ -56,7 +51,7 @@ export default async function EditarClientePage({ params }: PageProps) {
       </div>
 
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">Editar Cliente</h2>
+        <h2 className="text-2xl font-bold text-integra-navy">Editar Cliente</h2>
         <p className="text-sm text-gray-500">
           Modifica los datos de{" "}
           <span className="font-medium text-integra-navy">{client.name}</span>

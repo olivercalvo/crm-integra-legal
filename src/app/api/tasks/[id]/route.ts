@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function PATCH(
   request: NextRequest,
@@ -14,8 +15,10 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const admin = createAdminClient();
+
     // Get user's tenant_id
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -31,7 +34,7 @@ export async function PATCH(
     }
 
     // Verify the task belongs to this tenant
-    const { data: existingTask, error: fetchError } = await supabase
+    const { data: existingTask, error: fetchError } = await admin
       .from("tasks")
       .select("id, status, tenant_id")
       .eq("id", taskId)
@@ -54,7 +57,7 @@ export async function PATCH(
       return NextResponse.json({ error: "La tarea ya está marcada como cumplida" }, { status: 400 });
     }
 
-    const { data: updatedTask, error: updateError } = await supabase
+    const { data: updatedTask, error: updateError } = await admin
       .from("tasks")
       .update({
         status: "cumplida",

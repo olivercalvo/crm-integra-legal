@@ -1,6 +1,6 @@
 export const ENTITY_OPTIONS = [
   { value: "clients",   label: "Clientes" },
-  { value: "cases",     label: "Expedientes" },
+  { value: "cases",     label: "Casos" },
   { value: "expenses",  label: "Gastos" },
   { value: "tasks",     label: "Tareas" },
   { value: "documents", label: "Documentos" },

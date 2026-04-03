@@ -38,11 +38,18 @@ interface CaseFormProps {
     observations: string | null;
     has_digital_file: boolean;
     case_code: string;
+    entity: string | null;
+    procedure_type: string | null;
+    institution_procedure_number: string | null;
+    institution_case_number: string | null;
+    case_start_date: string | null;
+    procedure_start_date: string | null;
+    deadline: string | null;
   };
   mode: "create" | "edit";
 }
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 export function CaseForm({
   clients,
@@ -93,6 +100,21 @@ export function CaseForm({
   const [statusId, setStatusId] = useState(
     initialData?.status_id ?? statuses[0]?.id ?? ""
   );
+
+  // New fields
+  const [entity, setEntity] = useState(initialData?.entity ?? "");
+  const [procedureType, setProcedureType] = useState(initialData?.procedure_type ?? "");
+  const [institutionProcedureNumber, setInstitutionProcedureNumber] = useState(
+    initialData?.institution_procedure_number ?? ""
+  );
+  const [institutionCaseNumber, setInstitutionCaseNumber] = useState(
+    initialData?.institution_case_number ?? ""
+  );
+  const [caseStartDate, setCaseStartDate] = useState(initialData?.case_start_date ?? "");
+  const [procedureStartDate, setProcedureStartDate] = useState(
+    initialData?.procedure_start_date ?? ""
+  );
+  const [deadlineDate, setDeadlineDate] = useState(initialData?.deadline ?? "");
 
   // Compute preview code
   const selectedClassification = classifications.find((c) => c.id === classificationId);
@@ -147,6 +169,13 @@ export function CaseForm({
       physical_location: physicalLocation || null,
       observations: observations || null,
       has_digital_file: hasDigitalFile,
+      entity: entity || null,
+      procedure_type: procedureType || null,
+      institution_procedure_number: institutionProcedureNumber || null,
+      institution_case_number: institutionCaseNumber || null,
+      case_start_date: caseStartDate || null,
+      procedure_start_date: procedureStartDate || null,
+      deadline: deadlineDate || null,
     };
 
     startTransition(async () => {
@@ -169,7 +198,7 @@ export function CaseForm({
         const json = await response.json();
 
         if (!response.ok) {
-          setError(json.error ?? "Error al guardar el expediente");
+          setError(json.error ?? "Error al guardar el caso");
           return;
         }
 
@@ -200,7 +229,7 @@ export function CaseForm({
             </div>
             {s < TOTAL_STEPS && (
               <div
-                className={`h-0.5 w-12 transition-colors ${
+                className={`h-0.5 w-8 sm:w-12 transition-colors ${
                   s < step ? "bg-integra-navy" : "bg-gray-200"
                 }`}
               />
@@ -216,8 +245,8 @@ export function CaseForm({
       <div className="mb-6">
         {step === 1 && (
           <div>
-            <h2 className="font-serif text-xl font-bold text-integra-navy">
-              Datos del Expediente
+            <h2 className="text-xl font-bold text-integra-navy">
+              Datos del Caso
             </h2>
             <p className="text-sm text-gray-500">
               Cliente, descripción y clasificación
@@ -226,17 +255,27 @@ export function CaseForm({
         )}
         {step === 2 && (
           <div>
-            <h2 className="font-serif text-xl font-bold text-integra-navy">
+            <h2 className="text-xl font-bold text-integra-navy">
               Detalles Adicionales
             </h2>
             <p className="text-sm text-gray-500">
-              Institución, responsable y fechas
+              Institución, responsable, entidad y tipo de trámite
             </p>
           </div>
         )}
         {step === 3 && (
           <div>
-            <h2 className="font-serif text-xl font-bold text-integra-navy">
+            <h2 className="text-xl font-bold text-integra-navy">
+              Fechas y Números de Trámite
+            </h2>
+            <p className="text-sm text-gray-500">
+              Fechas clave, números de referencia y ubicación
+            </p>
+          </div>
+        )}
+        {step === 4 && (
+          <div>
+            <h2 className="text-xl font-bold text-integra-navy">
               Observaciones
             </h2>
             <p className="text-sm text-gray-500">
@@ -307,7 +346,7 @@ export function CaseForm({
             <textarea
               id="description"
               rows={3}
-              placeholder="Descripción del expediente..."
+              placeholder="Descripción del caso..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
@@ -334,7 +373,7 @@ export function CaseForm({
 
           {/* Code preview */}
           <div className="rounded-lg border border-integra-gold/30 bg-integra-gold/5 p-3">
-            <p className="text-xs text-gray-500">Código del expediente (preview)</p>
+            <p className="text-xs text-gray-500">Código del caso (preview)</p>
             <p className="font-mono text-lg font-bold text-integra-navy">{previewCode}</p>
             {mode === "edit" && (
               <p className="text-xs text-gray-400 mt-1">El código no cambia al editar</p>
@@ -343,7 +382,7 @@ export function CaseForm({
         </div>
       )}
 
-      {/* Step 2: Institution, responsible, opened_at, physical_location */}
+      {/* Step 2: Institution, responsible, status, entity, procedure_type */}
       {step === 2 && (
         <div className="space-y-4">
           {/* Institution */}
@@ -402,14 +441,107 @@ export function CaseForm({
             </div>
           )}
 
+          {/* Entity */}
+          <div className="space-y-1.5">
+            <Label htmlFor="entity">Entidad</Label>
+            <Input
+              id="entity"
+              type="text"
+              placeholder="Ej. Ministerio Público, Tribunal Superior..."
+              value={entity}
+              onChange={(e) => setEntity(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Procedure type */}
+          <div className="space-y-1.5">
+            <Label htmlFor="procedure-type">Tipo de trámite</Label>
+            <Input
+              id="procedure-type"
+              type="text"
+              placeholder="Ej. Demanda laboral, Recurso de amparo..."
+              value={procedureType}
+              onChange={(e) => setProcedureType(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Dates and reference numbers */}
+      {step === 3 && (
+        <div className="space-y-4">
           {/* Opened at */}
           <div className="space-y-1.5">
-            <Label htmlFor="opened-at">Fecha de apertura</Label>
+            <Label htmlFor="opened-at">Fecha apertura expediente</Label>
             <Input
               id="opened-at"
               type="date"
               value={openedAt}
               onChange={(e) => setOpenedAt(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Case start date */}
+          <div className="space-y-1.5">
+            <Label htmlFor="case-start-date">Fecha inicio del caso</Label>
+            <Input
+              id="case-start-date"
+              type="date"
+              value={caseStartDate}
+              onChange={(e) => setCaseStartDate(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Procedure start date */}
+          <div className="space-y-1.5">
+            <Label htmlFor="procedure-start-date">Fecha inicio del trámite</Label>
+            <Input
+              id="procedure-start-date"
+              type="date"
+              value={procedureStartDate}
+              onChange={(e) => setProcedureStartDate(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Deadline */}
+          <div className="space-y-1.5">
+            <Label htmlFor="deadline-date">Fecha tope</Label>
+            <Input
+              id="deadline-date"
+              type="date"
+              value={deadlineDate}
+              onChange={(e) => setDeadlineDate(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Institution procedure number */}
+          <div className="space-y-1.5">
+            <Label htmlFor="institution-procedure-number">N° trámite en la institución</Label>
+            <Input
+              id="institution-procedure-number"
+              type="text"
+              placeholder="Número de referencia del trámite..."
+              value={institutionProcedureNumber}
+              onChange={(e) => setInstitutionProcedureNumber(e.target.value)}
+              className="min-h-[48px]"
+            />
+          </div>
+
+          {/* Institution case number */}
+          <div className="space-y-1.5">
+            <Label htmlFor="institution-case-number">N° caso en la institución</Label>
+            <Input
+              id="institution-case-number"
+              type="text"
+              placeholder="Número de caso asignado por la institución..."
+              value={institutionCaseNumber}
+              onChange={(e) => setInstitutionCaseNumber(e.target.value)}
               className="min-h-[48px]"
             />
           </div>
@@ -429,8 +561,8 @@ export function CaseForm({
         </div>
       )}
 
-      {/* Step 3: Observations, has_digital_file */}
-      {step === 3 && (
+      {/* Step 4: Observations, has_digital_file, summary */}
+      {step === 4 && (
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="observations">Observaciones</Label>
@@ -464,7 +596,7 @@ export function CaseForm({
 
           {/* Summary */}
           <div className="rounded-lg border bg-gray-50 p-4 space-y-2">
-            <p className="text-sm font-medium text-gray-700">Resumen del expediente</p>
+            <p className="text-sm font-medium text-gray-700">Resumen del caso</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
               <span className="text-gray-500">Código:</span>
               <span className="font-mono font-medium">{previewCode}</span>
@@ -524,7 +656,7 @@ export function CaseForm({
             ) : (
               <>
                 <Save size={16} className="mr-2" />
-                {mode === "create" ? "Crear Expediente" : "Guardar Cambios"}
+                {mode === "create" ? "Crear Caso" : "Guardar Cambios"}
               </>
             )}
           </Button>

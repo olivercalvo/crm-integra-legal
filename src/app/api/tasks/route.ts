@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +12,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
+    const admin = createAdminClient();
+
     // Get user's tenant_id
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -29,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, description" }, { status: 400 });
     }
 
-    const { data: task, error: insertError } = await supabase
+    const { data: task, error: insertError } = await admin
       .from("tasks")
       .insert({
         tenant_id: profile.tenant_id,

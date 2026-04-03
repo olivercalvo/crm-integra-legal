@@ -1,25 +1,13 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { UserForm } from "@/components/admin/user-form";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default async function NuevoUsuarioPage() {
-  const supabase = createClient();
+  const { userRole } = await getAuthenticatedContext();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
+  if (userRole !== "admin") {
     redirect("/dashboard");
   }
 
@@ -40,7 +28,7 @@ export default async function NuevoUsuarioPage() {
 
       {/* Page header */}
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">
+        <h2 className="text-2xl font-bold text-integra-navy">
           Crear Nuevo Usuario
         </h2>
         <p className="mt-1 text-sm text-gray-500">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const ALLOWED_TABLES = [
   "cat_classifications",
@@ -34,7 +35,9 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -61,7 +64,7 @@ export async function PATCH(
     const itemId = params.id;
 
     // Verify item belongs to this tenant
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await admin
       .from(table)
       .select("*")
       .eq("id", itemId)
@@ -93,7 +96,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No hay campos para actualizar" }, { status: 400 });
     }
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await admin
       .from(table)
       .update(updates)
       .eq("id", itemId)
@@ -106,7 +109,7 @@ export async function PATCH(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: table,
@@ -138,7 +141,9 @@ export async function DELETE(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
       .eq("id", user.id)
@@ -165,7 +170,7 @@ export async function DELETE(
     const itemId = params.id;
 
     // Verify item belongs to this tenant
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await admin
       .from(table)
       .select("*")
       .eq("id", itemId)
@@ -179,7 +184,7 @@ export async function DELETE(
     // Check references to prevent deactivating items in use
     const refs = REFERENCE_MAP[table] ?? [];
     for (const ref of refs) {
-      const { count } = await supabase
+      const { count } = await admin
         .from(ref.table)
         .select("id", { count: "exact", head: true })
         .eq(ref.column, itemId)
@@ -188,7 +193,7 @@ export async function DELETE(
       if ((count ?? 0) > 0) {
         return NextResponse.json(
           {
-            error: `No se puede desactivar: hay ${count} expediente(s) usando este elemento.`,
+            error: `No se puede desactivar: hay ${count} caso(s) usando este elemento.`,
           },
           { status: 409 }
         );
@@ -196,7 +201,7 @@ export async function DELETE(
     }
 
     // Soft delete
-    const { data: deactivated, error: updateError } = await supabase
+    const { data: deactivated, error: updateError } = await admin
       .from(table)
       .update({ active: false })
       .eq("id", itemId)
@@ -209,7 +214,7 @@ export async function DELETE(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: table,

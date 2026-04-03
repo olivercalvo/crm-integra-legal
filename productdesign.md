@@ -36,31 +36,44 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ---
 
-### F-002: Gestión de Expedientes / Casos
+### F-002: Gestión de Casos
 **Prioridad:** P0 (MVP)
 **Roles:** Admin, Abogada (CRUD completo), Asistente (ver asignados, actualizar estado)
 
 **Campos:**
-- N° Expediente (auto-generado secuencial)
-- Código Expediente (prefijo de clasificación + secuencial, ej. `CORP-001`, `MIG-002`)
+- N° Caso (auto-generado secuencial)
+- Código Caso (prefijo de clasificación + secuencial, ej. `CORP-001`, `MIG-002`)
 - Cliente vinculado (obligatorio)
 - Descripción del Asunto
 - Clasificación (del catálogo)
 - Institución donde se tramita (del catálogo)
 - Responsable (del catálogo de equipo)
-- Fecha Apertura
+- Entidad (texto libre)
+- Tipo de trámite (texto libre)
+- N° trámite en la institución
+- N° caso en la institución
+- Fecha Apertura (date picker, DD/MM/AAAA)
+- Fecha inicio del caso (date picker, DD/MM/AAAA) + días transcurridos (calculado)
+- Fecha inicio del trámite (date picker, DD/MM/AAAA) + días transcurridos (calculado)
+- Fecha tope (date picker, DD/MM/AAAA) — alerta roja si vencida
 - Estado (del catálogo: Activo / En trámite / Cerrado)
-- Ubicación Física (texto libre buscable — referencia al gavetero/archivero físico)
+- Ubicación Física (texto libre)
 - Observaciones
-- Archivo Digital (flag sí/no — informativo)
+- Archivo Digital (flag sí/no)
 - Documentos adjuntos (multi-archivo)
+- Último seguimiento (auto — se actualiza al agregar comentario) + días transcurridos
+- Gastos cobrados al cliente (calculado, suma de pagos)
+- Gastos incurridos (calculado, suma de gastos)
+- Diferencia (calculado, ROJO si negativo)
 
 **Funcionalidad:**
-- Crear, editar, cerrar expedientes vinculados a un cliente
+- Crear, editar, cerrar casos vinculados a un cliente
+- Wizard de 4 pasos para crear/editar
 - Historial completo de cambios de estado (fecha, usuario, estado anterior → nuevo)
 - Filtrar por: estado, clasificación, responsable, cliente, institución
 - Búsqueda por código, descripción, cliente
-- Adjuntar documentos al expediente
+- Adjuntar documentos al caso
+- Sección de comentarios/avances con fecha de seguimiento (ver F-005)
 
 ---
 

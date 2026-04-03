@@ -1,11 +1,14 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
+import { AddExpenseForm } from "@/components/cases/add-expense-form";
+import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
 import { CaseStatusChanger } from "@/components/cases/case-status-changer";
+import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
+import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 import {
   ArrowLeft,
-  Pencil,
   FolderOpen,
   DollarSign,
   ListTodo,
@@ -19,6 +22,12 @@ import {
   Calendar,
   Tag,
   HardDrive,
+  Hash,
+  Clock,
+  Upload,
+  Paperclip,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,14 +55,6 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-PA", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 interface PageProps {
   params: { id: string };
   searchParams: { tab?: string };
@@ -63,11 +64,11 @@ export default async function ExpedienteDetailPage({
   params,
   searchParams,
 }: PageProps) {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
   const activeTab = searchParams.tab ?? "info";
 
   // Fetch case with all related data
-  const { data: caseData, error } = await supabase
+  const { data: caseData, error } = await db
     .from("cases")
     .select(
       `
@@ -95,20 +96,31 @@ export default async function ExpedienteDetailPage({
   const institution = caseData.cat_institutions as unknown as { id: string; name: string } | null;
   const responsible = caseData.cat_team as unknown as { id: string; name: string } | null;
 
-  // Fetch tab-specific data
-  const [expensesRes, paymentsRes, tasksRes, commentsRes, statusesRes] =
+  // Fetch assistant info if exists
+  let assistant: { id: string; name: string } | null = null;
+  if (caseData.assistant_id) {
+    const { data: assistantData } = await db
+      .from("cat_team")
+      .select("id, name")
+      .eq("id", caseData.assistant_id)
+      .single();
+    assistant = assistantData as unknown as { id: string; name: string } | null;
+  }
+
+  // Fetch tab-specific data and catalogs for editing
+  const [expensesRes, paymentsRes, tasksRes, commentsRes, statusesRes, classificationsRes, institutionsRes, teamRes, documentsRes, usersRes] =
     await Promise.all([
-      supabase
+      db
         .from("expenses")
         .select("id, amount, concept, date, registered_by")
         .eq("case_id", params.id)
         .order("date", { ascending: false }),
-      supabase
+      db
         .from("client_payments")
         .select("id, amount, payment_date, registered_by")
         .eq("case_id", params.id)
         .order("payment_date", { ascending: false }),
-      supabase
+      db
         .from("tasks")
         .select(`
           id, description, deadline, status, created_at, completed_at,
@@ -116,19 +128,50 @@ export default async function ExpedienteDetailPage({
         `)
         .eq("case_id", params.id)
         .order("created_at", { ascending: false }),
-      supabase
+      db
         .from("comments")
         .select(`
-          id, text, created_at,
+          id, text, created_at, follow_up_date,
           users(full_name)
         `)
         .eq("case_id", params.id)
-        .order("created_at", { ascending: true }),
-      supabase
+        .order("created_at", { ascending: false }),
+      db
         .from("cat_statuses")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("created_at", { ascending: true }),
+      db
+        .from("cat_classifications")
+        .select("id, name, prefix")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("name"),
+      db
+        .from("cat_institutions")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("name"),
+      db
+        .from("cat_team")
+        .select("id, name, role")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("name"),
+      db
+        .from("documents")
+        .select("id, file_name, file_path, created_at, uploaded_by")
+        .eq("entity_type", "case")
+        .eq("entity_id", params.id)
+        .order("created_at", { ascending: false }),
+      db
+        .from("users")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("full_name"),
     ]);
 
   const expenses = expensesRes.data ?? [];
@@ -136,6 +179,11 @@ export default async function ExpedienteDetailPage({
   const tasks = tasksRes.data ?? [];
   const comments = commentsRes.data ?? [];
   const allStatuses = statusesRes.data ?? [];
+  const allClassifications = classificationsRes.data ?? [];
+  const allInstitutions = institutionsRes.data ?? [];
+  const allTeam = teamRes.data ?? [];
+  const documents = documentsRes.data ?? [];
+  const allUsers = (usersRes.data ?? []) as { id: string; full_name: string }[];
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
   const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -155,7 +203,7 @@ export default async function ExpedienteDetailPage({
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Header — no global Edit button */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Button
@@ -192,15 +240,6 @@ export default async function ExpedienteDetailPage({
             currentStatusName={status?.name ?? ""}
             statuses={allStatuses}
           />
-          <Button
-            asChild
-            className="min-h-[48px] bg-integra-navy px-4 hover:bg-integra-navy/90"
-          >
-            <Link href={`/abogada/expedientes/${params.id}/editar`}>
-              <Pencil size={16} className="mr-1" />
-              Editar
-            </Link>
-          </Button>
         </div>
       </div>
 
@@ -228,162 +267,327 @@ export default async function ExpedienteDetailPage({
 
       {/* TAB: Información */}
       {activeTab === "info" && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          {/* Case info card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-integra-navy">
-                Datos del Expediente
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start gap-2">
-                <Tag size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Clasificación</p>
-                  <p className="font-medium">{classification?.name ?? "—"}</p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <Building2 size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Institución</p>
-                  <p className="font-medium">{institution?.name ?? "—"}</p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <User size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Responsable</p>
-                  <p className="font-medium">{responsible?.name ?? "—"}</p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Fecha de apertura</p>
-                  <p className="font-medium">{formatDate(caseData.opened_at)}</p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Ubicación física</p>
-                  <p className="font-medium">{caseData.physical_location ?? "—"}</p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-start gap-2">
-                <HardDrive size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-500">Expediente digital</p>
-                  <p className="font-medium">
-                    {caseData.has_digital_file ? "Sí, disponible" : "No disponible"}
-                  </p>
-                </div>
-              </div>
-              {caseData.description && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-gray-500">Descripción</p>
-                    <p className="mt-1 text-gray-700">{caseData.description}</p>
-                  </div>
-                </>
-              )}
-              {caseData.observations && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-gray-500">Observaciones</p>
-                    <p className="mt-1 text-gray-700">{caseData.observations}</p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          {/* Per-tab inline editor */}
+          <InlineCaseInfoEditor
+            caseId={params.id}
+            caseData={{
+              description: caseData.description,
+              classification_id: caseData.classification_id,
+              institution_id: caseData.institution_id,
+              responsible_id: caseData.responsible_id,
+              opened_at: caseData.opened_at,
+              physical_location: caseData.physical_location,
+              observations: caseData.observations,
+              has_digital_file: caseData.has_digital_file,
+              entity: caseData.entity,
+              procedure_type: caseData.procedure_type,
+              institution_procedure_number: caseData.institution_procedure_number,
+              institution_case_number: caseData.institution_case_number,
+              case_start_date: caseData.case_start_date,
+              procedure_start_date: caseData.procedure_start_date,
+              deadline: caseData.deadline,
+              assistant_id: caseData.assistant_id ?? null,
+            }}
+            classifications={allClassifications}
+            institutions={allInstitutions}
+            team={allTeam}
+            statuses={allStatuses}
+          />
 
-          {/* Client info card */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-integra-navy">
-                Datos del Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {client ? (
-                <>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {/* Case info card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-integra-navy">
+                  Datos del Caso
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <Tag size={15} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs text-gray-500">Nombre</p>
-                    <Link
-                      href={`/abogada/clientes/${client.id}`}
-                      className="font-medium text-integra-navy hover:underline"
-                    >
-                      {client.name}
-                    </Link>
+                    <p className="text-xs text-gray-500">Clasificación</p>
+                    <p className="font-medium">{classification?.name ?? "—"}</p>
                   </div>
-                  <Separator />
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <Building2 size={15} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs text-gray-500">N° de Cliente</p>
-                    <p className="font-mono font-medium">{client.client_number}</p>
+                    <p className="text-xs text-gray-500">Institución</p>
+                    <p className="font-medium">{institution?.name ?? "—"}</p>
                   </div>
-                  {client.ruc && (
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <UserCheck size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Abogado Responsable</p>
+                    <p className="font-medium">{responsible?.name ?? "—"}</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <Users size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Asistente Responsable de Seguimiento</p>
+                    <p className="font-medium">{assistant?.name ?? "—"}</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Fecha de apertura</p>
+                    <p className="font-medium">{formatDate(caseData.opened_at)}</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Ubicación física</p>
+                    <p className="font-medium">{caseData.physical_location ?? "—"}</p>
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-start gap-2">
+                  <HardDrive size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="text-xs text-gray-500">Expediente digital</p>
+                    <p className="font-medium">
+                      {caseData.has_digital_file ? "Sí, disponible" : "No disponible"}
+                    </p>
+                  </div>
+                </div>
+                {caseData.entity && (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Building2 size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Entidad</p>
+                        <p className="font-medium">{caseData.entity}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {caseData.procedure_type && (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Tag size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">Tipo de trámite</p>
+                        <p className="font-medium">{caseData.procedure_type}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {caseData.institution_procedure_number && (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Hash size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">N° trámite institución</p>
+                        <p className="font-mono font-medium">{caseData.institution_procedure_number}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {caseData.institution_case_number && (
+                  <>
+                    <Separator />
+                    <div className="flex items-start gap-2">
+                      <Hash size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                      <div>
+                        <p className="text-xs text-gray-500">N° caso institución</p>
+                        <p className="font-mono font-medium">{caseData.institution_case_number}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {caseData.case_start_date && (() => {
+                  const d = daysSince(caseData.case_start_date);
+                  return (
                     <>
                       <Separator />
-                      <div>
-                        <p className="text-xs text-gray-500">RUC / Cédula</p>
-                        <p className="font-medium">{client.ruc}</p>
+                      <div className="flex items-start gap-2">
+                        <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Fecha inicio caso</p>
+                          <p className="font-medium">
+                            {formatDate(caseData.case_start_date)}
+                            {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
+                          </p>
+                        </div>
                       </div>
                     </>
-                  )}
-                  {client.type && (
+                  );
+                })()}
+                {caseData.procedure_start_date && (() => {
+                  const d = daysSince(caseData.procedure_start_date);
+                  return (
                     <>
                       <Separator />
-                      <div>
-                        <p className="text-xs text-gray-500">Tipo</p>
-                        <p className="font-medium">{client.type}</p>
+                      <div className="flex items-start gap-2">
+                        <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Fecha inicio trámite</p>
+                          <p className="font-medium">
+                            {formatDate(caseData.procedure_start_date)}
+                            {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
+                          </p>
+                        </div>
                       </div>
                     </>
-                  )}
-                  {client.phone && (
+                  );
+                })()}
+                {caseData.deadline && (() => {
+                  const d = daysSince(caseData.deadline);
+                  const isPastDue = d !== null && d > 0;
+                  return (
                     <>
                       <Separator />
-                      <div>
-                        <p className="text-xs text-gray-500">Teléfono</p>
-                        <p className="font-medium">{client.phone}</p>
+                      <div className="flex items-start gap-2">
+                        <Clock size={15} className={`mt-0.5 shrink-0 ${isPastDue ? "text-red-500" : "text-gray-400"}`} />
+                        <div>
+                          <p className="text-xs text-gray-500">Fecha tope</p>
+                          <p className="font-medium">
+                            {formatDate(caseData.deadline)}
+                            {isPastDue
+                              ? <Badge className="ml-2 border-transparent bg-red-100 text-red-700 text-xs">Vencido hace {d} días</Badge>
+                              : d !== null
+                                ? <Badge className="ml-2 border-transparent bg-green-100 text-green-700 text-xs">Faltan {Math.abs(d)} días</Badge>
+                                : null}
+                          </p>
+                        </div>
                       </div>
                     </>
-                  )}
-                  {client.email && (
+                  );
+                })()}
+                {caseData.last_followup_at && (() => {
+                  const d = daysSince(caseData.last_followup_at);
+                  return (
                     <>
                       <Separator />
-                      <div>
-                        <p className="text-xs text-gray-500">Email</p>
-                        <a
-                          href={`mailto:${client.email}`}
-                          className="font-medium text-integra-navy hover:underline"
-                        >
-                          {client.email}
-                        </a>
+                      <div className="flex items-start gap-2">
+                        <MessageSquare size={15} className="mt-0.5 shrink-0 text-gray-400" />
+                        <div>
+                          <p className="text-xs text-gray-500">Último seguimiento</p>
+                          <p className="font-medium">
+                            {formatDate(caseData.last_followup_at)}
+                            {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">hace {d} días</Badge>}
+                          </p>
+                        </div>
                       </div>
                     </>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-400">Cliente no encontrado</p>
-              )}
-            </CardContent>
-          </Card>
+                  );
+                })()}
+                {caseData.description && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-gray-500">Descripción</p>
+                      <p className="mt-1 text-gray-700">{caseData.description}</p>
+                    </div>
+                  </>
+                )}
+                {caseData.observations && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-gray-500">Observaciones</p>
+                      <p className="mt-1 text-gray-700">{caseData.observations}</p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Client info card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-integra-navy">
+                  Datos del Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {client ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-500">Nombre</p>
+                      <Link
+                        href={`/abogada/clientes/${client.id}`}
+                        className="font-medium text-integra-navy hover:underline"
+                      >
+                        {client.name}
+                      </Link>
+                    </div>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-gray-500">N° de Cliente</p>
+                      <p className="font-mono font-medium">{client.client_number}</p>
+                    </div>
+                    {client.ruc && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs text-gray-500">RUC / Cédula</p>
+                          <p className="font-medium">{client.ruc}</p>
+                        </div>
+                      </>
+                    )}
+                    {client.type && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs text-gray-500">Tipo</p>
+                          <p className="font-medium">{client.type}</p>
+                        </div>
+                      </>
+                    )}
+                    {client.phone && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs text-gray-500">Teléfono</p>
+                          <p className="font-medium">{client.phone}</p>
+                        </div>
+                      </>
+                    )}
+                    {client.email && (
+                      <>
+                        <Separator />
+                        <div>
+                          <p className="text-xs text-gray-500">Email</p>
+                          <a
+                            href={`mailto:${client.email}`}
+                            className="font-medium text-integra-navy hover:underline"
+                          >
+                            {client.email}
+                          </a>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-gray-400">Cliente no encontrado</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
       {/* TAB: Gastos */}
       {activeTab === "gastos" && (
         <div className="space-y-4">
+          {/* Add expense/payment buttons */}
+          <AddExpenseForm caseId={params.id} />
+
           {/* Balance summary */}
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
             <Card>
@@ -494,6 +698,9 @@ export default async function ExpedienteDetailPage({
       {/* TAB: Tareas */}
       {activeTab === "tareas" && (
         <div className="space-y-3">
+          {/* Add task button */}
+          <AddTaskForm caseId={params.id} users={allUsers} />
+
           {tasks.length > 0 ? (
             tasks.map((t) => {
               const isPending = t.status === "pendiente";
@@ -556,17 +763,22 @@ export default async function ExpedienteDetailPage({
                         )}
                       </div>
                     </div>
-                    <Badge
-                      className={
-                        isPending
-                          ? isOverdue
-                            ? "border-transparent bg-red-100 text-red-700"
-                            : "border-transparent bg-amber-100 text-amber-700"
-                          : "border-transparent bg-green-100 text-green-700"
-                      }
-                    >
-                      {isPending ? (isOverdue ? "Vencida" : "Pendiente") : "Cumplida"}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {isPending && (
+                        <CompleteTaskButton taskId={t.id} />
+                      )}
+                      <Badge
+                        className={
+                          isPending
+                            ? isOverdue
+                              ? "border-transparent bg-red-100 text-red-700"
+                              : "border-transparent bg-amber-100 text-amber-700"
+                            : "border-transparent bg-green-100 text-green-700"
+                        }
+                      >
+                        {isPending ? (isOverdue ? "Vencida" : "Pendiente") : "Cumplida"}
+                      </Badge>
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -574,7 +786,7 @@ export default async function ExpedienteDetailPage({
           ) : (
             <div className="py-12 text-center text-gray-400">
               <ListTodo size={40} className="mx-auto mb-2 opacity-40" />
-              <p>No hay tareas para este expediente</p>
+              <p>No hay tareas para este caso</p>
             </div>
           )}
         </div>
@@ -599,14 +811,15 @@ export default async function ExpedienteDetailPage({
                           {commentUser?.full_name ?? "Usuario"}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {new Date(c.created_at).toLocaleString("es-PA", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {formatDateTime(c.created_at)}
                         </p>
                       </div>
+                      {c.follow_up_date && (
+                        <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+                          <Calendar size={12} />
+                          Seguimiento: {formatDate(c.follow_up_date)}
+                        </p>
+                      )}
                       <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">
                         {c.text}
                       </p>
@@ -629,10 +842,46 @@ export default async function ExpedienteDetailPage({
 
       {/* TAB: Documentos */}
       {activeTab === "documentos" && (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-          <FileText size={48} className="mb-3 opacity-40" />
-          <p className="text-base font-medium text-gray-500">Gestión de documentos</p>
-          <p className="text-sm">Próximamente disponible</p>
+        <div className="space-y-4">
+          {/* Attach document button — large, QuickBooks style */}
+          <div className="flex justify-center">
+            <Button
+              className="min-h-[56px] px-8 bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold text-base shadow-sm"
+              disabled
+              title="Requiere conexión a Supabase Storage del cliente"
+            >
+              <Upload size={22} className="mr-2" />
+              Adjuntar Documento
+            </Button>
+          </div>
+          <p className="text-center text-xs text-gray-400">
+            PDF, Word, imágenes, escaneos — se almacenan en Supabase Storage
+          </p>
+
+          {/* Existing documents list */}
+          {documents.length > 0 ? (
+            <div className="space-y-2">
+              {documents.map((doc) => (
+                <Card key={doc.id}>
+                  <CardContent className="flex items-center gap-3 p-4">
+                    <Paperclip size={18} className="shrink-0 text-integra-navy" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{doc.file_name}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatDateTime(doc.created_at)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-gray-400">
+              <FileText size={40} className="mx-auto mb-2 opacity-40" />
+              <p>No hay documentos adjuntos</p>
+              <p className="text-sm mt-1">Usa el botón de arriba para adjuntar archivos</p>
+            </div>
+          )}
         </div>
       )}
     </div>

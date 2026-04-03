@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskForm } from "./task-form";
 import { CheckCircle2, Clock, Calendar, User, Plus, X, Loader2 } from "lucide-react";
+import { formatDate } from "@/lib/utils/format-date";
 import type { Task, User as UserType } from "@/types/database";
 
 interface TaskWithAssignee extends Task {
@@ -16,12 +17,6 @@ interface TaskWithAssignee extends Task {
 interface TaskListProps {
   caseId: string;
   tasks: TaskWithAssignee[];
-}
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("es-PA", { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function isOverdue(deadline: string | null, status: Task["status"]) {
@@ -158,7 +153,7 @@ export function TaskList({ caseId, tasks }: TaskListProps) {
                       {task.completed_at && (
                         <span className="flex items-center gap-1">
                           <Calendar size={12} />
-                          Completada: {new Date(task.completed_at).toLocaleDateString("es-PA", { day: "2-digit", month: "short", year: "numeric" })}
+                          Completada: {formatDate(task.completed_at)}
                         </span>
                       )}
                     </div>
@@ -177,7 +172,7 @@ export function TaskList({ caseId, tasks }: TaskListProps) {
       {tasks.length === 0 && !showForm && (
         <div className="rounded-lg border border-dashed border-gray-200 py-10 text-center">
           <Clock size={32} className="mx-auto mb-2 text-gray-300" />
-          <p className="text-sm text-gray-400">No hay tareas para este expediente.</p>
+          <p className="text-sm text-gray-400">No hay tareas para este caso.</p>
           <Button
             type="button"
             size="sm"

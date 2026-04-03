@@ -1,8 +1,9 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import Link from "next/link";
 import { DollarSign, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GastosFormPanel } from "./gastos-client";
+import { formatDate } from "@/lib/utils/format-date";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("es-PA", {
@@ -11,25 +12,11 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("es-PA", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 export default async function AsistenteGastosPage() {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const { db, user } = await getAuthenticatedContext();
 
   // Fetch all expenses registered by this user (with case + client info)
-  const { data: expensesRaw } = await supabase
+  const { data: expensesRaw } = await db
     .from("expenses")
     .select(
       `
@@ -63,11 +50,11 @@ export default async function AsistenteGastosPage() {
 
   // Fetch cases assigned to this asistente (via cat_team or tasks) for the expense form
   const [teamRes, taskCasesRes] = await Promise.all([
-    supabase
+    db
       .from("cat_team")
       .select("id")
       .eq("user_id", user.id),
-    supabase
+    db
       .from("tasks")
       .select("case_id")
       .eq("assigned_to", user.id),
@@ -92,7 +79,7 @@ export default async function AsistenteGastosPage() {
   }
 
   if (orParts.length > 0) {
-    const { data: casesData } = await supabase
+    const { data: casesData } = await db
       .from("cases")
       .select(
         `
@@ -137,7 +124,7 @@ export default async function AsistenteGastosPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-bold text-integra-navy">
+          <h1 className="text-2xl font-bold text-integra-navy">
             Mis Gastos
           </h1>
           <p className="text-sm text-gray-500">

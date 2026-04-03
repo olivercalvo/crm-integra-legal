@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Button } from "@/components/ui/button";
 import { UserTable } from "@/components/admin/user-table";
 import { UserPlus, Users } from "lucide-react";
@@ -16,29 +16,17 @@ interface UserRow {
 }
 
 export default async function UsuariosPage() {
-  const supabase = createClient();
+  const { db, user, userRole, tenantId } = await getAuthenticatedContext();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, tenant_id")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
+  if (userRole !== "admin") {
     redirect("/dashboard");
   }
 
   // Fetch all users (active + inactive) for this tenant
-  const { data: users, error } = await supabase
+  const { data: users, error } = await db
     .from("users")
     .select("id, full_name, email, role, active, created_at")
-    .eq("tenant_id", profile.tenant_id)
+    .eq("tenant_id", tenantId)
     .order("full_name", { ascending: true });
 
   const userList: UserRow[] = (users ?? []) as UserRow[];
@@ -48,7 +36,7 @@ export default async function UsuariosPage() {
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-integra-navy">
+          <h2 className="text-2xl font-bold text-integra-navy">
             Gestión de Usuarios
           </h2>
           <p className="mt-1 text-sm text-gray-500">

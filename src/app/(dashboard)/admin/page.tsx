@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, FolderOpen, ListTodo, DollarSign, Settings, FileText } from "lucide-react";
+import { Users, FolderOpen, ListTodo, DollarSign, Settings, FileText, ChevronRight } from "lucide-react";
 
 export default async function AdminDashboard() {
-  const supabase = createClient();
+  const { db, tenantId } = await getAuthenticatedContext();
 
   // Fetch counts
   const [clientsRes, casesRes, tasksRes] = await Promise.all([
-    supabase.from("clients").select("id", { count: "exact", head: true }).eq("active", true),
-    supabase.from("cases").select("id", { count: "exact", head: true }),
-    supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "pendiente"),
+    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("active", true),
+    db.from("cases").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    db.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "pendiente"),
   ]);
 
   const stats = [
@@ -19,25 +19,28 @@ export default async function AdminDashboard() {
       value: clientsRes.count ?? 0,
       icon: <Users size={24} />,
       color: "text-blue-600 bg-blue-50",
+      href: "/abogada/clientes",
     },
     {
-      label: "Expedientes",
+      label: "Casos",
       value: casesRes.count ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
+      href: "/abogada/expedientes",
     },
     {
       label: "Tareas Pendientes",
       value: tasksRes.count ?? 0,
       icon: <ListTodo size={24} />,
       color: "text-amber-600 bg-amber-50",
+      href: "/asistente/tareas",
     },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">
+        <h2 className="text-2xl font-bold text-integra-navy">
           Panel de Administración
         </h2>
         <p className="text-sm text-gray-500">
@@ -48,17 +51,20 @@ export default async function AdminDashboard() {
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className={`rounded-lg p-3 ${stat.color}`}>
-                {stat.icon}
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stat.value}</p>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <Link key={stat.label} href={stat.href}>
+            <Card className="cursor-pointer transition-shadow hover:shadow-md active:scale-[0.98]">
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className={`rounded-lg p-3 ${stat.color}`}>
+                  {stat.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-sm text-gray-500">{stat.label}</p>
+                </div>
+                <ChevronRight size={16} className="text-gray-300" />
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
 

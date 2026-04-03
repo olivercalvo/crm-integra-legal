@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 
 export default async function DashboardLayout({
@@ -17,8 +18,9 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Get user profile from public.users table
-  const { data: profile } = await supabase
+  // Use admin client to bypass RLS for user profile lookup
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from("users")
     .select("full_name, role, tenant_id")
     .eq("id", user.id)

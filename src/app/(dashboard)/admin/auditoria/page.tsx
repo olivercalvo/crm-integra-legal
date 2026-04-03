@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,21 +141,9 @@ const EXPORT_COLUMNS: ColumnConfig<AuditRow>[] = [
 // ---------------------------------------------------------------------------
 
 export default async function AuditoriaPage({ searchParams }: PageProps) {
-  const supabase = createClient();
+  const { db, userRole, tenantId } = await getAuthenticatedContext();
 
-  // Auth check
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("tenant_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || profile.role !== "admin") {
+  if (userRole !== "admin") {
     redirect("/admin");
   }
 
@@ -170,15 +158,15 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
   const to       = from + PAGE_SIZE - 1;
 
   // Fetch users for filter dropdown (same tenant)
-  const { data: tenantUsers } = await supabase
+  const { data: tenantUsers } = await db
     .from("users")
     .select("id, full_name, email")
-    .eq("tenant_id", profile.tenant_id)
+    .eq("tenant_id", tenantId)
     .eq("active", true)
     .order("full_name");
 
   // Build main query
-  let query = supabase
+  let query = db
     .from("audit_log")
     .select(
       `
@@ -188,7 +176,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
     `,
       { count: "exact" }
     )
-    .eq("tenant_id", profile.tenant_id)
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -234,7 +222,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
       {/* ------------------------------------------------------------------ */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-integra-navy">
+          <h2 className="text-2xl font-bold text-integra-navy">
             Auditoría del Sistema
           </h2>
           <p className="text-sm text-gray-500">

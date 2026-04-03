@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { CatalogManager } from "@/components/admin/catalog-manager";
 import type { ColumnConfig } from "@/components/admin/catalog-manager";
 
@@ -24,21 +24,9 @@ const TEAM_COLUMNS: ColumnConfig[] = [
 ];
 
 export default async function ConfiguracionPage() {
-  const supabase = createClient();
+  const { userRole } = await getAuthenticatedContext();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") {
+  if (userRole !== "admin") {
     redirect("/dashboard");
   }
 
@@ -46,7 +34,7 @@ export default async function ConfiguracionPage() {
     <div className="space-y-8">
       {/* Page header */}
       <div>
-        <h2 className="font-serif text-2xl font-bold text-integra-navy">
+        <h2 className="text-2xl font-bold text-integra-navy">
           Configuración del Sistema
         </h2>
         <p className="mt-1 text-sm text-gray-500">
@@ -57,11 +45,11 @@ export default async function ConfiguracionPage() {
       {/* Section: Clasificaciones */}
       <section>
         <div className="mb-3">
-          <h3 className="font-serif text-base font-semibold text-integra-navy">
-            Clasificaciones de Expedientes
+          <h3 className="text-base font-semibold text-integra-navy">
+            Clasificaciones de Casos
           </h3>
           <p className="text-xs text-gray-500">
-            Define los tipos de expediente y su prefijo para el código automático (ej. CIV-001).
+            Define los tipos de caso y su prefijo para el código automático (ej. CIV-001).
           </p>
         </div>
         <CatalogManager
@@ -75,11 +63,11 @@ export default async function ConfiguracionPage() {
       {/* Section: Estados */}
       <section>
         <div className="mb-3">
-          <h3 className="font-serif text-base font-semibold text-integra-navy">
-            Estados de Expediente
+          <h3 className="text-base font-semibold text-integra-navy">
+            Estados de Caso
           </h3>
           <p className="text-xs text-gray-500">
-            Los estados disponibles para asignar a los expedientes (ej. Activo, En Espera, Cerrado).
+            Los estados disponibles para asignar a los casos (ej. Activo, En Espera, Cerrado).
           </p>
         </div>
         <CatalogManager
@@ -93,7 +81,7 @@ export default async function ConfiguracionPage() {
       {/* Section: Instituciones */}
       <section>
         <div className="mb-3">
-          <h3 className="font-serif text-base font-semibold text-integra-navy">
+          <h3 className="text-base font-semibold text-integra-navy">
             Instituciones
           </h3>
           <p className="text-xs text-gray-500">
@@ -111,11 +99,11 @@ export default async function ConfiguracionPage() {
       {/* Section: Equipo */}
       <section>
         <div className="mb-3">
-          <h3 className="font-serif text-base font-semibold text-integra-navy">
+          <h3 className="text-base font-semibold text-integra-navy">
             Equipo Legal
           </h3>
           <p className="text-xs text-gray-500">
-            Miembros del equipo para asignación de responsables en expedientes.
+            Miembros del equipo para asignación de responsables en casos.
           </p>
         </div>
         <CatalogManager

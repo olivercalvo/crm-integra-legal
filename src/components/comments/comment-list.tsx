@@ -1,6 +1,7 @@
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, CalendarClock } from "lucide-react";
 import { CommentForm } from "./comment-form";
 import { Separator } from "@/components/ui/separator";
+import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import type { Comment, User } from "@/types/database";
 
 interface CommentWithUser extends Comment {
@@ -10,18 +11,6 @@ interface CommentWithUser extends Comment {
 interface CommentListProps {
   caseId: string;
   comments: CommentWithUser[];
-}
-
-function formatDateTime(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleString("es-PA", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
 }
 
 function getUserInitials(name: string) {
@@ -68,6 +57,12 @@ export function CommentList({ caseId, comments }: CommentListProps) {
                         <span className="text-sm font-semibold text-integra-navy">{authorName}</span>
                         <span className="text-xs text-gray-400">{formatDateTime(comment.created_at)}</span>
                       </div>
+                      {comment.follow_up_date && (
+                        <div className="mb-1.5 flex items-center gap-1 text-xs text-amber-700">
+                          <CalendarClock size={12} />
+                          <span>Seguimiento: {formatDate(comment.follow_up_date)}</span>
+                        </div>
+                      )}
                       <p className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">
                         {comment.text}
                       </p>

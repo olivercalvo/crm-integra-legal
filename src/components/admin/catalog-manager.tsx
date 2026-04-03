@@ -214,7 +214,7 @@ export function CatalogManager({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
-        <CardTitle className="font-serif text-lg text-integra-navy">
+        <CardTitle className="text-lg text-integra-navy">
           {catalogName}
         </CardTitle>
         <Button

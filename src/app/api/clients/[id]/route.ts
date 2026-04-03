@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 interface RouteContext {
   params: { id: string };
@@ -17,7 +18,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -30,7 +33,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const { id } = params;
 
     // Fetch existing client (ensures tenant isolation)
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await admin
       .from("clients")
       .select("*")
       .eq("id", id)
@@ -57,7 +60,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (email !== undefined) updates.email = email?.trim() || null;
     if (observations !== undefined) updates.observations = observations?.trim() || null;
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await admin
       .from("clients")
       .update(updates)
       .eq("id", id)
@@ -76,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const oldVal = String(existing[field] ?? "");
       const newVal = String(updates[field] ?? "");
       if (oldVal !== newVal) {
-        await supabase.from("audit_log").insert({
+        await admin.from("audit_log").insert({
           tenant_id: profile.tenant_id,
           user_id: user.id,
           entity: "clients",
@@ -108,7 +111,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const admin = createAdminClient();
+
+    const { data: profile, error: profileError } = await admin
       .from("users")
       .select("tenant_id")
       .eq("id", user.id)
@@ -121,7 +126,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     const { id } = params;
 
     // Verify client belongs to tenant
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing, error: fetchError } = await admin
       .from("clients")
       .select("id, name")
       .eq("id", id)
@@ -133,7 +138,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     }
 
     // Soft delete: set active = false
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await admin
       .from("clients")
       .update({ active: false })
       .eq("id", id)
@@ -145,7 +150,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     }
 
     // Audit log
-    await supabase.from("audit_log").insert({
+    await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,
       entity: "clients",

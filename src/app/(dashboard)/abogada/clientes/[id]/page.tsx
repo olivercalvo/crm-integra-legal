@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect, notFound } from "next/navigation";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
   FolderOpen,
   Paperclip,
 } from "lucide-react";
+import { formatDate } from "@/lib/utils/format-date";
 import type { Client } from "@/types/database";
 
 interface PageProps {
@@ -37,17 +38,11 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 }
 
 export default async function ClienteDetailPage({ params }: PageProps) {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  const { db } = await getAuthenticatedContext();
 
   const { id } = params;
 
-  const { data: client, error } = await supabase
+  const { data: client, error } = await db
     .from("clients")
     .select("*")
     .eq("id", id)
@@ -60,7 +55,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
   const typedClient = client as Client;
 
   // Fetch linked cases with status
-  const { data: cases } = await supabase
+  const { data: cases } = await db
     .from("cases")
     .select(`
       id, case_code, description, opened_at, updated_at,
@@ -71,7 +66,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
     .order("updated_at", { ascending: false });
 
   // Fetch documents for this client
-  const { data: documents } = await supabase
+  const { data: documents } = await db
     .from("documents")
     .select("id, file_name, created_at")
     .eq("entity_type", "client")
@@ -94,7 +89,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-serif text-2xl font-bold text-integra-navy">
+            <h2 className="text-2xl font-bold text-integra-navy">
               {typedClient.name}
             </h2>
             {!typedClient.active && (
@@ -161,7 +156,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <FolderOpen size={18} className="text-integra-gold" />
-              Expedientes
+              Casos
               {cases && cases.length > 0 && (
                 <span className="rounded-full bg-integra-navy/10 px-2 py-0.5 text-xs font-bold text-integra-navy">
                   {cases.length}
@@ -174,7 +169,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
               className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90 text-white text-xs"
             >
               <Link href={`/abogada/expedientes/nuevo?client_id=${id}`}>
-                + Nuevo Expediente
+                + Nuevo Caso
               </Link>
             </Button>
           </div>
@@ -209,11 +204,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
                       </Badge>
                     )}
                     <p className="text-xs text-gray-400 mt-1">
-                      {new Date(c.updated_at as string).toLocaleDateString("es-PA", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {formatDate(c.updated_at as string)}
                     </p>
                   </div>
                 </Link>
@@ -221,7 +212,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <p className="text-sm text-gray-400 py-2">
-              No hay expedientes vinculados a este cliente.
+              No hay casos vinculados a este cliente.
             </p>
           )}
         </CardContent>
@@ -253,11 +244,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
                     <p className="text-sm font-medium truncate">{doc.file_name as string}</p>
                   </div>
                   <p className="text-xs text-gray-400 shrink-0 ml-3">
-                    {new Date(doc.created_at as string).toLocaleDateString("es-PA", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
+                    {formatDate(doc.created_at as string)}
                   </p>
                 </div>
               ))}

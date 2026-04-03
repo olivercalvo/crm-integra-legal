@@ -33,7 +33,7 @@ export default async function AdminDashboard() {
       value: tasksRes.count ?? 0,
       icon: <ListTodo size={24} />,
       color: "text-amber-600 bg-amber-50",
-      href: "/asistente/tareas",
+      href: "/abogada/tareas",
     },
   ];
 

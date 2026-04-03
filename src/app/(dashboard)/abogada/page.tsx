@@ -63,14 +63,14 @@ export default async function AbogadaDashboard() {
       value: pendingTasksRes.count ?? 0,
       icon: <ListTodo size={24} />,
       color: "text-amber-600 bg-amber-50",
-      href: "/asistente/tareas",
+      href: "/abogada/tareas",
     },
     {
       label: "Saldo en Contra",
       value: casesInRed.length,
       icon: <AlertTriangle size={24} />,
       color: casesInRed.length > 0 ? "text-red-600 bg-red-50" : "text-green-600 bg-green-50",
-      href: "/abogada/expedientes",
+      href: "/abogada/gastos",
     },
   ];
 

@@ -80,8 +80,7 @@ export default async function ExpedienteDetailPage({
       clients(id, name, client_number, ruc, type, phone, email),
       cat_statuses(id, name),
       cat_classifications(id, name, prefix),
-      cat_institutions(id, name),
-      cat_team(id, name)
+      cat_institutions(id, name)
     `
     )
     .eq("id", params.id)
@@ -98,7 +97,17 @@ export default async function ExpedienteDetailPage({
   const status = caseData.cat_statuses as unknown as { id: string; name: string } | null;
   const classification = caseData.cat_classifications as unknown as { id: string; name: string; prefix: string } | null;
   const institution = caseData.cat_institutions as unknown as { id: string; name: string } | null;
-  const responsible = caseData.cat_team as unknown as { id: string; name: string } | null;
+
+  // Fetch responsible (now from users table)
+  let responsible: { id: string; name: string } | null = null;
+  if (caseData.responsible_id) {
+    const { data: respData } = await db
+      .from("users")
+      .select("id, full_name")
+      .eq("id", caseData.responsible_id)
+      .single();
+    if (respData) responsible = { id: respData.id, name: respData.full_name };
+  }
 
   // Fetch assistant info if exists (assistant_id references users table)
   let assistant: { id: string; name: string } | null = null;

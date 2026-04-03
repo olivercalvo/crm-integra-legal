@@ -75,11 +75,7 @@ export function InlineCaseInfoEditor({
   const [procedureStartDate, setProcedureStartDate] = useState(caseData.procedure_start_date ?? "");
   const [deadline, setDeadline] = useState(caseData.deadline ?? "");
 
-  // Filter team by role for responsible dropdown
-  const abogadas = team.filter((t) => {
-    const r = (t as SelectOption & { role?: string }).role;
-    return !r || r === "abogada" || r === "admin";
-  });
+  // No team filtering needed — users prop provides all users
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -243,15 +239,15 @@ export function InlineCaseInfoEditor({
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label>Abogado Responsable</Label>
+          <Label>Abogada Responsable</Label>
           <select
             value={responsibleId}
             onChange={(e) => setResponsibleId(e.target.value)}
             className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Sin responsable</option>
-            {(abogadas.length > 0 ? abogadas : team).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.full_name}</option>
             ))}
           </select>
         </div>

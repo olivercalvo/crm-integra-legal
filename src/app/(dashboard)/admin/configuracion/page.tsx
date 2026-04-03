@@ -18,11 +18,6 @@ const INSTITUTIONS_COLUMNS: ColumnConfig[] = [
   { key: "name", label: "Nombre", editable: true },
 ];
 
-const TEAM_COLUMNS: ColumnConfig[] = [
-  { key: "name", label: "Nombre", editable: true, width: "50%" },
-  { key: "role", label: "Cargo / Rol", editable: true, width: "50%" },
-];
-
 export default async function ConfiguracionPage() {
   const { userRole } = await getAuthenticatedContext();
 
@@ -96,23 +91,8 @@ export default async function ConfiguracionPage() {
         />
       </section>
 
-      {/* Section: Equipo */}
-      <section>
-        <div className="mb-3">
-          <h3 className="text-base font-semibold text-integra-navy">
-            Equipo Legal
-          </h3>
-          <p className="text-xs text-gray-500">
-            Miembros del equipo para asignación de responsables en casos.
-          </p>
-        </div>
-        <CatalogManager
-          catalogName="Equipo"
-          apiEndpoint="cat_team"
-          columns={TEAM_COLUMNS}
-          emptyMessage="No hay miembros en el equipo. Agrega uno para comenzar."
-        />
-      </section>
+      {/* Note: Equipo Legal section removed — users with role abogada/asistente
+         are used directly for case assignments from the Usuarios section */}
     </div>
   );
 }

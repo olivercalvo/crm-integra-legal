@@ -548,7 +548,7 @@ export function CaseForm({
 
           {/* Physical location */}
           <div className="space-y-1.5">
-            <Label htmlFor="physical-location">Ubicación física del expediente</Label>
+            <Label htmlFor="physical-location">Ubicación del Expediente</Label>
             <Input
               id="physical-location"
               type="text"

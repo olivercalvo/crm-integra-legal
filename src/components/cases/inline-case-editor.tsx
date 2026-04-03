@@ -301,7 +301,7 @@ export function InlineCaseInfoEditor({
           <Input value={instCaseNum} onChange={(e) => setInstCaseNum(e.target.value)} className="min-h-[48px]" />
         </div>
         <div className="space-y-1.5">
-          <Label>Ubicación física</Label>
+          <Label>Ubicación del Expediente</Label>
           <Input value={physicalLocation} onChange={(e) => setPhysicalLocation(e.target.value)} className="min-h-[48px]" />
         </div>
         <div className="flex items-center gap-3 rounded-lg border p-4">

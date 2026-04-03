@@ -58,7 +58,7 @@ function formatCurrency(amount: number): string {
 
 interface PageProps {
   params: { id: string };
-  searchParams: { tab?: string };
+  searchParams: { tab?: string; from?: string; client_id?: string };
 }
 
 export default async function ExpedienteDetailPage({
@@ -67,6 +67,9 @@ export default async function ExpedienteDetailPage({
 }: PageProps) {
   const { db, tenantId } = await getAuthenticatedContext();
   const activeTab = searchParams.tab ?? "info";
+  const backUrl = searchParams.from === "client" && searchParams.client_id
+    ? `/abogada/clientes/${searchParams.client_id}`
+    : "/abogada/expedientes";
 
   // Fetch case with all related data
   const { data: caseData, error } = await db
@@ -215,7 +218,7 @@ export default async function ExpedienteDetailPage({
             size="icon"
             className="mt-0.5 min-h-[48px] min-w-[48px]"
           >
-            <Link href="/abogada/expedientes">
+            <Link href={backUrl}>
               <ArrowLeft size={20} />
               <span className="sr-only">Volver</span>
             </Link>
@@ -351,7 +354,7 @@ export default async function ExpedienteDetailPage({
                 <div className="flex items-start gap-2">
                   <MapPin size={15} className="mt-0.5 shrink-0 text-gray-400" />
                   <div>
-                    <p className="text-xs text-gray-500">Ubicación física</p>
+                    <p className="text-xs text-gray-500">Ubicación del Expediente</p>
                     <p className="font-medium">{caseData.physical_location ?? "—"}</p>
                   </div>
                 </div>

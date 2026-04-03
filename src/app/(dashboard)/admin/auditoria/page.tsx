@@ -6,8 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AuditFilters } from "@/components/admin/audit-filters";
 import { ENTITY_OPTIONS } from "@/lib/constants/audit";
-import { ExportButton } from "@/components/admin/export-button";
-import { formatDateForExport, type ColumnConfig } from "@/lib/utils/export";
+import { AuditExport } from "@/components/admin/audit-export";
 import { FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import type { AuditLog } from "@/types/database";
 
@@ -97,44 +96,6 @@ function getUserName(row: AuditRow): string {
 function getEntityLabel(entity: string): string {
   return ENTITY_LABELS[entity] ?? entity;
 }
-
-// ---------------------------------------------------------------------------
-// Export column config
-// ---------------------------------------------------------------------------
-
-const EXPORT_COLUMNS: ColumnConfig<AuditRow>[] = [
-  {
-    key: "created_at",
-    header: "Fecha y hora",
-    formatter: (v) => formatDateForExport(v as string),
-  },
-  {
-    key: "users",
-    header: "Usuario",
-    formatter: (_, row) => getUserName(row),
-  },
-  {
-    key: "action",
-    header: "Acción",
-    formatter: (v) => {
-      const map: Record<string, string> = {
-        create: "Creación",
-        update: "Actualización",
-        delete: "Eliminación",
-      };
-      return map[v as string] ?? String(v);
-    },
-  },
-  {
-    key: "entity",
-    header: "Entidad",
-    formatter: (v) => getEntityLabel(v as string),
-  },
-  { key: "entity_id", header: "ID Entidad" },
-  { key: "field",     header: "Campo" },
-  { key: "old_value", header: "Valor anterior" },
-  { key: "new_value", header: "Valor nuevo" },
-];
 
 // ---------------------------------------------------------------------------
 // Page Component (Server Component)
@@ -230,13 +191,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
             {total !== 1 ? "s" : ""} encontrado{total !== 1 ? "s" : ""}
           </p>
         </div>
-        <ExportButton<AuditRow>
-          data={auditRows}
-          columns={EXPORT_COLUMNS}
-          filename={exportFilename}
-          formats={["csv", "excel"]}
-          label="Exportar página"
-        />
+        <AuditExport data={auditRows} filename={exportFilename} />
       </div>
 
       {/* ------------------------------------------------------------------ */}

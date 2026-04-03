@@ -113,6 +113,13 @@
 | 10.7.8 | Datos ficticios completos para demo | — | ✅ Completo | 10 clientes, 12 casos, gastos/pagos en TODOS, tareas en TODOS, comentarios en TODOS, docs en TODOS |
 | 10.7.9 | Migración assistant_id | — | 🔶 Pendiente | SQL listo en scripts/add-assistant-id.sql |
 
+## FASE 10.8: Seguimiento & Route Cleanup
+| # | Tarea | Feature | Estado | Notas |
+|---|-------|---------|--------|-------|
+| 10.8.1 | Renombrar rutas /expedientes → /casos | — | ✅ Completo | Todos los links, redirects en middleware |
+| 10.8.2 | Crear sección Seguimiento (antes Tareas) | F-004/F-005 | ✅ Completo | /abogada/seguimiento — vista global de tareas+comentarios por caso |
+| 10.8.3 | Renombrar "Tareas" → "Seguimiento" en navegación | — | ✅ Completo | sidebar, bottom-nav, dashboards |
+
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|

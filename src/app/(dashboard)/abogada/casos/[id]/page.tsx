@@ -66,7 +66,7 @@ export default async function ExpedienteDetailPage({
   const activeTab = searchParams.tab ?? "info";
   const backUrl = searchParams.from === "client" && searchParams.client_id
     ? `/abogada/clientes/${searchParams.client_id}`
-    : "/abogada/expedientes";
+    : "/abogada/casos";
 
   // Fetch case with specific columns for performance
   const { data: caseData, error } = await db
@@ -214,7 +214,7 @@ export default async function ExpedienteDetailPage({
   ];
 
   const buildTabUrl = (tab: string) =>
-    `/abogada/expedientes/${params.id}?tab=${tab}`;
+    `/abogada/casos/${params.id}?tab=${tab}`;
 
   return (
     <div className="space-y-5">

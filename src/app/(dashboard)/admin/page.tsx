@@ -26,7 +26,7 @@ export default async function AdminDashboard() {
       value: casesRes.count ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
-      href: "/abogada/expedientes",
+      href: "/abogada/casos",
     },
     {
       label: "Tareas Pendientes",

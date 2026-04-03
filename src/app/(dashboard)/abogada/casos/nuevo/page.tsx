@@ -46,7 +46,7 @@ export default async function NuevoExpedientePage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" className="min-h-[48px] min-w-[48px]">
-          <Link href="/abogada/expedientes">
+          <Link href="/abogada/casos">
             <ArrowLeft size={20} />
             <span className="sr-only">Volver</span>
           </Link>

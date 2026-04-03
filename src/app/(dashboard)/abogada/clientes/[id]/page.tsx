@@ -186,7 +186,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
               size="sm"
               className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90 text-white text-xs"
             >
-              <Link href={`/abogada/expedientes/nuevo?client_id=${id}`}>+ Nuevo Caso</Link>
+              <Link href={`/abogada/casos/nuevo?client_id=${id}`}>+ Nuevo Caso</Link>
             </Button>
           </div>
         </CardHeader>
@@ -198,7 +198,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
                 return (
                   <Link
                     key={c.id as string}
-                    href={`/abogada/expedientes/${c.id as string}?from=client&client_id=${id}`}
+                    href={`/abogada/casos/${c.id as string}?from=client&client_id=${id}`}
                     className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 transition-colors"
                   >
                     <div>

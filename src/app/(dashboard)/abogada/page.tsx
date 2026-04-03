@@ -56,7 +56,7 @@ export default async function AbogadaDashboard() {
       value: activeCasesRes.count ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
-      href: "/abogada/expedientes",
+      href: "/abogada/casos",
     },
     {
       label: "Tareas Pendientes",
@@ -93,7 +93,7 @@ export default async function AbogadaDashboard() {
             </Link>
           </Button>
           <Button asChild size="sm" className="bg-integra-navy hover:bg-integra-navy/90 min-h-[48px] px-4">
-            <Link href="/abogada/expedientes/nuevo">
+            <Link href="/abogada/casos/nuevo">
               <Plus size={18} className="mr-1" />
               Caso
             </Link>

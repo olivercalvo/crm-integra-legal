@@ -129,7 +129,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     const { data: assistants } = await db
       .from("users")
       .select("id, full_name")
-      .in("id", [...new Set(assistantIds)]);
+      .in("id", Array.from(new Set(assistantIds)));
     if (assistants) {
       assistantMap = Object.fromEntries(
         assistants.map((a: { id: string; full_name: string }) => [a.id, a.full_name])
@@ -154,7 +154,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
           <p className="text-sm text-gray-500">{count ?? 0} casos encontrados</p>
         </div>
         <Button asChild className="min-h-[48px] bg-integra-navy px-4 hover:bg-integra-navy/90">
-          <Link href="/abogada/expedientes/nuevo">
+          <Link href="/abogada/casos/nuevo">
             <Plus size={18} className="mr-1" />
             Nuevo Caso
           </Link>
@@ -212,18 +212,18 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                     return (
                       <tr key={c.id} className="cursor-pointer transition-colors hover:bg-gray-50">
                         <td className="px-4 py-3">
-                          <Link href={`/abogada/expedientes/${c.id}`} className="block font-mono font-semibold text-integra-navy">
+                          <Link href={`/abogada/casos/${c.id}`} className="block font-mono font-semibold text-integra-navy">
                             {c.case_code}
                           </Link>
                         </td>
                         <td className="px-4 py-3">
-                          <Link href={`/abogada/expedientes/${c.id}`} className="block">
+                          <Link href={`/abogada/casos/${c.id}`} className="block">
                             <span className="font-medium">{client?.name ?? "—"}</span>
                             <span className="block text-xs text-gray-400">{client?.client_number}</span>
                           </Link>
                         </td>
                         <td className="px-4 py-3 max-w-xs">
-                          <Link href={`/abogada/expedientes/${c.id}`} className="block">
+                          <Link href={`/abogada/casos/${c.id}`} className="block">
                             <span className="line-clamp-2 text-gray-600">{c.description || "—"}</span>
                           </Link>
                         </td>
@@ -270,7 +270,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
               : null;
 
             return (
-              <Link key={c.id} href={`/abogada/expedientes/${c.id}`}>
+              <Link key={c.id} href={`/abogada/casos/${c.id}`}>
                 <Card className="transition-colors hover:bg-gray-50 active:bg-gray-100">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">

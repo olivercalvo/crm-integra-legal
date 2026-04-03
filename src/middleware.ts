@@ -52,6 +52,13 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // Redirect old /abogada/expedientes/* URLs to /abogada/casos/*
+  if (pathname.startsWith("/abogada/expedientes")) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.replace("/abogada/expedientes", "/abogada/casos");
+    return NextResponse.redirect(url);
+  }
+
   // Public routes — no auth required
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     if (user) {

@@ -62,7 +62,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" className="min-h-[48px] min-w-[48px]">
-          <Link href={`/abogada/expedientes/${params.id}`}>
+          <Link href={`/abogada/casos/${params.id}`}>
             <ArrowLeft size={20} />
             <span className="sr-only">Volver</span>
           </Link>

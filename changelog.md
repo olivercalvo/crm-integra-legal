@@ -1,5 +1,45 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.8.1] — 2026-04-03
+### Renombrar rutas expedientes → casos
+- **Rutas renombradas:** `/abogada/expedientes/*` → `/abogada/casos/*` en toda la app
+- **Links actualizados:** sidebar, bottom-nav, dashboards (admin + abogada), gastos, clientes, case-form, import-wizard
+- **Redirect automático:** middleware redirige `/abogada/expedientes/*` → `/abogada/casos/*` para URLs viejas
+
+## [0.8.0] — 2026-04-03
+### Correcciones y mejoras mayores (18 ajustes)
+
+#### Errores corregidos
+- **assistant_id migration:** Columna assistant_id ahora referencia users(id) en vez de cat_team(id)
+- **Auditoría error:** Separado export columns en client component para evitar pasar funciones a Client Components
+- **Asignar asistente:** Dropdown de asistente usa tabla users directamente
+- **Gastos 404:** Creada ruta /abogada/gastos con dashboard de balance general por caso
+- **Error de conexión:** Resuelto al agregar columna assistant_id (causa raíz)
+- **Botón adjuntar:** Habilitado con componente DocumentUpload funcional + API /api/documents/upload
+
+#### Mejoras de UI
+- **Dashboard clickeable:** KPI cards enlazan a secciones correctas por rol
+- **Listado clientes:** Paginación numérica, "Clasificación" renombrado a "Tipo de Cliente"
+- **Listado casos:** Columnas "Abogada Responsable" y "Asistente Responsable" agregadas, paginación numérica
+- **Vista cliente:** Campos "Dirección Física" y "Cliente Desde", DocumentUpload, badges de estado con colores
+- **Vista caso:** "Ubicación Física" → "Ubicación del Expediente", botón atrás inteligente (vuelve al cliente si vino de ahí)
+- **Seguimiento unificado:** Tareas y Comentarios combinados en tab "Seguimiento" cronológico con badges de tipo
+- **Moneda:** Todos los montos en Balboas (B/.) en vez de USD
+- **Mobile:** Gastos agregado a bottom nav de abogada
+
+#### Arquitectura
+- **Equipo Legal eliminado:** Usuarios con rol abogada/asistente se usan directamente para asignación de casos
+- **responsible_id:** Migración para referenciar users en vez de cat_team
+- **Datos demo:** Direcciones, fechas "Cliente Desde", gastos variados, tareas y comentarios realistas
+
+#### Migraciones SQL requeridas
+1. `ALTER TABLE cases ADD COLUMN IF NOT EXISTS assistant_id UUID REFERENCES users(id);`
+2. `ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;`
+3. `ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_since DATE;`
+4. `ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_responsible_id_fkey;`
+5. `ALTER TABLE cases ADD CONSTRAINT cases_responsible_id_fkey FOREIGN KEY (responsible_id) REFERENCES users(id);`
+6. Seed demo data (supabase/migrations/20260403000006_seed_complete_demo.sql)
+
 ## [0.7.1] — 2026-04-03
 ### Mejoras de UX y datos
 

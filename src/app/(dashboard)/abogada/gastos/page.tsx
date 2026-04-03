@@ -105,7 +105,7 @@ export default async function GastosPage() {
           {/* Mobile: card layout */}
           <div className="flex flex-col gap-3 sm:hidden">
             {rows.map((row) => (
-              <Link key={row.id} href={`/abogada/expedientes/${row.id}?tab=gastos`}>
+              <Link key={row.id} href={`/abogada/casos/${row.id}?tab=gastos`}>
                 <Card className="overflow-hidden hover:shadow-md transition-shadow">
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-center justify-between">
@@ -144,7 +144,7 @@ export default async function GastosPage() {
                     <tr key={row.id} className="transition-colors hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <Link
-                          href={`/abogada/expedientes/${row.id}?tab=gastos`}
+                          href={`/abogada/casos/${row.id}?tab=gastos`}
                           className="font-mono font-bold text-integra-navy hover:underline"
                         >
                           {row.caseCode}

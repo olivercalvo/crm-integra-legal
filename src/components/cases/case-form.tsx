@@ -202,7 +202,7 @@ export function CaseForm({
           return;
         }
 
-        router.push(`/abogada/expedientes/${json.data.id}`);
+        router.push(`/abogada/casos/${json.data.id}`);
         router.refresh();
       } catch {
         setError("Error de conexión. Por favor intente de nuevo.");

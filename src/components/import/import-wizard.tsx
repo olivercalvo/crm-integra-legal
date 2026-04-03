@@ -521,7 +521,7 @@ export function ImportWizard() {
               Ver clientes
             </a>
             <a
-              href="/abogada/expedientes"
+              href="/abogada/casos"
               className="inline-flex items-center gap-2 rounded-lg bg-integra-navy px-4 py-3 text-sm font-medium text-white hover:bg-integra-navy/90 min-h-[48px]"
             >
               <FolderOpen size={16} />

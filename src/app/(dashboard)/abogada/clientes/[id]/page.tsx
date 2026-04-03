@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DeactivateClientButton } from "@/components/clients/deactivate-client-button";
+import { DocumentUpload } from "@/components/documents/document-upload";
 import {
   ChevronLeft,
   Pencil,
@@ -17,6 +18,8 @@ import {
   FileText,
   FolderOpen,
   Paperclip,
+  MapPin,
+  Calendar,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import type { Client } from "@/types/database";
@@ -37,9 +40,22 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
+function getStatusStyle(statusName: string): string {
+  const name = statusName.toLowerCase();
+  if (name.includes("activo") || name.includes("activa")) {
+    return "border-transparent bg-green-100 text-green-800";
+  }
+  if (name.includes("trámite") || name.includes("tramite") || name.includes("proceso")) {
+    return "border-transparent bg-amber-100 text-amber-800";
+  }
+  if (name.includes("cerrado") || name.includes("cerrada") || name.includes("archivado")) {
+    return "border-transparent bg-gray-100 text-gray-600";
+  }
+  return "border-transparent bg-blue-100 text-blue-800";
+}
+
 export default async function ClienteDetailPage({ params }: PageProps) {
   const { db } = await getAuthenticatedContext();
-
   const { id } = params;
 
   const { data: client, error } = await db
@@ -48,9 +64,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
     .eq("id", id)
     .single();
 
-  if (error || !client) {
-    notFound();
-  }
+  if (error || !client) notFound();
 
   const typedClient = client as Client;
 
@@ -89,13 +103,9 @@ export default async function ClienteDetailPage({ params }: PageProps) {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-2xl font-bold text-integra-navy">
-              {typedClient.name}
-            </h2>
+            <h2 className="text-2xl font-bold text-integra-navy">{typedClient.name}</h2>
             {!typedClient.active && (
-              <Badge variant="secondary" className="bg-red-100 text-red-700 border-0">
-                Inactivo
-              </Badge>
+              <Badge variant="secondary" className="bg-red-100 text-red-700 border-0">Inactivo</Badge>
             )}
           </div>
           <p className="text-sm font-mono text-gray-400">{typedClient.client_number}</p>
@@ -128,14 +138,22 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         <CardContent className="divide-y">
           <InfoRow icon={<Hash size={16} />} label="N° Cliente" value={typedClient.client_number} />
           <InfoRow icon={<Building2 size={16} />} label="RUC / Cédula" value={typedClient.ruc} />
-          <InfoRow
-            icon={<FileText size={16} />}
-            label="Clasificación"
-            value={typedClient.type}
-          />
+          <InfoRow icon={<FileText size={16} />} label="Tipo de Cliente" value={typedClient.type} />
           <InfoRow icon={<User size={16} />} label="Persona de contacto" value={typedClient.contact} />
           <InfoRow icon={<Phone size={16} />} label="Teléfono" value={typedClient.phone} />
           <InfoRow icon={<Mail size={16} />} label="Correo electrónico" value={typedClient.email} />
+          <InfoRow
+            icon={<MapPin size={16} />}
+            label="Dirección Física"
+            value={(typedClient as Record<string, unknown>).address as string | null}
+          />
+          <InfoRow
+            icon={<Calendar size={16} />}
+            label="Cliente Desde"
+            value={(typedClient as Record<string, unknown>).client_since
+              ? formatDate((typedClient as Record<string, unknown>).client_since as string)
+              : null}
+          />
           {typedClient.observations && (
             <>
               <Separator />
@@ -150,7 +168,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         </CardContent>
       </Card>
 
-      {/* Linked cases */}
+      {/* Linked cases with colored status badges */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -168,57 +186,53 @@ export default async function ClienteDetailPage({ params }: PageProps) {
               size="sm"
               className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90 text-white text-xs"
             >
-              <Link href={`/abogada/expedientes/nuevo?client_id=${id}`}>
-                + Nuevo Caso
-              </Link>
+              <Link href={`/abogada/expedientes/nuevo?client_id=${id}`}>+ Nuevo Caso</Link>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
           {cases && cases.length > 0 ? (
             <div className="space-y-2">
-              {cases.map((c: Record<string, unknown>) => (
-                <Link
-                  key={c.id as string}
-                  href={`/abogada/expedientes/${c.id as string}`}
-                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 transition-colors"
-                >
-                  <div>
-                    <p className="font-medium text-sm text-integra-navy">{c.case_code as string}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                      {(c.description as string) || "Sin descripción"}
-                    </p>
-                    {(c.cat_classifications as Record<string, string> | null) && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {(c.cat_classifications as Record<string, string>).name}
+              {cases.map((c: Record<string, unknown>) => {
+                const statusObj = c.cat_statuses as { name: string } | null;
+                return (
+                  <Link
+                    key={c.id as string}
+                    href={`/abogada/expedientes/${c.id as string}?from=client&client_id=${id}`}
+                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div>
+                      <p className="font-medium text-sm text-integra-navy">{c.case_code as string}</p>
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                        {(c.description as string) || "Sin descripción"}
                       </p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0 ml-3">
-                    {(c.cat_statuses as Record<string, string> | null) && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs border-integra-navy/20 text-integra-navy"
-                      >
-                        {(c.cat_statuses as Record<string, string>).name}
-                      </Badge>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      {formatDate(c.updated_at as string)}
-                    </p>
-                  </div>
-                </Link>
-              ))}
+                      {(c.cat_classifications as Record<string, string> | null) && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {(c.cat_classifications as Record<string, string>).name}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0 ml-3">
+                      {statusObj && (
+                        <Badge className={getStatusStyle(statusObj.name)}>
+                          {statusObj.name}
+                        </Badge>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">
+                        {formatDate(c.updated_at as string)}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 py-2">
-              No hay casos vinculados a este cliente.
-            </p>
+            <p className="text-sm text-gray-400 py-2">No hay casos vinculados a este cliente.</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Documents */}
+      {/* Documents with upload button */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -231,8 +245,10 @@ export default async function ClienteDetailPage({ params }: PageProps) {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {documents && documents.length > 0 ? (
+        <CardContent className="space-y-4">
+          <DocumentUpload entityType="client" entityId={id} />
+
+          {documents && documents.length > 0 && (
             <div className="space-y-2">
               {documents.map((doc: Record<string, unknown>) => (
                 <div
@@ -249,10 +265,6 @@ export default async function ClienteDetailPage({ params }: PageProps) {
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="text-sm text-gray-400 py-2">
-              No hay documentos adjuntos. La carga de documentos estará disponible próximamente.
-            </p>
           )}
         </CardContent>
       </Card>

@@ -29,6 +29,8 @@ export interface Client {
   contact: string | null;
   phone: string | null;
   email: string | null;
+  address: string | null;
+  client_since: string | null;
   observations: string | null;
   active: boolean;
   created_at: string;

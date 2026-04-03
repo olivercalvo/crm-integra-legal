@@ -6,10 +6,7 @@ import { GastosFormPanel } from "./gastos-client";
 import { formatDate } from "@/lib/utils/format-date";
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-PA", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+  return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default async function AsistenteGastosPage() {

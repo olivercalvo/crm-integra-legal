@@ -50,10 +50,7 @@ function getStatusStyle(statusName: string): string {
 }
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-PA", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+  return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 interface PageProps {
@@ -71,12 +68,16 @@ export default async function ExpedienteDetailPage({
     ? `/abogada/clientes/${searchParams.client_id}`
     : "/abogada/expedientes";
 
-  // Fetch case with all related data
+  // Fetch case with specific columns for performance
   const { data: caseData, error } = await db
     .from("cases")
     .select(
       `
-      *,
+      id, case_code, case_number, client_id, description, classification_id,
+      institution_id, responsible_id, assistant_id, opened_at, status_id,
+      physical_location, observations, has_digital_file, entity, procedure_type,
+      institution_procedure_number, institution_case_number, case_start_date,
+      procedure_start_date, deadline, last_followup_at, created_at, updated_at,
       clients(id, name, client_number, ruc, type, phone, email),
       cat_statuses(id, name),
       cat_classifications(id, name, prefix),

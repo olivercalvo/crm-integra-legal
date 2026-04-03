@@ -18,7 +18,7 @@ interface ExpenseListProps {
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("es-PA", { style: "currency", currency: "USD" }).format(amount);
+  return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function ExpenseList({ caseId, expenses, payments }: ExpenseListProps) {

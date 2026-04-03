@@ -7,6 +7,7 @@ import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-for
 import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
 import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
+import { DocumentUpload } from "@/components/documents/document-upload";
 import {
   ArrowLeft,
   FolderOpen,
@@ -846,20 +847,8 @@ export default async function ExpedienteDetailPage({
       {/* TAB: Documentos */}
       {activeTab === "documentos" && (
         <div className="space-y-4">
-          {/* Attach document button — large, QuickBooks style */}
-          <div className="flex justify-center">
-            <Button
-              className="min-h-[56px] px-8 bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold text-base shadow-sm"
-              disabled
-              title="Requiere conexión a Supabase Storage del cliente"
-            >
-              <Upload size={22} className="mr-2" />
-              Adjuntar Documento
-            </Button>
-          </div>
-          <p className="text-center text-xs text-gray-400">
-            PDF, Word, imágenes, escaneos — se almacenan en Supabase Storage
-          </p>
+          {/* Attach document — QuickBooks style */}
+          <DocumentUpload entityType="case" entityId={params.id} />
 
           {/* Existing documents list */}
           {documents.length > 0 ? (

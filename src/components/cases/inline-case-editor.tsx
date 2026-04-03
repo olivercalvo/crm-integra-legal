@@ -13,6 +13,11 @@ interface SelectOption {
   prefix?: string;
 }
 
+interface UserOption {
+  id: string;
+  full_name: string;
+}
+
 interface InlineCaseInfoEditorProps {
   caseId: string;
   caseData: {
@@ -37,6 +42,7 @@ interface InlineCaseInfoEditorProps {
   institutions: SelectOption[];
   team: SelectOption[];
   statuses: SelectOption[];
+  users?: UserOption[];
 }
 
 export function InlineCaseInfoEditor({
@@ -45,6 +51,7 @@ export function InlineCaseInfoEditor({
   classifications,
   institutions,
   team,
+  users = [],
 }: InlineCaseInfoEditorProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -68,14 +75,10 @@ export function InlineCaseInfoEditor({
   const [procedureStartDate, setProcedureStartDate] = useState(caseData.procedure_start_date ?? "");
   const [deadline, setDeadline] = useState(caseData.deadline ?? "");
 
-  // Filter team by role for the dropdowns
+  // Filter team by role for responsible dropdown
   const abogadas = team.filter((t) => {
     const r = (t as SelectOption & { role?: string }).role;
     return !r || r === "abogada" || r === "admin";
-  });
-  const asistentes = team.filter((t) => {
-    const r = (t as SelectOption & { role?: string }).role;
-    return !r || r === "asistente";
   });
 
   const handleCancel = () => {
@@ -260,8 +263,8 @@ export function InlineCaseInfoEditor({
             className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Sin asistente</option>
-            {(asistentes.length > 0 ? asistentes : team).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.full_name}</option>
             ))}
           </select>
         </div>

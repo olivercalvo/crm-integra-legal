@@ -96,15 +96,17 @@ export default async function ExpedienteDetailPage({
   const institution = caseData.cat_institutions as unknown as { id: string; name: string } | null;
   const responsible = caseData.cat_team as unknown as { id: string; name: string } | null;
 
-  // Fetch assistant info if exists
+  // Fetch assistant info if exists (assistant_id references users table)
   let assistant: { id: string; name: string } | null = null;
   if (caseData.assistant_id) {
     const { data: assistantData } = await db
-      .from("cat_team")
-      .select("id, name")
+      .from("users")
+      .select("id, full_name")
       .eq("id", caseData.assistant_id)
       .single();
-    assistant = assistantData as unknown as { id: string; name: string } | null;
+    if (assistantData) {
+      assistant = { id: assistantData.id, name: assistantData.full_name };
+    }
   }
 
   // Fetch tab-specific data and catalogs for editing
@@ -293,6 +295,7 @@ export default async function ExpedienteDetailPage({
             institutions={allInstitutions}
             team={allTeam}
             statuses={allStatuses}
+            users={allUsers}
           />
 
           <div className="grid gap-5 lg:grid-cols-2">

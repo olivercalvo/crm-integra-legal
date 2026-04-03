@@ -199,8 +199,7 @@ export default async function ExpedienteDetailPage({
   const tabs = [
     { key: "info", label: "Información", icon: FolderOpen },
     { key: "gastos", label: "Gastos", icon: DollarSign },
-    { key: "tareas", label: "Tareas", icon: ListTodo },
-    { key: "comentarios", label: "Comentarios", icon: MessageSquare },
+    { key: "seguimiento", label: "Seguimiento", icon: MessageSquare },
     { key: "documentos", label: "Documentos", icon: FileText },
   ];
 
@@ -702,150 +701,140 @@ export default async function ExpedienteDetailPage({
         </div>
       )}
 
-      {/* TAB: Tareas */}
-      {activeTab === "tareas" && (
-        <div className="space-y-3">
-          {/* Add task button */}
-          <AddTaskForm caseId={params.id} users={allUsers} />
+      {/* TAB: Seguimiento (unified tasks + comments) */}
+      {activeTab === "seguimiento" && (() => {
+        // Merge tasks and comments into a chronological thread
+        type ThreadItem =
+          | { type: "task"; id: string; date: string; data: typeof tasks[number] }
+          | { type: "comment"; id: string; date: string; data: typeof comments[number] };
 
-          {tasks.length > 0 ? (
-            tasks.map((t) => {
-              const isPending = t.status === "pendiente";
-              const assignedUser = t.assigned as unknown as { full_name: string } | null;
-              const isOverdue =
-                isPending &&
-                t.deadline &&
-                new Date(t.deadline) < new Date();
+        const thread: ThreadItem[] = [
+          ...tasks.map((t) => ({
+            type: "task" as const,
+            id: `t-${t.id}`,
+            date: t.created_at,
+            data: t,
+          })),
+          ...comments.map((c) => ({
+            type: "comment" as const,
+            id: `c-${c.id}`,
+            date: c.created_at,
+            data: c,
+          })),
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-              return (
-                <Card
-                  key={t.id}
-                  className={isOverdue ? "border-red-200 bg-red-50/50" : ""}
-                >
-                  <CardContent className="flex items-start gap-3 p-4">
-                    <div
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
-                        isPending
-                          ? isOverdue
-                            ? "border-red-400 bg-white"
-                            : "border-amber-400 bg-white"
-                          : "border-green-500 bg-green-500"
-                      }`}
-                    >
-                      {!isPending && (
-                        <CheckCircle size={12} className="text-white" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`font-medium text-sm ${
-                          !isPending ? "text-gray-400 line-through" : ""
-                        }`}
-                      >
-                        {t.description}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
-                        {assignedUser && (
-                          <span className="flex items-center gap-1">
-                            <User size={11} />
-                            {assignedUser.full_name}
-                          </span>
-                        )}
-                        {t.deadline && (
-                          <span
-                            className={`flex items-center gap-1 ${
-                              isOverdue ? "text-red-500 font-medium" : ""
-                            }`}
-                          >
-                            <Calendar size={11} />
-                            Vence: {formatDate(t.deadline)}
-                            {isOverdue && " (vencida)"}
-                          </span>
-                        )}
-                        {t.completed_at && (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <CheckCircle size={11} />
-                            Cumplida: {formatDate(t.completed_at)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {isPending && (
-                        <CompleteTaskButton taskId={t.id} />
-                      )}
-                      <Badge
-                        className={
-                          isPending
-                            ? isOverdue
-                              ? "border-transparent bg-red-100 text-red-700"
-                              : "border-transparent bg-amber-100 text-amber-700"
-                            : "border-transparent bg-green-100 text-green-700"
-                        }
-                      >
-                        {isPending ? (isOverdue ? "Vencida" : "Pendiente") : "Cumplida"}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
-          ) : (
-            <div className="py-12 text-center text-gray-400">
-              <ListTodo size={40} className="mx-auto mb-2 opacity-40" />
-              <p>No hay tareas para este caso</p>
+        return (
+          <div className="space-y-4">
+            {/* Action buttons */}
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <AddTaskForm caseId={params.id} users={allUsers} />
             </div>
-          )}
-        </div>
-      )}
+            <AddCommentForm caseId={params.id} />
 
-      {/* TAB: Comentarios */}
-      {activeTab === "comentarios" && (
-        <div className="space-y-4">
-          {/* Comments thread */}
-          <div className="space-y-3">
-            {comments.length > 0 ? (
-              comments.map((c) => {
-                const commentUser = c.users as unknown as { full_name: string } | null;
-                return (
-                  <div key={c.id} className="flex gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-integra-navy/10 text-xs font-bold text-integra-navy">
-                      {commentUser?.full_name?.charAt(0)?.toUpperCase() ?? "?"}
-                    </div>
-                    <div className="flex-1 rounded-lg border bg-white p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-gray-900">
-                          {commentUser?.full_name ?? "Usuario"}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {formatDateTime(c.created_at)}
-                        </p>
-                      </div>
-                      {c.follow_up_date && (
-                        <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
-                          <Calendar size={12} />
-                          Seguimiento: {formatDate(c.follow_up_date)}
-                        </p>
-                      )}
-                      <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">
-                        {c.text}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })
+            <Separator />
+
+            {/* Chronological thread */}
+            {thread.length > 0 ? (
+              <div className="space-y-3">
+                {thread.map((item) => {
+                  if (item.type === "task") {
+                    const t = item.data;
+                    const taskPending = t.status === "pendiente";
+                    const assignedUser = t.assigned as unknown as { full_name: string } | null;
+                    const isOverdue = taskPending && t.deadline && new Date(t.deadline) < new Date();
+
+                    return (
+                      <Card key={item.id} className={`border-l-4 ${
+                        taskPending
+                          ? isOverdue ? "border-l-red-500 bg-red-50/30" : "border-l-amber-500"
+                          : "border-l-green-500"
+                      }`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 text-amber-700">
+                                <ListTodo size={10} className="mr-1" />
+                                Tarea
+                              </Badge>
+                              <span>{formatDateTime(t.created_at)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {taskPending && <CompleteTaskButton taskId={t.id} />}
+                              <Badge className={
+                                taskPending
+                                  ? isOverdue ? "border-transparent bg-red-100 text-red-700" : "border-transparent bg-amber-100 text-amber-700"
+                                  : "border-transparent bg-green-100 text-green-700"
+                              }>
+                                {taskPending ? (isOverdue ? "Vencida" : "Pendiente") : "Cumplida"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className={`mt-2 font-medium text-sm ${!taskPending ? "text-gray-400 line-through" : ""}`}>
+                            {t.description}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
+                            {assignedUser && (
+                              <span className="flex items-center gap-1">
+                                <User size={11} />
+                                {assignedUser.full_name}
+                              </span>
+                            )}
+                            {t.deadline && (
+                              <span className={`flex items-center gap-1 ${isOverdue ? "text-red-500 font-medium" : ""}`}>
+                                <Calendar size={11} />
+                                Vence: {formatDate(t.deadline)}
+                              </span>
+                            )}
+                            {t.completed_at && (
+                              <span className="flex items-center gap-1 text-green-600">
+                                <CheckCircle size={11} />
+                                Cumplida: {formatDate(t.completed_at)}
+                              </span>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+
+                  // Comment
+                  const c = item.data;
+                  const commentUser = c.users as unknown as { full_name: string } | null;
+                  return (
+                    <Card key={item.id} className="border-l-4 border-l-blue-400">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-700">
+                            <MessageSquare size={10} className="mr-1" />
+                            Comentario
+                          </Badge>
+                          <span>{formatDateTime(c.created_at)}</span>
+                          <span className="font-medium text-integra-navy">
+                            {commentUser?.full_name ?? "Usuario"}
+                          </span>
+                        </div>
+                        {c.follow_up_date && (
+                          <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+                            <Calendar size={12} />
+                            Seguimiento: {formatDate(c.follow_up_date)}
+                          </p>
+                        )}
+                        <p className="mt-2 text-sm text-gray-700 whitespace-pre-line">{c.text}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="py-8 text-center text-gray-400">
-                <MessageSquare size={36} className="mx-auto mb-2 opacity-40" />
-                <p>No hay comentarios aún</p>
+              <div className="py-12 text-center text-gray-400">
+                <MessageSquare size={40} className="mx-auto mb-2 opacity-40" />
+                <p>No hay seguimiento registrado</p>
+                <p className="text-sm mt-1">Agrega un comentario o asigna una tarea</p>
               </div>
             )}
           </div>
-
-          {/* Add comment form */}
-          <AddCommentForm caseId={params.id} />
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB: Documentos */}
       {activeTab === "documentos" && (

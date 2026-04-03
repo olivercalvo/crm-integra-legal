@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClientListSearch, ClientListPagination } from "@/components/clients/client-list";
+import { ClientListSearch } from "@/components/clients/client-list";
+import { PagePagination } from "@/components/ui/page-pagination";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { Plus, User, Phone, FolderOpen } from "lucide-react";
 import type { Client } from "@/types/database";
@@ -181,7 +182,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                     <SortableHeader column="phone" label="Teléfono" currentSort={currentSort} currentDir={currentDir} />
                   </th>
                   <th className="px-4 py-3">
-                    <SortableHeader column="type" label="Clasificación" currentSort={currentSort} currentDir={currentDir} />
+                    <SortableHeader column="type" label="Tipo de Cliente" currentSort={currentSort} currentDir={currentDir} />
                   </th>
                   <th className="px-4 py-3 text-center">Casos</th>
                 </tr>
@@ -236,7 +237,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
           </div>
 
           {/* Pagination */}
-          <ClientListPagination page={page} totalPages={totalPages} />
+          <PagePagination page={page} totalPages={totalPages} />
         </>
       )}
     </div>

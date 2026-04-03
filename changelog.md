@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.9.0] — 2026-04-03
+### Sección Seguimiento (antes Tareas)
+- **Nueva página `/abogada/seguimiento`:** vista global de tareas y comentarios de todos los casos, agrupados por caso
+- **Renombrado:** "Tareas" → "Seguimiento" en sidebar, bottom-nav, y dashboards
+- **Hilo cronológico:** muestra tareas (pendientes/cumplidas/vencidas) y comentarios con fechas de seguimiento
+- **Redirect:** `/abogada/tareas` redirige automáticamente a `/abogada/seguimiento`
+
 ## [0.8.1] — 2026-04-03
 ### Renombrar rutas expedientes → casos
 - **Rutas renombradas:** `/abogada/expedientes/*` → `/abogada/casos/*` en toda la app

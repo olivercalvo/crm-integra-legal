@@ -21,7 +21,7 @@ const adminNav: BottomNavItem[] = [
   { label: "Inicio", href: "/admin", icon: <LayoutDashboard size={20} /> },
   { label: "Clientes", href: "/abogada/clientes", icon: <Users size={20} /> },
   { label: "Casos", href: "/abogada/casos", icon: <FolderOpen size={20} /> },
-  { label: "Tareas", href: "/abogada/tareas", icon: <ListTodo size={20} /> },
+  { label: "Seguimiento", href: "/abogada/seguimiento", icon: <ListTodo size={20} /> },
 ];
 
 const abogadaNav: BottomNavItem[] = [

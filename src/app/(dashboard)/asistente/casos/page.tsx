@@ -67,7 +67,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
     )
     .order("updated_at", { ascending: false });
 
-  // Build filter: responsible_id in teamIds OR id in taskCaseIds
+  // Build filter: responsible_id in teamIds OR id in taskCaseIds OR assistant_id = user.id
   const orParts: string[] = [];
   if (teamIds.length > 0) {
     orParts.push(`responsible_id.in.(${teamIds.join(",")})`);
@@ -75,13 +75,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
   if (taskCaseIds.length > 0) {
     orParts.push(`id.in.(${taskCaseIds.join(",")})`);
   }
-
-  if (orParts.length === 0) {
-    // No assignments at all — return empty
-    return (
-      <EmptyState q={q} noAssignments />
-    );
-  }
+  orParts.push(`assistant_id.eq.${user.id}`);
 
   query = query.or(orParts.join(","));
 

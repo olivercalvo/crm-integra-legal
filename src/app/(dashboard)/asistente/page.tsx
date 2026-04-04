@@ -16,7 +16,7 @@ export default async function AsistenteDashboard() {
     .from("tasks")
     .select(`
       id, description, deadline, status,
-      cases!inner(case_code, description,
+      cases!inner(id, case_code, description,
         clients!inner(name)
       )
     `, { count: "exact" })
@@ -102,13 +102,14 @@ export default async function AsistenteDashboard() {
                 const clientInfo = caseInfo?.clients as Record<string, string>;
                 const deadline = task.deadline as string | null;
                 return (
-                  <div
+                  <Link
                     key={task.id as string}
-                    className="rounded-lg border p-3"
+                    href={`/asistente/casos/${caseInfo?.id as string}?tab=seguimiento`}
+                    className="block rounded-lg border p-3 hover:bg-gray-50 transition-colors"
                   >
                     <p className="font-medium">{task.description as string}</p>
                     <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                      <span>{caseInfo?.case_code as string}</span>
+                      <span className="font-mono font-semibold text-integra-navy">{caseInfo?.case_code as string}</span>
                       <span>•</span>
                       <span>{clientInfo?.name}</span>
                     </div>
@@ -118,7 +119,7 @@ export default async function AsistenteDashboard() {
                         <span>Vence: {formatDate(deadline)}</span>
                       </div>
                     ) : null}
-                  </div>
+                  </Link>
                 );
               })}
             </div>

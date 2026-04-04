@@ -175,11 +175,19 @@ export function TodoList({ initialTodos }: TodoListProps) {
                 {todo.description}
               </p>
               <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                {todo.deadline && (
+                <span className="flex items-center gap-1">
+                  <Calendar size={11} />
+                  Creado: {formatDate(todo.created_at)}
+                </span>
+                {todo.deadline ? (
                   <span className={`flex items-center gap-1 ${overdue ? "font-medium text-red-600" : ""}`}>
                     <Calendar size={11} />
-                    {overdue ? "Vencida: " : "Límite: "}
+                    {overdue ? "Vencida: " : "Vence: "}
                     {formatDate(todo.deadline)}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-400 italic">
+                    Sin fecha límite
                   </span>
                 )}
                 {isCompleted && todo.completed_at && (
@@ -297,9 +305,10 @@ export function TodoList({ initialTodos }: TodoListProps) {
                 }
               }}
             />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <Calendar size={16} className="text-gray-400" />
+                <label className="text-xs text-gray-500">Fecha de vencimiento (opcional):</label>
                 <input
                   type="date"
                   value={deadline}
@@ -348,17 +357,13 @@ export function TodoList({ initialTodos }: TodoListProps) {
         </div>
       )}
 
-      {/* Completed todos */}
+      {/* Completed todos — always visible */}
       {cumplidas.length > 0 && (
         <section className="space-y-2">
-          <button
-            onClick={() => setShowCompleted(!showCompleted)}
-            className="flex items-center gap-1 text-sm font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-600"
-          >
-            {showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            Cumplidas ({cumplidas.length})
-          </button>
-          {showCompleted && cumplidas.map(renderTodo)}
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
+            Completados ({cumplidas.length})
+          </h2>
+          {cumplidas.map(renderTodo)}
         </section>
       )}
     </div>

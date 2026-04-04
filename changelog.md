@@ -1,5 +1,35 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.9.3] — 2026-04-03
+### Ajustes de testing — UX del asistente (5 cambios)
+
+#### Adjuntos en seguimiento y tareas
+- **Asistente — Documentos:** sección de documentos en detalle de caso ahora funcional (antes era placeholder "Próximamente")
+- **DocumentUpload** habilitado para asistentes en sus casos asignados
+- **Lista de documentos** muestra nombre de archivo y timestamp en detalle del caso
+
+#### Datos ficticios completos
+- **SQL:** `supabase/migrations/20260403000011_fill_clients_and_documents.sql`
+- Completa TODOS los clientes (CLI-001 a CLI-023) con teléfono, email, RUC, tipo, dirección, fecha de cliente y observaciones
+- Inserta 4-6 documentos ficticios por caso (contratos, poderes, recibos, identificaciones)
+- Inserta 1 documento por cliente (cédula, RUC, cartas de autorización)
+- **Pendiente:** ejecutar SQL en Supabase SQL Editor
+
+#### Dashboard asistente simplificado
+- Eliminada lista de tareas pendientes del dashboard
+- Dashboard ahora muestra SOLO las 3 tarjetas KPI: Casos Asignados, Tareas Pendientes, Tareas Cumplidas
+
+#### Menú asistente simplificado
+- Eliminado "Mis Casos" del sidebar y bottom-nav
+- Asistente ahora solo tiene: Dashboard + Mis Tareas
+- Bottom-nav reducido a 2 botones (Inicio, Tareas)
+
+#### Mis Tareas — agrupado por caso
+- Tareas reorganizadas y agrupadas por caso (header con código + cliente)
+- Dentro de cada caso: pendientes primero (por deadline), cumplidas después
+- Cada tarea pendiente tiene botones: Marcar Cumplida, Comentar, Adjuntar
+- Casos con tareas pendientes aparecen primero en la lista
+
 ## [0.9.2] — 2026-04-03
 ### Ajustes de testing (8 correcciones)
 

@@ -132,7 +132,7 @@ export default async function AsistenteTareasPage() {
             clientName={group.clientName}
             pendientes={group.pendientes}
             cumplidas={group.cumplidas}
-            defaultOpen={index === 0 || group.pendientes.length > 0}
+            defaultOpen={false}
           />
         ))
       ) : (

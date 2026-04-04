@@ -169,3 +169,82 @@ export interface CatTeam {
   active: boolean;
   created_at: string;
 }
+
+// ── Personal To-Dos ──
+
+export interface PersonalTodo {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  description: string;
+  deadline: string | null;
+  status: "pendiente" | "cumplida";
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TodoComment {
+  id: string;
+  tenant_id: string;
+  todo_id: string;
+  text: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface TodoDocument {
+  id: string;
+  tenant_id: string;
+  todo_id: string;
+  file_name: string;
+  file_path: string;
+  storage_key: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+// ── Prospects Pipeline ──
+
+export type ProspectStatus =
+  | "contacto_inicial"
+  | "propuesta_enviada"
+  | "en_negociacion"
+  | "ganado"
+  | "perdido";
+
+export interface Prospect {
+  id: string;
+  tenant_id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  service_interest: string | null;
+  notes: string | null;
+  contact_date: string;
+  status: ProspectStatus;
+  converted_client_id: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProspectComment {
+  id: string;
+  tenant_id: string;
+  prospect_id: string;
+  text: string;
+  user_id: string;
+  created_at: string;
+}
+
+export interface ProspectDocument {
+  id: string;
+  tenant_id: string;
+  prospect_id: string;
+  file_name: string;
+  file_path: string;
+  storage_key: string;
+  uploaded_by: string;
+  created_at: string;
+}

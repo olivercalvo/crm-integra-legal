@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import Link from "next/link";
 import { ListTodo, Calendar, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -13,16 +13,10 @@ function isOverdue(deadline: string | null, status: "pendiente" | "cumplida") {
 }
 
 export default async function AsistenteTareasPage() {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
+  const { db, user } = await getAuthenticatedContext();
 
   // Fetch all tasks assigned to this user with case + client info
-  const { data: tasksRaw } = await supabase
+  const { data: tasksRaw } = await db
     .from("tasks")
     .select(
       `
@@ -125,7 +119,6 @@ export default async function AsistenteTareasPage() {
                         <Link
                           href={`/asistente/casos/${task.caseId}`}
                           className="font-mono font-semibold text-integra-navy hover:underline"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           {task.caseCode}
                         </Link>

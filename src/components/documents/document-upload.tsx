@@ -6,7 +6,7 @@ import { Upload, Loader2, X, FileText, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface DocumentUploadProps {
-  entityType: "client" | "case";
+  entityType: "client" | "case" | "task" | "comment";
   entityId: string;
 }
 

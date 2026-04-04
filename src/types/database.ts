@@ -112,7 +112,7 @@ export interface Comment {
 export interface Document {
   id: string;
   tenant_id: string;
-  entity_type: "client" | "case";
+  entity_type: "client" | "case" | "task" | "comment";
   entity_id: string;
   file_name: string;
   file_path: string;

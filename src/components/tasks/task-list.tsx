@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TaskForm } from "./task-form";
-import { CheckCircle2, Clock, Calendar, User, Plus, X, Loader2 } from "lucide-react";
+import { DocumentUpload } from "@/components/documents/document-upload";
+import { CheckCircle2, Clock, Calendar, User, Plus, X, Loader2, Paperclip } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import type { Task, User as UserType } from "@/types/database";
 
@@ -28,6 +29,7 @@ export function TaskList({ caseId, tasks }: TaskListProps) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [completing, setCompleting] = useState<string | null>(null);
+  const [attachingTo, setAttachingTo] = useState<string | null>(null);
 
   async function markComplete(taskId: string) {
     setCompleting(taskId);
@@ -107,24 +109,40 @@ export function TaskList({ caseId, tasks }: TaskListProps) {
                         )}
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => markComplete(task.id)}
-                      disabled={completing === task.id}
-                      className="flex-shrink-0 h-9 border-green-300 text-green-700 hover:bg-green-50 text-xs"
-                    >
-                      {completing === task.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 size={14} />
-                          Marcar Cumplida
-                        </span>
-                      )}
-                    </Button>
+                    <div className="flex flex-shrink-0 gap-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => markComplete(task.id)}
+                        disabled={completing === task.id}
+                        className="h-9 border-green-300 text-green-700 hover:bg-green-50 text-xs"
+                      >
+                        {completing === task.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <span className="flex items-center gap-1">
+                            <CheckCircle2 size={14} />
+                            Cumplida
+                          </span>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAttachingTo(attachingTo === task.id ? null : task.id)}
+                        className="h-9 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        <Paperclip size={14} />
+                      </Button>
+                    </div>
                   </div>
+                  {attachingTo === task.id && (
+                    <div className="mt-3 border-t pt-3">
+                      <DocumentUpload entityType="task" entityId={task.id} />
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

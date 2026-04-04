@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { MessageSquarePlus, Loader2 } from "lucide-react";
+import { MessageSquarePlus, Loader2, Paperclip, X } from "lucide-react";
 
 interface CommentFormProps {
   caseId: string;
@@ -19,6 +19,8 @@ export function CommentForm({ caseId, onSuccess }: CommentFormProps) {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +46,17 @@ export function CommentForm({ caseId, onSuccess }: CommentFormProps) {
         return;
       }
 
+      // Upload attached files linked to this comment
+      if (attachedFiles.length > 0 && data.id) {
+        const formData = new FormData();
+        formData.append("entity_type", "comment");
+        formData.append("entity_id", data.id);
+        attachedFiles.forEach((file) => formData.append("files", file));
+        await fetch("/api/documents/upload", { method: "POST", body: formData });
+      }
+
       setText("");
+      setAttachedFiles([]);
       onSuccess?.();
       router.refresh();
     } catch {
@@ -81,6 +93,48 @@ export function CommentForm({ caseId, onSuccess }: CommentFormProps) {
           required
           className="w-full resize-none rounded-md border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
         />
+      </div>
+
+      {/* File attachments */}
+      <div className="space-y-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.txt"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            setAttachedFiles((prev) => [...prev, ...files]);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-integra-navy"
+        >
+          <Paperclip size={14} />
+          Adjuntar archivo
+        </button>
+        {attachedFiles.length > 0 && (
+          <div className="space-y-1 rounded-md border border-gray-200 bg-gray-50 p-2">
+            {attachedFiles.map((file, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <Paperclip size={12} className="text-gray-400" />
+                <span className="flex-1 truncate">{file.name}</span>
+                <span className="text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (

@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FolderOpen, ListTodo, Clock, CheckCircle, ChevronRight } from "lucide-react";
-import { formatDate } from "@/lib/utils/format-date";
+import { Card, CardContent } from "@/components/ui/card";
+import { FolderOpen, ListTodo, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 export default async function AsistenteDashboard() {
@@ -11,18 +10,12 @@ export default async function AsistenteDashboard() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Fetch tasks assigned to this user
-  const { data: pendingTasks, count: pendingCount } = await supabase
+  // Fetch pending tasks count
+  const { count: pendingCount } = await supabase
     .from("tasks")
-    .select(`
-      id, description, deadline, status,
-      cases!inner(id, case_code, description,
-        clients!inner(name)
-      )
-    `, { count: "exact" })
+    .select("id", { count: "exact", head: true })
     .eq("assigned_to", user?.id)
-    .eq("status", "pendiente")
-    .order("deadline", { ascending: true, nullsFirst: false });
+    .eq("status", "pendiente");
 
   // Fetch completed tasks count
   const { count: completedCount } = await supabase
@@ -43,7 +36,7 @@ export default async function AsistenteDashboard() {
       value: casesCount ?? 0,
       icon: <FolderOpen size={24} />,
       color: "text-integra-navy bg-integra-navy/10",
-      href: "/asistente/casos",
+      href: "/asistente/tareas",
     },
     {
       label: "Tareas Pendientes",
@@ -89,45 +82,6 @@ export default async function AsistenteDashboard() {
         ))}
       </div>
 
-      {/* Pending tasks */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Tareas Pendientes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {pendingTasks && pendingTasks.length > 0 ? (
-            <div className="space-y-3">
-              {pendingTasks.map((task: Record<string, unknown>) => {
-                const caseInfo = task.cases as Record<string, unknown>;
-                const clientInfo = caseInfo?.clients as Record<string, string>;
-                const deadline = task.deadline as string | null;
-                return (
-                  <Link
-                    key={task.id as string}
-                    href={`/asistente/casos/${caseInfo?.id as string}?tab=seguimiento`}
-                    className="block rounded-lg border p-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <p className="font-medium">{task.description as string}</p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                      <span className="font-mono font-semibold text-integra-navy">{caseInfo?.case_code as string}</span>
-                      <span>•</span>
-                      <span>{clientInfo?.name}</span>
-                    </div>
-                    {deadline ? (
-                      <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
-                        <Clock size={14} />
-                        <span>Vence: {formatDate(deadline)}</span>
-                      </div>
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">No tienes tareas pendientes</p>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

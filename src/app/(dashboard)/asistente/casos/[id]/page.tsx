@@ -69,8 +69,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       clients(id, name, client_number, ruc, type, phone, email),
       cat_statuses(id, name),
       cat_classifications(id, name, prefix),
-      cat_institutions(id, name),
-      cat_team(id, name)
+      cat_institutions(id, name)
     `
     )
     .eq("id", params.id)
@@ -102,18 +101,15 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
     id: string;
     name: string;
   } | null;
-  const responsible = caseData.cat_team as unknown as {
-    id: string;
-    name: string;
-  } | null;
+  // Fetch responsible name from users
+  let responsible: { id: string; name: string } | null = null;
+  if (caseData.responsible_id) {
+    const { data: respUser } = await db.from("users").select("id, full_name").eq("id", caseData.responsible_id).single();
+    if (respUser) responsible = { id: respUser.id, name: respUser.full_name };
+  }
 
-  // Verify asistente has access: either in cat_team with responsible_id OR has an assigned task
-  const { data: teamEntry } = await db
-    .from("cat_team")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("id", caseData.responsible_id ?? "")
-    .maybeSingle();
+  // Verify asistente has access: assistant_id matches OR has an assigned task
+  const isAssistant = caseData.assistant_id === user.id;
 
   const { data: assignedTask } = await db
     .from("tasks")
@@ -123,7 +119,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
     .limit(1)
     .maybeSingle();
 
-  if (!teamEntry && !assignedTask) {
+  if (!isAssistant && !assignedTask) {
     notFound();
   }
 

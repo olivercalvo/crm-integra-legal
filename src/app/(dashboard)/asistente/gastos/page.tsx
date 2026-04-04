@@ -45,37 +45,24 @@ export default async function AsistenteGastosPage() {
     };
   });
 
-  // Fetch cases assigned to this asistente (via cat_team or tasks) for the expense form
-  const [teamRes, taskCasesRes] = await Promise.all([
-    db
-      .from("cat_team")
-      .select("id")
-      .eq("user_id", user.id),
-    db
-      .from("tasks")
-      .select("case_id")
-      .eq("assigned_to", user.id),
-  ]);
+  // Fetch cases assigned to this asistente (via assistant_id or tasks)
+  const { data: taskCasesData } = await db
+    .from("tasks")
+    .select("case_id")
+    .eq("assigned_to", user.id);
 
-  const teamIds = (teamRes.data ?? []).map((t) => t.id as string);
-  const taskCaseIdsRaw = (taskCasesRes.data ?? []).map(
-    (t) => t.case_id as string
-  );
-  const taskCaseIds = taskCaseIdsRaw.filter(
-    (id, idx) => taskCaseIdsRaw.indexOf(id) === idx
-  );
+  const taskCaseIdsRaw = (taskCasesData ?? []).map((t) => t.case_id as string);
+  const taskCaseIds = taskCaseIdsRaw.filter((id, idx) => taskCaseIdsRaw.indexOf(id) === idx);
 
   let assignedCases: { id: string; code: string; clientName: string }[] = [];
 
   const orParts: string[] = [];
-  if (teamIds.length > 0) {
-    orParts.push(`responsible_id.in.(${teamIds.join(",")})`);
-  }
+  orParts.push(`assistant_id.eq.${user.id}`);
   if (taskCaseIds.length > 0) {
     orParts.push(`id.in.(${taskCaseIds.join(",")})`);
   }
 
-  if (orParts.length > 0) {
+  {
     const { data: casesData } = await db
       .from("cases")
       .select(

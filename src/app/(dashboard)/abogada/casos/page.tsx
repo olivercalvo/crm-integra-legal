@@ -76,11 +76,12 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
         .eq("active", true)
         .order("name"),
       db
-        .from("cat_team")
-        .select("id, name")
+        .from("users")
+        .select("id, full_name")
         .eq("tenant_id", tenantId)
         .eq("active", true)
-        .order("name"),
+        .in("role", ["abogada", "asistente"])
+        .order("full_name"),
       db
         .from("cat_institutions")
         .select("id, name")
@@ -94,11 +95,10 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     .from("cases")
     .select(
       `
-      id, case_code, description, opened_at, updated_at, assistant_id,
+      id, case_code, description, opened_at, updated_at, assistant_id, responsible_id,
       clients!inner(id, name, client_number),
       cat_statuses(id, name),
-      cat_classifications(id, name, prefix),
-      cat_team(id, name)
+      cat_classifications(id, name, prefix)
     `,
       { count: "exact" }
     )
@@ -119,20 +119,21 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
 
   const { data: cases, count } = await query;
 
-  // Fetch assistant names from users table
-  const assistantIds = (cases ?? [])
-    .map((c) => (c as Record<string, unknown>).assistant_id as string | null)
-    .filter(Boolean) as string[];
+  // Fetch user names for responsible + assistant columns
+  const allUserIds = (cases ?? []).flatMap((c) => {
+    const rec = c as Record<string, unknown>;
+    return [rec.responsible_id as string | null, rec.assistant_id as string | null].filter(Boolean);
+  }) as string[];
 
-  let assistantMap: Record<string, string> = {};
-  if (assistantIds.length > 0) {
-    const { data: assistants } = await db
+  let userMap: Record<string, string> = {};
+  if (allUserIds.length > 0) {
+    const { data: usersData } = await db
       .from("users")
       .select("id, full_name")
-      .in("id", Array.from(new Set(assistantIds)));
-    if (assistants) {
-      assistantMap = Object.fromEntries(
-        assistants.map((a: { id: string; full_name: string }) => [a.id, a.full_name])
+      .in("id", Array.from(new Set(allUserIds)));
+    if (usersData) {
+      userMap = Object.fromEntries(
+        usersData.map((a: { id: string; full_name: string }) => [a.id, a.full_name])
       );
     }
   }
@@ -140,8 +141,9 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
   const statuses = statusesRes.data ?? [];
   const classifications = classificationsRes.data ?? [];
-  const teamList = teamRes.data ?? [];
   const institutions = institutionsRes.data ?? [];
+  // Use users with role abogada/asistente for the team filter
+  const teamList = (teamRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }));
   const currentSort = searchParams.sort ?? "";
   const currentDir = searchParams.dir ?? "desc";
 
@@ -204,9 +206,9 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                     const status = c.cat_statuses as unknown as { id: string; name: string } | null;
                     const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
                     const classification = c.cat_classifications as unknown as { id: string; name: string; prefix: string } | null;
-                    const responsible = c.cat_team as unknown as { id: string; name: string } | null;
+                    const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
                     const assistantName = (c as Record<string, unknown>).assistant_id
-                      ? assistantMap[(c as Record<string, unknown>).assistant_id as string] ?? "—"
+                      ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? "—"
                       : "—";
 
                     return (
@@ -234,7 +236,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-700">{responsible?.name ?? "—"}</td>
+                        <td className="px-4 py-3 text-gray-700">{responsibleName ?? "—"}</td>
                         <td className="px-4 py-3 text-gray-700">{assistantName}</td>
                         <td className="px-4 py-3 text-gray-700">{classification?.name ?? "—"}</td>
                         <td className="px-4 py-3 text-xs text-gray-500">
@@ -264,9 +266,9 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
             const status = c.cat_statuses as unknown as { id: string; name: string } | null;
             const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
             const classification = c.cat_classifications as unknown as { id: string; name: string } | null;
-            const responsible = c.cat_team as unknown as { id: string; name: string } | null;
+            const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
             const assistantName = (c as Record<string, unknown>).assistant_id
-              ? assistantMap[(c as Record<string, unknown>).assistant_id as string] ?? null
+              ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? null
               : null;
 
             return (
@@ -281,7 +283,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                           <p className="mt-1 text-sm text-gray-500 line-clamp-2">{c.description}</p>
                         )}
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-                          {responsible && <span>Abogada: {responsible.name}</span>}
+                          {responsibleName && <span>Abogada: {responsibleName}</span>}
                           {assistantName && <span>Asistente: {assistantName}</span>}
                           {classification && <span>{classification.name}</span>}
                         </div>

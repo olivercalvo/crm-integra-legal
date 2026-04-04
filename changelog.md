@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.9.1] — 2026-04-03
+### Fix crítico: reemplazar cat_team por users en todas las queries
+- **Bug:** "0 casos encontrados" causado por queries que usaban `cat_team` JOIN cuando el FK ya apunta a `users`
+- **Fix:** Reemplazado `cat_team(id, name)` → lookup directo a `users` en: lista de casos, detalle de caso, nuevo caso, editar caso, asistente casos, asistente dashboard, asistente gastos
+- **Filtros:** Dropdown de "Responsable" ahora usa tabla `users` (rol abogada/asistente)
+- **Asistente:** Access check usa `assistant_id` en vez de `cat_team.user_id`
+
 ## [0.9.0] — 2026-04-03
 ### Sección Seguimiento (antes Tareas)
 - **Nueva página `/abogada/seguimiento`:** vista global de tareas y comentarios de todos los casos, agrupados por caso

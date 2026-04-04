@@ -28,11 +28,12 @@ export default async function NuevoExpedientePage() {
         .eq("active", true)
         .order("name"),
       db
-        .from("cat_team")
-        .select("id, name")
+        .from("users")
+        .select("id, full_name")
         .eq("tenant_id", tenantId)
         .eq("active", true)
-        .order("name"),
+        .in("role", ["abogada", "asistente"])
+        .order("full_name"),
       db
         .from("cat_statuses")
         .select("id, name")
@@ -66,7 +67,7 @@ export default async function NuevoExpedientePage() {
           clients={clientsRes.data ?? []}
           classifications={classificationsRes.data ?? []}
           institutions={institutionsRes.data ?? []}
-          team={teamRes.data ?? []}
+          team={(teamRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }))}
           statuses={statusesRes.data ?? []}
           mode="create"
         />

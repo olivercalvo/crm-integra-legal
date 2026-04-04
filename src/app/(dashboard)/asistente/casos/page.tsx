@@ -36,15 +36,7 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
 
   const q = searchParams.q?.trim() ?? "";
 
-  // 1. Find cases where the asistente is in cat_team via responsible_id
-  const { data: teamEntries } = await db
-    .from("cat_team")
-    .select("id")
-    .eq("user_id", user.id);
-
-  const teamIds = (teamEntries ?? []).map((t) => t.id);
-
-  // 2. Find cases where the asistente has an assigned task
+  // 1. Find cases where the asistente has an assigned task
   const { data: taskCases } = await db
     .from("tasks")
     .select("case_id")
@@ -67,11 +59,8 @@ export default async function AsistenteCasosPage({ searchParams }: PageProps) {
     )
     .order("updated_at", { ascending: false });
 
-  // Build filter: responsible_id in teamIds OR id in taskCaseIds OR assistant_id = user.id
+  // Build filter: id in taskCaseIds OR assistant_id = user.id
   const orParts: string[] = [];
-  if (teamIds.length > 0) {
-    orParts.push(`responsible_id.in.(${teamIds.join(",")})`);
-  }
   if (taskCaseIds.length > 0) {
     orParts.push(`id.in.(${taskCaseIds.join(",")})`);
   }

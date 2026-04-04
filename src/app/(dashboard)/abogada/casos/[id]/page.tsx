@@ -171,11 +171,12 @@ export default async function ExpedienteDetailPage({
         .eq("active", true)
         .order("name"),
       db
-        .from("cat_team")
-        .select("id, name, role")
+        .from("users")
+        .select("id, full_name, role")
         .eq("tenant_id", tenantId)
         .eq("active", true)
-        .order("name"),
+        .in("role", ["abogada", "asistente"])
+        .order("full_name"),
       db
         .from("documents")
         .select("id, file_name, file_path, created_at, uploaded_by")
@@ -197,7 +198,7 @@ export default async function ExpedienteDetailPage({
   const allStatuses = statusesRes.data ?? [];
   const allClassifications = classificationsRes.data ?? [];
   const allInstitutions = institutionsRes.data ?? [];
-  const allTeam = teamRes.data ?? [];
+  const allTeam = (teamRes.data ?? []).map((u: { id: string; full_name: string; role: string }) => ({ id: u.id, name: u.full_name, role: u.role }));
   const documents = documentsRes.data ?? [];
   const allUsers = (usersRes.data ?? []) as { id: string; full_name: string }[];
 

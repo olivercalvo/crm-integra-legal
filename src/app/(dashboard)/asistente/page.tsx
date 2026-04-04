@@ -31,11 +31,11 @@ export default async function AsistenteDashboard() {
     .eq("assigned_to", user?.id)
     .eq("status", "cumplida");
 
-  // Fetch assigned cases
-  const { data: assignedCases, count: casesCount } = await supabase
-    .from("cat_team")
-    .select(`id`, { count: "exact", head: true })
-    .eq("user_id", user?.id);
+  // Fetch assigned cases (where assistant_id = user)
+  const { count: casesCount } = await supabase
+    .from("cases")
+    .select("id", { count: "exact", head: true })
+    .eq("assistant_id", user?.id);
 
   const stats = [
     {

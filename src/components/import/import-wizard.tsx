@@ -15,7 +15,7 @@ import {
   FolderOpen,
   Info,
 } from "lucide-react";
-import { generateTemplate } from "@/lib/utils/import-parser";
+import { generateTemplate, generateClientTemplate, generateCaseTemplate } from "@/lib/utils/import-parser";
 import type { ImportPreview } from "@/lib/utils/import-parser";
 
 // ---------------------------------------------------------------------------
@@ -32,11 +32,15 @@ interface ImportResults {
 
 type Step = "upload" | "preview" | "confirm" | "results";
 
+interface ImportWizardProps {
+  importType?: "clients" | "cases" | "all";
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function ImportWizard() {
+export function ImportWizard({ importType = "all" }: ImportWizardProps) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,21 +52,26 @@ export function ImportWizard() {
 
   // ---- Template download ----
   const handleDownloadTemplate = useCallback(() => {
-    const buffer = generateTemplate();
+    const buffer = importType === "clients"
+      ? generateClientTemplate()
+      : importType === "cases"
+        ? generateCaseTemplate()
+        : generateTemplate();
+    const suffix = importType === "clients" ? "clientes" : importType === "cases" ? "casos" : "importacion";
     const blob = new Blob([buffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "plantilla-importacion-crm.xlsx";
+    a.download = `plantilla-${suffix}-crm.xlsx`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 100);
-  }, []);
+  }, [importType]);
 
   // ---- File selection ----
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +91,7 @@ export function ImportWizard() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("mode", "preview");
+      formData.append("importType", importType);
 
       const res = await fetch("/api/import", { method: "POST", body: formData });
       const data = await res.json();
@@ -111,6 +121,7 @@ export function ImportWizard() {
       formData.append("file", file);
       formData.append("mode", "execute");
       formData.append("skipDuplicates", String(skipDuplicates));
+      formData.append("importType", importType);
 
       const res = await fetch("/api/import", { method: "POST", body: formData });
       const data = await res.json();
@@ -173,10 +184,15 @@ export function ImportWizard() {
             <div className="flex items-start gap-3">
               <Info size={20} className="mt-0.5 shrink-0 text-integra-gold" />
               <div className="space-y-2">
-                <p className="text-sm font-medium text-integra-navy">Plantilla de importación</p>
+                <p className="text-sm font-medium text-integra-navy">
+                  Plantilla de {importType === "clients" ? "clientes" : importType === "cases" ? "casos" : "importación"}
+                </p>
                 <p className="text-sm text-gray-600">
-                  Descargue la plantilla Excel con las columnas correctas. Puede importar clientes, casos o ambos.
-                  Use la hoja &quot;Clientes&quot; para clientes y &quot;Casos&quot; para casos.
+                  {importType === "clients"
+                    ? "Descargue la plantilla Excel con las columnas de clientes."
+                    : importType === "cases"
+                      ? "Descargue la plantilla Excel con las columnas de casos. Los clientes deben existir previamente."
+                      : "Descargue la plantilla Excel con las columnas correctas para clientes y casos."}
                 </p>
                 <button
                   onClick={handleDownloadTemplate}

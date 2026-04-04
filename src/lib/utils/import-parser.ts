@@ -574,3 +574,23 @@ export function generateTemplate(): ArrayBuffer {
 
   return XLSX.write(wb, { bookType: "xlsx", type: "array" });
 }
+
+export function generateClientTemplate(): ArrayBuffer {
+  const wb = XLSX.utils.book_new();
+  const headers = ["Nombre", "RUC/Cédula", "Tipo", "Contacto", "Teléfono", "Email", "Observaciones"];
+  const example = ["Empresa ABC, S.A.", "1234567-1-890", "Jurídica", "Juan Pérez", "+507 6000-0000", "contacto@empresa.com", "Cliente referido"];
+  const sheet = XLSX.utils.aoa_to_sheet([headers, example]);
+  sheet["!cols"] = [{ wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 30 }];
+  XLSX.utils.book_append_sheet(wb, sheet, "Clientes");
+  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+}
+
+export function generateCaseTemplate(): ArrayBuffer {
+  const wb = XLSX.utils.book_new();
+  const headers = ["Cliente", "Descripción", "Clasificación", "Institución", "Responsable", "Fecha Apertura", "Estado", "Ubicación Física", "Observaciones", "Archivo Digital"];
+  const example = ["Empresa ABC, S.A.", "Demanda laboral contra Empresa XYZ", "LABORAL", "Juzgado Primero Civil", "Daveiva", "01/04/2026", "Activo", "Estante 3, Carpeta 12", "Caso prioritario", "Sí"];
+  const sheet = XLSX.utils.aoa_to_sheet([headers, example]);
+  sheet["!cols"] = [{ wch: 30 }, { wch: 40 }, { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 30 }, { wch: 15 }];
+  XLSX.utils.book_append_sheet(wb, sheet, "Casos");
+  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+}

@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const mode = formData.get("mode") as string; // "preview" or "execute"
+    const importType = (formData.get("importType") as string) || "all"; // "clients", "cases", or "all"
 
     if (!file) {
       return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
@@ -67,13 +68,17 @@ export async function POST(request: NextRequest) {
     const buffer = await file.arrayBuffer();
     const { clientRows, caseRows, sheetNames } = parseImportFile(buffer);
 
+    // Filter rows based on importType
+    const filteredClients = importType === "cases" ? [] : clientRows;
+    const filteredCases = importType === "clients" ? [] : caseRows;
+
     // Get existing clients for duplicate detection
     const { data: existingClients } = await admin
       .from("clients")
       .select("name, ruc, client_number")
       .eq("tenant_id", profile.tenant_id);
 
-    const preview = validateImport(clientRows, caseRows, existingClients || []);
+    const preview = validateImport(filteredClients, filteredCases, existingClients || []);
 
     // Preview mode — return validation results
     if (mode !== "execute") {

@@ -54,8 +54,8 @@ export async function PATCH(
       physical_location,
       observations,
       has_digital_file,
-      entity,
       procedure_type,
+      new_institution_name,
       institution_procedure_number,
       institution_case_number,
       case_start_date,
@@ -111,6 +111,20 @@ export async function PATCH(
       return NextResponse.json({ data: updated });
     }
 
+    // If creating a new institution inline, insert it first
+    let resolvedInstitutionId = institution_id;
+    if (new_institution_name && typeof new_institution_name === "string" && new_institution_name.trim()) {
+      const { data: newInst, error: instErr } = await admin
+        .from("cat_institutions")
+        .insert({ tenant_id: profile.tenant_id, name: new_institution_name.trim(), active: true })
+        .select("id")
+        .single();
+      if (instErr) {
+        return NextResponse.json({ error: `Error creando institución: ${instErr.message}` }, { status: 500 });
+      }
+      resolvedInstitutionId = newInst.id;
+    }
+
     // Regular update
     const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -119,7 +133,7 @@ export async function PATCH(
     if (client_id !== undefined) updatePayload.client_id = client_id;
     if (description !== undefined) updatePayload.description = description || null;
     if (classification_id !== undefined) updatePayload.classification_id = classification_id || null;
-    if (institution_id !== undefined) updatePayload.institution_id = institution_id || null;
+    if (resolvedInstitutionId !== undefined) updatePayload.institution_id = resolvedInstitutionId || null;
     if (responsible_id !== undefined) updatePayload.responsible_id = responsible_id || null;
     if (opened_at !== undefined) updatePayload.opened_at = opened_at;
     if (status_id !== undefined) updatePayload.status_id = status_id || null;

@@ -67,8 +67,9 @@ export function InlineCaseInfoEditor({
   const [physicalLocation, setPhysicalLocation] = useState(caseData.physical_location ?? "");
   const [observations, setObservations] = useState(caseData.observations ?? "");
   const [hasDigitalFile, setHasDigitalFile] = useState(caseData.has_digital_file);
-  const [entity, setEntity] = useState(caseData.entity ?? "");
   const [procedureType, setProcedureType] = useState(caseData.procedure_type ?? "");
+  const [newInstitutionName, setNewInstitutionName] = useState("");
+  const [showNewInstitution, setShowNewInstitution] = useState(false);
   const [instProcNum, setInstProcNum] = useState(caseData.institution_procedure_number ?? "");
   const [instCaseNum, setInstCaseNum] = useState(caseData.institution_case_number ?? "");
   const [caseStartDate, setCaseStartDate] = useState(caseData.case_start_date ?? "");
@@ -90,8 +91,9 @@ export function InlineCaseInfoEditor({
     setPhysicalLocation(caseData.physical_location ?? "");
     setObservations(caseData.observations ?? "");
     setHasDigitalFile(caseData.has_digital_file);
-    setEntity(caseData.entity ?? "");
     setProcedureType(caseData.procedure_type ?? "");
+    setNewInstitutionName("");
+    setShowNewInstitution(false);
     setInstProcNum(caseData.institution_procedure_number ?? "");
     setInstCaseNum(caseData.institution_case_number ?? "");
     setCaseStartDate(caseData.case_start_date ?? "");
@@ -112,8 +114,8 @@ export function InlineCaseInfoEditor({
           physical_location: physicalLocation || null,
           observations: observations || null,
           has_digital_file: hasDigitalFile,
-          entity: entity || null,
           procedure_type: procedureType || null,
+          new_institution_name: showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
           institution_procedure_number: instProcNum || null,
           institution_case_number: instCaseNum || null,
           case_start_date: caseStartDate || null,
@@ -227,16 +229,46 @@ export function InlineCaseInfoEditor({
         </div>
         <div className="space-y-1.5">
           <Label>Institución</Label>
-          <select
-            value={institutionId}
-            onChange={(e) => setInstitutionId(e.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">Sin institución</option>
-            {institutions.map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
-            ))}
-          </select>
+          {!showNewInstitution ? (
+            <div className="space-y-1">
+              <select
+                value={institutionId}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setShowNewInstitution(true);
+                    setInstitutionId("");
+                  } else {
+                    setInstitutionId(e.target.value);
+                  }
+                }}
+                className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Sin institución</option>
+                {institutions.map((i) => (
+                  <option key={i.id} value={i.id}>{i.name}</option>
+                ))}
+                <option value="__new__">+ Agregar nueva institución</option>
+              </select>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                placeholder="Nombre de nueva institución..."
+                value={newInstitutionName}
+                onChange={(e) => setNewInstitutionName(e.target.value)}
+                className="min-h-[48px]"
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => { setShowNewInstitution(false); setNewInstitutionName(""); }}
+                className="min-h-[48px] px-3 text-gray-500 shrink-0"
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label>Abogada Responsable</Label>
@@ -263,10 +295,6 @@ export function InlineCaseInfoEditor({
               <option key={u.id} value={u.id}>{u.full_name}</option>
             ))}
           </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Entidad</Label>
-          <Input value={entity} onChange={(e) => setEntity(e.target.value)} className="min-h-[48px]" />
         </div>
         <div className="space-y-1.5">
           <Label>Tipo de trámite</Label>

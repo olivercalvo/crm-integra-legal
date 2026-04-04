@@ -354,18 +354,6 @@ export default async function ExpedienteDetailPage({
                     </p>
                   </div>
                 </div>
-                {caseData.entity && (
-                  <>
-                    <Separator />
-                    <div className="flex items-start gap-2">
-                      <Building2 size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                      <div>
-                        <p className="text-xs text-gray-500">Entidad</p>
-                        <p className="font-medium">{caseData.entity}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
                 {caseData.procedure_type && (
                   <>
                     <Separator />

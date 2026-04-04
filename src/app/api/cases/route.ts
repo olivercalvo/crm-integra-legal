@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
       physical_location,
       observations,
       has_digital_file,
-      entity,
       procedure_type,
+      new_institution_name,
       institution_procedure_number,
       institution_case_number,
       case_start_date,
@@ -78,6 +78,20 @@ export async function POST(request: NextRequest) {
     const paddedNumber = String(nextNumber).padStart(3, "0");
     const case_code = `${prefix}-${paddedNumber}`;
 
+    // If creating a new institution inline, insert it first
+    let resolvedInstitutionId = institution_id;
+    if (new_institution_name && typeof new_institution_name === "string" && new_institution_name.trim()) {
+      const { data: newInst, error: instErr } = await admin
+        .from("cat_institutions")
+        .insert({ tenant_id: profile.tenant_id, name: new_institution_name.trim(), active: true })
+        .select("id")
+        .single();
+      if (instErr) {
+        return NextResponse.json({ error: `Error creando institución: ${instErr.message}` }, { status: 500 });
+      }
+      resolvedInstitutionId = newInst.id;
+    }
+
     // Get default status if not provided
     let resolvedStatusId = status_id;
     if (!resolvedStatusId) {
@@ -101,14 +115,14 @@ export async function POST(request: NextRequest) {
         case_code,
         description: description || null,
         classification_id: classification_id || null,
-        institution_id: institution_id || null,
+        institution_id: resolvedInstitutionId || null,
         responsible_id: responsible_id || null,
         opened_at: opened_at || new Date().toISOString().split("T")[0],
         status_id: resolvedStatusId,
         physical_location: physical_location || null,
         observations: observations || null,
         has_digital_file: has_digital_file ?? false,
-        entity: entity || null,
+        entity: null,
         procedure_type: procedure_type || null,
         institution_procedure_number: institution_procedure_number || null,
         institution_case_number: institution_case_number || null,

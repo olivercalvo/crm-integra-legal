@@ -102,8 +102,9 @@ export function CaseForm({
   );
 
   // New fields
-  const [entity, setEntity] = useState(initialData?.entity ?? "");
   const [procedureType, setProcedureType] = useState(initialData?.procedure_type ?? "");
+  const [newInstitutionName, setNewInstitutionName] = useState("");
+  const [showNewInstitution, setShowNewInstitution] = useState(false);
   const [institutionProcedureNumber, setInstitutionProcedureNumber] = useState(
     initialData?.institution_procedure_number ?? ""
   );
@@ -169,7 +170,8 @@ export function CaseForm({
       physical_location: physicalLocation || null,
       observations: observations || null,
       has_digital_file: hasDigitalFile,
-      entity: entity || null,
+      entity: null,
+      new_institution_name: showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
       procedure_type: procedureType || null,
       institution_procedure_number: institutionProcedureNumber || null,
       institution_case_number: institutionCaseNumber || null,
@@ -388,19 +390,47 @@ export function CaseForm({
           {/* Institution */}
           <div className="space-y-1.5">
             <Label htmlFor="institution">Institución</Label>
-            <select
-              id="institution"
-              value={institutionId}
-              onChange={(e) => setInstitutionId(e.target.value)}
-              className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Sin institución</option>
-              {institutions.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
+            {!showNewInstitution ? (
+              <select
+                id="institution"
+                value={institutionId}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") {
+                    setShowNewInstitution(true);
+                    setInstitutionId("");
+                  } else {
+                    setInstitutionId(e.target.value);
+                  }
+                }}
+                className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">Sin institución</option>
+                {institutions.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+                <option value="__new__">+ Agregar nueva institución</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  id="new-institution"
+                  placeholder="Nombre de nueva institución..."
+                  value={newInstitutionName}
+                  onChange={(e) => setNewInstitutionName(e.target.value)}
+                  className="min-h-[48px]"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => { setShowNewInstitution(false); setNewInstitutionName(""); }}
+                  className="shrink-0 rounded-md px-3 text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Responsible */}
@@ -440,19 +470,6 @@ export function CaseForm({
               </select>
             </div>
           )}
-
-          {/* Entity */}
-          <div className="space-y-1.5">
-            <Label htmlFor="entity">Entidad</Label>
-            <Input
-              id="entity"
-              type="text"
-              placeholder="Ej. Ministerio Público, Tribunal Superior..."
-              value={entity}
-              onChange={(e) => setEntity(e.target.value)}
-              className="min-h-[48px]"
-            />
-          </div>
 
           {/* Procedure type */}
           <div className="space-y-1.5">

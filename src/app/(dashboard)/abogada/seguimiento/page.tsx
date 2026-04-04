@@ -4,6 +4,20 @@ import { SeguimientoView, type TaskRow, type CommentRow } from "@/components/seg
 export default async function SeguimientoPage() {
   const { db, tenantId } = await getAuthenticatedContext();
 
+  // Fetch assistants for filter
+  const { data: assistantsRaw } = await db
+    .from("users")
+    .select("id, full_name")
+    .eq("tenant_id", tenantId)
+    .eq("role", "asistente")
+    .eq("active", true)
+    .order("full_name");
+
+  const assistants = (assistantsRaw ?? []).map((a: { id: string; full_name: string }) => ({
+    id: a.id,
+    name: a.full_name,
+  }));
+
   const { data: tasksRaw } = await db
     .from("tasks")
     .select(`
@@ -57,5 +71,5 @@ export default async function SeguimientoPage() {
     };
   });
 
-  return <SeguimientoView tasks={tasks} comments={comments} />;
+  return <SeguimientoView tasks={tasks} comments={comments} assistants={assistants} />;
 }

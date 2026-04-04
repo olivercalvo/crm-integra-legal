@@ -63,12 +63,16 @@ interface CaseGroup {
 interface SeguimientoViewProps {
   tasks: TaskRow[];
   comments: CommentRow[];
+  assistants?: { id: string; name: string }[];
 }
 
-export function SeguimientoView({ tasks, comments }: SeguimientoViewProps) {
+export function SeguimientoView({ tasks, comments, assistants = [] }: SeguimientoViewProps) {
   const [search, setSearch] = useState("");
   const [expandedCases, setExpandedCases] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"all" | "pendiente" | "cumplida" | "comentarios">("all");
+  const [assistantFilter, setAssistantFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const pendientes = tasks.filter((t) => t.status === "pendiente");
   const cumplidas = tasks.filter((t) => t.status === "cumplida");
@@ -110,13 +114,28 @@ export function SeguimientoView({ tasks, comments }: SeguimientoViewProps) {
     );
   });
 
-  // Filter entries by type
+  // Filter entries by type, assistant, and date
   const filterEntries = (entries: TimelineEntry[]) => {
-    if (filter === "all") return entries;
-    if (filter === "pendiente") return entries.filter((e) => e.type === "task" && e.data.status === "pendiente");
-    if (filter === "cumplida") return entries.filter((e) => e.type === "task" && e.data.status === "cumplida");
-    if (filter === "comentarios") return entries.filter((e) => e.type === "comment");
-    return entries;
+    let filtered = entries;
+    if (filter === "pendiente") filtered = filtered.filter((e) => e.type === "task" && e.data.status === "pendiente");
+    else if (filter === "cumplida") filtered = filtered.filter((e) => e.type === "task" && e.data.status === "cumplida");
+    else if (filter === "comentarios") filtered = filtered.filter((e) => e.type === "comment");
+
+    if (assistantFilter) {
+      filtered = filtered.filter((e) => {
+        if (e.type === "task") return e.data.assignedTo === assistantFilter;
+        return true; // keep comments
+      });
+    }
+
+    if (dateFrom) {
+      filtered = filtered.filter((e) => e.date.slice(0, 10) >= dateFrom);
+    }
+    if (dateTo) {
+      filtered = filtered.filter((e) => e.date.slice(0, 10) <= dateTo);
+    }
+
+    return filtered;
   };
 
   const toggleCase = (caseId: string) => {
@@ -159,31 +178,68 @@ export function SeguimientoView({ tasks, comments }: SeguimientoViewProps) {
       </div>
 
       {/* Search + Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por caso, cliente o texto..."
-            className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-4 text-sm placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {(["all", "pendiente", "cumplida", "comentarios"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                filter === f
-                  ? "bg-integra-navy text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por caso, cliente o texto..."
+              className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-4 text-sm placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+            />
+          </div>
+          {assistants.length > 0 && (
+            <select
+              value={assistantFilter}
+              onChange={(e) => setAssistantFilter(e.target.value)}
+              className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
             >
-              {f === "all" ? "Todos" : f === "pendiente" ? "Pendientes" : f === "cumplida" ? "Cumplidas" : "Comentarios"}
-            </button>
-          ))}
+              <option value="">Todos los asistentes</option>
+              {assistants.map((a) => (
+                <option key={a.id} value={a.name}>{a.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <div className="flex gap-2 flex-wrap">
+            {(["all", "pendiente", "cumplida", "comentarios"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                  filter === f
+                    ? "bg-integra-navy text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {f === "all" ? "Todos" : f === "pendiente" ? "Pendientes" : f === "cumplida" ? "Cumplidas" : "Comentarios"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <span className="text-xs">Desde:</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+            />
+            <span className="text-xs">Hasta:</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+            />
+            {(dateFrom || dateTo) && (
+              <button onClick={() => { setDateFrom(""); setDateTo(""); }} className="text-xs text-red-500 hover:underline">
+                Limpiar
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  ClipboardList,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +35,8 @@ const navItems: NavItem[] = [
   { label: "Casos", href: "/abogada/casos", icon: <FolderOpen size={20} />, roles: ["admin", "abogada"] },
   { label: "Gastos", href: "/abogada/gastos", icon: <DollarSign size={20} />, roles: ["admin", "abogada"] },
   { label: "Seguimiento", href: "/abogada/seguimiento", icon: <ListTodo size={20} />, roles: ["admin", "abogada"] },
+  { label: "Mis Pendientes", href: "/abogada/pendientes", icon: <ClipboardList size={20} />, roles: ["abogada"] },
+  { label: "Prospectos", href: "/abogada/prospectos", icon: <UserPlus size={20} />, roles: ["abogada"] },
   { label: "Importar", href: "/abogada/importar", icon: <Upload size={20} />, roles: ["admin", "abogada"] },
   { label: "Mis Tareas", href: "/asistente/tareas", icon: <ListTodo size={20} />, roles: ["asistente"] },
   { label: "Usuarios", href: "/admin/usuarios", icon: <Shield size={20} />, roles: ["admin"] },

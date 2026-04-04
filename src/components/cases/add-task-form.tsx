@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, X, Loader2, CheckCircle } from "lucide-react";
+import { Plus, Save, X, Loader2, CheckCircle, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,10 +70,10 @@ export function AddTaskForm({ caseId, users }: AddTaskFormProps) {
       {!showForm && (
         <Button
           onClick={() => { setShowForm(true); setError(null); }}
-          className="min-h-[48px] bg-integra-navy hover:bg-integra-navy/90 font-semibold"
+          className="min-h-[56px] w-full bg-integra-navy hover:bg-integra-navy/90 font-semibold text-base gap-2"
         >
-          <Plus size={18} className="mr-1" />
-          Nueva Tarea
+          <ClipboardList size={20} />
+          + Nueva Tarea para Asistente
         </Button>
       )}
 

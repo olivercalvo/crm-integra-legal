@@ -19,11 +19,15 @@ interface ClientOption {
   client_number: string;
 }
 
+interface TeamMember extends SelectOption {
+  role?: string;
+}
+
 interface CaseFormProps {
   clients: ClientOption[];
   classifications: SelectOption[];
   institutions: SelectOption[];
-  team: SelectOption[];
+  team: TeamMember[];
   statuses: SelectOption[];
   initialData?: {
     id: string;
@@ -45,6 +49,7 @@ interface CaseFormProps {
     case_start_date: string | null;
     procedure_start_date: string | null;
     deadline: string | null;
+    assistant_id: string | null;
   };
   mode: "create" | "edit";
   preSelectedClientId?: string;
@@ -91,6 +96,11 @@ export function CaseForm({
   const [responsibleId, setResponsibleId] = useState(
     initialData?.responsible_id ?? ""
   );
+  const [assistantId, setAssistantId] = useState(
+    initialData?.assistant_id ?? ""
+  );
+  const abogadas = team.filter((t) => t.role === "abogada" || !t.role);
+  const asistentes = team.filter((t) => t.role === "asistente");
   const [openedAt, setOpenedAt] = useState(
     initialData?.opened_at ?? new Date().toISOString().split("T")[0]
   );
@@ -171,6 +181,7 @@ export function CaseForm({
       classification_id: classificationId || null,
       institution_id: institutionId || null,
       responsible_id: responsibleId || null,
+      assistant_id: assistantId || null,
       opened_at: openedAt,
       status_id: statusId || null,
       physical_location: physicalLocation || null,
@@ -439,17 +450,35 @@ export function CaseForm({
             )}
           </div>
 
-          {/* Responsible */}
+          {/* Abogada Responsable */}
           <div className="space-y-1.5">
-            <Label htmlFor="responsible">Responsable</Label>
+            <Label htmlFor="responsible">Abogada Responsable</Label>
             <select
               id="responsible"
               value={responsibleId}
               onChange={(e) => setResponsibleId(e.target.value)}
               className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <option value="">Sin responsable</option>
-              {team.map((t) => (
+              <option value="">Sin abogada responsable</option>
+              {abogadas.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Asistente Responsable */}
+          <div className="space-y-1.5">
+            <Label htmlFor="assistant">Asistente Responsable</Label>
+            <select
+              id="assistant"
+              value={assistantId}
+              onChange={(e) => setAssistantId(e.target.value)}
+              className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Sin asistente</option>
+              {asistentes.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>

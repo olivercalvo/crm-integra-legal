@@ -700,11 +700,11 @@ export default async function ExpedienteDetailPage({
 
         return (
           <div className="space-y-4">
-            {/* Action buttons */}
-            <div className="flex flex-col gap-3 sm:flex-row">
+            {/* Action buttons — two big intuitive buttons */}
+            <div className="grid gap-3 sm:grid-cols-2">
               <AddTaskForm caseId={params.id} users={allUsers} />
+              <AddCommentForm caseId={params.id} />
             </div>
-            <AddCommentForm caseId={params.id} />
 
             <Separator />
 

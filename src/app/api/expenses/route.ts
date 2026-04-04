@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { case_id, amount, concept, date } = body;
+    const { case_id, amount, concept, date, expense_type } = body;
 
     if (!case_id || !amount || !concept || !date) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, amount, concept, date" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         amount,
         concept: concept.trim(),
         date,
+        expense_type: expense_type === "administrativo" ? "administrativo" : "tramite",
         registered_by: user.id,
       })
       .select()

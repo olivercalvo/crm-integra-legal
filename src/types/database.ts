@@ -72,6 +72,7 @@ export interface Expense {
   amount: number;
   concept: string;
   date: string;
+  expense_type: "tramite" | "administrativo";
   registered_by: string;
   created_at: string;
 }

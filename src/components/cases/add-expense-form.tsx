@@ -22,6 +22,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   const [expAmount, setExpAmount] = useState("");
   const [expConcept, setExpConcept] = useState("");
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expType, setExpType] = useState<"tramite" | "administrativo">("tramite");
 
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
@@ -58,6 +59,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             amount,
             concept: expConcept.trim(),
             date: expDate,
+            expense_type: expType,
           }),
         });
         if (!response.ok) {
@@ -109,18 +111,25 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
       {!showExpenseForm && !showPaymentForm && (
         <div className="flex flex-wrap gap-2">
           <Button
-            onClick={() => { setShowExpenseForm(true); setShowPaymentForm(false); setError(null); }}
+            onClick={() => { setShowExpenseForm(true); setExpType("tramite"); setShowPaymentForm(false); setError(null); }}
             className="min-h-[48px] bg-red-600 text-white hover:bg-red-700 font-semibold"
           >
             <Plus size={18} className="mr-1" />
-            Registrar Gasto
+            Gasto del Trámite
+          </Button>
+          <Button
+            onClick={() => { setShowExpenseForm(true); setExpType("administrativo"); setExpAmount("21.50"); setShowPaymentForm(false); setError(null); }}
+            className="min-h-[48px] bg-amber-600 text-white hover:bg-amber-700 font-semibold"
+          >
+            <Plus size={18} className="mr-1" />
+            Gasto Administrativo
           </Button>
           <Button
             onClick={() => { setShowPaymentForm(true); setShowExpenseForm(false); setError(null); }}
             className="min-h-[48px] bg-green-600 text-white hover:bg-green-700 font-semibold"
           >
             <Plus size={18} className="mr-1" />
-            Registrar Pago
+            Pago del Cliente
           </Button>
         </div>
       )}
@@ -134,10 +143,15 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
       {/* Expense form */}
       {showExpenseForm && (
         <div className="rounded-xl border border-red-200 bg-red-50/30 p-4 space-y-3">
-          <h4 className="font-semibold text-red-700">Nuevo Gasto Ejecutado</h4>
+          <h4 className="font-semibold text-red-700">
+            {expType === "tramite" ? "Nuevo Gasto del Trámite" : "Nuevo Gasto Administrativo"}
+          </h4>
+          {expType === "administrativo" && (
+            <p className="text-xs text-amber-600">Monto sugerido: B/.21.50 (editable)</p>
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label>Monto (USD)</Label>
+              <Label>Monto (B/.)</Label>
               <Input
                 type="number"
                 min="0.01"

@@ -8,6 +8,7 @@ import {
   ListTodo,
   MessageSquare,
   FileText,
+  Paperclip,
   Calendar,
   Building2,
   MapPin,
@@ -17,7 +18,6 @@ import {
   Hash,
   Clock,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -25,7 +25,8 @@ import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { ExpenseForm } from "@/components/expenses/expense-form";
 import { TaskList } from "@/components/tasks/task-list";
 import { CommentList } from "@/components/comments/comment-list";
-import { formatDate, daysSince } from "@/lib/utils/format-date";
+import { DocumentUpload } from "@/components/documents/document-upload";
+import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 
 function getStatusStyle(statusName: string): string {
   const name = statusName.toLowerCase();
@@ -124,7 +125,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
   }
 
   // Fetch all related data in parallel
-  const [expensesRes, tasksRes, commentsRes, statusesRes] = await Promise.all([
+  const [expensesRes, tasksRes, commentsRes, statusesRes, documentsRes] = await Promise.all([
     db
       .from("expenses")
       .select("id, amount, concept, date, registered_by, case_id, tenant_id, created_at")
@@ -155,12 +156,19 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       .select("id, name")
       .eq("active", true)
       .order("created_at", { ascending: true }),
+    db
+      .from("documents")
+      .select("id, file_name, file_path, created_at, uploaded_by")
+      .eq("entity_type", "case")
+      .eq("entity_id", params.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const expenses = expensesRes.data ?? [];
   const tasksRaw = tasksRes.data ?? [];
   const commentsRaw = commentsRes.data ?? [];
   const allStatuses = statusesRes.data ?? [];
+  const documents = documentsRes.data ?? [];
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
@@ -656,7 +664,7 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
 
       <Separator />
 
-      {/* ── SECTION: Documentos (placeholder) ── */}
+      {/* ── SECTION: Documentos ── */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
           <FileText size={18} className="text-integra-navy" />
@@ -664,13 +672,32 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
             Documentos
           </h2>
         </div>
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 py-12 text-gray-400">
-          <FileText size={40} className="mb-2 opacity-40" />
-          <p className="text-sm font-medium text-gray-500">
-            Gestión de documentos
-          </p>
-          <p className="text-xs">Próximamente disponible</p>
-        </div>
+
+        <DocumentUpload entityType="case" entityId={params.id} />
+
+        {documents.length > 0 ? (
+          <div className="space-y-2">
+            {documents.map((doc) => (
+              <Card key={doc.id}>
+                <CardContent className="flex items-center gap-3 p-4">
+                  <Paperclip size={18} className="shrink-0 text-integra-navy" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{doc.file_name}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatDateTime(doc.created_at)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="py-8 text-center text-gray-400">
+            <FileText size={40} className="mx-auto mb-2 opacity-40" />
+            <p>No hay documentos adjuntos</p>
+            <p className="text-sm mt-1">Usa el botón de arriba para adjuntar archivos</p>
+          </div>
+        )}
       </section>
     </div>
   );

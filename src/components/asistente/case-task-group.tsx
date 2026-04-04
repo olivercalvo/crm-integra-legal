@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ListTodo, Calendar, AlertTriangle, CheckCircle2, MessageSquare, Paperclip, FolderOpen, ChevronDown, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ListTodo, Calendar, AlertTriangle, CheckCircle2, MessageSquare, FolderOpen, ChevronDown, ChevronRight, Send, Loader2, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { MarkTaskButton } from "@/components/asistente/mark-task-button";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
 
 interface ParsedTask {
@@ -34,8 +34,139 @@ function isOverdue(deadline: string | null, status: "pendiente" | "cumplida") {
   return deadline < today;
 }
 
+function InlineCommentField({ caseId }: { caseId: string }) {
+  const router = useRouter();
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [show, setShow] = useState(false);
+
+  if (!show) {
+    return (
+      <button
+        onClick={() => setShow(true)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 min-h-[44px] text-xs font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+      >
+        <MessageSquare size={14} />
+        Comentar
+      </button>
+    );
+  }
+
+  async function handleSubmit() {
+    if (!text.trim()) return;
+    setLoading(true);
+    try {
+      await fetch(`/api/cases/${caseId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.trim() }),
+      });
+      setText("");
+      setShow(false);
+      router.refresh();
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 flex gap-2">
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Escribe un comentario..."
+        className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-integra-navy/30"
+        autoFocus
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+      />
+      <Button
+        size="sm"
+        onClick={handleSubmit}
+        disabled={loading || !text.trim()}
+        className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90"
+      >
+        {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => { setShow(false); setText(""); }}
+        className="min-h-[40px] text-gray-400"
+      >
+        &times;
+      </Button>
+    </div>
+  );
+}
+
+function MarkCompleteModal({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+  const router = useRouter();
+  const [comment, setComment] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleComplete() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cumplida", comment: comment.trim() || undefined }),
+      });
+      if (res.ok) {
+        onClose();
+        router.refresh();
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-integra-navy flex items-center gap-2">
+          <CheckCircle2 size={20} className="text-green-600" />
+          Marcar Cumplida
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Fecha: {formatDate(new Date().toISOString().split("T")[0])}
+        </p>
+        <div className="mt-4">
+          <label className="text-sm font-medium text-gray-700">Comentario (opcional)</label>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="Agregar nota sobre la tarea completada..."
+            rows={3}
+            className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-integra-navy/30 resize-none"
+          />
+        </div>
+        <div className="mt-4 flex gap-2 justify-end">
+          <Button variant="ghost" onClick={onClose} disabled={loading} className="min-h-[44px]">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleComplete}
+            disabled={loading}
+            className="min-h-[44px] bg-green-600 hover:bg-green-700 text-white"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin mr-1" /> : <CheckCircle2 size={14} className="mr-1" />}
+            Confirmar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CaseTaskGroup({ caseId, caseCode, clientName, pendientes, cumplidas, defaultOpen = false }: CaseTaskGroupProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   return (
     <section className="space-y-2">
@@ -101,23 +232,23 @@ export function CaseTaskGroup({ caseId, caseCode, clientName, pendientes, cumpli
                           </span>
                         )}
                       </div>
-                      {/* Action buttons */}
+                      {/* Action buttons — only comment and mark complete */}
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <MarkTaskButton taskId={task.id} />
-                        <Link
-                          href={`/asistente/casos/${task.caseId}?tab=comentarios`}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 min-h-[48px] text-xs font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                        <button
+                          onClick={() => setCompletingTaskId(task.id)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-green-300 px-3 min-h-[44px] text-xs font-medium text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors"
                         >
-                          <MessageSquare size={14} />
-                          Comentar
-                        </Link>
-                        <Link
-                          href={`/asistente/casos/${task.caseId}?tab=documentos`}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 min-h-[48px] text-xs font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                          <CheckCircle2 size={14} />
+                          Marcar Cumplida
+                        </button>
+                        <InlineCommentField caseId={task.caseId} />
+                        <a
+                          href={`/asistente/casos/${task.caseId}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 min-h-[44px] text-xs font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                         >
-                          <Paperclip size={14} />
-                          Adjuntar
-                        </Link>
+                          <Info size={14} />
+                          Info del Caso
+                        </a>
                       </div>
                     </div>
                   </div>
@@ -152,6 +283,14 @@ export function CaseTaskGroup({ caseId, caseCode, clientName, pendientes, cumpli
               </CardContent>
             </Card>
           ))}
+
+          {/* Complete task modal */}
+          {completingTaskId && (
+            <MarkCompleteModal
+              taskId={completingTaskId}
+              onClose={() => setCompletingTaskId(null)}
+            />
+          )}
         </>
       )}
     </section>

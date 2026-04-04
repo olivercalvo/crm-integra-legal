@@ -33,9 +33,7 @@ const abogadaNav: BottomNavItem[] = [
 
 const asistenteNav: BottomNavItem[] = [
   { label: "Inicio", href: "/asistente", icon: <LayoutDashboard size={20} /> },
-  { label: "Casos", href: "/asistente/casos", icon: <FolderOpen size={20} /> },
   { label: "Tareas", href: "/asistente/tareas", icon: <ListTodo size={20} /> },
-  { label: "Gastos", href: "/asistente/gastos", icon: <DollarSign size={20} /> },
 ];
 
 const navByRole: Record<string, BottomNavItem[]> = {

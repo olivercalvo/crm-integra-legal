@@ -34,7 +34,6 @@ const navItems: NavItem[] = [
   { label: "Gastos", href: "/abogada/gastos", icon: <DollarSign size={20} />, roles: ["admin", "abogada"] },
   { label: "Seguimiento", href: "/abogada/seguimiento", icon: <ListTodo size={20} />, roles: ["admin", "abogada"] },
   { label: "Importar", href: "/abogada/importar", icon: <Upload size={20} />, roles: ["admin", "abogada"] },
-  { label: "Mis Casos", href: "/asistente/casos", icon: <FolderOpen size={20} />, roles: ["asistente"] },
   { label: "Mis Tareas", href: "/asistente/tareas", icon: <ListTodo size={20} />, roles: ["asistente"] },
   { label: "Usuarios", href: "/admin/usuarios", icon: <Shield size={20} />, roles: ["admin"] },
   { label: "Auditoría", href: "/admin/auditoria", icon: <FileText size={20} />, roles: ["admin"] },

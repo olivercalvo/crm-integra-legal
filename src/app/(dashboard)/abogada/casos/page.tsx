@@ -11,6 +11,8 @@ import { PagePagination } from "@/components/ui/page-pagination";
 const PAGE_SIZE = 10;
 
 import { getStatusStyle } from "@/lib/utils/status-styles";
+import { getClassificationColor } from "@/lib/utils/classification-colors";
+import { formatDate } from "@/lib/utils/format-date";
 
 const SORTABLE_COLUMNS: Record<string, string> = {
   case_code: "case_code",
@@ -59,7 +61,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
         .order("name"),
       db
         .from("cat_classifications")
-        .select("id, name, prefix")
+        .select("id, name, prefix, color")
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),
@@ -86,7 +88,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
       id, case_code, description, opened_at, updated_at, assistant_id, responsible_id,
       clients!inner(id, name, client_number),
       cat_statuses(id, name),
-      cat_classifications(id, name, prefix)
+      cat_classifications(id, name, prefix, color)
     `,
       { count: "exact" }
     )
@@ -193,11 +195,12 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                   cases.map((c) => {
                     const status = c.cat_statuses as unknown as { id: string; name: string } | null;
                     const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
-                    const classification = c.cat_classifications as unknown as { id: string; name: string; prefix: string } | null;
+                    const classification = c.cat_classifications as unknown as { id: string; name: string; prefix: string; color: string | null } | null;
                     const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
                     const assistantName = (c as Record<string, unknown>).assistant_id
                       ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? "—"
                       : "—";
+                    const classColor = classification ? getClassificationColor(classification.name, classification.color) : "#6B7280";
 
                     return (
                       <tr key={c.id} className="cursor-pointer transition-colors hover:bg-gray-50">
@@ -226,9 +229,21 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                         </td>
                         <td className="px-4 py-3 text-gray-700">{responsibleName ?? "—"}</td>
                         <td className="px-4 py-3 text-gray-700">{assistantName}</td>
-                        <td className="px-4 py-3 text-gray-700">{classification?.name ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          {classification ? (
+                            <Badge
+                              className="border-0 text-xs font-medium"
+                              style={{ backgroundColor: `${classColor}15`, color: classColor }}
+                            >
+                              <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: classColor }} />
+                              {classification.name}
+                            </Badge>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-xs text-gray-500">
-                          {c.opened_at ? new Date(c.opened_at).toLocaleDateString("es-PA") : "—"}
+                          {formatDate(c.opened_at)}
                         </td>
                       </tr>
                     );
@@ -253,7 +268,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
           cases.map((c) => {
             const status = c.cat_statuses as unknown as { id: string; name: string } | null;
             const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
-            const classification = c.cat_classifications as unknown as { id: string; name: string } | null;
+            const classification = c.cat_classifications as unknown as { id: string; name: string; color: string | null } | null;
             const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
             const assistantName = (c as Record<string, unknown>).assistant_id
               ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? null
@@ -273,7 +288,18 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
                           {responsibleName && <span>Abogada: {responsibleName}</span>}
                           {assistantName && <span>Asistente: {assistantName}</span>}
-                          {classification && <span>{classification.name}</span>}
+                          {classification && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                              style={{
+                                backgroundColor: `${getClassificationColor(classification.name, classification.color)}15`,
+                                color: getClassificationColor(classification.name, classification.color),
+                              }}
+                            >
+                              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getClassificationColor(classification.name, classification.color) }} />
+                              {classification.name}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex-shrink-0">

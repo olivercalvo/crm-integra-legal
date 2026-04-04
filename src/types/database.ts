@@ -140,6 +140,7 @@ export interface CatClassification {
   name: string;
   prefix: string;
   description: string | null;
+  color: string | null;
   active: boolean;
   created_at: string;
 }

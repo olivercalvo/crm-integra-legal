@@ -8,6 +8,7 @@ import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
 import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { PrintCaseCard } from "@/components/cases/print-case-card";
 import { BackButton } from "@/components/ui/back-button";
 import {
   FolderOpen,
@@ -225,7 +226,17 @@ export default async function ExpedienteDetailPage({
             </p>
           </div>
         </div>
-        <div className="flex gap-2 pl-12 sm:pl-0">
+        <div className="flex gap-2 pl-12 sm:pl-0 flex-wrap">
+          <PrintCaseCard
+            caseCode={caseData.case_code}
+            clientName={client?.name ?? "—"}
+            description={caseData.description}
+            classification={classification?.name ?? null}
+            classificationColor={null}
+            responsibleName={responsible?.name ?? null}
+            openedAt={caseData.opened_at}
+            clientNumber={client?.client_number ?? "—"}
+          />
           <CaseStatusChanger
             caseId={params.id}
             currentStatusId={caseData.status_id}

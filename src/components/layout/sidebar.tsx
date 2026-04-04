@@ -108,7 +108,7 @@ export function Sidebar({ userRole, open, collapsed, onClose, onToggleCollapse }
                 onClick={onClose}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 min-h-[44px] text-sm font-medium transition-colors",
+                  "flex items-center gap-3 rounded-lg px-3 min-h-[44px] text-sm font-medium transition-all duration-200",
                   isActive
                     ? "bg-white/15 text-white border-l-[3px] border-integra-gold pl-[9px]"
                     : "text-white/70 hover:bg-white/10 hover:text-white",

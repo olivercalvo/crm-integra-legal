@@ -1,9 +1,7 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import { CaseForm } from "@/components/cases/case-form";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/back-button";
 
 interface PageProps {
   params: { id: string };
@@ -62,12 +60,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon" className="min-h-[48px] min-w-[48px]">
-          <Link href={`/abogada/casos/${params.id}`}>
-            <ArrowLeft size={20} />
-            <span className="sr-only">Volver</span>
-          </Link>
-        </Button>
+        <BackButton fallbackHref={`/abogada/casos/${params.id}`} />
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">
             Editar Caso

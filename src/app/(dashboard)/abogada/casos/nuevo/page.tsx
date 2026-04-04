@@ -1,8 +1,6 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { CaseForm } from "@/components/cases/case-form";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { BackButton } from "@/components/ui/back-button";
 
 export default async function NuevoExpedientePage() {
   const { db, tenantId } = await getAuthenticatedContext();
@@ -46,12 +44,7 @@ export default async function NuevoExpedientePage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon" className="min-h-[48px] min-w-[48px]">
-          <Link href="/abogada/casos">
-            <ArrowLeft size={20} />
-            <span className="sr-only">Volver</span>
-          </Link>
-        </Button>
+        <BackButton fallbackHref="/abogada/casos" />
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">
             Nuevo Caso

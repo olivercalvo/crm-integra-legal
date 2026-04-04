@@ -1,8 +1,8 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackButton } from "@/components/ui/back-button";
 import {
-  ArrowLeft,
   FolderOpen,
   DollarSign,
   ListTodo,
@@ -215,17 +215,9 @@ export default async function AsistenteCasoDetailPage({ params }: PageProps) {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="mt-0.5 min-h-[48px] min-w-[48px]"
-          >
-            <Link href="/asistente/casos">
-              <ArrowLeft size={20} />
-              <span className="sr-only">Volver a mis casos</span>
-            </Link>
-          </Button>
+          <div className="mt-0.5">
+            <BackButton fallbackHref="/asistente/casos" />
+          </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-mono text-2xl font-bold text-integra-navy">

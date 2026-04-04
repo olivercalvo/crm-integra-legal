@@ -8,8 +8,8 @@ import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
 import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { BackButton } from "@/components/ui/back-button";
 import {
-  ArrowLeft,
   FolderOpen,
   DollarSign,
   ListTodo,
@@ -222,17 +222,9 @@ export default async function ExpedienteDetailPage({
       {/* Header — no global Edit button */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="mt-0.5 min-h-[48px] min-w-[48px]"
-          >
-            <Link href={backUrl}>
-              <ArrowLeft size={20} />
-              <span className="sr-only">Volver</span>
-            </Link>
-          </Button>
+          <div className="mt-0.5">
+            <BackButton fallbackHref="/abogada/casos" />
+          </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-mono text-2xl font-bold text-integra-navy">

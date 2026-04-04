@@ -17,7 +17,10 @@ CREATE INDEX IF NOT EXISTS idx_cases_assistant_id ON cases(assistant_id);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_since DATE;
 
--- 3. Mapear responsible_id de cat_team a users (IDs exactos)
+-- 3. PRIMERO quitar el FK viejo (apunta a cat_team)
+ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_responsible_id_fkey;
+
+-- 4. Mapear responsible_id de cat_team a users (IDs exactos)
 -- Daveiva: cat_team cac353a5 → users d5cf61cb
 -- Milena:  cat_team 7942b5e8 → users aefb05ce
 UPDATE cases SET responsible_id = 'd5cf61cb-2f1f-4e1b-8fd1-1db82dd16867'
@@ -26,8 +29,7 @@ WHERE responsible_id = 'cac353a5-da8f-4bbf-8033-e1162024320c';
 UPDATE cases SET responsible_id = 'aefb05ce-871a-4f6a-a952-2e385dc45176'
 WHERE responsible_id = '7942b5e8-41e7-4fd1-af20-8f04c2de9be4';
 
--- Ahora cambiar el FK
-ALTER TABLE cases DROP CONSTRAINT IF EXISTS cases_responsible_id_fkey;
+-- 5. Agregar el FK nuevo (apunta a users)
 ALTER TABLE cases ADD CONSTRAINT cases_responsible_id_fkey
   FOREIGN KEY (responsible_id) REFERENCES users(id);
 

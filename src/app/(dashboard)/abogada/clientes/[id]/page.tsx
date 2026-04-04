@@ -40,19 +40,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function getStatusStyle(statusName: string): string {
-  const name = statusName.toLowerCase();
-  if (name.includes("activo") || name.includes("activa")) {
-    return "border-transparent bg-green-100 text-green-800";
-  }
-  if (name.includes("trámite") || name.includes("tramite") || name.includes("proceso")) {
-    return "border-transparent bg-amber-100 text-amber-800";
-  }
-  if (name.includes("cerrado") || name.includes("cerrada") || name.includes("archivado")) {
-    return "border-transparent bg-gray-100 text-gray-600";
-  }
-  return "border-transparent bg-blue-100 text-blue-800";
-}
+import { getStatusStyle } from "@/lib/utils/status-styles";
 
 export default async function ClienteDetailPage({ params }: PageProps) {
   const { db } = await getAuthenticatedContext();

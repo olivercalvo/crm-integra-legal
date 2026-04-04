@@ -11,7 +11,7 @@ export default function LoginPage() {
           </h1>
           <div className="mx-auto mt-2 h-1 w-16 bg-integra-gold" />
           <p className="mt-4 text-sm text-integra-white/70">
-            Sistema de Gestión de Casos
+            Gestión Legal Integral
           </p>
         </div>
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { LogIn, Eye, EyeOff } from "lucide-react";
+import { LogIn, Eye, EyeOff, Mail } from "lucide-react";
 
 export function LoginForm() {
   const router = useRouter();
@@ -17,6 +17,8 @@ export function LoginForm() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Load remembered email on mount
   useEffect(() => {
@@ -57,6 +59,31 @@ export function LoginForm() {
     } catch {
       setError("Error de conexión. Intente de nuevo.");
       setLoading(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError("Ingresa tu correo electrónico primero");
+      return;
+    }
+    setResetLoading(true);
+    setError("");
+    setResetSent(false);
+    try {
+      const supabase = createClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      });
+      if (resetError) {
+        setError("Error al enviar el correo de recuperación. Intente de nuevo.");
+      } else {
+        setResetSent(true);
+      }
+    } catch {
+      setError("Error de conexión. Intente de nuevo.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -119,6 +146,26 @@ export function LoginForm() {
               Recordar mi correo
             </Label>
           </div>
+
+          {/* Forgot password */}
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              className="text-sm text-integra-gold/80 hover:text-integra-gold hover:underline disabled:opacity-50"
+            >
+              {resetLoading ? "Enviando..." : "¿Olvidaste tu contraseña?"}
+            </button>
+          </div>
+
+          {/* Reset success */}
+          {resetSent && (
+            <div className="flex items-center gap-2 rounded-md bg-green-500/20 px-4 py-2 text-sm text-green-200">
+              <Mail size={16} />
+              Se envió un enlace de recuperación a tu correo.
+            </div>
+          )}
 
           {/* Error */}
           {error && (

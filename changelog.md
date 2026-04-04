@@ -1,5 +1,21 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [0.9.2] — 2026-04-03
+### Ajustes de testing (8 correcciones)
+
+#### Bugs corregidos
+- **Casos vacíos (crítico):** queries usaban `cat_team` JOIN pero FK ya apunta a `users` — reemplazado en 8 archivos
+- **Asistente tareas error:** `onClick` pasado a Server Component — removido, migrado a `getAuthenticatedContext`
+- **Navegación atrás:** botón atrás hardcodeado — creado `BackButton` con `router.back()` + fallback en 5 páginas
+
+#### Mejoras
+- **Seguimiento:** buscador, filtros (todos/pendientes/cumplidas/comentarios), casos colapsados por defecto con contadores
+- **Dashboard asistente:** tareas clickeables que llevan al caso con tab seguimiento
+- **Datos ficticios:** SQL para completar todos los campos de clientes y casos + 7 clientes nuevos sin expedientes
+
+#### SQL pendiente de ejecutar
+- `supabase/migrations/20260403000010_complete_demo_data.sql`
+
 ## [0.9.1] — 2026-04-03
 ### Fix crítico: reemplazar cat_team por users en todas las queries
 - **Bug:** "0 casos encontrados" causado por queries que usaban `cat_team` JOIN cuando el FK ya apunta a `users`

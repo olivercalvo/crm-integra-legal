@@ -1,5 +1,56 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.1.0] — 2026-04-04
+### Correcciones y mejoras basadas en feedback de abogadas
+
+#### Correcciones Criticas
+1. **Estados de caso simplificados:** Solo "En trámite" y "Cerrado". Eliminado "Activo" con migración automática.
+2. **Fix timezone en fechas:** Fechas de apertura ya no muestran un día antes (fix de conversión UTC vs Panama).
+3. **Formato de fecha global:** DD/MM/AAAA en toda la aplicación sin excepción.
+4. **Eliminar duplicidad Entidad/Institución:** Removido campo "Entidad", solo se usa "Institución" con opción "+ Agregar nueva" inline.
+
+#### Diseño Visual
+5. **Colores por clasificación:** CORPORATIVO=Azul, REGULATORIO=Verde, MIGRACIÓN=Naranja, LABORAL=Morado, PENAL=Rojo, CIVIL=Teal, ADMINISTRATIVO=Gris. Badges con color en listados.
+6. **Dashboard rediseñado:** Solo gráficas y tarjetas KPI (5 tarjetas grandes), donut de clasificaciones con colores, barras de progreso, alertas de deadlines en rojo/naranja, saldos en contra, tareas vencidas.
+7. **Transiciones suaves:** Cards y nav items con transiciones hover/active.
+
+#### Gastos — Rediseño
+8. **Dos tipos de gastos:** "Gastos del Trámite" y "Gastos Administrativos" (default B/.21.50 editable). Balance visible con 4 tarjetas: trámite, administrativo, pagado por cliente, diferencia. Rojo si negativo, verde si positivo.
+
+#### Casos — Mejoras
+9. **Responsables separados:** "Abogada Responsable" y "Asistente Responsable" como dropdowns separados.
+10. **Botones de seguimiento intuitivos:** Dos botones grandes: checklist + "Nueva Tarea para Asistente", mensaje + "Agregar Comentario/Seguimiento". Expandibles con formularios inline.
+11. **Tarjeta de expediente imprimible:** Botón "Imprimir Tarjeta" genera etiqueta media carta con branding Integra, color de clasificación, datos del caso.
+
+#### Clientes — Mejoras
+12. **Listado simplificado:** Sin teléfono. Carpetitas con colores: total, en trámite, cerrados por cliente.
+13. **Crear caso desde cliente:** Pre-selecciona el cliente automáticamente.
+14. **Tipo "Retainer":** Nuevo tipo de cliente con badge dorado para contratos continuos.
+
+#### Asistente — Simplificado
+15. **Solo ver, comentar y cumplir:** Removidos botones de gastos y adjuntar documentos. Comentario inline. Modal para "Marcar Cumplida" con comentario opcional y fecha auto. Botón "Info del Caso".
+
+#### Seguimiento
+16. **Filtros avanzados:** Filtro por asistente, por estado (pendientes/cumplidas/todas/comentarios), por rango de fechas (desde-hasta). Aplicación inmediata.
+
+#### Mis Pendientes
+17. **Mejoras:** Fecha de vencimiento opcional con label claro. Muestra "Creado:" y "Vence:" o "Sin fecha límite". Completados siempre visibles abajo con tachado (no colapsados).
+
+#### Admin
+18. **Acceso completo:** Admin ve Mis Pendientes y Prospectos en sidebar.
+
+#### Performance
+19. **Optimizaciones:** Tree-shaking de lucide-react, formatos AVIF/WebP.
+
+#### Datos
+20. **SQL para datos reales:** Script generado para cargar 23 clientes y 46 casos reales del Excel. Limpieza de datos ficticios. Archivo: `scripts/load_real_data.sql`.
+
+#### Migraciones SQL pendientes
+- `supabase/migrations/20260404000001_v1_1_feedback_changes.sql`: Requiere ejecución en Supabase para: simplificar estados, agregar expense_type, agregar color a clasificaciones, agregar assigned_to a personal_todos, limpiar datos ficticios.
+- `scripts/load_real_data.sql`: Requiere reemplazar TENANT_ID_HERE y ejecutar después de la migración.
+
+---
+
 ## [1.0.0] — 2026-04-03
 ### Nuevas funcionalidades mayores (6 features)
 

@@ -2,7 +2,11 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { CaseForm } from "@/components/cases/case-form";
 import { BackButton } from "@/components/ui/back-button";
 
-export default async function NuevoExpedientePage() {
+interface PageProps {
+  searchParams: { client_id?: string };
+}
+
+export default async function NuevoExpedientePage({ searchParams }: PageProps) {
   const { db, tenantId } = await getAuthenticatedContext();
 
   const [clientsRes, classificationsRes, institutionsRes, teamRes, statusesRes] =
@@ -63,6 +67,7 @@ export default async function NuevoExpedientePage() {
           team={(teamRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }))}
           statuses={statusesRes.data ?? []}
           mode="create"
+          preSelectedClientId={searchParams.client_id}
         />
       </div>
     </div>

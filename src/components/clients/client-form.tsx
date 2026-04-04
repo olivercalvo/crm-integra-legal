@@ -195,20 +195,23 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="type">Clasificación</Label>
+                <Label htmlFor="type">Tipo de Cliente</Label>
                 <select
                   id="type"
                   value={formData.type}
                   onChange={set("type")}
                   className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">— Sin clasificación —</option>
-                  {classifications.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
+                  <option value="">— Seleccionar tipo —</option>
+                  <option value="Persona Natural">Persona Natural</option>
+                  <option value="Persona Jurídica">Persona Jurídica</option>
+                  <option value="Retainer">Retainer</option>
                 </select>
+                {formData.type === "Retainer" && (
+                  <p className="text-xs text-integra-gold font-medium">
+                    Cliente con contrato continuo y múltiples casos
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -47,6 +47,7 @@ interface CaseFormProps {
     deadline: string | null;
   };
   mode: "create" | "edit";
+  preSelectedClientId?: string;
 }
 
 const TOTAL_STEPS = 4;
@@ -59,6 +60,7 @@ export function CaseForm({
   statuses,
   initialData,
   mode,
+  preSelectedClientId,
 }: CaseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -66,11 +68,15 @@ export function CaseForm({
   const [error, setError] = useState<string | null>(null);
 
   // Form state
-  const [clientId, setClientId] = useState(initialData?.client_id ?? "");
+  const preClient = preSelectedClientId ? clients.find((cl) => cl.id === preSelectedClientId) : null;
+  const [clientId, setClientId] = useState(initialData?.client_id ?? preSelectedClientId ?? "");
   const [clientSearch, setClientSearch] = useState(() => {
     if (initialData?.client_id) {
       const c = clients.find((cl) => cl.id === initialData.client_id);
       return c ? `${c.client_number} - ${c.name}` : "";
+    }
+    if (preClient) {
+      return `${preClient.client_number} - ${preClient.name}`;
     }
     return "";
   });

@@ -101,6 +101,15 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         <div className="flex flex-wrap gap-2">
           <Button
             asChild
+            className="min-h-[48px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold"
+          >
+            <Link href={`/abogada/casos/nuevo?client_id=${id}`}>
+              <FolderOpen size={18} className="mr-1" />
+              Crear Caso
+            </Link>
+          </Button>
+          <Button
+            asChild
             variant="outline"
             className="min-h-[48px] border-integra-navy text-integra-navy hover:bg-integra-navy hover:text-white"
           >

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ClientListSearch } from "@/components/clients/client-list";
 import { PagePagination } from "@/components/ui/page-pagination";
 import { SortableHeader } from "@/components/ui/sortable-header";
-import { Plus, User, Phone, FolderOpen } from "lucide-react";
+import { Plus, User, FolderOpen } from "lucide-react";
 import type { Client } from "@/types/database";
 
 const PAGE_SIZE = 10;
@@ -15,7 +15,6 @@ const SORTABLE_COLUMNS: Record<string, string> = {
   client_number: "client_number",
   name: "name",
   ruc: "ruc",
-  phone: "phone",
   type: "type",
 };
 
@@ -58,19 +57,27 @@ export default async function ClientesPage({ searchParams }: PageProps) {
   const list: Client[] = clients ?? [];
   const clientIds = list.map((c) => c.id);
 
-  let caseCounts: Record<string, number> = {};
+  let caseCounts: Record<string, { total: number; enTramite: number; cerrados: number }> = {};
   if (clientIds.length > 0) {
     const { data: caseData } = await db
       .from("cases")
-      .select("client_id")
+      .select("client_id, cat_statuses(name)")
       .eq("tenant_id", tenantId)
       .in("client_id", clientIds);
 
     if (caseData) {
-      caseCounts = caseData.reduce((acc: Record<string, number>, row: { client_id: string }) => {
-        acc[row.client_id] = (acc[row.client_id] || 0) + 1;
-        return acc;
-      }, {});
+      for (const row of caseData as { client_id: string; cat_statuses: { name: string } | null }[]) {
+        if (!caseCounts[row.client_id]) {
+          caseCounts[row.client_id] = { total: 0, enTramite: 0, cerrados: 0 };
+        }
+        caseCounts[row.client_id].total++;
+        const statusName = row.cat_statuses?.name?.toLowerCase() ?? "";
+        if (statusName.includes("cerrado") || statusName.includes("cerrada")) {
+          caseCounts[row.client_id].cerrados++;
+        } else {
+          caseCounts[row.client_id].enTramite++;
+        }
+      }
     }
   }
 
@@ -137,14 +144,8 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                         <p className="text-xs text-gray-400 font-mono">{client.client_number}</p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {(caseCounts[client.id] ?? 0) > 0 && (
-                          <Badge className="bg-green-100 text-green-700 border-0 text-xs gap-1">
-                            <FolderOpen size={11} />
-                            {caseCounts[client.id]}
-                          </Badge>
-                        )}
                         {client.type && (
-                          <Badge className="bg-integra-navy/10 text-integra-navy border-0 text-xs">
+                          <Badge className={`border-0 text-xs ${client.type === "Retainer" ? "bg-integra-gold/20 text-integra-gold" : "bg-integra-navy/10 text-integra-navy"}`}>
                             {client.type}
                           </Badge>
                         )}
@@ -152,12 +153,25 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                       {client.ruc && <span>RUC: {client.ruc}</span>}
-                      {client.phone && (
-                        <span className="flex items-center gap-1">
-                          <Phone size={13} /> {client.phone}
-                        </span>
-                      )}
                     </div>
+                    {/* Case folder badges */}
+                    {caseCounts[client.id] && caseCounts[client.id].total > 0 && (
+                      <div className="mt-1.5 flex gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                          <FolderOpen size={10} /> {caseCounts[client.id].total}
+                        </span>
+                        {caseCounts[client.id].enTramite > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                            <FolderOpen size={10} /> {caseCounts[client.id].enTramite} trámite
+                          </span>
+                        )}
+                        {caseCounts[client.id].cerrados > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                            <FolderOpen size={10} /> {caseCounts[client.id].cerrados} cerr.
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
@@ -177,9 +191,6 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                   </th>
                   <th className="px-4 py-3">
                     <SortableHeader column="ruc" label="RUC" currentSort={currentSort} currentDir={currentDir} />
-                  </th>
-                  <th className="px-4 py-3">
-                    <SortableHeader column="phone" label="Teléfono" currentSort={currentSort} currentDir={currentDir} />
                   </th>
                   <th className="px-4 py-3">
                     <SortableHeader column="type" label="Tipo de Cliente" currentSort={currentSort} currentDir={currentDir} />
@@ -210,25 +221,37 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-gray-500">{client.ruc ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-500">{client.phone ?? "—"}</td>
                     <td className="px-4 py-3">
                       {client.type ? (
-                        <Badge className="bg-integra-navy/10 text-integra-navy border-0 text-xs">
+                        <Badge className={`border-0 text-xs ${client.type === "Retainer" ? "bg-integra-gold/20 text-integra-gold font-semibold" : "bg-integra-navy/10 text-integra-navy"}`}>
                           {client.type}
                         </Badge>
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      {(caseCounts[client.id] ?? 0) > 0 ? (
-                        <Badge className="bg-green-100 text-green-700 border-0 text-xs gap-1">
-                          <FolderOpen size={11} />
-                          {caseCounts[client.id]}
-                        </Badge>
-                      ) : (
-                        <span className="text-gray-300">0</span>
-                      )}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {caseCounts[client.id] ? (
+                          <>
+                            <span className="inline-flex items-center gap-0.5 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700" title="Total">
+                              <FolderOpen size={10} /> {caseCounts[client.id].total}
+                            </span>
+                            {caseCounts[client.id].enTramite > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700" title="En trámite">
+                                <FolderOpen size={10} /> {caseCounts[client.id].enTramite}
+                              </span>
+                            )}
+                            {caseCounts[client.id].cerrados > 0 && (
+                              <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600" title="Cerrados">
+                                <FolderOpen size={10} /> {caseCounts[client.id].cerrados}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-300">0</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

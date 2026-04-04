@@ -262,6 +262,51 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ---
 
+### F-015: Mis Pendientes (To-Do Personal)
+**Prioridad:** P1
+**Roles:** Abogada
+
+**Funcionalidad:**
+- Tareas personales (to-dos) privadas por abogada
+- Cada pendiente tiene: descripción, fecha límite, estado (pendiente/cumplida), comentarios
+- Marcar como completado registra fecha de cierre automáticamente
+- Eliminar pendientes
+- Una abogada NO puede ver los pendientes de la otra
+- API: /api/todos (CRUD), /api/todos/[id]/comments
+
+---
+
+### F-016: Pipeline de Prospectos
+**Prioridad:** P1
+**Roles:** Abogada
+
+**Campos:**
+- Nombre (obligatorio)
+- Teléfono
+- Correo electrónico
+- Servicio de interés
+- Notas
+- Fecha de contacto
+
+**Pipeline (5 etapas):**
+1. Contacto Inicial
+2. Propuesta Enviada
+3. En Negociación
+4. Ganado
+5. Perdido
+
+**Funcionalidad:**
+- Vista Kanban con columnas por etapa
+- Vista lista como alternativa
+- Mover prospectos entre etapas
+- Comentarios de seguimiento por prospecto
+- Adjuntar documentos a prospectos
+- Botón "Crear como Cliente" al ganar: crea registro en clients y redirige al detalle
+- Todo filtrado por tenant_id
+- API: /api/prospects (CRUD), /api/prospects/[id]/comments, /api/prospects/[id]/convert
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

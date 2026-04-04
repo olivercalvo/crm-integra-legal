@@ -1,5 +1,57 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.0.0] — 2026-04-03
+### Nuevas funcionalidades mayores (6 features)
+
+#### 1. Login — Mejoras
+- **Recuperar contraseña:** nuevo enlace "¿Olvidaste tu contraseña?" que envía email vía Supabase Auth
+- **Título actualizado:** "Sistema de Gestión de Casos" → "Gestión Legal Integral"
+
+#### 2. Mis Pendientes — To-Do personal para abogadas
+- **Nueva sección** en sidebar: "Mis Pendientes" (solo rol abogada)
+- Crear tareas personales con descripción y fecha límite opcional
+- Marcar como pendiente/cumplida (toggle)
+- Eliminar pendientes
+- Agregar comentarios expandibles a cada pendiente
+- Detección de vencidas con resaltado rojo
+- Sección colapsable de cumplidas
+- **Privacidad:** cada abogada solo ve sus propios pendientes
+- API: `/api/todos` (GET, POST), `/api/todos/[id]` (PATCH, DELETE), `/api/todos/[id]/comments` (GET, POST)
+
+#### 3. Pipeline de Prospectos
+- **Nueva sección** en sidebar: "Prospectos" (solo rol abogada)
+- Crear prospectos con: nombre, teléfono, email, servicio de interés, notas, fecha de contacto
+- **5 etapas del pipeline:** Contacto Inicial → Propuesta Enviada → En Negociación → Ganado → Perdido
+- **Vista Kanban** con columnas scrolleables por etapa
+- **Vista Lista** como alternativa
+- Mover prospectos entre etapas con botones de acción
+- Agregar notas de seguimiento (comentarios) por prospecto
+- **"Crear como Cliente"**: al ganar un prospecto, bot��n que auto-crea registro en `clients` y redirige al detalle del cliente
+- API: `/api/prospects` (GET, POST), `/api/prospects/[id]` (PATCH, DELETE), `/api/prospects/[id]/comments` (GET, POST), `/api/prospects/[id]/convert` (POST)
+
+#### 4. Importación Masiva — Separar clientes y casos
+- Página dividida en dos secciones independientes: "Importar Clientes" + "Importar Casos"
+- Indicador visual de flujo recomendado: "Paso 1: Clientes → Paso 2: Casos"
+- Cada sección con su propia plantilla descargable
+- API acepta parámetro `importType` para filtrar filas
+- Casos requieren que el cliente exista previamente
+
+#### 5. Adjuntos en tareas y comentarios
+- **Tareas:** bot��n de clip (📎) en cada tarea pendiente para adjuntar documentos
+- **Comentarios:** link "Adjuntar archivo" en el formulario de comentarios — archivos se suben vinculados al comentario
+- Funciona para ambos roles: abogadas y asistentes
+- `documents.entity_type` extendido a: client, case, task, comment
+
+#### 6. Migraciones SQL requeridas
+- `supabase/migrations/20260403000012_todos_and_prospects.sql` — 6 tablas nuevas (personal_todos, todo_comments, todo_documents, prospects, prospect_comments, prospect_documents)
+- `supabase/migrations/20260403000013_extend_document_entity_types.sql` — extiende CHECK constraint de documents
+
+### Técnico
+- 12 nuevos API routes
+- 3 nuevos componentes: TodoList, ProspectPipeline, templates separadas
+- TypeScript types: PersonalTodo, TodoComment, TodoDocument, Prospect, ProspectComment, ProspectDocument, ProspectStatus
+- Sidebar: 2 nuevos items (Mis Pendientes, Prospectos) para rol abogada
+
 ## [0.9.3] — 2026-04-03
 ### Ajustes de testing — UX del asistente (5 cambios)
 

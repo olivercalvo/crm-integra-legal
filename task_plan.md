@@ -120,6 +120,27 @@
 | 10.8.2 | Crear sección Seguimiento (antes Tareas) | F-004/F-005 | ✅ Completo | /abogada/seguimiento — vista global de tareas+comentarios por caso |
 | 10.8.3 | Renombrar "Tareas" → "Seguimiento" en navegación | — | ✅ Completo | sidebar, bottom-nav, dashboards |
 
+## FASE 10.9: UX Asistente (v0.9.3)
+| # | Tarea | Feature | Estado | Notas |
+|---|-------|---------|--------|-------|
+| 10.9.1 | Dashboard asistente — solo KPIs | F-007 | ✅ Completo | Eliminada lista de tareas, solo 3 cards |
+| 10.9.2 | Menú asistente simplificado | F-007 | ✅ Completo | Solo Dashboard + Mis Tareas, eliminado Mis Casos |
+| 10.9.3 | Mis Tareas — agrupar por caso | F-004 | ✅ Completo | Header por caso, pendientes primero, botones acción |
+| 10.9.4 | Documentos en detalle caso asistente | F-008 | ✅ Completo | DocumentUpload funcional (antes placeholder) |
+| 10.9.5 | Datos ficticios completos (SQL) | — | ✅ Completo | Clientes + documentos ficticios. SQL pendiente ejecutar |
+
+## FASE 12: Nuevas Funcionalidades (v1.0.0)
+| # | Tarea | Feature | Estado | Notas |
+|---|-------|---------|--------|-------|
+| 12.1 | Login — Recuperar contraseña | F-012 | ✅ Completo | Supabase Auth resetPasswordForEmail |
+| 12.2 | Login — Cambiar título | — | ✅ Completo | "Gestión Legal Integral" |
+| 12.3 | Mis Pendientes (to-do personal abogadas) | F-015 | ✅ Completo | CRUD + comentarios, privado por usuario |
+| 12.4 | Pipeline de Prospectos | F-016 | ✅ Completo | Kanban 5 etapas, comentarios, convertir a cliente |
+| 12.5 | Importación separada clientes/casos | F-009 | ✅ Completo | 2 secciones independientes con plantillas propias |
+| 12.6 | Adjuntos en tareas y comentarios | F-008 | ✅ Completo | Clip en tareas, adjuntar en comentarios |
+| 12.7 | SQL: tablas todos + prospectos | — | 🔶 Pendiente | 20260403000012_todos_and_prospects.sql |
+| 12.8 | SQL: extend document entity_type | — | 🔶 Pendiente | 20260403000013_extend_document_entity_types.sql |
+
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|

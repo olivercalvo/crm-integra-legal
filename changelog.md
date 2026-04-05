@@ -1,5 +1,22 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.2.0] — 2026-04-04
+### Tres ajustes urgentes post-carga de datos reales
+
+#### Numeración Editable
+1. **N° Cliente editable:** Al crear un cliente, el sistema sugiere CLI-NNN pero la abogada puede cambiarlo. Validación de unicidad.
+2. **Código de expediente editable:** Al crear un caso, el sistema sugiere PREFIX-NNN pero es editable. Validación de unicidad.
+
+#### Gastos — Pagos clasificados
+3. **Pagos del cliente por tipo:** Ahora se clasifican como "Pago para Trámite" o "Pago Administrativo". Balance calculado por separado: Balance Trámite, Balance Administrativo, Balance Total.
+4. **Nueva migración:** `20260404000002_payment_type.sql` — agrega `payment_type` a `client_payments`.
+
+#### Mis Pendientes — Funcionalidad completa
+5. **Adjuntar documentos:** Botón "Adjuntar" en cada pendiente para subir archivos via Supabase Storage.
+6. **Asignar a equipo:** Dropdown opcional "Asignar a" al crear un pendiente. El asignado ve el pendiente en su propia lista con badge "Asignado por [nombre]". El creador ve "Asignado a [nombre]".
+
+---
+
 ## [1.1.0] — 2026-04-04
 ### Correcciones y mejoras basadas en feedback de abogadas
 

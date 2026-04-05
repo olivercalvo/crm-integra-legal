@@ -118,7 +118,7 @@ export default async function ExpedienteDetailPage({
         .order("date", { ascending: false }),
       db
         .from("client_payments")
-        .select("id, amount, payment_date, registered_by")
+        .select("id, amount, payment_date, payment_type, registered_by")
         .eq("case_id", params.id)
         .order("payment_date", { ascending: false }),
       db
@@ -192,7 +192,14 @@ export default async function ExpedienteDetailPage({
   const totalTramite = expensesTramite.reduce((sum, e) => sum + Number(e.amount), 0);
   const totalAdmin = expensesAdmin.reduce((sum, e) => sum + Number(e.amount), 0);
   const totalExpenses = totalTramite + totalAdmin;
-  const totalPayments = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  // Split payments by type
+  const paymentsTramite = payments.filter((p) => (p as Record<string, unknown>).payment_type !== "administrativo");
+  const paymentsAdmin = payments.filter((p) => (p as Record<string, unknown>).payment_type === "administrativo");
+  const totalPayTramite = paymentsTramite.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPayAdmin = paymentsAdmin.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalPayments = totalPayTramite + totalPayAdmin;
+  const balanceTramite = totalPayTramite - totalTramite;
+  const balanceAdmin = totalPayAdmin - totalAdmin;
   const balance = totalPayments - totalExpenses;
   const isInRed = totalExpenses > totalPayments && totalExpenses > 0;
 
@@ -584,39 +591,73 @@ export default async function ExpedienteDetailPage({
           {/* Add expense/payment buttons */}
           <AddExpenseForm caseId={params.id} />
 
-          {/* Balance summary — 4 cards */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          {/* Balance summary — separate by type */}
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+            {/* Trámite column */}
             <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Gastos Trámite</p>
-                <p className="text-lg font-bold text-red-600">{formatCurrency(totalTramite)}</p>
+              <CardContent className="p-4 space-y-1">
+                <p className="text-xs text-gray-500 font-semibold uppercase">Trámite</p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Gastos:</span>
+                  <span className="font-bold text-red-600">{formatCurrency(totalTramite)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Pagos:</span>
+                  <span className="font-bold text-green-600">{formatCurrency(totalPayTramite)}</span>
+                </div>
+                <div className="border-t pt-1 flex justify-between text-sm">
+                  <span className="text-gray-500">Balance:</span>
+                  <span className={`font-bold ${balanceTramite < 0 ? "text-red-600" : "text-green-600"}`}>
+                    {formatCurrency(balanceTramite)}
+                  </span>
+                </div>
               </CardContent>
             </Card>
+            {/* Administrativo column */}
             <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Gastos Administrativos</p>
-                <p className="text-lg font-bold text-amber-600">{formatCurrency(totalAdmin)}</p>
+              <CardContent className="p-4 space-y-1">
+                <p className="text-xs text-gray-500 font-semibold uppercase">Administrativo</p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Gastos:</span>
+                  <span className="font-bold text-amber-600">{formatCurrency(totalAdmin)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Pagos:</span>
+                  <span className="font-bold text-teal-600">{formatCurrency(totalPayAdmin)}</span>
+                </div>
+                <div className="border-t pt-1 flex justify-between text-sm">
+                  <span className="text-gray-500">Balance:</span>
+                  <span className={`font-bold ${balanceAdmin < 0 ? "text-red-600" : "text-green-600"}`}>
+                    {formatCurrency(balanceAdmin)}
+                  </span>
+                </div>
               </CardContent>
             </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-gray-500">Pagos del Cliente</p>
-                <p className="text-lg font-bold text-green-600">{formatCurrency(totalPayments)}</p>
-              </CardContent>
-            </Card>
+            {/* Total */}
             <Card className={isInRed ? "border-red-300 bg-red-50" : "border-green-200 bg-green-50"}>
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-1">
                 <div className="flex items-center gap-1.5">
                   {isInRed ? (
                     <AlertTriangle size={16} className="text-red-500" />
                   ) : (
                     <CheckCircle size={16} className="text-green-600" />
                   )}
-                  <p className="text-xs text-gray-500">Balance</p>
+                  <p className="text-xs text-gray-500 font-semibold uppercase">Balance Total</p>
                 </div>
-                <p className={`text-lg font-bold ${isInRed ? "text-red-600" : "text-green-600"}`}>
-                  {formatCurrency(balance)}
-                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Total Gastos:</span>
+                  <span className="font-bold text-red-600">{formatCurrency(totalExpenses)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Total Pagos:</span>
+                  <span className="font-bold text-green-600">{formatCurrency(totalPayments)}</span>
+                </div>
+                <div className="border-t pt-1 flex justify-between text-sm">
+                  <span className="text-gray-500">Balance:</span>
+                  <span className={`text-lg font-bold ${isInRed ? "text-red-600" : "text-green-600"}`}>
+                    {formatCurrency(balance)}
+                  </span>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -678,15 +719,22 @@ export default async function ExpedienteDetailPage({
               <CardContent>
                 {payments.length > 0 ? (
                   <div className="divide-y">
-                    {payments.map((p) => (
-                      <div key={p.id} className="flex items-start justify-between py-3">
-                        <div>
-                          <p className="font-medium text-sm">Pago del cliente</p>
-                          <p className="text-xs text-gray-500">{formatDate(p.payment_date)}</p>
+                    {payments.map((p) => {
+                      const pType = (p as Record<string, unknown>).payment_type;
+                      return (
+                        <div key={p.id} className="flex items-start justify-between py-3">
+                          <div>
+                            <p className="font-medium text-sm">
+                              {pType === "administrativo" ? "Pago Administrativo" : "Pago Trámite"}
+                            </p>
+                            <p className="text-xs text-gray-500">{formatDate(p.payment_date)}</p>
+                          </div>
+                          <span className={`font-semibold ${pType === "administrativo" ? "text-teal-600" : "text-green-600"}`}>
+                            {formatCurrency(Number(p.amount))}
+                          </span>
                         </div>
-                        <span className="font-semibold text-green-600">{formatCurrency(Number(p.amount))}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-400 py-4 text-center">Sin pagos registrados</p>

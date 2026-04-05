@@ -83,6 +83,7 @@ export interface ClientPayment {
   case_id: string;
   amount: number;
   payment_date: string;
+  payment_type: "tramite" | "administrativo";
   registered_by: string;
   created_at: string;
 }

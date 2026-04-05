@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { case_id, amount, payment_date } = body;
+    const { case_id, amount, payment_date, payment_type } = body;
 
     if (!case_id || !amount || !payment_date) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, amount, payment_date" }, { status: 400 });
@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "El monto debe ser un número mayor a 0" }, { status: 400 });
     }
 
+    const validType = payment_type === "administrativo" ? "administrativo" : "tramite";
+
     const { data: payment, error: insertError } = await admin
       .from("client_payments")
       .insert({
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
         case_id,
         amount,
         payment_date,
+        payment_type: validType,
         registered_by: user.id,
       })
       .select()

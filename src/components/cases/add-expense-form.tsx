@@ -27,6 +27,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payType, setPayType] = useState<"tramite" | "administrativo">("tramite");
 
   const resetExpense = () => {
     setExpAmount("");
@@ -90,6 +91,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             case_id: caseId,
             amount,
             payment_date: payDate,
+            payment_type: payType,
           }),
         });
         if (!response.ok) {
@@ -125,11 +127,18 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             Gasto Administrativo
           </Button>
           <Button
-            onClick={() => { setShowPaymentForm(true); setShowExpenseForm(false); setError(null); }}
+            onClick={() => { setShowPaymentForm(true); setPayType("tramite"); setShowExpenseForm(false); setError(null); }}
             className="min-h-[48px] bg-green-600 text-white hover:bg-green-700 font-semibold"
           >
             <Plus size={18} className="mr-1" />
-            Pago del Cliente
+            Pago para Trámite
+          </Button>
+          <Button
+            onClick={() => { setShowPaymentForm(true); setPayType("administrativo"); setShowExpenseForm(false); setError(null); }}
+            className="min-h-[48px] bg-teal-600 text-white hover:bg-teal-700 font-semibold"
+          >
+            <Plus size={18} className="mr-1" />
+            Pago Administrativo
           </Button>
         </div>
       )}
@@ -195,8 +204,10 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
 
       {/* Payment form */}
       {showPaymentForm && (
-        <div className="rounded-xl border border-green-200 bg-green-50/30 p-4 space-y-3">
-          <h4 className="font-semibold text-green-700">Nuevo Pago del Cliente</h4>
+        <div className={`rounded-xl border p-4 space-y-3 ${payType === "administrativo" ? "border-teal-200 bg-teal-50/30" : "border-green-200 bg-green-50/30"}`}>
+          <h4 className={`font-semibold ${payType === "administrativo" ? "text-teal-700" : "text-green-700"}`}>
+            {payType === "administrativo" ? "Nuevo Pago para Gastos Administrativos" : "Nuevo Pago para Gastos del Trámite"}
+          </h4>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Monto (USD)</Label>

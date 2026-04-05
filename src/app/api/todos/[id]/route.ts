@@ -18,16 +18,15 @@ export async function PATCH(
     const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
-    // Verify ownership
+    // Verify ownership or assignment
     const { data: todo } = await admin
       .from("personal_todos")
-      .select("id, user_id")
+      .select("id, user_id, assigned_to")
       .eq("id", params.id)
       .eq("tenant_id", profile.tenant_id)
-      .eq("user_id", user.id)
       .single();
 
-    if (!todo) {
+    if (!todo || (todo.user_id !== user.id && todo.assigned_to !== user.id)) {
       return NextResponse.json({ error: "Pendiente no encontrado" }, { status: 404 });
     }
 
@@ -36,6 +35,7 @@ export async function PATCH(
 
     if (body.description !== undefined) updates.description = body.description;
     if (body.deadline !== undefined) updates.deadline = body.deadline || null;
+    if (body.assigned_to !== undefined) updates.assigned_to = body.assigned_to || null;
     if (body.status === "cumplida") {
       updates.status = "cumplida";
       updates.completed_at = new Date().toISOString();
@@ -79,6 +79,7 @@ export async function DELETE(
     const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
+    // Only the owner can delete
     const { error } = await admin
       .from("personal_todos")
       .delete()

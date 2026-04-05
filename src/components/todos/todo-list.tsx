@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -13,6 +13,9 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Paperclip,
+  UserPlus,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,10 +29,29 @@ interface Todo {
   status: "pendiente" | "cumplida";
   completed_at: string | null;
   created_at: string;
+  user_id: string;
+  assigned_to: string | null;
+  creator_name: string | null;
+  assignee_name: string | null;
+}
+
+interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface TodoDoc {
+  id: string;
+  file_name: string;
+  file_path: string;
+  created_at: string;
 }
 
 interface TodoListProps {
   initialTodos: Todo[];
+  teamMembers: TeamMember[];
+  currentUserId: string;
 }
 
 function isOverdue(deadline: string | null, status: string) {
@@ -37,18 +59,22 @@ function isOverdue(deadline: string | null, status: string) {
   return deadline < new Date().toISOString().split("T")[0];
 }
 
-export function TodoList({ initialTodos }: TodoListProps) {
+export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListProps) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedTodo, setExpandedTodo] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<Record<string, Array<{ id: string; text: string; created_at: string }>>>({});
   const [commentLoading, setCommentLoading] = useState(false);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [documents, setDocuments] = useState<Record<string, TodoDoc[]>>({});
+  const [docLoading, setDocLoading] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTodoId, setUploadTodoId] = useState<string | null>(null);
 
   const pendientes = initialTodos.filter((t) => t.status === "pendiente");
   const cumplidas = initialTodos.filter((t) => t.status === "cumplida");
@@ -62,11 +88,16 @@ export function TodoList({ initialTodos }: TodoListProps) {
       const res = await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: description.trim(), deadline: deadline || null }),
+        body: JSON.stringify({
+          description: description.trim(),
+          deadline: deadline || null,
+          assigned_to: assignedTo || null,
+        }),
       });
       if (res.ok) {
         setDescription("");
         setDeadline("");
+        setAssignedTo("");
         setShowForm(false);
         router.refresh();
       }
@@ -113,6 +144,13 @@ export function TodoList({ initialTodos }: TodoListProps) {
         setComments((prev) => ({ ...prev, [todoId]: data }));
       }
     }
+    if (!documents[todoId]) {
+      const res = await fetch(`/api/todos/${todoId}/documents`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments((prev) => ({ ...prev, [todoId]: data }));
+      }
+    }
   }
 
   async function handleAddComment(todoId: string) {
@@ -137,17 +175,43 @@ export function TodoList({ initialTodos }: TodoListProps) {
     }
   }
 
+  async function handleFileUpload(todoId: string, files: FileList) {
+    setDocLoading(todoId);
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+      const res = await fetch(`/api/todos/${todoId}/documents`, {
+        method: "POST",
+        body: formData,
+      });
+      if (res.ok) {
+        const newDocs = await res.json();
+        setDocuments((prev) => ({
+          ...prev,
+          [todoId]: [...newDocs, ...(prev[todoId] || [])],
+        }));
+      }
+    } finally {
+      setDocLoading(null);
+      setUploadTodoId(null);
+    }
+  }
+
   function renderTodo(todo: Todo) {
     const overdue = isOverdue(todo.deadline, todo.status);
     const isCompleted = todo.status === "cumplida";
     const isExpanded = expandedTodo === todo.id;
     const loading = actionLoading === todo.id;
+    const isAssignedToMe = todo.assigned_to === currentUserId && todo.user_id !== currentUserId;
+    const isOwner = todo.user_id === currentUserId;
 
     return (
       <Card
         key={todo.id}
         className={`border ${
-          overdue ? "border-red-300 bg-red-50/40" : isCompleted ? "border-gray-100 opacity-70" : "border-gray-100"
+          overdue ? "border-red-300 bg-red-50/40" : isCompleted ? "border-gray-100 opacity-70" : isAssignedToMe ? "border-blue-200 bg-blue-50/30" : "border-gray-100"
         }`}
       >
         <CardContent className="p-4">
@@ -174,6 +238,23 @@ export function TodoList({ initialTodos }: TodoListProps) {
               <p className={`text-sm font-medium leading-snug ${isCompleted ? "text-gray-500 line-through" : "text-gray-900"}`}>
                 {todo.description}
               </p>
+
+              {/* Assignment badges */}
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {isAssignedToMe && todo.creator_name && (
+                  <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
+                    <UserPlus size={10} className="mr-0.5" />
+                    Asignado por {todo.creator_name}
+                  </Badge>
+                )}
+                {isOwner && todo.assigned_to && todo.assignee_name && (
+                  <Badge variant="outline" className="text-[10px] text-purple-600 border-purple-200">
+                    <UserPlus size={10} className="mr-0.5" />
+                    Asignado a {todo.assignee_name}
+                  </Badge>
+                )}
+              </div>
+
               <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
                   <Calendar size={11} />
@@ -199,7 +280,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
               </div>
 
               {/* Action buttons */}
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex gap-3">
                 <button
                   onClick={() => handleToggleComments(todo.id)}
                   className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-integra-navy"
@@ -208,11 +289,40 @@ export function TodoList({ initialTodos }: TodoListProps) {
                   <MessageSquare size={14} />
                   Comentarios
                 </button>
+                <button
+                  onClick={() => {
+                    setUploadTodoId(todo.id);
+                    fileInputRef.current?.click();
+                  }}
+                  disabled={docLoading === todo.id}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-integra-navy"
+                >
+                  {docLoading === todo.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Paperclip size={14} />
+                  )}
+                  Adjuntar
+                </button>
               </div>
 
-              {/* Comments section */}
+              {/* Expanded section: comments + documents */}
               {isExpanded && (
-                <div className="mt-3 space-y-2 border-t pt-3">
+                <div className="mt-3 space-y-3 border-t pt-3">
+                  {/* Documents list */}
+                  {(documents[todo.id] || []).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Documentos</p>
+                      {(documents[todo.id] || []).map((d) => (
+                        <div key={d.id} className="flex items-center gap-2 rounded-md bg-blue-50 px-3 py-1.5 text-sm">
+                          <FileText size={14} className="text-blue-500 shrink-0" />
+                          <span className="truncate text-blue-700">{d.file_name}</span>
+                          <span className="ml-auto text-xs text-gray-400">{formatDate(d.created_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Add comment */}
                   <div className="flex gap-2">
                     <input
@@ -252,7 +362,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
             </div>
 
             {/* Delete */}
-            {!isCompleted && (
+            {!isCompleted && isOwner && (
               <button
                 onClick={() => handleDelete(todo.id)}
                 disabled={loading}
@@ -270,6 +380,20 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
   return (
     <div className="space-y-4">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0 && uploadTodoId) {
+            handleFileUpload(uploadTodoId, e.target.files);
+          }
+          e.target.value = "";
+        }}
+      />
+
       {/* Stats */}
       <div className="flex items-center gap-4 text-sm text-gray-500">
         <span>{pendientes.length} pendiente{pendientes.length !== 1 ? "s" : ""}</span>
@@ -308,7 +432,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <Calendar size={16} className="text-gray-400" />
-                <label className="text-xs text-gray-500">Fecha de vencimiento (opcional):</label>
+                <label className="text-xs text-gray-500">Vencimiento:</label>
                 <input
                   type="date"
                   value={deadline}
@@ -316,25 +440,43 @@ export function TodoList({ initialTodos }: TodoListProps) {
                   className="rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:border-integra-gold focus:outline-none"
                 />
               </div>
-              <div className="ml-auto flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setShowForm(false); setDescription(""); setDeadline(""); }}
-                  className="min-h-[36px]"
+              <div className="flex items-center gap-2">
+                <UserPlus size={16} className="text-gray-400" />
+                <label className="text-xs text-gray-500">Asignar a:</label>
+                <select
+                  value={assignedTo}
+                  onChange={(e) => setAssignedTo(e.target.value)}
+                  className="rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:border-integra-gold focus:outline-none"
                 >
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={saving || !description.trim()}
-                  className="min-h-[36px] bg-integra-navy hover:bg-integra-navy/90"
-                >
-                  {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-                  Guardar
-                </Button>
+                  <option value="">— Nadie (solo mío) —</option>
+                  {teamMembers
+                    .filter((m) => m.id !== currentUserId)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.role})
+                      </option>
+                    ))}
+                </select>
               </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setShowForm(false); setDescription(""); setDeadline(""); setAssignedTo(""); }}
+                className="min-h-[36px]"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCreate}
+                disabled={saving || !description.trim()}
+                className="min-h-[36px] bg-integra-navy hover:bg-integra-navy/90"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                Guardar
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -357,7 +499,7 @@ export function TodoList({ initialTodos }: TodoListProps) {
         </div>
       )}
 
-      {/* Completed todos — always visible */}
+      {/* Completed todos */}
       {cumplidas.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">

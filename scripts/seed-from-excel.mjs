@@ -12,10 +12,15 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ── Config ───────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://uqmmkklbhzxqybljiecs.supabase.co";
-const SERVICE_ROLE_KEY = "REDACTED_KEY";
-const TENANT_ID = "a0000000-0000-0000-0000-000000000001";
+// ── Config (from environment variables) ──────────────────────────────────────
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const TENANT_ID = process.env.TENANT_ID || "a0000000-0000-0000-0000-000000000001";
+
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
+  process.exit(1);
+}
 
 const headers = {
   Authorization: `Bearer ${SERVICE_ROLE_KEY}`,

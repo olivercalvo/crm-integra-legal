@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const storagePath = `${profile.tenant_id}/${entityType}/${entityId}/${Date.now()}_${safeName}`;
 
-      const buffer = Buffer.from(await file.arrayBuffer());
+      const buffer = new Uint8Array(await file.arrayBuffer());
 
       const { error: uploadError } = await admin.storage
         .from("documents")

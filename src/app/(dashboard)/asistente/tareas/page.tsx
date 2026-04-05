@@ -85,7 +85,7 @@ export default async function AsistenteTareasPage() {
   }
 
   // Sort pendientes by deadline asc (nulls last) within each group
-  for (const group of caseMap.values()) {
+  for (const group of Array.from(caseMap.values())) {
     group.pendientes.sort((a, b) => {
       if (!a.deadline && !b.deadline) return 0;
       if (!a.deadline) return 1;

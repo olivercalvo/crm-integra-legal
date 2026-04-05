@@ -96,6 +96,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
             case_start_date: caseData.case_start_date,
             procedure_start_date: caseData.procedure_start_date,
             deadline: caseData.deadline,
+            assistant_id: caseData.assistant_id,
           }}
           mode="edit"
         />

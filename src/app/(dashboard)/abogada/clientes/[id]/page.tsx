@@ -142,13 +142,13 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           <InfoRow
             icon={<MapPin size={16} />}
             label="Dirección Física"
-            value={(typedClient as Record<string, unknown>).address as string | null}
+            value={typedClient.address}
           />
           <InfoRow
             icon={<Calendar size={16} />}
             label="Cliente Desde"
-            value={(typedClient as Record<string, unknown>).client_since
-              ? formatDate((typedClient as Record<string, unknown>).client_since as string)
+            value={typedClient.client_since
+              ? formatDate(typedClient.client_since)
               : null}
           />
           {typedClient.observations && (

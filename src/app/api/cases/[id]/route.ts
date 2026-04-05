@@ -54,6 +54,7 @@ export async function PATCH(
       physical_location,
       observations,
       has_digital_file,
+      entity,
       procedure_type,
       new_institution_name,
       institution_procedure_number,

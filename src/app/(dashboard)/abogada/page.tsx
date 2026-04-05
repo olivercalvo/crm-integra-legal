@@ -41,11 +41,11 @@ export default async function AbogadaDashboard() {
 
   // Calculate derived stats
   const casesEnTramite = cases.filter((c) => {
-    const status = (c.cat_statuses as { name: string } | null)?.name?.toLowerCase() ?? "";
+    const status = (c.cat_statuses as unknown as { name: string } | null)?.name?.toLowerCase() ?? "";
     return !status.includes("cerrado") && !status.includes("cerrada");
   });
   const casesCerrados = cases.filter((c) => {
-    const status = (c.cat_statuses as { name: string } | null)?.name?.toLowerCase() ?? "";
+    const status = (c.cat_statuses as unknown as { name: string } | null)?.name?.toLowerCase() ?? "";
     return status.includes("cerrado") || status.includes("cerrada");
   });
 
@@ -61,15 +61,15 @@ export default async function AbogadaDashboard() {
 
   // Cases with negative balance
   const casesInRed = cases.filter((c) => {
-    const totalExpenses = ((c.expenses as { amount: number }[]) || []).reduce((s, e) => s + Number(e.amount), 0);
-    const totalPayments = ((c.client_payments as { amount: number }[]) || []).reduce((s, p) => s + Number(p.amount), 0);
+    const totalExpenses = ((c.expenses as unknown as { amount: number }[]) || []).reduce((s, e) => s + Number(e.amount), 0);
+    const totalPayments = ((c.client_payments as unknown as { amount: number }[]) || []).reduce((s, p) => s + Number(p.amount), 0);
     return totalExpenses > totalPayments && totalExpenses > 0;
   });
 
   // Cases by classification for donut
   const classificationCounts: Record<string, { count: number; color: string }> = {};
   for (const c of cases) {
-    const classification = c.cat_classifications as { name: string; color: string | null } | null;
+    const classification = c.cat_classifications as unknown as { name: string; color: string | null } | null;
     const name = classification?.name ?? "Sin clasificar";
     const color = classification ? getClassificationColor(classification.name, classification.color) : "#9CA3AF";
     if (!classificationCounts[name]) classificationCounts[name] = { count: 0, color };
@@ -211,8 +211,8 @@ export default async function AbogadaDashboard() {
             </CardHeader>
             <CardContent className="space-y-2">
               {casesInRed.slice(0, 4).map((c) => {
-                const exp = ((c.expenses as { amount: number }[]) || []).reduce((s, e) => s + Number(e.amount), 0);
-                const pay = ((c.client_payments as { amount: number }[]) || []).reduce((s, p) => s + Number(p.amount), 0);
+                const exp = ((c.expenses as unknown as { amount: number }[]) || []).reduce((s, e) => s + Number(e.amount), 0);
+                const pay = ((c.client_payments as unknown as { amount: number }[]) || []).reduce((s, p) => s + Number(p.amount), 0);
                 return (
                   <Link key={c.id} href={`/abogada/casos/${c.id}?tab=gastos`} className="block">
                     <div className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2 text-sm hover:bg-red-100">

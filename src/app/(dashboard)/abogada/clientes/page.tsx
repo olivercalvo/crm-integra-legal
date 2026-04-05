@@ -66,7 +66,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
       .in("client_id", clientIds);
 
     if (caseData) {
-      for (const row of caseData as { client_id: string; cat_statuses: { name: string } | null }[]) {
+      for (const row of caseData as unknown as { client_id: string; cat_statuses: { name: string } | null }[]) {
         if (!caseCounts[row.client_id]) {
           caseCounts[row.client_id] = { total: 0, enTramite: 0, cerrados: 0 };
         }

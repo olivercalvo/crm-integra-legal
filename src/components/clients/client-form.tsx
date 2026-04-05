@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ interface ClientFormProps {
 }
 
 interface FormData {
+  client_number: string;
   name: string;
   ruc: string;
   type: string;
@@ -38,6 +39,7 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<FormData>({
+    client_number: client?.client_number ?? "",
     name: client?.name ?? "",
     ruc: client?.ruc ?? "",
     type: client?.type ?? "",
@@ -46,6 +48,20 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
     email: client?.email ?? "",
     observations: client?.observations ?? "",
   });
+
+  // Fetch suggested number on create mode
+  useEffect(() => {
+    if (mode === "create") {
+      fetch("/api/clients")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.suggested) {
+            setFormData((prev) => ({ ...prev, client_number: d.suggested }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mode]);
 
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
@@ -93,6 +109,9 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
         phone: formData.phone.trim() || null,
         email: formData.email.trim() || null,
         observations: formData.observations.trim() || null,
+        ...(mode === "create" && formData.client_number.trim()
+          ? { client_number: formData.client_number.trim() }
+          : {}),
       };
 
       let response: Response;
@@ -166,6 +185,29 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
           {/* Step 0: Identificación */}
           {step === 0 && (
             <div className="space-y-4">
+              {/* Editable client number */}
+              <div className="space-y-1.5">
+                <Label htmlFor="client_number">
+                  N° Cliente <span className="text-gray-400 text-xs font-normal">(editable)</span>
+                </Label>
+                <Input
+                  id="client_number"
+                  value={formData.client_number}
+                  onChange={set("client_number")}
+                  placeholder="Ej. CLI-024"
+                  className="min-h-[48px] font-mono"
+                  disabled={mode === "edit"}
+                />
+                {mode === "create" && (
+                  <p className="text-xs text-gray-400">
+                    Sugerido automáticamente. Puedes cambiarlo para seguir tu propia numeración.
+                  </p>
+                )}
+                {fieldErrors.client_number && (
+                  <p className="text-xs text-red-500">{fieldErrors.client_number}</p>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="name">
                   Nombre completo <span className="text-red-500">*</span>

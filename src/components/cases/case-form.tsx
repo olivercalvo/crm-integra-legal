@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Save, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -133,10 +133,31 @@ export function CaseForm({
   );
   const [deadlineDate, setDeadlineDate] = useState(initialData?.deadline ?? "");
 
-  // Compute preview code
+  // Editable case code
   const selectedClassification = classifications.find((c) => c.id === classificationId);
-  const prefix = selectedClassification?.prefix ?? "EXP";
-  const previewCode = mode === "edit" ? initialData!.case_code : `${prefix}-###`;
+  const [caseCode, setCaseCode] = useState(initialData?.case_code ?? "");
+  const [suggestedCode, setSuggestedCode] = useState("");
+
+  const fetchSuggestedCode = useCallback(async (classId: string) => {
+    if (mode !== "create") return;
+    try {
+      const url = classId
+        ? `/api/cases?classification_id=${classId}`
+        : "/api/cases";
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.suggested) {
+        setSuggestedCode(data.suggested);
+        setCaseCode(data.suggested);
+      }
+    } catch { /* ignore */ }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === "create") {
+      fetchSuggestedCode(classificationId);
+    }
+  }, [mode, classificationId, fetchSuggestedCode]);
 
   // Filtered client list for searchable select
   const filteredClients = clients.filter((c) => {
@@ -195,6 +216,7 @@ export function CaseForm({
       case_start_date: caseStartDate || null,
       procedure_start_date: procedureStartDate || null,
       deadline: deadlineDate || null,
+      ...(mode === "create" && caseCode.trim() ? { case_code: caseCode.trim() } : {}),
     };
 
     startTransition(async () => {
@@ -390,12 +412,26 @@ export function CaseForm({
             </select>
           </div>
 
-          {/* Code preview */}
-          <div className="rounded-lg border border-integra-gold/30 bg-integra-gold/5 p-3">
-            <p className="text-xs text-gray-500">Código del caso (preview)</p>
-            <p className="font-mono text-lg font-bold text-integra-navy">{previewCode}</p>
+          {/* Editable case code */}
+          <div className="space-y-1.5">
+            <Label htmlFor="case-code">
+              Código del expediente <span className="text-gray-400 text-xs font-normal">(editable)</span>
+            </Label>
+            <Input
+              id="case-code"
+              value={caseCode}
+              onChange={(e) => setCaseCode(e.target.value)}
+              placeholder={suggestedCode || "EXP-001"}
+              className="min-h-[48px] font-mono text-lg font-bold"
+              disabled={mode === "edit"}
+            />
+            {mode === "create" && suggestedCode && (
+              <p className="text-xs text-gray-400">
+                Sugerido: <span className="font-mono">{suggestedCode}</span> — puedes cambiarlo para seguir tu propia numeración.
+              </p>
+            )}
             {mode === "edit" && (
-              <p className="text-xs text-gray-400 mt-1">El código no cambia al editar</p>
+              <p className="text-xs text-gray-400">El código no cambia al editar</p>
             )}
           </div>
         </div>
@@ -651,7 +687,7 @@ export function CaseForm({
             <p className="text-sm font-medium text-gray-700">Resumen del caso</p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
               <span className="text-gray-500">Código:</span>
-              <span className="font-mono font-medium">{previewCode}</span>
+              <span className="font-mono font-medium">{caseCode || "—"}</span>
               <span className="text-gray-500">Cliente:</span>
               <span className="font-medium">{clientSearch || "—"}</span>
               <span className="text-gray-500">Clasificación:</span>

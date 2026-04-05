@@ -2,6 +2,58 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+// GET — suggest next case_code for a given classification
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("users")
+      .select("tenant_id")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile) {
+      return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const classificationId = searchParams.get("classification_id");
+
+    let prefix = "EXP";
+    if (classificationId) {
+      const { data: classification } = await admin
+        .from("cat_classifications")
+        .select("prefix")
+        .eq("id", classificationId)
+        .single();
+      if (classification?.prefix) {
+        prefix = classification.prefix;
+      }
+    }
+
+    const { data: maxCase } = await admin
+      .from("cases")
+      .select("case_number")
+      .eq("tenant_id", profile.tenant_id)
+      .order("case_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const nextNumber = (maxCase?.case_number ?? 0) + 1;
+    const suggested = `${prefix}-${String(nextNumber).padStart(3, "0")}`;
+
+    return NextResponse.json({ suggested });
+  } catch {
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
@@ -52,7 +104,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "El cliente es requerido" }, { status: 400 });
     }
 
-    // Auto-generate case_code: prefix from classification + sequential number
+    // Resolve classification prefix
     let prefix = "EXP";
     if (classification_id) {
       const { data: classification } = await admin
@@ -72,11 +124,33 @@ export async function POST(request: NextRequest) {
       .eq("tenant_id", profile.tenant_id)
       .order("case_number", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     const nextNumber = (maxCase?.case_number ?? 0) + 1;
-    const paddedNumber = String(nextNumber).padStart(3, "0");
-    const case_code = `${prefix}-${paddedNumber}`;
+
+    let case_code: string;
+    const customCode = body.case_code;
+
+    if (customCode && typeof customCode === "string" && customCode.trim()) {
+      // Validate uniqueness of custom code
+      const { data: existing } = await admin
+        .from("cases")
+        .select("id")
+        .eq("tenant_id", profile.tenant_id)
+        .eq("case_code", customCode.trim())
+        .maybeSingle();
+
+      if (existing) {
+        return NextResponse.json(
+          { error: `El código de expediente "${customCode.trim()}" ya existe. Elige otro.` },
+          { status: 409 }
+        );
+      }
+      case_code = customCode.trim();
+    } else {
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      case_code = `${prefix}-${paddedNumber}`;
+    }
 
     // If creating a new institution inline, insert it first
     let resolvedInstitutionId = institution_id;

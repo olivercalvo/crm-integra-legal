@@ -10,8 +10,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User as UserIcon, Menu, Search } from "lucide-react";
+import { LogOut, User as UserIcon, Menu } from "lucide-react";
 import { ConnectivityIndicator } from "@/components/layout/connectivity-indicator";
+import { GlobalSearch } from "@/components/layout/global-search";
 
 interface HeaderProps {
   userName: string;
@@ -60,15 +61,7 @@ export function Header({ userName, userRole, onToggleSidebar }: HeaderProps) {
 
       {/* Center: search bar */}
       <div className="hidden md:flex flex-1 max-w-md mx-8">
-        <div className="relative w-full">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar clientes, casos..."
-            readOnly
-            className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-10 pr-4 text-sm text-gray-500 placeholder:text-gray-400 focus:outline-none cursor-default"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       {/* Right: connectivity + user menu */}

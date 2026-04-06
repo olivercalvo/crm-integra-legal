@@ -418,27 +418,29 @@ export function CaseForm({
           </div>
 
           {/* Editable case code */}
-          <div className="space-y-1.5">
-            <Label htmlFor="case-code">
-              Código del expediente <span className="text-gray-400 text-xs font-normal">(editable)</span>
-            </Label>
-            <Input
-              id="case-code"
-              value={caseCode}
-              onChange={(e) => setCaseCode(e.target.value)}
-              placeholder={suggestedCode || "EXP-001"}
-              className="min-h-[48px] font-mono text-lg font-bold"
-              disabled={mode === "edit"}
-            />
-            {mode === "create" && suggestedCode && (
-              <p className="text-xs text-gray-400">
-                Sugerido: <span className="font-mono">{suggestedCode}</span> — puedes cambiarlo para seguir tu propia numeración.
+          {mode === "create" ? (
+            <div className="rounded-lg border-2 border-integra-gold/50 bg-integra-gold/5 p-3 space-y-1.5">
+              <Label htmlFor="case-code" className="text-integra-navy font-semibold">
+                Código del Expediente
+              </Label>
+              <Input
+                id="case-code"
+                value={caseCode}
+                onChange={(e) => setCaseCode(e.target.value)}
+                placeholder={suggestedCode || "EXP-001"}
+                className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
+              />
+              <p className="text-xs text-integra-navy/70">
+                Puedes cambiar este código para seguir tu propia numeración.
               </p>
-            )}
-            {mode === "edit" && (
-              <p className="text-xs text-gray-400">El código no cambia al editar</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">Código del expediente</p>
+              <p className="font-mono text-lg font-bold text-integra-navy">{caseCode}</p>
+              <p className="text-xs text-gray-400 mt-1">El código no cambia al editar</p>
+            </div>
+          )}
         </div>
       )}
 

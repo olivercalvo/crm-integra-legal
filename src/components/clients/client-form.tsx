@@ -195,27 +195,26 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
           {step === 0 && (
             <div className="space-y-4">
               {/* Editable client number */}
-              <div className="space-y-1.5">
-                <Label htmlFor="client_number">
-                  N° Cliente <span className="text-gray-400 text-xs font-normal">(editable)</span>
-                </Label>
-                <Input
-                  id="client_number"
-                  value={formData.client_number}
-                  onChange={set("client_number")}
-                  placeholder="Ej. CLI-024"
-                  className="min-h-[48px] font-mono"
-                  disabled={mode === "edit"}
-                />
-                {mode === "create" && (
-                  <p className="text-xs text-gray-400">
-                    Sugerido automáticamente. Puedes cambiarlo para seguir tu propia numeración.
+              {mode === "create" && (
+                <div className="rounded-lg border-2 border-integra-gold/50 bg-integra-gold/5 p-3 space-y-1.5">
+                  <Label htmlFor="client_number" className="text-integra-navy font-semibold">
+                    N° Cliente
+                  </Label>
+                  <Input
+                    id="client_number"
+                    value={formData.client_number}
+                    onChange={set("client_number")}
+                    placeholder="Ej. CLI-024"
+                    className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
+                  />
+                  <p className="text-xs text-integra-navy/70">
+                    Puedes cambiar este número para seguir tu propia numeración.
                   </p>
-                )}
-                {fieldErrors.client_number && (
-                  <p className="text-xs text-red-500">{fieldErrors.client_number}</p>
-                )}
-              </div>
+                  {fieldErrors.client_number && (
+                    <p className="text-xs text-red-500">{fieldErrors.client_number}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="name">

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber } = body;
+    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id } = body;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
         phone: phone?.trim() || null,
         email: email?.trim() || null,
         observations: observations?.trim() || null,
+        responsible_lawyer_id: responsible_lawyer_id || null,
         active: true,
       })
       .select()

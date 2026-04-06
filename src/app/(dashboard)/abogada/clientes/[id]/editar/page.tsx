@@ -14,14 +14,10 @@ export default async function EditarClientePage({ params }: PageProps) {
 
   const { id } = params;
 
-  const [clientRes, classRes] = await Promise.all([
+  const [clientRes, classRes, lawyersRes] = await Promise.all([
     db.from("clients").select("*").eq("id", id).single(),
-    db
-      .from("cat_classifications")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .eq("active", true)
-      .order("name", { ascending: true }),
+    db.from("cat_classifications").select("*").eq("tenant_id", tenantId).eq("active", true).order("name"),
+    db.from("users").select("id, full_name").eq("tenant_id", tenantId).eq("role", "abogada").eq("active", true).order("full_name"),
   ]);
 
   if (clientRes.error || !clientRes.data) {
@@ -30,6 +26,7 @@ export default async function EditarClientePage({ params }: PageProps) {
 
   const client = clientRes.data as Client;
   const classifications = (classRes.data as CatClassification[]) ?? [];
+  const lawyers = (lawyersRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }));
 
   return (
     <div className="space-y-5">
@@ -58,7 +55,7 @@ export default async function EditarClientePage({ params }: PageProps) {
         </p>
       </div>
 
-      <ClientForm mode="edit" client={client} classifications={classifications} />
+      <ClientForm mode="edit" client={client} classifications={classifications} lawyers={lawyers} />
     </div>
   );
 }

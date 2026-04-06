@@ -17,6 +17,7 @@ interface ClientOption {
   id: string;
   name: string;
   client_number: string;
+  responsible_lawyer_id?: string | null;
 }
 
 interface TeamMember extends SelectOption {
@@ -94,7 +95,7 @@ export function CaseForm({
     initialData?.institution_id ?? ""
   );
   const [responsibleId, setResponsibleId] = useState(
-    initialData?.responsible_id ?? ""
+    initialData?.responsible_id ?? preClient?.responsible_lawyer_id ?? ""
   );
   const [assistantId, setAssistantId] = useState(
     initialData?.assistant_id ?? ""
@@ -172,6 +173,10 @@ export function CaseForm({
     setClientId(client.id);
     setClientSearch(`${client.client_number} - ${client.name}`);
     setShowClientDropdown(false);
+    // Auto-inherit responsible lawyer from client (only if not already set)
+    if (mode === "create" && client.responsible_lawyer_id && !responsibleId) {
+      setResponsibleId(client.responsible_lawyer_id);
+    }
   };
 
   const validateStep = (): boolean => {

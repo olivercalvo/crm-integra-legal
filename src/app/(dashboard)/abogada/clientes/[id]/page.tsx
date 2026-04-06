@@ -48,13 +48,14 @@ export default async function ClienteDetailPage({ params }: PageProps) {
 
   const { data: client, error } = await db
     .from("clients")
-    .select("*")
+    .select("*, responsible_lawyer:users!clients_responsible_lawyer_id_fkey(full_name)")
     .eq("id", id)
     .single();
 
   if (error || !client) notFound();
 
   const typedClient = client as Client;
+  const lawyerName = (client.responsible_lawyer as unknown as { full_name: string } | null)?.full_name ?? null;
 
   // Fetch linked cases with status
   const { data: cases } = await db
@@ -136,6 +137,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           <InfoRow icon={<Hash size={16} />} label="N° Cliente" value={typedClient.client_number} />
           <InfoRow icon={<Building2 size={16} />} label="RUC / Cédula" value={typedClient.ruc} />
           <InfoRow icon={<FileText size={16} />} label="Tipo de Cliente" value={typedClient.type} />
+          <InfoRow icon={<User size={16} />} label="Abogada Responsable" value={lawyerName} />
           <InfoRow icon={<User size={16} />} label="Persona de contacto" value={typedClient.contact} />
           <InfoRow icon={<Phone size={16} />} label="Teléfono" value={typedClient.phone} />
           <InfoRow icon={<Mail size={16} />} label="Correo electrónico" value={typedClient.email} />

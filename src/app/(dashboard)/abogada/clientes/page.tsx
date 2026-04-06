@@ -35,7 +35,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
   let query = db
     .from("clients")
-    .select("*", { count: "exact" })
+    .select("*, responsible_lawyer:users!clients_responsible_lawyer_id_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId)
     .eq("active", true)
     .order(sortColumn, { ascending: sortDir })
@@ -54,7 +54,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
   }
 
   // Fetch active case counts per client
-  const list: Client[] = clients ?? [];
+  const list = (clients ?? []) as (Client & { responsible_lawyer?: { full_name: string } | null })[];
   const clientIds = list.map((c) => c.id);
 
   let caseCounts: Record<string, { total: number; enTramite: number; cerrados: number }> = {};
@@ -153,6 +153,9 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                       {client.ruc && <span>RUC: {client.ruc}</span>}
+                      {client.responsible_lawyer?.full_name && (
+                        <span>Abogada: {client.responsible_lawyer?.full_name}</span>
+                      )}
                     </div>
                     {/* Case folder badges */}
                     {caseCounts[client.id] && caseCounts[client.id].total > 0 && (
@@ -195,6 +198,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                   <th className="px-4 py-3">
                     <SortableHeader column="type" label="Tipo de Cliente" currentSort={currentSort} currentDir={currentDir} />
                   </th>
+                  <th className="px-4 py-3">Abogada</th>
                   <th className="px-4 py-3 text-center">Casos</th>
                 </tr>
               </thead>
@@ -229,6 +233,9 @@ export default async function ClientesPage({ searchParams }: PageProps) {
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {client.responsible_lawyer?.full_name ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">

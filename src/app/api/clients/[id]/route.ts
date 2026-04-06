@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
 
     const body = await request.json();
-    const { name, ruc, type, contact, phone, email, observations } = body;
+    const { name, ruc, type, contact, phone, email, observations, responsible_lawyer_id } = body;
 
     if (name !== undefined && (!name || !String(name).trim())) {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
@@ -59,6 +59,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (phone !== undefined) updates.phone = phone?.trim() || null;
     if (email !== undefined) updates.email = email?.trim() || null;
     if (observations !== undefined) updates.observations = observations?.trim() || null;
+    if (responsible_lawyer_id !== undefined) updates.responsible_lawyer_id = responsible_lawyer_id || null;
 
     const { data: updated, error: updateError } = await admin
       .from("clients")

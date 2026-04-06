@@ -32,6 +32,7 @@ export interface Client {
   address: string | null;
   client_since: string | null;
   observations: string | null;
+  responsible_lawyer_id: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;

@@ -9,10 +9,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import type { Client, CatClassification } from "@/types/database";
 
+interface LawyerOption {
+  id: string;
+  name: string;
+}
+
 interface ClientFormProps {
   mode: "create" | "edit";
   client?: Client;
   classifications: CatClassification[];
+  lawyers?: LawyerOption[];
 }
 
 interface FormData {
@@ -20,6 +26,7 @@ interface FormData {
   name: string;
   ruc: string;
   type: string;
+  responsible_lawyer_id: string;
   contact: string;
   phone: string;
   email: string;
@@ -32,7 +39,7 @@ const STEPS = [
   { label: "Observaciones", description: "Notas adicionales" },
 ];
 
-export function ClientForm({ mode, client, classifications }: ClientFormProps) {
+export function ClientForm({ mode, client, classifications, lawyers = [] }: ClientFormProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -43,6 +50,7 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
     name: client?.name ?? "",
     ruc: client?.ruc ?? "",
     type: client?.type ?? "",
+    responsible_lawyer_id: client?.responsible_lawyer_id ?? "",
     contact: client?.contact ?? "",
     phone: client?.phone ?? "",
     email: client?.email ?? "",
@@ -109,6 +117,7 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
         phone: formData.phone.trim() || null,
         email: formData.email.trim() || null,
         observations: formData.observations.trim() || null,
+        responsible_lawyer_id: formData.responsible_lawyer_id || null,
         ...(mode === "create" && formData.client_number.trim()
           ? { client_number: formData.client_number.trim() }
           : {}),
@@ -255,6 +264,23 @@ export function ClientForm({ mode, client, classifications }: ClientFormProps) {
                   </p>
                 )}
               </div>
+
+              {lawyers.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="responsible_lawyer_id">Abogada Responsable</Label>
+                  <select
+                    id="responsible_lawyer_id"
+                    value={formData.responsible_lawyer_id}
+                    onChange={set("responsible_lawyer_id")}
+                    className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">— Sin abogada responsable —</option>
+                    {lawyers.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

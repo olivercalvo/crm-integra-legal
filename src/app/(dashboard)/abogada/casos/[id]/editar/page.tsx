@@ -19,7 +19,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
         .single(),
       db
         .from("clients")
-        .select("id, name, client_number")
+        .select("id, name, client_number, responsible_lawyer_id")
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("name"),

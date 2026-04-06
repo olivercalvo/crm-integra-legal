@@ -7,12 +7,12 @@ import type { CatClassification } from "@/types/database";
 export default async function NuevoClientePage() {
   const { db, tenantId } = await getAuthenticatedContext();
 
-  const { data: classifications } = await db
-    .from("cat_classifications")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .eq("active", true)
-    .order("name", { ascending: true });
+  const [classificationsRes, lawyersRes] = await Promise.all([
+    db.from("cat_classifications").select("*").eq("tenant_id", tenantId).eq("active", true).order("name"),
+    db.from("users").select("id, full_name").eq("tenant_id", tenantId).eq("role", "abogada").eq("active", true).order("full_name"),
+  ]);
+
+  const lawyers = (lawyersRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }));
 
   return (
     <div className="space-y-5">
@@ -33,7 +33,8 @@ export default async function NuevoClientePage() {
 
       <ClientForm
         mode="create"
-        classifications={(classifications as CatClassification[]) ?? []}
+        classifications={(classificationsRes.data as CatClassification[]) ?? []}
+        lawyers={lawyers}
       />
     </div>
   );

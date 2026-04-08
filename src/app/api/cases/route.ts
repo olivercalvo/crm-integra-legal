@@ -37,15 +37,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const { data: maxCase } = await admin
+    // Query cases with this prefix to find the max number for THIS classification
+    const { data: prefixCases } = await admin
       .from("cases")
-      .select("case_number")
+      .select("case_code")
       .eq("tenant_id", profile.tenant_id)
-      .order("case_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .ilike("case_code", `${prefix}-%`);
 
-    const nextNumber = (maxCase?.case_number ?? 0) + 1;
+    let maxNum = 0;
+    if (prefixCases) {
+      for (const c of prefixCases) {
+        const match = c.case_code?.match(new RegExp(`^${prefix}-(\\d+)$`));
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    }
+
+    const nextNumber = maxNum + 1;
     const suggested = `${prefix}-${String(nextNumber).padStart(3, "0")}`;
 
     return NextResponse.json({ suggested });
@@ -117,7 +127,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get current max case_number for this tenant to assign next number
+    // Get current max case_number for this tenant (for the DB serial field)
     const { data: maxCase } = await admin
       .from("cases")
       .select("case_number")
@@ -148,7 +158,24 @@ export async function POST(request: NextRequest) {
       }
       case_code = customCode.trim();
     } else {
-      const paddedNumber = String(nextNumber).padStart(3, "0");
+      // Auto-generate based on max number for this prefix
+      const { data: prefixCases } = await admin
+        .from("cases")
+        .select("case_code")
+        .eq("tenant_id", profile.tenant_id)
+        .ilike("case_code", `${prefix}-%`);
+
+      let maxPrefixNum = 0;
+      if (prefixCases) {
+        for (const c of prefixCases) {
+          const match = c.case_code?.match(new RegExp(`^${prefix}-(\\d+)$`));
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxPrefixNum) maxPrefixNum = num;
+          }
+        }
+      }
+      const paddedNumber = String(maxPrefixNum + 1).padStart(3, "0");
       case_code = `${prefix}-${paddedNumber}`;
     }
 

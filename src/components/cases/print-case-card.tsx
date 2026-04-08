@@ -3,7 +3,7 @@
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
-import { getClassificationColor } from "@/lib/utils/classification-colors";
+import { getClassificationColor, getClassificationTextColor } from "@/lib/utils/classification-colors";
 
 interface PrintCaseCardProps {
   caseCode: string;
@@ -29,6 +29,9 @@ export function PrintCaseCard({
   const color = classification
     ? getClassificationColor(classification, classificationColor)
     : "#1B2A4A";
+  const badgeTextColor = classification
+    ? getClassificationTextColor(classification, color)
+    : "#FFFFFF";
 
   function handlePrint() {
     const printWindow = window.open("", "_blank", "width=600,height=400");
@@ -104,7 +107,7 @@ export function PrintCaseCard({
       border-radius: 4px;
       font-size: 8pt;
       font-weight: bold;
-      color: white;
+      color: ${badgeTextColor};
       background: ${color};
     }
     .footer {

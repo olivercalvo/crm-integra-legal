@@ -65,7 +65,7 @@ export default async function ExpedienteDetailPage({
       procedure_start_date, deadline, last_followup_at, created_at, updated_at,
       clients(id, name, client_number, ruc, type, phone, email),
       cat_statuses(id, name),
-      cat_classifications(id, name, prefix),
+      cat_classifications(id, name, prefix, color),
       cat_institutions(id, name)
     `
     )
@@ -81,7 +81,7 @@ export default async function ExpedienteDetailPage({
     ruc: string | null; type: string | null; phone: string | null; email: string | null;
   } | null;
   const status = caseData.cat_statuses as unknown as { id: string; name: string } | null;
-  const classification = caseData.cat_classifications as unknown as { id: string; name: string; prefix: string } | null;
+  const classification = caseData.cat_classifications as unknown as { id: string; name: string; prefix: string; color: string | null } | null;
   const institution = caseData.cat_institutions as unknown as { id: string; name: string } | null;
 
   // Fetch responsible (now from users table)
@@ -243,7 +243,7 @@ export default async function ExpedienteDetailPage({
             clientName={client?.name ?? "—"}
             description={caseData.description}
             classification={classification?.name ?? null}
-            classificationColor={null}
+            classificationColor={classification?.color ?? null}
             responsibleName={responsible?.name ?? null}
             openedAt={caseData.opened_at}
             clientNumber={client?.client_number ?? "—"}

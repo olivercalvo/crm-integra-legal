@@ -11,7 +11,7 @@ import { PagePagination } from "@/components/ui/page-pagination";
 const PAGE_SIZE = 10;
 
 import { getStatusStyle } from "@/lib/utils/status-styles";
-import { getClassificationColor } from "@/lib/utils/classification-colors";
+import { getClassificationColor, getClassificationTextColor } from "@/lib/utils/classification-colors";
 import { formatDate } from "@/lib/utils/format-date";
 
 const SORTABLE_COLUMNS: Record<string, string> = {
@@ -233,9 +233,11 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                           {classification ? (
                             <Badge
                               className="border-0 text-xs font-medium"
-                              style={{ backgroundColor: `${classColor}15`, color: classColor }}
+                              style={{
+                                backgroundColor: classColor,
+                                color: getClassificationTextColor(classification.name, classColor),
+                              }}
                             >
-                              <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: classColor }} />
                               {classification.name}
                             </Badge>
                           ) : (
@@ -273,6 +275,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
             const assistantName = (c as Record<string, unknown>).assistant_id
               ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? null
               : null;
+            const mobileClassColor = classification ? getClassificationColor(classification.name, classification.color) : "#6B7280";
 
             return (
               <Link key={c.id} href={`/abogada/casos/${c.id}`}>
@@ -292,11 +295,10 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                             <span
                               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
                               style={{
-                                backgroundColor: `${getClassificationColor(classification.name, classification.color)}15`,
-                                color: getClassificationColor(classification.name, classification.color),
+                                backgroundColor: mobileClassColor,
+                                color: getClassificationTextColor(classification.name, mobileClassColor),
                               }}
                             >
-                              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: getClassificationColor(classification.name, classification.color) }} />
                               {classification.name}
                             </span>
                           )}

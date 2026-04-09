@@ -177,7 +177,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
 
       {/* Expense form */}
       {showExpenseForm && (
-        <div className={`rounded-xl border border-${expenseColor}-200 bg-${expenseColor}-50/30 p-4 space-y-3`}
+        <div className="rounded-xl border p-4 space-y-3"
           style={{
             borderColor: isTramite ? "rgb(254 202 202)" : "rgb(253 230 138)",
             backgroundColor: isTramite ? "rgba(254 242 242 / 0.3)" : "rgba(255 251 235 / 0.3)",

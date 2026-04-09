@@ -85,9 +85,12 @@ export interface ClientPayment {
   tenant_id: string;
   case_id: string;
   amount: number;
+  description: string | null;
   payment_date: string;
   payment_type: "tramite" | "administrativo";
   registered_by: string;
+  receipt_url: string | null;
+  receipt_filename: string | null;
   created_at: string;
 }
 

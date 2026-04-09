@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.6.1] — 2026-04-09
+### Bugfix — Error 413 al subir archivos grandes (Vercel body limit)
+- Todos los uploads de archivos ahora van DIRECTO a Supabase Storage desde el frontend
+- Ya no pasan por API routes de Next.js (límite de Vercel 4.5MB)
+- Componentes migrados: document-upload, comment-form, expense-actions, payment-actions, add-expense-form, section-expense-form, todo-list
+- Nuevo utility: `src/lib/storage/direct-upload.ts` con XMLHttpRequest para barra de progreso
+- Nuevo endpoint: `GET /api/storage/prepare` — retorna tenantId para construir paths
+- Nuevos endpoints: `POST /api/documents/register`, `POST /api/todos/[id]/documents/register` — guardan metadata sin archivo
+- Barra de progreso visible durante upload de documentos
+- Validación de tamaño (10MB) y tipo de archivo en frontend antes de subir
+- Import wizard (Excel/CSV) NO se migró — requiere procesamiento server-side y archivos pequeños
+- SQL pendiente: `sql/pending/storage_rls_policies.sql` — políticas RLS para bucket "documents"
+
 ## [1.6.0] — 2026-04-09
 ### Bugfix — Búsqueda de casos por nombre de cliente
 - La búsqueda en la lista de casos ahora busca en: código del caso, descripción, nombre del cliente, y código del cliente

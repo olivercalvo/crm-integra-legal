@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { directUpload } from "@/lib/storage/direct-upload";
 import {
   Plus,
   CheckCircle2,
@@ -207,19 +208,26 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
   async function handleFileUpload(todoId: string, files: FileList) {
     setDocLoading(todoId);
     try {
-      const formData = new FormData();
+      const uploaded: TodoDoc[] = [];
       for (let i = 0; i < files.length; i++) {
-        formData.append("files", files[i]);
+        const file = files[i];
+        const { storagePath, fileName } = await directUpload({
+          file,
+          pathPrefix: `todos/${todoId}`,
+        });
+        const res = await fetch(`/api/todos/${todoId}/documents/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_name: fileName, storage_path: storagePath }),
+        });
+        if (res.ok) {
+          uploaded.push(await res.json());
+        }
       }
-      const res = await fetch(`/api/todos/${todoId}/documents`, {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok) {
-        const newDocs = await res.json();
+      if (uploaded.length > 0) {
         setDocuments((prev) => ({
           ...prev,
-          [todoId]: [...newDocs, ...(prev[todoId] || [])],
+          [todoId]: [...uploaded, ...(prev[todoId] || [])],
         }));
       }
     } finally {

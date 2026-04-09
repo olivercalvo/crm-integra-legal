@@ -1,100 +1,122 @@
 -- =============================================================================
 -- FIX: Eliminar clasificaciones duplicadas en cat_classifications
--- Fecha: 2026-04-08
+-- Fecha: 2026-04-09
 -- Tenant: a0000000-0000-0000-0000-000000000001
--- Descripcion: El dropdown muestra duplicados (MAYUSCULAS y mixed case).
---              Mantener SOLO los registros en MAYUSCULAS. Reasignar casos
---              que referencien los duplicados al registro correcto.
+-- Descripcion: El dropdown muestra duplicados/triplicados. Este script:
+--   1. Identifica TODOS los duplicados (por prefix), sin importar capitalización
+--   2. Mantiene SOLO el registro más antiguo por prefix
+--   3. Reasigna casos que referencian duplicados al registro canónico
+--   4. Normaliza nombres a MAYÚSCULAS
+-- SOLO toca tabla cat_classifications — NUNCA clients, cases (excepto reasignar FK)
 -- =============================================================================
 
 -- =============================================================================
--- PASO 1: VERIFICACION — Ejecutar PRIMERO para revisar que se va a cambiar
+-- PASO 1: VERIFICACIÓN — Ejecutar PRIMERO para revisar el estado actual
 -- =============================================================================
 
 -- 1a. Ver TODAS las clasificaciones del tenant (detectar duplicados)
 SELECT id, name, prefix, color, active, created_at
 FROM cat_classifications
 WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
-ORDER BY prefix, name;
+ORDER BY prefix, created_at;
 
--- 1b. Detectar duplicados: clasificaciones con el mismo prefix pero distinto case
-SELECT
-  a.id AS duplicate_id,
-  a.name AS duplicate_name,
-  a.prefix,
-  b.id AS canonical_id,
-  b.name AS canonical_name
-FROM cat_classifications a
-JOIN cat_classifications b
-  ON a.tenant_id = b.tenant_id
-  AND a.prefix = b.prefix
-  AND a.id <> b.id
-  AND b.name = UPPER(b.name)   -- el canonico esta en MAYUSCULAS
-  AND a.name <> UPPER(a.name)  -- el duplicado NO esta en MAYUSCULAS
-WHERE a.tenant_id = 'a0000000-0000-0000-0000-000000000001';
-
--- 1c. Casos que referencian clasificaciones duplicadas (las que se van a eliminar)
-SELECT
-  c.id AS case_id,
-  c.case_code,
-  c.description,
-  c.classification_id,
-  dup.name AS current_classification_name,
-  canon.id AS new_classification_id,
-  canon.name AS new_classification_name
-FROM cases c
-JOIN cat_classifications dup ON c.classification_id = dup.id
-JOIN cat_classifications canon
-  ON dup.tenant_id = canon.tenant_id
-  AND dup.prefix = canon.prefix
-  AND canon.name = UPPER(canon.name)
-  AND dup.name <> UPPER(dup.name)
-  AND canon.id <> dup.id
-WHERE c.tenant_id = 'a0000000-0000-0000-0000-000000000001';
-
--- =============================================================================
--- PASO 2: CORRECCION — Ejecutar SOLO despues de verificar el paso 1
--- =============================================================================
-
-BEGIN;
-
--- 2a. Reasignar casos que apuntan a clasificaciones duplicadas → al registro canonico (MAYUSCULAS)
-UPDATE cases
-SET classification_id = canon.id,
-    updated_at = NOW()
-FROM cat_classifications dup
-JOIN cat_classifications canon
-  ON dup.tenant_id = canon.tenant_id
-  AND dup.prefix = canon.prefix
-  AND canon.name = UPPER(canon.name)
-  AND dup.name <> UPPER(dup.name)
-  AND canon.id <> dup.id
-WHERE cases.classification_id = dup.id
-  AND cases.tenant_id = 'a0000000-0000-0000-0000-000000000001';
-
--- 2b. Eliminar las clasificaciones duplicadas (las que NO estan en MAYUSCULAS)
-DELETE FROM cat_classifications
+-- 1b. Identificar el registro CANÓNICO por cada prefix (el más antiguo)
+SELECT DISTINCT ON (UPPER(prefix))
+  id AS canonical_id,
+  name AS canonical_name,
+  prefix,
+  created_at
+FROM cat_classifications
 WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
-  AND name <> UPPER(name)
-  AND prefix IN (
-    SELECT prefix FROM cat_classifications
+ORDER BY UPPER(prefix), created_at ASC;
+
+-- 1c. Identificar los DUPLICADOS a eliminar (todos excepto el más antiguo por prefix)
+SELECT id AS duplicate_id, name, prefix, created_at
+FROM cat_classifications
+WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+  AND id NOT IN (
+    SELECT DISTINCT ON (UPPER(prefix)) id
+    FROM cat_classifications
     WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
-    GROUP BY prefix
-    HAVING COUNT(*) > 1
-  );
+    ORDER BY UPPER(prefix), created_at ASC
+  )
+ORDER BY prefix, created_at;
 
-COMMIT;
+-- 1d. Casos que referencian duplicados (serán reasignados)
+SELECT c.id AS case_id, c.case_code, c.classification_id,
+       cl.name AS current_classification
+FROM cases c
+JOIN cat_classifications cl ON c.classification_id = cl.id
+WHERE c.tenant_id = 'a0000000-0000-0000-0000-000000000001'
+  AND c.classification_id NOT IN (
+    SELECT DISTINCT ON (UPPER(prefix)) id
+    FROM cat_classifications
+    WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+    ORDER BY UPPER(prefix), created_at ASC
+  )
+ORDER BY cl.prefix;
 
 -- =============================================================================
--- ROLLBACK (comentado) — En caso de problemas, ejecutar esto para revertir
+-- PASO 2: OLIVER REVISA los resultados anteriores antes de continuar
 -- =============================================================================
--- NOTA: Si ya se hizo COMMIT, este rollback no aplica automaticamente.
--- Habria que recrear los registros eliminados manualmente.
--- Los IDs originales se pueden obtener del SELECT de verificacion (paso 1a).
+
+-- =============================================================================
+-- PASO 3: CORRECCIÓN — Ejecutar SOLO después de verificar pasos 1 y 2
+-- Descomentar el bloque BEGIN...COMMIT para ejecutar
+-- =============================================================================
+
+-- BEGIN;
 --
--- Para revertir los casos reasignados:
--- UPDATE cases SET classification_id = '<duplicate_id_original>' WHERE id IN ('<case_ids_afectados>');
+--   -- 3a. Reasignar casos que apuntan a duplicados → al registro canónico
+--   UPDATE cases
+--   SET classification_id = canonical.id,
+--       updated_at = NOW()
+--   FROM cat_classifications dup
+--   JOIN (
+--     SELECT DISTINCT ON (UPPER(prefix)) id, UPPER(prefix) AS norm_prefix
+--     FROM cat_classifications
+--     WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+--     ORDER BY UPPER(prefix), created_at ASC
+--   ) canonical ON UPPER(dup.prefix) = canonical.norm_prefix
+--   WHERE cases.classification_id = dup.id
+--     AND dup.tenant_id = 'a0000000-0000-0000-0000-000000000001'
+--     AND dup.id <> canonical.id
+--     AND cases.tenant_id = 'a0000000-0000-0000-0000-000000000001';
 --
--- Para recrear clasificaciones eliminadas:
--- INSERT INTO cat_classifications (id, tenant_id, name, prefix, color, active, created_at)
--- VALUES ('<id_original>', 'a0000000-0000-0000-0000-000000000001', '<nombre_original>', '<prefix>', '<color>', true, '<created_at>');
+--   -- 3b. Eliminar duplicados (mantener solo el más antiguo por prefix)
+--   DELETE FROM cat_classifications
+--   WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+--     AND id NOT IN (
+--       SELECT DISTINCT ON (UPPER(prefix)) id
+--       FROM cat_classifications
+--       WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+--       ORDER BY UPPER(prefix), created_at ASC
+--     );
+--
+--   -- 3c. Normalizar nombres a MAYÚSCULAS
+--   UPDATE cat_classifications SET name = 'CORPORATIVO'    WHERE prefix = 'CORP' AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'MIGRACIÓN'      WHERE prefix = 'MIG'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'LABORAL'        WHERE prefix = 'LAB'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'PENAL'          WHERE prefix = 'PEN'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'CIVIL'          WHERE prefix = 'CIV'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'ADMINISTRATIVO' WHERE prefix = 'ADM'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--   UPDATE cat_classifications SET name = 'REGULATORIO'    WHERE prefix = 'REG'  AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+--
+-- COMMIT;
+
+-- =============================================================================
+-- VERIFICACIÓN POST-FIX — Ejecutar después del COMMIT para confirmar
+-- =============================================================================
+
+-- Debe mostrar exactamente 7 registros, uno por prefix
+-- SELECT id, name, prefix, color, created_at
+-- FROM cat_classifications
+-- WHERE tenant_id = 'a0000000-0000-0000-0000-000000000001'
+--   AND active = true
+-- ORDER BY name;
+
+-- =============================================================================
+-- ROLLBACK (manual) — Documentar IDs originales del PASO 1a antes de ejecutar
+-- =============================================================================
+-- Si se necesita revertir, usar los resultados del paso 1a para recrear
+-- los registros eliminados con INSERT INTO cat_classifications (...).

@@ -134,18 +134,26 @@ export function CaseForm({
   );
   const [deadlineDate, setDeadlineDate] = useState(initialData?.deadline ?? "");
 
+  // Deduplicate classifications by prefix (safety net against DB duplicates)
+  const uniqueClassifications = classifications.filter(
+    (c, i, arr) => !c.prefix || arr.findIndex((x) => x.prefix === c.prefix) === i
+  );
+
   // Editable case code
-  const selectedClassification = classifications.find((c) => c.id === classificationId);
+  const selectedClassification = uniqueClassifications.find((c) => c.id === classificationId);
   const [caseCode, setCaseCode] = useState(initialData?.case_code ?? "");
   const [suggestedCode, setSuggestedCode] = useState("");
 
   const fetchSuggestedCode = useCallback(async (classId: string) => {
     if (mode !== "create") return;
+    if (!classId) {
+      // No classification selected — clear the suggestion
+      setSuggestedCode("");
+      setCaseCode("");
+      return;
+    }
     try {
-      const url = classId
-        ? `/api/cases?classification_id=${classId}`
-        : "/api/cases";
-      const res = await fetch(url);
+      const res = await fetch(`/api/cases?classification_id=${classId}`);
       const data = await res.json();
       if (data.suggested) {
         setSuggestedCode(data.suggested);
@@ -409,7 +417,7 @@ export function CaseForm({
               className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <option value="">Sin clasificación</option>
-              {classifications.map((c) => (
+              {uniqueClassifications.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} ({c.prefix})
                 </option>
@@ -427,7 +435,7 @@ export function CaseForm({
                 id="case-code"
                 value={caseCode}
                 onChange={(e) => setCaseCode(e.target.value)}
-                placeholder={suggestedCode || "EXP-001"}
+                placeholder={suggestedCode || "Selecciona clasificación primero"}
                 className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
               />
               <p className="text-xs text-integra-navy/70">

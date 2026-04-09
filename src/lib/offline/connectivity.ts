@@ -17,6 +17,8 @@ const PING_TIMEOUT_MS = 5_000;   // 5 s fetch abort
 
 // ─── ConnectivityService ──────────────────────────────────────────────────────
 
+const CONSECUTIVE_FAILURES_THRESHOLD = 2;
+
 export class ConnectivityService {
   private _isOnline: boolean = typeof navigator !== "undefined"
     ? navigator.onLine
@@ -25,6 +27,7 @@ export class ConnectivityService {
   private listeners = new Map<ConnectivityEvent, Set<ConnectivityListener>>();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private initialized = false;
+  private consecutiveFailures = 0;
 
   // ── Public state ──────────────────────────────────────────────────────────
 
@@ -76,10 +79,21 @@ export class ConnectivityService {
         cache: "no-store",
         signal: controller.signal,
       });
-      this.setOnline(res.ok);
+      if (res.ok) {
+        this.consecutiveFailures = 0;
+        this.setOnline(true);
+      } else {
+        this.consecutiveFailures++;
+        if (this.consecutiveFailures >= CONSECUTIVE_FAILURES_THRESHOLD) {
+          this.setOnline(false);
+        }
+      }
     } catch {
-      // Network error or abort → offline
-      this.setOnline(false);
+      // Network error or abort — only go offline after repeated failures
+      this.consecutiveFailures++;
+      if (this.consecutiveFailures >= CONSECUTIVE_FAILURES_THRESHOLD) {
+        this.setOnline(false);
+      }
     } finally {
       clearTimeout(timeout);
     }

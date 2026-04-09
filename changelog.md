@@ -1,5 +1,35 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.2.1] — 2026-04-09
+### Bugfix correctivo — 4 bugs de producción
+
+#### Bug 0: Badge "Sin conexión" permanente
+- El indicador de conexión mostraba "Sin conexión" permanentemente incluso con internet
+- **Causa:** El ping inicial a `/api/health` fallaba durante la hidratación, marcando offline inmediatamente
+- **Fix:** Se requieren 2 fallos consecutivos antes de mostrar offline. Cuando hay conexión, no se muestra badge (UX más limpia)
+
+#### Bug 1: Clasificaciones duplicadas/triplicadas en dropdown
+- El dropdown de clasificación mostraba hasta 3 entradas por clasificación
+- **Fix frontend:** Deduplicación por prefijo en el componente CaseForm como red de seguridad
+- **SQL pendiente:** `/sql/pending/fix-duplicate-classifications.sql` — limpia duplicados en BD, mantiene el más antiguo por prefijo, reasigna casos
+
+#### Bug 2: Auto-numeración de código de expediente
+- El campo mostraba "EXP-001" como placeholder sin importar la clasificación
+- **Fix:** Sin clasificación seleccionada, el campo muestra "Selecciona clasificación primero". Al elegir clasificación, calcula el siguiente número correcto (ej: CORP-004)
+- NO se modificaron códigos de casos existentes
+
+#### Bug 3: Colores de clasificación
+- Colores actualizados al Excel oficial del despacho
+- **SQL pendiente:** `/sql/pending/update-classification-colors.sql`
+- Frontend ya tiene los colores correctos en `classification-colors.ts`
+- REGULATORIO usa texto oscuro (#1B2A4A), todas las demás texto blanco
+
+#### Archivos SQL pendientes de ejecución manual:
+1. `sql/pending/fix-duplicate-classifications.sql`
+2. `sql/pending/update-classification-colors.sql`
+
+---
+
 ## [1.2.0] — 2026-04-04
 ### Tres ajustes urgentes post-carga de datos reales
 

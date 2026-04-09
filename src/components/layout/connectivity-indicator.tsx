@@ -70,23 +70,6 @@ export function ConnectivityIndicator() {
     );
   }
 
-  // ── Online ───────────────────────────────────────────────────────────────
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 rounded-full px-3 py-1",
-        "bg-green-100 text-green-800 text-xs font-medium"
-      )}
-      role="status"
-      aria-live="polite"
-      aria-label="En línea"
-    >
-      {/* Pulsing dot */}
-      <span className="relative flex h-2 w-2" aria-hidden="true">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-      </span>
-      <span>En línea</span>
-    </div>
-  );
+  // ── Online — no badge shown (clean header, no visual noise) ────────────
+  return null;
 }

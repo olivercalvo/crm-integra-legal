@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
 import { AddExpenseForm } from "@/components/cases/add-expense-form";
+import { ExpenseRow } from "@/components/expenses/expense-actions";
 import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
 import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
@@ -114,7 +115,7 @@ export default async function ExpedienteDetailPage({
     await Promise.all([
       db
         .from("expenses")
-        .select("id, amount, concept, date, expense_type, registered_by")
+        .select("id, amount, concept, date, expense_type, registered_by, receipt_url, receipt_filename")
         .eq("case_id", params.id)
         .order("date", { ascending: false }),
       db
@@ -681,13 +682,20 @@ export default async function ExpedienteDetailPage({
                 {expensesTramite.length > 0 ? (
                   <div className="divide-y">
                     {expensesTramite.map((e) => (
-                      <div key={e.id} className="flex items-start justify-between py-3">
-                        <div>
-                          <p className="font-medium text-sm">{e.concept}</p>
-                          <p className="text-xs text-gray-500">{formatDate(e.date)}</p>
-                        </div>
-                        <span className="font-semibold text-red-600">{formatCurrency(Number(e.amount))}</span>
-                      </div>
+                      <ExpenseRow
+                        key={e.id}
+                        expense={{
+                          id: e.id,
+                          amount: Number(e.amount),
+                          concept: e.concept,
+                          date: e.date,
+                          expense_type: (e as Record<string, unknown>).expense_type as string,
+                          receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
+                          receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
+                        }}
+                        canEdit={userRole === "admin" || userRole === "abogada"}
+                        colorClass="text-red-600"
+                      />
                     ))}
                   </div>
                 ) : (
@@ -705,13 +713,20 @@ export default async function ExpedienteDetailPage({
                 {expensesAdmin.length > 0 ? (
                   <div className="divide-y">
                     {expensesAdmin.map((e) => (
-                      <div key={e.id} className="flex items-start justify-between py-3">
-                        <div>
-                          <p className="font-medium text-sm">{e.concept}</p>
-                          <p className="text-xs text-gray-500">{formatDate(e.date)}</p>
-                        </div>
-                        <span className="font-semibold text-amber-600">{formatCurrency(Number(e.amount))}</span>
-                      </div>
+                      <ExpenseRow
+                        key={e.id}
+                        expense={{
+                          id: e.id,
+                          amount: Number(e.amount),
+                          concept: e.concept,
+                          date: e.date,
+                          expense_type: (e as Record<string, unknown>).expense_type as string,
+                          receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
+                          receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
+                        }}
+                        canEdit={userRole === "admin" || userRole === "abogada"}
+                        colorClass="text-amber-600"
+                      />
                     ))}
                   </div>
                 ) : (

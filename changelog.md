@@ -1,5 +1,100 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.5.0] — 2026-04-09
+### Feature — Sort y Filtros en todos los listados
+
+#### Balance General de Gastos (/abogada/gastos)
+- Barra de búsqueda por caso, cliente o descripción
+- Filtro por estado del caso
+- Sort clickeable en todas las columnas (caso, cliente, estado, pagado, gastos, balance)
+- Indicadores visuales de dirección (flechas)
+- Totales se recalculan según filtros activos
+
+#### Clientes (/abogada/clientes)
+- Nuevo filtro por abogada responsable (dropdown)
+- Componente ClientFilters reemplaza ClientListSearch con búsqueda + filtro combinados
+- Botón "Limpiar" para resetear todos los filtros
+
+#### Usuarios (/admin/usuarios)
+- Barra de búsqueda por nombre o correo
+- Filtro por rol (Administrador, Abogada, Asistente)
+- Sort clickeable en columnas: Nombre, Correo, Rol, Estado
+- Contador de resultados filtrados
+
+#### Auditoría (/admin/auditoria)
+- Sort clickeable en columnas: Fecha, Acción, Entidad (via SortableHeader)
+- Se mantienen los filtros existentes (entity, user, action, dates)
+
+#### Seguimiento (/abogada/seguimiento)
+- Nuevo selector de ordenamiento: Más reciente, Por código, Más pendientes
+- Ya tenía filtros por estado, asistente, y rango de fechas
+
+#### Mis Pendientes (/abogada/pendientes)
+- Barra de búsqueda por descripción
+- Filtro por estado: Todos, Pendientes, Cumplidos
+- Selector de ordenamiento: Más reciente, Por vencimiento, Alfabético
+- Botón "Limpiar" filtros
+
+#### Archivos nuevos
+- `src/components/expenses/gastos-table.tsx` — Tabla de gastos con sort/filter/search
+- `src/components/clients/client-filters.tsx` — Filtros de clientes (búsqueda + abogada)
+
+#### Archivos modificados
+- `src/app/(dashboard)/abogada/gastos/page.tsx` — Usa GastosTable con sort/filter
+- `src/app/(dashboard)/abogada/clientes/page.tsx` — Usa ClientFilters, filtro por abogada
+- `src/app/(dashboard)/admin/auditoria/page.tsx` — SortableHeader en columnas
+- `src/app/(dashboard)/admin/usuarios/page.tsx` — (sin cambios, UserTable actualizado)
+- `src/components/admin/user-table.tsx` — Búsqueda, filtro por rol, sort por columna
+- `src/components/seguimiento/seguimiento-view.tsx` — Sort por reciente/código/pendientes
+- `src/components/todos/todo-list.tsx` — Búsqueda, filtro estado, sort
+
+#### Nota: Casos y Auditoría ya tenían sort/filtros completos. No se duplicó funcionalidad.
+
+## [1.4.0] — 2026-04-09
+### Feature — Editar/Eliminar Gastos + Adjuntar Recibos + Navegación Balance General
+
+#### Editar Gastos
+- Botón de editar (ícono lápiz) en cada fila de gasto (trámite y administrativo)
+- Modal inline con campos precargados: monto, concepto, fecha
+- Validación de campos antes de guardar
+- Auditoría registra cada campo modificado (valor anterior → nuevo)
+- Solo admin y abogada pueden editar (asistente NO)
+
+#### Eliminar Gastos
+- Botón de eliminar (ícono basura) en cada fila de gasto
+- Modal de confirmación mostrando concepto, monto y fecha del gasto
+- Si el gasto tiene recibo adjunto, se elimina también del storage
+- Auditoría registra la eliminación completa
+- Totales y balance se recalculan automáticamente
+- Solo admin y abogada pueden eliminar
+
+#### Adjuntar Recibo a Gastos
+- Al crear gasto: campo opcional "Adjuntar recibo" (JPG, PNG, PDF, máx 10MB)
+- En gastos existentes: ícono de clip para adjuntar/cambiar/ver recibo
+- Recibos se almacenan en Supabase Storage: `{tenant_id}/gastos/{caso_id}/{gasto_id}/`
+- Click en recibo adjunto abre el archivo en nueva pestaña (URL firmada)
+- En edición: opción de eliminar recibo existente
+- Columnas nuevas en tabla expenses: receipt_url, receipt_filename (SQL pendiente)
+
+#### Navegación Balance General
+- Toda la fila del Balance General de Gastos es clickeable (desktop y mobile)
+- Click navega al detalle del caso, pestaña Gastos
+- Cursor pointer y highlight al hover
+
+#### Archivos nuevos
+- `src/app/api/expenses/[id]/route.ts` — API PATCH/DELETE gastos
+- `src/app/api/expenses/[id]/receipt/route.ts` — API POST/DELETE recibos
+- `src/app/api/expenses/[id]/receipt/url/route.ts` — API GET URL firmada recibo
+- `src/components/expenses/expense-actions.tsx` — Componente ExpenseRow con edit/delete/receipt
+- `src/components/expenses/clickable-row.tsx` — Fila clickeable para tabla
+- `sql/pending/add-receipt-to-expenses.sql` — SQL pendiente para columnas receipt
+
+#### Archivos modificados
+- `src/types/database.ts` — Agregado receipt_url, receipt_filename a Expense
+- `src/app/(dashboard)/abogada/casos/[id]/page.tsx` — Usa ExpenseRow, incluye receipt fields en query
+- `src/app/(dashboard)/abogada/gastos/page.tsx` — Filas clickeables con ClickableRow
+- `src/components/cases/add-expense-form.tsx` — Campo de adjuntar recibo al crear gasto
+
 ## [1.3.0] — 2026-04-09
 ### Feature — Eliminar Casos y Clientes
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, X, Loader2 } from "lucide-react";
+import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   const [expConcept, setExpConcept] = useState("");
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
   const [expType, setExpType] = useState<"tramite" | "administrativo">("tramite");
+  const [expFile, setExpFile] = useState<File | null>(null);
+  const expFileRef = useRef<HTMLInputElement>(null);
 
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
@@ -33,6 +35,8 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
     setExpAmount("");
     setExpConcept("");
     setExpDate(new Date().toISOString().split("T")[0]);
+    setExpFile(null);
+    if (expFileRef.current) expFileRef.current.value = "";
     setShowExpenseForm(false);
     setError(null);
   };
@@ -50,6 +54,18 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
       setError("Completa todos los campos del gasto");
       return;
     }
+    // Validate file if selected
+    if (expFile) {
+      if (expFile.size > 10 * 1024 * 1024) {
+        setError("El archivo excede el tamaño máximo de 10MB");
+        return;
+      }
+      const allowed = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
+      if (!allowed.includes(expFile.type)) {
+        setError("Solo se permiten archivos JPG, PNG o PDF");
+        return;
+      }
+    }
     startTransition(async () => {
       try {
         const response = await fetch("/api/expenses", {
@@ -63,11 +79,22 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             expense_type: expType,
           }),
         });
+        const json = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const json = await response.json().catch(() => ({}));
           setError(json.error ?? `Error ${response.status}: ${response.statusText}`);
           return;
         }
+
+        // Upload receipt if file was selected
+        if (expFile && json.id) {
+          const formData = new FormData();
+          formData.append("file", expFile);
+          await fetch(`/api/expenses/${json.id}/receipt`, {
+            method: "POST",
+            body: formData,
+          });
+        }
+
         resetExpense();
         router.refresh();
       } catch {
@@ -190,6 +217,32 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
               />
             </div>
           </div>
+          {/* Receipt attachment */}
+          <div className="space-y-1.5">
+            <Label className="text-sm flex items-center gap-1">
+              <Paperclip size={14} /> Adjuntar recibo (opcional)
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input
+                ref={expFileRef}
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={(e) => setExpFile(e.target.files?.[0] ?? null)}
+                className="min-h-[48px] text-sm"
+              />
+              {expFile && (
+                <button
+                  type="button"
+                  onClick={() => { setExpFile(null); if (expFileRef.current) expFileRef.current.value = ""; }}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">JPG, PNG o PDF. Máximo 10MB.</p>
+          </div>
+
           <div className="flex gap-2 justify-end">
             <Button onClick={resetExpense} variant="ghost" disabled={isPending} className="min-h-[44px]">
               <X size={16} className="mr-1" /> Cancelar

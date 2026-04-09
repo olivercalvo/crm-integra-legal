@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, PowerOff, Power, ChevronDown } from "lucide-react";
+import { Loader2, PowerOff, Power, ChevronDown, Search, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
 import type { UserRole } from "@/types/database";
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -32,11 +32,53 @@ interface UserTableProps {
   currentUserId: string;
 }
 
+type SortKey = "full_name" | "email" | "role" | "active";
+
+function SortIcon({ column, activeCol, dir }: { column: string; activeCol: string; dir: "asc" | "desc" }) {
+  if (column !== activeCol) return <ArrowUpDown size={14} className="text-gray-300 group-hover:text-gray-500" />;
+  return dir === "asc" ? <ArrowUp size={14} className="text-integra-navy" /> : <ArrowDown size={14} className="text-integra-navy" />;
+}
+
 export function UserTable({ users: initialUsers, currentUserId }: UserTableProps) {
   const [users, setUsers] = useState<UserRow[]>(initialUsers);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+
+  // Sort & filter state
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [sortCol, setSortCol] = useState<SortKey>("full_name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (col: SortKey) => {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  };
+
+  const filtered = useMemo(() => {
+    let result = users;
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (u) => u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    if (roleFilter) {
+      result = result.filter((u) => u.role === roleFilter);
+    }
+    return [...result].sort((a, b) => {
+      const aVal = String(a[sortCol]).toLowerCase();
+      const bVal = String(b[sortCol]).toLowerCase();
+      return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+  }, [users, search, roleFilter, sortCol, sortDir]);
+
+  const hasFilters = search || roleFilter;
 
   async function toggleActive(user: UserRow) {
     if (user.id === currentUserId) {
@@ -87,6 +129,40 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
 
   return (
     <div className="space-y-3">
+      {/* Search + filters */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre o correo..."
+            className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-4 text-sm placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+        >
+          <option value="">Todos los roles</option>
+          <option value="admin">Administrador</option>
+          <option value="abogada">Abogada</option>
+          <option value="asistente">Asistente</option>
+        </select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setSearch(""); setRoleFilter(""); }}
+            className="h-11 text-gray-500 hover:text-gray-700"
+          >
+            <X size={14} className="mr-1" /> Limpiar
+          </Button>
+        )}
+      </div>
+
       {error && (
         <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
@@ -103,15 +179,31 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-3 font-semibold">Nombre</th>
-              <th className="px-4 py-3 font-semibold">Correo</th>
-              <th className="px-4 py-3 font-semibold">Rol</th>
-              <th className="px-4 py-3 font-semibold text-center">Estado</th>
+              <th className="px-4 py-3 font-semibold">
+                <button onClick={() => handleSort("full_name")} className="flex items-center gap-1 hover:text-integra-navy transition-colors group">
+                  Nombre <SortIcon column="full_name" activeCol={sortCol} dir={sortDir} />
+                </button>
+              </th>
+              <th className="px-4 py-3 font-semibold">
+                <button onClick={() => handleSort("email")} className="flex items-center gap-1 hover:text-integra-navy transition-colors group">
+                  Correo <SortIcon column="email" activeCol={sortCol} dir={sortDir} />
+                </button>
+              </th>
+              <th className="px-4 py-3 font-semibold">
+                <button onClick={() => handleSort("role")} className="flex items-center gap-1 hover:text-integra-navy transition-colors group">
+                  Rol <SortIcon column="role" activeCol={sortCol} dir={sortDir} />
+                </button>
+              </th>
+              <th className="px-4 py-3 font-semibold text-center">
+                <button onClick={() => handleSort("active")} className="flex items-center gap-1 hover:text-integra-navy transition-colors group mx-auto">
+                  Estado <SortIcon column="active" activeCol={sortCol} dir={sortDir} />
+                </button>
+              </th>
               <th className="px-4 py-3 font-semibold text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {users.map((user) => {
+            {filtered.map((user) => {
               const isLoading = loadingId === user.id;
               const isCurrentUser = user.id === currentUserId;
 
@@ -234,12 +326,19 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
                 </tr>
               );
             })}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
+                  No se encontraron usuarios
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <p className="text-xs text-gray-400">
-        {users.filter((u) => u.active).length} activo(s) · {users.length} total
+        {filtered.length} de {users.length} usuario(s) · {users.filter((u) => u.active).length} activo(s)
       </p>
     </div>
   );

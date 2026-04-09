@@ -1,5 +1,31 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.6.0] — 2026-04-09
+### Bugfix — Búsqueda de casos por nombre de cliente
+- La búsqueda en la lista de casos ahora busca en: código del caso, descripción, nombre del cliente, y código del cliente
+- Búsqueda case-insensitive: buscar "carlos" encuentra "CARLOS ENRIQUE PULIDO"
+
+### Feature — Rediseño del layout de gastos del caso
+- Nueva organización en 2 secciones verticales: Trámite y Administrativo
+- Cada sección agrupa sus gastos y pagos lado a lado con subtotales propios
+- Subtítulos descriptivos en cada sección explican qué tipo de gastos corresponden
+- Botones de "+ Gasto" y "+ Pago" dentro de cada sección (ya no en la parte superior)
+- Tabla de Balance General al final con resumen por concepto (Trámite, Administrativo, Total)
+- Balances positivos en verde, negativos en rojo
+- Borde lateral de color para identificar cada sección visualmente
+- Responsive: en móvil los gastos y pagos van uno debajo del otro
+
+### Feature — Editar y Eliminar Pagos del Cliente
+- Botón de editar (lápiz) en cada fila de pago: permite cambiar monto, descripción y fecha
+- Botón de eliminar (basura) con confirmación: muestra descripción, monto y fecha antes de confirmar
+- Adjuntar recibo a pagos: misma funcionalidad que gastos (JPG/PNG/PDF, máx 10MB)
+- Ver recibo adjunto con URL firmada
+- API endpoints: PATCH/DELETE /api/payments/[id], POST/DELETE /api/payments/[id]/receipt, GET /api/payments/[id]/receipt/url
+- Permisos: solo admin y abogada pueden editar/eliminar pagos (asistente no)
+- Auditoría: todos los cambios y eliminaciones se registran en audit_log
+- Campo description agregado a pagos (nullable, opcional)
+- SQL pendiente: sql/pending/add_payment_description_receipt.sql
+
 ## [1.5.0] — 2026-04-09
 ### Feature — Sort y Filtros en todos los listados
 

@@ -105,7 +105,19 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
 
   if (searchParams.q) {
     const q = `%${searchParams.q}%`;
-    query = query.or(`case_code.ilike.${q},description.ilike.${q}`);
+    // Search matching clients first (name, client_number) then combine with case fields
+    const { data: matchingClients } = await db
+      .from("clients")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .or(`name.ilike.${q},client_number.ilike.${q}`);
+    const matchedClientIds = (matchingClients ?? []).map((c: { id: string }) => c.id);
+
+    if (matchedClientIds.length > 0) {
+      query = query.or(`case_code.ilike.${q},description.ilike.${q},client_id.in.(${matchedClientIds.join(",")})`);
+    } else {
+      query = query.or(`case_code.ilike.${q},description.ilike.${q}`);
+    }
   }
 
   const { data: cases, count } = await query;

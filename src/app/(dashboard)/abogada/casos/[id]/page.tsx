@@ -2,8 +2,9 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
-import { AddExpenseForm } from "@/components/cases/add-expense-form";
+import { SectionExpenseForm } from "@/components/cases/section-expense-form";
 import { ExpenseRow } from "@/components/expenses/expense-actions";
+import { PaymentRow } from "@/components/expenses/payment-actions";
 import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
 import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
@@ -120,7 +121,7 @@ export default async function ExpedienteDetailPage({
         .order("date", { ascending: false }),
       db
         .from("client_payments")
-        .select("id, amount, payment_date, payment_type, registered_by")
+        .select("id, amount, description, payment_date, payment_type, registered_by, receipt_url, receipt_filename")
         .eq("case_id", params.id)
         .order("payment_date", { ascending: false }),
       db
@@ -597,175 +598,246 @@ export default async function ExpedienteDetailPage({
 
       {/* TAB: Gastos */}
       {activeTab === "gastos" && (
-        <div className="space-y-4">
-          {/* Add expense/payment buttons */}
-          <AddExpenseForm caseId={params.id} />
+        <div className="space-y-6">
+          {/* ═══ SECTION: TRÁMITE ═══ */}
+          <Card className="border-l-4 border-l-red-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold text-integra-navy">Trámite</CardTitle>
+              <p className="text-xs text-gray-500">
+                Gastos y pagos relacionados con trámites legales ante instituciones, registros públicos, notarías y entidades gubernamentales
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Buttons for this section */}
+              {(userRole === "admin" || userRole === "abogada") && (
+                <SectionExpenseForm caseId={params.id} sectionType="tramite" />
+              )}
 
-          {/* Balance summary — separate by type */}
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
-            {/* Trámite column */}
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-semibold uppercase">Trámite</p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Gastos:</span>
-                  <span className="font-bold text-red-600">{formatCurrency(totalTramite)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Pagos:</span>
-                  <span className="font-bold text-green-600">{formatCurrency(totalPayTramite)}</span>
-                </div>
-                <div className="border-t pt-1 flex justify-between text-sm">
-                  <span className="text-gray-500">Balance:</span>
-                  <span className={`font-bold ${balanceTramite < 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(balanceTramite)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-            {/* Administrativo column */}
-            <Card>
-              <CardContent className="p-4 space-y-1">
-                <p className="text-xs text-gray-500 font-semibold uppercase">Administrativo</p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Gastos:</span>
-                  <span className="font-bold text-amber-600">{formatCurrency(totalAdmin)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Pagos:</span>
-                  <span className="font-bold text-teal-600">{formatCurrency(totalPayAdmin)}</span>
-                </div>
-                <div className="border-t pt-1 flex justify-between text-sm">
-                  <span className="text-gray-500">Balance:</span>
-                  <span className={`font-bold ${balanceAdmin < 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(balanceAdmin)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-            {/* Total */}
-            <Card className={isInRed ? "border-red-300 bg-red-50" : "border-green-200 bg-green-50"}>
-              <CardContent className="p-4 space-y-1">
-                <div className="flex items-center gap-1.5">
-                  {isInRed ? (
-                    <AlertTriangle size={16} className="text-red-500" />
+              <div className="grid gap-4 lg:grid-cols-2">
+                {/* Gastos del Trámite */}
+                <div>
+                  <h4 className="text-sm font-semibold text-red-700 mb-2">Gastos</h4>
+                  {expensesTramite.length > 0 ? (
+                    <div className="divide-y rounded-lg border bg-white p-2">
+                      {expensesTramite.map((e) => (
+                        <ExpenseRow
+                          key={e.id}
+                          expense={{
+                            id: e.id,
+                            amount: Number(e.amount),
+                            concept: e.concept,
+                            date: e.date,
+                            expense_type: (e as Record<string, unknown>).expense_type as string,
+                            receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
+                            receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
+                          }}
+                          canEdit={userRole === "admin" || userRole === "abogada"}
+                          colorClass="text-red-600"
+                        />
+                      ))}
+                    </div>
                   ) : (
-                    <CheckCircle size={16} className="text-green-600" />
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin gastos de trámite</p>
                   )}
-                  <p className="text-xs text-gray-500 font-semibold uppercase">Balance Total</p>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Total Gastos:</span>
-                  <span className="font-bold text-red-600">{formatCurrency(totalExpenses)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Total Pagos:</span>
-                  <span className="font-bold text-green-600">{formatCurrency(totalPayments)}</span>
-                </div>
-                <div className="border-t pt-1 flex justify-between text-sm">
-                  <span className="text-gray-500">Balance:</span>
-                  <span className={`text-lg font-bold ${isInRed ? "text-red-600" : "text-green-600"}`}>
-                    {formatCurrency(balance)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            {/* Gastos del Trámite */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-red-700">Gastos del Trámite</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {expensesTramite.length > 0 ? (
-                  <div className="divide-y">
-                    {expensesTramite.map((e) => (
-                      <ExpenseRow
-                        key={e.id}
-                        expense={{
-                          id: e.id,
-                          amount: Number(e.amount),
-                          concept: e.concept,
-                          date: e.date,
-                          expense_type: (e as Record<string, unknown>).expense_type as string,
-                          receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
-                          receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
-                        }}
-                        canEdit={userRole === "admin" || userRole === "abogada"}
-                        colorClass="text-red-600"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-400 py-4 text-center">Sin gastos de trámite</p>
-                )}
-              </CardContent>
-            </Card>
+                {/* Pagos de Trámite */}
+                <div>
+                  <h4 className="text-sm font-semibold text-green-700 mb-2">Pagos</h4>
+                  {paymentsTramite.length > 0 ? (
+                    <div className="divide-y rounded-lg border bg-white p-2">
+                      {paymentsTramite.map((p) => (
+                        <PaymentRow
+                          key={p.id}
+                          payment={{
+                            id: p.id,
+                            amount: Number(p.amount),
+                            description: (p as Record<string, unknown>).description as string | null,
+                            payment_date: p.payment_date,
+                            payment_type: (p as Record<string, unknown>).payment_type as string,
+                            receipt_url: (p as Record<string, unknown>).receipt_url as string | null,
+                            receipt_filename: (p as Record<string, unknown>).receipt_filename as string | null,
+                          }}
+                          canEdit={userRole === "admin" || userRole === "abogada"}
+                          colorClass="text-green-600"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin pagos de trámite</p>
+                  )}
+                </div>
+              </div>
 
-            {/* Gastos Administrativos */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-amber-700">Gastos Administrativos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {expensesAdmin.length > 0 ? (
-                  <div className="divide-y">
-                    {expensesAdmin.map((e) => (
-                      <ExpenseRow
-                        key={e.id}
-                        expense={{
-                          id: e.id,
-                          amount: Number(e.amount),
-                          concept: e.concept,
-                          date: e.date,
-                          expense_type: (e as Record<string, unknown>).expense_type as string,
-                          receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
-                          receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
-                        }}
-                        canEdit={userRole === "admin" || userRole === "abogada"}
-                        colorClass="text-amber-600"
-                      />
-                    ))}
+              {/* Trámite subtotals */}
+              <div className="rounded-lg bg-gray-50 p-3 text-sm">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-xs text-gray-500">Gastos</p>
+                    <p className="font-bold text-red-600">{formatCurrency(totalTramite)}</p>
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-400 py-4 text-center">Sin gastos administrativos</p>
-                )}
-              </CardContent>
-            </Card>
+                  <div>
+                    <p className="text-xs text-gray-500">Pagos</p>
+                    <p className="font-bold text-green-600">{formatCurrency(totalPayTramite)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Balance</p>
+                    <p className={`font-bold ${balanceTramite < 0 ? "text-red-600" : "text-green-600"}`}>
+                      {formatCurrency(balanceTramite)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Pagos del Cliente */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-green-700">Pagos del Cliente</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {payments.length > 0 ? (
-                  <div className="divide-y">
-                    {payments.map((p) => {
-                      const pType = (p as Record<string, unknown>).payment_type;
-                      return (
-                        <div key={p.id} className="flex items-start justify-between py-3">
-                          <div>
-                            <p className="font-medium text-sm">
-                              {pType === "administrativo" ? "Pago Administrativo" : "Pago Trámite"}
-                            </p>
-                            <p className="text-xs text-gray-500">{formatDate(p.payment_date)}</p>
-                          </div>
-                          <span className={`font-semibold ${pType === "administrativo" ? "text-teal-600" : "text-green-600"}`}>
-                            {formatCurrency(Number(p.amount))}
-                          </span>
-                        </div>
-                      );
-                    })}
+          {/* ═══ SECTION: ADMINISTRATIVO ═══ */}
+          <Card className="border-l-4 border-l-amber-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-bold text-integra-navy">Administrativo</CardTitle>
+              <p className="text-xs text-gray-500">
+                Gastos y pagos relacionados con la gestión interna del caso: mensajería, copias, transporte, papelería y otros gastos operativos
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Buttons for this section */}
+              {(userRole === "admin" || userRole === "abogada") && (
+                <SectionExpenseForm caseId={params.id} sectionType="administrativo" />
+              )}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {/* Gastos Administrativos */}
+                <div>
+                  <h4 className="text-sm font-semibold text-red-700 mb-2">Gastos</h4>
+                  {expensesAdmin.length > 0 ? (
+                    <div className="divide-y rounded-lg border bg-white p-2">
+                      {expensesAdmin.map((e) => (
+                        <ExpenseRow
+                          key={e.id}
+                          expense={{
+                            id: e.id,
+                            amount: Number(e.amount),
+                            concept: e.concept,
+                            date: e.date,
+                            expense_type: (e as Record<string, unknown>).expense_type as string,
+                            receipt_url: (e as Record<string, unknown>).receipt_url as string | null,
+                            receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
+                          }}
+                          canEdit={userRole === "admin" || userRole === "abogada"}
+                          colorClass="text-red-600"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin gastos administrativos</p>
+                  )}
+                </div>
+
+                {/* Pagos Administrativos */}
+                <div>
+                  <h4 className="text-sm font-semibold text-green-700 mb-2">Pagos</h4>
+                  {paymentsAdmin.length > 0 ? (
+                    <div className="divide-y rounded-lg border bg-white p-2">
+                      {paymentsAdmin.map((p) => (
+                        <PaymentRow
+                          key={p.id}
+                          payment={{
+                            id: p.id,
+                            amount: Number(p.amount),
+                            description: (p as Record<string, unknown>).description as string | null,
+                            payment_date: p.payment_date,
+                            payment_type: (p as Record<string, unknown>).payment_type as string,
+                            receipt_url: (p as Record<string, unknown>).receipt_url as string | null,
+                            receipt_filename: (p as Record<string, unknown>).receipt_filename as string | null,
+                          }}
+                          canEdit={userRole === "admin" || userRole === "abogada"}
+                          colorClass="text-green-600"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin pagos administrativos</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Administrativo subtotals */}
+              <div className="rounded-lg bg-gray-50 p-3 text-sm">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-xs text-gray-500">Gastos</p>
+                    <p className="font-bold text-red-600">{formatCurrency(totalAdmin)}</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Pagos</p>
+                    <p className="font-bold text-green-600">{formatCurrency(totalPayAdmin)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Balance</p>
+                    <p className={`font-bold ${balanceAdmin < 0 ? "text-red-600" : "text-green-600"}`}>
+                      {formatCurrency(balanceAdmin)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ═══ BALANCE GENERAL ═══ */}
+          <Card className={`border-2 ${isInRed ? "border-red-300" : "border-green-300"}`}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                {isInRed ? (
+                  <AlertTriangle size={20} className="text-red-500" />
                 ) : (
-                  <p className="text-sm text-gray-400 py-4 text-center">Sin pagos registrados</p>
+                  <CheckCircle size={20} className="text-green-600" />
                 )}
-              </CardContent>
-            </Card>
-          </div>
+                <CardTitle className="text-lg font-bold text-integra-navy">Balance General</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="px-4 py-2 text-left font-semibold text-gray-600">Concepto</th>
+                      <th className="px-4 py-2 text-right font-semibold text-red-600">Gastos</th>
+                      <th className="px-4 py-2 text-right font-semibold text-green-600">Pagos</th>
+                      <th className="px-4 py-2 text-right font-semibold text-gray-600">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b">
+                      <td className="px-4 py-2 font-medium">Trámite</td>
+                      <td className="px-4 py-2 text-right text-red-600">{formatCurrency(totalTramite)}</td>
+                      <td className="px-4 py-2 text-right text-green-600">{formatCurrency(totalPayTramite)}</td>
+                      <td className={`px-4 py-2 text-right font-semibold ${balanceTramite < 0 ? "text-red-600" : "text-green-600"}`}>
+                        {formatCurrency(balanceTramite)}
+                      </td>
+                    </tr>
+                    <tr className="border-b">
+                      <td className="px-4 py-2 font-medium">Administrativo</td>
+                      <td className="px-4 py-2 text-right text-red-600">{formatCurrency(totalAdmin)}</td>
+                      <td className="px-4 py-2 text-right text-green-600">{formatCurrency(totalPayAdmin)}</td>
+                      <td className={`px-4 py-2 text-right font-semibold ${balanceAdmin < 0 ? "text-red-600" : "text-green-600"}`}>
+                        {formatCurrency(balanceAdmin)}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr className={`${isInRed ? "bg-red-50" : "bg-green-50"}`}>
+                      <td className="px-4 py-3 font-bold text-integra-navy text-base">TOTAL GENERAL</td>
+                      <td className="px-4 py-3 text-right font-bold text-red-600 text-base">{formatCurrency(totalExpenses)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-green-600 text-base">{formatCurrency(totalPayments)}</td>
+                      <td className={`px-4 py-3 text-right font-bold text-base ${isInRed ? "text-red-600" : "text-green-600"}`}>
+                        {formatCurrency(balance)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

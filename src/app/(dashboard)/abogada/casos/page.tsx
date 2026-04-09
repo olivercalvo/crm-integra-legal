@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CaseFilters } from "@/components/cases/case-filters";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { PagePagination } from "@/components/ui/page-pagination";
+import { DeleteSuccessToast } from "@/components/ui/delete-success-toast";
 
 const PAGE_SIZE = 10;
 
@@ -139,6 +140,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-5">
+      <DeleteSuccessToast entityLabel="Caso" />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

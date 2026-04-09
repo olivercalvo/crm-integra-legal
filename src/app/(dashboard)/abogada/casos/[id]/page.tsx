@@ -9,6 +9,7 @@ import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
 import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 import { DocumentUpload } from "@/components/documents/document-upload";
 import { PrintCaseCard } from "@/components/cases/print-case-card";
+import { DeleteCaseButton } from "@/components/cases/delete-case-button";
 import { BackButton } from "@/components/ui/back-button";
 import {
   FolderOpen,
@@ -47,7 +48,7 @@ export default async function ExpedienteDetailPage({
   params,
   searchParams,
 }: PageProps) {
-  const { db, tenantId } = await getAuthenticatedContext();
+  const { db, tenantId, userRole } = await getAuthenticatedContext();
   const activeTab = searchParams.tab ?? "info";
   const backUrl = searchParams.from === "client" && searchParams.client_id
     ? `/abogada/clientes/${searchParams.client_id}`
@@ -254,6 +255,14 @@ export default async function ExpedienteDetailPage({
             currentStatusName={status?.name ?? ""}
             statuses={allStatuses}
           />
+          {(userRole === "admin" || userRole === "abogada") && (
+            <DeleteCaseButton
+              caseId={params.id}
+              caseCode={caseData.case_code}
+              clientName={client?.name ?? "—"}
+              description={caseData.description}
+            />
+          )}
         </div>
       </div>
 

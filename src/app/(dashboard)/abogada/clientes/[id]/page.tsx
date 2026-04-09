@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DeactivateClientButton } from "@/components/clients/deactivate-client-button";
+import { DeleteClientButton } from "@/components/clients/delete-client-button";
 import { DocumentUpload } from "@/components/documents/document-upload";
 import {
   ChevronLeft,
@@ -43,7 +44,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
 import { getStatusStyle } from "@/lib/utils/status-styles";
 
 export default async function ClienteDetailPage({ params }: PageProps) {
-  const { db } = await getAuthenticatedContext();
+  const { db, userRole } = await getAuthenticatedContext();
   const { id } = params;
 
   const { data: client, error } = await db
@@ -121,6 +122,14 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           </Button>
           {typedClient.active && (
             <DeactivateClientButton clientId={id} clientName={typedClient.name} />
+          )}
+          {(userRole === "admin" || userRole === "abogada") && (
+            <DeleteClientButton
+              clientId={id}
+              clientNumber={typedClient.client_number}
+              clientName={typedClient.name}
+              caseCount={cases?.length ?? 0}
+            />
           )}
         </div>
       </div>

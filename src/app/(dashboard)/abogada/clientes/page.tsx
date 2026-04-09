@@ -7,6 +7,7 @@ import { ClientListSearch } from "@/components/clients/client-list";
 import { PagePagination } from "@/components/ui/page-pagination";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { Plus, User, FolderOpen } from "lucide-react";
+import { DeleteSuccessToast } from "@/components/ui/delete-success-toast";
 import type { Client } from "@/types/database";
 
 const PAGE_SIZE = 10;
@@ -87,6 +88,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-5">
+      <DeleteSuccessToast entityLabel="Cliente" />
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

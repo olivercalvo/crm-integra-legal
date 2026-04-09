@@ -1,5 +1,41 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.3.0] — 2026-04-09
+### Feature — Eliminar Casos y Clientes
+
+#### Eliminar Caso
+- Boton "Eliminar caso" (rojo, icono basura) en detalle del caso
+- Solo visible para roles admin y abogada (asistente NO lo ve)
+- Modal de confirmacion con doble seguridad: debe escribir el codigo exacto del caso
+- Muestra detalles: codigo, cliente, descripcion
+- Advertencia clara: se eliminan gastos, tareas, comentarios, documentos y pagos
+- Eliminacion en cascada: storage + documents, comments, tasks, expenses, payments, case
+- Registro en audit_log con datos del caso eliminado
+- Redirige a lista de casos con toast de confirmacion
+
+#### Eliminar Cliente
+- Boton "Eliminar cliente" (rojo, icono basura) en detalle del cliente
+- Solo visible para roles admin y abogada
+- Si tiene casos asociados: modal informativo, boton deshabilitado, NO se puede eliminar
+- Si NO tiene casos: requiere escribir codigo del cliente para confirmar
+- Elimina documentos (storage + BD) y el cliente
+- Registro en audit_log
+- Redirige a lista de clientes con toast de confirmacion
+
+#### Archivos nuevos
+- `src/components/ui/delete-confirmation-modal.tsx` — Modal reutilizable con confirmacion por codigo
+- `src/components/ui/delete-success-toast.tsx` — Toast de exito post-eliminacion
+- `src/components/cases/delete-case-button.tsx` — Boton + modal para eliminar caso
+- `src/components/clients/delete-client-button.tsx` — Boton + modal para eliminar cliente
+- `src/app/api/cases/[id]/delete/route.ts` — API endpoint eliminacion de caso
+- `src/app/api/clients/[id]/delete/route.ts` — API endpoint eliminacion de cliente
+
+#### Archivos modificados
+- `src/app/(dashboard)/abogada/casos/[id]/page.tsx` — Agrego DeleteCaseButton
+- `src/app/(dashboard)/abogada/clientes/[id]/page.tsx` — Agrego DeleteClientButton
+- `src/app/(dashboard)/abogada/casos/page.tsx` — Toast de eliminacion exitosa
+- `src/app/(dashboard)/abogada/clientes/page.tsx` — Toast de eliminacion exitosa
+
 ## [1.2.1] — 2026-04-09
 ### Bugfix correctivo — 4 bugs de producción
 

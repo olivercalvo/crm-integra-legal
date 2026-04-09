@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { ClickableRow } from "@/components/expenses/clickable-row";
 
 function formatCurrency(amount: number): string {
   return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -141,14 +142,11 @@ export default async function GastosPage() {
                 </thead>
                 <tbody className="divide-y">
                   {rows.map((row) => (
-                    <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                    <ClickableRow key={row.id} href={`/abogada/casos/${row.id}?tab=gastos`}>
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/abogada/casos/${row.id}?tab=gastos`}
-                          className="font-mono font-bold text-integra-navy hover:underline"
-                        >
+                        <span className="font-mono font-bold text-integra-navy">
                           {row.caseCode}
-                        </Link>
+                        </span>
                         {row.description && (
                           <p className="text-xs text-gray-400 truncate max-w-[200px]">{row.description}</p>
                         )}
@@ -166,7 +164,7 @@ export default async function GastosPage() {
                       <td className={`px-4 py-3 text-right font-bold ${row.balance < 0 ? "text-red-600" : "text-green-700"}`}>
                         {formatCurrency(row.balance)}
                       </td>
-                    </tr>
+                    </ClickableRow>
                   ))}
                 </tbody>
                 <tfoot>

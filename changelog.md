@@ -1,5 +1,50 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.4.0] — 2026-04-09
+### Feature — Editar/Eliminar Gastos + Adjuntar Recibos + Navegación Balance General
+
+#### Editar Gastos
+- Botón de editar (ícono lápiz) en cada fila de gasto (trámite y administrativo)
+- Modal inline con campos precargados: monto, concepto, fecha
+- Validación de campos antes de guardar
+- Auditoría registra cada campo modificado (valor anterior → nuevo)
+- Solo admin y abogada pueden editar (asistente NO)
+
+#### Eliminar Gastos
+- Botón de eliminar (ícono basura) en cada fila de gasto
+- Modal de confirmación mostrando concepto, monto y fecha del gasto
+- Si el gasto tiene recibo adjunto, se elimina también del storage
+- Auditoría registra la eliminación completa
+- Totales y balance se recalculan automáticamente
+- Solo admin y abogada pueden eliminar
+
+#### Adjuntar Recibo a Gastos
+- Al crear gasto: campo opcional "Adjuntar recibo" (JPG, PNG, PDF, máx 10MB)
+- En gastos existentes: ícono de clip para adjuntar/cambiar/ver recibo
+- Recibos se almacenan en Supabase Storage: `{tenant_id}/gastos/{caso_id}/{gasto_id}/`
+- Click en recibo adjunto abre el archivo en nueva pestaña (URL firmada)
+- En edición: opción de eliminar recibo existente
+- Columnas nuevas en tabla expenses: receipt_url, receipt_filename (SQL pendiente)
+
+#### Navegación Balance General
+- Toda la fila del Balance General de Gastos es clickeable (desktop y mobile)
+- Click navega al detalle del caso, pestaña Gastos
+- Cursor pointer y highlight al hover
+
+#### Archivos nuevos
+- `src/app/api/expenses/[id]/route.ts` — API PATCH/DELETE gastos
+- `src/app/api/expenses/[id]/receipt/route.ts` — API POST/DELETE recibos
+- `src/app/api/expenses/[id]/receipt/url/route.ts` — API GET URL firmada recibo
+- `src/components/expenses/expense-actions.tsx` — Componente ExpenseRow con edit/delete/receipt
+- `src/components/expenses/clickable-row.tsx` — Fila clickeable para tabla
+- `sql/pending/add-receipt-to-expenses.sql` — SQL pendiente para columnas receipt
+
+#### Archivos modificados
+- `src/types/database.ts` — Agregado receipt_url, receipt_filename a Expense
+- `src/app/(dashboard)/abogada/casos/[id]/page.tsx` — Usa ExpenseRow, incluye receipt fields en query
+- `src/app/(dashboard)/abogada/gastos/page.tsx` — Filas clickeables con ClickableRow
+- `src/components/cases/add-expense-form.tsx` — Campo de adjuntar recibo al crear gasto
+
 ## [1.3.0] — 2026-04-09
 ### Feature — Eliminar Casos y Clientes
 

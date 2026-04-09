@@ -75,6 +75,8 @@ export interface Expense {
   date: string;
   expense_type: "tramite" | "administrativo";
   registered_by: string;
+  receipt_url: string | null;
+  receipt_filename: string | null;
   created_at: string;
 }
 

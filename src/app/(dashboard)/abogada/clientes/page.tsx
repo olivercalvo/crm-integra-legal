@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClientListSearch } from "@/components/clients/client-list";
+import { ClientFilters } from "@/components/clients/client-filters";
 import { PagePagination } from "@/components/ui/page-pagination";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { Plus, User, FolderOpen } from "lucide-react";
@@ -20,7 +20,7 @@ const SORTABLE_COLUMNS: Record<string, string> = {
 };
 
 interface PageProps {
-  searchParams: { q?: string; page?: string; sort?: string; dir?: string };
+  searchParams: { q?: string; page?: string; sort?: string; dir?: string; responsible?: string };
 }
 
 export default async function ClientesPage({ searchParams }: PageProps) {
@@ -48,7 +48,21 @@ export default async function ClientesPage({ searchParams }: PageProps) {
     );
   }
 
+  if (searchParams.responsible) {
+    query = query.eq("responsible_lawyer_id", searchParams.responsible);
+  }
+
   const { data: clients, count, error } = await query;
+
+  // Fetch lawyers for filter dropdown
+  const { data: lawyersRaw } = await db
+    .from("users")
+    .select("id, full_name")
+    .eq("tenant_id", tenantId)
+    .eq("active", true)
+    .in("role", ["abogada", "admin"])
+    .order("full_name");
+  const lawyers = (lawyersRaw ?? []) as { id: string; full_name: string }[];
 
   if (error) {
     console.error("Error fetching clients:", error);
@@ -108,8 +122,11 @@ export default async function ClientesPage({ searchParams }: PageProps) {
         </Button>
       </div>
 
-      {/* Search */}
-      <ClientListSearch defaultSearch={search} />
+      {/* Search + Filters */}
+      <ClientFilters
+        defaultSearch={search}
+        lawyers={lawyers.map((l) => ({ id: l.id, name: l.full_name }))}
+      />
 
       {/* Empty state */}
       {list.length === 0 && (

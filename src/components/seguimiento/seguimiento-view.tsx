@@ -73,6 +73,7 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
   const [assistantFilter, setAssistantFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<"recent" | "code" | "pendientes">("recent");
 
   const pendientes = tasks.filter((t) => t.status === "pendiente");
   const cumplidas = tasks.filter((t) => t.status === "cumplida");
@@ -101,18 +102,27 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
 
   // Filter by search
   const q = search.toLowerCase();
-  const filteredCases = Array.from(caseMap.entries()).filter(([, group]) => {
-    if (!q) return true;
-    return (
-      group.code.toLowerCase().includes(q) ||
-      group.client.toLowerCase().includes(q) ||
-      group.entries.some((e) =>
-        e.type === "task"
-          ? e.data.description.toLowerCase().includes(q)
-          : e.data.text.toLowerCase().includes(q)
-      )
-    );
-  });
+  const filteredCases = Array.from(caseMap.entries())
+    .filter(([, group]) => {
+      if (!q) return true;
+      return (
+        group.code.toLowerCase().includes(q) ||
+        group.client.toLowerCase().includes(q) ||
+        group.entries.some((e) =>
+          e.type === "task"
+            ? e.data.description.toLowerCase().includes(q)
+            : e.data.text.toLowerCase().includes(q)
+        )
+      );
+    })
+    .sort(([, a], [, b]) => {
+      if (sortBy === "code") return a.code.localeCompare(b.code);
+      if (sortBy === "pendientes") return b.pendingCount - a.pendingCount;
+      // "recent" — by most recent entry
+      const aDate = a.entries[0]?.date ?? "";
+      const bDate = b.entries[0]?.date ?? "";
+      return bDate.localeCompare(aDate);
+    });
 
   // Filter entries by type, assistant, and date
   const filterEntries = (entries: TimelineEntry[]) => {
@@ -220,6 +230,15 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
             ))}
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "recent" | "code" | "pendientes")}
+              className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+            >
+              <option value="recent">Más reciente</option>
+              <option value="code">Por código</option>
+              <option value="pendientes">Más pendientes</option>
+            </select>
             <span className="text-xs">Desde:</span>
             <input
               type="date"

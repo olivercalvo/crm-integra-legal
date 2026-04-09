@@ -16,6 +16,8 @@ import {
   Paperclip,
   UserPlus,
   FileText,
+  Search,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,10 +78,37 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTodoId, setUploadTodoId] = useState<string | null>(null);
 
-  const pendientes = initialTodos.filter((t) => t.status === "pendiente");
-  const cumplidas = initialTodos.filter((t) => t.status === "cumplida");
+  // Filter & sort state
+  const [searchTodo, setSearchTodo] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pendiente" | "cumplida">("all");
+  const [sortTodo, setSortTodo] = useState<"recent" | "deadline" | "alpha">("recent");
+
+  const filteredTodos = initialTodos
+    .filter((t) => {
+      if (statusFilter === "pendiente" && t.status !== "pendiente") return false;
+      if (statusFilter === "cumplida" && t.status !== "cumplida") return false;
+      if (searchTodo) {
+        const q = searchTodo.toLowerCase();
+        return t.description.toLowerCase().includes(q) ||
+          (t.assignee_name?.toLowerCase().includes(q) ?? false);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortTodo === "deadline") {
+        const aD = a.deadline ?? "9999";
+        const bD = b.deadline ?? "9999";
+        return aD.localeCompare(bD);
+      }
+      if (sortTodo === "alpha") return a.description.localeCompare(b.description);
+      return b.created_at.localeCompare(a.created_at); // recent
+    });
+
+  const pendientes = filteredTodos.filter((t) => t.status === "pendiente");
+  const cumplidas = filteredTodos.filter((t) => t.status === "cumplida");
 
   const overdueCount = pendientes.filter((t) => isOverdue(t.deadline, t.status)).length;
+  const hasFilters = searchTodo || statusFilter !== "all";
 
   async function handleCreate() {
     if (!description.trim()) return;
@@ -393,6 +422,50 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
           e.target.value = "";
         }}
       />
+
+      {/* Search + filter */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchTodo}
+            onChange={(e) => setSearchTodo(e.target.value)}
+            placeholder="Buscar pendientes..."
+            className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-4 text-sm placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {(["all", "pendiente", "cumplida"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setStatusFilter(f)}
+              className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                statusFilter === f ? "bg-integra-navy text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {f === "all" ? "Todos" : f === "pendiente" ? "Pendientes" : "Cumplidos"}
+            </button>
+          ))}
+          <select
+            value={sortTodo}
+            onChange={(e) => setSortTodo(e.target.value as "recent" | "deadline" | "alpha")}
+            className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+          >
+            <option value="recent">Más reciente</option>
+            <option value="deadline">Por vencimiento</option>
+            <option value="alpha">Alfabético</option>
+          </select>
+          {hasFilters && (
+            <button
+              onClick={() => { setSearchTodo(""); setStatusFilter("all"); }}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+            >
+              <X size={14} /> Limpiar
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Stats */}
       <div className="flex items-center gap-4 text-sm text-gray-500">

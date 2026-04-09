@@ -8,6 +8,7 @@ import { AuditFilters } from "@/components/admin/audit-filters";
 import { ENTITY_OPTIONS } from "@/lib/constants/audit";
 import { AuditExport } from "@/components/admin/audit-export";
 import { FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { SortableHeader } from "@/components/ui/sortable-header";
 import type { AuditLog } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,8 @@ interface PageProps {
     date_from?: string;
     date_to?: string;
     page?: string;
+    sort?: string;
+    dir?: string;
   };
 }
 
@@ -118,6 +121,18 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
   const from     = (page - 1) * PAGE_SIZE;
   const to       = from + PAGE_SIZE - 1;
 
+  const SORTABLE_COLUMNS: Record<string, string> = {
+    created_at: "created_at",
+    entity: "entity",
+    action: "action",
+  };
+  const sortColumn = SORTABLE_COLUMNS[searchParams.sort ?? ""] ?? "created_at";
+  const sortDir = searchParams.sort
+    ? searchParams.dir === "asc"
+    : false; // default desc
+  const currentSort = searchParams.sort ?? "";
+  const currentDir = searchParams.dir ?? "desc";
+
   // Fetch users for filter dropdown (same tenant)
   const { data: tenantUsers } = await db
     .from("users")
@@ -138,7 +153,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
       { count: "exact" }
     )
     .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: false })
+    .order(sortColumn, { ascending: sortDir })
     .range(from, to);
 
   if (entity)   query = query.eq("entity", entity);
@@ -285,10 +300,16 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <th className="px-4 py-3 whitespace-nowrap">Fecha y hora</th>
+                    <th className="px-4 py-3 whitespace-nowrap">
+                      <SortableHeader column="created_at" label="Fecha y hora" currentSort={currentSort} currentDir={currentDir} />
+                    </th>
                     <th className="px-4 py-3">Usuario</th>
-                    <th className="px-4 py-3">Acción</th>
-                    <th className="px-4 py-3">Entidad</th>
+                    <th className="px-4 py-3">
+                      <SortableHeader column="action" label="Acción" currentSort={currentSort} currentDir={currentDir} />
+                    </th>
+                    <th className="px-4 py-3">
+                      <SortableHeader column="entity" label="Entidad" currentSort={currentSort} currentDir={currentDir} />
+                    </th>
                     <th className="px-4 py-3">Campo</th>
                     <th className="px-4 py-3">Antes</th>
                     <th className="px-4 py-3">Ahora</th>

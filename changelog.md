@@ -1,5 +1,26 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.6.3] — 2026-04-09
+### Feature — Documentos clickeables: abrir y descargar
+- Clic en cualquier documento adjunto lo abre en nueva pestaña (signed URL de Supabase, 5 min)
+- Botón de descarga (ícono) al lado de cada documento
+- Hover sutil y cursor pointer en cada fila de documento
+- Spinner de carga mientras se obtiene la URL
+- Nuevo componente reutilizable: `DocumentRow` (unifica vista de documento en casos y clientes)
+- Nuevo endpoint: `GET /api/documents/[id]/url` — genera signed URL temporal
+- Aplica en: documentos de casos y documentos de clientes
+
+## [1.6.2] — 2026-04-09
+### Feature — Eliminar documentos adjuntos en Casos y Clientes
+- Nuevo botón de eliminar (ícono basura) en cada fila de documento adjunto
+- Modal de confirmación muestra nombre del archivo y fecha de subida
+- Al confirmar: elimina archivo de Supabase Storage + registro de BD
+- Auditoría: registra quién eliminó, qué archivo, de qué caso/cliente
+- Permisos: solo admin y abogada pueden eliminar; asistente NO ve el botón
+- Aplica en: documentos de casos y documentos de clientes
+- Nuevo endpoint: `POST /api/documents/[id]/delete`
+- Nuevo componente: `DeleteDocumentButton`
+
 ## [1.6.1] — 2026-04-09
 ### Bugfix — Error 413 al subir archivos grandes (Vercel body limit)
 - Todos los uploads de archivos ahora van DIRECTO a Supabase Storage desde el frontend

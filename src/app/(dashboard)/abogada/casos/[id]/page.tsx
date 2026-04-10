@@ -10,6 +10,7 @@ import { CaseStatusChanger } from "@/components/cases/case-status-changer";
 import { InlineCaseInfoEditor } from "@/components/cases/inline-case-editor";
 import { formatDate, formatDateTime, daysSince } from "@/lib/utils/format-date";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { DocumentRow } from "@/components/documents/document-row";
 import { PrintCaseCard } from "@/components/cases/print-case-card";
 import { DeleteCaseButton } from "@/components/cases/delete-case-button";
 import { BackButton } from "@/components/ui/back-button";
@@ -30,7 +31,7 @@ import {
   Hash,
   Clock,
   Upload,
-  Paperclip,
+
   UserCheck,
   Users,
 } from "lucide-react";
@@ -986,17 +987,13 @@ export default async function ExpedienteDetailPage({
           {documents.length > 0 ? (
             <div className="space-y-2">
               {documents.map((doc) => (
-                <Card key={doc.id}>
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <Paperclip size={18} className="shrink-0 text-integra-navy" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{doc.file_name}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatDateTime(doc.created_at)}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <DocumentRow
+                  key={doc.id}
+                  documentId={doc.id}
+                  fileName={doc.file_name}
+                  createdAt={formatDateTime(doc.created_at)}
+                  canDelete={userRole === "admin" || userRole === "abogada"}
+                />
               ))}
             </div>
           ) : (

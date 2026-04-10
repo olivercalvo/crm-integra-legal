@@ -3,6 +3,7 @@
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Paperclip, X, Save, Loader2, FileText, Image as ImageIcon } from "lucide-react";
+import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,34 +110,29 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
   };
 
   const handleUploadReceipt = async (file: File) => {
-    if (file.size > 10 * 1024 * 1024) {
-      setError("El archivo excede 10MB");
-      return;
-    }
-    const allowed = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
-    if (!allowed.includes(file.type)) {
-      setError("Solo se permiten archivos JPG, PNG o PDF");
-      return;
-    }
-
     setUploading(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/payments/${payment.id}/receipt`, {
-        method: "POST",
-        body: formData,
+      const { storagePath } = await directUpload({
+        file,
+        pathPrefix: `pagos/${payment.id}`,
+        allowedTypes: ["image/jpeg", "image/png", "image/jpg", "application/pdf"],
+      });
+      // Update payment record with receipt reference
+      const res = await fetch(`/api/payments/${payment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt_url: storagePath, receipt_filename: file.name }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error ?? "Error al subir recibo");
+        setError(json.error ?? "Error al registrar recibo");
         return;
       }
       showToast("Recibo adjuntado correctamente");
       router.refresh();
-    } catch {
-      setError("Error de conexión");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir recibo");
     } finally {
       setUploading(false);
     }

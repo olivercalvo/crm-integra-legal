@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { MessageSquarePlus, Loader2, Paperclip, X } from "lucide-react";
+import { directUpload } from "@/lib/storage/direct-upload";
 
 interface CommentFormProps {
   caseId: string;
@@ -46,13 +47,28 @@ export function CommentForm({ caseId, onSuccess }: CommentFormProps) {
         return;
       }
 
-      // Upload attached files linked to this comment
+      // Upload attached files directly to Storage, then register metadata
       if (attachedFiles.length > 0 && data.id) {
-        const formData = new FormData();
-        formData.append("entity_type", "comment");
-        formData.append("entity_id", data.id);
-        attachedFiles.forEach((file) => formData.append("files", file));
-        await fetch("/api/documents/upload", { method: "POST", body: formData });
+        for (const file of attachedFiles) {
+          try {
+            const { storagePath, fileName } = await directUpload({
+              file,
+              pathPrefix: `comment/${data.id}`,
+            });
+            await fetch("/api/documents/register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                entity_type: "comment",
+                entity_id: data.id,
+                file_name: fileName,
+                storage_path: storagePath,
+              }),
+            });
+          } catch {
+            // Continue with remaining files if one fails
+          }
+        }
       }
 
       setText("");

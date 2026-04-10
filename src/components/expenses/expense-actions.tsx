@@ -2,7 +2,8 @@
 
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Paperclip, X, Save, Loader2, Upload, FileText, Image as ImageIcon } from "lucide-react";
+import { Pencil, Trash2, Paperclip, X, Save, Loader2, FileText, Image as ImageIcon } from "lucide-react";
+import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,34 +108,29 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600" }: Ex
   };
 
   const handleUploadReceipt = async (file: File) => {
-    if (file.size > 10 * 1024 * 1024) {
-      setError("El archivo excede 10MB");
-      return;
-    }
-    const allowed = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
-    if (!allowed.includes(file.type)) {
-      setError("Solo se permiten archivos JPG, PNG o PDF");
-      return;
-    }
-
     setUploading(true);
     setError(null);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch(`/api/expenses/${expense.id}/receipt`, {
-        method: "POST",
-        body: formData,
+      const { storagePath } = await directUpload({
+        file,
+        pathPrefix: `gastos/${expense.id}`,
+        allowedTypes: ["image/jpeg", "image/png", "image/jpg", "application/pdf"],
+      });
+      // Update expense record with receipt reference
+      const res = await fetch(`/api/expenses/${expense.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt_url: storagePath, receipt_filename: file.name }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error ?? "Error al subir recibo");
+        setError(json.error ?? "Error al registrar recibo");
         return;
       }
       showToast("Recibo adjuntado correctamente");
       router.refresh();
-    } catch {
-      setError("Error de conexión");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al subir recibo");
     } finally {
       setUploading(false);
     }

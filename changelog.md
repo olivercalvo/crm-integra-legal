@@ -1,5 +1,39 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.6.3] — 2026-04-09
+### Feature — Documentos clickeables: abrir y descargar
+- Clic en cualquier documento adjunto lo abre en nueva pestaña (signed URL de Supabase, 5 min)
+- Botón de descarga (ícono) al lado de cada documento
+- Hover sutil y cursor pointer en cada fila de documento
+- Spinner de carga mientras se obtiene la URL
+- Nuevo componente reutilizable: `DocumentRow` (unifica vista de documento en casos y clientes)
+- Nuevo endpoint: `GET /api/documents/[id]/url` — genera signed URL temporal
+- Aplica en: documentos de casos y documentos de clientes
+
+## [1.6.2] — 2026-04-09
+### Feature — Eliminar documentos adjuntos en Casos y Clientes
+- Nuevo botón de eliminar (ícono basura) en cada fila de documento adjunto
+- Modal de confirmación muestra nombre del archivo y fecha de subida
+- Al confirmar: elimina archivo de Supabase Storage + registro de BD
+- Auditoría: registra quién eliminó, qué archivo, de qué caso/cliente
+- Permisos: solo admin y abogada pueden eliminar; asistente NO ve el botón
+- Aplica en: documentos de casos y documentos de clientes
+- Nuevo endpoint: `POST /api/documents/[id]/delete`
+- Nuevo componente: `DeleteDocumentButton`
+
+## [1.6.1] — 2026-04-09
+### Bugfix — Error 413 al subir archivos grandes (Vercel body limit)
+- Todos los uploads de archivos ahora van DIRECTO a Supabase Storage desde el frontend
+- Ya no pasan por API routes de Next.js (límite de Vercel 4.5MB)
+- Componentes migrados: document-upload, comment-form, expense-actions, payment-actions, add-expense-form, section-expense-form, todo-list
+- Nuevo utility: `src/lib/storage/direct-upload.ts` con XMLHttpRequest para barra de progreso
+- Nuevo endpoint: `GET /api/storage/prepare` — retorna tenantId para construir paths
+- Nuevos endpoints: `POST /api/documents/register`, `POST /api/todos/[id]/documents/register` — guardan metadata sin archivo
+- Barra de progreso visible durante upload de documentos
+- Validación de tamaño (10MB) y tipo de archivo en frontend antes de subir
+- Import wizard (Excel/CSV) NO se migró — requiere procesamiento server-side y archivos pequeños
+- SQL pendiente: `sql/pending/storage_rls_policies.sql` — políticas RLS para bucket "documents"
+
 ## [1.6.0] — 2026-04-09
 ### Bugfix — Búsqueda de casos por nombre de cliente
 - La búsqueda en la lista de casos ahora busca en: código del caso, descripción, nombre del cliente, y código del cliente

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Loader2, X, FileText, Paperclip } from "lucide-react";
+import { Upload, Loader2, X, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { directUpload } from "@/lib/storage/direct-upload";
 
 interface DocumentUploadProps {
   entityType: "client" | "case" | "task" | "comment";
@@ -13,17 +14,24 @@ interface DocumentUploadProps {
 export function DocumentUpload({ entityType, entityId }: DocumentUploadProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isPending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
+    // Validate each file size
+    const oversized = files.find((f) => f.size > 10 * 1024 * 1024);
+    if (oversized) {
+      setError(`Archivo demasiado grande: ${oversized.name} (máximo 10MB)`);
+      return;
+    }
     setSelectedFiles((prev) => [...prev, ...files]);
     setError(null);
     setSuccess(null);
-    // Reset input so same file can be selected again
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -31,37 +39,62 @@ export function DocumentUpload({ entityType, entityId }: DocumentUploadProps) {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (selectedFiles.length === 0) return;
 
-    startTransition(async () => {
-      try {
-        const formData = new FormData();
-        formData.append("entity_type", entityType);
-        formData.append("entity_id", entityId);
-        selectedFiles.forEach((file) => formData.append("files", file));
+    setUploading(true);
+    setError(null);
+    setProgress(0);
+    let uploadedCount = 0;
 
-        const response = await fetch("/api/documents/upload", {
-          method: "POST",
-          body: formData,
+    try {
+      for (let i = 0; i < selectedFiles.length; i++) {
+        setCurrentFileIndex(i);
+        const file = selectedFiles[i];
+
+        // Upload directly to Supabase Storage
+        const { storagePath, fileName } = await directUpload({
+          file,
+          pathPrefix: `${entityType}/${entityId}`,
+          onProgress: (pct) => {
+            // Combine file-level progress with overall progress
+            const overall = Math.round(((i + pct / 100) / selectedFiles.length) * 100);
+            setProgress(overall);
+          },
         });
 
-        if (!response.ok) {
-          const json = await response.json().catch(() => ({}));
-          setError(json.error ?? `Error ${response.status}: ${response.statusText}`);
-          return;
+        // Register metadata via lightweight JSON API
+        const res = await fetch("/api/documents/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entity_type: entityType,
+            entity_id: entityId,
+            file_name: fileName,
+            storage_path: storagePath,
+          }),
+        });
+
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error ?? "Error al registrar documento");
         }
 
-        setSelectedFiles([]);
-        setError(null);
-        setSuccess(`${selectedFiles.length} documento(s) subido(s) correctamente`);
-        setTimeout(() => setSuccess(null), 3000);
-        router.refresh();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Error desconocido";
-        setError(`Error de conexión: ${message}`);
+        uploadedCount++;
       }
-    });
+
+      setSelectedFiles([]);
+      setSuccess(`${uploadedCount} documento(s) subido(s) correctamente`);
+      setTimeout(() => setSuccess(null), 3000);
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setError(message);
+    } finally {
+      setUploading(false);
+      setProgress(0);
+      setCurrentFileIndex(0);
+    }
   };
 
   return (
@@ -78,13 +111,13 @@ export function DocumentUpload({ entityType, entityId }: DocumentUploadProps) {
         <Button
           onClick={() => fileInputRef.current?.click()}
           className="min-h-[56px] px-8 bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold text-base shadow-sm"
-          disabled={isPending}
+          disabled={uploading}
         >
           <Upload size={22} className="mr-2" />
           Adjuntar Documento
         </Button>
         <p className="text-center text-xs text-gray-400">
-          PDF, Word, Excel, imágenes — se almacenan en Supabase Storage
+          PDF, Word, Excel, imágenes — máximo 10MB por archivo
         </p>
       </div>
 
@@ -101,20 +134,39 @@ export function DocumentUpload({ entityType, entityId }: DocumentUploadProps) {
               <span className="text-xs text-gray-400">
                 {(file.size / 1024).toFixed(0)} KB
               </span>
-              <button
-                onClick={() => removeFile(i)}
-                className="rounded p-1 text-gray-400 hover:text-red-500"
-              >
-                <X size={14} />
-              </button>
+              {!uploading && (
+                <button
+                  onClick={() => removeFile(i)}
+                  className="rounded p-1 text-gray-400 hover:text-red-500"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           ))}
+
+          {/* Progress bar */}
+          {uploading && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Subiendo archivo {currentFileIndex + 1} de {selectedFiles.length}...</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-integra-gold transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <Button
             onClick={handleUpload}
-            disabled={isPending}
+            disabled={uploading}
             className="mt-2 min-h-[44px] w-full bg-integra-navy hover:bg-integra-navy/90"
           >
-            {isPending ? (
+            {uploading ? (
               <>
                 <Loader2 size={16} className="mr-2 animate-spin" />
                 Subiendo...

@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { DeactivateClientButton } from "@/components/clients/deactivate-client-button";
 import { DeleteClientButton } from "@/components/clients/delete-client-button";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { DocumentRow } from "@/components/documents/document-row";
 import {
   ChevronLeft,
   Pencil,
@@ -259,18 +260,13 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           {documents && documents.length > 0 && (
             <div className="space-y-2">
               {documents.map((doc: Record<string, unknown>) => (
-                <div
+                <DocumentRow
                   key={doc.id as string}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText size={16} className="text-gray-400 shrink-0" />
-                    <p className="text-sm font-medium truncate">{doc.file_name as string}</p>
-                  </div>
-                  <p className="text-xs text-gray-400 shrink-0 ml-3">
-                    {formatDate(doc.created_at as string)}
-                  </p>
-                </div>
+                  documentId={doc.id as string}
+                  fileName={doc.file_name as string}
+                  createdAt={formatDate(doc.created_at as string)}
+                  canDelete={userRole === "admin" || userRole === "abogada"}
+                />
               ))}
             </div>
           )}

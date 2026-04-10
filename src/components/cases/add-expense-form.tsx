@@ -3,6 +3,7 @@
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
+import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,14 +86,22 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
           return;
         }
 
-        // Upload receipt if file was selected
+        // Upload receipt directly to Storage if file was selected
         if (expFile && json.id) {
-          const formData = new FormData();
-          formData.append("file", expFile);
-          await fetch(`/api/expenses/${json.id}/receipt`, {
-            method: "POST",
-            body: formData,
-          });
+          try {
+            const { storagePath } = await directUpload({
+              file: expFile,
+              pathPrefix: `gastos/${json.id}`,
+              allowedTypes: ["image/jpeg", "image/png", "image/jpg", "application/pdf"],
+            });
+            await fetch(`/api/expenses/${json.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ receipt_url: storagePath, receipt_filename: expFile.name }),
+            });
+          } catch {
+            // Expense created but receipt failed — user can retry via edit
+          }
         }
 
         resetExpense();

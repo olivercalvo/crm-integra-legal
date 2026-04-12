@@ -44,7 +44,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
   if (search) {
     query = query.or(
-      `name.ilike.%${search}%,ruc.ilike.%${search}%,client_number.ilike.%${search}%`
+      `name.ilike.%${search}%,ruc.ilike.%${search}%,client_number.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
     );
   }
 

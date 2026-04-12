@@ -26,6 +26,7 @@
     "pg": "^8.20.0",
     "react": "^18",
     "react-dom": "^18",
+    "resend": "^6.10.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.21.0",

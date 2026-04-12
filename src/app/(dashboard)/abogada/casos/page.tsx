@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/utils/format-date";
 
 const SORTABLE_COLUMNS: Record<string, string> = {
   case_code: "case_code",
+  client: "client",
   description: "description",
   opened_at: "opened_at",
   updated_at: "updated_at",
@@ -45,6 +46,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
   const offset = (currentPage - 1) * PAGE_SIZE;
 
   const sortColumn = SORTABLE_COLUMNS[searchParams.sort ?? ""] ?? "updated_at";
+  const isClientSort = sortColumn === "client";
   const sortDir = searchParams.sort
     ? searchParams.dir === "desc"
       ? false
@@ -82,6 +84,8 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     ]);
 
   // Build cases query with filters
+  // Cuando se ordena por cliente, no podemos usar .order() de PostgREST sobre una
+  // columna de tabla relacionada, así que ordenamos en JS y paginamos manualmente.
   let query = db
     .from("cases")
     .select(
@@ -93,9 +97,11 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     `,
       { count: "exact" }
     )
-    .eq("tenant_id", tenantId)
-    .order(sortColumn, { ascending: sortDir })
-    .range(offset, offset + PAGE_SIZE - 1);
+    .eq("tenant_id", tenantId);
+
+  if (!isClientSort) {
+    query = query.order(sortColumn, { ascending: sortDir }).range(offset, offset + PAGE_SIZE - 1);
+  }
 
   // Apply filters
   if (searchParams.status) query = query.eq("status_id", searchParams.status);
@@ -105,22 +111,57 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
 
   if (searchParams.q) {
     const q = `%${searchParams.q}%`;
-    // Search matching clients first (name, client_number) then combine with case fields
-    const { data: matchingClients } = await db
-      .from("clients")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .or(`name.ilike.${q},client_number.ilike.${q}`);
-    const matchedClientIds = (matchingClients ?? []).map((c: { id: string }) => c.id);
+    // Búsqueda OR entre: case_code, description, client name, client_number.
+    // Usamos 3 queries separadas y unimos IDs en JS porque PostgREST .or() con
+    // `client_id.in.(...)` anidado no parsea de forma confiable (los commas
+    // internos confunden al tokenizer del filtro compuesto).
+    const [clientMatchRes, caseFieldMatchRes] = await Promise.all([
+      db
+        .from("clients")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .or(`name.ilike.${q},client_number.ilike.${q}`),
+      db
+        .from("cases")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .or(`case_code.ilike.${q},description.ilike.${q}`),
+    ]);
 
+    const matchedClientIds = (clientMatchRes.data ?? []).map((c: { id: string }) => c.id);
+    const caseIdsByField = (caseFieldMatchRes.data ?? []).map((c: { id: string }) => c.id);
+
+    let caseIdsByClient: string[] = [];
     if (matchedClientIds.length > 0) {
-      query = query.or(`case_code.ilike.${q},description.ilike.${q},client_id.in.(${matchedClientIds.join(",")})`);
+      const { data: casesByClient } = await db
+        .from("cases")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .in("client_id", matchedClientIds);
+      caseIdsByClient = (casesByClient ?? []).map((c: { id: string }) => c.id);
+    }
+
+    const allMatchedCaseIds = Array.from(new Set([...caseIdsByField, ...caseIdsByClient]));
+
+    if (allMatchedCaseIds.length === 0) {
+      // Forzar cero resultados sin romper la paginación
+      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
     } else {
-      query = query.or(`case_code.ilike.${q},description.ilike.${q}`);
+      query = query.in("id", allMatchedCaseIds);
     }
   }
 
-  const { data: cases, count } = await query;
+  let { data: cases, count } = await query;
+
+  // Cuando se ordena por cliente, ordenamos en JS y paginamos manualmente
+  if (isClientSort && cases) {
+    cases.sort((a, b) => {
+      const nameA = ((a.clients as unknown as { name: string } | null)?.name ?? "").toLowerCase();
+      const nameB = ((b.clients as unknown as { name: string } | null)?.name ?? "").toLowerCase();
+      return sortDir ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    });
+    cases = cases.slice(offset, offset + PAGE_SIZE);
+  }
 
   // Fetch user names for responsible + assistant columns
   const allUserIds = (cases ?? []).flatMap((c) => {
@@ -185,7 +226,9 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     <SortableHeader column="case_code" label="Código" currentSort={currentSort} currentDir={currentDir} />
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Cliente</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    <SortableHeader column="client" label="Cliente" currentSort={currentSort} currentDir={currentDir} />
+                  </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     <SortableHeader column="description" label="Descripción" currentSort={currentSort} currentDir={currentDir} />
                   </th>

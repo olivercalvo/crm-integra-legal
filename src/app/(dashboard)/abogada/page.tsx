@@ -9,6 +9,10 @@ import {
   Clock,
   CheckCircle,
   UserPlus,
+  ClipboardList,
+  Inbox,
+  Activity,
+  MessageSquare,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -18,7 +22,8 @@ import { getClassificationColor, DEFAULT_CLASSIFICATION_COLORS } from "@/lib/uti
 import { formatCurrency } from "@/lib/utils/status-styles";
 
 export default async function AbogadaDashboard() {
-  const { db, tenantId } = await getAuthenticatedContext();
+  const { db, tenantId, userId, userRole } = await getAuthenticatedContext();
+  const isAdmin = userRole === "admin";
 
   // Fetch stats in parallel
   const [clientsRes, pendingTasksRes, casesRes, prospectsRes] = await Promise.all([
@@ -85,6 +90,135 @@ export default async function AbogadaDashboard() {
     .eq("tenant_id", tenantId)
     .eq("status", "pendiente")
     .lt("deadline", today);
+
+  // ── Sección 1: "Mis Pendientes" — personal_todos que el usuario creó (user_id = userId)
+  // Misma lógica que /abogada/pendientes (ownedRaw): cargar TODOS y filtrar status en JS
+  // para garantizar que los conteos coincidan entre dashboard y página de pendientes.
+  const myPendingQuery = db
+    .from("personal_todos")
+    .select(`
+      id, description, deadline, status, user_id, assigned_to,
+      assignee:users!personal_todos_assigned_to_fkey(full_name)
+    `)
+    .eq("tenant_id", tenantId)
+    .order("deadline", { ascending: true, nullsFirst: false });
+
+  const myPendingRes = isAdmin ? await myPendingQuery : await myPendingQuery.eq("user_id", userId);
+
+  type MyTodoRow = {
+    id: string;
+    description: string;
+    deadline: string | null;
+    status: string;
+    user_id: string;
+    assigned_to: string | null;
+    assignee: { full_name: string } | null;
+  };
+  const myPendingTodos = ((myPendingRes.data ?? []) as unknown as MyTodoRow[])
+    .filter((t) => t.status === "pendiente")
+    .slice(0, 15);
+
+  // ── Sección 2: "Pendientes Asignados por Otros" — assigned_to = userId AND user_id != userId
+  // Misma lógica que /abogada/pendientes (assignedRaw): cargar TODOS y filtrar status en JS.
+  const assignedQuery = db
+    .from("personal_todos")
+    .select(`
+      id, description, deadline, status, user_id,
+      creator:users!personal_todos_user_id_fkey(full_name)
+    `)
+    .eq("tenant_id", tenantId)
+    .order("deadline", { ascending: true, nullsFirst: false });
+
+  const assignedRes = isAdmin
+    ? await assignedQuery
+    : await assignedQuery.eq("assigned_to", userId).neq("user_id", userId);
+
+  type AssignedTodoRow = {
+    id: string;
+    description: string;
+    deadline: string | null;
+    status: string;
+    user_id: string;
+    creator: { full_name: string } | null;
+  };
+  const assignedByOthers = ((assignedRes.data ?? []) as unknown as AssignedTodoRow[])
+    .filter((t) => t.status === "pendiente")
+    .slice(0, 15);
+
+  // ── Sección 3: "Seguimientos Recientes" — tareas + comentarios mergeados
+  const [recentTasksRes, recentCommentsRes] = await Promise.all([
+    db
+      .from("tasks")
+      .select(`
+        id, description, created_at, case_id,
+        cases!inner(case_code, clients!inner(name)),
+        creator:users!tasks_created_by_fkey(full_name)
+      `)
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    db
+      .from("comments")
+      .select(`
+        id, text, created_at, case_id,
+        cases!inner(case_code, clients!inner(name)),
+        users(full_name)
+      `)
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+  ]);
+
+  type RecentEntry = {
+    id: string;
+    type: "tarea" | "comentario";
+    description: string;
+    created_at: string;
+    case_id: string;
+    caseCode: string;
+    clientName: string;
+    userName: string;
+  };
+
+  const recentTasks: RecentEntry[] = ((recentTasksRes.data ?? []) as unknown as Array<{
+    id: string;
+    description: string;
+    created_at: string;
+    case_id: string;
+    cases: { case_code: string; clients: { name: string } };
+    creator: { full_name: string } | null;
+  }>).map((t) => ({
+    id: `t-${t.id}`,
+    type: "tarea",
+    description: t.description,
+    created_at: t.created_at,
+    case_id: t.case_id,
+    caseCode: t.cases.case_code,
+    clientName: t.cases.clients.name,
+    userName: t.creator?.full_name ?? "Sistema",
+  }));
+
+  const recentComments: RecentEntry[] = ((recentCommentsRes.data ?? []) as unknown as Array<{
+    id: string;
+    text: string;
+    created_at: string;
+    case_id: string;
+    cases: { case_code: string; clients: { name: string } };
+    users: { full_name: string } | null;
+  }>).map((c) => ({
+    id: `c-${c.id}`,
+    type: "comentario",
+    description: c.text,
+    created_at: c.created_at,
+    case_id: c.case_id,
+    caseCode: c.cases.case_code,
+    clientName: c.cases.clients.name,
+    userName: c.users?.full_name ?? "Sistema",
+  }));
+
+  const recentSeguimientos = [...recentTasks, ...recentComments]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 20);
 
   const stats = [
     {
@@ -325,6 +459,166 @@ export default async function AbogadaDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sección: Mis Pendientes */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 text-integra-navy">
+              <ClipboardList size={18} className="text-integra-gold" />
+              {isAdmin ? "Todos los Pendientes" : "Mis Pendientes"}
+              <span className="ml-2 text-xs font-normal text-gray-500">{myPendingTodos.length}</span>
+            </CardTitle>
+            <Link href="/abogada/pendientes" className="text-xs font-medium text-integra-navy hover:underline">
+              Ver todos →
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {myPendingTodos.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-500">No tienes pendientes. ¡Buen trabajo!</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {myPendingTodos.map((t) => {
+                const overdue = t.deadline && t.deadline < today;
+                const urgent = t.deadline && t.deadline >= today && t.deadline <= weekFromNow;
+                const assignedToSomeone = t.assigned_to && t.assigned_to !== userId && t.assignee?.full_name;
+                return (
+                  <Link
+                    key={t.id}
+                    href="/abogada/pendientes"
+                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800 truncate">{t.description}</p>
+                      {assignedToSomeone && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Asignado a: <span className="font-medium">{t.assignee?.full_name}</span>
+                        </p>
+                      )}
+                    </div>
+                    {t.deadline && (
+                      <Badge
+                        className={`border-0 text-xs shrink-0 ${
+                          overdue
+                            ? "bg-red-100 text-red-800"
+                            : urgent
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {overdue ? "Vencido" : "Vence"}: {formatDate(t.deadline)}
+                      </Badge>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sección: Pendientes Asignados por Otros */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 text-integra-navy">
+              <Inbox size={18} className="text-integra-gold" />
+              Pendientes Asignados por Otros
+              <span className="ml-2 text-xs font-normal text-gray-500">{assignedByOthers.length}</span>
+            </CardTitle>
+            <Link href="/abogada/pendientes" className="text-xs font-medium text-integra-navy hover:underline">
+              Ver todos →
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {assignedByOthers.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-500">No tienes pendientes asignados por otros.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {assignedByOthers.map((t) => {
+                const overdue = t.deadline && t.deadline < today;
+                const urgent = t.deadline && t.deadline >= today && t.deadline <= weekFromNow;
+                return (
+                  <Link
+                    key={t.id}
+                    href="/abogada/pendientes"
+                    className="flex items-center gap-3 py-2.5 hover:bg-gray-50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800 truncate">{t.description}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Asignado por: <span className="font-medium">{t.creator?.full_name ?? "—"}</span>
+                      </p>
+                    </div>
+                    {t.deadline && (
+                      <Badge
+                        className={`border-0 text-xs shrink-0 ${
+                          overdue
+                            ? "bg-red-100 text-red-800"
+                            : urgent
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {overdue ? "Vencido" : "Vence"}: {formatDate(t.deadline)}
+                      </Badge>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sección: Seguimientos Recientes */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2 text-integra-navy">
+              <Activity size={18} className="text-integra-gold" />
+              Seguimientos Recientes
+            </CardTitle>
+            <Link href="/abogada/seguimiento" className="text-xs font-medium text-integra-navy hover:underline">
+              Ver todos →
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recentSeguimientos.length === 0 ? (
+            <p className="py-4 text-center text-sm text-gray-500">No hay actividad reciente.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {recentSeguimientos.map((e) => (
+                <Link
+                  key={e.id}
+                  href={`/abogada/casos/${e.case_id}`}
+                  className="flex items-start gap-3 py-2.5 hover:bg-gray-50"
+                >
+                  <div
+                    className={`mt-0.5 rounded-md p-1.5 shrink-0 ${
+                      e.type === "tarea" ? "bg-purple-50 text-purple-600" : "bg-blue-50 text-blue-600"
+                    }`}
+                  >
+                    {e.type === "tarea" ? <ListTodo size={14} /> : <MessageSquare size={14} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-mono font-bold text-integra-navy">{e.caseCode}</span>
+                      <span className="text-gray-500 truncate">{e.clientName}</span>
+                      <span className="ml-auto shrink-0 text-gray-400">{formatDate(e.created_at)}</span>
+                    </div>
+                    <p className="text-sm text-gray-800 truncate mt-0.5">{e.description}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">por {e.userName}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

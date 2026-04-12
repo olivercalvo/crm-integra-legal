@@ -1,5 +1,81 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.7.2] — 2026-04-12
+
+### Bugfix — Dashboard: conteos de Mis Pendientes no coincidían con página de Pendientes
+- Dashboard ahora carga todos los `personal_todos` sin filtrar `status` en DB (igual que `/abogada/pendientes`) y filtra a `status === "pendiente"` en JavaScript.
+- Garantiza que los conteos del dashboard coinciden exactamente con la página de Pendientes.
+- Se agrega campo `status` al select de ambas queries del dashboard para poder filtrar en JS.
+
+### Bugfix — Tarjeta imprimible: contenido se cortaba al imprimir
+- Eliminado `overflow: hidden` del body; reemplazado con `min-height` + `max-height` y flexbox para distribuir contenido.
+- Agregado `@media print` explícito con dimensiones exactas para ambos formatos.
+- Tarjeta completa: header + código + descripción del trámite + nombre del cliente + datos del caso.
+- Etiqueta simple: código grande + nombre del cliente, centrado.
+- Ambos formatos caben sin cortarse en impresión.
+
+### Bugfix — Buscador de casos: debounce y consistencia (reportado 2x)
+- `CaseFilters` ahora tiene debounce de 300ms en el input de búsqueda (antes disparaba `router.push` en cada keystroke).
+- Input controlado con estado local para evitar pérdida de foco/valor durante transiciones.
+
+### Mejora — Buscador de clientes: más campos de búsqueda
+- La búsqueda de clientes ahora incluye `email` y `phone` además de `name`, `ruc` y `client_number`.
+
+### Bugfix — Buscador global del header
+- Ahora busca casos por nombre de cliente (antes solo buscaba `case_code` y `description`).
+- Rutas corregidas: `/clientes/` → `/abogada/clientes/`, `/casos/` → `/abogada/casos/`.
+- Implementación: query adicional para encontrar clientes que coincidan, luego busca sus casos y combina sin duplicados.
+
+## [1.7.1] — 2026-04-11
+### Bugfix — Dashboard Abogada: Mis Pendientes usaba tabla equivocada
+- El dashboard consultaba `tasks` (tareas vinculadas a casos) en vez de `personal_todos` (Mis Pendientes). Resultado: Daveiva veía 1 pendiente en vez de los 5 reales.
+- Queries de "Mis Pendientes" y "Pendientes Asignados por Otros" ahora usan `personal_todos` con exactamente la misma lógica que `/abogada/pendientes`:
+  - Mis Pendientes: `user_id = userId AND status = 'pendiente'`
+  - Asignados por Otros: `assigned_to = userId AND user_id != userId AND status = 'pendiente'`
+- Cada fila linkea a `/abogada/pendientes` (ya no a un caso, porque los personal_todos no tienen case_id).
+- "Mis Pendientes" muestra "Asignado a: [nombre]" cuando el todo está asignado a otra persona.
+- El endpoint del email diario (`/api/cron/daily-summary`) y el template HTML también se corrigieron para usar `personal_todos`.
+
+### Feature — Tarjeta imprimible de expediente rediseñada
+- Fix del recorte al imprimir: `@page margin: 0` + `html,body margin:0` + body con dimensiones fijas `5.5in × 4.25in` y padding interior. El borde queda al ras del papel.
+- La tarjeta completa ahora incluye: código (grande) + descripción del trámite (itálica, 2 líneas máx) + nombre del cliente + código cliente + clasificación + responsable + fecha apertura.
+- Descripción y cliente usan line-clamp (máx 2 líneas) + overflow hidden para evitar corte por contenido largo.
+- Nuevo botón **Etiqueta Simple** (icono `Tag`): imprime etiqueta compacta 4in × 2in con solo código + nombre del cliente, centrado, con el color de clasificación como borde superior.
+- Ambos formatos conservan el borde superior del color de la clasificación (10px).
+- HTML del template ahora escapa correctamente caracteres especiales del cliente/descripción.
+
+### Bugfix — Búsqueda en lista de casos no encontraba por nombre de cliente
+- El filtro usaba `.or('case_code.ilike.X,description.ilike.X,client_id.in.(uuid1,uuid2)')` pero PostgREST/supabase-js no parsea confiablemente el `in.(...)` anidado dentro de un `.or()` compuesto — los commas internos confundían al tokenizer.
+- Nueva implementación: tres queries en paralelo para obtener IDs candidatos y unión en JS, luego `.in('id', allIds)` sobre la query principal.
+  - Query 1: clientes cuyo `name` o `client_number` matchea
+  - Query 2: casos cuyo `case_code` o `description` matchea
+  - Query 3: casos cuyo `client_id` está en los clientes matcheados
+- Ahora `"alejandra"` encuentra todos los casos de clientes con ese nombre (ilike es case-insensitive por defecto).
+- La búsqueda sigue respetando los otros filtros (status, clasificación, responsable, institución) y la paginación.
+
+## [1.7.0] — 2026-04-11
+### Feature — Dashboard Abogada: Pendientes, Asignados y Seguimientos
+- Nueva sección "Mis Pendientes": tareas pendientes donde la abogada logueada es creadora/responsable, ordenadas por fecha límite ascendente, con badge de urgencia (vencido/urgente/normal)
+- Nueva sección "Pendientes Asignados por Otros": tareas donde la abogada es `assigned_to` pero el `created_by` es otra persona; muestra quién asignó
+- Nueva sección "Seguimientos Recientes": merge cronológico (desc) de tareas + comentarios de TODOS los casos del tenant (últimos 20), con link "Ver todos" a `/abogada/seguimiento`
+- Visibilidad por rol: abogada solo ve lo propio; admin ve todos los pendientes de la oficina
+- Cada fila es clickeable y navega al caso correspondiente
+
+### Feature — Email Diario Automático (8:00 AM Panamá, L-S)
+- Nuevo endpoint `GET /api/cron/daily-summary` protegido con `CRON_SECRET` (header `Authorization: Bearer <secret>` o `?secret=`)
+- Query param `?test=true` envía solo un correo de prueba a `oliver@clienteenelcentro.com`
+- Configuración de Vercel Cron en `vercel.json` con schedule `0 13 * * 1-6` (13:00 UTC = 8:00 AM Panamá, lunes a sábado, sin domingos)
+- Envío via Resend (`notificaciones@integra-panama.com`) — a cada abogada activa del tenant
+- Template HTML responsive con branding Integra (azul #1B2A4A, dorado #C5A55A), tablas con indicadores de urgencia, links directos al CRM
+- Destinatarios en producción: todas las abogadas activas del tenant; admin y asistente NO reciben
+- Nuevas dependencias: `resend`
+- Nuevos archivos:
+  - `src/app/api/cron/daily-summary/route.ts`
+  - `src/lib/email/resend.ts`
+  - `src/lib/email/daily-summary-template.ts`
+  - `vercel.json`
+- Variables de entorno nuevas: `RESEND_API_KEY`, `CRON_SECRET` (configurar en Vercel y `.env.local`)
+
 ## [1.6.3] — 2026-04-09
 ### Feature — Documentos clickeables: abrir y descargar
 - Clic en cualquier documento adjunto lo abre en nueva pestaña (signed URL de Supabase, 5 min)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -52,10 +52,17 @@ export function CaseFilters({
     });
   };
 
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchValue, setSearchValue] = useState(searchParams.get("q") ?? "");
+
   const handleSearchChange = (value: string) => {
-    startTransition(() => {
-      router.push(`${pathname}?${createQueryString({ q: value || null })}`);
-    });
+    setSearchValue(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      startTransition(() => {
+        router.push(`${pathname}?${createQueryString({ q: value || null })}`);
+      });
+    }, 300);
   };
 
   const hasFilters =
@@ -82,7 +89,7 @@ export function CaseFilters({
         <Input
           type="text"
           placeholder="Buscar por código, descripción o cliente..."
-          defaultValue={searchParams.get("q") ?? ""}
+          value={searchValue}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-9 min-h-[48px]"
         />

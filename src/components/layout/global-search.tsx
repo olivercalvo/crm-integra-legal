@@ -35,7 +35,10 @@ export function GlobalSearch() {
     const supabase = createClient();
     const pattern = `%${term.trim()}%`;
 
-    const [clientsRes, casesRes] = await Promise.all([
+    // 1. Buscar clientes por nombre, ruc, client_number
+    // 2. Buscar casos por case_code, description
+    // 3. Buscar clientes que coincidan para encontrar sus casos (búsqueda por nombre de cliente en casos)
+    const [clientsRes, casesRes, clientMatchRes] = await Promise.all([
       supabase
         .from("clients")
         .select("id, name, ruc, client_number")
@@ -47,7 +50,23 @@ export function GlobalSearch() {
         .select("id, case_code, description, clients!inner(name)")
         .or(`case_code.ilike.${pattern},description.ilike.${pattern}`)
         .limit(5),
+      supabase
+        .from("clients")
+        .select("id")
+        .eq("active", true)
+        .or(`name.ilike.${pattern},client_number.ilike.${pattern}`),
     ]);
+
+    // Buscar casos de los clientes que coincidieron (para búsqueda por nombre de cliente)
+    const matchedClientIds = (clientMatchRes.data ?? []).map((c: { id: string }) => c.id);
+    let casesByClientRes: { data: Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }> | null } = { data: null };
+    if (matchedClientIds.length > 0) {
+      casesByClientRes = await supabase
+        .from("cases")
+        .select("id, case_code, description, clients!inner(name)")
+        .in("client_id", matchedClientIds)
+        .limit(5) as typeof casesByClientRes;
+    }
 
     const items: SearchResult[] = [];
 
@@ -58,29 +77,31 @@ export function GlobalSearch() {
           type: "client",
           title: c.name,
           subtitle: [c.client_number, c.ruc].filter(Boolean).join(" · "),
-          href: `/clientes/${c.id}`,
+          href: `/abogada/clientes/${c.id}`,
         });
       }
     }
 
-    if (casesRes.data) {
-      for (const cs of casesRes.data as Array<{
-        id: string;
-        case_code: string;
-        description: string | null;
-        clients: { name: string } | { name: string }[];
-      }>) {
-        const clientName = Array.isArray(cs.clients)
-          ? cs.clients[0]?.name
-          : cs.clients?.name;
-        items.push({
-          id: cs.id,
-          type: "case",
-          title: cs.case_code,
-          subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
-          href: `/casos/${cs.id}`,
-        });
-      }
+    // Combinar casos de búsqueda directa + casos por cliente, sin duplicados
+    const seenCaseIds = new Set<string>();
+    const allCases = [
+      ...((casesRes.data ?? []) as Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }>),
+      ...((casesByClientRes.data ?? []) as Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }>),
+    ];
+
+    for (const cs of allCases) {
+      if (seenCaseIds.has(cs.id)) continue;
+      seenCaseIds.add(cs.id);
+      const clientName = Array.isArray(cs.clients)
+        ? cs.clients[0]?.name
+        : cs.clients?.name;
+      items.push({
+        id: cs.id,
+        type: "case",
+        title: cs.case_code,
+        subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
+        href: `/abogada/casos/${cs.id}`,
+      });
     }
 
     setResults(items);

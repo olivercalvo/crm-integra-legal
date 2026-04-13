@@ -1,5 +1,21 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.8.0] — 2026-04-13
+
+### Feature — Email Diario Automático para Abogadas
+- **Cron diario** a las 9:00 AM Panam (UTC-5), lunes a sbado. Domingos no se enva.
+- **Template con branding Integra Legal**: header azul marino con "DESPACHO JURDICO  INTEGRA LEGAL / Panam", lnea dorada decorativa, saludo "Buenos das, Licda. [Nombre]", fecha en espaol con da de la semana.
+- **Seccin 1: Tus Pendientes** tabla con Caso | Cliente | Tarea | Vence. Casos son links clickeables al CRM. Badges: rojo "Vencido" y amarillo "Vence hoy".
+- **Seccin 2: Pendientes Asignados por Otros** tabla con Caso | Cliente | Tarea | Asignado por | Vence. Mismos badges y links.
+- **Seccin 3: Seguimientos Recientes** ltimos 15 seguimientos (tareas + comentarios) de toda la oficina con Fecha | Caso | Cliente | Descripcin | Registrado por.
+- **Footer** azul marino: "INTEGRA LEGAL  Gestin Legal Integral", aviso de mensaje automtico.
+- **Botn "Ver en el CRM"** al final de cada seccin.
+- **Modo test** con `?test=true` enva solo a oliver@clienteenelcentro.com.
+- **Proteccin** con CRON_SECRET en header Authorization.
+- **Queries**: usa tabla `tasks` con joins a `cases` y `clients` (no personal_todos).
+- **vercel.json** configurado: `0 14 * * 1-6`.
+- **Archivos**: `/src/lib/email/resend.ts`, `/src/lib/email/daily-summary-template.ts`, `/src/app/api/cron/daily-summary/route.ts`, `vercel.json`, `/sql/pending/ENVIRONMENT_VARIABLES.md`.
+
 ## [1.7.2] — 2026-04-12
 
 ### Bugfix — Dashboard: conteos de Mis Pendientes no coincidían con página de Pendientes

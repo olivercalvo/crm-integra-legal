@@ -75,6 +75,11 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Cron routes — authenticated via CRON_SECRET header, not user session
+  if (pathname.startsWith("/api/cron/")) {
+    return response;
+  }
+
   // API routes — auth checked inside each handler, skip role-based routing
   if (pathname.startsWith("/api/")) {
     if (!user) {

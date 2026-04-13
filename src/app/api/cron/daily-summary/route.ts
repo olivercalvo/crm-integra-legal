@@ -209,70 +209,75 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if today is Sunday in Panama timezone — no email on Sundays
-  const now = new Date();
-  const dayOfWeek = panamaDayOfWeek(now);
-  if (dayOfWeek === 0) {
-    return NextResponse.json({ ok: true, message: "Domingo, no se envía" });
-  }
-
-  const url = new URL(req.url);
-  const isTest = url.searchParams.get("test") === "true";
-
-  const db = createAdminClient();
-  const resend = getResend();
-
-  const results: Array<{ email: string; status: "sent" | "error"; error?: string }> = [];
-  const dateLabel = formatDateLabelPanama(now);
-  const dateSubject = formatDateSubject(now);
-
-  // Fetch abogadas for the tenant
-  const { data: abogadas } = await db
-    .from("users")
-    .select("id, full_name, email")
-    .eq("tenant_id", TENANT_ID)
-    .eq("role", "abogada")
-    .eq("active", true);
-
-  if (!abogadas || abogadas.length === 0) {
-    return NextResponse.json({ ok: true, message: "No active abogadas found" });
-  }
-
-  // Fetch recent activity once (shared across all recipients)
-  const recentActivity = await fetchRecentActivity(db, TENANT_ID);
-
-  for (const abogada of abogadas) {
-    const { myPending, assignedByOthers } = await buildSummaryForUser({
-      db,
-      tenantId: TENANT_ID,
-      userId: abogada.id as string,
-    });
-
-    const html = renderDailySummaryEmail({
-      recipientName: (abogada.full_name as string) ?? "Abogada",
-      dateLabel,
-      myPending,
-      assignedByOthers,
-      recentActivity,
-      appBaseUrl: APP_BASE_URL,
-    });
-
-    const to = isTest ? TEST_RECIPIENT : (abogada.email as string);
-    const subject = `Seguimientos y Pendientes - ${dateSubject}${isTest ? ` (TEST: ${abogada.full_name})` : ""}`;
-
-    try {
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to,
-        subject,
-        html,
-      });
-      results.push({ email: to, status: "sent" });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      results.push({ email: to, status: "error", error: message });
+  try {
+    // Check if today is Sunday in Panama timezone — no email on Sundays
+    const now = new Date();
+    const dayOfWeek = panamaDayOfWeek(now);
+    if (dayOfWeek === 0) {
+      return NextResponse.json({ ok: true, message: "Domingo, no se envía" });
     }
-  }
 
-  return NextResponse.json({ ok: true, test: isTest, results });
+    const url = new URL(req.url);
+    const isTest = url.searchParams.get("test") === "true";
+
+    const db = createAdminClient();
+    const resend = getResend();
+
+    const results: Array<{ email: string; status: "sent" | "error"; error?: string }> = [];
+    const dateLabel = formatDateLabelPanama(now);
+    const dateSubject = formatDateSubject(now);
+
+    // Fetch abogadas for the tenant
+    const { data: abogadas } = await db
+      .from("users")
+      .select("id, full_name, email")
+      .eq("tenant_id", TENANT_ID)
+      .eq("role", "abogada")
+      .eq("active", true);
+
+    if (!abogadas || abogadas.length === 0) {
+      return NextResponse.json({ ok: true, message: "No active abogadas found" });
+    }
+
+    // Fetch recent activity once (shared across all recipients)
+    const recentActivity = await fetchRecentActivity(db, TENANT_ID);
+
+    for (const abogada of abogadas) {
+      const { myPending, assignedByOthers } = await buildSummaryForUser({
+        db,
+        tenantId: TENANT_ID,
+        userId: abogada.id as string,
+      });
+
+      const html = renderDailySummaryEmail({
+        recipientName: (abogada.full_name as string) ?? "Abogada",
+        dateLabel,
+        myPending,
+        assignedByOthers,
+        recentActivity,
+        appBaseUrl: APP_BASE_URL,
+      });
+
+      const to = isTest ? TEST_RECIPIENT : (abogada.email as string);
+      const subject = `Seguimientos y Pendientes - ${dateSubject}${isTest ? ` (TEST: ${abogada.full_name})` : ""}`;
+
+      try {
+        await resend.emails.send({
+          from: EMAIL_FROM,
+          to,
+          subject,
+          html,
+        });
+        results.push({ email: to, status: "sent" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        results.push({ email: to, status: "error", error: message });
+      }
+    }
+
+    return NextResponse.json({ ok: true, test: isTest, results });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: "Internal error", detail: message }, { status: 500 });
+  }
 }

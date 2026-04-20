@@ -8,7 +8,7 @@ interface PageProps {
 }
 
 export default async function EditarExpedientePage({ params }: PageProps) {
-  const { db, tenantId } = await getAuthenticatedContext();
+  const { db, tenantId, userRole } = await getAuthenticatedContext();
 
   const [caseRes, clientsRes, classificationsRes, institutionsRes, teamRes, statusesRes] =
     await Promise.all([
@@ -99,6 +99,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
             assistant_id: caseData.assistant_id,
           }}
           mode="edit"
+          userRole={userRole as "admin" | "abogada" | "asistente"}
         />
       </div>
     </div>

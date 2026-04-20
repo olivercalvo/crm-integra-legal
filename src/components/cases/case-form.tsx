@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Save, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InstitutionSelect, type InstitutionUserRole } from "@/components/cases/institution-select";
 
 interface SelectOption {
   id: string;
@@ -54,6 +55,7 @@ interface CaseFormProps {
   };
   mode: "create" | "edit";
   preSelectedClientId?: string;
+  userRole: InstitutionUserRole;
 }
 
 const TOTAL_STEPS = 4;
@@ -67,6 +69,7 @@ export function CaseForm({
   initialData,
   mode,
   preSelectedClientId,
+  userRole,
 }: CaseFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -458,47 +461,16 @@ export function CaseForm({
           {/* Institution */}
           <div className="space-y-1.5">
             <Label htmlFor="institution">Institución</Label>
-            {!showNewInstitution ? (
-              <select
-                id="institution"
-                value={institutionId}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") {
-                    setShowNewInstitution(true);
-                    setInstitutionId("");
-                  } else {
-                    setInstitutionId(e.target.value);
-                  }
-                }}
-                className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Sin institución</option>
-                {institutions.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
-                <option value="__new__">+ Agregar nueva institución</option>
-              </select>
-            ) : (
-              <div className="flex gap-2">
-                <Input
-                  id="new-institution"
-                  placeholder="Nombre de nueva institución..."
-                  value={newInstitutionName}
-                  onChange={(e) => setNewInstitutionName(e.target.value)}
-                  className="min-h-[48px]"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => { setShowNewInstitution(false); setNewInstitutionName(""); }}
-                  className="shrink-0 rounded-md px-3 text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            <InstitutionSelect
+              institutions={institutions}
+              value={institutionId}
+              onChange={setInstitutionId}
+              showNewInstitution={showNewInstitution}
+              onShowNewInstitutionChange={setShowNewInstitution}
+              newInstitutionName={newInstitutionName}
+              onNewInstitutionNameChange={setNewInstitutionName}
+              userRole={userRole}
+            />
           </div>
 
           {/* Abogada Responsable */}

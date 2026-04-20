@@ -320,6 +320,7 @@ export default async function ExpedienteDetailPage({
             team={allTeam}
             statuses={allStatuses}
             users={allUsers}
+            userRole={userRole as "admin" | "abogada" | "asistente"}
           />
 
           <div className="grid gap-5 lg:grid-cols-2">

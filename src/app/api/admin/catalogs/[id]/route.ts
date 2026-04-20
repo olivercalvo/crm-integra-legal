@@ -23,6 +23,17 @@ const REFERENCE_MAP: Partial<Record<AllowedTable, { table: string; column: strin
   cat_team: [],
 };
 
+// Abogada can also manage these catalogs (admin can manage everything).
+// The institutions catalog is editable by abogadas because they create/correct
+// entries inline from the case form.
+const ABOGADA_EDITABLE_TABLES: AllowedTable[] = ["cat_institutions"];
+
+function canManageCatalog(role: string, table: AllowedTable): boolean {
+  if (role === "admin") return true;
+  if (role === "abogada" && ABOGADA_EDITABLE_TABLES.includes(table)) return true;
+  return false;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -47,10 +58,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const table = searchParams.get("table");
 
@@ -59,6 +66,10 @@ export async function PATCH(
         { error: `Tabla inválida. Use: ${ALLOWED_TABLES.join(", ")}` },
         { status: 400 }
       );
+    }
+
+    if (!canManageCatalog(profile.role, table)) {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
     const itemId = params.id;
@@ -79,7 +90,31 @@ export async function PATCH(
 
     const updates: Record<string, unknown> = {};
 
-    if (body.name !== undefined) updates.name = body.name.trim();
+    if (body.name !== undefined) {
+      const trimmedName = String(body.name).trim();
+      if (!trimmedName) {
+        return NextResponse.json(
+          { error: "El nombre no puede estar vacío" },
+          { status: 400 }
+        );
+      }
+      // Check for duplicate name within the same tenant (case insensitive).
+      // Allow keeping the same name (no-op rename).
+      const { data: dup } = await admin
+        .from(table)
+        .select("id")
+        .eq("tenant_id", profile.tenant_id)
+        .ilike("name", trimmedName)
+        .neq("id", itemId)
+        .limit(1);
+      if (dup && dup.length > 0) {
+        return NextResponse.json(
+          { error: "Ya existe una institución con ese nombre" },
+          { status: 409 }
+        );
+      }
+      updates.name = trimmedName;
+    }
     if (body.active !== undefined) updates.active = body.active;
 
     if (table === "cat_classifications") {
@@ -153,10 +188,6 @@ export async function DELETE(
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-    }
-
     const { searchParams } = new URL(request.url);
     const table = searchParams.get("table");
 
@@ -165,6 +196,10 @@ export async function DELETE(
         { error: `Tabla inválida. Use: ${ALLOWED_TABLES.join(", ")}` },
         { status: 400 }
       );
+    }
+
+    if (!canManageCatalog(profile.role, table)) {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
     const itemId = params.id;

@@ -13,6 +13,7 @@ export const DEFAULT_CLASSIFICATION_COLORS: Record<string, string> = {
   PENAL: "#B71C1C",
   CIVIL: "#6A1B9A",
   ADMINISTRATIVO: "#455A64",
+  EXTRAJUDICIAL: "#00695C",
 };
 
 /** Get the color for a classification, falling back to defaults */

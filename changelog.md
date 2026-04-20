@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.9.2] — 2026-04-20
+
+### Feature — Nueva clasificación EXTRAJUDICIAL (prefijo EXT, color #00695C)
+- **SQL pendiente** en `/sql/pending/add_extrajudicial_classification.sql`: INSERT con verificación previa, idempotente (NOT EXISTS) y rollback comentado. Tenant `a0000000-0000-0000-0000-000000000001`. **No ejecutado** — Oliver lo corre manualmente en Supabase SQL Editor.
+- **Fallback de color** agregado en `/src/lib/utils/classification-colors.ts` (`EXTRAJUDICIAL: "#00695C"`) para que el badge se renderice con el color correcto incluso en entornos donde la migración aún no se haya ejecutado.
+- **Texto del badge**: `getClassificationTextColor` ya devuelve `#FFFFFF` para todos los colores excepto REGULATORIO — EXT obtiene texto blanco con contraste WCAG AA sobre #00695C automáticamente.
+- **Auto-numeración**: el endpoint `GET /api/cases?classification_id=` lee el `prefix` de `cat_classifications` y calcula el siguiente correlativo escaneando casos existentes con ese prefijo. EXT-001, EXT-002, ... funcionarán automáticamente sin más cambios.
+- **Sin cambios de código en formularios/listados/dashboard/print card**: el dropdown del wizard, el editor inline y los badges leen `cat_classifications` desde BD; aparecerán solos al insertar la fila.
+- **Archivos**: `/sql/pending/add_extrajudicial_classification.sql` (nuevo), `/src/lib/utils/classification-colors.ts`.
+
 ## [1.9.1] — 2026-04-20
 
 ### Fix — Migrar el editor inline (vista de detalle del caso) al nuevo InstitutionSelect

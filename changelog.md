@@ -1,5 +1,25 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.9.1] — 2026-04-20
+
+### Fix — Migrar el editor inline (vista de detalle del caso) al nuevo InstitutionSelect
+- En la implementación inicial del CRUD de instituciones se migró sólo el wizard `case-form.tsx`. El editor inline `inline-case-editor.tsx` (botón "Editar Información" en `/abogada/casos/[id]`) seguía usando un `<select>` HTML nativo, donde no se pueden renderizar íconos por opción — por eso los íconos de editar/eliminar no aparecían cuando el usuario editaba desde la vista de detalle.
+- Reemplazado el `<select>` nativo en `inline-case-editor.tsx` por `<InstitutionSelect>`. Plumbed `userRole` desde la página de detalle (`abogada/casos/[id]/page.tsx`).
+- **Archivos**: `/src/components/cases/inline-case-editor.tsx`, `/src/app/(dashboard)/abogada/casos/[id]/page.tsx`.
+
+## [1.9.0] — 2026-04-20
+
+### Feature — CRUD completo de instituciones desde el dropdown de casos
+- Reemplazado el `<select>` nativo de "Institución" en el formulario de casos por un dropdown personalizado (`InstitutionSelect`) que permite editar y eliminar instituciones sin salir del contexto.
+- **Edición inline**: ícono lápiz por fila → fila se vuelve input editable con ✓ guardar / ✗ cancelar (Enter/Esc también funcionan). Validación: nombre no vacío, no duplicado (case insensitive) en el mismo tenant. Toast "Institución actualizada".
+- **Eliminación con pre-check de uso**: ícono basurero → llama a nuevo endpoint `GET /api/admin/catalogs/[id]/usage`. Si la institución no está en uso, modal "Eliminar institución" con botones Cancelar/Eliminar. Si está asignada a casos, modal informativo "No se puede eliminar" con conteo de casos y único botón "Entendido".
+- **Permisos**: `admin` y `abogada` ven y usan los íconos. `asistente` no los ve (no se renderizan).
+- **UX mobile**: íconos siempre visibles en móvil; en desktop aparecen solo en hover de la fila. Área clickeable de 32px.
+- **Backend**: actualizado `PATCH/DELETE /api/admin/catalogs/[id]` para permitir rol `abogada` exclusivamente sobre `cat_institutions`. Validación de nombre duplicado movida al backend (case insensitive, mismo tenant). Soft-delete reusa el chequeo de referencias existente.
+- **Sin cambios de BD**: las RLS y schema actuales soportan UPDATE/DELETE por tenant. El soft-delete (`active=false`) reutiliza la convención del proyecto.
+- El flujo "+ Agregar nueva institución" se mantiene idéntico (sigue usando `new_institution_name` en `/api/cases`).
+- **Archivos**: `/src/components/cases/institution-select.tsx` (nuevo), `/src/components/cases/case-form.tsx`, `/src/app/api/admin/catalogs/[id]/route.ts`, `/src/app/api/admin/catalogs/[id]/usage/route.ts` (nuevo), `/src/app/(dashboard)/abogada/casos/[id]/editar/page.tsx`, `/src/app/(dashboard)/abogada/casos/nuevo/page.tsx`.
+
 ## [1.8.0] — 2026-04-13
 
 ### Feature — Email Diario Automático para Abogadas

@@ -6,6 +6,7 @@ import { Pencil, Save, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InstitutionSelect, type InstitutionUserRole } from "@/components/cases/institution-select";
 
 interface SelectOption {
   id: string;
@@ -43,6 +44,7 @@ interface InlineCaseInfoEditorProps {
   team: SelectOption[];
   statuses: SelectOption[];
   users?: UserOption[];
+  userRole: InstitutionUserRole;
 }
 
 export function InlineCaseInfoEditor({
@@ -52,6 +54,7 @@ export function InlineCaseInfoEditor({
   institutions,
   team,
   users = [],
+  userRole,
 }: InlineCaseInfoEditorProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -229,46 +232,16 @@ export function InlineCaseInfoEditor({
         </div>
         <div className="space-y-1.5">
           <Label>Institución</Label>
-          {!showNewInstitution ? (
-            <div className="space-y-1">
-              <select
-                value={institutionId}
-                onChange={(e) => {
-                  if (e.target.value === "__new__") {
-                    setShowNewInstitution(true);
-                    setInstitutionId("");
-                  } else {
-                    setInstitutionId(e.target.value);
-                  }
-                }}
-                className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">Sin institución</option>
-                {institutions.map((i) => (
-                  <option key={i.id} value={i.id}>{i.name}</option>
-                ))}
-                <option value="__new__">+ Agregar nueva institución</option>
-              </select>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nombre de nueva institución..."
-                value={newInstitutionName}
-                onChange={(e) => setNewInstitutionName(e.target.value)}
-                className="min-h-[48px]"
-                autoFocus
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => { setShowNewInstitution(false); setNewInstitutionName(""); }}
-                className="min-h-[48px] px-3 text-gray-500 shrink-0"
-              >
-                <X size={16} />
-              </Button>
-            </div>
-          )}
+          <InstitutionSelect
+            institutions={institutions}
+            value={institutionId}
+            onChange={setInstitutionId}
+            showNewInstitution={showNewInstitution}
+            onShowNewInstitutionChange={setShowNewInstitution}
+            newInstitutionName={newInstitutionName}
+            onNewInstitutionNameChange={setNewInstitutionName}
+            userRole={userRole}
+          />
         </div>
         <div className="space-y-1.5">
           <Label>Abogada Responsable</Label>

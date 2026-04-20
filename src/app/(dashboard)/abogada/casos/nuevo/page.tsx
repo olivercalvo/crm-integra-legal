@@ -7,7 +7,7 @@ interface PageProps {
 }
 
 export default async function NuevoExpedientePage({ searchParams }: PageProps) {
-  const { db, tenantId } = await getAuthenticatedContext();
+  const { db, tenantId, userRole } = await getAuthenticatedContext();
 
   const [clientsRes, classificationsRes, institutionsRes, teamRes, statusesRes] =
     await Promise.all([
@@ -68,6 +68,7 @@ export default async function NuevoExpedientePage({ searchParams }: PageProps) {
           statuses={statusesRes.data ?? []}
           mode="create"
           preSelectedClientId={searchParams.client_id}
+          userRole={userRole as "admin" | "abogada" | "asistente"}
         />
       </div>
     </div>

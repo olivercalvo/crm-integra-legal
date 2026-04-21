@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InstitutionSelect, type InstitutionUserRole } from "@/components/cases/institution-select";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { matchesSearchQuery } from "@/lib/utils/search";
 
 interface SelectOption {
   id: string;
@@ -187,14 +188,10 @@ export function CaseForm({
     }
   }, [mode, classificationId, fetchSuggestedCode]);
 
-  // Filtered client list for searchable select
-  const filteredClients = clients.filter((c) => {
-    const q = clientSearch.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.client_number.toLowerCase().includes(q)
-    );
-  });
+  // Filtered client list for searchable select — búsqueda universal
+  const filteredClients = clients.filter((c) =>
+    matchesSearchQuery(clientSearch, c.name, c.client_number)
+  );
 
   const handleClientSelect = (client: ClientOption) => {
     setClientId(client.id);

@@ -8,6 +8,11 @@ import { PagePagination } from "@/components/ui/page-pagination";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { Plus, User, FolderOpen } from "lucide-react";
 import { DeleteSuccessToast } from "@/components/ui/delete-success-toast";
+import { EmptySearchResult } from "@/components/ui/empty-search-result";
+import {
+  fallbackClientSearchIds,
+  tryUniversalSearchIds,
+} from "@/lib/utils/search-server";
 import type { Client } from "@/types/database";
 
 const PAGE_SIZE = 10;
@@ -43,9 +48,13 @@ export default async function ClientesPage({ searchParams }: PageProps) {
     .range(from, to);
 
   if (search) {
-    query = query.or(
-      `name.ilike.%${search}%,ruc.ilike.%${search}%,client_number.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`
-    );
+    const rpcIds = await tryUniversalSearchIds(db, "search_clients_ids", tenantId, search);
+    const matchedIds = rpcIds ?? (await fallbackClientSearchIds(db, tenantId, search));
+    if (matchedIds.length === 0) {
+      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+    } else {
+      query = query.in("id", matchedIds);
+    }
   }
 
   if (searchParams.responsible) {
@@ -130,17 +139,11 @@ export default async function ClientesPage({ searchParams }: PageProps) {
 
       {/* Empty state */}
       {list.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16 text-center">
-          <User size={40} className="mb-3 text-gray-300" />
-          <p className="font-medium text-gray-500">
-            {search ? "No se encontraron clientes" : "Aún no hay clientes"}
-          </p>
-          <p className="mt-1 text-sm text-gray-400">
-            {search
-              ? "Intenta con otro término de búsqueda"
-              : "Crea el primero haciendo clic en «Nuevo Cliente»"}
-          </p>
-        </div>
+        <EmptySearchResult
+          query={search}
+          emptyMessage="Aún no hay clientes. Crea el primero haciendo clic en «Nuevo Cliente»."
+          icon={<User size={40} className="mb-3 text-gray-300" />}
+        />
       )}
 
       {/* Mobile: card list */}

@@ -17,6 +17,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils/format-date";
+import { matchesSearchQuery } from "@/lib/utils/search";
+import { EmptySearchResult } from "@/components/ui/empty-search-result";
 
 function isOverdue(deadline: string | null, status: string) {
   if (!deadline || status === "cumplida") return false;
@@ -100,20 +102,34 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
     if (entry.type === "comment") group.commentCount++;
   }
 
-  // Filter by search
-  const q = search.toLowerCase();
+  // Filter by search — universal (case + accent insensitive, multi-field)
   const filteredCases = Array.from(caseMap.entries())
     .filter(([, group]) => {
-      if (!q) return true;
-      return (
-        group.code.toLowerCase().includes(q) ||
-        group.client.toLowerCase().includes(q) ||
-        group.entries.some((e) =>
-          e.type === "task"
-            ? e.data.description.toLowerCase().includes(q)
-            : e.data.text.toLowerCase().includes(q)
-        )
-      );
+      if (!search.trim()) return true;
+      // Match el grupo por código/cliente, o cualquier entrada (descripción
+      // de tarea, texto de comentario, asignada, deadline, follow_up_date).
+      if (matchesSearchQuery(search, group.code, group.client)) return true;
+      return group.entries.some((e) => {
+        if (e.type === "task") {
+          return matchesSearchQuery(
+            search,
+            e.data.description,
+            e.data.assignedTo,
+            e.data.status,
+            e.data.deadline,
+            e.data.caseCode,
+            e.data.clientName
+          );
+        }
+        return matchesSearchQuery(
+          search,
+          e.data.text,
+          e.data.userName,
+          e.data.follow_up_date,
+          e.data.caseCode,
+          e.data.clientName
+        );
+      });
     })
     .sort(([, a], [, b]) => {
       if (sortBy === "code") return a.code.localeCompare(b.code);
@@ -372,12 +388,11 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-          <ListTodo size={40} className="mb-3 text-gray-300" />
-          <p className="font-medium text-gray-500">
-            {search ? `Sin resultados para "${search}"` : "No hay seguimiento registrado"}
-          </p>
-        </div>
+        <EmptySearchResult
+          query={search}
+          emptyMessage="No hay seguimiento registrado."
+          icon={<ListTodo size={40} className="mb-3 text-gray-300" />}
+        />
       )}
     </div>
   );

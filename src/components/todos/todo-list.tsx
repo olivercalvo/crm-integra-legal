@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils/format-date";
+import { matchesSearchQuery } from "@/lib/utils/search";
 
 interface Todo {
   id: string;
@@ -88,10 +89,15 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
     .filter((t) => {
       if (statusFilter === "pendiente" && t.status !== "pendiente") return false;
       if (statusFilter === "cumplida" && t.status !== "cumplida") return false;
-      if (searchTodo) {
-        const q = searchTodo.toLowerCase();
-        return t.description.toLowerCase().includes(q) ||
-          (t.assignee_name?.toLowerCase().includes(q) ?? false);
+      if (searchTodo.trim()) {
+        return matchesSearchQuery(
+          searchTodo,
+          t.description,
+          t.assignee_name,
+          t.creator_name,
+          t.status,
+          t.deadline
+        );
       }
       return true;
     })
@@ -575,8 +581,20 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
       {pendientes.length === 0 && cumplidas.length === 0 && (
         <div className="py-12 text-center text-gray-400">
           <CheckCircle2 size={48} className="mx-auto mb-3 opacity-40" />
-          <p className="text-base font-medium text-gray-500">Sin pendientes</p>
-          <p className="text-sm">Crea tu primer pendiente con el botón de arriba</p>
+          {searchTodo.trim() ? (
+            <>
+              <p className="text-base font-medium text-gray-500">
+                No se encontraron resultados para:{" "}
+                <span className="text-integra-navy">&ldquo;{searchTodo.trim()}&rdquo;</span>
+              </p>
+              <p className="text-sm">Intenta con otro término o quita los filtros.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-base font-medium text-gray-500">Sin pendientes</p>
+              <p className="text-sm">Crea tu primer pendiente con el botón de arriba</p>
+            </>
+          )}
         </div>
       )}
 

@@ -1,5 +1,44 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.10.0] — 2026-04-21
+
+### Feature — Búsqueda universal unificada en TODOS los buscadores del CRM
+- **Problema reportado**: buscadores inconsistentes. En `/abogada/casos` buscar "extrajudicial" devolvía 0 resultados aunque existía el caso EXT-001; en otros listados no se podía buscar por cliente, abogada, institución, etc. Cada buscador cubría un subconjunto distinto de campos.
+- **Estándar único** aplicado a los 10 buscadores del sistema:
+  1. **Multi-campo + JOIN**: en casos busca en `case_code`, `description`, `observations`, `physical_location`, `entity`, `procedure_type`, `institution_procedure_number`, `institution_case_number` + relación con cliente (`name`, `client_number`, `ruc`, `email`, `phone`, `type`, `address`, `contact`) + clasificación (`name`, `prefix`) + institución (`name`) + estado (`name`) + abogada/asistente (`full_name`, `email`). En clientes, prospectos, gastos, seguimiento, pendientes, usuarios, catálogos: conjunto de campos equivalente.
+  2. **Case-insensitive**: `EXTRAJUDICIAL`, `extrajudicial`, `Extrajudicial` → mismo resultado.
+  3. **Coincidencia parcial** con wildcards: `extra` encuentra `EXTRAJUDICIAL`.
+  4. **Tolerante a acentos (unaccent)**: `migracion` encuentra `MIGRACIÓN`, `panama` encuentra `Panamá`. Client-side via `String.normalize("NFD")`; server-side requiere ejecutar el SQL pendiente (ver más abajo).
+  5. **Números**: `002` encuentra `CIV-002`, `EXT-002`, `CLI-002`, etc.
+  6. **Mensaje "sin resultados"** uniforme: `No se encontraron resultados para: "X"` en lugar del `No se encontraron casos` / `Sin resultados para "X"` / mensajes distintos por listado.
+- **Arquitectura**:
+  - Helper JS `src/lib/utils/search.ts` con `normalizeSearch`, `matchesSearchQuery`, `escapeLikePattern`, `buildIlikeOrClause` — único punto de verdad para filtrado client-side.
+  - Helper server `src/lib/utils/search-server.ts` con `tryUniversalSearchIds` (invoca RPC) + `fallbackCaseSearchIds`/`fallbackClientSearchIds`/`fallbackProspectSearchIds` que hacen búsqueda SDK con `.or()` ampliado cuando la RPC no está aún aplicada.
+  - Nuevo endpoint `GET /api/search?q=` que el buscador global del header consulta. Resuelve `tenant_id` del usuario autenticado y delega en las RPCs.
+  - Componente reutilizable `src/components/ui/empty-search-result.tsx` para el mensaje "sin resultados" estandarizado.
+- **SQL aplicado** en `/sql/pending/002_enable_unaccent_and_search_rpcs.sql`:
+  - `CREATE EXTENSION IF NOT EXISTS unaccent` (idempotente).
+  - `public.f_unaccent(text)` IMMUTABLE + `public.f_search_contains(h, n)` como predicado case/accent-insensitive.
+  - `public.search_cases_ids(uuid, text)`, `public.search_clients_ids(uuid, text)`, `public.search_prospects_ids(uuid, text)` — RPCs que devuelven `SETOF uuid` con búsqueda multi-campo + JOINs.
+  - `GRANT EXECUTE` a `authenticated` y `service_role`.
+  - **Ejecutado manualmente en Supabase el 2026-04-21**: las RPCs están activas y el código ya las usa (el fallback SDK queda solo como red de seguridad).
+- **Buscadores migrados**:
+  - `/abogada/casos` (server): usa RPC `search_cases_ids` o fallback.
+  - `/abogada/clientes` (server): usa RPC `search_clients_ids` o fallback.
+  - Buscador global del header (cliente → `/api/search`): usa ambas RPCs o fallback.
+  - `/abogada/gastos` (GastosTable, client): `matchesSearchQuery` sobre `caseCode`, `clientName`, `description`, `statusName`, `totalPayments`, `totalExpenses`, `balance`.
+  - `/abogada/seguimiento` (SeguimientoView, client): `matchesSearchQuery` sobre código, cliente, descripción, comentario, asignada, estado, deadline.
+  - `/abogada/pendientes` (TodoList, client): `matchesSearchQuery` sobre `description`, `assignee_name`, `creator_name`, `status`, `deadline`.
+  - `/abogada/prospectos` (ProspectPipeline, client): **nuevo** input de búsqueda (antes no tenía). Filtra sobre `name`, `phone`, `email`, `service_interest`, `notes`, `status`.
+  - `/admin/usuarios` (UserTable, client): `matchesSearchQuery` sobre `full_name`, `email`, `role`, label de rol, activo/inactivo.
+  - Catálogos (ClassificationsManager, InstitutionsManager, StatusesManager en `/admin/configuracion`): `matchesSearchQuery` sobre todas las columnas configuradas + activo/inactivo.
+  - Buscador de cliente en el wizard de casos (`CaseForm`, client): `matchesSearchQuery` sobre `name`, `client_number`.
+- **Debounce**: los buscadores con query server-side (casos, clientes, header) ya tienen 300 ms. Los client-side no lo necesitan porque filtran datos ya cargados.
+- **Placeholders** actualizados para reflejar el alcance ampliado: "Buscar en todo: código, cliente, clasificación, abogada, institución..." (casos), "Buscar en todo: nombre, RUC, número, email, abogada, casos..." (clientes).
+- **Archivos**:
+  - Nuevos: `src/lib/utils/search.ts`, `src/lib/utils/search-server.ts`, `src/components/ui/empty-search-result.tsx`, `src/app/api/search/route.ts`, `sql/pending/002_enable_unaccent_and_search_rpcs.sql`.
+  - Modificados: `src/app/(dashboard)/abogada/casos/page.tsx`, `src/app/(dashboard)/abogada/clientes/page.tsx`, `src/components/layout/global-search.tsx`, `src/components/cases/case-filters.tsx`, `src/components/cases/case-form.tsx`, `src/components/clients/client-filters.tsx`, `src/components/expenses/gastos-table.tsx`, `src/components/seguimiento/seguimiento-view.tsx`, `src/components/admin/user-table.tsx`, `src/components/admin/catalog-manager.tsx`, `src/components/todos/todo-list.tsx`, `src/components/prospects/prospect-pipeline.tsx`.
+
 ## [1.9.3] — 2026-04-21
 
 ### Feature — Recálculo automático del código del expediente al cambiar clasificación

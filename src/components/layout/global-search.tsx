@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X, User, FolderOpen } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 interface SearchResult {
   id: string;
@@ -11,6 +10,20 @@ interface SearchResult {
   title: string;
   subtitle: string;
   href: string;
+}
+
+interface ApiClient {
+  id: string;
+  name: string;
+  ruc: string | null;
+  client_number: string;
+}
+
+interface ApiCase {
+  id: string;
+  case_code: string;
+  description: string | null;
+  clients: { name: string } | { name: string }[] | null;
 }
 
 export function GlobalSearch() {
@@ -25,53 +38,21 @@ export function GlobalSearch() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback(async (term: string) => {
-    if (term.trim().length < 2) {
+    const trimmed = term.trim();
+    if (trimmed.length < 2) {
       setResults([]);
       setOpen(false);
       return;
     }
 
     setLoading(true);
-    const supabase = createClient();
-    const pattern = `%${term.trim()}%`;
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: { clients: ApiClient[]; cases: ApiCase[] } = await res.json();
 
-    // 1. Buscar clientes por nombre, ruc, client_number
-    // 2. Buscar casos por case_code, description
-    // 3. Buscar clientes que coincidan para encontrar sus casos (búsqueda por nombre de cliente en casos)
-    const [clientsRes, casesRes, clientMatchRes] = await Promise.all([
-      supabase
-        .from("clients")
-        .select("id, name, ruc, client_number")
-        .eq("active", true)
-        .or(`name.ilike.${pattern},ruc.ilike.${pattern},client_number.ilike.${pattern}`)
-        .limit(5),
-      supabase
-        .from("cases")
-        .select("id, case_code, description, clients!inner(name)")
-        .or(`case_code.ilike.${pattern},description.ilike.${pattern}`)
-        .limit(5),
-      supabase
-        .from("clients")
-        .select("id")
-        .eq("active", true)
-        .or(`name.ilike.${pattern},client_number.ilike.${pattern}`),
-    ]);
-
-    // Buscar casos de los clientes que coincidieron (para búsqueda por nombre de cliente)
-    const matchedClientIds = (clientMatchRes.data ?? []).map((c: { id: string }) => c.id);
-    let casesByClientRes: { data: Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }> | null } = { data: null };
-    if (matchedClientIds.length > 0) {
-      casesByClientRes = await supabase
-        .from("cases")
-        .select("id, case_code, description, clients!inner(name)")
-        .in("client_id", matchedClientIds)
-        .limit(5) as typeof casesByClientRes;
-    }
-
-    const items: SearchResult[] = [];
-
-    if (clientsRes.data) {
-      for (const c of clientsRes.data) {
+      const items: SearchResult[] = [];
+      for (const c of data.clients ?? []) {
         items.push({
           id: c.id,
           type: "client",
@@ -80,34 +61,31 @@ export function GlobalSearch() {
           href: `/abogada/clientes/${c.id}`,
         });
       }
+      const seenCaseIds = new Set<string>();
+      for (const cs of data.cases ?? []) {
+        if (seenCaseIds.has(cs.id)) continue;
+        seenCaseIds.add(cs.id);
+        const clientName = Array.isArray(cs.clients)
+          ? cs.clients[0]?.name
+          : cs.clients?.name;
+        items.push({
+          id: cs.id,
+          type: "case",
+          title: cs.case_code,
+          subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
+          href: `/abogada/casos/${cs.id}`,
+        });
+      }
+
+      setResults(items);
+      setSelectedIndex(-1);
+      setOpen(true);
+    } catch {
+      setResults([]);
+      setOpen(true);
+    } finally {
+      setLoading(false);
     }
-
-    // Combinar casos de búsqueda directa + casos por cliente, sin duplicados
-    const seenCaseIds = new Set<string>();
-    const allCases = [
-      ...((casesRes.data ?? []) as Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }>),
-      ...((casesByClientRes.data ?? []) as Array<{ id: string; case_code: string; description: string | null; clients: { name: string } | { name: string }[] }>),
-    ];
-
-    for (const cs of allCases) {
-      if (seenCaseIds.has(cs.id)) continue;
-      seenCaseIds.add(cs.id);
-      const clientName = Array.isArray(cs.clients)
-        ? cs.clients[0]?.name
-        : cs.clients?.name;
-      items.push({
-        id: cs.id,
-        type: "case",
-        title: cs.case_code,
-        subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
-        href: `/abogada/casos/${cs.id}`,
-      });
-    }
-
-    setResults(items);
-    setSelectedIndex(-1);
-    setOpen(items.length > 0);
-    setLoading(false);
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,7 +209,7 @@ export function GlobalSearch() {
 
       {!loading && open && results.length === 0 && query.trim().length >= 2 && (
         <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-gray-200 bg-white shadow-lg z-50 px-4 py-3 text-sm text-gray-500">
-          Sin resultados para &ldquo;{query}&rdquo;
+          No se encontraron resultados para: <span className="font-medium text-integra-navy">&ldquo;{query}&rdquo;</span>
         </div>
       )}
     </div>

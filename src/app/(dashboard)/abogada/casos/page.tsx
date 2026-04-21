@@ -8,6 +8,11 @@ import { CaseFilters } from "@/components/cases/case-filters";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import { PagePagination } from "@/components/ui/page-pagination";
 import { DeleteSuccessToast } from "@/components/ui/delete-success-toast";
+import { EmptySearchResult } from "@/components/ui/empty-search-result";
+import {
+  fallbackCaseSearchIds,
+  tryUniversalSearchIds,
+} from "@/lib/utils/search-server";
 
 const PAGE_SIZE = 10;
 
@@ -110,38 +115,11 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
   if (searchParams.institution) query = query.eq("institution_id", searchParams.institution);
 
   if (searchParams.q) {
-    const q = `%${searchParams.q}%`;
-    // Búsqueda OR entre: case_code, description, client name, client_number.
-    // Usamos 3 queries separadas y unimos IDs en JS porque PostgREST .or() con
-    // `client_id.in.(...)` anidado no parsea de forma confiable (los commas
-    // internos confunden al tokenizer del filtro compuesto).
-    const [clientMatchRes, caseFieldMatchRes] = await Promise.all([
-      db
-        .from("clients")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .or(`name.ilike.${q},client_number.ilike.${q}`),
-      db
-        .from("cases")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .or(`case_code.ilike.${q},description.ilike.${q}`),
-    ]);
-
-    const matchedClientIds = (clientMatchRes.data ?? []).map((c: { id: string }) => c.id);
-    const caseIdsByField = (caseFieldMatchRes.data ?? []).map((c: { id: string }) => c.id);
-
-    let caseIdsByClient: string[] = [];
-    if (matchedClientIds.length > 0) {
-      const { data: casesByClient } = await db
-        .from("cases")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .in("client_id", matchedClientIds);
-      caseIdsByClient = (casesByClient ?? []).map((c: { id: string }) => c.id);
-    }
-
-    const allMatchedCaseIds = Array.from(new Set([...caseIdsByField, ...caseIdsByClient]));
+    // Búsqueda universal: RPC (unaccent + multi-campo + multi-JOIN) si está
+    // instalada; fallback SDK si no. Ver sql/pending/002_enable_unaccent_and_search_rpcs.sql.
+    const rpcIds = await tryUniversalSearchIds(db, "search_cases_ids", tenantId, searchParams.q);
+    const allMatchedCaseIds =
+      rpcIds ?? (await fallbackCaseSearchIds(db, tenantId, searchParams.q));
 
     if (allMatchedCaseIds.length === 0) {
       // Forzar cero resultados sin romper la paginación
@@ -309,9 +287,13 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
-                      <FolderOpen size={40} className="mx-auto mb-2 opacity-40" />
-                      <p>No se encontraron casos</p>
+                    <td colSpan={8} className="px-4 py-8">
+                      <EmptySearchResult
+                        query={searchParams.q ?? ""}
+                        emptyMessage="No hay casos registrados."
+                        icon={<FolderOpen size={40} className="mb-3 text-gray-300" />}
+                        className="border-0"
+                      />
                     </td>
                   </tr>
                 )}
@@ -371,10 +353,11 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
             );
           })
         ) : (
-          <div className="py-12 text-center text-gray-400">
-            <FolderOpen size={40} className="mx-auto mb-2 opacity-40" />
-            <p>No se encontraron casos</p>
-          </div>
+          <EmptySearchResult
+            query={searchParams.q ?? ""}
+            emptyMessage="No hay casos registrados."
+            icon={<FolderOpen size={40} className="mb-3 text-gray-300" />}
+          />
         )}
       </div>
 

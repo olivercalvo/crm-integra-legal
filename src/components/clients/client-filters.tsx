@@ -70,7 +70,7 @@ export function ClientFilters({ defaultSearch = "", lawyers }: ClientFiltersProp
           type="text"
           value={value}
           onChange={handleSearchChange}
-          placeholder="Buscar por nombre, RUC o número..."
+          placeholder="Buscar en todo: nombre, RUC, número, email, abogada, casos..."
           className="pl-9 pr-9 min-h-[44px]"
         />
         {value && (

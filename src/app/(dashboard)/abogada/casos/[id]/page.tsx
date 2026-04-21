@@ -297,6 +297,7 @@ export default async function ExpedienteDetailPage({
           {/* Per-tab inline editor */}
           <InlineCaseInfoEditor
             caseId={params.id}
+            caseCode={caseData.case_code}
             caseData={{
               description: caseData.description,
               classification_id: caseData.classification_id,

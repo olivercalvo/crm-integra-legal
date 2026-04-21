@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, PowerOff, Power, ChevronDown, Search, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
+import { matchesSearchQuery } from "@/lib/utils/search";
 import type { UserRole } from "@/types/database";
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -63,9 +64,15 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
   const filtered = useMemo(() => {
     let result = users;
     if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (u) => u.full_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      result = result.filter((u) =>
+        matchesSearchQuery(
+          search,
+          u.full_name,
+          u.email,
+          u.role,
+          ROLE_LABELS[u.role],
+          u.active ? "activo" : "inactivo"
+        )
       );
     }
     if (roleFilter) {
@@ -329,7 +336,9 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No se encontraron usuarios
+                  {search.trim()
+                    ? `No se encontraron resultados para: "${search.trim()}"`
+                    : "No se encontraron usuarios"}
                 </td>
               </tr>
             )}

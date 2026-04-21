@@ -88,7 +88,7 @@ export function CaseFilters({
         />
         <Input
           type="text"
-          placeholder="Buscar por código, descripción o cliente..."
+          placeholder="Buscar en todo: código, cliente, clasificación, abogada, institución..."
           value={searchValue}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="pl-9 min-h-[48px]"

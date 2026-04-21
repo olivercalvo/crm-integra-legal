@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Search, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
+import { matchesSearchQuery } from "@/lib/utils/search";
+import { EmptySearchResult } from "@/components/ui/empty-search-result";
 
 interface GastosRow {
   id: string;
@@ -53,12 +55,17 @@ export function GastosTable({ rows, statuses }: GastosTableProps) {
   const filtered = useMemo(() => {
     let result = rows;
     if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (r) =>
-          r.caseCode.toLowerCase().includes(q) ||
-          r.clientName.toLowerCase().includes(q) ||
-          (r.description?.toLowerCase().includes(q) ?? false)
+      result = result.filter((r) =>
+        matchesSearchQuery(
+          search,
+          r.caseCode,
+          r.clientName,
+          r.description,
+          r.statusName,
+          r.totalPayments,
+          r.totalExpenses,
+          r.balance
+        )
       );
     }
     if (statusFilter) {
@@ -119,6 +126,10 @@ export function GastosTable({ rows, statuses }: GastosTableProps) {
       </div>
 
       <p className="text-xs text-gray-400">{filtered.length} de {rows.length} casos</p>
+
+      {filtered.length === 0 && hasFilters && (
+        <EmptySearchResult query={search} emptyMessage="No hay casos que coincidan con los filtros." />
+      )}
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 sm:hidden">

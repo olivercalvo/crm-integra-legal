@@ -16,6 +16,7 @@ import {
   Power,
   Loader2,
 } from "lucide-react";
+import { matchesSearchQuery } from "@/lib/utils/search";
 
 export interface ColumnConfig {
   key: string;
@@ -80,7 +81,11 @@ export function CatalogManager({
   }, [fetchItems]);
 
   const filtered = items.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
+    matchesSearchQuery(
+      search,
+      ...columns.map((col) => item[col.key]),
+      item.active ? "activo" : "inactivo"
+    )
   );
 
   function startEdit(item: CatalogItem) {
@@ -310,7 +315,11 @@ export function CatalogManager({
             <span className="text-sm">Cargando...</span>
           </div>
         ) : filtered.length === 0 ? (
-          <p className="py-6 text-center text-sm text-gray-500">{emptyMessage}</p>
+          <p className="py-6 text-center text-sm text-gray-500">
+            {search.trim()
+              ? `No se encontraron resultados para: "${search.trim()}"`
+              : emptyMessage}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

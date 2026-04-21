@@ -15,11 +15,14 @@ import {
   X,
   Briefcase,
   ArrowRight,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils/format-date";
+import { matchesSearchQuery } from "@/lib/utils/search";
+import { EmptySearchResult } from "@/components/ui/empty-search-result";
 
 interface Prospect {
   id: string;
@@ -56,6 +59,21 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
   const [commentText, setCommentText] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [search, setSearch] = useState("");
+
+  const filteredProspects = search.trim()
+    ? initialProspects.filter((p) =>
+        matchesSearchQuery(
+          search,
+          p.name,
+          p.phone,
+          p.email,
+          p.service_interest,
+          p.notes,
+          p.status
+        )
+      )
+    : initialProspects;
 
   // Form fields
   const [name, setName] = useState("");
@@ -311,6 +329,27 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
 
   return (
     <div className="space-y-4">
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nombre, contacto, interés, etapa..."
+          className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-9 text-sm placeholder:text-gray-400 focus:border-integra-gold focus:outline-none focus:ring-1 focus:ring-integra-gold"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="Limpiar búsqueda"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
       {/* Actions bar */}
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -405,11 +444,16 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
         </Card>
       )}
 
+      {/* Empty state tras búsqueda */}
+      {search.trim() && filteredProspects.length === 0 && (
+        <EmptySearchResult query={search} emptyMessage="Sin prospectos" />
+      )}
+
       {/* Kanban view */}
       {viewMode === "kanban" ? (
         <div className="flex gap-3 overflow-x-auto pb-4">
           {PIPELINE_STAGES.map((stage) => {
-            const stageProspects = initialProspects.filter((p) => p.status === stage.key);
+            const stageProspects = filteredProspects.filter((p) => p.status === stage.key);
             return (
               <div key={stage.key} className="flex-shrink-0 w-72">
                 <div className={`rounded-t-lg border px-3 py-2 ${stage.headerBg}`}>
@@ -432,15 +476,15 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
       ) : (
         /* List view */
         <div className="space-y-2">
-          {initialProspects.length > 0 ? (
-            initialProspects.map(renderProspectCard)
-          ) : (
+          {filteredProspects.length > 0 ? (
+            filteredProspects.map(renderProspectCard)
+          ) : !search.trim() ? (
             <div className="py-12 text-center text-gray-400">
               <UserCheck size={48} className="mx-auto mb-3 opacity-40" />
               <p className="text-base font-medium text-gray-500">Sin prospectos</p>
               <p className="text-sm">Agrega tu primer prospecto con el botón de arriba</p>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>

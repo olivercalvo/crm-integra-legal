@@ -1,5 +1,22 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.9.3] — 2026-04-21
+
+### Feature — Recálculo automático del código del expediente al cambiar clasificación
+- **Escenario**: hasta ahora, al editar un caso y cambiar su clasificación (ej. CIVIL → EXTRAJUDICIAL), el `case_code` quedaba fosilizado en el prefijo original (ej. CIV-002 aunque el caso ya fuera EXTRAJUDICIAL). Esto rompía las numeraciones por prefijo.
+- **Comportamiento nuevo**: al guardar un cambio de clasificación desde el wizard de edición (`/abogada/casos/[id]/editar`) o desde el editor inline de la vista de detalle, el frontend muestra un modal de confirmación con:
+  - Clasificación anterior → nueva.
+  - Código actual (CIV-002).
+  - Código nuevo calculado (ej. EXT-002), obtenido de `GET /api/cases?classification_id=<nuevo>`.
+  - Botones "Cancelar" (revierte la selección) y "Confirmar cambio" (azul navy).
+- **Reglas**: el nuevo código es el siguiente correlativo libre del nuevo prefijo (no se reutilizan huecos). El código anterior queda como hueco en su secuencia original. Al crear un caso nuevo el comportamiento no cambia; al eliminar tampoco.
+- **Atomicidad**: el handler `PATCH /api/cases/[id]` recalcula el código con hasta 3 reintentos ante colisiones del `UNIQUE INDEX idx_cases_code_tenant`. La query de UPDATE condiciona por `(id, tenant_id, case_code=antiguo)` como doble seguro contra escrituras concurrentes. Si tras 3 intentos sigue habiendo conflicto, responde 409 y el frontend muestra el mensaje.
+- **Auditoría**: el cambio queda en `audit_log` como dos entradas (`field=classification_id` con nombres legibles, y `field=case_code` con códigos viejo/nuevo), sin duplicar las entradas genéricas preexistentes.
+- **Refactor**: extraído `src/lib/utils/case-code.ts` como única fuente de verdad para calcular el siguiente correlativo por prefijo. `GET /api/cases` y `POST /api/cases` migrados al helper.
+- **Nuevo componente UI reutilizable**: `src/components/ui/confirmation-modal.tsx` (versión genérica, sin input de typed-confirmation, usada para confirmaciones simples).
+- **SQL de corrección del caso actual mal grabado** (CIV-002 → EXT-NNN de PRODUCTOS ALIMENTICIOS PASCUAL, S.A.): dejado en `/sql/pending/001_fix_case_code_civ_002_to_ext.sql` con verificación previa, cálculo atómico del siguiente EXT libre, UPDATE condicionado por `tenant_id + case_code='CIV-002' + classification EXT`, verificación post-update, entrada de auditoría y rollback comentado. **SQL ya ejecutado manualmente en Supabase el 2026-04-21**: CIV-002 migrado a EXT-001 con audit log registrado.
+- **Archivos**: `src/lib/utils/case-code.ts` (nuevo), `src/components/ui/confirmation-modal.tsx` (nuevo), `src/app/api/cases/route.ts`, `src/app/api/cases/[id]/route.ts`, `src/components/cases/case-form.tsx`, `src/components/cases/inline-case-editor.tsx`, `src/app/(dashboard)/abogada/casos/[id]/page.tsx`, `sql/pending/001_fix_case_code_civ_002_to_ext.sql` (nuevo).
+
 ## [1.9.2] — 2026-04-20
 
 ### Feature — Nueva clasificación EXTRAJUDICIAL (prefijo EXT, color #00695C)

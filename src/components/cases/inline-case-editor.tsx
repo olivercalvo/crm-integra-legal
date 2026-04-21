@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InstitutionSelect, type InstitutionUserRole } from "@/components/cases/institution-select";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 interface SelectOption {
   id: string;
@@ -21,6 +22,7 @@ interface UserOption {
 
 interface InlineCaseInfoEditorProps {
   caseId: string;
+  caseCode: string;
   caseData: {
     description: string | null;
     classification_id: string | null;
@@ -49,6 +51,7 @@ interface InlineCaseInfoEditorProps {
 
 export function InlineCaseInfoEditor({
   caseId,
+  caseCode,
   caseData,
   classifications,
   institutions,
@@ -60,6 +63,21 @@ export function InlineCaseInfoEditor({
   const [isEditing, setIsEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [classificationChangeModal, setClassificationChangeModal] = useState<{
+    open: boolean;
+    oldCode: string;
+    newCode: string;
+    oldClassificationName: string;
+    newClassificationName: string;
+    loadingPreview: boolean;
+  }>({
+    open: false,
+    oldCode: "",
+    newCode: "",
+    oldClassificationName: "",
+    newClassificationName: "",
+    loadingPreview: false,
+  });
 
   const [description, setDescription] = useState(caseData.description ?? "");
   const [classificationId, setClassificationId] = useState(caseData.classification_id ?? "");
@@ -104,48 +122,95 @@ export function InlineCaseInfoEditor({
     setDeadline(caseData.deadline ?? "");
   };
 
-  const handleSave = () => {
-    startTransition(async () => {
-      try {
-        const payload: Record<string, unknown> = {
-          description: description || null,
-          classification_id: classificationId || null,
-          institution_id: institutionId || null,
-          responsible_id: responsibleId || null,
-          assistant_id: assistantId || null,
-          opened_at: openedAt,
-          physical_location: physicalLocation || null,
-          observations: observations || null,
-          has_digital_file: hasDigitalFile,
-          procedure_type: procedureType || null,
-          new_institution_name: showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
-          institution_procedure_number: instProcNum || null,
-          institution_case_number: instCaseNum || null,
-          case_start_date: caseStartDate || null,
-          procedure_start_date: procedureStartDate || null,
-          deadline: deadline || null,
-        };
+  const buildPayload = (): Record<string, unknown> => ({
+    description: description || null,
+    classification_id: classificationId || null,
+    institution_id: institutionId || null,
+    responsible_id: responsibleId || null,
+    assistant_id: assistantId || null,
+    opened_at: openedAt,
+    physical_location: physicalLocation || null,
+    observations: observations || null,
+    has_digital_file: hasDigitalFile,
+    procedure_type: procedureType || null,
+    new_institution_name:
+      showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
+    institution_procedure_number: instProcNum || null,
+    institution_case_number: instCaseNum || null,
+    case_start_date: caseStartDate || null,
+    procedure_start_date: procedureStartDate || null,
+    deadline: deadline || null,
+  });
 
-        const response = await fetch(`/api/cases/${caseId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+  const submitPayload = async (payload: Record<string, unknown>) => {
+    try {
+      const response = await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-        if (!response.ok) {
-          const json = await response.json().catch(() => ({}));
-          setError(json.error ?? `Error ${response.status}: ${response.statusText}`);
-          return;
-        }
-
-        setIsEditing(false);
-        setError(null);
-        router.refresh();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Error desconocido";
-        setError(`Error de conexión: ${message}. Verifica tu conexión a internet.`);
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        setError(json.error ?? `Error ${response.status}: ${response.statusText}`);
+        return;
       }
+
+      setIsEditing(false);
+      setError(null);
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setError(`Error de conexión: ${message}. Verifica tu conexión a internet.`);
+    }
+  };
+
+  const handleSave = async () => {
+    const originalClassificationId = caseData.classification_id ?? "";
+
+    if (classificationId && classificationId !== originalClassificationId) {
+      setError(null);
+      setClassificationChangeModal((m) => ({ ...m, open: true, loadingPreview: true }));
+      try {
+        const res = await fetch(`/api/cases?classification_id=${classificationId}`);
+        const data = await res.json();
+        const previewCode: string = data.suggested ?? "";
+        const oldName =
+          classifications.find((c) => c.id === originalClassificationId)?.name ?? "—";
+        const newName =
+          classifications.find((c) => c.id === classificationId)?.name ?? "—";
+        setClassificationChangeModal({
+          open: true,
+          oldCode: caseCode,
+          newCode: previewCode,
+          oldClassificationName: oldName,
+          newClassificationName: newName,
+          loadingPreview: false,
+        });
+      } catch {
+        setClassificationChangeModal((m) => ({ ...m, open: false, loadingPreview: false }));
+        setError("No se pudo calcular el nuevo código. Intenta de nuevo.");
+      }
+      return;
+    }
+
+    const payload = buildPayload();
+    startTransition(async () => {
+      await submitPayload(payload);
     });
+  };
+
+  const handleConfirmClassificationChange = () => {
+    setClassificationChangeModal((m) => ({ ...m, open: false }));
+    const payload = buildPayload();
+    startTransition(async () => {
+      await submitPayload(payload);
+    });
+  };
+
+  const handleCancelClassificationChange = () => {
+    setClassificationId(caseData.classification_id ?? "");
+    setClassificationChangeModal((m) => ({ ...m, open: false }));
   };
 
   if (!isEditing) {
@@ -311,6 +376,52 @@ export function InlineCaseInfoEditor({
           <Label className="cursor-pointer">Expediente digital disponible</Label>
         </div>
       </div>
+
+      <ConfirmationModal
+        open={classificationChangeModal.open}
+        onClose={handleCancelClassificationChange}
+        onConfirm={handleConfirmClassificationChange}
+        loading={isPending || classificationChangeModal.loadingPreview}
+        title="Confirmar cambio de clasificación"
+        confirmButtonText="Confirmar cambio"
+        cancelButtonText="Cancelar"
+      >
+        <div className="space-y-3">
+          <p>
+            Estás cambiando la clasificación de este caso. El código del expediente se
+            recalculará para seguir la numeración de la nueva clasificación.
+          </p>
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Clasificación:</span>
+              <span className="font-medium">
+                {classificationChangeModal.oldClassificationName} →{" "}
+                <span className="text-integra-navy">
+                  {classificationChangeModal.newClassificationName}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Código actual:</span>
+              <span className="font-mono font-semibold">
+                {classificationChangeModal.oldCode || "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Código nuevo:</span>
+              <span className="font-mono font-bold text-integra-navy">
+                {classificationChangeModal.loadingPreview
+                  ? "Calculando..."
+                  : classificationChangeModal.newCode || "—"}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            El código anterior quedará como hueco en su secuencia (no se reutilizará al
+            crear casos nuevos).
+          </p>
+        </div>
+      </ConfirmationModal>
     </div>
   );
 }

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  buildCaseCode,
+  getClassificationPrefix,
+  getMaxCaseNumberForPrefix,
+} from "@/lib/utils/case-code";
+
+const MAX_CODE_RECALC_RETRIES = 3;
 
 export async function PATCH(
   request: NextRequest,
@@ -150,17 +157,127 @@ export async function PATCH(
     if (deadline !== undefined) updatePayload.deadline = deadline || null;
     if (assistant_id !== undefined) updatePayload.assistant_id = assistant_id || null;
 
-    const { data: updated, error } = await admin
+    // Recalculate case_code when classification changes to a different non-null value.
+    // Retry up to MAX_CODE_RECALC_RETRIES times on unique-index collision (PG 23505).
+    const newClassificationId = classification_id ? classification_id : null;
+    const shouldRecalcCode =
+      classification_id !== undefined &&
+      newClassificationId !== null &&
+      newClassificationId !== existingCase.classification_id;
+
+    let oldCaseCode: string | null = null;
+    let newCaseCode: string | null = null;
+
+    if (shouldRecalcCode) {
+      const newPrefix = await getClassificationPrefix(admin, newClassificationId);
+      oldCaseCode = existingCase.case_code as string;
+
+      let attempt = 0;
+      let currentMax = await getMaxCaseNumberForPrefix(admin, profile.tenant_id, newPrefix);
+
+      while (attempt < MAX_CODE_RECALC_RETRIES) {
+        const candidateNumber = currentMax + 1 + attempt;
+        const candidateCode = buildCaseCode(newPrefix, candidateNumber);
+
+        // Pre-check: fail fast if already taken in this tenant
+        const { data: clash } = await admin
+          .from("cases")
+          .select("id")
+          .eq("tenant_id", profile.tenant_id)
+          .eq("case_code", candidateCode)
+          .maybeSingle();
+
+        if (clash) {
+          attempt += 1;
+          continue;
+        }
+
+        const { error: updErr } = await admin
+          .from("cases")
+          .update({ ...updatePayload, case_code: candidateCode })
+          .eq("id", caseId)
+          .eq("tenant_id", profile.tenant_id)
+          .eq("case_code", oldCaseCode);
+
+        if (!updErr) {
+          newCaseCode = candidateCode;
+          break;
+        }
+
+        // Postgres unique_violation
+        const isUniqueViolation =
+          (updErr as { code?: string }).code === "23505" ||
+          /duplicate key|unique/i.test(updErr.message);
+
+        if (isUniqueViolation) {
+          attempt += 1;
+          // Refresh the max in case another writer just committed
+          currentMax = await getMaxCaseNumberForPrefix(admin, profile.tenant_id, newPrefix);
+          continue;
+        }
+
+        console.error("Error updating case with new code:", updErr);
+        return NextResponse.json({ error: updErr.message }, { status: 500 });
+      }
+
+      if (!newCaseCode) {
+        return NextResponse.json(
+          {
+            error:
+              "No se pudo asignar un código único para la nueva clasificación tras varios intentos. Intenta de nuevo en unos segundos.",
+          },
+          { status: 409 }
+        );
+      }
+    } else {
+      const { error: updErr } = await admin
+        .from("cases")
+        .update(updatePayload)
+        .eq("id", caseId)
+        .eq("tenant_id", profile.tenant_id);
+
+      if (updErr) {
+        console.error("Error updating case:", updErr);
+        return NextResponse.json({ error: updErr.message }, { status: 500 });
+      }
+    }
+
+    // Read back the updated row
+    const { data: updated, error: readErr } = await admin
       .from("cases")
-      .update(updatePayload)
+      .select()
       .eq("id", caseId)
       .eq("tenant_id", profile.tenant_id)
-      .select()
       .single();
 
-    if (error) {
-      console.error("Error updating case:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (readErr || !updated) {
+      console.error("Error reading updated case:", readErr);
+      return NextResponse.json(
+        { error: readErr?.message ?? "Error leyendo caso actualizado" },
+        { status: 500 }
+      );
+    }
+
+    // Resolve classification names for richer audit log on classification change
+    let classificationOldName: string | null = null;
+    let classificationNewName: string | null = null;
+    if (shouldRecalcCode || (classification_id !== undefined && classification_id !== existingCase.classification_id)) {
+      if (existingCase.classification_id) {
+        const { data: oldCls } = await admin
+          .from("cat_classifications")
+          .select("name")
+          .eq("id", existingCase.classification_id)
+          .maybeSingle();
+        classificationOldName = (oldCls as { name?: string } | null)?.name ?? null;
+      }
+      if (newClassificationId) {
+        const { data: newCls } = await admin
+          .from("cat_classifications")
+          .select("name")
+          .eq("id", newClassificationId)
+          .maybeSingle();
+        classificationNewName = (newCls as { name?: string } | null)?.name ?? null;
+      }
     }
 
     // Audit log for each changed field
@@ -174,16 +291,39 @@ export async function PATCH(
 
     const auditEntries = trackedFields
       .filter((field) => updatePayload[field] !== undefined && updatePayload[field] !== existingCase[field as keyof typeof existingCase])
-      .map((field) => ({
+      .map((field) => {
+        const oldRaw = existingCase[field as keyof typeof existingCase];
+        const newRaw = updatePayload[field];
+        let oldStr = String(oldRaw ?? "");
+        let newStr = String(newRaw ?? "");
+        if (field === "classification_id") {
+          oldStr = classificationOldName ?? oldStr;
+          newStr = classificationNewName ?? newStr;
+        }
+        return {
+          tenant_id: profile.tenant_id,
+          user_id: user.id,
+          entity: "cases",
+          entity_id: caseId,
+          action: "update" as const,
+          field,
+          old_value: oldStr,
+          new_value: newStr,
+        };
+      });
+
+    if (newCaseCode && oldCaseCode && newCaseCode !== oldCaseCode) {
+      auditEntries.push({
         tenant_id: profile.tenant_id,
         user_id: user.id,
         entity: "cases",
         entity_id: caseId,
         action: "update" as const,
-        field,
-        old_value: String(existingCase[field as keyof typeof existingCase] ?? ""),
-        new_value: String(updatePayload[field] ?? ""),
-      }));
+        field: "case_code",
+        old_value: oldCaseCode,
+        new_value: newCaseCode,
+      });
+    }
 
     if (auditEntries.length > 0) {
       await admin.from("audit_log").insert(auditEntries);

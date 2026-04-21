@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InstitutionSelect, type InstitutionUserRole } from "@/components/cases/institution-select";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 interface SelectOption {
   id: string;
@@ -75,6 +76,21 @@ export function CaseForm({
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [classificationChangeModal, setClassificationChangeModal] = useState<{
+    open: boolean;
+    oldCode: string;
+    newCode: string;
+    oldClassificationName: string;
+    newClassificationName: string;
+    loadingPreview: boolean;
+  }>({
+    open: false,
+    oldCode: "",
+    newCode: "",
+    oldClassificationName: "",
+    newClassificationName: "",
+    loadingPreview: false,
+  });
 
   // Form state
   const preClient = preSelectedClientId ? clients.find((cl) => cl.id === preSelectedClientId) : null;
@@ -209,62 +225,116 @@ export function CaseForm({
     setStep((s) => Math.max(s - 1, 1));
   };
 
+  const buildPayload = () => ({
+    client_id: clientId,
+    description: description || null,
+    classification_id: classificationId || null,
+    institution_id: institutionId || null,
+    responsible_id: responsibleId || null,
+    assistant_id: assistantId || null,
+    opened_at: openedAt,
+    status_id: statusId || null,
+    physical_location: physicalLocation || null,
+    observations: observations || null,
+    has_digital_file: hasDigitalFile,
+    entity: null,
+    new_institution_name:
+      showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
+    procedure_type: procedureType || null,
+    institution_procedure_number: institutionProcedureNumber || null,
+    institution_case_number: institutionCaseNumber || null,
+    case_start_date: caseStartDate || null,
+    procedure_start_date: procedureStartDate || null,
+    deadline: deadlineDate || null,
+    ...(mode === "create" && caseCode.trim() ? { case_code: caseCode.trim() } : {}),
+  });
+
+  const submitPayload = async (payload: ReturnType<typeof buildPayload>) => {
+    try {
+      let response: Response;
+      if (mode === "create") {
+        response = await fetch("/api/cases", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        response = await fetch(`/api/cases/${initialData!.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        setError(json.error ?? "Error al guardar el caso");
+        return;
+      }
+
+      router.push(`/abogada/casos/${json.data.id}`);
+      router.refresh();
+    } catch {
+      setError("Error de conexión. Por favor intente de nuevo.");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!validateStep()) return;
 
-    const payload = {
-      client_id: clientId,
-      description: description || null,
-      classification_id: classificationId || null,
-      institution_id: institutionId || null,
-      responsible_id: responsibleId || null,
-      assistant_id: assistantId || null,
-      opened_at: openedAt,
-      status_id: statusId || null,
-      physical_location: physicalLocation || null,
-      observations: observations || null,
-      has_digital_file: hasDigitalFile,
-      entity: null,
-      new_institution_name: showNewInstitution && newInstitutionName.trim() ? newInstitutionName.trim() : undefined,
-      procedure_type: procedureType || null,
-      institution_procedure_number: institutionProcedureNumber || null,
-      institution_case_number: institutionCaseNumber || null,
-      case_start_date: caseStartDate || null,
-      procedure_start_date: procedureStartDate || null,
-      deadline: deadlineDate || null,
-      ...(mode === "create" && caseCode.trim() ? { case_code: caseCode.trim() } : {}),
-    };
-
-    startTransition(async () => {
+    // On edit, if classification changed to a different non-null value,
+    // preview the new code and ask for confirmation before saving.
+    if (
+      mode === "edit" &&
+      initialData &&
+      classificationId &&
+      classificationId !== (initialData.classification_id ?? "")
+    ) {
+      setError(null);
+      setClassificationChangeModal((m) => ({ ...m, open: true, loadingPreview: true }));
       try {
-        let response: Response;
-        if (mode === "create") {
-          response = await fetch("/api/cases", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-        } else {
-          response = await fetch(`/api/cases/${initialData!.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-        }
-
-        const json = await response.json();
-
-        if (!response.ok) {
-          setError(json.error ?? "Error al guardar el caso");
-          return;
-        }
-
-        router.push(`/abogada/casos/${json.data.id}`);
-        router.refresh();
+        const res = await fetch(`/api/cases?classification_id=${classificationId}`);
+        const data = await res.json();
+        const previewCode: string = data.suggested ?? "";
+        const oldName =
+          uniqueClassifications.find((c) => c.id === initialData.classification_id)?.name ?? "—";
+        const newName = selectedClassification?.name ?? "—";
+        setClassificationChangeModal({
+          open: true,
+          oldCode: initialData.case_code,
+          newCode: previewCode,
+          oldClassificationName: oldName,
+          newClassificationName: newName,
+          loadingPreview: false,
+        });
       } catch {
-        setError("Error de conexión. Por favor intente de nuevo.");
+        setClassificationChangeModal((m) => ({ ...m, open: false, loadingPreview: false }));
+        setError("No se pudo calcular el nuevo código. Intenta de nuevo.");
       }
+      return;
+    }
+
+    const payload = buildPayload();
+    startTransition(async () => {
+      await submitPayload(payload);
     });
+  };
+
+  const handleConfirmClassificationChange = () => {
+    setClassificationChangeModal((m) => ({ ...m, open: false }));
+    const payload = buildPayload();
+    startTransition(async () => {
+      await submitPayload(payload);
+    });
+  };
+
+  const handleCancelClassificationChange = () => {
+    // Revert the classification back to its original value — no changes applied.
+    if (initialData) {
+      setClassificationId(initialData.classification_id ?? "");
+    }
+    setClassificationChangeModal((m) => ({ ...m, open: false }));
   };
 
   return (
@@ -737,6 +807,52 @@ export function CaseForm({
           </Button>
         )}
       </div>
+
+      <ConfirmationModal
+        open={classificationChangeModal.open}
+        onClose={handleCancelClassificationChange}
+        onConfirm={handleConfirmClassificationChange}
+        loading={isPending || classificationChangeModal.loadingPreview}
+        title="Confirmar cambio de clasificación"
+        confirmButtonText="Confirmar cambio"
+        cancelButtonText="Cancelar"
+      >
+        <div className="space-y-3">
+          <p>
+            Estás cambiando la clasificación de este caso. El código del expediente se
+            recalculará para seguir la numeración de la nueva clasificación.
+          </p>
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Clasificación:</span>
+              <span className="font-medium">
+                {classificationChangeModal.oldClassificationName} →{" "}
+                <span className="text-integra-navy">
+                  {classificationChangeModal.newClassificationName}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Código actual:</span>
+              <span className="font-mono font-semibold">
+                {classificationChangeModal.oldCode || "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-500">Código nuevo:</span>
+              <span className="font-mono font-bold text-integra-navy">
+                {classificationChangeModal.loadingPreview
+                  ? "Calculando..."
+                  : classificationChangeModal.newCode || "—"}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            El código anterior quedará como hueco en su secuencia (no se reutilizará al
+            crear casos nuevos).
+          </p>
+        </div>
+      </ConfirmationModal>
     </div>
   );
 }

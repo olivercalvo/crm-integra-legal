@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getClassificationPrefix,
+  getNextCaseCodeForPrefix,
+} from "@/lib/utils/case-code";
 
 // GET — suggest next case_code for a given classification
 export async function GET(request: NextRequest) {
@@ -25,40 +29,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const classificationId = searchParams.get("classification_id");
 
-    let prefix = "EXP";
-    if (classificationId) {
-      const { data: classification } = await admin
-        .from("cat_classifications")
-        .select("prefix")
-        .eq("id", classificationId)
-        .single();
-      if (classification?.prefix) {
-        prefix = classification.prefix;
-      }
-    }
+    const prefix = await getClassificationPrefix(admin, classificationId);
+    const suggested = await getNextCaseCodeForPrefix(admin, profile.tenant_id, prefix);
 
-    // Query cases with this prefix to find the max number for THIS classification
-    const { data: prefixCases } = await admin
-      .from("cases")
-      .select("case_code")
-      .eq("tenant_id", profile.tenant_id)
-      .ilike("case_code", `${prefix}-%`);
-
-    let maxNum = 0;
-    if (prefixCases) {
-      for (const c of prefixCases) {
-        const match = c.case_code?.match(new RegExp(`^${prefix}-(\\d+)$`));
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (num > maxNum) maxNum = num;
-        }
-      }
-    }
-
-    const nextNumber = maxNum + 1;
-    const suggested = `${prefix}-${String(nextNumber).padStart(3, "0")}`;
-
-    return NextResponse.json({ suggested });
+    return NextResponse.json({ suggested, prefix });
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
@@ -115,17 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve classification prefix
-    let prefix = "EXP";
-    if (classification_id) {
-      const { data: classification } = await admin
-        .from("cat_classifications")
-        .select("prefix")
-        .eq("id", classification_id)
-        .single();
-      if (classification?.prefix) {
-        prefix = classification.prefix;
-      }
-    }
+    const prefix = await getClassificationPrefix(admin, classification_id);
 
     // Get current max case_number for this tenant (for the DB serial field)
     const { data: maxCase } = await admin
@@ -158,25 +122,7 @@ export async function POST(request: NextRequest) {
       }
       case_code = customCode.trim();
     } else {
-      // Auto-generate based on max number for this prefix
-      const { data: prefixCases } = await admin
-        .from("cases")
-        .select("case_code")
-        .eq("tenant_id", profile.tenant_id)
-        .ilike("case_code", `${prefix}-%`);
-
-      let maxPrefixNum = 0;
-      if (prefixCases) {
-        for (const c of prefixCases) {
-          const match = c.case_code?.match(new RegExp(`^${prefix}-(\\d+)$`));
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxPrefixNum) maxPrefixNum = num;
-          }
-        }
-      }
-      const paddedNumber = String(maxPrefixNum + 1).padStart(3, "0");
-      case_code = `${prefix}-${paddedNumber}`;
+      case_code = await getNextCaseCodeForPrefix(admin, profile.tenant_id, prefix);
     }
 
     // If creating a new institution inline, insert it first

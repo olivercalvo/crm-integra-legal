@@ -1,5 +1,14 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.10.3] — 2026-04-28
+
+### Feature — Nueva clasificación FAMILIA
+- Agrega la clasificación `FAMILIA` (prefijo `FAM`, color `#00838F` turquesa oscuro, badge con texto blanco) al catálogo del tenant Integra Legal.
+- **Catálogo (DB)**: `sql/pending/005_add_familia_classification.sql` — INSERT idempotente en `cat_classifications` + entrada en `audit_log` siguiendo el patrón de `src/app/api/admin/catalogs/route.ts` (entity = nombre de tabla, new_value = JSON del payload). Ejecutado manualmente en Supabase el 2026-04-28.
+- **Verificación previa**: `sql/pending/004_verify_familia_classification.sql`.
+- **Frontend**: agregado `FAMILIA: "#00838F"` al fallback `DEFAULT_CLASSIFICATION_COLORS` en `src/lib/utils/classification-colors.ts`. La lógica de color de texto del badge no requiere cambios — `getClassificationTextColor` ya retorna `#FFFFFF` para cualquier color distinto del amarillo de REGULATORIO.
+- **Sin cambios** en formularios de caso, dropdowns, filtros ni en `src/lib/utils/case-code.ts`: las clasificaciones se cargan 100% desde DB y la auto-numeración resuelve el prefijo dinámicamente. Al crear el primer caso con FAMILIA, el código será `FAM-001`.
+
 ## [1.10.2] — 2026-04-28
 
 ### Fix — Email diario consulta `personal_todos` (no `tasks`)

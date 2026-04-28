@@ -55,17 +55,22 @@ function panamaDayOfWeek(date: Date): number {
   return panama.getUTCDay();
 }
 
-type TaskRow = {
+type PersonalTodoOwnRow = {
   id: string;
   description: string;
   deadline: string | null;
-  case_id: string;
-  created_by: string;
+  status: string;
+  user_id: string;
   assigned_to: string | null;
-  cases: {
-    case_code: string;
-    clients: { name: string };
-  };
+  assignee: { full_name: string } | null;
+};
+
+type PersonalTodoAssignedRow = {
+  id: string;
+  description: string;
+  deadline: string | null;
+  status: string;
+  user_id: string;
   creator: { full_name: string } | null;
 };
 
@@ -100,52 +105,50 @@ async function buildSummaryForUser(opts: {
 }): Promise<{ myPending: SummaryTask[]; assignedByOthers: SummaryTask[] }> {
   const { db, tenantId, userId } = opts;
 
-  // Section 1: Tasks created by this user that are pending (own pendientes)
-  // These are tasks where she is the creator (responsible) excluding tasks assigned to her by others
+  // Replica exactamente la lógica del dashboard /abogada (page.tsx): consulta
+  // personal_todos, filtra status='pendiente' en JS, slice 15. Cada query está
+  // scopeada por userId — sin fugas entre usuarias.
   const { data: myPendingRaw } = await db
-    .from("tasks")
+    .from("personal_todos")
     .select(`
-      id, description, deadline, case_id, created_by, assigned_to,
-      cases!inner(case_code, clients!inner(name)),
-      creator:users!tasks_created_by_fkey(full_name)
+      id, description, deadline, status, user_id, assigned_to,
+      assignee:users!personal_todos_assigned_to_fkey(full_name)
     `)
     .eq("tenant_id", tenantId)
-    .eq("status", "pendiente")
-    .eq("created_by", userId)
+    .eq("user_id", userId)
     .order("deadline", { ascending: true, nullsFirst: false });
 
-  // Section 2: Tasks assigned TO this user but created by someone else
   const { data: assignedRaw } = await db
-    .from("tasks")
+    .from("personal_todos")
     .select(`
-      id, description, deadline, case_id, created_by, assigned_to,
-      cases!inner(case_code, clients!inner(name)),
-      creator:users!tasks_created_by_fkey(full_name)
+      id, description, deadline, status, user_id,
+      creator:users!personal_todos_user_id_fkey(full_name)
     `)
     .eq("tenant_id", tenantId)
-    .eq("status", "pendiente")
     .eq("assigned_to", userId)
-    .neq("created_by", userId)
+    .neq("user_id", userId)
     .order("deadline", { ascending: true, nullsFirst: false });
 
-  const myPending: SummaryTask[] = ((myPendingRaw ?? []) as unknown as TaskRow[]).map((t) => ({
-    id: t.id,
-    case_id: t.case_id,
-    caseCode: t.cases.case_code,
-    clientName: t.cases.clients.name,
-    description: t.description,
-    deadline: t.deadline,
-  }));
+  const myPending: SummaryTask[] = ((myPendingRaw ?? []) as unknown as PersonalTodoOwnRow[])
+    .filter((t) => t.status === "pendiente")
+    .slice(0, 15)
+    .map((t) => ({
+      id: t.id,
+      description: t.description,
+      deadline: t.deadline,
+      assigneeName:
+        t.assigned_to && t.assigned_to !== userId ? t.assignee?.full_name ?? null : null,
+    }));
 
-  const assignedByOthers: SummaryTask[] = ((assignedRaw ?? []) as unknown as TaskRow[]).map((t) => ({
-    id: t.id,
-    case_id: t.case_id,
-    caseCode: t.cases.case_code,
-    clientName: t.cases.clients.name,
-    description: t.description,
-    deadline: t.deadline,
-    assignedBy: t.creator?.full_name ?? null,
-  }));
+  const assignedByOthers: SummaryTask[] = ((assignedRaw ?? []) as unknown as PersonalTodoAssignedRow[])
+    .filter((t) => t.status === "pendiente")
+    .slice(0, 15)
+    .map((t) => ({
+      id: t.id,
+      description: t.description,
+      deadline: t.deadline,
+      assignedBy: t.creator?.full_name ?? null,
+    }));
 
   return { myPending, assignedByOthers };
 }

@@ -1,11 +1,9 @@
 export type SummaryTask = {
   id: string;
-  case_id: string;
-  caseCode: string;
-  clientName: string;
   description: string;
   deadline: string | null;
   assignedBy?: string | null;
+  assigneeName?: string | null;
 };
 
 export type SummaryActivity = {
@@ -113,9 +111,8 @@ function renderMyPendingTable(tasks: SummaryTask[], appBaseUrl: string): string 
     .map(
       (t, i) => `
       <tr style="background:${i % 2 === 1 ? GRAY_BG : WHITE};">
-        <td style="${TD_STYLE}">${caseLink(t.caseCode, t.case_id, appBaseUrl)}</td>
-        <td style="${TD_STYLE}">${escapeHtml(t.clientName)}</td>
         <td style="${TD_STYLE}">${escapeHtml(t.description)}</td>
+        <td style="${TD_STYLE}">${escapeHtml(t.assigneeName ?? "—")}</td>
         ${deadlineBadge(t.deadline)}
       </tr>`,
     )
@@ -124,9 +121,8 @@ function renderMyPendingTable(tasks: SummaryTask[], appBaseUrl: string): string 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${GRAY_BORDER};border-radius:6px;overflow:hidden;">
       <thead>
         <tr style="background:${GRAY_BG};">
-          <th align="left" style="${TH_STYLE}">Caso</th>
-          <th align="left" style="${TH_STYLE}">Cliente</th>
           <th align="left" style="${TH_STYLE}">Tarea</th>
+          <th align="left" style="${TH_STYLE}">Asignada a</th>
           <th align="left" style="${TH_STYLE}">Vence</th>
         </tr>
       </thead>
@@ -143,8 +139,6 @@ function renderAssignedTable(tasks: SummaryTask[], appBaseUrl: string): string {
     .map(
       (t, i) => `
       <tr style="background:${i % 2 === 1 ? GRAY_BG : WHITE};">
-        <td style="${TD_STYLE}">${caseLink(t.caseCode, t.case_id, appBaseUrl)}</td>
-        <td style="${TD_STYLE}">${escapeHtml(t.clientName)}</td>
         <td style="${TD_STYLE}">${escapeHtml(t.description)}</td>
         <td style="${TD_STYLE}">${escapeHtml(t.assignedBy ?? "—")}</td>
         ${deadlineBadge(t.deadline)}
@@ -155,8 +149,6 @@ function renderAssignedTable(tasks: SummaryTask[], appBaseUrl: string): string {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${GRAY_BORDER};border-radius:6px;overflow:hidden;">
       <thead>
         <tr style="background:${GRAY_BG};">
-          <th align="left" style="${TH_STYLE}">Caso</th>
-          <th align="left" style="${TH_STYLE}">Cliente</th>
           <th align="left" style="${TH_STYLE}">Tarea</th>
           <th align="left" style="${TH_STYLE}">Asignado por</th>
           <th align="left" style="${TH_STYLE}">Vence</th>

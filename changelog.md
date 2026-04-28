@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.10.2] — 2026-04-28
+
+### Fix — Email diario consulta `personal_todos` (no `tasks`)
+- **Problema**: el email diario "Seguimientos y Pendientes" mostraba conteos incorrectos vs el dashboard. Milena: dashboard 15 pendientes propios / 3 asignados, email 0 / 0. Daveiva: dashboard 9 / 10, email 2 / 0.
+- **Causa raíz**: `buildSummaryForUser` en `src/app/api/cron/daily-summary/route.ts` consultaba la tabla `tasks` (tareas de caso) cuando el dashboard consulta `personal_todos` (pendientes personales). Decisión errada del commit `c335c8a` (introducción del email): usaba `created_by`, joins a `cases!inner` y `clients!inner` que no aplican a pendientes personales.
+- **Fix**: `buildSummaryForUser` ahora consulta `personal_todos` con la misma lógica que el dashboard (`src/app/(dashboard)/abogada/page.tsx`):
+  - Mis Pendientes: `tenant_id = ?` AND `user_id = userId`, orden `deadline ASC nullsFirst:false`, filtro `status === 'pendiente'` en JS, slice 15.
+  - Asignados por Otros: `tenant_id = ?` AND `assigned_to = userId` AND `user_id != userId`, mismo orden y slice.
+  - Aislamiento por usuario garantizado por construcción: cada query se scopea con `userId` específico de cada destinataria dentro del loop `for (const abogada of abogadas)`. Sin fugas cruzadas.
+- **Template** (`src/lib/email/daily-summary-template.ts`): tipo `SummaryTask` simplificado (sin `case_id`/`caseCode`/`clientName`, agrega `assigneeName`). Tablas HTML de las dos primeras secciones reducidas a columnas `Tarea | Asignada a / Asignado por | Vence`. La sección "Seguimientos Recientes" no se modificó (sí debe seguir mostrando actividad de casos).
+- **Schedule**: el horario del cron se cambió a 8 AM Panamá (`0 13 * * 1-6` UTC) en commit anterior `66f8aff`.
+- **Archivos modificados**: `src/app/api/cron/daily-summary/route.ts`, `src/lib/email/daily-summary-template.ts`.
+
 ## [1.10.0] — 2026-04-21
 
 ### Feature — Búsqueda universal unificada en TODOS los buscadores del CRM

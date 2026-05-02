@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.10.4] — 2026-05-02
+
+### Fix — Flujo de creación de usuarios desde frontend ahora sincroniza `app_metadata` (resuelve loop `?error=no-role`)
+
+- **Problema**: usuarios creados desde `/admin/usuarios` no podían entrar al CRM. Login exitoso, pero al navegar a `/dashboard` el middleware redirigía a `/login?error=no-role` y el ciclo entraba en `ERR_TOO_MANY_REDIRECTS`. Reportado para `legal@integra-panama.com`.
+- **Causa raíz**: el endpoint `POST /api/admin/users` seteaba `user_metadata` (informativo) pero **no** `app_metadata`. El middleware (`src/middleware.ts:117`) lee `session.user.app_metadata.user_role` para autorizar, así que sin esa clave el JWT del usuario no tiene rol y el middleware lo rebota. Los usuarios viejos (Daveiva/Milena/Harry/Oliver) sí tenían `app_metadata.user_role` por haber sido creados en flujos anteriores; el bug solo afectaba a usuarios creados desde la UI actual. El `custom_access_token_hook` definido en migraciones no está activo en el dashboard de Supabase, por lo que no compensaba el faltante.
+- **Fix en POST `/api/admin/users`**: ahora pasa `app_metadata: { user_role, tenant_id }` al `auth.admin.createUser`, además de `user_metadata`. Verificación defensiva post-creación: si `app_metadata` no quedó persistido, hace rollback (`deleteUser`) y devuelve 500. Logs por paso (sin secrets) para facilitar debugging futuro.
+- **Fix en PATCH `/api/admin/users/[id]`**: cuando `body.role` cambia, además de actualizar `public.users.role`, ahora llama `auth.admin.updateUserById` para sincronizar `app_metadata.user_role`. Sin esto, cambiar el rol desde la UI dejaba el JWT inconsistente con el perfil.
+- **Endpoint nuevo `POST /api/admin/users/[id]/sync-metadata`** (admin-only, idempotente): lee `role` y `tenant_id` desde `public.users` y los copia a `auth.users.app_metadata`. Sirve para reparar usuarios pre-existentes con metadata desincronizado (caso del usuario Legal). Inserta entrada en `audit_log` solo si hubo cambio efectivo.
+- **Documentación nueva**: `docs/USUARIOS.md` cubre roles, flujo de creación correcto, diagnóstico cuando un usuario reporta no poder entrar, uso del endpoint de sync-metadata y hardening futuro (activar el JWT hook como defensa en profundidad).
+- **Sin cambios** en migraciones SQL ni en `auth.users` de los 4 usuarios existentes.
+- **Archivos**: `src/app/api/admin/users/route.ts`, `src/app/api/admin/users/[id]/route.ts`, `src/app/api/admin/users/[id]/sync-metadata/route.ts` (nuevo), `docs/USUARIOS.md` (nuevo).
+
 ## [1.10.3] — 2026-04-28
 
 ### Feature — Nueva clasificación FAMILIA

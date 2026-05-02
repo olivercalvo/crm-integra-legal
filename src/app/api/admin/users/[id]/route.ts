@@ -82,6 +82,29 @@ export async function PATCH(
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
+    // Si cambia el rol, sincronizar app_metadata.user_role en auth.users.
+    // El middleware lee de app_metadata; sin esto, el cambio de rol no se
+    // refleja en el JWT del usuario y queda inconsistente con public.users.
+    if (updates.role !== undefined) {
+      const { error: metaError } = await admin.auth.admin.updateUserById(targetId, {
+        app_metadata: {
+          user_role: updates.role,
+          tenant_id: profile.tenant_id,
+        },
+      });
+      if (metaError) {
+        console.error(
+          `[users.patch] fallo sync app_metadata id=${targetId} rol=${updates.role}`,
+          metaError
+        );
+        return NextResponse.json(
+          { error: "Rol actualizado en perfil pero falló sincronización de autenticación" },
+          { status: 500 }
+        );
+      }
+      console.log(`[users.patch] sync app_metadata.user_role=${updates.role} id=${targetId}`);
+    }
+
     await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,
       user_id: user.id,

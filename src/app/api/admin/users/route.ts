@@ -104,21 +104,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create auth user via admin client
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedFullName = full_name.trim();
+
+    console.log(`[users.create] inicio email=${normalizedEmail} rol=${role}`);
+
+    // Create auth user via admin client.
+    // CRITICAL: app_metadata.user_role + app_metadata.tenant_id son los campos
+    // que el middleware (src/middleware.ts) lee para autorizar acceso. Si solo
+    // se setea user_metadata, el usuario entra en loop /login?error=no-role.
     const { data: authData, error: authCreateError } = await admin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
+      email: normalizedEmail,
       password,
       email_confirm: true,
+      app_metadata: {
+        user_role: role,
+        tenant_id: profile.tenant_id,
+      },
       user_metadata: {
-        full_name: full_name.trim(),
+        full_name: normalizedFullName,
         role,
         tenant_id: profile.tenant_id,
       },
     });
 
     if (authCreateError || !authData.user) {
-      console.error("Error creating auth user:", authCreateError);
-      // Handle duplicate email
+      console.error(`[users.create] fallo auth.users email=${normalizedEmail}`, authCreateError);
       if (authCreateError?.message?.includes("already") || authCreateError?.message?.includes("duplicate")) {
         return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 409 });
       }
@@ -128,14 +139,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const authUserId = authData.user.id;
+    console.log(`[users.create] auth.users creado id=${authUserId}`);
+
+    // Verificación defensiva: confirmar que app_metadata quedó seteado.
+    // Si Supabase cambia su API o el campo no se persistió, abortamos y rollback.
+    const appMeta = authData.user.app_metadata as Record<string, unknown> | null;
+    if (!appMeta || appMeta.user_role !== role || appMeta.tenant_id !== profile.tenant_id) {
+      console.error(
+        `[users.create] app_metadata inconsistente tras createUser id=${authUserId} app_metadata=`,
+        appMeta
+      );
+      await admin.auth.admin.deleteUser(authUserId);
+      return NextResponse.json(
+        { error: "Error al sincronizar metadata de autenticación. Operación revertida." },
+        { status: 500 }
+      );
+    }
+
     // Create public.users record
     const { data: newUser, error: insertError } = await admin
       .from("users")
       .insert({
-        id: authData.user.id,
+        id: authUserId,
         tenant_id: profile.tenant_id,
-        email: email.trim().toLowerCase(),
-        full_name: full_name.trim(),
+        email: normalizedEmail,
+        full_name: normalizedFullName,
         role: role as UserRole,
         active: true,
       })
@@ -143,11 +172,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error("Error inserting public.users record:", insertError);
-      // Rollback: delete the auth user
-      await admin.auth.admin.deleteUser(authData.user.id);
+      console.error(`[users.create] fallo public.users id=${authUserId}, rollback auth.users`, insertError);
+      await admin.auth.admin.deleteUser(authUserId);
       return NextResponse.json({ error: "Error al crear el perfil del usuario" }, { status: 500 });
     }
+
+    console.log(`[users.create] public.users creado id=${authUserId} email=${normalizedEmail} rol=${role}`);
 
     await admin.from("audit_log").insert({
       tenant_id: profile.tenant_id,

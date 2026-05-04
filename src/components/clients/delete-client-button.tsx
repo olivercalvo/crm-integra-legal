@@ -39,7 +39,7 @@ export function DeleteClientButton({
         return;
       }
 
-      router.push(`/abogada/clientes?deleted=${encodeURIComponent(clientNumber)}`);
+      router.push(`/legal/clientes?deleted=${encodeURIComponent(clientNumber)}`);
       router.refresh();
     } catch {
       alert("Error de conexión. Intenta de nuevo.");

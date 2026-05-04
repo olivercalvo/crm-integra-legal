@@ -316,7 +316,7 @@ export function SeguimientoView({ tasks, comments, assistants = [] }: Seguimient
                   <CardContent className="pt-0 pb-4 space-y-2 border-t">
                     <div className="pt-3 mb-2">
                       <Link
-                        href={`/abogada/casos/${caseId}?tab=seguimiento`}
+                        href={`/legal/casos/${caseId}?tab=seguimiento`}
                         className="text-xs text-integra-navy hover:underline font-medium"
                       >
                         Abrir caso completo

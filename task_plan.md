@@ -141,6 +141,24 @@
 | 12.7 | SQL: tablas todos + prospectos | — | 🔶 Pendiente | 20260403000012_todos_and_prospects.sql |
 | 12.8 | SQL: extend document entity_type | — | 🔶 Pendiente | 20260403000013_extend_document_entity_types.sql |
 
+## FASE 1A — UX Foundation (v1.11.0) — selector + reestructura `/legal/*`
+| # | Tarea | Feature | Estado | Notas |
+|---|-------|---------|--------|-------|
+| 1A.1 | Migración SQL: rol `contador` válido en CHECK constraint | — | ✅ Completo | `supabase/migrations/20260504000001_add_contador_role.sql` — aplicar manual en SQL Editor. NO crea usuarios contadores; solo abre el rol. |
+| 1A.2 | Helper `getGreetingPanama()` (UTC-5) | — | ✅ Completo | `src/lib/utils/greeting.ts` |
+| 1A.3 | Reestructura: todo el CRM bajo `/legal/*` | — | ✅ Completo | Aplanado, sin subárboles por rol. Permisos por componente. |
+| 1A.4 | Unificación `/asistente/tareas` + `/abogada/pendientes` → `/legal/pendientes` | — | ✅ Completo | Una URL, contenido por rol. |
+| 1A.5 | Unificación gastos y caso-detail bajo `/legal/*` con role-gating | — | ✅ Completo | Asistente con access check (assistant_id o tarea asignada). |
+| 1A.6 | Middleware: nuevo `ROLE_ROUTES` + redirects 301 legacy `/abogada/* /asistente/* /admin/* /dashboard` → nuevas rutas | — | ✅ Completo | Vigentes ~4 semanas. Verificados con curl. |
+| 1A.7 | Pantalla selector en `/` con saludo Panamá + tarjetas Legal/Finanzas | — | ✅ Completo | Branding Integra, mobile-first, 48px touch target. |
+| 1A.8 | Placeholder `/finanzas` "Próximamente" | — | ✅ Completo | Mismo branding. Layout slim sin sidebar. Phase 1B construirá el módulo. |
+| 1A.9 | Cron BASE_URL via `process.env.NEXT_PUBLIC_APP_URL` con fallback | — | ✅ Completo | **Configurar la env var en Vercel (production + preview) antes del merge a main**. |
+| 1A.10 | Email template URLs: `/abogada/*` → `/legal/*` | — | ✅ Completo | Emails antiguos siguen funcionando vía 301. |
+| 1A.11 | Sidebar y bottom-nav reescritos con "Inicio" → `/` | — | ✅ Completo | Asistente expandido (Casos, Gastos, Pendientes). |
+| 1A.12 | Login + auth callback: redirect a `/` (era `/dashboard`) | — | ✅ Completo | `/dashboard` redirige 301 a `/`. |
+| 1A.13 | Build + smoke test (curl en dev) | — | ✅ Completo | 41 rutas, sin errores de tipos. Lint con errores pre-existentes (ignoreDuringBuilds). |
+| 1A.14 | Validación visual en preview de Vercel | — | ⬜ Pendiente | Oliver valida antes de merge a main. |
+
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|

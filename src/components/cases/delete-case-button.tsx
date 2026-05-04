@@ -38,7 +38,7 @@ export function DeleteCaseButton({
       }
 
       // Redirect to cases list — the page will show a success message via query param
-      router.push(`/abogada/casos?deleted=${encodeURIComponent(caseCode)}`);
+      router.push(`/legal/casos?deleted=${encodeURIComponent(caseCode)}`);
       router.refresh();
     } catch {
       alert("Error de conexión. Intenta de nuevo.");

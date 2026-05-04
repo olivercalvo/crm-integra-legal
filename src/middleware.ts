@@ -1,19 +1,52 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Routes accessible by each role
+// Prefijos que cada rol puede acceder.
+//   "/"          — selector de módulos, abierto a todo rol autenticado.
+//   "/legal/*"   — módulo Legal: abogada, asistente y admin (NO contador).
+//   "/finanzas/*" — módulo Finanzas: abogada, asistente, admin y contador.
+// El subárbol /legal/admin/* es admin-only y se gatea aparte (ADMIN_ONLY_PREFIX).
 const ROLE_ROUTES: Record<string, string[]> = {
-  admin: ["/dashboard", "/admin", "/abogada", "/asistente"],
-  abogada: ["/dashboard", "/abogada"],
-  asistente: ["/dashboard", "/asistente"],
+  admin:     ["/", "/legal", "/finanzas"],
+  abogada:   ["/", "/legal", "/finanzas"],
+  asistente: ["/", "/legal", "/finanzas"],
+  contador:  ["/", "/finanzas"],
 };
 
-// Default redirect per role after login
-const ROLE_HOME: Record<string, string> = {
-  admin: "/admin",
-  abogada: "/abogada",
-  asistente: "/asistente",
-};
+const ADMIN_ONLY_PREFIX = "/legal/admin";
+
+// Redirects 301 desde rutas pre-Fase 1A (vigentes ~4 semanas para preservar
+// bookmarks y los emails diarios ya enviados con URLs antiguas).
+const LEGACY_REDIRECTS: Array<{ pattern: RegExp; build: (m: RegExpMatchArray) => string }> = [
+  // Mapeos antiguos del propio middleware histórico
+  { pattern: /^\/abogada\/expedientes(\/.*)?$/, build: (m) => `/legal/casos${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/tareas(\/.*)?$/,      build: (m) => `/legal/seguimiento${m[1] ?? ""}` },
+
+  // /abogada/* → /legal/*
+  { pattern: /^\/abogada\/clientes(\/.*)?$/,    build: (m) => `/legal/clientes${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/casos(\/.*)?$/,       build: (m) => `/legal/casos${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/gastos(\/.*)?$/,      build: (m) => `/legal/gastos${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/seguimiento(\/.*)?$/, build: (m) => `/legal/seguimiento${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/pendientes(\/.*)?$/,  build: (m) => `/legal/pendientes${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/prospectos(\/.*)?$/,  build: (m) => `/legal/prospectos${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/importar(\/.*)?$/,    build: (m) => `/legal/importar${m[1] ?? ""}` },
+  { pattern: /^\/abogada\/?$/,                  build: () => "/legal" },
+
+  // /asistente/* → /legal/*  (tareas se unifica con pendientes)
+  { pattern: /^\/asistente\/casos(\/.*)?$/,     build: (m) => `/legal/casos${m[1] ?? ""}` },
+  { pattern: /^\/asistente\/gastos(\/.*)?$/,    build: (m) => `/legal/gastos${m[1] ?? ""}` },
+  { pattern: /^\/asistente\/tareas(\/.*)?$/,    build: (m) => `/legal/pendientes${m[1] ?? ""}` },
+  { pattern: /^\/asistente\/?$/,                build: () => "/legal" },
+
+  // /admin/* → /legal/admin/*
+  { pattern: /^\/admin\/usuarios(\/.*)?$/,      build: (m) => `/legal/admin/usuarios${m[1] ?? ""}` },
+  { pattern: /^\/admin\/auditoria(\/.*)?$/,     build: () => "/legal/admin/auditoria" },
+  { pattern: /^\/admin\/configuracion(\/.*)?$/, build: () => "/legal/admin/configuracion" },
+  { pattern: /^\/admin\/?$/,                    build: () => "/legal/admin" },
+
+  // /dashboard → /
+  { pattern: /^\/dashboard\/?$/,                build: () => "/" },
+];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -52,35 +85,34 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Redirect old URLs to new routes
-  if (pathname.startsWith("/abogada/expedientes")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace("/abogada/expedientes", "/abogada/casos");
-    return NextResponse.redirect(url);
-  }
-  if (pathname.startsWith("/abogada/tareas")) {
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.replace("/abogada/tareas", "/abogada/seguimiento");
-    return NextResponse.redirect(url);
+  // Legacy 301 redirects (pre-Fase 1A) — se evalúan ANTES del auth check para
+  // que los bookmarks viejos lleguen al destino aunque la sesión esté caducada
+  // (luego el destino aplica su propio gating).
+  for (const rule of LEGACY_REDIRECTS) {
+    const match = pathname.match(rule.pattern);
+    if (match) {
+      const url = request.nextUrl.clone();
+      url.pathname = rule.build(match);
+      return NextResponse.redirect(url, 301);
+    }
   }
 
-  // Public routes — no auth required
+  // Rutas públicas — sin requerir auth.
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     if (user) {
-      // Already logged in, redirect to dashboard
       const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
+      url.pathname = "/";
       return NextResponse.redirect(url);
     }
     return response;
   }
 
-  // Cron routes — authenticated via CRON_SECRET header, not user session
+  // Cron — autenticado por header CRON_SECRET dentro del handler.
   if (pathname.startsWith("/api/cron/")) {
     return response;
   }
 
-  // API routes — auth checked inside each handler, skip role-based routing
+  // API — auth chequeado dentro de cada handler.
   if (pathname.startsWith("/api/")) {
     if (!user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -88,14 +120,14 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Protected routes — require auth
+  // Rutas protegidas — requieren auth.
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Check session age (8 hours timeout)
+  // Timeout de sesión: 8 horas.
   const sessionCreated = user.last_sign_in_at;
   if (sessionCreated) {
     const sessionAge = Date.now() - new Date(sessionCreated).getTime();
@@ -109,7 +141,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Get user role from JWT claims
+  // Rol del JWT.
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -118,27 +150,33 @@ export async function middleware(request: NextRequest) {
     (session?.access_token ? JSON.parse(atob(session.access_token.split(".")[1]))?.user_role : null);
 
   if (!userRole) {
-    // No role assigned — redirect to login
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("error", "no-role");
     return NextResponse.redirect(url);
   }
 
-  // /dashboard redirects to role-specific home
-  if (pathname === "/dashboard") {
-    const url = request.nextUrl.clone();
-    url.pathname = ROLE_HOME[userRole] || "/login";
-    return NextResponse.redirect(url);
+  // /legal/admin/* es admin-only.
+  if (pathname.startsWith(ADMIN_ONLY_PREFIX)) {
+    if (userRole !== "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = userRole === "contador" ? "/finanzas" : "/legal";
+      return NextResponse.redirect(url);
+    }
+    return response;
   }
 
-  // Role-based route protection
-  const allowedRoutes = ROLE_ROUTES[userRole] || [];
-  const hasAccess = allowedRoutes.some((route) => pathname.startsWith(route));
+  // Gating por rol: el path debe matchear alguno de los prefijos permitidos.
+  const allowedPrefixes = ROLE_ROUTES[userRole] ?? [];
+  const hasAccess = allowedPrefixes.some((prefix) =>
+    prefix === "/"
+      ? pathname === "/"
+      : pathname === prefix || pathname.startsWith(prefix + "/")
+  );
 
   if (!hasAccess) {
     const url = request.nextUrl.clone();
-    url.pathname = ROLE_HOME[userRole] || "/dashboard";
+    url.pathname = userRole === "contador" ? "/finanzas" : "/";
     return NextResponse.redirect(url);
   }
 

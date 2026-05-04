@@ -146,7 +146,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
         return;
       }
 
-      router.push(`/abogada/clientes/${data.id}`);
+      router.push(`/legal/clientes/${data.id}`);
       router.refresh();
     } catch {
       setError("Error de conexión. Intenta de nuevo.");

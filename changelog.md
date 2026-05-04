@@ -1,5 +1,43 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [1.11.0] — 2026-05-04
+
+### Feature — Fase 1A: Selector de módulo + reestructura de rutas bajo `/legal/*`
+
+- **Pantalla selector en `/`**: nueva home post-login con saludo según hora Panamá ("Buenos días/tardes/noches, {nombre}") y tarjetas de módulos. Hoy hay dos: **Gestión Legal** (icono Scale) → `/legal`, y **Finanzas** (icono Wallet) → `/finanzas`. Branding Integra (navy `#1B2A4A`, gold `#C5A55A`, blanco). Botón "Entrar" mínimo 48 px, tarjetas apiladas en mobile y lado-a-lado en desktop. Header propio sin sidebar (logo Integra Legal + avatar). El selector se renderiza siempre — incluso si solo hay una tarjeta visible — para mantener consistencia entre roles y dejar margen a expansión futura.
+- **Rol nuevo `contador`**: agregado al CHECK constraint de `public.users.role`. Migration en `supabase/migrations/20260504000001_add_contador_role.sql` — aplicar manualmente en Supabase SQL Editor (convención del proyecto desde 2026-04-05). El rol queda **válido en DB pero no expuesto** todavía: la API (`/api/admin/users`) y la UI (`UserForm`) siguen aceptando solo los 3 roles existentes. La habilitación completa se hace en Fase 1B con el módulo Finanzas. Verificación post-aplicación incluida en el SQL.
+- **Reestructura de rutas — todo el CRM ahora vive bajo `/legal/*`**:
+  - `/abogada/*`, `/asistente/*`, `/admin/*` → eliminados como rutas activas. Reemplazados por:
+    - `/legal` (dashboard del módulo, contenido por rol: abogada/admin → dashboard completo, asistente → "Mi Panel" con casos+tareas asignadas)
+    - `/legal/clientes`, `/legal/casos`, `/legal/gastos`, `/legal/seguimiento`, `/legal/pendientes`, `/legal/prospectos`, `/legal/importar`
+    - `/legal/admin` (subset transversal admin-only) y subrutas `/legal/admin/usuarios`, `/legal/admin/auditoria`, `/legal/admin/configuracion`
+  - **Unificación `/asistente/tareas` + `/abogada/pendientes` → `/legal/pendientes`**: una sola URL, contenido por rol (abogada/admin ven `personal_todos`, asistente ve sus `tasks` agrupadas por caso).
+  - **Unificación `/abogada/gastos` + `/asistente/gastos` → `/legal/gastos`**: balance global para abogada/admin, "Mis Gastos" para asistente.
+  - **Unificación `/abogada/casos/[id]` + `/asistente/casos/[id]` → `/legal/casos/[id]`**: misma página con role-based gating de botones de edición y access check para asistente (acceso solo a casos donde es `assistant_id` o tiene una tarea asignada). Idéntico patrón en `/legal/casos` (lista filtrada para asistente).
+  - **Eliminada ruta `/dashboard`**: el dispatcher por rol ya no aplica con el selector. Reemplazada por redirect 301 a `/`.
+- **Legacy redirects 301 (vigentes ~4 semanas)**: el middleware mapea automáticamente toda ruta antigua al nuevo destino. Mantiene bookmarks vivos y los emails diarios ya enviados con URLs `/abogada/*`. Reglas en `src/middleware.ts` (constante `LEGACY_REDIRECTS`).
+  - Ejemplos: `/abogada` → `/legal`, `/abogada/casos/{id}` → `/legal/casos/{id}`, `/admin/usuarios` → `/legal/admin/usuarios`, `/asistente/tareas` → `/legal/pendientes`, `/dashboard` → `/`.
+  - Verificado con `curl` durante la build: redirects 301 correctos en todos los casos. Auth-aware (los redirects se aplican antes del auth check, para que bookmarks viejos lleguen al destino aunque la sesión esté caducada).
+- **Gating por rol en middleware**: nuevo `ROLE_ROUTES` con prefijos: admin/abogada/asistente acceden `/`, `/legal`, `/finanzas`; contador solo accede `/`, `/finanzas`. `/legal/admin/*` es admin-only (subset transversal). Los redirects de un usuario sin acceso van a `/finanzas` (contador) o `/` (resto).
+- **Login y auth callback**: `router.push("/")` post-login (antes `/dashboard`). Default `next` del callback OAuth: `/` (antes `/dashboard`).
+- **Sidebar y bottom-nav reescritos**: items con hrefs `/legal/*`, primera entrada "Inicio" → `/` (selector). Asistente ahora ve Dashboard, Casos, Gastos, Mis Pendientes (antes solo Dashboard + Mis Tareas) — el gating real lo hacen los componentes y los queries por rol, no la ruta.
+- **Cron BASE_URL**: `src/app/api/cron/daily-summary/route.ts` ahora lee `process.env.NEXT_PUBLIC_APP_URL` con fallback al hardcoded actual. **Importante para deploy**: configurar `NEXT_PUBLIC_APP_URL` en Vercel (production y preview) antes del merge a main para evitar comportamiento inconsistente entre entornos.
+- **Email template (`src/lib/email/daily-summary-template.ts`)**: URLs actualizadas a `/legal/casos/{id}`, `/legal/pendientes`, `/legal/seguimiento`. Los emails ya enviados con URLs `/abogada/*` siguen funcionando vía los redirects 301 del middleware.
+- **Helper `getGreetingPanama()`**: nuevo en `src/lib/utils/greeting.ts`. UTC-5 fijo (Panamá no usa DST). Rangos: 05–11h "Buenos días", 12–18h "Buenas tardes", 19–04h "Buenas noches". Calculado en SSR (no se actualiza dinámicamente — refresh para recalcular).
+- **Componentes nuevos**:
+  - `src/components/home/home-header.tsx` — header slim para selector y placeholder de Finanzas (sin sidebar/búsqueda global).
+  - `src/components/dashboards/asistente-home.tsx`, `asistente-pendientes.tsx`, `asistente-gastos.tsx`, `asistente-gastos-form.tsx` — extraídas de las antiguas páginas `(dashboard)/asistente/*` para que las páginas unificadas en `/legal/*` puedan despachar por rol sin duplicar lógica.
+- **Archivos eliminados**: toda la carpeta `src/app/(dashboard)/`. Las páginas se movieron a `/legal/*` con `Move-Item` para preservar git rename detection.
+- **Verificación**:
+  - `npm run build`: ✓ 41 rutas generadas, sin errores de tipos.
+  - `npm run lint`: errores pre-existentes (unused-vars, etc.) — `next.config.mjs` tiene `ignoreDuringBuilds: true`. No introducimos errores nuevos.
+  - Smoke test con `curl` en dev server: `/login` 200, `/` y `/legal` y `/finanzas` 307 → `/login` (sin sesión), legacy redirects (`/abogada`, `/abogada/casos`, `/dashboard`, `/admin/usuarios`, `/asistente/tareas`) → 301 al nuevo destino. ✓
+  - **Pendiente** (post-merge a main): validación visual en preview de Vercel por Oliver — flujos de las 5 verificaciones post-deploy.
+- **Archivos clave**:
+  - Nuevos: `src/app/page.tsx` (selector), `src/app/finanzas/layout.tsx`, `src/app/finanzas/page.tsx`, `src/app/legal/layout.tsx`, `src/components/home/home-header.tsx`, `src/components/dashboards/asistente-*.tsx` (4 archivos), `src/lib/utils/greeting.ts`, `supabase/migrations/20260504000001_add_contador_role.sql`.
+  - Movidos: todo `src/app/(dashboard)/*` → `src/app/legal/*` con renames y merges.
+  - Modificados: `src/middleware.ts` (rewrite completo), `src/components/layout/sidebar.tsx` y `bottom-nav.tsx` (rewrite de navItems), `src/components/auth/login-form.tsx`, `src/app/api/auth/callback/route.ts`, `src/app/api/cron/daily-summary/route.ts`, `src/lib/email/daily-summary-template.ts`, y ~25 componentes/páginas con `<Link href>`/`router.push` actualizados a `/legal/*`.
+
 ## [1.10.4] — 2026-05-02
 
 ### Fix — Flujo de creación de usuarios desde frontend ahora sincroniza `app_metadata` (resuelve loop `?error=no-role`)

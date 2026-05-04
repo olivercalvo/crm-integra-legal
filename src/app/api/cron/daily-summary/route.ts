@@ -10,7 +10,10 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const APP_BASE_URL = "https://crm-integra-legal.vercel.app";
+// NOTE: configurar NEXT_PUBLIC_APP_URL en las env vars de Vercel
+// (production + preview) antes del merge a main. El fallback evita rotura
+// pero genera comportamiento inconsistente entre entornos si falta.
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://crm-integra-legal.vercel.app";
 const TEST_RECIPIENT = "oliver@clienteenelcentro.com";
 const TENANT_ID = "a0000000-0000-0000-0000-000000000001";
 

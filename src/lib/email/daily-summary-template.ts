@@ -90,7 +90,7 @@ function deadlineBadge(deadline: string | null): string {
 }
 
 function caseLink(caseCode: string, caseId: string, appBaseUrl: string): string {
-  const url = `${appBaseUrl}/abogada/casos/${caseId}`;
+  const url = `${appBaseUrl}/legal/casos/${caseId}`;
   return `<a href="${url}" style="color:${GOLD};text-decoration:underline;font-weight:700;font-family:monospace;font-size:13px;">${escapeHtml(caseCode)}</a>`;
 }
 
@@ -128,7 +128,7 @@ function renderMyPendingTable(tasks: SummaryTask[], appBaseUrl: string): string 
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    ${sectionButton("Ver en el CRM", `${appBaseUrl}/abogada/pendientes`)}`;
+    ${sectionButton("Ver en el CRM", `${appBaseUrl}/legal/pendientes`)}`;
 }
 
 function renderAssignedTable(tasks: SummaryTask[], appBaseUrl: string): string {
@@ -156,7 +156,7 @@ function renderAssignedTable(tasks: SummaryTask[], appBaseUrl: string): string {
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    ${sectionButton("Ver en el CRM", `${appBaseUrl}/abogada/pendientes`)}`;
+    ${sectionButton("Ver en el CRM", `${appBaseUrl}/legal/pendientes`)}`;
 }
 
 function renderActivityTable(items: SummaryActivity[], appBaseUrl: string): string {
@@ -188,7 +188,7 @@ function renderActivityTable(items: SummaryActivity[], appBaseUrl: string): stri
       </thead>
       <tbody>${rows}</tbody>
     </table>
-    ${sectionButton("Ver en el CRM", `${appBaseUrl}/abogada/seguimiento`)}`;
+    ${sectionButton("Ver en el CRM", `${appBaseUrl}/legal/seguimiento`)}`;
 }
 
 export function renderDailySummaryEmail(data: DailySummaryData): string {

@@ -530,14 +530,14 @@ export function ImportWizard({ importType = "all" }: ImportWizardProps) {
               Nueva importación
             </button>
             <a
-              href="/abogada/clientes"
+              href="/legal/clientes"
               className="inline-flex items-center gap-2 rounded-lg bg-integra-navy px-4 py-3 text-sm font-medium text-white hover:bg-integra-navy/90 min-h-[48px]"
             >
               <Users size={16} />
               Ver clientes
             </a>
             <a
-              href="/abogada/casos"
+              href="/legal/casos"
               className="inline-flex items-center gap-2 rounded-lg bg-integra-navy px-4 py-3 text-sm font-medium text-white hover:bg-integra-navy/90 min-h-[48px]"
             >
               <FolderOpen size={16} />

@@ -136,7 +136,7 @@ export function GastosTable({ rows, statuses }: GastosTableProps) {
         {filtered.map((row) => (
           <div
             key={row.id}
-            onClick={() => router.push(`/abogada/casos/${row.id}?tab=gastos`)}
+            onClick={() => router.push(`/legal/casos/${row.id}?tab=gastos`)}
             className="cursor-pointer"
           >
             <Card className="overflow-hidden hover:shadow-md transition-shadow">
@@ -200,7 +200,7 @@ export function GastosTable({ rows, statuses }: GastosTableProps) {
               {filtered.map((row) => (
                 <tr
                   key={row.id}
-                  onClick={() => router.push(`/abogada/casos/${row.id}?tab=gastos`)}
+                  onClick={() => router.push(`/legal/casos/${row.id}?tab=gastos`)}
                   className="cursor-pointer transition-colors hover:bg-gray-100"
                 >
                   <td className="px-4 py-3">

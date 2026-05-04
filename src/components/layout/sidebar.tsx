@@ -14,6 +14,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Home,
   X,
   ClipboardList,
   UserPlus,
@@ -27,21 +28,22 @@ interface NavItem {
   roles: string[];
 }
 
+// "Inicio" lleva al selector de módulos (raíz). Es la primera entrada para
+// que el usuario siempre tenga vuelta a la pantalla de selección.
 const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: <LayoutDashboard size={20} />, roles: ["admin"] },
-  { label: "Dashboard", href: "/abogada", icon: <LayoutDashboard size={20} />, roles: ["abogada"] },
-  { label: "Dashboard", href: "/asistente", icon: <LayoutDashboard size={20} />, roles: ["asistente"] },
-  { label: "Clientes", href: "/abogada/clientes", icon: <Users size={20} />, roles: ["admin", "abogada"] },
-  { label: "Casos", href: "/abogada/casos", icon: <FolderOpen size={20} />, roles: ["admin", "abogada"] },
-  { label: "Gastos", href: "/abogada/gastos", icon: <DollarSign size={20} />, roles: ["admin", "abogada"] },
-  { label: "Seguimiento", href: "/abogada/seguimiento", icon: <ListTodo size={20} />, roles: ["admin", "abogada"] },
-  { label: "Mis Pendientes", href: "/abogada/pendientes", icon: <ClipboardList size={20} />, roles: ["admin", "abogada"] },
-  { label: "Prospectos", href: "/abogada/prospectos", icon: <UserPlus size={20} />, roles: ["admin", "abogada"] },
-  { label: "Importar", href: "/abogada/importar", icon: <Upload size={20} />, roles: ["admin", "abogada"] },
-  { label: "Mis Tareas", href: "/asistente/tareas", icon: <ListTodo size={20} />, roles: ["asistente"] },
-  { label: "Usuarios", href: "/admin/usuarios", icon: <Shield size={20} />, roles: ["admin"] },
-  { label: "Auditoría", href: "/admin/auditoria", icon: <FileText size={20} />, roles: ["admin"] },
-  { label: "Configuración", href: "/admin/configuracion", icon: <Settings size={20} />, roles: ["admin"] },
+  { label: "Inicio",         href: "/",                          icon: <Home size={20} />,            roles: ["admin", "abogada", "asistente"] },
+  { label: "Dashboard",      href: "/legal",                     icon: <LayoutDashboard size={20} />, roles: ["admin", "abogada", "asistente"] },
+  { label: "Clientes",       href: "/legal/clientes",            icon: <Users size={20} />,           roles: ["admin", "abogada"] },
+  { label: "Casos",          href: "/legal/casos",               icon: <FolderOpen size={20} />,      roles: ["admin", "abogada", "asistente"] },
+  { label: "Gastos",         href: "/legal/gastos",              icon: <DollarSign size={20} />,      roles: ["admin", "abogada", "asistente"] },
+  { label: "Seguimiento",    href: "/legal/seguimiento",         icon: <ListTodo size={20} />,        roles: ["admin", "abogada"] },
+  { label: "Mis Pendientes", href: "/legal/pendientes",          icon: <ClipboardList size={20} />,   roles: ["admin", "abogada", "asistente"] },
+  { label: "Prospectos",     href: "/legal/prospectos",          icon: <UserPlus size={20} />,        roles: ["admin", "abogada"] },
+  { label: "Importar",       href: "/legal/importar",            icon: <Upload size={20} />,          roles: ["admin", "abogada"] },
+  { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"] },
+  { label: "Usuarios",       href: "/legal/admin/usuarios",      icon: <Shield size={20} />,          roles: ["admin"] },
+  { label: "Auditoría",      href: "/legal/admin/auditoria",     icon: <FileText size={20} />,        roles: ["admin"] },
+  { label: "Configuración",  href: "/legal/admin/configuracion", icon: <Settings size={20} />,        roles: ["admin"] },
 ];
 
 interface SidebarProps {
@@ -94,12 +96,12 @@ export function Sidebar({ userRole, open, collapsed, onClose, onToggleCollapse }
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
           {filteredItems.map((item) => {
+            // Para rutas raíz ("/" y "/legal") solo activamos en match exacto.
+            // Para subrutas activamos también si el pathname es subdirectorio.
+            const isRootLike = item.href === "/" || item.href === "/legal" || item.href === "/legal/admin";
             const isActive =
               pathname === item.href ||
-              (item.href !== "/admin" &&
-                item.href !== "/abogada" &&
-                item.href !== "/asistente" &&
-                pathname.startsWith(item.href));
+              (!isRootLike && pathname.startsWith(item.href + "/"));
 
             return (
               <Link

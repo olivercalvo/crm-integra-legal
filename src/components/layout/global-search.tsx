@@ -58,7 +58,7 @@ export function GlobalSearch() {
           type: "client",
           title: c.name,
           subtitle: [c.client_number, c.ruc].filter(Boolean).join(" · "),
-          href: `/abogada/clientes/${c.id}`,
+          href: `/legal/clientes/${c.id}`,
         });
       }
       const seenCaseIds = new Set<string>();
@@ -73,7 +73,7 @@ export function GlobalSearch() {
           type: "case",
           title: cs.case_code,
           subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
-          href: `/abogada/casos/${cs.id}`,
+          href: `/legal/casos/${cs.id}`,
         });
       }
 

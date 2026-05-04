@@ -54,7 +54,7 @@ export function LoginForm() {
         localStorage.removeItem("integra_remembered_email");
       }
 
-      router.push("/dashboard");
+      router.push("/");
       router.refresh();
     } catch {
       setError("Error de conexión. Intente de nuevo.");

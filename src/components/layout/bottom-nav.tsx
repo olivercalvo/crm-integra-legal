@@ -8,6 +8,7 @@ import {
   FolderOpen,
   ListTodo,
   DollarSign,
+  Home,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,22 +19,26 @@ interface BottomNavItem {
 }
 
 const adminNav: BottomNavItem[] = [
-  { label: "Inicio", href: "/admin", icon: <LayoutDashboard size={20} /> },
-  { label: "Clientes", href: "/abogada/clientes", icon: <Users size={20} /> },
-  { label: "Casos", href: "/abogada/casos", icon: <FolderOpen size={20} /> },
-  { label: "Seguimiento", href: "/abogada/seguimiento", icon: <ListTodo size={20} /> },
+  { label: "Inicio",      href: "/",                  icon: <Home size={20} /> },
+  { label: "Dashboard",   href: "/legal",             icon: <LayoutDashboard size={20} /> },
+  { label: "Clientes",    href: "/legal/clientes",    icon: <Users size={20} /> },
+  { label: "Casos",       href: "/legal/casos",       icon: <FolderOpen size={20} /> },
+  { label: "Seguimiento", href: "/legal/seguimiento", icon: <ListTodo size={20} /> },
 ];
 
 const abogadaNav: BottomNavItem[] = [
-  { label: "Inicio", href: "/abogada", icon: <LayoutDashboard size={20} /> },
-  { label: "Clientes", href: "/abogada/clientes", icon: <Users size={20} /> },
-  { label: "Casos", href: "/abogada/casos", icon: <FolderOpen size={20} /> },
-  { label: "Gastos", href: "/abogada/gastos", icon: <DollarSign size={20} /> },
+  { label: "Inicio",    href: "/",                icon: <Home size={20} /> },
+  { label: "Dashboard", href: "/legal",           icon: <LayoutDashboard size={20} /> },
+  { label: "Clientes",  href: "/legal/clientes",  icon: <Users size={20} /> },
+  { label: "Casos",     href: "/legal/casos",     icon: <FolderOpen size={20} /> },
+  { label: "Gastos",    href: "/legal/gastos",    icon: <DollarSign size={20} /> },
 ];
 
 const asistenteNav: BottomNavItem[] = [
-  { label: "Inicio", href: "/asistente", icon: <LayoutDashboard size={20} /> },
-  { label: "Tareas", href: "/asistente/tareas", icon: <ListTodo size={20} /> },
+  { label: "Inicio",     href: "/",                 icon: <Home size={20} /> },
+  { label: "Dashboard",  href: "/legal",            icon: <LayoutDashboard size={20} /> },
+  { label: "Casos",      href: "/legal/casos",      icon: <FolderOpen size={20} /> },
+  { label: "Pendientes", href: "/legal/pendientes", icon: <ListTodo size={20} /> },
 ];
 
 const navByRole: Record<string, BottomNavItem[]> = {
@@ -54,7 +59,11 @@ export function BottomNav({ userRole }: BottomNavProps) {
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white lg:hidden">
       <div className="flex items-center justify-around">
         {items.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          // Para rutas raíz solo activamos en match exacto, no en sub-paths.
+          const isRootLike = item.href === "/" || item.href === "/legal";
+          const isActive =
+            pathname === item.href ||
+            (!isRootLike && pathname.startsWith(item.href + "/"));
           return (
             <Link
               key={item.href}

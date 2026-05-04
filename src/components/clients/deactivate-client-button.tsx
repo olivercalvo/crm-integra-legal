@@ -38,7 +38,7 @@ export function DeactivateClientButton({ clientId, clientName }: DeactivateClien
         return;
       }
 
-      router.push("/abogada/clientes");
+      router.push("/legal/clientes");
       router.refresh();
     } catch {
       alert("Error de conexión. Intenta de nuevo.");

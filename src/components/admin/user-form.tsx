@@ -79,7 +79,7 @@ export function UserForm() {
       setSuccess(true);
       // Redirect after short delay so user sees success state
       setTimeout(() => {
-        router.push("/admin/usuarios");
+        router.push("/legal/admin/usuarios");
         router.refresh();
       }, 1200);
     } catch (err) {

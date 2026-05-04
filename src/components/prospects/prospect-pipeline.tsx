@@ -129,7 +129,7 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
         const data = await res.json();
         router.refresh();
         // Navigate to edit the new client
-        router.push(`/abogada/clientes/${data.client.id}`);
+        router.push(`/legal/clientes/${data.client.id}`);
       }
     } finally {
       setActionLoading(null);

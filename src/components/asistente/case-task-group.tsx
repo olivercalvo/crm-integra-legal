@@ -243,7 +243,7 @@ export function CaseTaskGroup({ caseId, caseCode, clientName, pendientes, cumpli
                         </button>
                         <InlineCommentField caseId={task.caseId} />
                         <a
-                          href={`/asistente/casos/${task.caseId}`}
+                          href={`/legal/casos/${task.caseId}`}
                           className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-3 min-h-[44px] text-xs font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                         >
                           <Info size={14} />

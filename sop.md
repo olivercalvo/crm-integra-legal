@@ -4,19 +4,32 @@
 1. Crear repositorio con `gh repo create crm-integra-legal --public --clone`
 2. Inicializar Next.js 14 con App Router, TypeScript, Tailwind, ESLint
 3. Instalar dependencias: `shadcn/ui`, `@supabase/supabase-js`, `@supabase/ssr`, `idb` (IndexedDB wrapper)
-4. Configurar estructura de carpetas:
+4. Configurar estructura de carpetas (v1.11+ — selector de módulos):
    ```
    src/
      app/
+       page.tsx                  ← selector de módulos (post-login)
        (auth)/login/
-       (dashboard)/
-         abogada/
-         asistente/
-         admin/
+       legal/                    ← módulo Gestión Legal (abogada/asistente/admin)
+         layout.tsx              ← auth + DashboardShell con sidebar
+         page.tsx                ← dashboard del módulo (role-based)
+         clientes/
+         casos/
+         gastos/
+         seguimiento/
+         pendientes/             ← unifica abogada/pendientes + asistente/tareas
+         prospectos/
+         importar/
+         admin/                  ← admin-only: usuarios, auditoría, configuración
+       finanzas/                 ← módulo Finanzas (Fase 1B; placeholder hoy)
+         layout.tsx              ← auth + HomeHeader (sin sidebar)
+         page.tsx                ← "Próximamente"
        api/
      components/
        ui/          (shadcn)
-       layout/
+       layout/                   ← Header, Sidebar, BottomNav, DashboardShell
+       home/                     ← HomeHeader del selector
+       dashboards/               ← variantes asistente del dashboard / gastos / pendientes
        clients/
        cases/
        expenses/
@@ -27,10 +40,17 @@
      lib/
        supabase/    (client, server, middleware, types)
        offline/     (queue, sync, conflict-resolution)
-       utils/
+       utils/                    ← greeting.ts (saludo Panamá), format-date, etc.
+     middleware.ts               ← gating por rol + redirects 301 legacy
      types/
      hooks/
    ```
+   **Notas sobre routing**:
+   - El selector en `/` está abierto a todo rol autenticado. Las cards visibles dependen del rol.
+   - `/legal/*` es accesible para abogada/asistente/admin (NO contador). El gating fino de botones/acciones está en los componentes.
+   - `/legal/admin/*` es admin-only (subset transversal).
+   - `/finanzas/*` está abierto a todos los 4 roles (incluido contador). En Fase 1B tendrá su propia gating.
+   - Rutas legacy (`/abogada/*`, `/asistente/*`, `/admin/*`, `/dashboard`) hacen redirect 301 al destino nuevo. Mantenidas ~4 semanas para preservar bookmarks y emails ya enviados.
 5. Configurar Supabase: proyecto en la CUENTA DEL CLIENTE (no la de Oliver). Solicitar al cliente las env vars: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY. No proceder sin estas credenciales.
 6. Configurar middleware de Auth + tenant isolation
 7. Branch `develop` como default de trabajo

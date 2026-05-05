@@ -32,7 +32,7 @@ const MODULES: ModuleCard[] = [
     title: "Finanzas",
     description: "Cotizaciones, facturas, cobros y gastos",
     Icon: Wallet,
-    show: () => true,
+    show: (role) => role === "admin" || role === "abogada" || role === "contador",
   },
 ];
 

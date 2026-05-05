@@ -5,15 +5,26 @@ import { NextResponse, type NextRequest } from "next/server";
 //   "/"          — selector de módulos, abierto a todo rol autenticado.
 //   "/legal/*"   — módulo Legal: abogada, asistente y admin (NO contador).
 //   "/finanzas/*" — módulo Finanzas: abogada, asistente, admin y contador.
-// El subárbol /legal/admin/* es admin-only y se gatea aparte (ADMIN_ONLY_PREFIX).
+// Los subárboles /legal/admin/* y /finanzas/admin/* son admin-only y se gatean
+// aparte (ADMIN_ONLY_PREFIXES).
 const ROLE_ROUTES: Record<string, string[]> = {
   admin:     ["/", "/legal", "/finanzas"],
   abogada:   ["/", "/legal", "/finanzas"],
-  asistente: ["/", "/legal", "/finanzas"],
+  asistente: ["/", "/legal"],
   contador:  ["/", "/finanzas"],
 };
 
-const ADMIN_ONLY_PREFIX = "/legal/admin";
+const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
+
+// Home primaria por rol — destino fallback cuando el rol no tiene acceso a la
+// ruta solicitada. Admin/abogada caen al selector general; contador y asistente
+// tienen un solo módulo, así que caen ahí directo.
+const ROLE_HOME: Record<string, string> = {
+  admin:     "/",
+  abogada:   "/",
+  asistente: "/legal",
+  contador:  "/finanzas",
+};
 
 // Redirects 301 desde rutas pre-Fase 1A (vigentes ~4 semanas para preservar
 // bookmarks y los emails diarios ya enviados con URLs antiguas).
@@ -156,11 +167,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // /legal/admin/* es admin-only.
-  if (pathname.startsWith(ADMIN_ONLY_PREFIX)) {
+  // /legal/admin/* y /finanzas/admin/* son admin-only.
+  const matchedAdminPrefix = ADMIN_ONLY_PREFIXES.find((p) => pathname.startsWith(p));
+  if (matchedAdminPrefix) {
     if (userRole !== "admin") {
       const url = request.nextUrl.clone();
-      url.pathname = userRole === "contador" ? "/finanzas" : "/legal";
+      // Si el rol tiene acceso al root del módulo (sin /admin), va ahí; sino
+      // cae a su home primaria (ROLE_HOME).
+      const moduleRoot = matchedAdminPrefix.replace("/admin", "");
+      const allowedPrefixes = ROLE_ROUTES[userRole] ?? [];
+      url.pathname = allowedPrefixes.includes(moduleRoot)
+        ? moduleRoot
+        : ROLE_HOME[userRole] ?? "/";
       return NextResponse.redirect(url);
     }
     return response;
@@ -176,7 +194,7 @@ export async function middleware(request: NextRequest) {
 
   if (!hasAccess) {
     const url = request.nextUrl.clone();
-    url.pathname = userRole === "contador" ? "/finanzas" : "/";
+    url.pathname = ROLE_HOME[userRole] ?? "/";
     return NextResponse.redirect(url);
   }
 

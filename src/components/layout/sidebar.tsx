@@ -18,6 +18,7 @@ import {
   X,
   ClipboardList,
   UserPlus,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,25 +27,37 @@ interface NavItem {
   href: string;
   icon: React.ReactNode;
   roles: string[];
+  /** Sección lógica para renderizar separadores entre módulos. */
+  section?: "general" | "legal" | "finanzas" | "admin";
 }
 
 // "Inicio" lleva al selector de módulos (raíz). Es la primera entrada para
 // que el usuario siempre tenga vuelta a la pantalla de selección.
 const navItems: NavItem[] = [
-  { label: "Inicio",         href: "/",                          icon: <Home size={20} />,            roles: ["admin", "abogada", "asistente"] },
-  { label: "Dashboard",      href: "/legal",                     icon: <LayoutDashboard size={20} />, roles: ["admin", "abogada", "asistente"] },
-  { label: "Clientes",       href: "/legal/clientes",            icon: <Users size={20} />,           roles: ["admin", "abogada"] },
-  { label: "Casos",          href: "/legal/casos",               icon: <FolderOpen size={20} />,      roles: ["admin", "abogada", "asistente"] },
-  { label: "Gastos",         href: "/legal/gastos",              icon: <DollarSign size={20} />,      roles: ["admin", "abogada", "asistente"] },
-  { label: "Seguimiento",    href: "/legal/seguimiento",         icon: <ListTodo size={20} />,        roles: ["admin", "abogada"] },
-  { label: "Mis Pendientes", href: "/legal/pendientes",          icon: <ClipboardList size={20} />,   roles: ["admin", "abogada", "asistente"] },
-  { label: "Prospectos",     href: "/legal/prospectos",          icon: <UserPlus size={20} />,        roles: ["admin", "abogada"] },
-  { label: "Importar",       href: "/legal/importar",            icon: <Upload size={20} />,          roles: ["admin", "abogada"] },
-  { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"] },
-  { label: "Usuarios",       href: "/legal/admin/usuarios",      icon: <Shield size={20} />,          roles: ["admin"] },
-  { label: "Auditoría",      href: "/legal/admin/auditoria",     icon: <FileText size={20} />,        roles: ["admin"] },
-  { label: "Configuración",  href: "/legal/admin/configuracion", icon: <Settings size={20} />,        roles: ["admin"] },
+  { label: "Inicio",         href: "/",                          icon: <Home size={20} />,            roles: ["admin", "abogada", "asistente"], section: "general" },
+  { label: "Dashboard",      href: "/legal",                     icon: <LayoutDashboard size={20} />, roles: ["admin", "abogada", "asistente"], section: "legal" },
+  { label: "Clientes",       href: "/legal/clientes",            icon: <Users size={20} />,           roles: ["admin", "abogada"],              section: "legal" },
+  { label: "Casos",          href: "/legal/casos",               icon: <FolderOpen size={20} />,      roles: ["admin", "abogada", "asistente"], section: "legal" },
+  { label: "Gastos",         href: "/legal/gastos",              icon: <DollarSign size={20} />,      roles: ["admin", "abogada", "asistente"], section: "legal" },
+  { label: "Seguimiento",    href: "/legal/seguimiento",         icon: <ListTodo size={20} />,        roles: ["admin", "abogada"],              section: "legal" },
+  { label: "Mis Pendientes", href: "/legal/pendientes",          icon: <ClipboardList size={20} />,   roles: ["admin", "abogada", "asistente"], section: "legal" },
+  { label: "Prospectos",     href: "/legal/prospectos",          icon: <UserPlus size={20} />,        roles: ["admin", "abogada"],              section: "legal" },
+  { label: "Importar",       href: "/legal/importar",            icon: <Upload size={20} />,          roles: ["admin", "abogada"],              section: "legal" },
+  // Finanzas (gating server-side: middleware redirige asistentes fuera de /finanzas)
+  { label: "Facturas",       href: "/finanzas/facturas",         icon: <Receipt size={20} />,         roles: ["admin", "abogada"],              section: "finanzas" },
+  // Admin (gating server-side)
+  { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"],                         section: "admin" },
+  { label: "Usuarios",       href: "/legal/admin/usuarios",      icon: <Shield size={20} />,          roles: ["admin"],                         section: "admin" },
+  { label: "Auditoría",      href: "/legal/admin/auditoria",     icon: <FileText size={20} />,        roles: ["admin"],                         section: "admin" },
+  { label: "Configuración",  href: "/legal/admin/configuracion", icon: <Settings size={20} />,        roles: ["admin"],                         section: "admin" },
 ];
+
+const SECTION_LABEL: Record<NonNullable<NavItem["section"]>, string> = {
+  general: "",
+  legal: "GESTIÓN LEGAL",
+  finanzas: "FINANZAS",
+  admin: "ADMINISTRACIÓN",
+};
 
 interface SidebarProps {
   userRole: string;
@@ -95,7 +108,7 @@ export function Sidebar({ userRole, open, collapsed, onClose, onToggleCollapse }
 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-          {filteredItems.map((item) => {
+          {filteredItems.map((item, idx) => {
             // Para rutas raíz ("/" y "/legal") solo activamos en match exacto.
             // Para subrutas activamos también si el pathname es subdirectorio.
             const isRootLike = item.href === "/" || item.href === "/legal" || item.href === "/legal/admin";
@@ -103,25 +116,44 @@ export function Sidebar({ userRole, open, collapsed, onClose, onToggleCollapse }
               pathname === item.href ||
               (!isRootLike && pathname.startsWith(item.href + "/"));
 
+            // Renderizar header de sección cuando cambia respecto del ítem
+            // anterior. Ocultos cuando el sidebar está colapsado.
+            const prev = idx > 0 ? filteredItems[idx - 1] : null;
+            const showSectionHeader =
+              item.section &&
+              item.section !== "general" &&
+              item.section !== prev?.section;
+
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                title={collapsed ? item.label : undefined}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 min-h-[44px] text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-white/15 text-white border-l-[3px] border-integra-gold pl-[9px]"
-                    : "text-white/70 hover:bg-white/10 hover:text-white",
-                  collapsed && "lg:justify-center lg:px-0 lg:gap-0"
+              <div key={item.href}>
+                {showSectionHeader && (
+                  <div
+                    className={cn(
+                      "px-3 pt-3 pb-1 text-[10px] font-semibold tracking-wider text-white/40",
+                      collapsed && "lg:hidden"
+                    )}
+                  >
+                    {SECTION_LABEL[item.section!]}
+                  </div>
                 )}
-              >
-                <span className="shrink-0">{item.icon}</span>
-                <span className={cn("truncate", collapsed && "lg:hidden")}>
-                  {item.label}
-                </span>
-              </Link>
+                <Link
+                  href={item.href}
+                  onClick={onClose}
+                  title={collapsed ? item.label : undefined}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 min-h-[44px] text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-white/15 text-white border-l-[3px] border-integra-gold pl-[9px]"
+                      : "text-white/70 hover:bg-white/10 hover:text-white",
+                    collapsed && "lg:justify-center lg:px-0 lg:gap-0"
+                  )}
+                >
+                  <span className="shrink-0">{item.icon}</span>
+                  <span className={cn("truncate", collapsed && "lg:hidden")}>
+                    {item.label}
+                  </span>
+                </Link>
+              </div>
             );
           })}
         </nav>

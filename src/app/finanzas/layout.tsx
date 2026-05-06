@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { HomeHeader } from "@/components/home/home-header";
+import { DashboardShell } from "@/components/layout/dashboard-shell";
 
 /**
- * Layout placeholder de Finanzas. Auth + header simple sin sidebar (el módulo
- * todavía no existe — se construye en Fase 1B). Cuando el módulo tenga
- * navegación propia, se reemplazará por un FinanzasShell con sidebar.
+ * Layout del módulo Finanzas. Reusamos DashboardShell para que las abogadas
+ * sientan que es el mismo CRM (sidebar + header consistentes con /legal).
+ *
+ * El gating de roles a /finanzas (asistentes redirigidos) lo hace el
+ * middleware — acá solo aseguramos auth + cargamos perfil para el shell.
  */
 export default async function FinanzasLayout({
   children,
@@ -34,11 +36,8 @@ export default async function FinanzasLayout({
   const userRole = (profile?.role as string) || "abogada";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <HomeHeader userName={userName} userRole={userRole} />
-      <main className="px-4 py-8 lg:py-12">
-        <div className="mx-auto max-w-5xl">{children}</div>
-      </main>
-    </div>
+    <DashboardShell userName={userName} userRole={userRole}>
+      {children}
+    </DashboardShell>
   );
 }

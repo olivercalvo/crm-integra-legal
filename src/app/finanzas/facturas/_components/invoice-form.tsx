@@ -211,7 +211,9 @@ export function InvoiceForm(props: Props) {
         }
         const id = data.id ?? (props.mode === "edit" ? props.initial.id : null);
         if (id) {
-          router.push(`/finanzas/facturas/${id}`);
+          // ?saved=1 dispara el InvoiceSuccessToast en el detalle. El valor
+          // del param no se usa — solo su presencia.
+          router.push(`/finanzas/facturas/${id}?saved=1`);
           router.refresh();
         }
       } catch (err) {

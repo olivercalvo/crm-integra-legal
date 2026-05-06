@@ -16,6 +16,7 @@ import {
 } from "@/lib/finanzas/types/invoice";
 import { EmitInvoiceDialog } from "../_components/emit-invoice-dialog";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
+import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 
 interface PageProps {
   params: { id: string };
@@ -43,6 +44,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
 
   return (
     <div className="space-y-5">
+      <InvoiceSuccessToast />
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">

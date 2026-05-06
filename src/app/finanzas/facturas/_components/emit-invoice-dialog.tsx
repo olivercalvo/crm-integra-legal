@@ -49,6 +49,12 @@ export function EmitInvoiceDialog({
           return;
         }
         setOpen(false);
+        // Propagar número emitido vía URL para que InvoiceSuccessToast lo
+        // surface en el detalle. router.refresh recarga la data.
+        const num = data.invoice_number as string | undefined;
+        if (num) {
+          router.push(`/finanzas/facturas/${invoiceId}?emitted=${encodeURIComponent(num)}`);
+        }
         router.refresh();
       } catch {
         setError("Error de red. Intentá de nuevo.");

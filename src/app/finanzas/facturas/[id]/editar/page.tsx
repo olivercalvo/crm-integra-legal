@@ -69,7 +69,11 @@ export default async function EditarFacturaPage({ params }: PageProps) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton fallbackHref={`/finanzas/facturas/${invoice.id}`} />
+        <BackButton
+          fallbackHref={`/finanzas/facturas/${invoice.id}`}
+          label="Volver al detalle"
+          showLabel
+        />
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Editar factura</h1>
           <p className="text-sm text-gray-500">

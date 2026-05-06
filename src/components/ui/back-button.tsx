@@ -7,16 +7,23 @@ import { ArrowLeft } from "lucide-react";
 interface BackButtonProps {
   fallbackHref?: string;
   label?: string;
+  /**
+   * Si true, muestra el `label` visiblemente al lado del icono (botón con
+   * texto). Default false → solo icono (sr-only). Backward-compat con
+   * /legal que ya usa el botón solo-icono.
+   */
+  showLabel?: boolean;
 }
 
-export function BackButton({ fallbackHref, label }: BackButtonProps) {
+export function BackButton({ fallbackHref, label, showLabel = false }: BackButtonProps) {
   const router = useRouter();
+  const text = label ?? "Volver";
 
   return (
     <Button
       variant="ghost"
-      size="icon"
-      className="min-h-[48px] min-w-[48px]"
+      size={showLabel ? "default" : "icon"}
+      className={showLabel ? "min-h-[48px] px-3" : "min-h-[48px] min-w-[48px]"}
       onClick={() => {
         if (window.history.length > 1) {
           router.back();
@@ -24,10 +31,14 @@ export function BackButton({ fallbackHref, label }: BackButtonProps) {
           router.push(fallbackHref);
         }
       }}
-      aria-label={label ?? "Volver"}
+      aria-label={text}
     >
       <ArrowLeft size={20} />
-      <span className="sr-only">{label ?? "Volver"}</span>
+      {showLabel ? (
+        <span className="ml-2 text-sm font-medium">{text}</span>
+      ) : (
+        <span className="sr-only">{text}</span>
+      )}
     </Button>
   );
 }

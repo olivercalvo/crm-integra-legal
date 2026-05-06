@@ -48,7 +48,7 @@ export default async function NuevaFacturaPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <BackButton fallbackHref="/finanzas/facturas" />
+        <BackButton fallbackHref="/finanzas/facturas" label="Volver a facturas" showLabel />
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Nueva factura</h1>
           <p className="text-sm text-gray-500">

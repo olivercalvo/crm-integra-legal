@@ -49,7 +49,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <BackButton fallbackHref="/finanzas/facturas" />
+          <BackButton fallbackHref="/finanzas/facturas" label="Volver a facturas" showLabel />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Receipt size={20} className="text-integra-gold shrink-0" />

@@ -34,22 +34,22 @@ interface NavItem {
 // "Inicio" lleva al selector de módulos (raíz). Es la primera entrada para
 // que el usuario siempre tenga vuelta a la pantalla de selección.
 const navItems: NavItem[] = [
-  { label: "Inicio",         href: "/",                          icon: <Home size={20} />,            roles: ["admin", "abogada", "asistente"], section: "general" },
-  { label: "Dashboard",      href: "/legal",                     icon: <LayoutDashboard size={20} />, roles: ["admin", "abogada", "asistente"], section: "legal" },
-  { label: "Clientes",       href: "/legal/clientes",            icon: <Users size={20} />,           roles: ["admin", "abogada"],              section: "legal" },
-  { label: "Casos",          href: "/legal/casos",               icon: <FolderOpen size={20} />,      roles: ["admin", "abogada", "asistente"], section: "legal" },
-  { label: "Gastos",         href: "/legal/gastos",              icon: <DollarSign size={20} />,      roles: ["admin", "abogada", "asistente"], section: "legal" },
-  { label: "Seguimiento",    href: "/legal/seguimiento",         icon: <ListTodo size={20} />,        roles: ["admin", "abogada"],              section: "legal" },
-  { label: "Mis Pendientes", href: "/legal/pendientes",          icon: <ClipboardList size={20} />,   roles: ["admin", "abogada", "asistente"], section: "legal" },
-  { label: "Prospectos",     href: "/legal/prospectos",          icon: <UserPlus size={20} />,        roles: ["admin", "abogada"],              section: "legal" },
-  { label: "Importar",       href: "/legal/importar",            icon: <Upload size={20} />,          roles: ["admin", "abogada"],              section: "legal" },
+  { label: "Inicio",         href: "/",                          icon: <Home size={20} />,            roles: ["admin", "abogada", "asistente", "contador"], section: "general" },
+  { label: "Dashboard",      href: "/legal",                     icon: <LayoutDashboard size={20} />, roles: ["admin", "abogada", "asistente"],              section: "legal" },
+  { label: "Clientes",       href: "/legal/clientes",            icon: <Users size={20} />,           roles: ["admin", "abogada"],                           section: "legal" },
+  { label: "Casos",          href: "/legal/casos",               icon: <FolderOpen size={20} />,      roles: ["admin", "abogada", "asistente"],              section: "legal" },
+  { label: "Gastos",         href: "/legal/gastos",              icon: <DollarSign size={20} />,      roles: ["admin", "abogada", "asistente"],              section: "legal" },
+  { label: "Seguimiento",    href: "/legal/seguimiento",         icon: <ListTodo size={20} />,        roles: ["admin", "abogada"],                           section: "legal" },
+  { label: "Mis Pendientes", href: "/legal/pendientes",          icon: <ClipboardList size={20} />,   roles: ["admin", "abogada", "asistente"],              section: "legal" },
+  { label: "Prospectos",     href: "/legal/prospectos",          icon: <UserPlus size={20} />,        roles: ["admin", "abogada"],                           section: "legal" },
+  { label: "Importar",       href: "/legal/importar",            icon: <Upload size={20} />,          roles: ["admin", "abogada"],                           section: "legal" },
   // Finanzas (gating server-side: middleware redirige asistentes fuera de /finanzas)
-  { label: "Facturas",       href: "/finanzas/facturas",         icon: <Receipt size={20} />,         roles: ["admin", "abogada"],              section: "finanzas" },
+  { label: "Facturas",       href: "/finanzas/facturas",         icon: <Receipt size={20} />,         roles: ["admin", "abogada", "contador"],               section: "finanzas" },
   // Admin (gating server-side)
-  { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"],                         section: "admin" },
-  { label: "Usuarios",       href: "/legal/admin/usuarios",      icon: <Shield size={20} />,          roles: ["admin"],                         section: "admin" },
-  { label: "Auditoría",      href: "/legal/admin/auditoria",     icon: <FileText size={20} />,        roles: ["admin"],                         section: "admin" },
-  { label: "Configuración",  href: "/legal/admin/configuracion", icon: <Settings size={20} />,        roles: ["admin"],                         section: "admin" },
+  { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"],                                      section: "admin" },
+  { label: "Usuarios",       href: "/legal/admin/usuarios",      icon: <Shield size={20} />,          roles: ["admin"],                                      section: "admin" },
+  { label: "Auditoría",      href: "/legal/admin/auditoria",     icon: <FileText size={20} />,        roles: ["admin"],                                      section: "admin" },
+  { label: "Configuración",  href: "/legal/admin/configuracion", icon: <Settings size={20} />,        roles: ["admin"],                                      section: "admin" },
 ];
 
 const SECTION_LABEL: Record<NonNullable<NavItem["section"]>, string> = {
@@ -57,6 +57,27 @@ const SECTION_LABEL: Record<NonNullable<NavItem["section"]>, string> = {
   legal: "GESTIÓN LEGAL",
   finanzas: "FINANZAS",
   admin: "ADMINISTRACIÓN",
+};
+
+/**
+ * Visibilidad de SECCIONES por rol — capa adicional sobre los `roles` por
+ * ítem. Aunque un rol matchee `item.roles`, si la sección NO está habilitada
+ * para ese rol el ítem no se muestra. Permite ocultar módulos completos
+ * para roles especializados (ej: contador NO ve Gestión Legal aunque
+ * algunos ítems individuales lo permitan en el futuro).
+ *
+ * - admin:     ve TODO
+ * - abogada:   legal + finanzas
+ * - asistente: solo legal
+ * - contador:  solo finanzas
+ *
+ * "general" (Inicio) es siempre visible — es la salida al selector de módulos.
+ */
+const SECTION_ROLES: Record<NonNullable<NavItem["section"]>, string[]> = {
+  general:  ["admin", "abogada", "asistente", "contador"],
+  legal:    ["admin", "abogada", "asistente"],
+  finanzas: ["admin", "abogada", "contador"],
+  admin:    ["admin"],
 };
 
 interface SidebarProps {
@@ -69,7 +90,14 @@ interface SidebarProps {
 
 export function Sidebar({ userRole, open, collapsed, onClose, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
-  const filteredItems = navItems.filter((item) => item.roles.includes(userRole));
+  const filteredItems = navItems.filter((item) => {
+    // Doble guard: el ítem debe permitir el rol Y la sección del ítem debe
+    // estar habilitada para ese rol. Esto evita que un ítem nuevo agregado
+    // por error a una sección "ajena" se filtre por error.
+    if (!item.roles.includes(userRole)) return false;
+    if (!item.section) return true;
+    return SECTION_ROLES[item.section].includes(userRole);
+  });
 
   return (
     <>

@@ -218,6 +218,7 @@ export function InvoiceLineItems({
                       inputMode="decimal"
                       value={ln.quantity}
                       onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) })}
+                      onFocus={(e) => e.target.select()}
                       disabled={disabled}
                       className={lineErrors.quantity ? "border-red-300" : ""}
                     />
@@ -229,16 +230,25 @@ export function InvoiceLineItems({
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Precio unit.
                     </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={ln.unit_price}
-                      onChange={(e) => patchLine(idx, { unit_price: Number(e.target.value) })}
-                      disabled={disabled}
-                      className={lineErrors.unit_price ? "border-red-300" : ""}
-                    />
+                    <div className="relative">
+                      <span
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500"
+                        aria-hidden="true"
+                      >
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={ln.unit_price}
+                        onChange={(e) => patchLine(idx, { unit_price: Number(e.target.value) })}
+                        onFocus={(e) => e.target.select()}
+                        disabled={disabled}
+                        className={`pl-7 ${lineErrors.unit_price ? "border-red-300" : ""}`}
+                      />
+                    </div>
                     {lineErrors.unit_price && (
                       <p className="mt-1 text-xs text-red-600">{lineErrors.unit_price}</p>
                     )}

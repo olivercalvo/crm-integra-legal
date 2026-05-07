@@ -129,7 +129,7 @@ export function InvoiceLineItems({
 
       {lines.length === 0 ? (
         <div className="rounded-md border border-dashed bg-gray-50 p-6 text-center text-sm text-gray-500">
-          Aún no hay líneas. Agregá la primera con el botón de arriba.
+          Aún no hay líneas. Agrega la primera con el botón de arriba.
         </div>
       ) : (
         <div className="space-y-3">

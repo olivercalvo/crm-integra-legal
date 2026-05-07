@@ -52,7 +52,7 @@ export default async function NuevaFacturaPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Nueva factura</h1>
           <p className="text-sm text-gray-500">
-            Completá los datos y guardá como borrador. La numeración se asigna al emitir.
+            Completa los datos y guarda como borrador. La numeración se asigna al emitir.
           </p>
         </div>
       </div>

@@ -37,7 +37,7 @@ export function DeleteInvoiceButton({ invoiceId, invoiceLabel, disabled }: Props
         }
         router.push(`/finanzas/facturas?deleted=${encodeURIComponent(invoiceLabel)}`);
       } catch {
-        setError("Error de red. Intentá de nuevo.");
+        setError("Error de red. Intenta de nuevo.");
       }
     });
   }
@@ -68,7 +68,7 @@ export function DeleteInvoiceButton({ invoiceId, invoiceLabel, disabled }: Props
         cancelButtonText="Cancelar"
       >
         <p className="text-sm text-gray-700">
-          ¿Seguro que querés eliminar el borrador{" "}
+          ¿Seguro que quieres eliminar el borrador{" "}
           <span className="font-semibold">{invoiceLabel}</span>? Esta acción no
           se puede deshacer.
         </p>

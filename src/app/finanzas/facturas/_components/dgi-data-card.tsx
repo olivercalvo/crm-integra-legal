@@ -82,7 +82,7 @@ export function DgiDataCard({ invoiceId, initial }: Props) {
       {isEmpty ? (
         <div className="rounded-lg border border-dashed border-integra-gold/40 bg-integra-navy/[0.02] p-5 text-center">
           <p className="text-sm text-gray-700 mb-4">
-            Esta factura aún no fue replicada en eFactura. Registrá el número
+            Esta factura aún no fue replicada en eFactura. Registra el número
             oficial cuando termines de emitirla allá.
           </p>
           <Button
@@ -297,7 +297,7 @@ function DgiFormModal({ invoiceId, initial, onClose }: ModalProps) {
         router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {
-        setError("Error de red. Intentá de nuevo.");
+        setError("Error de red. Intenta de nuevo.");
       }
     });
   }
@@ -328,7 +328,7 @@ function DgiFormModal({ invoiceId, initial, onClose }: ModalProps) {
           </div>
 
           <p className="text-xs text-gray-500">
-            Registrá los datos oficiales que devolvió eFactura tras emitir la
+            Registra los datos oficiales que devolvió eFactura tras emitir la
             factura electrónica allá.
           </p>
 

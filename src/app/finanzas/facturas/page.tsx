@@ -100,7 +100,7 @@ export default async function FacturasListPage({ searchParams }: PageProps) {
           emptyMessage={
             hasFilters
               ? "No hay facturas que coincidan con los filtros aplicados."
-              : "Aún no hay facturas. Creá la primera con el botón de arriba."
+              : "Aún no hay facturas. Crea la primera con el botón de arriba."
           }
         />
       ) : (

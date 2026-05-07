@@ -110,7 +110,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             <p className="font-semibold">📄 Documento interno</p>
             <p>
               La factura fiscal oficial debe emitirse en eFactura. Cuando
-              termines, registrá el número y el CUFE en la sección de abajo.
+              termines, registra el número y el CUFE en la sección de abajo.
             </p>
           </div>
         </div>
@@ -319,7 +319,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <p>
                 En estado{" "}
                 <span className="font-mono">{invoice.status}</span> no se permite
-                editar líneas ni cabecera. Para cambios, generá una nota de
+                editar líneas ni cabecera. Para cambios, genera una nota de
                 crédito (próximamente).
               </p>
             </div>

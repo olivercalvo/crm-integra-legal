@@ -26,7 +26,7 @@ export default function Error({
         Algo salió mal en Facturas
       </h2>
       <p className="mt-1 text-sm text-red-600">
-        {error.message || "Error inesperado. Intentá recargar la página."}
+        {error.message || "Error inesperado. Intenta recargar la página."}
       </p>
       {error.digest && (
         <p className="mt-2 text-xs text-red-500 font-mono">ref: {error.digest}</p>

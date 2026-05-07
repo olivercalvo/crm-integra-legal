@@ -77,7 +77,7 @@ export default async function EditarFacturaPage({ params }: PageProps) {
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Editar factura</h1>
           <p className="text-sm text-gray-500">
-            Modificá los datos del borrador. Al guardar, los totales se
+            Modifica los datos del borrador. Al guardar, los totales se
             recalculan automáticamente.
           </p>
         </div>

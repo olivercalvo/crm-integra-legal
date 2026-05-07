@@ -312,7 +312,7 @@ export async function emitInvoice(
   }
   if (!lineCount || lineCount === 0) {
     throw new InvoiceMutationError(
-      "La factura no tiene líneas. Agregá al menos una antes de emitir.",
+      "La factura no tiene líneas. Agrega al menos una antes de emitir.",
       400
     );
   }

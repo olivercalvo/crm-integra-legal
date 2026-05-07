@@ -96,7 +96,7 @@ export function validateCreateInvoice(
 
   const lines = Array.isArray(raw.lines) ? raw.lines : [];
   if (lines.length === 0) {
-    errors.lines = "Agregá al menos una línea a la factura";
+    errors.lines = "Agrega al menos una línea a la factura";
   } else {
     lines.forEach((ln, idx) => {
       const lineErrors = validateLine(ln);

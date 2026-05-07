@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Receipt, User, FolderOpen, Calendar, FileText } from "lucide-react";
+import { Pencil, Receipt, User, FolderOpen, Calendar, FileText, AlertTriangle } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/back-button";
@@ -17,6 +17,7 @@ import {
 import { EmitInvoiceDialog } from "../_components/emit-invoice-dialog";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
+import { DgiDataCard } from "../_components/dgi-data-card";
 
 interface PageProps {
   params: { id: string };
@@ -31,6 +32,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const editable = isEditable(invoice.status);
   const emittable = isEmittable(invoice.status);
   const deletable = isDeletable(invoice.status);
+  const isEmitida = invoice.status === "emitida";
+  // Banner pre-integración eFactura: visible mientras la abogada no haya
+  // capturado el CUFE oficial. Una vez registrado, el flujo se considera
+  // completo y ocultamos el banner para reducir ruido visual.
+  const showInternalBanner = isEmitida && !invoice.dgi_cufe;
 
   const numberPreview = emittable
     ? await previewNextInvoiceNumber(db, tenantId, invoice.invoice_kind)
@@ -89,6 +95,26 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* Banner pre-integración eFactura (decisión D2 del sprint).
+          Sólo visible en facturas emitidas que aún no tienen CUFE registrado.
+          shadcn/ui no incluye Alert en este proyecto, así que armamos un
+          banner custom con la paleta corporativa. */}
+      {showInternalBanner && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 text-amber-900"
+        >
+          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
+          <div className="text-sm">
+            <p className="font-semibold">📄 Documento interno</p>
+            <p>
+              La factura fiscal oficial debe emitirse en eFactura. Cuando
+              termines, registrá el número y el CUFE en la sección de abajo.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         {/* Cuerpo principal */}
@@ -225,6 +251,24 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               </div>
             )}
           </section>
+
+          {/* Datos DGI — visible sólo cuando status='emitida' (decisión D4
+              del sprint). En el MVP actual no hay registro de pagos en UI
+              ni anulación, así que 'emitida' es el único estado post-emisión
+              alcanzable por el usuario. Cuando se agregue pagos (Fase 2C),
+              revisar si conviene extender a parcialmente_pagada/pagada/anulada
+              para captura retroactiva. */}
+          {isEmitida && (
+            <DgiDataCard
+              invoiceId={invoice.id}
+              initial={{
+                dgi_numero_documento: invoice.dgi_numero_documento,
+                dgi_cufe: invoice.dgi_cufe,
+                dgi_fecha_autorizacion: invoice.dgi_fecha_autorizacion,
+                dgi_cafe_url: invoice.dgi_cafe_url,
+              }}
+            />
+          )}
         </div>
 
         {/* Sidebar: totales */}

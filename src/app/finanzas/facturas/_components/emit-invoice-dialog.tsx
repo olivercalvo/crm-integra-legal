@@ -74,7 +74,7 @@ export function EmitInvoiceDialog({
         className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px]"
       >
         <Send size={16} className="mr-2" />
-        Emitir factura
+        Emitir factura interna
       </Button>
 
       <ConfirmationModal
@@ -82,8 +82,8 @@ export function EmitInvoiceDialog({
         onClose={() => !isPending && setOpen(false)}
         onConfirm={emit}
         loading={isPending}
-        title="Emitir factura"
-        confirmButtonText="Sí, emitir"
+        title="Emitir factura interna"
+        confirmButtonText="Sí, emitir factura interna"
         cancelButtonText="Cancelar"
       >
         <div className="space-y-3">
@@ -92,6 +92,14 @@ export function EmitInvoiceDialog({
             <span className="font-semibold text-integra-navy">emitida</span>. La
             factura ya no podrá editarse ni eliminarse.
           </p>
+
+          <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+            <p>
+              <span className="font-semibold">Esta factura interna no es válida fiscalmente.</span>{" "}
+              Recordá replicarla en eFactura para emitir la factura electrónica
+              oficial.
+            </p>
+          </div>
 
           <div className="rounded-md border bg-gray-50 p-3 space-y-2 text-sm">
             <div className="flex justify-between">

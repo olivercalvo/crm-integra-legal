@@ -18,6 +18,7 @@ import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
   UpdateInvoiceDgiInput,
+  CancelInvoiceInput,
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
@@ -529,6 +530,102 @@ export async function updateInvoiceDgiData(
       dgi_cufe: input.dgi_cufe,
       dgi_fecha_autorizacion: input.dgi_fecha_autorizacion,
       dgi_cafe_url: input.dgi_cafe_url,
+    })
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId);
+
+  if (errUpd) {
+    throw new InvoiceMutationError(pgErrorToMessage(errUpd), 400, errUpd);
+  }
+
+  return { id: invoiceId };
+}
+
+// ---------------------------------------------------------------------------
+// CANCEL — anulación post-emisión con razón persistida
+// ---------------------------------------------------------------------------
+
+/**
+ * Valida la razón de anulación. Reglas:
+ *   - reason debe ser string trimeado de longitud >= 3.
+ *   - Sin tope superior — el TEXT de Postgres es ilimitado en la práctica
+ *     y queremos permitir razones detalladas que la abogada arme con paste
+ *     desde un email de DGI/cliente.
+ *
+ * Devuelve la razón YA TRIMEADA si pasa, o un error map (compatible con el
+ * resto del módulo) si no.
+ */
+export function validateCancelInput(
+  raw: Partial<CancelInvoiceInput> | null | undefined
+): { ok: true; data: CancelInvoiceInput } | { ok: false; errors: { reason: string } } {
+  const reason = raw?.reason ? String(raw.reason).trim() : "";
+  if (reason.length < 3) {
+    return {
+      ok: false,
+      errors: {
+        reason: "La razón de anulación debe tener al menos 3 caracteres.",
+      },
+    };
+  }
+  return { ok: true, data: { reason } };
+}
+
+/**
+ * Anula una factura emitida. Marca status='anulada', persiste razón y
+ * timestamp UTC. Es UN solo UPDATE atómico — T2 valida la transición de
+ * status, T4 deja pasar las nuevas columnas (no están en su whitelist).
+ *
+ * Estados de origen permitidos por el spec del sprint:
+ *   - emitida              ✓ (T2 lo permite)
+ *   - parcialmente_pagada  ✓ (T2 lo permite)
+ *   - pagada               ✗ T2 NO lo permite (línea 106 del trigger b3e:
+ *     pagada solo puede ir a parcialmente_pagada o emitida). En el MVP
+ *     actual no es alcanzable porque no hay UI de pagos. Lo dejamos en la
+ *     lista del backend gate por consistencia con el spec; si llegara a
+ *     entrar (vía SQL manual de pagos), el UPDATE rebotaría con el mensaje
+ *     del trigger ("Transición de status inválida..."), que `pgErrorToMessage`
+ *     surface tal cual al usuario. Cuando llegue Fase 2C (pagos) habrá que
+ *     decidir si se permite anulación de facturas pagadas (probable: sí,
+ *     con reverso de payment) — eso requerirá tocar T2.
+ */
+export async function cancelInvoice(
+  db: DB,
+  tenantId: string,
+  invoiceId: string,
+  reason: string
+) {
+  // 1. Cargar status actual para validar antes del UPDATE. Mejor diagnóstico
+  //    que dejar que T2 raise — distinguimos entre "no anulable" y "ya anulada".
+  const { data: inv, error: errFetch } = await db
+    .from("invoices")
+    .select("id, status, invoice_number")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+
+  if (errFetch) {
+    throw new InvoiceMutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  }
+  if (!inv) {
+    throw new InvoiceMutationError("Factura no encontrada", 404);
+  }
+  if (inv.status === "anulada") {
+    throw new InvoiceMutationError("La factura ya está anulada.", 400);
+  }
+  if (inv.status === "borrador" || inv.status === "cancelada_pre_emision") {
+    throw new InvoiceMutationError(
+      "No se puede anular una factura no emitida. Para descartarla, usa Eliminar.",
+      400
+    );
+  }
+
+  // 2. UPDATE atómico: status + reason + timestamp. T2 valida la transición.
+  const { error: errUpd } = await db
+    .from("invoices")
+    .update({
+      status: "anulada",
+      cancellation_reason: reason,
+      cancelled_at: new Date().toISOString(),
     })
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId);

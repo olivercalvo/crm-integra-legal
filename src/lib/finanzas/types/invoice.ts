@@ -153,6 +153,10 @@ export interface InvoiceRow {
   dgi_cufe: string | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
+  // ----- Anulación. Se llenan en el mismo UPDATE que cambia status a 'anulada'.
+  // Schema: migration 20260507000001_finanzas_b4_anular_factura.sql
+  cancellation_reason: string | null;
+  cancelled_at: string | null;
 }
 
 /** Payload para registrar/actualizar los datos DGI de una factura emitida. */
@@ -161,6 +165,11 @@ export interface UpdateInvoiceDgiInput {
   dgi_cufe: string | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
+}
+
+/** Payload para anular una factura. Reason es requerida. */
+export interface CancelInvoiceInput {
+  reason: string;
 }
 
 /** Línea de invoice tal como viene del SELECT. */

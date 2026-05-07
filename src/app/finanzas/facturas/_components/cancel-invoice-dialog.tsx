@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { XCircle, AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,20 @@ export function CancelInvoiceDialog({
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Autofocus al textarea cuando se abre el dialog. Pequeño delay para que
+  // el render del modal termine antes; sin él el focus se pierde porque el
+  // ConfirmationModal se monta después del onClick.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => textareaRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  const trimmedLen = reason.trim().length;
+  const meetsMinimum = trimmedLen >= 3;
+  const REASON_MAX = 1000;
 
   function reset() {
     setReason("");
@@ -161,6 +175,7 @@ export function CancelInvoiceDialog({
             </Label>
             <textarea
               id="cancel_reason"
+              ref={textareaRef}
               value={reason}
               onChange={(e) => {
                 setReason(e.target.value);
@@ -168,7 +183,7 @@ export function CancelInvoiceDialog({
               }}
               disabled={isPending}
               rows={3}
-              maxLength={1000}
+              maxLength={REASON_MAX}
               placeholder="Ej: Datos del receptor incorrectos, error en el monto…"
               className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm bg-white focus:outline-none focus:border-integra-navy ${
                 reasonError
@@ -176,14 +191,28 @@ export function CancelInvoiceDialog({
                   : "border-gray-300 hover:border-integra-navy"
               }`}
             />
-            <p
-              className={`mt-1 text-xs ${
-                reasonError ? "text-red-600" : "text-gray-500"
-              }`}
-            >
-              {reasonError ??
-                "Esta razón quedará registrada permanentemente y se enviará a DGI cuando se complete la integración con eFactura."}
-            </p>
+            <div className="mt-1 flex items-start justify-between gap-3">
+              <p
+                className={`text-xs ${
+                  reasonError ? "text-red-600" : "text-gray-500"
+                }`}
+              >
+                {reasonError ??
+                  "Esta razón quedará registrada permanentemente y se enviará a DGI cuando se complete la integración con eFactura."}
+              </p>
+              <span
+                aria-live="polite"
+                className={`shrink-0 text-xs font-mono ${
+                  trimmedLen === 0
+                    ? "text-gray-400"
+                    : meetsMinimum
+                      ? "text-gray-500"
+                      : "text-amber-600"
+                }`}
+              >
+                {trimmedLen}/{REASON_MAX}
+              </span>
+            </div>
           </div>
 
           {/* Error del backend (solo si no es field-level) */}

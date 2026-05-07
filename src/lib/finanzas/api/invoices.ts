@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
+  UpdateInvoiceDgiInput,
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
@@ -399,6 +400,143 @@ export async function deleteInvoice(
   if (error) {
     throw new InvoiceMutationError(pgErrorToMessage(error), 400, error);
   }
+  return { id: invoiceId };
+}
+
+// ---------------------------------------------------------------------------
+// DGI (eFactura) — registro manual pre-integración PAC (Camino 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resultado de validación de los datos DGI. Mensajes en español, mapa flat
+ * `campo → mensaje` consistente con validateCreateInvoice().
+ */
+export type DgiValidationErrors = Partial<
+  Record<keyof UpdateInvoiceDgiInput, string>
+>;
+
+/**
+ * Valida el payload DGI. Reglas (FAQ):
+ *
+ *   - dgi_numero_documento: opcional. Si se provee, exactamente 10 dígitos
+ *     numéricos (formato '0000001234'). El backend NO lo deja en estado
+ *     intermedio — o se manda válido o vacío/null.
+ *   - dgi_cufe: opcional. Cualquier string trimeado no vacío.
+ *   - dgi_fecha_autorizacion: opcional. Si se provee, debe parsear como
+ *     fecha válida (Date.parse !== NaN). El frontend manda ISO 8601.
+ *   - dgi_cafe_url: opcional. Si se provee, parseable por `new URL()`.
+ *
+ * Mantenemos las reglas server-side aún cuando el form ya valida — defensa
+ * en profundidad. La UI puede enforzar adicionalmente que numero y fecha
+ * sean obligatorios para "completar" el flujo, pero el endpoint acepta
+ * guardados parciales.
+ */
+export function validateDgiInput(
+  raw: Partial<UpdateInvoiceDgiInput> | null | undefined
+): { ok: true; data: UpdateInvoiceDgiInput } | { ok: false; errors: DgiValidationErrors } {
+  const errors: DgiValidationErrors = {};
+
+  // Helper: trim + null-if-empty.
+  const norm = (v: unknown): string | null => {
+    if (v === null || v === undefined) return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+  };
+
+  const numero = norm(raw?.dgi_numero_documento);
+  const cufe = norm(raw?.dgi_cufe);
+  const fecha = norm(raw?.dgi_fecha_autorizacion);
+  const url = norm(raw?.dgi_cafe_url);
+
+  if (numero !== null && !/^\d{10}$/.test(numero)) {
+    errors.dgi_numero_documento =
+      "El número DGI debe ser exactamente 10 dígitos numéricos (formato 0000001234).";
+  }
+
+  if (fecha !== null) {
+    const parsed = Date.parse(fecha);
+    if (isNaN(parsed)) {
+      errors.dgi_fecha_autorizacion = "Fecha de autorización inválida.";
+    }
+  }
+
+  if (url !== null) {
+    try {
+      // `new URL()` rechaza strings que no son URL absolutas válidas.
+      new URL(url);
+    } catch {
+      errors.dgi_cafe_url = "URL del CAFE inválida.";
+    }
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  return {
+    ok: true,
+    data: {
+      dgi_numero_documento: numero,
+      dgi_cufe: cufe,
+      dgi_fecha_autorizacion: fecha,
+      dgi_cafe_url: url,
+    },
+  };
+}
+
+/**
+ * Actualiza los 4 campos DGI de una factura. SOLO debe llamarse para
+ * facturas en status='emitida' — ni borrador (no tiene sentido) ni anulada
+ * (cerrada). El handler debe gate-ear ese estado antes de llamar.
+ *
+ * Las 4 columnas no están en la whitelist de T4 (trg_invoice_immutability),
+ * así que la DB no las bloquea aún en facturas emitidas. Eso es por diseño
+ * (decisión D5 del sprint).
+ */
+export async function updateInvoiceDgiData(
+  db: DB,
+  tenantId: string,
+  invoiceId: string,
+  input: UpdateInvoiceDgiInput
+) {
+  // Verificá que la factura existe y está en un estado donde tiene sentido
+  // capturar datos DGI. Si está en borrador, esto es prematuro; si está
+  // cancelada_pre_emision, no hay nada que registrar.
+  const { data: inv, error: errFetch } = await db
+    .from("invoices")
+    .select("id, status, invoice_number")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+
+  if (errFetch) {
+    throw new InvoiceMutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  }
+  if (!inv) {
+    throw new InvoiceMutationError("Factura no encontrada", 404);
+  }
+  if (inv.status === "borrador" || inv.status === "cancelada_pre_emision") {
+    throw new InvoiceMutationError(
+      "No se puede registrar datos DGI en una factura que aún no fue emitida.",
+      400
+    );
+  }
+
+  const { error: errUpd } = await db
+    .from("invoices")
+    .update({
+      dgi_numero_documento: input.dgi_numero_documento,
+      dgi_cufe: input.dgi_cufe,
+      dgi_fecha_autorizacion: input.dgi_fecha_autorizacion,
+      dgi_cafe_url: input.dgi_cafe_url,
+    })
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId);
+
+  if (errUpd) {
+    throw new InvoiceMutationError(pgErrorToMessage(errUpd), 400, errUpd);
+  }
+
   return { id: invoiceId };
 }
 

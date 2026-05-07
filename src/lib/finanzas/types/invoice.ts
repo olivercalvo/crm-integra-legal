@@ -144,6 +144,23 @@ export interface InvoiceRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // ----- DGI (eFactura) — registro manual pre-integración PAC.
+  // Estos 4 campos los carga la abogada DESPUÉS de replicar la factura
+  // interna en eFactura. Cuando se complete la integración con el PAC
+  // (Camino 2), el flujo automático los va a poblar.
+  // Schema: migration 20260506000001_finanzas_b4_schema_prep_dgi.sql
+  dgi_numero_documento: string | null;
+  dgi_cufe: string | null;
+  dgi_fecha_autorizacion: string | null;
+  dgi_cafe_url: string | null;
+}
+
+/** Payload para registrar/actualizar los datos DGI de una factura emitida. */
+export interface UpdateInvoiceDgiInput {
+  dgi_numero_documento: string | null;
+  dgi_cufe: string | null;
+  dgi_fecha_autorizacion: string | null;
+  dgi_cafe_url: string | null;
 }
 
 /** Línea de invoice tal como viene del SELECT. */

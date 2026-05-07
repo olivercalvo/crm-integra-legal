@@ -1,5 +1,31 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+### 2026-05-07 — Sprint Camino 1 Extendido (Fase 1B parte 3)
+
+**UI Facturas — Pre-integración eFactura + Anulación desde UI**
+
+Commits incluidos:
+- c83a01e — feat(finanzas): schema prep DGI (4 columnas)
+- 1c67e52 — feat(finanzas): backend captura datos DGI
+- a912aa1 — feat(finanzas): UI captura datos DGI + banner pre-integración
+- f87fc36 — feat(finanzas): polish toast variantes
+- 6d5bd3a — fix(finanzas): reemplazar voseo argentino por tuteo neutro panameño
+- 21d78a1 — feat(finanzas): schema para anulación de facturas con razón
+- 9ddabe2 — feat(finanzas): backend para anular factura desde UI
+- 0904bd7 — feat(finanzas): UI para anular facturas con captura de razón
+- 5ff7dbb — feat(finanzas): polish y smoke trace anular factura
+
+Cambios funcionales:
+- Las abogadas pueden anular facturas desde UI con razón obligatoria (ya no requiere acceso a SQL)
+- Pantalla de detalle muestra "Información de anulación" cuando status='anulada'
+- Toast rojo "Factura anulada correctamente" diferenciado de toasts verdes (acciones positivas)
+- Convención permanente: tuteo neutro panameño en todo texto UI
+- Schema preparado para Camino 2 (integración eFactura): 6 columnas nuevas en invoices
+
+Migrations aplicadas en prod:
+- 20260506000001_finanzas_b4_schema_prep_dgi.sql
+- 20260507000001_finanzas_b4_anular_factura.sql
+
 ## [1.11.0] — 2026-05-04
 
 ### Feature — Fase 1A: Selector de módulo + reestructura de rutas bajo `/legal/*`

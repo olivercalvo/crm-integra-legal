@@ -109,3 +109,46 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Server Components por defecto, Client Components solo cuando necesario
 - Imports absolutos con `@/`
 - Supabase client: server-side con `createServerComponentClient`, client-side con `createClientComponentClient`
+
+## Módulo Finanzas — Anulación de facturas
+
+### Estado actual (Camino 1, MVP transitorio)
+
+Las abogadas y admins pueden anular facturas emitidas desde la UI:
+- Botón "Anular factura" visible en detalle cuando status ∈ {emitida, parcialmente_pagada, pagada}
+- Modal con textarea obligatoria (mínimo 3 caracteres, máximo 1000)
+- Permisos: admin + abogada + contador (NO asistente)
+- La anulación es UN solo UPDATE atómico: status='anulada' + cancellation_reason + cancelled_at = NOW()
+- T2 (status transition validator) permite emitida→anulada y parcialmente_pagada→anulada
+- T2 NO permite pagada→anulada hoy. Cuando llegue Fase 2C (pagos) habrá que revisar el trigger junto con la lógica de reverso de payments.
+
+Schema relevante:
+- invoices.cancellation_reason TEXT NULL — obligatorio al anular
+- invoices.cancelled_at TIMESTAMPTZ NULL — timestamp UTC interno
+- Migration: 20260507000001_finanzas_b4_anular_factura.sql
+
+### Estado futuro (Camino 2, post-integración eFactura)
+
+Cuando se complete la integración con la API de eFactura, el helper cancelInvoice() debe extenderse con la siguiente lógica de bifurcación:
+
+| Escenario | Acción | Endpoint DGI |
+|---|---|---|
+| Factura sin dgi_cufe (pre-integración o falla) | Anular solo en BD interna | — |
+| dgi_cufe registrado, < 182h desde dgi_fecha_autorizacion | Anular en DGI + BD | POST /api/v1/InvoiceEvents/CreateCancellation con cancellationReason |
+| dgi_cufe registrado, ≥ 182h | NC obligatoria (no anular) | POST /api/v1/Invoices con tipoDocumento=04 (módulo NC, sprint propio) |
+| Anulada manualmente en portal eFactura | Detectar via polling, sync BD | GET /Invoices/{id} |
+
+Activos ya preparados para Camino 2:
+- cancellation_reason → mapea 1:1 a cancellationReason del payload DGI
+- cancelled_at → auditoría interna
+- dgi_fecha_autorizacion → cálculo de ventana 182h
+- dgi_cufe → identificador único para el endpoint de cancelación
+- cancelInvoice() helper en src/lib/finanzas/api/invoices.ts → punto único donde se intercepta para agregar la llamada DGI
+
+Items pendientes Camino 2:
+- Cliente API eFactura server-side
+- Helper canCancel() que retorna 'anular' | 'nc-obligatoria' según horas transcurridas
+- UI condicional en CancelInvoiceDialog (≥182h bloquea botón y sugiere NC)
+- Módulo Nota de Crédito (sprint propio)
+- Polling sync portal eFactura (no hay webhook documentado)
+- Manejo idempotencia: cola de retry o flag pending_sync si DGI cae después del UPDATE local

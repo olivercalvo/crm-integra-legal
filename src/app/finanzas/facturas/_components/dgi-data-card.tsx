@@ -289,6 +289,12 @@ function DgiFormModal({ invoiceId, initial, onClose }: ModalProps) {
           return;
         }
         onClose();
+        // Disparamos el toast vía URL param (patrón consistente con
+        // InvoiceSuccessToast). router.refresh recarga la data del server
+        // component padre para reflejar los nuevos valores en la card.
+        const url = new URL(window.location.href);
+        url.searchParams.set("dgi", "saved");
+        router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {
         setError("Error de red. Intentá de nuevo.");

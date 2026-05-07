@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Receipt, User, FolderOpen, Calendar, FileText, AlertTriangle } from "lucide-react";
+import {
+  Pencil,
+  Receipt,
+  User,
+  FolderOpen,
+  Calendar,
+  FileText,
+  AlertTriangle,
+  XCircle,
+} from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Button } from "@/components/ui/button";
 import { BackButton } from "@/components/ui/back-button";
@@ -16,6 +25,7 @@ import {
 } from "@/lib/finanzas/types/invoice";
 import { EmitInvoiceDialog } from "../_components/emit-invoice-dialog";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
+import { CancelInvoiceDialog } from "../_components/cancel-invoice-dialog";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 
@@ -33,9 +43,30 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const emittable = isEmittable(invoice.status);
   const deletable = isDeletable(invoice.status);
   const isEmitida = invoice.status === "emitida";
+  const isAnulada = invoice.status === "anulada";
+  // Anulable desde UI: emitida, parcialmente_pagada, pagada. T2 valida la
+  // transición server-side. En el MVP actual sólo 'emitida' es alcanzable
+  // (no hay UI de pagos), pero dejamos los 3 estados para que la lógica
+  // quede correcta cuando llegue Fase 2C (pagos). NB: T2 no permite
+  // pagada→anulada hoy; el backend devolverá 400 si se intenta — habrá
+  // que revisar el trigger junto con el feature de pagos.
+  const cancellable =
+    invoice.status === "emitida" ||
+    invoice.status === "parcialmente_pagada" ||
+    invoice.status === "pagada";
+  // Conserva la card DGI en facturas anuladas SI tienen algún dato cargado,
+  // como referencia histórica. Si nunca se llenó, no la mostramos.
+  const hasDgiData =
+    !!invoice.dgi_numero_documento ||
+    !!invoice.dgi_cufe ||
+    !!invoice.dgi_fecha_autorizacion ||
+    !!invoice.dgi_cafe_url;
+  const showDgiCard = isEmitida || (isAnulada && hasDgiData);
   // Banner pre-integración eFactura: visible mientras la abogada no haya
   // capturado el CUFE oficial. Una vez registrado, el flujo se considera
-  // completo y ocultamos el banner para reducir ruido visual.
+  // completo y ocultamos el banner para reducir ruido visual. Si la factura
+  // fue anulada, isEmitida queda en false → el banner no se muestra
+  // (el estado de anulación tiene su propia sección dedicada).
   const showInternalBanner = isEmitida && !invoice.dgi_cufe;
 
   const numberPreview = emittable
@@ -90,6 +121,14 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               invoiceId={invoice.id}
               invoiceKind={invoice.invoice_kind}
               nextNumberPreview={numberPreview}
+              grandTotal={Number(invoice.grand_total)}
+            />
+          )}
+          {cancellable && (
+            <CancelInvoiceDialog
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoice_number}
+              invoiceKind={invoice.invoice_kind}
               grandTotal={Number(invoice.grand_total)}
             />
           )}
@@ -252,13 +291,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             )}
           </section>
 
-          {/* Datos DGI — visible sólo cuando status='emitida' (decisión D4
-              del sprint). En el MVP actual no hay registro de pagos en UI
-              ni anulación, así que 'emitida' es el único estado post-emisión
-              alcanzable por el usuario. Cuando se agregue pagos (Fase 2C),
-              revisar si conviene extender a parcialmente_pagada/pagada/anulada
-              para captura retroactiva. */}
-          {isEmitida && (
+          {/* Datos DGI — visible cuando status='emitida' (caso primario,
+              D4 del sprint Camino 1) o cuando la factura fue anulada y aún
+              conserva datos DGI cargados (referencia histórica). El propio
+              componente DgiDataCard no permite editar si el invoice no está
+              emitida — el backend (updateInvoiceDgiData) ya lo gate-ea. */}
+          {showDgiCard && (
             <DgiDataCard
               invoiceId={invoice.id}
               initial={{
@@ -268,6 +306,51 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                 dgi_cafe_url: invoice.dgi_cafe_url,
               }}
             />
+          )}
+
+          {/* Información de anulación — solo si la factura fue anulada.
+              Render similar a DgiDataCard pero solo lectura (la anulación
+              es irreversible — T2 no permite transiciones desde anulada). */}
+          {isAnulada && (
+            <section className="rounded-xl border bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50">
+                  <XCircle size={20} className="text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-integra-navy">
+                    Información de anulación
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    Esta factura fue anulada. Esta acción es irreversible.
+                  </p>
+                </div>
+              </div>
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border bg-gray-50/50 p-3 sm:col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                    <FileText size={12} /> Razón
+                  </dt>
+                  <dd className="mt-1 whitespace-pre-wrap text-sm text-gray-900">
+                    {invoice.cancellation_reason ?? (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-gray-50/50 p-3 sm:col-span-2">
+                  <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                    <Calendar size={12} /> Fecha de anulación
+                  </dt>
+                  <dd className="mt-1 text-sm font-medium text-gray-900">
+                    {invoice.cancelled_at ? (
+                      formatDateTime(invoice.cancelled_at)
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
           )}
         </div>
 

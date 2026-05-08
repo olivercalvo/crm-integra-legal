@@ -22,40 +22,19 @@ import type {
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
+import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 
 type DB = SupabaseClient;
 
-export class InvoiceMutationError extends Error {
-  /** Código HTTP sugerido para devolver. */
-  status: number;
-  /** Detalles internos para logging (NO mostrar al usuario). */
-  detail?: unknown;
-  constructor(message: string, status = 400, detail?: unknown) {
-    super(message);
-    this.name = "InvoiceMutationError";
-    this.status = status;
-    this.detail = detail;
-  }
-}
-
 /**
- * Mapea errores de Postgres (incluyendo RAISE de los triggers T1-T8b) a
- * mensajes friendly en español. Si no matchea, devuelve el message tal cual
- * (los triggers ya tienen mensajes en español).
+ * Alias mantenido por backwards compatibility con los route handlers de
+ * /api/finanzas/invoices/* que ya importan `InvoiceMutationError`. Los
+ * módulos nuevos (quotes, etc.) deben importar `MutationError` directamente
+ * desde `./errors`.
  */
-function pgErrorToMessage(err: unknown): string {
-  if (!err || typeof err !== "object") return "Error desconocido";
-  const e = err as { message?: string; code?: string; details?: string };
-  // Los RAISE EXCEPTION de los triggers vienen en .message, ya en español.
-  if (e.message) {
-    // Stripe el prefijo "new row violates check constraint" si aparece.
-    if (e.code === "23514" && e.details) {
-      return `Validación rechazada por la base de datos: ${e.details}`;
-    }
-    return e.message;
-  }
-  return "Error desconocido al procesar la operación";
-}
+export const InvoiceMutationError = MutationError;
+export type InvoiceMutationError = MutationError;
+export { pgErrorToMessage };
 
 // ---------------------------------------------------------------------------
 // CREATE
@@ -83,6 +62,32 @@ export async function createInvoice(
   userId: string,
   input: CreateInvoiceInput
 ) {
+  // Gate: el cliente debe estar en estado 'active' para emitir factura. Los
+  // prospects (creados inline desde una cotización) NO son facturables hasta
+  // que un admin los promueva manualmente desde el módulo Clientes (D12).
+  // Sprint 2E.1 — agregado al introducir client_status.
+  const { data: client, error: errClient } = await db
+    .from("clients")
+    .select("client_status")
+    .eq("tenant_id", tenantId)
+    .eq("id", input.client_id)
+    .maybeSingle();
+
+  if (errClient) {
+    throw new MutationError(pgErrorToMessage(errClient), 500, errClient);
+  }
+  if (!client) {
+    throw new MutationError("Cliente no encontrado", 404);
+  }
+  const clientStatus = client.client_status as string;
+  if (clientStatus !== "active") {
+    const stateLabel = clientStatus === "prospect" ? "prospecto" : clientStatus;
+    throw new MutationError(
+      `No se puede emitir factura a un cliente en estado '${stateLabel}'. El cliente debe estar activo (datos completos) para poder facturar.`,
+      400
+    );
+  }
+
   // Slug único temporal para borradores. Al emitir se reemplaza por el
   // número real ("FAC-HON-000454"). Esto sortea el UNIQUE (tenant, number).
   const draftSlug = `DRAFT-${cryptoRandom()}`;

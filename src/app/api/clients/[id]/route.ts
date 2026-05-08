@@ -45,10 +45,78 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     }
 
     const body = await request.json();
-    const { name, ruc, type, contact, phone, email, observations, responsible_lawyer_id } = body;
+    const {
+      name,
+      ruc,
+      type,
+      contact,
+      phone,
+      email,
+      observations,
+      responsible_lawyer_id,
+      // Sprint 2E.1 — campos para soporte de prospects (D11, D12)
+      client_status,
+      client_type,
+      tax_id,
+      tax_id_type,
+    } = body;
 
     if (name !== undefined && (!name || !String(name).trim())) {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
+    }
+
+    // Validar valores válidos de client_status / client_type si vienen
+    if (
+      client_status !== undefined &&
+      !["prospect", "active", "inactive"].includes(client_status)
+    ) {
+      return NextResponse.json(
+        { error: "client_status inválido (valores válidos: prospect, active, inactive)" },
+        { status: 400 }
+      );
+    }
+    if (
+      client_type !== undefined &&
+      client_type !== null &&
+      !["persona_natural", "persona_juridica"].includes(client_type)
+    ) {
+      return NextResponse.json(
+        { error: "client_type inválido (valores válidos: persona_natural, persona_juridica)" },
+        { status: 400 }
+      );
+    }
+
+    // Gate de promoción prospect → active (D12). Si el cliente está en
+    // prospect y se intenta pasar a active, exigimos campos obligatorios
+    // para facturación. Comparamos la "vista combinada": valor del body si
+    // viene, sino el valor existente en BD.
+    if (existing.client_status === "prospect" && client_status === "active") {
+      const finalTaxId =
+        tax_id !== undefined ? (tax_id ? String(tax_id).trim() : "") : (existing.tax_id ?? "");
+      const finalTaxIdType =
+        tax_id_type !== undefined
+          ? (tax_id_type ? String(tax_id_type).trim() : "")
+          : (existing.tax_id_type ?? "");
+      const finalEmail =
+        email !== undefined ? (email ? String(email).trim() : "") : (existing.email ?? "");
+
+      const missing: string[] = [];
+      if (!finalTaxId) missing.push("tax_id");
+      if (!finalTaxIdType) missing.push("tax_id_type");
+      if (!finalEmail) missing.push("email");
+
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Para promover el cliente a activo, debes completar: ${missing.join(", ")}.`,
+            fieldErrors: missing.reduce<Record<string, string>>((acc, f) => {
+              acc[f] = "Requerido para promover a activo";
+              return acc;
+            }, {}),
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const updates: Record<string, string | null> = {};
@@ -60,6 +128,10 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (email !== undefined) updates.email = email?.trim() || null;
     if (observations !== undefined) updates.observations = observations?.trim() || null;
     if (responsible_lawyer_id !== undefined) updates.responsible_lawyer_id = responsible_lawyer_id || null;
+    if (client_status !== undefined) updates.client_status = client_status;
+    if (client_type !== undefined) updates.client_type = client_type || null;
+    if (tax_id !== undefined) updates.tax_id = tax_id?.trim() || null;
+    if (tax_id_type !== undefined) updates.tax_id_type = tax_id_type || null;
 
     const { data: updated, error: updateError } = await admin
       .from("clients")

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import {
   getTermsTemplateRow,
@@ -14,7 +14,7 @@ const WRITE_ROLES = ["admin"] as const;
  * Devuelve el template T&C del tenant para preview en la pantalla de
  * configuración o para el editor. Permisos: admin, abogada, contador.
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const ctx = await getAuthenticatedContext();
   if (!READ_ROLES.includes(ctx.userRole as (typeof READ_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });

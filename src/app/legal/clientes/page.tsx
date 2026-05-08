@@ -43,7 +43,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
     .from("clients")
     .select("*, responsible_lawyer:users!clients_responsible_lawyer_id_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId)
-    .eq("active", true)
+    .eq("client_status", "active")
     .order(sortColumn, { ascending: sortDir })
     .range(from, to);
 

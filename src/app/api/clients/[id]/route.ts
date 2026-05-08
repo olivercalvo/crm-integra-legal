@@ -129,7 +129,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     // Verify client belongs to tenant
     const { data: existing, error: fetchError } = await admin
       .from("clients")
-      .select("id, name")
+      .select("id, name, client_status")
       .eq("id", id)
       .eq("tenant_id", profile.tenant_id)
       .single();
@@ -138,10 +138,11 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "Cliente no encontrado" }, { status: 404 });
     }
 
-    // Soft delete: set active = false
+    // Soft delete: set client_status = 'inactive'. La columna `active`
+    // es GENERATED ALWAYS desde client_status, no se setea directamente.
     const { error: deleteError } = await admin
       .from("clients")
-      .update({ active: false })
+      .update({ client_status: "inactive" })
       .eq("id", id)
       .eq("tenant_id", profile.tenant_id);
 
@@ -157,9 +158,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
       entity: "clients",
       entity_id: id,
       action: "delete",
-      field: "active",
-      old_value: "true",
-      new_value: "false",
+      field: "client_status",
+      old_value: (existing.client_status as string) ?? "active",
+      new_value: "inactive",
     });
 
     return NextResponse.json({ success: true });

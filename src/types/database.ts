@@ -33,7 +33,19 @@ export interface Client {
   client_since: string | null;
   observations: string | null;
   responsible_lawyer_id: string | null;
+  /**
+   * @deprecated Sprint 2E.1 — usar `client_status` en lugar de `active`.
+   *
+   * Hoy es una columna GENERATED ALWAYS AS (client_status = 'active') STORED
+   * en la BD para retrocompatibilidad. Será dropeada en una migration separada
+   * al final del Sprint 2E.1, después de verificar en preview que NINGÚN
+   * código sigue leyéndola. NO escribir nuevo código que dependa de este campo.
+   */
   active: boolean;
+  /** Estado del registro: `prospect` (datos mínimos, no facturable), `active` (datos completos), `inactive` (archivado). */
+  client_status: "prospect" | "active" | "inactive";
+  /** Tipo fiscal: persona natural (cédula/pasaporte) o jurídica (RUC). NULL en registros legacy donde no se distinguió. */
+  client_type: "persona_natural" | "persona_juridica" | null;
   created_at: string;
   updated_at: string;
 }

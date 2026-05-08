@@ -21,7 +21,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
         .from("clients")
         .select("id, name, client_number, responsible_lawyer_id")
         .eq("tenant_id", tenantId)
-        .eq("active", true)
+        .eq("client_status", "active")
         .order("name"),
       db
         .from("cat_classifications")

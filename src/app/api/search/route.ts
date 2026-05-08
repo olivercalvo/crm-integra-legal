@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
             .from("clients")
             .select("id, name, ruc, client_number")
             .eq("tenant_id", tenantId)
-            .eq("active", true)
+            .eq("client_status", "active")
             .in("id", clientIds.slice(0, 8))
         : Promise.resolve({ data: [] as Array<{ id: string; name: string; ruc: string | null; client_number: string }> }),
       caseIds.length > 0

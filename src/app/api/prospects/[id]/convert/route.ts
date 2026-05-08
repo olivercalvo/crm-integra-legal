@@ -55,7 +55,7 @@ export async function POST(
         phone: prospect.phone,
         email: prospect.email,
         observations: prospect.notes ? `Convertido desde prospecto. ${prospect.notes}` : "Convertido desde prospecto.",
-        active: true,
+        client_status: "active",
       })
       .select()
       .single();

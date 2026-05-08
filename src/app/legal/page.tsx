@@ -34,7 +34,7 @@ export default async function LegalDashboard() {
 
   // Fetch stats in parallel
   const [clientsRes, pendingTasksRes, casesRes, prospectsRes] = await Promise.all([
-    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("active", true),
+    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_status", "active"),
     db.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "pendiente"),
     db.from("cases").select(`
       id, case_code, deadline, description,

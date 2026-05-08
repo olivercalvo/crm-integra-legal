@@ -95,8 +95,10 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-2xl font-bold text-integra-navy">{typedClient.name}</h2>
-            {!typedClient.active && (
-              <Badge variant="secondary" className="bg-red-100 text-red-700 border-0">Inactivo</Badge>
+            {typedClient.client_status !== "active" && (
+              <Badge variant="secondary" className="bg-red-100 text-red-700 border-0">
+                {typedClient.client_status === "prospect" ? "Prospecto" : "Inactivo"}
+              </Badge>
             )}
           </div>
           <p className="text-sm font-mono text-gray-400">{typedClient.client_number}</p>
@@ -121,7 +123,7 @@ export default async function ClienteDetailPage({ params }: PageProps) {
               Editar
             </Link>
           </Button>
-          {typedClient.active && (
+          {typedClient.client_status === "active" && (
             <DeactivateClientButton clientId={id} clientName={typedClient.name} />
           )}
           {(userRole === "admin" || userRole === "abogada") && (

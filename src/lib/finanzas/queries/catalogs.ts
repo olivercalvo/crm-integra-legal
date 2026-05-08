@@ -23,7 +23,7 @@ export async function listClientsActive(db: DB, tenantId: string): Promise<Clien
     .from("clients")
     .select("id, name, client_number, default_payment_terms_days, ruc")
     .eq("tenant_id", tenantId)
-    .eq("active", true)
+    .eq("client_status", "active")
     .order("name");
 
   if (error) {

@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         email: email?.trim() || null,
         observations: observations?.trim() || null,
         responsible_lawyer_id: responsible_lawyer_id || null,
-        active: true,
+        client_status: "active",
       })
       .select()
       .single();

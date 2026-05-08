@@ -8,7 +8,7 @@ export default async function AdminDashboard() {
 
   // Fetch counts
   const [clientsRes, casesRes, tasksRes] = await Promise.all([
-    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("active", true),
+    db.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_status", "active"),
     db.from("cases").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
     db.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "pendiente"),
   ]);

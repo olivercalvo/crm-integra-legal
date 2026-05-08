@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
           phone: client.phone,
           email: client.email,
           observations: client.observations,
-          active: true,
+          client_status: "active",
         })
         .select("id")
         .single();
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
             client_number: clientNumber,
             name: caseRow.clientName.trim(),
             ruc: caseRow.clientRuc,
-            active: true,
+            client_status: "active",
           })
           .select("id")
           .single();

@@ -152,3 +152,30 @@ Items pendientes Camino 2:
 - Módulo Nota de Crédito (sprint propio)
 - Polling sync portal eFactura (no hay webhook documentado)
 - Manejo idempotencia: cola de retry o flag pending_sync si DGI cae después del UPDATE local
+
+## Sprint 2E.1 Cotizaciones — Backend (Cerrado 2026-05-13)
+
+### Implementado en producción
+- Módulo Cotizaciones backend completo (8 endpoints REST)
+- Endpoints: /api/finanzas/quotes/{POST,GET}, /api/finanzas/quotes/[id]/{GET,PATCH,DELETE},
+  /cancel, /send, /mark-accepted, /mark-rejected, /convert, /api/finanzas/configuracion/terms-template/{GET,PUT}
+- Schema: tabla quotes 35 columnas, quote_lines 18 columnas, quote_terms_template con seed T&C panameña
+- Sequence quote: last_number=1268, próxima COT-001269
+- Refactor clients: columna active eliminada, reemplazada por client_status (prospect|active|inactive) + client_type (persona_natural|persona_juridica)
+- Backfill client_type desde type legacy: 31 persona_natural, 28 persona_juridica, 5 NULL
+- Gate facturas: createInvoice rechaza si client_status != 'active'
+- Validación promoción prospect→active: requiere tax_id, tax_id_type, email
+- Creación inline de prospect desde createQuote
+- convertToInvoices: cotización aceptada → 1 o 2 facturas (HON/REI) según líneas mixtas
+
+### NO implementado (queda para sprints futuros)
+- UI de Cotizaciones (Fase 2E.2 — listado, crear, editar, detalle)
+- PDF generation + envío email Resend (Fase 2E.3)
+- Portal público con token único (Fase 2E.4)
+- Cron de expiración automática (Fase 2E.4)
+
+### Lecciones aprendidas
+- **Schema y código DEBEN moverse en lock-step**. NUNCA dropear columnas antes de refactorizar y verificar código en producción.
+- **Patrón seguro de migración destructiva**: agregar columna nueva → backfill → refactor código → deploy + verificar prod → drop columna vieja en migración separada.
+- **El hotfix GENERATED ALWAYS AS** sirve como puente temporal seguro cuando se dropea una columna que aún tiene referencias en código.
+- **Voseo argentino** es un anti-patrón en el proyecto (tuteo neutro panameño obligatorio en UI).

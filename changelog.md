@@ -1,5 +1,29 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.1] - 2026-05-13 - Cotizaciones backend
+
+### Added
+- Módulo Cotizaciones backend completo (8 endpoints REST en /api/finanzas/quotes/* y /api/finanzas/configuracion/terms-template)
+- Columnas client_status (prospect|active|inactive) y client_type (persona_natural|persona_juridica) en tabla clients
+- Soporte para prospects (clientes con datos mínimos, no facturables)
+- Gate de facturas que rechaza prospects
+- Validación de promoción prospect→active (requiere tax_id, tax_id_type, email)
+- Plantilla de Términos y Condiciones por tenant (admin-editable)
+- convertToInvoices: cotización aceptada → 1-2 facturas según líneas HON/REI
+
+### Changed
+- Refactor clients.active boolean → client_status enum (3 estados)
+- 14 referencias en código actualizadas (queries, listados, forms, soft-delete, audit log)
+- MutationError refactorizado a módulo compartido (api/errors.ts)
+
+### Removed
+- Columna clients.active (legacy boolean)
+
+Migrations aplicadas en prod:
+- 20260508000001_clients_add_status_and_type.sql
+- 20260508000002_quotes_extension_and_terms_template.sql
+- 20260508000003_clients_drop_active_legacy.sql
+
 ### 2026-05-07 — Sprint Camino 1 Extendido (Fase 1B parte 3)
 
 **UI Facturas — Pre-integración eFactura + Anulación desde UI**

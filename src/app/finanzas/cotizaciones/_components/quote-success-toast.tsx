@@ -2,30 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CheckCircle, Send, FileBadge, XCircle, ArrowRightCircle } from "lucide-react";
+import { CheckCircle, Send, XCircle, ThumbsUp, ThumbsDown, ArrowRightCircle } from "lucide-react";
 
 /**
- * Toast de éxito para acciones del módulo Facturas. Lee `?saved`, `?emitted`,
- * `?dgi=saved`, `?cancelled=1` o `?converted=<N>` del URL — análogo a
- * DeleteSuccessToast pero específico para Facturas.
+ * Toast de éxito para acciones del módulo Cotizaciones. Lee los params:
+ *   ?created=1, ?saved=1, ?sent=1, ?cancelled=1, ?accepted=1, ?rejected=1, ?converted=N
  *
- * `?converted=N` viene del flujo de Cotizaciones cuando ConvertToInvoicesDialog
- * redirige acá tras crear N facturas. N puede ser 1 o 2 según las líneas
- * mixtas (D2).
- *
- * El URL param se limpia tras 4s para evitar reaparición al refrescar.
+ * El URL param se limpia tras 4s. Análogo a InvoiceSuccessToast.
  */
-export function InvoiceSuccessToast() {
+export function QuoteSuccessToast() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const created = searchParams.get("created");
   const saved = searchParams.get("saved");
-  const emitted = searchParams.get("emitted");
-  const dgi = searchParams.get("dgi");
+  const sent = searchParams.get("sent");
   const cancelled = searchParams.get("cancelled");
+  const accepted = searchParams.get("accepted");
+  const rejected = searchParams.get("rejected");
   const converted = searchParams.get("converted");
   const [visible, setVisible] = useState(false);
 
-  const anyParam = !!(saved || emitted || dgi || cancelled || converted);
+  const anyParam = !!(created || saved || sent || cancelled || accepted || rejected || converted);
 
   useEffect(() => {
     if (!anyParam) return;
@@ -33,10 +30,12 @@ export function InvoiceSuccessToast() {
     const timer = setTimeout(() => {
       setVisible(false);
       const url = new URL(window.location.href);
+      url.searchParams.delete("created");
       url.searchParams.delete("saved");
-      url.searchParams.delete("emitted");
-      url.searchParams.delete("dgi");
+      url.searchParams.delete("sent");
       url.searchParams.delete("cancelled");
+      url.searchParams.delete("accepted");
+      url.searchParams.delete("rejected");
       url.searchParams.delete("converted");
       router.replace(url.pathname + url.search, { scroll: false });
     }, 4000);
@@ -45,13 +44,12 @@ export function InvoiceSuccessToast() {
 
   if (!visible || !anyParam) return null;
 
-  // Resolución del icono + mensaje según qué param vino. Prioridad:
-  // converted (viene desde Cotizaciones) → emitted → cancelled → dgi → saved.
-  // converted tiene paleta violeta (acción cross-módulo); cancelled rojo;
-  // resto verde.
+  // Resolución de icono + mensaje + paleta. Prioridad por especificidad
+  // (converted → rejected → accepted → cancelled → sent → created → saved).
   let icon: React.ReactNode;
   let message: string;
   let palette: "success" | "danger" | "info" = "success";
+
   if (converted) {
     const count = parseInt(converted, 10);
     icon = <ArrowRightCircle size={18} className="text-violet-600 shrink-0" />;
@@ -60,16 +58,23 @@ export function InvoiceSuccessToast() {
         ? `Cotización convertida. ${count} facturas creadas.`
         : "Cotización convertida. 1 factura creada.";
     palette = "info";
-  } else if (emitted) {
-    icon = <Send size={18} className="text-green-600 shrink-0" />;
-    message = `Factura emitida con número ${emitted}`;
+  } else if (rejected) {
+    icon = <ThumbsDown size={18} className="text-red-600 shrink-0" />;
+    message = "Cotización marcada como rechazada";
+    palette = "danger";
+  } else if (accepted) {
+    icon = <ThumbsUp size={18} className="text-green-600 shrink-0" />;
+    message = "Cotización marcada como aceptada";
   } else if (cancelled) {
     icon = <XCircle size={18} className="text-red-600 shrink-0" />;
-    message = "Factura anulada correctamente";
+    message = "Cotización cancelada";
     palette = "danger";
-  } else if (dgi === "saved") {
-    icon = <FileBadge size={18} className="text-green-600 shrink-0" />;
-    message = "Datos DGI guardados correctamente";
+  } else if (sent) {
+    icon = <Send size={18} className="text-green-600 shrink-0" />;
+    message = "Cotización enviada correctamente";
+  } else if (created) {
+    icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
+    message = "Cotización creada correctamente";
   } else {
     icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
     message = "Cambios guardados correctamente";

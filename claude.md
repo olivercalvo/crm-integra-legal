@@ -179,3 +179,32 @@ Items pendientes Camino 2:
 - **Patrón seguro de migración destructiva**: agregar columna nueva → backfill → refactor código → deploy + verificar prod → drop columna vieja en migración separada.
 - **El hotfix GENERATED ALWAYS AS** sirve como puente temporal seguro cuando se dropea una columna que aún tiene referencias en código.
 - **Voseo argentino** es un anti-patrón en el proyecto (tuteo neutro panameño obligatorio en UI).
+
+## Sprint 2E.2 UI Cotizaciones — Cerrado 2026-05-13
+
+### Implementado en producción
+- 5 pantallas nuevas en /finanzas/cotizaciones/* (listado, nueva, detalle, editar, configuracion)
+- 18 componentes UI nuevos en src/app/finanzas/cotizaciones/_components y src/components/finanzas/cotizaciones/
+- Sidebar actualizado con entradas Cotizaciones (admin/abogada/contador) y Plantilla T&C (solo admin)
+- Toast cross-módulo: invoice-success-toast lee ?converted=N para mostrar mensaje violeta cuando se llega desde conversión de cotización
+- Loading + Error boundaries en /finanzas/cotizaciones/*
+
+### Decisiones de UX implementadas (D1-D7)
+- D1: Toggle visible siempre con 2 secciones radio (cliente existente vs prospecto nuevo)
+- D2: Una tabla con dropdown HON/REI por línea + indicador visual + totales agrupados por kind
+- D3: Conversión con modal preview "1-2 facturas" → redirect al detalle de la 1ra con toast
+- D4: Botón Enviar cambia status + muestra link público copiable (NO email, NO mailto)
+- D5: Botones de acción en header del detalle según status (Marcar Aceptada/Rechazada/Cancelar)
+- D6: Editor T&C en /finanzas/cotizaciones/configuracion, admin-only, 403 redirect para otros roles
+- D7: Badges de status con paleta completa (gris/azul/verde/rojo/ámbar/violeta)
+
+### NO implementado (queda para sprints futuros)
+- Envío real de email vía Resend (Fase 2E.3)
+- Portal público /cotizacion/[token] para que el cliente apruebe/rechace (Fase 2E.4)
+- Generación de PDF descargable (Fase 2E.3)
+- Cron de expiración automática (Fase 2E.4)
+
+### Lecciones aprendidas
+- Reordenamiento por dependencia de compilación: ConvertToInvoicesDialog se entregó en Fase C
+  (no D) porque el detalle ya lo importa para el estado aceptada. Mantenido en su fase nominal
+  conceptualmente pero implementado donde la compilación lo requería.

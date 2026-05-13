@@ -1,5 +1,21 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.2] - 2026-05-13 - UI Cotizaciones
+
+### Added
+- Módulo Cotizaciones UI completo (5 pantallas en /finanzas/cotizaciones/*)
+- 18 componentes nuevos para crear, editar, listar, ver detalle y configurar cotizaciones
+- Toggle cliente existente vs crear prospecto inline en el form de creación
+- Editor de líneas mixtas HON/REI con totales agrupados por kind
+- Modal de conversión cotización aceptada → 1-2 facturas con preview
+- Botón Enviar con dialog en 2 pasos (compose email + link público copiable)
+- Editor de plantilla Términos y Condiciones (admin only)
+- Toast cross-módulo ?converted=N que muestra mensaje violeta al llegar a Facturas desde conversión
+
+### Changed
+- Sidebar: agregadas entradas "Cotizaciones" (3 roles) y "Plantilla T&C" (admin only) en sección FINANZAS
+- invoice-success-toast.tsx: agregado handler ?converted=N con paleta violeta y mensaje cross-módulo
+
 ## [Sprint 2E.1] - 2026-05-13 - Cotizaciones backend
 
 ### Added

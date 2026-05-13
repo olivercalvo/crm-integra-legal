@@ -8,6 +8,7 @@ import { DeleteSuccessToast } from "@/components/ui/delete-success-toast";
 import { listQuotes } from "@/lib/finanzas/queries/quotes";
 import { QuotesFilters } from "./_components/quotes-filters";
 import { QuotesList } from "./_components/quotes-list";
+import { DeniedToast } from "./_components/denied-toast";
 import type { ClientOption, CaseOption } from "@/lib/finanzas/types/invoice";
 import type { QuoteStatus } from "@/lib/finanzas/types/quote";
 
@@ -85,6 +86,7 @@ export default async function CotizacionesListPage({ searchParams }: PageProps) 
   return (
     <div className="space-y-5">
       <DeleteSuccessToast entityLabel="Cotización" />
+      <DeniedToast />
 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">

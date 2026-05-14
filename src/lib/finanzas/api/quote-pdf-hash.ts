@@ -79,6 +79,8 @@ export interface QuotePdfTotalsPayload {
  */
 export interface QuotePdfPayload {
   quote_number: string;
+  /** Título descriptivo (Sprint 2E.3.2). Entra al hash: si cambia, el PDF se regenera. */
+  title: string;
   status: string;
   client: QuotePdfClientPayload;
   case: QuotePdfCasePayload | null;

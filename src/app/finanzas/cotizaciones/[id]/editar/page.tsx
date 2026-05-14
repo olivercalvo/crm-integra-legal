@@ -111,6 +111,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
           case_id: quote.case_id,
           issue_date: quote.issue_date,
           valid_until: quote.valid_until,
+          title: quote.title,
           notes: quote.notes,
           terms_and_conditions: quote.terms_and_conditions ?? defaultTermsFallback,
           lines: initialLines,

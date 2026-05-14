@@ -61,9 +61,19 @@ export const QUOTE_SEQUENCE_TYPE = "quote" as const;
 /** Prefijo del quote_number formateado: COT-NNNNNN. */
 export const QUOTE_NUMBER_PREFIX = "COT" as const;
 
+/**
+ * Límites de longitud del campo title (Sprint 2E.3.2).
+ *
+ * El CHECK constraint quotes_title_length en BD enforza estos mismos
+ * valores. Si se cambia uno, hay que migrar el otro en lock-step
+ * (lección Sprint 2E.1).
+ */
+export const QUOTE_TITLE_MIN = 3;
+export const QUOTE_TITLE_MAX = 100;
+
 // ---------- DB row shapes -------------------------------------------------
 
-/** Cabecera de quote tal como viene del SELECT. 35 columnas. */
+/** Cabecera de quote tal como viene del SELECT. 36 columnas. */
 export interface QuoteRow {
   // ----- Originales (Batch 3a) -----
   id: string;
@@ -82,6 +92,9 @@ export interface QuoteRow {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  // ----- Sprint 2E.3.2 -----
+  /** Descripción corta obligatoria (3-100 chars). CHECK quotes_title_length. */
+  title: string;
   // ----- Sprint 2E.1 (D1-D9) -----
   /** Snapshot del T&C al crear (D4). NULL = usar template del tenant. */
   terms_and_conditions: string | null;
@@ -205,6 +218,8 @@ export interface CreateQuoteInput {
   case_id?: string | null;
   issue_date?: string;        // YYYY-MM-DD; default = today UTC
   valid_until: string;        // YYYY-MM-DD; obligatorio (D3)
+  /** Título descriptivo (3-100 chars). Sprint 2E.3.2. */
+  title: string;
   notes?: string | null;
   terms_and_conditions?: string | null;
   lines: NewQuoteLineInput[];
@@ -216,6 +231,8 @@ export interface UpdateQuoteInput {
   case_id?: string | null;
   issue_date?: string;
   valid_until?: string;
+  /** Si viene, debe respetar 3-100 chars. Sprint 2E.3.2. */
+  title?: string;
   notes?: string | null;
   terms_and_conditions?: string | null;
   /** Si viene, REEMPLAZA todas las líneas (delete + insert). */

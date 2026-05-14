@@ -43,7 +43,7 @@ export async function listQuotes(
     .select(
       `
         id, tenant_id, quote_number, client_id, case_id,
-        issue_date, valid_until, status, currency,
+        issue_date, valid_until, title, status, currency,
         subtotal_total, tax_total, grand_total,
         subtotal_hon, subtotal_rei, terms_and_conditions,
         notes, created_at, updated_at, created_by,
@@ -104,7 +104,7 @@ export async function getQuoteById(
     .select(
       `
         id, tenant_id, quote_number, client_id, case_id,
-        issue_date, valid_until, status, currency,
+        issue_date, valid_until, title, status, currency,
         subtotal_total, tax_total, grand_total,
         subtotal_hon, subtotal_rei, terms_and_conditions,
         notes, created_at, updated_at, created_by,
@@ -168,7 +168,7 @@ export async function getQuoteByPublicToken(
     .select(
       `
         id, tenant_id, quote_number, client_id, case_id,
-        issue_date, valid_until, status, currency,
+        issue_date, valid_until, title, status, currency,
         subtotal_total, tax_total, grand_total,
         subtotal_hon, subtotal_rei, terms_and_conditions,
         notes, created_at, updated_at, created_by,

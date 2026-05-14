@@ -53,6 +53,8 @@ export interface QuoteDocumentCase {
 
 export interface QuoteDocumentProps {
   quote_number: string;
+  /** Título descriptivo de la cotización (Sprint 2E.3.2). Se muestra debajo de COT-NNNNNN en el header del PDF. */
+  title: string;
   status: string;
   status_label: string;
   issue_date: string;       // YYYY-MM-DD

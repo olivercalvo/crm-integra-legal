@@ -23,10 +23,12 @@ import type {
   ServiceOption,
   TaxCodeOption,
 } from "@/lib/finanzas/types/invoice";
-import type {
-  CreateQuoteInput,
-  NewQuoteLineInput,
-  NewProspectInput,
+import {
+  QUOTE_TITLE_MIN,
+  QUOTE_TITLE_MAX,
+  type CreateQuoteInput,
+  type NewQuoteLineInput,
+  type NewProspectInput,
 } from "@/lib/finanzas/types/quote";
 
 type ValidationErrors = Record<string, string>;
@@ -53,6 +55,7 @@ interface EditProps extends BaseProps {
     case_id: string | null;
     issue_date: string;
     valid_until: string;
+    title: string;
     notes: string | null;
     terms_and_conditions: string;
     lines: QuoteLineEditorInput[];
@@ -119,6 +122,11 @@ export function QuoteForm(props: Props) {
       : addDays(todayIso(), 30)
   );
 
+  // ---- Título (Sprint 2E.3.2) --------------------------------------------
+  const [title, setTitle] = useState<string>(
+    props.mode === "edit" ? props.initial.title ?? "" : ""
+  );
+
   // ---- Notas / T&C --------------------------------------------------------
   const [notes, setNotes] = useState<string>(
     props.mode === "edit" ? props.initial.notes ?? "" : ""
@@ -178,6 +186,15 @@ export function QuoteForm(props: Props) {
       if (!p?.client_type) {
         e["new_prospect.client_type"] = "Tipo de persona requerido";
       }
+    }
+
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      e.title = "Título requerido";
+    } else if (trimmedTitle.length < QUOTE_TITLE_MIN) {
+      e.title = `Título mínimo ${QUOTE_TITLE_MIN} caracteres`;
+    } else if (trimmedTitle.length > QUOTE_TITLE_MAX) {
+      e.title = `Título máximo ${QUOTE_TITLE_MAX} caracteres`;
     }
 
     if (!issueDate) e.issue_date = "Fecha de emisión requerida";
@@ -251,6 +268,7 @@ export function QuoteForm(props: Props) {
       case_id: caseId ?? null,
       issue_date: issueDate,
       valid_until: validUntil,
+      title: title.trim(),
       notes: notes.trim() || null,
       terms_and_conditions: terms.trim() || null,
       lines: linesPayload,
@@ -277,6 +295,7 @@ export function QuoteForm(props: Props) {
                 case_id: caseId ?? null,
                 issue_date: issueDate,
                 valid_until: validUntil,
+                title: title.trim(),
                 notes: notes.trim() || null,
                 terms_and_conditions: terms.trim() || null,
                 lines: linesPayload,
@@ -337,6 +356,55 @@ export function QuoteForm(props: Props) {
               elimina el borrador y crea una cotización nueva.
             </p>
           )}
+
+          {/* Título (Sprint 2E.3.2) — obligatorio, 3-100 chars */}
+          <div data-error={!!errors.title}>
+            <div className="flex items-baseline justify-between gap-2">
+              <Label htmlFor="quote-title" className="mb-1 block">
+                Título de la cotización{" "}
+                <span className="text-red-600" aria-hidden="true">
+                  *
+                </span>
+              </Label>
+              <span
+                className={`text-[11px] font-mono ${
+                  title.trim().length > QUOTE_TITLE_MAX
+                    ? "text-red-600"
+                    : "text-gray-400"
+                }`}
+                aria-live="polite"
+              >
+                {title.length}/{QUOTE_TITLE_MAX}
+              </span>
+            </div>
+            <Input
+              id="quote-title"
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (errors.title) {
+                  setErrors((prev) => {
+                    const rest = { ...prev };
+                    delete rest.title;
+                    return rest;
+                  });
+                }
+              }}
+              maxLength={QUOTE_TITLE_MAX + 20 /* permite paste y truncar visual */}
+              disabled={isPending}
+              placeholder="Ej: Naturalización Adrian Fu - 1ra cotización"
+              className={errors.title ? "border-red-300" : ""}
+            />
+            {errors.title ? (
+              <p className="mt-1 text-xs text-red-600">{errors.title}</p>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">
+                Descripción breve que ayuda a identificar esta cotización en
+                el listado ({QUOTE_TITLE_MIN}-{QUOTE_TITLE_MAX} caracteres).
+              </p>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Caso */}

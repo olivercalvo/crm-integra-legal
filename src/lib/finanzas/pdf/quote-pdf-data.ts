@@ -79,6 +79,7 @@ interface RawQuote {
   id: string;
   tenant_id: string;
   quote_number: string;
+  title: string;
   status: QuoteStatus;
   issue_date: string;
   valid_until: string;
@@ -121,7 +122,7 @@ export async function fetchQuotePdfBundle(
     .from("quotes")
     .select(
       `
-        id, tenant_id, quote_number, status, issue_date, valid_until, notes,
+        id, tenant_id, quote_number, title, status, issue_date, valid_until, notes,
         terms_and_conditions, subtotal_hon, subtotal_rei, tax_total, grand_total,
         sent_by, client_id, case_id,
         client:clients!quotes_client_id_fkey(
@@ -172,6 +173,7 @@ export async function fetchQuotePdfBundle(
     id: header.id as string,
     tenant_id: header.tenant_id as string,
     quote_number: header.quote_number as string,
+    title: (header.title as string | null) ?? "",
     status: header.status as QuoteStatus,
     issue_date: header.issue_date as string,
     valid_until: header.valid_until as string,
@@ -249,6 +251,7 @@ export function buildQuotePdfPayload(bundle: QuotePdfBundle): QuotePdfPayload {
   // del lado BD — la única fuente confiable es grand_total).
   return {
     quote_number: s(quote.quote_number) ?? "",
+    title: s(quote.title) ?? "",
     status: quote.status,
     client: clientPayload,
     case: casePayload,
@@ -285,6 +288,7 @@ export function buildQuoteDocumentProps(
 
   return {
     quote_number: quote.quote_number,
+    title: quote.title ?? "",
     status: quote.status,
     status_label: statusLabel,
     issue_date: quote.issue_date,

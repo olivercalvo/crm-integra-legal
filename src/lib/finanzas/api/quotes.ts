@@ -23,7 +23,12 @@ import type {
   MarkRejectedInput,
   QuoteLineKind,
 } from "@/lib/finanzas/types/quote";
-import { QUOTE_SEQUENCE_TYPE, QUOTE_NUMBER_PREFIX } from "@/lib/finanzas/types/quote";
+import {
+  QUOTE_SEQUENCE_TYPE,
+  QUOTE_NUMBER_PREFIX,
+  QUOTE_TITLE_MIN,
+  QUOTE_TITLE_MAX,
+} from "@/lib/finanzas/types/quote";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createInvoice } from "@/lib/finanzas/api/invoices";
 import { getTermsTemplate } from "@/lib/finanzas/api/quote-terms";
@@ -44,6 +49,27 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_KINDS: QuoteLineKind[] = ["HON", "REI"];
+
+/**
+ * Valida un title de cotización (Sprint 2E.3.2). Devuelve mensaje de error
+ * o null si está OK. Trim siempre antes de validar para que un usuario que
+ * solo pone espacios reciba el mismo error que un campo vacío.
+ *
+ * El CHECK quotes_title_length en BD enforza los mismos límites, así que
+ * server-side y client-side comparten constantes (QUOTE_TITLE_MIN/MAX).
+ */
+function validateTitle(raw: unknown): string | null {
+  if (raw == null) return "Título requerido";
+  const trimmed = String(raw).trim();
+  if (trimmed.length === 0) return "Título requerido";
+  if (trimmed.length < QUOTE_TITLE_MIN) {
+    return `Título mínimo ${QUOTE_TITLE_MIN} caracteres`;
+  }
+  if (trimmed.length > QUOTE_TITLE_MAX) {
+    return `Título máximo ${QUOTE_TITLE_MAX} caracteres`;
+  }
+  return null;
+}
 
 /**
  * Valida una línea individual. Devuelve un mapa flat de errores; el caller
@@ -144,6 +170,10 @@ export function validateCreateQuote(
     errors.case_id = "Caso inválido";
   }
 
+  // title obligatorio (Sprint 2E.3.2). 3-100 chars luego de trim.
+  const titleError = validateTitle(raw.title);
+  if (titleError) errors.title = titleError;
+
   // issue_date opcional (default hoy); valid_until obligatorio.
   if (raw.issue_date && !DATE_RE.test(String(raw.issue_date))) {
     errors.issue_date = "Fecha de emisión inválida";
@@ -182,6 +212,7 @@ export function validateCreateQuote(
       case_id: raw.case_id ?? null,
       issue_date: raw.issue_date,
       valid_until: raw.valid_until as string,
+      title: String(raw.title ?? "").trim(),
       notes: raw.notes ?? null,
       terms_and_conditions: raw.terms_and_conditions ?? null,
       lines: lines.map((ln) => ({
@@ -220,6 +251,13 @@ export function validateUpdateQuote(
     errors.valid_until = "La fecha de validez no puede ser anterior a la fecha de emisión";
   }
 
+  // title opcional en update — pero si viene, debe respetar 3-100 chars.
+  // No se permite enviar "" (la BD lo rechazaría por CHECK).
+  if (raw.title !== undefined) {
+    const titleError = validateTitle(raw.title);
+    if (titleError) errors.title = titleError;
+  }
+
   if (raw.lines !== undefined) {
     const lines = Array.isArray(raw.lines) ? raw.lines : [];
     if (lines.length === 0) {
@@ -238,7 +276,14 @@ export function validateUpdateQuote(
     return { ok: false, data: null, errors };
   }
 
-  return { ok: true, errors: null, data: raw as UpdateQuoteInput };
+  // Normalizar title con trim para que el UPDATE persista la versión limpia
+  // (consistente con createQuote).
+  const normalized: UpdateQuoteInput = {
+    ...(raw as UpdateQuoteInput),
+    ...(raw.title !== undefined ? { title: String(raw.title).trim() } : {}),
+  };
+
+  return { ok: true, errors: null, data: normalized };
 }
 
 /** Valida payload de envío (sent_to_email + reglas de estado se chequean en sendQuote). */
@@ -497,6 +542,7 @@ export async function createQuote(
       case_id: input.case_id ?? null,
       issue_date: issueDate,
       valid_until: input.valid_until,
+      title: input.title,
       status: "borrador",
       currency: "USD",
       subtotal_total: totals.subtotal_total,
@@ -592,6 +638,7 @@ export async function updateQuote(
   if (input.case_id !== undefined) headerUpdate.case_id = input.case_id;
   if (input.issue_date !== undefined) headerUpdate.issue_date = input.issue_date;
   if (input.valid_until !== undefined) headerUpdate.valid_until = input.valid_until;
+  if (input.title !== undefined) headerUpdate.title = input.title;
   if (input.notes !== undefined) headerUpdate.notes = input.notes;
   if (input.terms_and_conditions !== undefined) {
     headerUpdate.terms_and_conditions = input.terms_and_conditions;

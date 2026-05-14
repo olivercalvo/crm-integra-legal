@@ -4,9 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 // Prefijos que cada rol puede acceder.
 //   "/"          — selector de módulos, abierto a todo rol autenticado.
 //   "/legal/*"   — módulo Legal: abogada, asistente y admin (NO contador).
-//   "/finanzas/*" — módulo Finanzas: abogada, asistente, admin y contador.
+//   "/finanzas/*" — módulo Finanzas: abogada, admin y contador (NO asistente).
 // Los subárboles /legal/admin/* y /finanzas/admin/* son admin-only y se gatean
-// aparte (ADMIN_ONLY_PREFIXES).
+// aparte (ADMIN_ONLY_PREFIXES). El contador queda confinado a un sub-subset
+// de /finanzas via CONTADOR_FINANZAS_ALLOWED_PREFIXES (ver más abajo).
 const ROLE_ROUTES: Record<string, string[]> = {
   admin:     ["/", "/legal", "/finanzas"],
   abogada:   ["/", "/legal", "/finanzas"],
@@ -16,14 +17,20 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
 
+// El contador es un rol de solo-lectura especializado en cierre contable.
+// Dentro de /finanzas solo puede ver /finanzas/reportes/* (hub + sub-páginas).
+// El root /finanzas se permite porque tiene un redirect interno por rol
+// (page.tsx lo manda a /finanzas/reportes cuando rol=contador).
+const CONTADOR_FINANZAS_ALLOWED_PREFIXES = ["/finanzas/reportes"];
+
 // Home primaria por rol — destino fallback cuando el rol no tiene acceso a la
-// ruta solicitada. Admin/abogada caen al selector general; contador y asistente
-// tienen un solo módulo, así que caen ahí directo.
+// ruta solicitada. Admin/abogada caen al selector general; asistente cae a
+// Legal; contador cae directo al hub de reportes (su única vista útil).
 const ROLE_HOME: Record<string, string> = {
   admin:     "/",
   abogada:   "/",
   asistente: "/legal",
-  contador:  "/finanzas",
+  contador:  "/finanzas/reportes",
 };
 
 // Redirects 301 desde rutas pre-Fase 1A (vigentes ~4 semanas para preservar
@@ -191,6 +198,20 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     return response;
+  }
+
+  // Gating extra para el contador dentro de /finanzas: solo /finanzas/reportes/*.
+  // /finanzas raíz pasa para que page.tsx haga el redirect dinámico.
+  if (
+    userRole === "contador" &&
+    pathname.startsWith("/finanzas/") &&
+    !CONTADOR_FINANZAS_ALLOWED_PREFIXES.some(
+      (p) => pathname === p || pathname.startsWith(p + "/")
+    )
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/finanzas/reportes";
+    return NextResponse.redirect(url);
   }
 
   // Gating por rol: el path debe matchear alguno de los prefijos permitidos.

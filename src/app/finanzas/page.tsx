@@ -1,10 +1,21 @@
 import { redirect } from "next/navigation";
+import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 
 /**
- * Hoy `/finanzas` redirige a Facturas (única vista del módulo en MVP). Cuando
- * exista un dashboard propio de Finanzas (cobros pendientes, aging, etc.),
- * reemplazar este redirect por el componente del dashboard.
+ * Entrada al módulo Finanzas. Redirige según el rol:
+ *   - contador → /finanzas/reportes (su única vista permitida)
+ *   - admin, abogada → /finanzas/facturas (vista por defecto del MVP)
+ *
+ * Cuando exista un dashboard propio de Finanzas (cobros pendientes, aging,
+ * etc.) admin/abogada apuntarán ahí. El contador siempre cae al hub de
+ * reportes.
  */
-export default function FinanzasIndexPage() {
+export default async function FinanzasIndexPage() {
+  const { userRole } = await getAuthenticatedContext();
+
+  if (userRole === "contador") {
+    redirect("/finanzas/reportes");
+  }
+
   redirect("/finanzas/facturas");
 }

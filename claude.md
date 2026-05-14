@@ -208,3 +208,43 @@ Items pendientes Camino 2:
 - Reordenamiento por dependencia de compilación: ConvertToInvoicesDialog se entregó en Fase C
   (no D) porque el detalle ya lo importa para el estado aceptada. Mantenido en su fase nominal
   conceptualmente pero implementado donde la compilación lo requería.
+
+## Sprint 2E.3 + 2E.3.2 — Cerrado 2026-05-14
+
+### Implementado
+- PDF generation on-demand con cache por hash SHA-256 (regenera solo si el contenido cambia)
+- Email Resend con PDF adjunto (DNS verified para `integra-panama.com`)
+- Tabla `documents` extendida polimórfica: `source`, `source_version`, `source_generated_at`, `source_content_hash`, `entity_type='quote'`
+- CHECK `documents_source_check` future-proof preparado para `'invoice'` y `'auto_invoice_pdf'` (Fase 2F)
+- Botón "Descargar PDF" disponible en todos los estados del detalle de cotización
+- Botón "Reenviar" para estados `enviada`/`aceptada`/`rechazada`: status NO cambia, refresca `sent_at` + `sent_to_email` + `sent_by` y reutiliza el `public_token` original
+- Visibilidad doble: PDF auto-generado aparece en la sección Documentos del cliente con badge violeta "PDF Cotización COT-XXXXXX"
+- Bloqueo de delete manual para documentos con `source != 'manual'` (gestionados automáticamente)
+- Portal público placeholder `/cotizacion/[token]` (paleta navy/gold, mobile-first, sin sidebar CRM)
+- Middleware actualizado para permitir acceso público sin auth a `/cotizacion/[token]`
+- **Campo `title` OBLIGATORIO (3-100 chars)** en `quotes`, con CHECK `quotes_title_length`
+- Backfill aplicado: 4 cotizaciones legacy con título auto-generado `'Cotización {cliente} {DD/MM/YYYY}'`
+- Hash del PDF incluye `title` (regenera el PDF si el título cambia)
+- Listado de cotizaciones: 3 líneas en columna Cliente (nombre + título + client_number)
+- Detalle con título prominente debajo del `COT-XXXXXX` (`text-lg font-semibold text-gray-700`)
+- PDF con banda de título `Helvetica-Oblique 11pt navy` debajo del header navy/gold
+- Email subject: `Cotización COT-XXXXXX: {título} · Integra Legal`
+- Email cuerpo HTML/texto plano con título descriptivo (italic semibold en HTML, "Referencia: …" en texto plano)
+
+### Bugs corregidos en este sprint
+- **PDF download redirigía la pestaña actual** (causa: `window.open` con noopener fallback). Fix: anchor programático con `document.createElement('a')`.
+- **Banner verde mentiroso en envío de email**: la validación de Resend solo chequeaba `!error`, no validaba `data.id` presente. Resultado: cotizaciones que NO llegaban al inbox aparecían como "enviadas" en la UI. Fix: requiere `data.id` Y `error null`, con log estructurado en todos los casos.
+
+### SHAs Sprint 2E.3.2
+- `a5ef205` chore - remove endpoint debug test-resend post-hotfix
+- `ff80542` feat - migración SQL agregar columna title obligatoria
+- `25cf13d` feat - backend campo title obligatorio + input en form
+- `31b5995` feat - UI título en listado/detalle/PDF/email/portal
+
+### Pendiente Sprint 2E.4
+- Portal público FUNCIONAL (cliente acepta/rechaza desde link con log de IP/UA)
+- Cron de expiración automática (`enviada` → `expirada` cuando pasa `valid_until`)
+- Notificación a abogada cuando el cliente responde
+
+### Pendiente operativo (no técnico)
+- Confirmar con las licenciadas qué email de contacto mostrar en el portal público. Hoy está hardcoded `contacto@integra-panama.com` en `src/app/cotizacion/[token]/page.tsx`, dirección que probablemente no existe. Es un cambio de una sola línea cuando lo confirmen.

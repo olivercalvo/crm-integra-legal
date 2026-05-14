@@ -41,10 +41,13 @@ export function QuotesList({ quotes }: Props) {
                     {q.quote_number}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 max-w-[260px]">
                   {q.client ? (
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
+                      <p
+                        className="font-medium text-gray-900 truncate"
+                        title={q.client.name}
+                      >
                         {q.client.name}
                         {q.client.client_status === "prospect" && (
                           <span className="ml-1 text-[10px] font-semibold uppercase text-amber-700">
@@ -52,7 +55,17 @@ export function QuotesList({ quotes }: Props) {
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-500">{q.client.client_number}</p>
+                      {q.title && (
+                        <p
+                          className="text-sm text-gray-500 truncate"
+                          title={q.title}
+                        >
+                          {q.title}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-gray-400 font-mono">
+                        {q.client.client_number}
+                      </p>
                     </div>
                   ) : (
                     <span className="text-gray-400">—</span>
@@ -107,6 +120,14 @@ export function QuotesList({ quotes }: Props) {
                     </span>
                   )}
                 </p>
+                {q.title && (
+                  <p
+                    className="text-xs text-gray-500 truncate"
+                    title={q.title}
+                  >
+                    {q.title}
+                  </p>
+                )}
                 <p className="text-xs text-gray-500">
                   Vence {formatDate(q.valid_until)}
                   {q.case?.case_code && (

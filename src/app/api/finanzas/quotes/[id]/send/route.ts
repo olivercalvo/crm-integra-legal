@@ -140,6 +140,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     email: {
       client_name: bundle.client.name,
       quote_number: bundle.quote.quote_number,
+      title: bundle.quote.title ?? "",
       valid_until: bundle.quote.valid_until,
       grand_total: grandTotal,
       currency: "USD",

@@ -16,6 +16,8 @@
 export interface QuoteEmailProps {
   client_name: string;
   quote_number: string;
+  /** Título descriptivo de la cotización (Sprint 2E.3.2). Va al subject y al cuerpo. */
+  title: string;
   valid_until: string;     // YYYY-MM-DD
   grand_total: number;
   currency: string;        // 'USD'
@@ -58,6 +60,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
   const {
     client_name,
     quote_number,
+    title,
     valid_until,
     grand_total,
     currency,
@@ -68,6 +71,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
 
   const safeClient = escapeHtml(client_name);
   const safeNumber = escapeHtml(quote_number);
+  const safeTitle = title ? escapeHtml(title) : "";
   const safeValidUntil = escapeHtml(formatDateEs(valid_until));
   const safeTotal = escapeHtml(formatMoney(grand_total, currency));
   const safeLink = escapeHtml(public_link);
@@ -108,6 +112,11 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                 <p style="margin:0 0 16px;font-size:16px;color:${NAVY};">
                   Estimado/a <strong>${safeClient}</strong>:
                 </p>
+                ${
+                  safeTitle
+                    ? `<p style="margin:0 0 12px;font-size:15px;font-weight:600;font-style:italic;color:${NAVY};line-height:1.4;">${safeTitle}</p>`
+                    : ""
+                }
                 <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:${GRAY_700};">
                   Te adjuntamos la cotización <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>
                   para los servicios solicitados. La oferta tiene vigencia hasta el
@@ -192,6 +201,7 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
   const {
     client_name,
     quote_number,
+    title,
     valid_until,
     grand_total,
     currency,
@@ -203,11 +213,18 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
   const lines = [
     `Estimado/a ${client_name}:`,
     "",
+  ];
+
+  if (title && title.trim().length > 0) {
+    lines.push(`Referencia: ${title}`, "");
+  }
+
+  lines.push(
     `Te adjuntamos la cotización ${quote_number} para los servicios solicitados.`,
     `La oferta tiene vigencia hasta el ${formatDateEs(valid_until)}.`,
     "",
-    `Total cotizado: ${formatMoney(grand_total, currency)}`,
-  ];
+    `Total cotizado: ${formatMoney(grand_total, currency)}`
+  );
 
   if (summary_line) {
     lines.push(summary_line);

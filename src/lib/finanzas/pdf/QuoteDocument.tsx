@@ -187,6 +187,17 @@ const styles = StyleSheet.create({
     color: COLOR_NAVY,
     letterSpacing: 1,
   },
+  // ---- Subtítulo título cotización (Sprint 2E.3.2) ----
+  titleBar: {
+    marginBottom: 14,
+    marginTop: -4,
+  },
+  titleText: {
+    fontFamily: "Helvetica-Oblique",
+    fontSize: 11,
+    color: COLOR_NAVY,
+    lineHeight: 1.3,
+  },
   // ---- Two-col info ----
   infoRow: {
     flexDirection: "row",
@@ -413,6 +424,7 @@ function InfoLine({
 export function QuoteDocument(props: QuoteDocumentProps) {
   const {
     quote_number,
+    title,
     status_label,
     issue_date,
     valid_until,
@@ -454,6 +466,13 @@ export function QuoteDocument(props: QuoteDocumentProps) {
             <Text style={styles.statusBadge}>{status_label.toUpperCase()}</Text>
           </View>
         </View>
+
+        {/* ===== Título descriptivo (Sprint 2E.3.2) ===== */}
+        {title && title.trim().length > 0 && (
+          <View style={styles.titleBar}>
+            <Text style={styles.titleText}>{title}</Text>
+          </View>
+        )}
 
         {/* ===== Info cliente + cotización ===== */}
         <View style={styles.infoRow}>

@@ -37,8 +37,14 @@ export async function sendQuoteEmail(
 ): Promise<SendQuoteEmailResult> {
   const { to, pdfBuffer, pdfFileName, email } = input;
 
-  const subject =
-    input.subject ?? `Cotización ${email.quote_number} · Integra Legal`;
+  // Subject (Sprint 2E.3.2): si la cotización tiene title, lo incluimos
+  // para que el cliente lo vea en su bandeja sin abrir el correo. Si no
+  // (cotización vieja antes del backfill), fallback al subject anterior.
+  const defaultSubject =
+    email.title && email.title.trim().length > 0
+      ? `Cotización ${email.quote_number}: ${email.title.trim()} · Integra Legal`
+      : `Cotización ${email.quote_number} · Integra Legal`;
+  const subject = input.subject ?? defaultSubject;
 
   try {
     const resend = getResend();

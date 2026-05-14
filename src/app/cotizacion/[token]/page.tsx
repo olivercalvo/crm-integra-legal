@@ -42,6 +42,7 @@ export const dynamic = "force-dynamic";
 interface QuoteSummary {
   id: string;
   quote_number: string;
+  title: string;
   valid_until: string;
   status: QuoteStatus;
   client_name: string;
@@ -51,7 +52,7 @@ async function fetchQuoteByToken(token: string): Promise<QuoteSummary | null> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("quotes")
-    .select("id, quote_number, valid_until, status, client:clients(name)")
+    .select("id, quote_number, title, valid_until, status, client:clients(name)")
     .eq("public_token", token)
     .limit(1)
     .maybeSingle();
@@ -70,6 +71,7 @@ async function fetchQuoteByToken(token: string): Promise<QuoteSummary | null> {
   return {
     id: data.id as string,
     quote_number: data.quote_number as string,
+    title: (data.title as string | null) ?? "",
     valid_until: data.valid_until as string,
     status: data.status as QuoteStatus,
     client_name: clientName,
@@ -212,6 +214,11 @@ export default async function CotizacionPublicPage({ params }: PageProps) {
               {quote.quote_number}
             </span>
           </h1>
+          {quote.title && (
+            <p className="mt-2 italic text-base text-gray-600 break-words">
+              {quote.title}
+            </p>
+          )}
           <p className="mt-1 text-sm text-gray-500">Integra Panamá</p>
         </div>
 

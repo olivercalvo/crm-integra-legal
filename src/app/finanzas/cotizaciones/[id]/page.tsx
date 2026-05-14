@@ -96,6 +96,11 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
               </h1>
               <QuoteStatusBadge status={quote.status} />
             </div>
+            {quote.title && (
+              <p className="mt-1 text-lg font-semibold text-gray-700 line-clamp-2 break-words">
+                {quote.title}
+              </p>
+            )}
             <p className="mt-1 text-sm text-gray-500">
               Creada el {formatDateTime(quote.created_at)}
             </p>

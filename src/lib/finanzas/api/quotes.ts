@@ -674,6 +674,29 @@ export async function deleteQuote(
     );
   }
 
+  // Sprint 2E.3 D9: limpiar PDFs auto-generados antes de borrar la
+  // cotización (no hay FK porque documents es polimórfico — la limpieza
+  // explícita evita filas huérfanas y blobs olvidados en Storage).
+  const { data: autoPdfs } = await db
+    .from("documents")
+    .select("id, storage_key")
+    .eq("tenant_id", tenantId)
+    .eq("entity_type", "quote")
+    .eq("entity_id", quoteId)
+    .eq("source", "auto_quote_pdf");
+
+  for (const row of autoPdfs ?? []) {
+    const storageKey = (row as { storage_key: string | null }).storage_key;
+    if (storageKey) {
+      await db.storage.from("documents").remove([storageKey]);
+    }
+    await db
+      .from("documents")
+      .delete()
+      .eq("id", (row as { id: string }).id)
+      .eq("tenant_id", tenantId);
+  }
+
   const { error } = await db
     .from("quotes")
     .delete()

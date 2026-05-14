@@ -1,5 +1,13 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase E] - 2026-05-14 - PDF Cotizaciones (visibilidad doble + bloqueo delete manual)
+
+### Changed
+- /legal/clientes/[id]: la sección Documentos ahora trae también los PDFs auto-generados de cotizaciones del cliente. Dos queries (entity_type='client' + entity_type='quote' IN quotes_of_client) mergeadas y ordenadas por fecha.
+- document-row.tsx: prop opcional `badge` (string). Cuando viene, se muestra una pill violeta arriba del filename y el row cambia de paleta (border-violet-200, FileText icon). Indica documentos auto-generados.
+- /api/documents/[id]/delete: rechaza con 403 si el row tiene source != 'manual'. Mensaje explica que se gestionan automáticamente.
+- src/lib/finanzas/api/quotes.ts → deleteQuote(): antes de borrar el quote, limpia documents rows con source='auto_quote_pdf' (DB + storage blob). Evita filas huérfanas y archivos olvidados.
+
 ## [Sprint 2E.3 — Fase D] - 2026-05-14 - PDF Cotizaciones (UI descarga + SendDialog actualizado)
 
 ### Added

@@ -70,13 +70,55 @@ export default async function ClienteDetailPage({ params }: PageProps) {
     .eq("client_id", id)
     .order("updated_at", { ascending: false });
 
-  // Fetch documents for this client
-  const { data: documents } = await db
+  // Fetch documents for this client AND auto-generated PDFs de cualquier
+  // cotización del cliente (Sprint 2E.3, D9: visibilidad doble).
+  //
+  // Hacemos dos queries y mergeamos:
+  //   1. documents donde entity_type='client' y entity_id=$id (subidos manualmente).
+  //   2. documents donde entity_type='quote' y entity_id ∈ quotes_of_client
+  //      (PDFs auto generados desde Cotizaciones, source='auto_quote_pdf').
+  const { data: clientQuotes } = await db
+    .from("quotes")
+    .select("id, quote_number")
+    .eq("tenant_id", typedClient.tenant_id)
+    .eq("client_id", id);
+
+  const quoteNumberById = new Map<string, string>(
+    (clientQuotes ?? []).map((q: { id: string; quote_number: string }) => [
+      q.id,
+      q.quote_number,
+    ])
+  );
+  const quoteIds = Array.from(quoteNumberById.keys());
+
+  const { data: clientDocs } = await db
     .from("documents")
-    .select("id, file_name, created_at")
+    .select("id, file_name, created_at, entity_type, entity_id, source, source_version")
+    .eq("tenant_id", typedClient.tenant_id)
     .eq("entity_type", "client")
-    .eq("entity_id", id)
-    .order("created_at", { ascending: false });
+    .eq("entity_id", id);
+
+  let quoteDocs: Array<Record<string, unknown>> = [];
+  if (quoteIds.length > 0) {
+    const { data: qd } = await db
+      .from("documents")
+      .select("id, file_name, created_at, entity_type, entity_id, source, source_version")
+      .eq("tenant_id", typedClient.tenant_id)
+      .eq("entity_type", "quote")
+      .in("entity_id", quoteIds);
+    quoteDocs = (qd ?? []) as Array<Record<string, unknown>>;
+  }
+
+  const documents = [...(clientDocs ?? []), ...quoteDocs]
+    .sort((a, b) => {
+      const at = String(
+        (a as Record<string, unknown>).created_at ?? ""
+      );
+      const bt = String(
+        (b as Record<string, unknown>).created_at ?? ""
+      );
+      return bt.localeCompare(at);
+    });
 
   return (
     <div className="space-y-5 max-w-3xl mx-auto">
@@ -261,15 +303,35 @@ export default async function ClienteDetailPage({ params }: PageProps) {
 
           {documents && documents.length > 0 && (
             <div className="space-y-2">
-              {documents.map((doc: Record<string, unknown>) => (
-                <DocumentRow
-                  key={doc.id as string}
-                  documentId={doc.id as string}
-                  fileName={doc.file_name as string}
-                  createdAt={formatDate(doc.created_at as string)}
-                  canDelete={userRole === "admin" || userRole === "abogada"}
-                />
-              ))}
+              {documents.map((doc: Record<string, unknown>) => {
+                const source =
+                  (doc.source as string | null | undefined) ?? "manual";
+                const isAutoQuotePdf = source === "auto_quote_pdf";
+                const isManual = source === "manual";
+                const quoteNumber = isAutoQuotePdf
+                  ? quoteNumberById.get(doc.entity_id as string)
+                  : undefined;
+                const badge = quoteNumber
+                  ? `PDF Cotización ${quoteNumber}`
+                  : isAutoQuotePdf
+                    ? "PDF auto-generado"
+                    : null;
+                return (
+                  <DocumentRow
+                    key={doc.id as string}
+                    documentId={doc.id as string}
+                    fileName={doc.file_name as string}
+                    createdAt={formatDate(doc.created_at as string)}
+                    // Solo permitir borrar adjuntos manuales subidos por usuarios.
+                    // Los PDFs auto-generados se gestionan automáticamente.
+                    canDelete={
+                      isManual &&
+                      (userRole === "admin" || userRole === "abogada")
+                    }
+                    badge={badge}
+                  />
+                );
+              })}
             </div>
           )}
         </CardContent>

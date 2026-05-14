@@ -36,13 +36,28 @@ export async function POST(
     // Fetch the document to verify it exists and belongs to this tenant
     const { data: doc } = await admin
       .from("documents")
-      .select("id, file_name, storage_key, entity_type, entity_id, created_at")
+      .select(
+        "id, file_name, storage_key, entity_type, entity_id, created_at, source"
+      )
       .eq("id", docId)
       .eq("tenant_id", profile.tenant_id)
       .single();
 
     if (!doc) {
       return NextResponse.json({ error: "Documento no encontrado" }, { status: 404 });
+    }
+
+    // Sprint 2E.3 D9: los PDFs auto-generados no se pueden eliminar
+    // manualmente. Se gestionan automáticamente (regenerar al cambiar el
+    // contenido fuente, o limpiar al borrar la entidad asociada).
+    if (doc.source && doc.source !== "manual") {
+      return NextResponse.json(
+        {
+          error:
+            "Este documento se generó automáticamente y no se puede eliminar manualmente. Si necesitas removerlo, elimina o cancela la entidad fuente.",
+        },
+        { status: 403 }
+      );
     }
 
     // Delete file from Supabase Storage

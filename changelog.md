@@ -1,5 +1,41 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3.2] - 2026-05-14 - Campo `title` obligatorio en cotizaciones
+
+### Added
+- Columna `quotes.title TEXT NOT NULL` con CHECK `quotes_title_length` (3-100 chars). Migración `sql/pending/007_quotes_title_required.sql` (ya ejecutada por Oliver en Supabase). Backfill: 4 cotizaciones legacy reciben título auto-generado `'Cotización {cliente} {DD/MM/YYYY}'`.
+- Constantes `QUOTE_TITLE_MIN` (3) y `QUOTE_TITLE_MAX` (100) en `src/lib/finanzas/types/quote.ts`, compartidas client + server para mantener client-side y CHECK en lock-step.
+- Validación `validateTitle()` en `src/lib/finanzas/api/quotes.ts` aplicada en `validateCreateQuote` y `validateUpdateQuote` (trim antes de validar; vacío == requerido).
+- Input visible en `quote-form.tsx` con counter `N/100`, error inline, placeholder en tuteo neutro panameño ("Ej: Naturalización Adrian Fu - 1ra cotización").
+
+### Changed
+- Listado `quotes-list.tsx`: columna Cliente ahora muestra 3 líneas — nombre (font-medium), título (text-sm gris, ellipsis + tooltip nativo), client_number (10px mono). Mobile cards: título como tercera línea entre cliente y "Vence …".
+- Detalle `/finanzas/cotizaciones/[id]`: título como subtítulo prominente `text-lg font-semibold text-gray-700 line-clamp-2` debajo del `COT-XXXXXX`.
+- PDF `QuoteDocument.tsx`: banda full-width con título en `Helvetica-Oblique 11pt navy` debajo del header navy/gold. El título entra al hash SHA-256 del PDF, así que si cambia, el PDF se regenera (vía `quote-pdf-hash.ts`).
+- Email subject: `Cotización COT-XXXXXX: {título} · Integra Legal` cuando hay título; fallback al subject anterior si no.
+- Email HTML: párrafo italic semibold con el título debajo del saludo "Estimado/a …".
+- Email texto plano: línea "Referencia: {título}" antes del cuerpo principal.
+- Portal público `/cotizacion/[token]/page.tsx`: SELECT trae `title`; aparece como `italic text-base text-gray-600` debajo del `COTIZACIÓN COT-XXXXXX` del header centrado.
+- Helpers de query `listQuotes`, `getQuoteById`, `getQuoteByPublicToken` incluyen `title` en el SELECT.
+- Rutas `/api/finanzas/quotes/[id]/send` y `/api/finanzas/quotes/[id]/resend` propagan `bundle.quote.title` al `QuoteEmailProps`.
+
+### Verified
+- `npx tsc --noEmit` limpio (0 errores).
+- `npx next lint` limpio en los 8 archivos del sprint.
+- `npx next build` limpio (production).
+- Voseo audit (regex completa CLAUDE.md): 0 hits en `src/`.
+- Smoke visual aprobado por Oliver: 6/6 tests OK (listado desktop, listado mobile, detalle, PDF, email, portal público).
+- Vercel preview deploy success (sha `31b5995`).
+
+### SHAs
+- `a5ef205` chore - remove endpoint debug test-resend post-hotfix
+- `ff80542` feat - migración SQL agregar columna title obligatoria
+- `25cf13d` feat - backend campo title obligatorio + input en form
+- `31b5995` feat - UI título en listado/detalle/PDF/email/portal
+
+### Pendiente operativo (no técnico)
+- Confirmar con licenciadas el email de contacto del portal público. Hoy está hardcoded `contacto@integra-panama.com` en `src/app/cotizacion/[token]/page.tsx`, que probablemente no existe. Cambio de una sola línea cuando lo confirmen.
+
 ## [Sprint 2E.3 — Fase F] - 2026-05-14 - PDF Cotizaciones (polish + voseo + smoke)
 
 ### Changed

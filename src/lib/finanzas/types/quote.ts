@@ -295,3 +295,19 @@ export function isQuoteDecidable(status: QuoteStatus): boolean {
 export function isQuoteConvertible(status: QuoteStatus): boolean {
   return status === "aceptada";
 }
+
+/**
+ * Si una cotización puede reenviarse al cliente (Sprint 2E.3 hotfix).
+ *
+ * El reenvío refresca sent_at/sent_to_email/sent_by sin cambiar el status,
+ * y conserva el mismo public_token. Se permite mientras el ciclo del envío
+ * sigue activo: enviada (cliente todavía no respondió), aceptada (refrescar
+ * confirmación) o rechazada (volver a contactar). NO en borrador (todavía
+ * no se envió), convertida (ya está cerrada) ni cancelada/expirada (ciclo
+ * cerrado).
+ */
+export function isQuoteResendable(status: QuoteStatus): boolean {
+  return (
+    status === "enviada" || status === "aceptada" || status === "rechazada"
+  );
+}

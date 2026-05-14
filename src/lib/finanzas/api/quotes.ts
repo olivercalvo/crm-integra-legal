@@ -811,6 +811,81 @@ export async function sendQuote(
 }
 
 // ---------------------------------------------------------------------------
+// RESEND — reenviar cotización ya enviada/aceptada/rechazada (Sprint 2E.3 hotfix)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reenviar la cotización a una dirección (puede ser la misma o distinta a la
+ * original). NO toca status: una cotización ya 'enviada' sigue 'enviada',
+ * 'aceptada' sigue 'aceptada', 'rechazada' sigue 'rechazada'. Solo refresca
+ * sent_at / sent_to_email / sent_by para reflejar el último envío, y conserva
+ * el mismo public_token (el link del portal no cambia).
+ *
+ * El caller (route handler) hace el envío del email y la materialización del
+ * PDF. Esta función solo se ocupa de la transición de columnas en BD y de la
+ * auditoría.
+ *
+ * Retorna el public_token y los datos previos para que el caller los registre
+ * en audit_log.
+ */
+export async function resendQuote(
+  db: DB,
+  tenantId: string,
+  userId: string,
+  quoteId: string,
+  input: SendQuoteInput
+): Promise<{
+  id: string;
+  public_token: string;
+  previous_sent_at: string | null;
+  previous_sent_to_email: string | null;
+}> {
+  const { data: quote, error: errFetch } = await db
+    .from("quotes")
+    .select("id, status, public_token, sent_at, sent_to_email")
+    .eq("tenant_id", tenantId)
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (errFetch) throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  if (!quote) throw new MutationError("Cotización no encontrada", 404);
+
+  const allowedStatuses = ["enviada", "aceptada", "rechazada"];
+  if (!allowedStatuses.includes(quote.status as string)) {
+    throw new MutationError(
+      `Solo se pueden reenviar cotizaciones en estado enviada/aceptada/rechazada. Estado actual: '${quote.status}'.`,
+      400
+    );
+  }
+
+  // El public_token debería existir desde el envío original; si por algún
+  // motivo está NULL (cotizaciones legacy), generamos uno nuevo.
+  const publicToken =
+    (quote.public_token as string | null) ?? generatePublicToken();
+
+  const { error } = await db
+    .from("quotes")
+    .update({
+      // status NO se toca.
+      public_token: publicToken,
+      sent_at: new Date().toISOString(),
+      sent_to_email: input.sent_to_email,
+      sent_by: userId,
+    })
+    .eq("tenant_id", tenantId)
+    .eq("id", quoteId);
+
+  if (error) throw new MutationError(pgErrorToMessage(error), 400, error);
+
+  return {
+    id: quoteId,
+    public_token: publicToken,
+    previous_sent_at: (quote.sent_at as string | null) ?? null,
+    previous_sent_to_email: (quote.sent_to_email as string | null) ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // MARK ACCEPTED MANUAL — escape hatch (D1) cuando el cliente acepta offline
 // ---------------------------------------------------------------------------
 

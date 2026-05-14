@@ -26,6 +26,8 @@ import {
   isQuoteCancellable,
   isQuoteDecidable,
   isQuoteConvertible,
+  isQuoteResendable,
+  QUOTE_STATUS_LABEL,
 } from "@/lib/finanzas/types/quote";
 import { QuoteStatusBadge } from "@/components/finanzas/cotizaciones/quote-status-badge";
 import { QuoteKindIndicator } from "@/components/finanzas/cotizaciones/quote-kind-indicator";
@@ -59,6 +61,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
   const cancellable = isQuoteCancellable(quote.status);
   const decidable = isQuoteDecidable(quote.status);
   const convertible = isQuoteConvertible(quote.status);
+  const resendable = isQuoteResendable(quote.status);
 
   // Construir el link público si la cotización fue enviada y tiene token.
   const publicLink =
@@ -121,6 +124,16 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
               quoteNumber={quote.quote_number}
               defaultEmail={quote.client?.email ?? null}
               publicPortalBaseUrl={APP_BASE_URL}
+            />
+          )}
+          {resendable && (
+            <SendQuoteDialog
+              mode="resend"
+              quoteId={quote.id}
+              quoteNumber={quote.quote_number}
+              defaultEmail={quote.sent_to_email ?? quote.client?.email ?? null}
+              publicPortalBaseUrl={APP_BASE_URL}
+              currentStatusLabel={QUOTE_STATUS_LABEL[quote.status]}
             />
           )}
           {cancellable && (

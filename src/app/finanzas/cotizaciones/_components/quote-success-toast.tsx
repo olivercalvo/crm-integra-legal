@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CheckCircle, Send, XCircle, ThumbsUp, ThumbsDown, ArrowRightCircle } from "lucide-react";
+import { CheckCircle, Send, XCircle, ThumbsUp, ThumbsDown, ArrowRightCircle, RotateCcw } from "lucide-react";
 
 /**
  * Toast de éxito para acciones del módulo Cotizaciones. Lee los params:
- *   ?created=1, ?saved=1, ?sent=1, ?cancelled=1, ?accepted=1, ?rejected=1, ?converted=N
+ *   ?created=1, ?saved=1, ?sent=1, ?resent=1, ?cancelled=1, ?accepted=1,
+ *   ?rejected=1, ?converted=N
  *
  * El URL param se limpia tras 4s. Análogo a InvoiceSuccessToast.
  */
@@ -16,13 +17,23 @@ export function QuoteSuccessToast() {
   const created = searchParams.get("created");
   const saved = searchParams.get("saved");
   const sent = searchParams.get("sent");
+  const resent = searchParams.get("resent");
   const cancelled = searchParams.get("cancelled");
   const accepted = searchParams.get("accepted");
   const rejected = searchParams.get("rejected");
   const converted = searchParams.get("converted");
   const [visible, setVisible] = useState(false);
 
-  const anyParam = !!(created || saved || sent || cancelled || accepted || rejected || converted);
+  const anyParam = !!(
+    created ||
+    saved ||
+    sent ||
+    resent ||
+    cancelled ||
+    accepted ||
+    rejected ||
+    converted
+  );
 
   useEffect(() => {
     if (!anyParam) return;
@@ -33,6 +44,7 @@ export function QuoteSuccessToast() {
       url.searchParams.delete("created");
       url.searchParams.delete("saved");
       url.searchParams.delete("sent");
+      url.searchParams.delete("resent");
       url.searchParams.delete("cancelled");
       url.searchParams.delete("accepted");
       url.searchParams.delete("rejected");
@@ -45,7 +57,7 @@ export function QuoteSuccessToast() {
   if (!visible || !anyParam) return null;
 
   // Resolución de icono + mensaje + paleta. Prioridad por especificidad
-  // (converted → rejected → accepted → cancelled → sent → created → saved).
+  // (converted → rejected → accepted → cancelled → resent → sent → created → saved).
   let icon: React.ReactNode;
   let message: string;
   let palette: "success" | "danger" | "info" = "success";
@@ -69,6 +81,9 @@ export function QuoteSuccessToast() {
     icon = <XCircle size={18} className="text-red-600 shrink-0" />;
     message = "Cotización cancelada";
     palette = "danger";
+  } else if (resent) {
+    icon = <RotateCcw size={18} className="text-green-600 shrink-0" />;
+    message = "Cotización reenviada por email";
   } else if (sent) {
     icon = <Send size={18} className="text-green-600 shrink-0" />;
     message = "Cotización enviada por email";

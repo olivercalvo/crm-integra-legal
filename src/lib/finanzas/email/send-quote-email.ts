@@ -45,7 +45,7 @@ export async function sendQuoteEmail(
     const html = renderQuoteEmailHtml(email);
     const text = renderQuoteEmailText(email);
 
-    const { data, error } = await resend.emails.send({
+    const sendResult = await resend.emails.send({
       from: EMAIL_FROM,
       to,
       subject,
@@ -59,6 +59,30 @@ export async function sendQuoteEmail(
       ],
     });
 
+    // Hotfix Sprint 2E.3 (smoke 2026-05-14): Oliver reportó silent failure
+    // (banner verde mostraba "Email enviado" pero el email no llegaba al
+    // inbox). El check anterior — `if (error) { ... } return { ok: true }`
+    // — no validaba que data.id estuviera presente, así que cualquier
+    // respuesta de Resend sin error explícito se tomaba como éxito.
+    //
+    // Ahora validamos de forma estricta:
+    //   1. data presente con .id (Resend devuelve un UUID en envíos
+    //      aceptados — sin id NO hay envío real).
+    //   2. error null/undefined.
+    //
+    // Además logueamos el response completo (no solo en error) para que
+    // el diagnóstico del endpoint /api/debug/test-resend y los logs de
+    // Vercel ayuden a Edwin a verificar el DNS del dominio.
+    const { data, error } = sendResult;
+    console.info("[finanzas/email] resend response", {
+      to,
+      from: EMAIL_FROM,
+      has_data: data != null,
+      data_id: data?.id ?? null,
+      error_name: error?.name ?? null,
+      error_message: error?.message ?? null,
+    });
+
     if (error) {
       console.error("[finanzas/email] resend returned error", error);
       return {
@@ -67,7 +91,19 @@ export async function sendQuoteEmail(
       };
     }
 
-    return { ok: true, resend_id: data?.id };
+    if (!data?.id) {
+      // Caso extremo: ni data.id ni error. NO podemos confirmar el envío.
+      console.error(
+        "[finanzas/email] resend devolvió respuesta sin .id ni error — tratamos como fallido",
+        sendResult
+      );
+      return {
+        ok: false,
+        error: "Resend no devolvió un id de envío — no podemos confirmar entrega",
+      };
+    }
+
+    return { ok: true, resend_id: data.id };
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error desconocido al enviar email";

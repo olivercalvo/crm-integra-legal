@@ -1,5 +1,24 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase A] - 2026-05-14 - PDF Cotizaciones (migración + hash)
+
+### Added
+- sql/pending/006_extend_documents_for_auto_pdfs.sql — migración manual para extender la tabla documents:
+  - CHECK entity_type ampliado a ('client','case','task','comment','quote','invoice')
+  - Columnas nuevas: source (DEFAULT 'manual'), source_version, source_generated_at, source_content_hash
+  - CHECK documents_source_check ∈ ('manual','auto_quote_pdf','auto_invoice_pdf')
+  - Índices parciales: idx_documents_source (WHERE source <> 'manual'), idx_documents_quote_entity (WHERE entity_type='quote')
+  - Comments in-DB para documentación de las nuevas columnas
+- src/lib/finanzas/api/quote-pdf-hash.ts — helper computeQuoteContentHash (SHA-256 sobre JSON canónico)
+- types DocumentEntityType y DocumentSource exportados desde src/types/database.ts
+
+### Changed
+- Document interface: agrega 4 propiedades nuevas (source, source_version, source_generated_at, source_content_hash) y migra entity_type a la union DocumentEntityType
+
+### Notes
+- Migration SQL queda en sql/pending/ para ejecución manual de Oliver en Supabase SQL Editor (convención del repo desde 2026-04-05).
+- Fase A pausa el sprint: las fases B–F dependen del schema aplicado.
+
 ## [Sprint 2E.2] - 2026-05-13 - UI Cotizaciones
 
 ### Added

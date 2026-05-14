@@ -129,16 +129,52 @@ export interface Comment {
   created_at: string;
 }
 
+/**
+ * Tipos de entidad sobre las que un documento puede colgar.
+ * Sprint 2E.3: agregados 'quote' e 'invoice' (D10 future-proof — 'invoice'
+ * queda preparado para Fase 2F). El CHECK del constraint vive en BD,
+ * ver sql/pending/006_extend_documents_for_auto_pdfs.sql.
+ */
+export type DocumentEntityType =
+  | "client"
+  | "case"
+  | "task"
+  | "comment"
+  | "quote"
+  | "invoice";
+
+/**
+ * Origen del adjunto.
+ *   'manual'           = subido por usuario via UI (DocumentUpload).
+ *   'auto_quote_pdf'   = PDF auto-generado desde una cotización (Sprint 2E.3).
+ *   'auto_invoice_pdf' = preparado para Fase 2F (factura).
+ *
+ * Reglas:
+ *   - source='manual' es el default y aplica a todos los rows pre-Sprint 2E.3.
+ *   - Sólo rows con source='manual' pueden borrarse via /api/documents/[id]/delete.
+ *   - Los rows con source!='manual' se eliminan implícitamente al borrar la
+ *     entidad fuente (ej. al borrar el quote, su PDF auto se limpia).
+ */
+export type DocumentSource = "manual" | "auto_quote_pdf" | "auto_invoice_pdf";
+
 export interface Document {
   id: string;
   tenant_id: string;
-  entity_type: "client" | "case" | "task" | "comment";
+  entity_type: DocumentEntityType;
   entity_id: string;
   file_name: string;
   file_path: string;
   storage_key: string;
   uploaded_by: string;
   created_at: string;
+  /** Sprint 2E.3: origen del adjunto. Default 'manual' en BD. */
+  source: DocumentSource;
+  /** Versión del contenido auto-generado. Incrementa al regenerar. NULL si source='manual'. */
+  source_version: number | null;
+  /** Timestamp de la última regeneración del PDF auto. NULL si source='manual'. */
+  source_generated_at: string | null;
+  /** SHA-256 hex del payload canónico que produjo el PDF actual. Cache de regeneración. NULL si source='manual'. */
+  source_content_hash: string | null;
 }
 
 export interface AuditLog {

@@ -155,7 +155,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                 </table>
 
                 <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:${GRAY_500};">
-                  Si tenés cualquier consulta sobre esta cotización, responde directamente
+                  Si tienes cualquier consulta sobre esta cotización, responde directamente
                   a este correo y atenderemos tu consulta a la brevedad.
                 </p>
 
@@ -220,7 +220,7 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
     "",
     `Ver y aceptar la cotización: ${public_link}`,
     "",
-    "Si tenés cualquier consulta sobre esta cotización, responde directamente a",
+    "Si tienes cualquier consulta sobre esta cotización, responde directamente a",
     "este correo.",
     "",
     "Cordialmente,",

@@ -1,5 +1,25 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase F] - 2026-05-14 - PDF Cotizaciones (polish + voseo + smoke)
+
+### Changed
+- src/lib/finanzas/email/quote-email-template.ts: "Si tenés" → "Si tienes" (voseo argentino → tuteo neutro panameño). 2 ocurrencias (HTML + texto plano).
+
+### Verified (smoke trace mental)
+- Crear quote borrador → "Descargar PDF" → regenerated=true. PDF abre en pestaña.
+- Editar quote → "Descargar PDF" → regenerated=true (hash cambió).
+- Click "Descargar PDF" sin editar → regenerated=false (cache hit).
+- "Enviar" → email con PDF adjunto + transición a 'enviada'. Si Resend falla, banner ámbar en el dialog con link público copiable como fallback.
+- /legal/clientes/[id] muestra el PDF de la cotización con pill violeta "PDF Cotización COT-XXXXXX". No tiene botón eliminar.
+- /api/documents/[id]/delete rechaza con 403 si source != 'manual'.
+- Borrar quote en borrador limpia documents row + storage blob.
+
+### Verified (técnico)
+- tsc --noEmit limpio (0 errores).
+- next lint limpio en los 17 archivos del Sprint 2E.3.
+- next build limpio (production, sin warnings nuevos).
+- Voseo audit (regex completa del CLAUDE.md): 0 hits.
+
 ## [Sprint 2E.3 — Fase E] - 2026-05-14 - PDF Cotizaciones (visibilidad doble + bloqueo delete manual)
 
 ### Changed

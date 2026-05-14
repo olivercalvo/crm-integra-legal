@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase B] - 2026-05-14 - PDF Cotizaciones (plantilla + endpoint on-demand)
+
+### Added
+- Dependencia @react-pdf/renderer ^4.5.1
+- src/lib/finanzas/pdf/QuoteDocument.tsx — plantilla React-PDF con paleta Integra (navy/gold), header con número y status, info cliente + cotización en dos columnas, tabla de líneas con badges HON/REI, totales card y bloque T&C completo. Footer con paginación + sello de generación.
+- src/lib/finanzas/pdf/generate-quote-pdf.ts — generateQuotePdfBuffer wrapper sobre pdf().toBuffer() de react-pdf.
+- src/lib/finanzas/pdf/quote-pdf-data.ts — fetchQuotePdfBundle + buildQuotePdfPayload + buildQuoteDocumentProps (reutilizables por /pdf y por /send en Fase C).
+- src/app/api/finanzas/quotes/[id]/pdf/route.ts — GET on-demand con cache por hash. Reglas: admin/abogada/contador; cualquier estado (incluso borrador para preview); upsert blob en {tenant}/quote_pdf/{quote_id}/current.pdf; insert/update fila en documents con source='auto_quote_pdf' y source_version+1 al regenerar. Cache hit devuelve signed URL sin regenerar.
+
+### Notes
+- runtime='nodejs' + maxDuration=30 explícitos en el route para react-pdf serverless.
+- Helvetica como fuente (default react-pdf, sin red).
+
 ## [Sprint 2E.3 — Fase A] - 2026-05-14 - PDF Cotizaciones (migración + hash)
 
 ### Added

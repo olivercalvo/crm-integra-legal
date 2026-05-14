@@ -71,8 +71,7 @@ export async function sendQuoteEmail(
     //   2. error null/undefined.
     //
     // Además logueamos el response completo (no solo en error) para que
-    // el diagnóstico del endpoint /api/debug/test-resend y los logs de
-    // Vercel ayuden a Edwin a verificar el DNS del dominio.
+    // los logs de Vercel reflejen siempre el resultado del envío.
     const { data, error } = sendResult;
     console.info("[finanzas/email] resend response", {
       to,

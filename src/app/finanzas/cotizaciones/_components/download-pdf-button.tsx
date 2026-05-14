@@ -9,8 +9,13 @@
  *   - Loading state mientras espera la respuesta.
  *   - Toast verde sutil si regenerated=true ("PDF actualizado").
  *   - Toast rojo si falla.
- *   - El URL se abre en una pestaña nueva (window.open). Si el browser
- *     bloquea el popup, fallback a navegación directa.
+ *   - El URL se abre en una pestaña nueva usando un <a target="_blank">
+ *     creado dinámicamente. Este patrón es más fiable que window.open()
+ *     porque window.open() con "noopener" puede devolver null aún cuando
+ *     la pestaña se abre correctamente (es comportamiento por diseño en
+ *     varios browsers — la nueva ventana no debe tener referencia al
+ *     opener), lo que provocaba un fallback erróneo a window.location.href
+ *     que redirigía la pestaña actual al PDF (bug Sprint 2E.3 smoke).
  */
 
 import { useState } from "react";
@@ -67,11 +72,18 @@ export function DownloadPdfButton({
         return;
       }
 
-      // Abrir en pestaña nueva. Si el browser bloquea, fallback a navegación.
-      const opened = window.open(url, "_blank", "noopener,noreferrer");
-      if (!opened) {
-        window.location.href = url;
-      }
+      // Abrir en pestaña nueva usando un anchor programático.
+      // NO usamos window.open(url, '_blank', 'noopener,noreferrer') porque
+      // con noopener varios browsers devuelven null aunque la pestaña se
+      // haya abierto correctamente, y un fallback a window.location.href
+      // termina redirigiendo la pestaña actual al PDF.
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      // No anexamos al DOM porque no es necesario para que click() funcione
+      // y evitamos un reflow innecesario.
+      anchor.click();
 
       if (data?.regenerated) {
         setStatus({ kind: "regenerated" });

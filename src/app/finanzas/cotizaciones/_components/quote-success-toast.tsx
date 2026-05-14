@@ -71,7 +71,7 @@ export function QuoteSuccessToast() {
     palette = "danger";
   } else if (sent) {
     icon = <Send size={18} className="text-green-600 shrink-0" />;
-    message = "Cotización enviada correctamente";
+    message = "Cotización enviada por email";
   } else if (created) {
     icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
     message = "Cotización creada correctamente";

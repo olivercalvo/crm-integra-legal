@@ -2,7 +2,17 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, AlertCircle, AlertTriangle, Loader2, Copy, Check, ExternalLink } from "lucide-react";
+import {
+  Send,
+  AlertCircle,
+  AlertTriangle,
+  Loader2,
+  Copy,
+  Check,
+  ExternalLink,
+  Mail,
+  Paperclip,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,13 +34,18 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Botón "Enviar" + dialog en dos pasos (D4):
  *
  *   Step 1: dialog con input email destinatario + confirmar.
- *   Step 2 (post-éxito): dialog con el link público copiable + banner
+ *   Step 2 (post-éxito): confirmación con resumen del envío (email
+ *           enviado + PDF adjunto + link público copiable) + banner
  *           "El portal público estará disponible en una próxima
  *           actualización."
  *
- * El POST /send genera el public_token. La ruta /cotizacion/[token] aún
- * NO existe (es Fase 2E.4); por eso el banner ámbar avisa que el link
- * todavía no es funcional.
+ * Sprint 2E.3: el POST /send genera el PDF, lo adjunta al email y lo
+ * envía vía Resend. Si el email falla (DNS pendiente u otro motivo),
+ * la cotización igual queda marcada como enviada y la UI muestra el
+ * fallback con el link público copiable para compartir manualmente.
+ *
+ * La ruta /cotizacion/[token] aún NO existe (es Fase 2E.4); por eso
+ * el banner ámbar avisa que el link todavía no es funcional.
  */
 export function SendQuoteDialog({
   quoteId,
@@ -47,6 +62,9 @@ export function SendQuoteDialog({
   const [emailError, setEmailError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [publicLink, setPublicLink] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState<boolean | null>(null);
+  const [apiEmailError, setApiEmailError] = useState<string | null>(null);
+  const [sentToEmail, setSentToEmail] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -63,6 +81,9 @@ export function SendQuoteDialog({
     setEmailError(null);
     setSubmitError(null);
     setPublicLink(null);
+    setEmailSent(null);
+    setApiEmailError(null);
+    setSentToEmail(null);
     setCopied(false);
   }
 
@@ -104,6 +125,12 @@ export function SendQuoteDialog({
             (typeof window !== "undefined" ? window.location.origin : "");
           setPublicLink(`${base}/cotizacion/${token}`);
         }
+        // Estado del envío de email (best-effort, ver Sprint 2E.3 Fase C).
+        setEmailSent(data.email_sent === true);
+        setApiEmailError(
+          typeof data.email_error === "string" ? data.email_error : null
+        );
+        setSentToEmail(trimmed);
         setStep("success");
         // Refresh para que el server component recargue con status='enviada'.
         router.refresh();
@@ -201,8 +228,9 @@ export function SendQuoteDialog({
               <p className="mt-1 text-xs text-red-600">{emailError}</p>
             )}
             <p className="mt-1 text-xs text-gray-500">
-              Por ahora no se envía email automático: solo se genera el
-              link público para que lo compartas manualmente.
+              Al confirmar enviamos el PDF de la cotización por email con
+              el link de aceptación. La cotización queda marcada como
+              enviada y ya no se puede editar.
             </p>
           </div>
 
@@ -222,7 +250,7 @@ export function SendQuoteDialog({
         </div>
       </ConfirmationModal>
 
-      {/* Step 2: éxito con link público */}
+      {/* Step 2: éxito con resumen del envío */}
       <ConfirmationModal
         open={open && step === "success"}
         onClose={closeAfterSuccess}
@@ -237,6 +265,44 @@ export function SendQuoteDialog({
             La cotización <span className="font-mono font-semibold">{quoteNumber}</span>{" "}
             quedó marcada como <span className="font-semibold">enviada</span>.
           </p>
+
+          {/* Resultado del envío de email */}
+          {emailSent === true ? (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-md border-l-4 border-green-400 bg-green-50 p-3 text-sm text-green-800"
+            >
+              <Mail size={16} className="mt-0.5 shrink-0 text-green-600" />
+              <div className="space-y-1">
+                <p className="font-semibold">
+                  Email enviado a {sentToEmail ?? "el destinatario"}
+                </p>
+                <p className="text-xs text-green-700 inline-flex items-center gap-1">
+                  <Paperclip size={11} />
+                  Con el PDF de la cotización adjunto y el link de aceptación.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-700" />
+              <div className="space-y-1">
+                <p className="font-semibold">
+                  No se pudo enviar el email automático
+                </p>
+                <p className="text-xs">
+                  {apiEmailError ??
+                    "Verifica con el equipo técnico que el servicio de email esté configurado."}
+                  {" "}
+                  La cotización igual quedó marcada como enviada — copia el
+                  link de abajo y compártelo manualmente con el cliente.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div>
             <Label className="text-sm">Link público para el cliente</Label>
@@ -277,10 +343,8 @@ export function SendQuoteDialog({
             <ExternalLink size={14} className="mt-0.5 shrink-0 text-amber-600" />
             <p>
               El portal público estará disponible en una próxima
-              actualización. Por ahora el link funciona como referencia
-              interna. Pega este link en el email o WhatsApp que envíes al
-              cliente. Cuando el cliente responda, marca la cotización como
-              aceptada o rechazada manualmente desde esta misma pantalla.
+              actualización. Cuando el cliente responda, marca la cotización
+              como aceptada o rechazada manualmente desde esta misma pantalla.
             </p>
           </div>
         </div>

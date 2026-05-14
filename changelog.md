@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase D] - 2026-05-14 - PDF Cotizaciones (UI descarga + SendDialog actualizado)
+
+### Added
+- download-pdf-button.tsx — botón "Descargar PDF" disponible en todos los estados del detalle. Loading state, toast verde si regenerated=true, toast rojo si falla. Abre en pestaña nueva.
+
+### Changed
+- /finanzas/cotizaciones/[id]: DownloadPdfButton agregado al header de acciones.
+- send-quote-dialog.tsx: step 1 actualizado para reflejar que envía email + PDF; step 2 (success) muestra banner verde si email_sent=true (con email destinatario + indicador "PDF adjunto"), o banner ámbar si falló con fallback al link público copiable. La cotización queda enviada en BD en ambos casos.
+- quote-success-toast.tsx: mensaje del query param ?sent=1 actualizado a "Cotización enviada por email".
+
 ## [Sprint 2E.3 — Fase C] - 2026-05-14 - PDF Cotizaciones (email Resend + integración /send)
 
 ### Added

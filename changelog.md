@@ -1,5 +1,20 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Sprint 2E.3 — Fase C] - 2026-05-14 - PDF Cotizaciones (email Resend + integración /send)
+
+### Added
+- src/lib/finanzas/pdf/ensure-quote-pdf.ts — ensureQuotePdfRow (compartido /pdf y /send) + downloadQuotePdfBuffer
+- src/lib/finanzas/email/quote-email-template.ts — renderQuoteEmailHtml + renderQuoteEmailText (HTML para Resend con paleta Integra, CTA al portal público, tuteo neutro panameño)
+- src/lib/finanzas/email/send-quote-email.ts — sendQuoteEmail wrapper sobre Resend con PDF adjunto en base64
+
+### Changed
+- /api/finanzas/quotes/[id]/send: ahora genera/recupera el PDF actual (via ensureQuotePdfRow), aplica la transición de estado y envía el email vía Resend. Email es best-effort: si falla, el quote queda enviado y la response retorna { email_sent: false, email_error }. Permite al operador reenviar o compartir el link público manualmente.
+- /api/finanzas/quotes/[id]/pdf: refactor para usar ensureQuotePdfRow (mismo comportamiento user-facing).
+
+### Notes
+- DNS de Resend para integra-panama.com pendiente de Edwin. El código queda code-complete; el envío real fallará silenciosamente hasta que se verifique DNS (la cotización igual queda marcada como 'enviada' y la abogada puede compartir el link público).
+- APP_BASE_URL se lee de NEXT_PUBLIC_APP_URL (mismo patrón que daily-summary cron).
+
 ## [Sprint 2E.3 — Fase B] - 2026-05-14 - PDF Cotizaciones (plantilla + endpoint on-demand)
 
 ### Added

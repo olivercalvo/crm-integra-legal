@@ -118,6 +118,15 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Portal público de cotizaciones (Sprint 2E.3 hotfix): el cliente
+  // accede vía link en el email con un token único en la URL. NO
+  // requiere auth — la "auth" la da el token impredecible en el path.
+  // Si el cliente está ya logueado al CRM (caso raro), igual lo
+  // dejamos ver la página pública (NO lo redirigimos al dashboard).
+  if (pathname.startsWith("/cotizacion/") || pathname === "/cotizacion") {
+    return response;
+  }
+
   // Cron — autenticado por header CRON_SECRET dentro del handler.
   if (pathname.startsWith("/api/cron/")) {
     return response;

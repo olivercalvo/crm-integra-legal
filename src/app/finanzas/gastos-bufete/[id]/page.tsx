@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote } from "lucide-react";
+import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote, ArrowLeft, Plus } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
-import { BackButton } from "@/components/ui/back-button";
+import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
 import {
@@ -60,10 +61,25 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
         </div>
       )}
 
-      {/* Header */}
+      {/* Header.
+          NOTA: usamos un <Link> directo al listado en lugar del <BackButton>
+          compartido del repo. El BackButton hace router.back() si hay history
+          (línea 28 de back-button.tsx), lo que causa bug UX al venir desde
+          /nuevo tras crear un gasto: el "atrás" lleva al form en blanco en
+          vez del listado. Este patrón corrige solo gastos-bufete.
+          TODO(sprint futuro): el resto de las pantallas /finanzas (facturas,
+          cotizaciones) tienen el mismo issue. Decidir si arreglamos el
+          BackButton globalmente (priorizar `fallbackHref` sobre history) o
+          si todas las pantallas migran a <Link href> explícito. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <BackButton fallbackHref="/finanzas/gastos-bufete" />
+          <Link
+            href="/finanzas/gastos-bufete"
+            aria-label="Volver a Gastos del Bufete"
+            className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-md text-integra-navy hover:bg-gray-100"
+          >
+            <ArrowLeft size={20} />
+          </Link>
           <div className="rounded-lg bg-integra-navy/5 p-2 text-integra-gold ring-1 ring-integra-gold/30">
             <ShoppingBag size={24} />
           </div>
@@ -78,11 +94,24 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             </div>
           </div>
         </div>
-        <BusinessExpenseActions
-          id={expense.id}
-          status={expense.status}
-          canMutate={canMutate}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          {canMutate && (
+            <Link href="/finanzas/gastos-bufete/nuevo">
+              <Button
+                variant="outline"
+                className="min-h-[44px] border-integra-navy/30 text-integra-navy hover:bg-integra-navy/5"
+              >
+                <Plus size={16} className="mr-1.5" />
+                Nuevo gasto
+              </Button>
+            </Link>
+          )}
+          <BusinessExpenseActions
+            id={expense.id}
+            status={expense.status}
+            canMutate={canMutate}
+          />
+        </div>
       </div>
 
       {/* Grid de dos columnas en desktop */}

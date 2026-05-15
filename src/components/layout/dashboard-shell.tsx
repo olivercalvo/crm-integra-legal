@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import { Header } from "./header";
-import { Sidebar } from "./sidebar";
+import { ContextualSidebar } from "./contextual-sidebar";
+import { MobileDrawer } from "./mobile-drawer";
 import { BottomNav } from "./bottom-nav";
 import { cn } from "@/lib/utils";
 
@@ -12,43 +13,35 @@ interface DashboardShellProps {
   userRole: string;
 }
 
+type SidebarMode = "pinned" | "auto";
+
 export function DashboardShell({ children, userName, userRole }: DashboardShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>("auto");
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sidebar-collapsed");
-      if (saved === "true") setSidebarCollapsed(true);
-    } catch {}
+  const handleModeChange = useCallback((mode: SidebarMode) => {
+    setSidebarMode(mode);
   }, []);
-
-  function toggleCollapse() {
-    setSidebarCollapsed((prev) => {
-      const next = !prev;
-      try { localStorage.setItem("sidebar-collapsed", String(next)); } catch {}
-      return next;
-    });
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header
         userName={userName}
         userRole={userRole}
-        onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onToggleSidebar={() => setDrawerOpen((o) => !o)}
       />
-      <Sidebar
+      <ContextualSidebar userRole={userRole} onModeChange={handleModeChange} />
+      <MobileDrawer
         userRole={userRole}
-        open={sidebarOpen}
-        collapsed={sidebarCollapsed}
-        onClose={() => setSidebarOpen(false)}
-        onToggleCollapse={toggleCollapse}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
       />
       <main
         className={cn(
-          "p-4 pb-20 lg:p-6 lg:pb-6 transition-all duration-200",
-          sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+          "p-4 pb-20 lg:p-6 lg:pb-6 transition-[margin] duration-200",
+          // Cuando el sidebar está pineado empujamos el main 240px.
+          // En modo auto, el sidebar overlay flota sobre 64px reservados.
+          sidebarMode === "pinned" ? "lg:ml-60" : "lg:ml-16"
         )}
       >
         <div className="mx-auto max-w-7xl">{children}</div>

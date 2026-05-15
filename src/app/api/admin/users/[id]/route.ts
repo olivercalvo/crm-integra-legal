@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UserRole } from "@/types/database";
 
-const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente"];
+const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente", "contador"];
 
 export async function PATCH(
   request: NextRequest,

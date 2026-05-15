@@ -17,11 +17,15 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
 
-// El contador es un rol de solo-lectura especializado en cierre contable.
-// Dentro de /finanzas solo puede ver /finanzas/reportes/* (hub + sub-páginas).
-// El root /finanzas se permite porque tiene un redirect interno por rol
-// (page.tsx lo manda a /finanzas/reportes cuando rol=contador).
-const CONTADOR_FINANZAS_ALLOWED_PREFIXES = ["/finanzas/reportes"];
+// El contador es un rol especializado en cierre contable.
+// Dentro de /finanzas puede ver /finanzas/reportes/* (hub + sub-páginas) y
+// /finanzas/gastos-bufete/* (carga de compras del bufete con ITBMS recuperable;
+// Sprint 2F Parte 3a). El root /finanzas se permite porque tiene un redirect
+// interno por rol (page.tsx lo manda a /finanzas/reportes cuando rol=contador).
+const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
+  "/finanzas/reportes",
+  "/finanzas/gastos-bufete",
+];
 
 // Home primaria por rol — destino fallback cuando el rol no tiene acceso a la
 // ruta solicitada. Admin/abogada caen al selector general; asistente cae a

@@ -20,6 +20,7 @@ import {
   UserPlus,
   Receipt,
   BarChart3,
+  ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,7 @@ const navItems: NavItem[] = [
   { label: "Cotizaciones",   href: "/finanzas/cotizaciones",     icon: <FileText size={20} />,        roles: ["admin", "abogada"],                           section: "finanzas" },
   { label: "Plantilla T&C",  href: "/finanzas/cotizaciones/configuracion", icon: <Settings size={20} />, roles: ["admin"],                                  section: "finanzas" },
   { label: "Facturas",       href: "/finanzas/facturas",         icon: <Receipt size={20} />,         roles: ["admin", "abogada"],                           section: "finanzas" },
+  { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete", icon: <ShoppingBag size={20} />,    roles: ["admin", "abogada", "contador"],               section: "finanzas" },
   { label: "Reportes",       href: "/finanzas/reportes",         icon: <BarChart3 size={20} />,       roles: ["admin", "abogada", "contador"],               section: "finanzas" },
   // Admin (gating server-side)
   { label: "Admin",          href: "/legal/admin",               icon: <Shield size={20} />,          roles: ["admin"],                                      section: "admin" },

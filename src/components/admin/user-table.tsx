@@ -11,12 +11,14 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Administrador",
   abogada: "Abogada",
   asistente: "Asistente",
+  contador: "Contador",
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: "bg-integra-navy/10 text-integra-navy",
   abogada: "bg-integra-gold/20 text-amber-800",
   asistente: "bg-gray-100 text-gray-700",
+  contador: "bg-emerald-100 text-emerald-800",
 };
 
 interface UserRow {
@@ -157,6 +159,7 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
           <option value="admin">Administrador</option>
           <option value="abogada">Abogada</option>
           <option value="asistente">Asistente</option>
+          <option value="contador">Contador</option>
         </select>
         {hasFilters && (
           <Button

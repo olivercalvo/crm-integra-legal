@@ -41,6 +41,7 @@ export function Header({ userName, userRole, onToggleSidebar }: HeaderProps) {
     admin: "Administrador",
     abogada: "Abogada",
     asistente: "Asistente",
+    contador: "Contador",
   };
 
   return (

@@ -13,6 +13,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Administrador",
   abogada: "Abogada",
   asistente: "Asistente",
+  contador: "Contador",
 };
 
 export function UserForm() {

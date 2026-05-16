@@ -23,6 +23,7 @@ import type {
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { createCreditNoteFromInvoice } from "@/lib/finanzas/api/credit-notes";
 
 type DB = SupabaseClient;
 
@@ -576,34 +577,35 @@ export function validateCancelInput(
 }
 
 /**
- * Anula una factura emitida. Marca status='anulada', persiste razón y
- * timestamp UTC. Es UN solo UPDATE atómico — T2 valida la transición de
- * status, T4 deja pasar las nuevas columnas (no están en su whitelist).
+ * Anula una factura emitida. Sprint 2C: ahora bloquea si tiene pagos
+ * aplicados (amount_paid > 0) y genera una nota de crédito mirror
+ * automáticamente.
  *
- * Estados de origen permitidos por el spec del sprint:
- *   - emitida              ✓ (T2 lo permite)
- *   - parcialmente_pagada  ✓ (T2 lo permite)
- *   - pagada               ✗ T2 NO lo permite (línea 106 del trigger b3e:
- *     pagada solo puede ir a parcialmente_pagada o emitida). En el MVP
- *     actual no es alcanzable porque no hay UI de pagos. Lo dejamos en la
- *     lista del backend gate por consistencia con el spec; si llegara a
- *     entrar (vía SQL manual de pagos), el UPDATE rebotaría con el mensaje
- *     del trigger ("Transición de status inválida..."), que `pgErrorToMessage`
- *     surface tal cual al usuario. Cuando llegue Fase 2C (pagos) habrá que
- *     decidir si se permite anulación de facturas pagadas (probable: sí,
- *     con reverso de payment) — eso requerirá tocar T2.
+ * Reglas de origen:
+ *   - emitida sin pagos        ✓ → genera NC + UPDATE status='anulada'
+ *   - parcialmente_pagada      ✗ rechaza con mensaje pidiendo eliminar pagos
+ *   - pagada                   ✗ rechaza con mismo mensaje
+ *   - borrador / pre_emision   ✗ usar Eliminar
+ *   - anulada                  ✗ ya está anulada
+ *
+ * Atomicidad: la NC se crea ANTES del UPDATE de la factura. Si el UPDATE
+ * falla, la NC queda huérfana (sin factura anulada que la respalde) — caso
+ * extremadamente raro porque el UPDATE es un cambio de status validado por
+ * T2 que ya pasó la pre-check. Si ocurre, queda en logs y requiere
+ * intervención manual. Aceptable para MVP (alternativa: SECURITY DEFINER RPC
+ * con BEGIN/COMMIT, fuera de scope de este sprint).
  */
 export async function cancelInvoice(
   db: DB,
   tenantId: string,
+  userId: string,
   invoiceId: string,
   reason: string
 ) {
-  // 1. Cargar status actual para validar antes del UPDATE. Mejor diagnóstico
-  //    que dejar que T2 raise — distinguimos entre "no anulable" y "ya anulada".
+  // 1. Cargar status + amount_paid para validar antes de cualquier mutación.
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number")
+    .select("id, status, invoice_number, amount_paid")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -624,7 +626,27 @@ export async function cancelInvoice(
     );
   }
 
-  // 2. UPDATE atómico: status + reason + timestamp. T2 valida la transición.
+  // 2. Bloqueo D3.d/D3.e: si la factura tiene pagos aplicados, NO se anula.
+  //    El usuario debe eliminar los pagos primero (T7a revierte status a
+  //    'emitida' automáticamente al borrar el último pago).
+  const amountPaid = Number(inv.amount_paid);
+  if (amountPaid > 0) {
+    throw new InvoiceMutationError(
+      `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Eliminá los pagos primero antes de anular.`,
+      400
+    );
+  }
+
+  // 3. Generar NC mirror (idempotente: si ya existe, devuelve la existente).
+  const cn = await createCreditNoteFromInvoice(
+    db,
+    tenantId,
+    userId,
+    invoiceId,
+    reason
+  );
+
+  // 4. UPDATE atómico de la factura. T2 valida la transición.
   const { error: errUpd } = await db
     .from("invoices")
     .update({
@@ -636,10 +658,22 @@ export async function cancelInvoice(
     .eq("id", invoiceId);
 
   if (errUpd) {
+    // NC ya quedó creada (idempotente, no se duplica en retry). Loguear
+    // para visibilidad operativa.
+    console.error(
+      "[finanzas] cancelInvoice: NC creada (" +
+        cn.credit_note_number +
+        ") pero UPDATE invoice falló:",
+      errUpd
+    );
     throw new InvoiceMutationError(pgErrorToMessage(errUpd), 400, errUpd);
   }
 
-  return { id: invoiceId };
+  return {
+    id: invoiceId,
+    credit_note_id: cn.id,
+    credit_note_number: cn.credit_note_number,
+  };
 }
 
 // ---------------------------------------------------------------------------

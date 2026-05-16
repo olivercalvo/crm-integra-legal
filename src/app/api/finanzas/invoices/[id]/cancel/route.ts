@@ -13,20 +13,23 @@ interface RouteParams {
 /**
  * POST /api/finanzas/invoices/[id]/cancel
  *
- * Anula una factura emitida (o parcialmente_pagada). Persiste razón en
- * cancellation_reason y timestamp en cancelled_at.
+ * Anula una factura emitida sin pagos. Genera una nota de crédito mirror
+ * automáticamente. Si la factura tiene pagos aplicados, rechaza con
+ * mensaje claro pidiendo eliminar los pagos primero.
  *
- * Permisos: admin, abogada y contador. Asistente queda fuera (solo registra
- * pagos / actualiza estado de tareas, no toma decisiones de anulación).
+ * Permisos: admin + abogada (Sprint 2C, D4 + D5). Anteriormente contador
+ * podía anular; este sprint lo deja solo en lectura del módulo.
  *
  * Validación:
  *   - reason trimeado, longitud >= 3 (validador en api/invoices.ts).
  *
  * Body esperado: { reason: string }
+ *
+ * Respuesta exitosa: { id, credit_note_id, credit_note_number }
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
-  if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
+  if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
@@ -48,8 +51,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    await cancelInvoice(ctx.db, ctx.tenantId, params.id, validation.data.reason);
-    return NextResponse.json({ id: params.id }, { status: 200 });
+    const result = await cancelInvoice(
+      ctx.db,
+      ctx.tenantId,
+      ctx.userId,
+      params.id,
+      validation.data.reason
+    );
+    return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof InvoiceMutationError) {
       console.error(

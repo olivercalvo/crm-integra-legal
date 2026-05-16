@@ -11,7 +11,7 @@ const ALLOWED_STATUSES = new Set<BusinessExpenseStatus>([
   "pagado",
 ]);
 
-const MUTATING_ROLES = ["admin", "contador"] as const;
+const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 const READING_ROLES = ["admin", "abogada", "contador"] as const;
 
 /**
@@ -57,8 +57,9 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/finanzas/business-expenses
  *
- * Crea un gasto del bufete. Solo admin + contador (las abogadas tienen
- * acceso de lectura pero no escritura — la RLS también lo enforza).
+ * Crea un gasto del bufete. Admin + abogada + contador.
+ * Asistente queda fuera por middleware de /finanzas y por defensa en
+ * profundidad acá.
  */
 export async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();

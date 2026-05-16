@@ -4,7 +4,7 @@ import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
 import { BusinessExpenseForm } from "../_components/business-expense-form";
 
-const MUTATING_ROLES = ["admin", "contador"];
+const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
 export default async function NuevoGastoBufetePage() {
   const ctx = await getAuthenticatedContext();

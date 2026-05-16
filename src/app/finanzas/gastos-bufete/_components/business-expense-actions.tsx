@@ -17,7 +17,7 @@ import {
 interface Props {
   id: string;
   status: BusinessExpenseStatus;
-  /** Si el usuario puede mutar (admin/contador). Las abogadas ven el detalle pero no pueden editar/borrar. */
+  /** Si el usuario puede mutar (admin/abogada/contador). Solo el asistente queda sin acceso al módulo. */
   canMutate: boolean;
 }
 
@@ -59,7 +59,7 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
   if (!canMutate) {
     return (
       <p className="text-xs text-gray-500">
-        Solo administrador o contador pueden modificar este gasto.
+        Solo administrador, abogada o contador pueden modificar este gasto.
       </p>
     );
   }

@@ -9,7 +9,7 @@ const ALLOWED_TYPES = [
   "application/pdf",
 ];
 
-const MUTATING_ROLES = ["admin", "contador"] as const;
+const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
 /**
  * POST /api/finanzas/business-expenses/[id]/receipt

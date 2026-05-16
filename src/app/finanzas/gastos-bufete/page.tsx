@@ -32,7 +32,7 @@ const ALLOWED_STATUSES = new Set<BusinessExpenseStatus>([
 ]);
 const ALLOWED_HAS_ITBMS = new Set(["true", "false"]);
 const READING_ROLES = ["admin", "abogada", "contador"];
-const MUTATING_ROLES = ["admin", "contador"];
+const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
 export default async function GastosBufeteListPage({ searchParams }: PageProps) {
   const ctx = await getAuthenticatedContext();

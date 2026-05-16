@@ -8,7 +8,7 @@ import {
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
 import { MutationError } from "@/lib/finanzas/api/errors";
 
-const MUTATING_ROLES = ["admin", "contador"] as const;
+const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 const READING_ROLES = ["admin", "abogada", "contador"] as const;
 
 /** GET — detalle. Admin/abogada/contador. */
@@ -25,7 +25,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   return NextResponse.json({ data: row }, { status: 200 });
 }
 
-/** PATCH — actualizar campos. Admin + contador. */
+/** PATCH — actualizar campos. Admin + abogada + contador. */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-/** DELETE — hard delete + cleanup de receipt. Admin + contador. */
+/** DELETE — hard delete + cleanup de receipt. Admin + abogada + contador. */
 export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {

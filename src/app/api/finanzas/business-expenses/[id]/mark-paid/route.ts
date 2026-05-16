@@ -4,7 +4,7 @@ import { validateMarkAsPaid } from "@/lib/finanzas/validators/business-expense";
 import { markBusinessExpenseAsPaid } from "@/lib/finanzas/api/business-expenses";
 import { MutationError } from "@/lib/finanzas/api/errors";
 
-const MUTATING_ROLES = ["admin", "contador"] as const;
+const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
 /**
  * POST /api/finanzas/business-expenses/[id]/mark-paid

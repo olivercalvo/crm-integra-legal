@@ -15,7 +15,7 @@ interface PageProps {
   params: { id: string };
 }
 
-const MUTATING_ROLES = ["admin", "contador"];
+const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
 export default async function EditarGastoBufetePage({ params }: PageProps) {
   const ctx = await getAuthenticatedContext();

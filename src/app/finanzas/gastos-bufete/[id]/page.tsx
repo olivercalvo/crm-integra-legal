@@ -19,7 +19,7 @@ interface PageProps {
 }
 
 const READING_ROLES = ["admin", "abogada", "contador"];
-const MUTATING_ROLES = ["admin", "contador"];
+const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
 function fmtMoney(n: number | string): string {
   return Number(n).toLocaleString("en-US", {

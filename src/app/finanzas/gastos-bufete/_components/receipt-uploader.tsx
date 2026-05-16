@@ -11,7 +11,7 @@ interface Props {
   /** Path en storage (bucket "documents"). NULL si no hay comprobante aún. */
   receiptUrl: string | null;
   receiptFilename: string | null;
-  /** Si el usuario puede mutar (admin/contador). */
+  /** Si el usuario puede mutar (admin/abogada/contador). */
   canMutate: boolean;
   /** URL pública/firmada para previsualizar el comprobante existente, si aplica. */
   publicUrl: string | null;

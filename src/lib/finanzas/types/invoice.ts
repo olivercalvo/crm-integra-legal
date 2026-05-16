@@ -167,10 +167,18 @@ export interface UpdateInvoiceDgiInput {
   dgi_cafe_url: string | null;
 }
 
-/** Payload para anular una factura. Reason es requerida. */
+/**
+ * Payload para anular una factura. Reason es requerida (mínimo 3 chars).
+ * observations es opcional (máx 2000 chars) y se guarda en la NC generada.
+ * Sprint QUOTES-POLISH D7.
+ */
 export interface CancelInvoiceInput {
   reason: string;
+  observations?: string | null;
 }
+
+/** Límite alineado con CHECK credit_notes_observations_length_check en BD. */
+export const CREDIT_NOTE_OBSERVATIONS_MAX = 2000;
 
 /** Línea de invoice tal como viene del SELECT. */
 export interface InvoiceLineRow {

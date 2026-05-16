@@ -42,6 +42,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     credit_note_number: string;
     issue_date: string;
     reason: string;
+    observations: string | null;
     subtotal_total: string | number;
     tax_total: string | number;
     grand_total: string | number;
@@ -77,6 +78,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     credit_note_number: cnData.credit_note_number,
     issue_date: cnData.issue_date,
     reason: cnData.reason,
+    observations: cnData.observations ?? null,
     client: {
       name: cnData.client.name,
       client_number: cnData.client.client_number,

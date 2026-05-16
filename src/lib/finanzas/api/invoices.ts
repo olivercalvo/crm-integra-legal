@@ -563,7 +563,9 @@ export async function updateInvoiceDgiData(
  */
 export function validateCancelInput(
   raw: Partial<CancelInvoiceInput> | null | undefined
-): { ok: true; data: CancelInvoiceInput } | { ok: false; errors: { reason: string } } {
+):
+  | { ok: true; data: CancelInvoiceInput }
+  | { ok: false; errors: { reason?: string; observations?: string } } {
   const reason = raw?.reason ? String(raw.reason).trim() : "";
   if (reason.length < 3) {
     return {
@@ -573,7 +575,25 @@ export function validateCancelInput(
       },
     };
   }
-  return { ok: true, data: { reason } };
+
+  // observations opcional (Sprint QUOTES-POLISH D7). Si viene, trim + máx 2000.
+  let observations: string | null = null;
+  if (raw?.observations != null) {
+    const trimmed = String(raw.observations).trim();
+    if (trimmed.length > 0) {
+      if (trimmed.length > 2000) {
+        return {
+          ok: false,
+          errors: {
+            observations: "Las observaciones no pueden tener más de 2000 caracteres.",
+          },
+        };
+      }
+      observations = trimmed;
+    }
+  }
+
+  return { ok: true, data: { reason, observations } };
 }
 
 /**
@@ -600,7 +620,8 @@ export async function cancelInvoice(
   tenantId: string,
   userId: string,
   invoiceId: string,
-  reason: string
+  reason: string,
+  observations: string | null = null
 ) {
   // 1. Cargar status + amount_paid para validar antes de cualquier mutación.
   const { data: inv, error: errFetch } = await db
@@ -643,7 +664,8 @@ export async function cancelInvoice(
     tenantId,
     userId,
     invoiceId,
-    reason
+    reason,
+    observations
   );
 
   // 4. UPDATE atómico de la factura. T2 valida la transición.

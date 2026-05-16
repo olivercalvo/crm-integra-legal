@@ -84,6 +84,7 @@ interface RawQuote {
   issue_date: string;
   valid_until: string;
   notes: string | null;
+  observations: string | null;
   terms_and_conditions: string | null;
   subtotal_hon: string | number;
   subtotal_rei: string | number;
@@ -123,7 +124,7 @@ export async function fetchQuotePdfBundle(
     .select(
       `
         id, tenant_id, quote_number, title, status, issue_date, valid_until, notes,
-        terms_and_conditions, subtotal_hon, subtotal_rei, tax_total, grand_total,
+        observations, terms_and_conditions, subtotal_hon, subtotal_rei, tax_total, grand_total,
         sent_by, client_id, case_id,
         client:clients!quotes_client_id_fkey(
           id, name, client_number, client_status, client_type,
@@ -178,6 +179,7 @@ export async function fetchQuotePdfBundle(
     issue_date: header.issue_date as string,
     valid_until: header.valid_until as string,
     notes: (header.notes as string | null) ?? null,
+    observations: (header.observations as string | null) ?? null,
     terms_and_conditions: (header.terms_and_conditions as string | null) ?? null,
     subtotal_hon: header.subtotal_hon as string | number,
     subtotal_rei: header.subtotal_rei as string | number,
@@ -258,6 +260,7 @@ export function buildQuotePdfPayload(bundle: QuotePdfBundle): QuotePdfPayload {
     issue_date: quote.issue_date,
     valid_until: quote.valid_until,
     internal_notes: s(quote.notes),
+    observations: s(quote.observations),
     terms_and_conditions: s(quote.terms_and_conditions),
     lines: linesPayload,
     totals: {
@@ -320,6 +323,7 @@ export function buildQuoteDocumentProps(
     tax_total: n(quote.tax_total),
     grand_total: n(quote.grand_total),
     notes: s(quote.notes),
+    observations: s(quote.observations),
     terms_and_conditions: s(quote.terms_and_conditions),
     generated_at_label: generatedAtLabel,
     generated_by_label: meta.generated_by_name ?? "",

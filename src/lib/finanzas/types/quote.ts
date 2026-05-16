@@ -71,6 +71,15 @@ export const QUOTE_NUMBER_PREFIX = "COT" as const;
 export const QUOTE_TITLE_MIN = 3;
 export const QUOTE_TITLE_MAX = 100;
 
+/**
+ * Límite máximo del campo observations (Sprint QUOTES-POLISH).
+ *
+ * Alineado con el CHECK quotes_observations_length_check en BD. Cualquier
+ * cambio acá debe migrarse en lock-step en sql/pending/012 (lección
+ * Sprint 2E.1: schema y código se mueven juntos).
+ */
+export const QUOTE_OBSERVATIONS_MAX = 2000;
+
 // ---------- DB row shapes -------------------------------------------------
 
 /** Cabecera de quote tal como viene del SELECT. 36 columnas. */
@@ -89,6 +98,8 @@ export interface QuoteRow {
   tax_total: string | number;
   grand_total: string | number;
   notes: string | null;
+  /** Observaciones cliente-visible en el PDF (Sprint QUOTES-POLISH). Distinto a notes (interno). */
+  observations: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -221,6 +232,8 @@ export interface CreateQuoteInput {
   /** Título descriptivo (3-100 chars). Sprint 2E.3.2. */
   title: string;
   notes?: string | null;
+  /** Observaciones cliente-visible (Sprint QUOTES-POLISH). Máx 2000 chars. */
+  observations?: string | null;
   terms_and_conditions?: string | null;
   lines: NewQuoteLineInput[];
 }
@@ -234,6 +247,8 @@ export interface UpdateQuoteInput {
   /** Si viene, debe respetar 3-100 chars. Sprint 2E.3.2. */
   title?: string;
   notes?: string | null;
+  /** Observaciones cliente-visible (Sprint QUOTES-POLISH). Máx 2000 chars. */
+  observations?: string | null;
   terms_and_conditions?: string | null;
   /** Si viene, REEMPLAZA todas las líneas (delete + insert). */
   lines?: NewQuoteLineInput[];

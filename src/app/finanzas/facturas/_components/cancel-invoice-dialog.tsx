@@ -42,9 +42,12 @@ export function CancelInvoiceDialog({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
+  const [observations, setObservations] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
+  const [observationsError, setObservationsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const OBSERVATIONS_MAX = 2000;
 
   // Autofocus al textarea cuando se abre el dialog. Pequeño delay para que
   // el render del modal termine antes; sin él el focus se pierde porque el
@@ -62,17 +65,27 @@ export function CancelInvoiceDialog({
 
   function reset() {
     setReason("");
+    setObservations("");
     setReasonError(null);
+    setObservationsError(null);
     setSubmitError(null);
   }
 
   function submit() {
     setReasonError(null);
+    setObservationsError(null);
     setSubmitError(null);
 
     const trimmed = reason.trim();
     if (trimmed.length < 3) {
       setReasonError("La razón de anulación debe tener al menos 3 caracteres.");
+      return;
+    }
+    const trimmedObs = observations.trim();
+    if (trimmedObs.length > OBSERVATIONS_MAX) {
+      setObservationsError(
+        `Las observaciones no pueden tener más de ${OBSERVATIONS_MAX} caracteres.`
+      );
       return;
     }
 
@@ -81,13 +94,19 @@ export function CancelInvoiceDialog({
         const res = await fetch(`/api/finanzas/invoices/${invoiceId}/cancel`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: trimmed }),
+          body: JSON.stringify({
+            reason: trimmed,
+            observations: trimmedObs || null,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          // Si vino fieldErrors.reason del backend, mostralo bajo el textarea.
+          // Si vino fieldErrors del backend, mostralos en el campo correspondiente.
           if (data.fieldErrors?.reason) {
             setReasonError(data.fieldErrors.reason);
+          }
+          if (data.fieldErrors?.observations) {
+            setObservationsError(data.fieldErrors.observations);
           }
           setSubmitError(data.error ?? "No se pudo anular la factura.");
           return;
@@ -282,6 +301,52 @@ export function CancelInvoiceDialog({
                     }`}
                   >
                     {trimmedLen}/{REASON_MAX}
+                  </span>
+                </div>
+              </div>
+
+              {/* Observaciones adicionales (Sprint QUOTES-POLISH D7) */}
+              <div>
+                <Label htmlFor="cancel_observations" className="text-sm">
+                  Observaciones adicionales{" "}
+                  <span className="text-gray-400 font-normal">(opcional)</span>
+                </Label>
+                <textarea
+                  id="cancel_observations"
+                  value={observations}
+                  onChange={(e) => {
+                    setObservations(e.target.value);
+                    if (observationsError) setObservationsError(null);
+                  }}
+                  disabled={isPending}
+                  rows={3}
+                  maxLength={OBSERVATIONS_MAX + 20}
+                  placeholder="Detalles adicionales que quieres que aparezcan en el PDF de la nota de crédito (opcional)."
+                  className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm bg-white focus:outline-none focus:border-integra-navy ${
+                    observationsError
+                      ? "border-red-300"
+                      : "border-gray-300 hover:border-integra-navy"
+                  }`}
+                />
+                <div className="mt-1 flex items-start justify-between gap-3">
+                  <p
+                    className={`text-xs ${
+                      observationsError ? "text-red-600" : "text-gray-500"
+                    }`}
+                  >
+                    {observationsError ??
+                      "Aparecen en el PDF de la nota de crédito junto al motivo."}
+                  </p>
+                  <span
+                    aria-live="polite"
+                    className={`shrink-0 text-xs font-mono ${
+                      observations.trim().length > OBSERVATIONS_MAX
+                        ? "text-red-600"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {observations.length.toLocaleString("es-PA")}/
+                    {OBSERVATIONS_MAX.toLocaleString("es-PA")}
                   </span>
                 </div>
               </div>

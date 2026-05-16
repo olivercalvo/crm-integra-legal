@@ -38,3 +38,11 @@ next-env.d.ts
 # claude code
 .claude/
 supabase/.temp/
+
+# brand-assets — el archivo original que el cliente pasó mal-nombrado (.jpg
+# pero contiene WebP) queda fuera del repo; el WebP renombrado vive en
+# brand-assets/ y el PNG runtime en public/.
+/Logo-Integra-2024.jpg
+
+# scripts/fixture-output — PDFs/PNGs sintéticos del smoke local
+/scripts/fixture-output/

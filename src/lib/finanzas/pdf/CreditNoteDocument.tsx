@@ -12,13 +12,22 @@
  */
 
 import React from "react";
+import path from "node:path";
+import fs from "node:fs";
 import {
   Document,
   Page,
   Text,
   View,
+  Image,
   StyleSheet,
 } from "@react-pdf/renderer";
+
+/** Logo PNG en Buffer (mismo patrón y razón que QuoteDocument). */
+const LOGO_PNG_BUFFER: Buffer = fs.readFileSync(
+  path.join(process.cwd(), "public", "integra-logo.png")
+);
+const LOGO_SRC = { data: LOGO_PNG_BUFFER, format: "png" as const };
 
 // ---------------------------------------------------------------------------
 // Props
@@ -50,6 +59,8 @@ export interface CreditNoteDocumentProps {
   credit_note_number: string;
   issue_date: string;
   reason: string;
+  /** Observaciones adicionales opcionales (Sprint QUOTES-POLISH, D7). */
+  observations: string | null;
   client: CreditNoteDocumentClient;
   invoice: CreditNoteDocumentInvoice;
   lines: CreditNoteDocumentLine[];
@@ -96,8 +107,9 @@ function formatDateEs(iso: string): string {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 60,
+    // Sprint QUOTES-POLISH: compactaciones idénticas a QuoteDocument.
+    paddingTop: 28,
+    paddingBottom: 40,
     paddingHorizontal: 36,
     fontFamily: "Helvetica",
     fontSize: 9,
@@ -114,24 +126,11 @@ const styles = StyleSheet.create({
   },
   brand: {
     flexDirection: "column",
+    alignItems: "flex-start",
   },
-  brandPrimary: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 22,
-    color: COLOR_NAVY,
-    letterSpacing: 2,
-  },
-  brandSecondary: {
-    fontSize: 9,
-    color: COLOR_GOLD,
-    fontFamily: "Helvetica-Bold",
-    letterSpacing: 4,
-    marginTop: 2,
-  },
-  brandTagline: {
-    fontSize: 8,
-    color: COLOR_GRAY_500,
-    marginTop: 4,
+  brandLogo: {
+    width: 130,
+    height: 57,
   },
   docHeader: {
     alignItems: "flex-end",
@@ -190,15 +189,15 @@ const styles = StyleSheet.create({
   // Two-col info
   infoRow: {
     flexDirection: "row",
-    marginBottom: 14,
-    gap: 18,
+    marginBottom: 10,
+    gap: 14,
   },
   infoCol: {
     flex: 1,
     borderWidth: 1,
     borderColor: COLOR_GRAY_200,
     borderRadius: 4,
-    padding: 10,
+    padding: 8,
   },
   infoColHeading: {
     fontFamily: "Helvetica-Bold",
@@ -266,7 +265,7 @@ const styles = StyleSheet.create({
   totalsWrap: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginBottom: 18,
+    marginBottom: 12,
   },
   totalsCard: {
     width: "45%",
@@ -320,19 +319,41 @@ const styles = StyleSheet.create({
     color: COLOR_GRAY_500,
     lineHeight: 1.4,
   },
+  // Observaciones (Sprint QUOTES-POLISH D7)
+  observationsHeading: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    color: COLOR_GOLD,
+    letterSpacing: 1.5,
+    marginBottom: 6,
+    marginTop: 4,
+  },
+  observationsBox: {
+    borderWidth: 0.5,
+    borderColor: COLOR_GRAY_200,
+    borderRadius: 3,
+    padding: 8,
+    backgroundColor: COLOR_GRAY_50,
+    marginBottom: 12,
+  },
+  observationsText: {
+    fontSize: 8.5,
+    color: COLOR_NAVY,
+    lineHeight: 1.4,
+  },
   footer: {
     position: "absolute",
-    bottom: 24,
+    bottom: 20,
     left: 36,
     right: 36,
     borderTopWidth: 0.5,
     borderTopColor: COLOR_GRAY_300,
-    paddingTop: 6,
+    paddingTop: 5,
     flexDirection: "row",
     justifyContent: "space-between",
   },
   footerText: {
-    fontSize: 7,
+    fontSize: 6.5,
     color: COLOR_GRAY_400,
   },
 });
@@ -374,6 +395,7 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
     credit_note_number,
     issue_date,
     reason,
+    observations,
     client,
     invoice,
     lines,
@@ -399,9 +421,7 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
         {/* ===== Header ===== */}
         <View style={styles.header} fixed>
           <View style={styles.brand}>
-            <Text style={styles.brandPrimary}>INTEGRA</Text>
-            <Text style={styles.brandSecondary}>LEGAL · PANAMÁ</Text>
-            <Text style={styles.brandTagline}>Servicios legales corporativos</Text>
+            <Image src={LOGO_SRC} style={styles.brandLogo} />
           </View>
           <View style={styles.docHeader}>
             <Text style={styles.docHeaderTitle}>NOTA DE CRÉDITO</Text>
@@ -531,6 +551,16 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
             </View>
           </View>
         </View>
+
+        {/* ===== Observaciones (Sprint QUOTES-POLISH, D7) ===== */}
+        {observations && observations.trim().length > 0 && (
+          <View wrap={false}>
+            <Text style={styles.observationsHeading}>OBSERVACIONES</Text>
+            <View style={styles.observationsBox}>
+              <Text style={styles.observationsText}>{observations}</Text>
+            </View>
+          </View>
+        )}
 
         {/* ===== Nota legal ===== */}
         <View style={styles.legalBox}>

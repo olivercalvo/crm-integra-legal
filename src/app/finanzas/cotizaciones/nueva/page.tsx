@@ -7,6 +7,7 @@ import {
   listTaxCodesActive,
 } from "@/lib/finanzas/queries/catalogs";
 import { getTermsTemplate } from "@/lib/finanzas/api/quote-terms";
+import { listObservationTemplatesActive } from "@/lib/finanzas/queries/observation-templates";
 import { QuoteForm } from "../_components/quote-form";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
 
@@ -27,17 +28,19 @@ export default async function NuevaCotizacionPage() {
   }
   const { db, tenantId } = ctx;
 
-  const [clients, services, taxCodes, casesRes, defaultTerms] = await Promise.all([
-    listClientsActive(db, tenantId),
-    listServicesActive(db, tenantId),
-    listTaxCodesActive(db, tenantId),
-    db
-      .from("cases")
-      .select("id, case_code, description, client_id")
-      .eq("tenant_id", tenantId)
-      .order("case_code"),
-    getTermsTemplate(db, tenantId),
-  ]);
+  const [clients, services, taxCodes, casesRes, defaultTerms, observationTemplates] =
+    await Promise.all([
+      listClientsActive(db, tenantId),
+      listServicesActive(db, tenantId),
+      listTaxCodesActive(db, tenantId),
+      db
+        .from("cases")
+        .select("id, case_code, description, client_id")
+        .eq("tenant_id", tenantId)
+        .order("case_code"),
+      getTermsTemplate(db, tenantId),
+      listObservationTemplatesActive(db, tenantId),
+    ]);
 
   const allCases = (casesRes.data ?? []) as CaseOption[];
   const casesByClient: Record<string, CaseOption[]> = {};
@@ -66,6 +69,7 @@ export default async function NuevaCotizacionPage() {
         services={services}
         taxCodes={taxCodes}
         defaultTerms={defaultTerms}
+        observationTemplates={observationTemplates}
       />
     </div>
   );

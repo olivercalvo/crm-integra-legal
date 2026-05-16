@@ -63,6 +63,11 @@ export async function listCasesByClient(
  * Servicios activos del catálogo + denormalizamos default_tax_rate y
  * default_tax_code_id desde tax_codes para evitar un round-trip extra al
  * elegir un servicio en el form.
+ *
+ * Orden: sort_order ASC (NULLS LAST), code ASC como desempate. La columna
+ * sort_order vive en services_catalog desde Sprint QUOTES-POLISH; el
+ * fallback por code preserva orden estable si sort_order queda NULL para
+ * filas legacy.
  */
 export async function listServicesActive(db: DB, tenantId: string): Promise<ServiceOption[]> {
   const { data, error } = await db
@@ -74,11 +79,13 @@ export async function listServicesActive(db: DB, tenantId: string): Promise<Serv
       service_type,
       revenue_account,
       default_tax_code,
+      sort_order,
       tax_codes!services_catalog_default_tax_code_fk(id, rate)
     `)
     .eq("tenant_id", tenantId)
     .eq("active", true)
-    .order("code");
+    .order("sort_order", { ascending: true, nullsFirst: false })
+    .order("code", { ascending: true });
 
   if (error) {
     console.error("[finanzas/queries] listServicesActive failed", error);
@@ -92,6 +99,7 @@ export async function listServicesActive(db: DB, tenantId: string): Promise<Serv
     service_type: ServiceOption["service_type"];
     revenue_account: string;
     default_tax_code: string;
+    sort_order: number | null;
     tax_codes: { id: string; rate: number } | null;
   };
 

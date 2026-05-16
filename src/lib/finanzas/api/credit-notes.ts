@@ -34,7 +34,8 @@ export async function createCreditNoteFromInvoice(
   tenantId: string,
   userId: string,
   invoiceId: string,
-  reason: string
+  reason: string,
+  observations: string | null = null
 ): Promise<{ id: string; credit_note_number: string }> {
   // Idempotencia: si ya existe una NC para esta factura, devolverla.
   // Caso típico: retry del usuario tras error de red intermedio.
@@ -116,6 +117,7 @@ export async function createCreditNoteFromInvoice(
       client_id: invoice.client_id,
       issue_date: issueDateIso,
       reason,
+      observations,
       status: "emitida",
       currency: "USD",
       created_by: userId,
@@ -182,7 +184,7 @@ export async function getCreditNoteById(
     .select(
       `
         id, credit_note_number, invoice_id, client_id, issue_date, reason,
-        status, currency, subtotal_total, tax_total, grand_total,
+        observations, status, currency, subtotal_total, tax_total, grand_total,
         created_at, created_by,
         invoice:invoices!credit_notes_invoice_id_fkey(
           id, invoice_number, invoice_kind, issue_date

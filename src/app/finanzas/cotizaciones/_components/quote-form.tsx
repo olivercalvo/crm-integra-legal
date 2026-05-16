@@ -2,11 +2,12 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, AlertCircle, FileText } from "lucide-react";
+import { Save, Loader2, AlertCircle, FileText, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CaseCombobox } from "@/components/finanzas/case-combobox";
+import { ObservationTemplateCombobox } from "@/components/finanzas/observation-template-combobox";
 import {
   ClientSelectorToggle,
   type ClientSelectorValue,
@@ -26,10 +27,12 @@ import type {
 import {
   QUOTE_TITLE_MIN,
   QUOTE_TITLE_MAX,
+  QUOTE_OBSERVATIONS_MAX,
   type CreateQuoteInput,
   type NewQuoteLineInput,
   type NewProspectInput,
 } from "@/lib/finanzas/types/quote";
+import type { ObservationTemplate } from "@/lib/finanzas/types/observation-template";
 
 type ValidationErrors = Record<string, string>;
 
@@ -40,6 +43,8 @@ interface BaseProps {
   taxCodes: TaxCodeOption[];
   /** Plantilla T&C del tenant — se pre-puebla en el textarea al crear. */
   defaultTerms: string;
+  /** Plantillas activas de observaciones (Sprint QUOTES-POLISH, D5/D11). */
+  observationTemplates: ObservationTemplate[];
 }
 
 interface CreateProps extends BaseProps {
@@ -57,6 +62,7 @@ interface EditProps extends BaseProps {
     valid_until: string;
     title: string;
     notes: string | null;
+    observations: string | null;
     terms_and_conditions: string;
     lines: QuoteLineEditorInput[];
   };
@@ -127,13 +133,38 @@ export function QuoteForm(props: Props) {
     props.mode === "edit" ? props.initial.title ?? "" : ""
   );
 
-  // ---- Notas / T&C --------------------------------------------------------
+  // ---- Notas / Observaciones / T&C ----------------------------------------
   const [notes, setNotes] = useState<string>(
     props.mode === "edit" ? props.initial.notes ?? "" : ""
+  );
+  const [observations, setObservations] = useState<string>(
+    props.mode === "edit" ? props.initial.observations ?? "" : ""
   );
   const [terms, setTerms] = useState<string>(
     props.mode === "edit" ? props.initial.terms_and_conditions : props.defaultTerms
   );
+
+  /**
+   * Anexa el content de una plantilla al textarea de observaciones (D11).
+   *   - Si el textarea está vacío → lo asigna directo.
+   *   - Si ya hay texto → anexa con doble salto de línea como separador.
+   */
+  function insertObservationTemplate(content: string) {
+    setObservations((current) => {
+      const trimmedCurrent = current.trim();
+      if (trimmedCurrent.length === 0) return content;
+      return `${trimmedCurrent}\n\n${content}`;
+    });
+    // Limpiar error de longitud si el usuario estaba en el borde — se
+    // re-valida al submit. Si la nueva inserción excede 2000, el server
+    // rebota igual; mostramos el counter en rojo para feedback inmediato.
+    setErrors((prev) => {
+      if (!prev.observations) return prev;
+      const rest = { ...prev };
+      delete rest.observations;
+      return rest;
+    });
+  }
 
   // ---- Líneas -------------------------------------------------------------
   const [lines, setLines] = useState<QuoteLineEditorInput[]>(() =>
@@ -204,6 +235,10 @@ export function QuoteForm(props: Props) {
       e.valid_until = "La fecha de validez no puede ser anterior a la emisión";
     }
 
+    if (observations.trim().length > QUOTE_OBSERVATIONS_MAX) {
+      e.observations = `Observaciones máximo ${QUOTE_OBSERVATIONS_MAX} caracteres`;
+    }
+
     if (lines.length === 0) {
       e.lines = "Agrega al menos una línea";
     } else {
@@ -270,6 +305,7 @@ export function QuoteForm(props: Props) {
       valid_until: validUntil,
       title: title.trim(),
       notes: notes.trim() || null,
+      observations: observations.trim() || null,
       terms_and_conditions: terms.trim() || null,
       lines: linesPayload,
     };
@@ -297,6 +333,7 @@ export function QuoteForm(props: Props) {
                 valid_until: validUntil,
                 title: title.trim(),
                 notes: notes.trim() || null,
+                observations: observations.trim() || null,
                 terms_and_conditions: terms.trim() || null,
                 lines: linesPayload,
               };
@@ -474,6 +511,69 @@ export function QuoteForm(props: Props) {
             onChange={setLines}
             disabled={isPending}
           />
+        </section>
+
+        {/* Observaciones al cliente (Sprint QUOTES-POLISH, D5) */}
+        <section
+          className="rounded-xl border bg-white p-5 shadow-sm"
+          data-error={!!errors.observations}
+        >
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} className="text-integra-gold" />
+              <h2 className="text-base font-semibold text-integra-navy">
+                Observaciones al cliente
+              </h2>
+            </div>
+            <ObservationTemplateCombobox
+              templates={props.observationTemplates}
+              onInsert={insertObservationTemplate}
+              disabled={isPending}
+            />
+          </div>
+          <p className="mb-2 text-xs text-gray-500">
+            Texto opcional que aparece en el PDF de la cotización, debajo de
+            los totales. Útil para forma de pago, vigencia o aclaraciones
+            puntuales. Puedes combinar varias plantillas.
+          </p>
+          <textarea
+            value={observations}
+            onChange={(e) => {
+              setObservations(e.target.value);
+              if (errors.observations) {
+                setErrors((prev) => {
+                  const rest = { ...prev };
+                  delete rest.observations;
+                  return rest;
+                });
+              }
+            }}
+            disabled={isPending}
+            rows={5}
+            maxLength={QUOTE_OBSERVATIONS_MAX + 20 /* permite paste y truncar visualmente */}
+            className={`block w-full rounded-md border px-3 py-2 text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none ${
+              errors.observations ? "border-red-300" : "border-gray-300"
+            }`}
+            placeholder="Ej: Los honorarios se pagan 50% al firmar el contrato y 50% al entregar el resultado final."
+          />
+          <div className="mt-1 flex items-center justify-between gap-2">
+            {errors.observations ? (
+              <p className="text-xs text-red-600">{errors.observations}</p>
+            ) : (
+              <span aria-hidden="true" />
+            )}
+            <span
+              className={`text-[11px] font-mono ${
+                observations.trim().length > QUOTE_OBSERVATIONS_MAX
+                  ? "text-red-600"
+                  : "text-gray-400"
+              }`}
+              aria-live="polite"
+            >
+              {observations.length.toLocaleString("es-PA")}/
+              {QUOTE_OBSERVATIONS_MAX.toLocaleString("es-PA")}
+            </span>
+          </div>
         </section>
 
         {/* Términos y Condiciones */}

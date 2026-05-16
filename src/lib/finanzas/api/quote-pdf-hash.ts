@@ -87,6 +87,8 @@ export interface QuotePdfPayload {
   issue_date: string;
   valid_until: string;
   internal_notes: string | null;
+  /** Observaciones cliente-visible (Sprint QUOTES-POLISH). Entra al hash. */
+  observations: string | null;
   terms_and_conditions: string | null;
   lines: QuotePdfLinePayload[];
   totals: QuotePdfTotalsPayload;

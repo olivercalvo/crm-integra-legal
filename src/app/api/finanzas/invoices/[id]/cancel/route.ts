@@ -56,7 +56,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.tenantId,
       ctx.userId,
       params.id,
-      validation.data.reason
+      validation.data.reason,
+      validation.data.observations ?? null
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {

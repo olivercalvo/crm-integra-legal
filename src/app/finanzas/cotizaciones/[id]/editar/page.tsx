@@ -8,6 +8,7 @@ import {
   listServicesActive,
   listTaxCodesActive,
 } from "@/lib/finanzas/queries/catalogs";
+import { listObservationTemplatesActive } from "@/lib/finanzas/queries/observation-templates";
 import { QuoteForm } from "../../_components/quote-form";
 import type { QuoteLineEditorInput } from "../../_components/quote-lines-editor";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
@@ -41,18 +42,20 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
 
   // Cargar catálogos para el form (no necesitamos el default template
   // porque el quote ya tiene un snapshot de T&C).
-  const [clients, services, taxCodes, casesRes, defaultTermsFallback] = await Promise.all([
-    listClientsActive(db, tenantId),
-    listServicesActive(db, tenantId),
-    listTaxCodesActive(db, tenantId),
-    db
-      .from("cases")
-      .select("id, case_code, description, client_id")
-      .eq("tenant_id", tenantId)
-      .order("case_code"),
-    // Fallback por si la cotización tiene terms_and_conditions=null (legacy).
-    getTermsTemplate(db, tenantId),
-  ]);
+  const [clients, services, taxCodes, casesRes, defaultTermsFallback, observationTemplates] =
+    await Promise.all([
+      listClientsActive(db, tenantId),
+      listServicesActive(db, tenantId),
+      listTaxCodesActive(db, tenantId),
+      db
+        .from("cases")
+        .select("id, case_code, description, client_id")
+        .eq("tenant_id", tenantId)
+        .order("case_code"),
+      // Fallback por si la cotización tiene terms_and_conditions=null (legacy).
+      getTermsTemplate(db, tenantId),
+      listObservationTemplatesActive(db, tenantId),
+    ]);
 
   const allCases = (casesRes.data ?? []) as CaseOption[];
   const casesByClient: Record<string, CaseOption[]> = {};
@@ -105,6 +108,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
         services={services}
         taxCodes={taxCodes}
         defaultTerms={defaultTermsFallback}
+        observationTemplates={observationTemplates}
         initial={{
           id: quote.id,
           client_id: quote.client_id,
@@ -113,6 +117,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
           valid_until: quote.valid_until,
           title: quote.title,
           notes: quote.notes,
+          observations: quote.observations,
           terms_and_conditions: quote.terms_and_conditions ?? defaultTermsFallback,
           lines: initialLines,
         }}

@@ -28,6 +28,7 @@ import {
   QUOTE_NUMBER_PREFIX,
   QUOTE_TITLE_MIN,
   QUOTE_TITLE_MAX,
+  QUOTE_OBSERVATIONS_MAX,
 } from "@/lib/finanzas/types/quote";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createInvoice } from "@/lib/finanzas/api/invoices";
@@ -49,6 +50,28 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const VALID_KINDS: QuoteLineKind[] = ["HON", "REI"];
+
+/**
+ * Valida el campo observations (Sprint QUOTES-POLISH). Opcional; si viene,
+ * trim + máx QUOTE_OBSERVATIONS_MAX. Devuelve mensaje o null. El CHECK en
+ * BD enforza el mismo límite.
+ */
+function validateObservations(raw: unknown): string | null {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length > QUOTE_OBSERVATIONS_MAX) {
+    return `Observaciones máximo ${QUOTE_OBSERVATIONS_MAX} caracteres`;
+  }
+  return null;
+}
+
+/** Normaliza observations: trim, devuelve null si queda vacío. */
+function normalizeObservations(raw: unknown): string | null {
+  if (raw == null) return null;
+  const trimmed = String(raw).trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
 
 /**
  * Valida un title de cotización (Sprint 2E.3.2). Devuelve mensaje de error
@@ -174,6 +197,10 @@ export function validateCreateQuote(
   const titleError = validateTitle(raw.title);
   if (titleError) errors.title = titleError;
 
+  // observations opcional (Sprint QUOTES-POLISH). Si viene, máx 2000 chars.
+  const obsError = validateObservations(raw.observations);
+  if (obsError) errors.observations = obsError;
+
   // issue_date opcional (default hoy); valid_until obligatorio.
   if (raw.issue_date && !DATE_RE.test(String(raw.issue_date))) {
     errors.issue_date = "Fecha de emisión inválida";
@@ -214,6 +241,7 @@ export function validateCreateQuote(
       valid_until: raw.valid_until as string,
       title: String(raw.title ?? "").trim(),
       notes: raw.notes ?? null,
+      observations: normalizeObservations(raw.observations),
       terms_and_conditions: raw.terms_and_conditions ?? null,
       lines: lines.map((ln) => ({
         invoice_kind: ln.invoice_kind as QuoteLineKind,
@@ -258,6 +286,12 @@ export function validateUpdateQuote(
     if (titleError) errors.title = titleError;
   }
 
+  // observations opcional en update — si viene, máx 2000 chars.
+  if (raw.observations !== undefined) {
+    const obsError = validateObservations(raw.observations);
+    if (obsError) errors.observations = obsError;
+  }
+
   if (raw.lines !== undefined) {
     const lines = Array.isArray(raw.lines) ? raw.lines : [];
     if (lines.length === 0) {
@@ -277,10 +311,13 @@ export function validateUpdateQuote(
   }
 
   // Normalizar title con trim para que el UPDATE persista la versión limpia
-  // (consistente con createQuote).
+  // (consistente con createQuote). Idem observations.
   const normalized: UpdateQuoteInput = {
     ...(raw as UpdateQuoteInput),
     ...(raw.title !== undefined ? { title: String(raw.title).trim() } : {}),
+    ...(raw.observations !== undefined
+      ? { observations: normalizeObservations(raw.observations) }
+      : {}),
   };
 
   return { ok: true, errors: null, data: normalized };
@@ -552,6 +589,7 @@ export async function createQuote(
       subtotal_rei: totals.subtotal_rei,
       terms_and_conditions: terms,
       notes: input.notes ?? null,
+      observations: normalizeObservations(input.observations),
       created_by: userId,
     })
     .select("id")
@@ -640,6 +678,9 @@ export async function updateQuote(
   if (input.valid_until !== undefined) headerUpdate.valid_until = input.valid_until;
   if (input.title !== undefined) headerUpdate.title = input.title;
   if (input.notes !== undefined) headerUpdate.notes = input.notes;
+  if (input.observations !== undefined) {
+    headerUpdate.observations = normalizeObservations(input.observations);
+  }
   if (input.terms_and_conditions !== undefined) {
     headerUpdate.terms_and_conditions = input.terms_and_conditions;
   }

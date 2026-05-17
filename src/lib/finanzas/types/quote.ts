@@ -16,16 +16,25 @@
 /**
  * Valores válidos de quotes.status (CHECK quotes_status_check).
  *
- * Transiciones (validadas por T2-quote en BD):
- *   borrador → enviada               (sendQuote)
- *   borrador → cancelada_pre_envio   (cancelQuote — admin descarta)
+ * Transiciones (validadas por T1-quote en BD, función
+ * finanzas_validate_status_transition):
+ *   borrador → emitida               (defensivo, "emitir" un borrador legacy)
+ *   borrador → enviada               (sendQuote desde un borrador legacy)
+ *   borrador → cancelada_pre_envio   (cancelQuote)
+ *   emitida  → enviada               (sendQuote — botón Enviar al cliente)
+ *   emitida  → cancelada_pre_envio   (cancelQuote — escape hatch)
  *   enviada  → aceptada              (portal cliente o markAcceptedManual)
  *   enviada  → rechazada             (portal cliente o markRejectedManual)
  *   enviada  → expirada              (cron en Fase 2E.4 cuando valid_until < hoy)
  *   aceptada → convertida            (convertToInvoices)
+ *
+ * Nuevas cotizaciones nacen en 'emitida' (hot-fix QUOTES-FLOW). 'borrador'
+ * queda en el CHECK solo para los 4 registros legacy preexistentes (H2:
+ * no se migran).
  */
 export type QuoteStatus =
   | "borrador"
+  | "emitida"
   | "enviada"
   | "aceptada"
   | "rechazada"
@@ -40,6 +49,7 @@ export type QuoteLineKind = "HON" | "REI";
 
 export const QUOTE_STATUS_LABEL: Record<QuoteStatus, string> = {
   borrador: "Borrador",
+  emitida: "Emitida",
   enviada: "Enviada",
   aceptada: "Aceptada",
   rechazada: "Rechazada",
@@ -298,24 +308,31 @@ export interface UpdateTermsTemplateInput {
 
 // ---------- UI helpers -----------------------------------------------------
 
-/** Si una cotización puede editarse (header + líneas). */
+/**
+ * Si una cotización puede editarse (header + líneas). Permite 'borrador'
+ * (cotizaciones legacy) y 'emitida' (default post-hot-fix QUOTES-FLOW).
+ */
 export function isQuoteEditable(status: QuoteStatus): boolean {
-  return status === "borrador";
+  return status === "borrador" || status === "emitida";
 }
 
-/** Si una cotización puede eliminarse (T6-quote enforza también). */
+/**
+ * Si una cotización puede eliminarse (T6-quote enforza también). Solo
+ * borradores legacy y canceladas pre-envío. 'emitida' NO se elimina: tiene
+ * número definitivo consumido del sequence; el escape hatch es cancelarla.
+ */
 export function isQuoteDeletable(status: QuoteStatus): boolean {
   return status === "borrador" || status === "cancelada_pre_envio";
 }
 
-/** Si una cotización puede enviarse (transición borrador → enviada). */
+/** Si una cotización puede enviarse al cliente (transición → enviada). */
 export function isQuoteSendable(status: QuoteStatus): boolean {
-  return status === "borrador";
+  return status === "borrador" || status === "emitida";
 }
 
 /** Si una cotización puede cancelarse pre-envío. */
 export function isQuoteCancellable(status: QuoteStatus): boolean {
-  return status === "borrador";
+  return status === "borrador" || status === "emitida";
 }
 
 /** Si una cotización puede aceptarse/rechazarse manualmente. */

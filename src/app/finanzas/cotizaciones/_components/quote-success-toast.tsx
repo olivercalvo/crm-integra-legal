@@ -89,7 +89,15 @@ export function QuoteSuccessToast() {
     message = "Cotización enviada por email";
   } else if (created) {
     icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
-    message = "Cotización creada correctamente";
+    // Post-hot-fix QUOTES-FLOW: el form pasa el quote_number (ej. COT-001275)
+    // como valor del param para que el toast lo muestre. Si por algún motivo
+    // llega "1" (legacy), mostramos un mensaje fallback.
+    message = created.startsWith("COT-")
+      ? `Cotización emitida con número ${created}`
+      : "Cotización emitida correctamente";
+  } else if (saved) {
+    icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
+    message = "Cotización actualizada";
   } else {
     icon = <CheckCircle size={18} className="text-green-600 shrink-0" />;
     message = "Cambios guardados correctamente";

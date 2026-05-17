@@ -16,12 +16,13 @@ interface Props {
 const REASON_MAX = 1000;
 
 /**
- * Botón "Cancelar" + dialog con razón opcional (D5). Solo válido para
- * cotizaciones en estado 'borrador'. Transición → 'cancelada_pre_envio'.
+ * Botón "Cancelar" + dialog con razón opcional (D5). Válido para
+ * cotizaciones en estado 'borrador' (legacy) o 'emitida' (post-hot-fix
+ * QUOTES-FLOW). Transición → 'cancelada_pre_envio'.
  *
- * Nota terminológica: "cancelar" aquí significa descartar un borrador
- * sin enviarlo. No confundir con "rechazar" (cliente rechaza una cotización
- * enviada).
+ * Nota terminológica: "cancelar" aquí significa descartar la cotización
+ * antes de enviarla al cliente. No confundir con "rechazar" (cliente
+ * rechaza una cotización enviada).
  */
 export function CancelQuoteDialog({ quoteId, quoteNumber, disabled }: Props) {
   const router = useRouter();
@@ -108,9 +109,9 @@ export function CancelQuoteDialog({ quoteId, quoteNumber, disabled }: Props) {
           >
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
             <p>
-              Esta acción descarta el borrador sin enviarlo. No se puede
-              deshacer. La cotización queda archivada con estado{" "}
-              <span className="font-mono">cancelada</span>.
+              Esta acción descarta la cotización sin enviarla al cliente.
+              No se puede deshacer. La cotización queda archivada con
+              estado <span className="font-mono">cancelada</span>.
             </p>
           </div>
 

@@ -478,7 +478,12 @@ function generatePublicToken(): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Crea una cotización en estado borrador con sus líneas.
+ * Crea una cotización en estado 'emitida' con sus líneas.
+ *
+ * Hot-fix QUOTES-FLOW (2026-05-17): el status final pasó de 'borrador' a
+ * 'emitida' para eliminar el paso intermedio "guardar borrador → emitir".
+ * La cotización nace con número definitivo, lista para entregar al cliente
+ * y todavía editable mientras esté en 'emitida'.
  *
  * Flujo (compensating delete pattern, mismo que createInvoice):
  *   1. Si new_prospect: INSERT cliente con client_status='prospect'.
@@ -488,8 +493,14 @@ function generatePublicToken(): string {
  *   4. Snapshot del T&C: si terms_and_conditions vacío → cargar template del tenant.
  *   5. Calcular totales (client-side; trigger T8b-quote los re-confirma).
  *   6. Consumir secuencia 'quote' via RPC get_next_sequence_number.
- *   7. INSERT cabecera (status='borrador') + INSERT líneas bulk.
- *   8. Si las líneas fallan, DELETE cabecera (compensating).
+ *   7. INSERT cabecera (status='borrador' transitorio) + INSERT líneas bulk
+ *      + UPDATE status='emitida' al final. La cabecera nace 'borrador' para
+ *      no romper el compensating delete (T6 bloquea delete de 'emitida',
+ *      D2 congelada). Si algún paso entre el INSERT cabecera y el UPDATE
+ *      final falla, el DELETE compensating funciona porque la cabecera
+ *      sigue en 'borrador'.
+ *   8. Si las líneas fallan o el UPDATE status='emitida' falla, DELETE
+ *      cabecera (sigue 'borrador', T6 lo permite).
  *   9. Si se creó un prospect y la cotización falla post-prospect, NO
  *      eliminar el prospect (queda en BD para que la abogada decida qué
  *      hacer con él — los datos del cliente nuevo son trabajo capturado).
@@ -580,6 +591,9 @@ export async function createQuote(
       issue_date: issueDate,
       valid_until: input.valid_until,
       title: input.title,
+      // Cabecera nace 'borrador' transitorio para que el compensating delete
+      // funcione si las líneas fallan (T6 bloquea delete de 'emitida').
+      // Tras insertar las líneas se promociona a 'emitida' (paso 8).
       status: "borrador",
       currency: "USD",
       subtotal_total: totals.subtotal_total,
@@ -635,6 +649,28 @@ export async function createQuote(
     throw new MutationError(pgErrorToMessage(errLines), 400, errLines);
   }
 
+  // ---------- 8. Promover status borrador → emitida ----------
+  // Después de migration 014: T1 permite quote|borrador → emitida.
+  // Si este UPDATE falla, hacemos compensating delete (la cabecera sigue
+  // en 'borrador', T6 lo permite). Las líneas se borran en cascada por el
+  // FK ON DELETE CASCADE definido en quote_lines.
+  const { error: errPromote } = await db
+    .from("quotes")
+    .update({ status: "emitida" })
+    .eq("tenant_id", tenantId)
+    .eq("id", quoteId);
+
+  if (errPromote) {
+    await db.from("quotes").delete().eq("tenant_id", tenantId).eq("id", quoteId);
+    if (createdProspectId) {
+      console.warn(
+        "[finanzas/quotes] createQuote falló al promover a emitida; el cliente prospect %s queda persistido",
+        createdProspectId
+      );
+    }
+    throw new MutationError(pgErrorToMessage(errPromote), 400, errPromote);
+  }
+
   return {
     id: quoteId,
     quote_number: quoteNumber,
@@ -653,7 +689,8 @@ export async function updateQuote(
   quoteId: string,
   input: UpdateQuoteInput
 ): Promise<{ id: string }> {
-  // 1. Verificar status='borrador' (T4-quote también valida, pero diagnóstico mejor acá).
+  // 1. Verificar status editable (T5b-quote también valida en BD las líneas).
+  //    Post-hot-fix QUOTES-FLOW: editable = 'borrador' (legacy) | 'emitida' (default).
   const { data: quote, error: errFetch } = await db
     .from("quotes")
     .select("id, status, client_id")
@@ -663,9 +700,9 @@ export async function updateQuote(
 
   if (errFetch) throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
   if (!quote) throw new MutationError("Cotización no encontrada", 404);
-  if (quote.status !== "borrador") {
+  if (quote.status !== "borrador" && quote.status !== "emitida") {
     throw new MutationError(
-      `Solo se pueden modificar cotizaciones en borrador. Estado actual: '${quote.status}'.`,
+      `Solo se pueden modificar cotizaciones en borrador o emitidas. Estado actual: '${quote.status}'.`,
       400
     );
   }
@@ -814,9 +851,11 @@ export async function cancelQuote(
 
   if (errFetch) throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
   if (!quote) throw new MutationError("Cotización no encontrada", 404);
-  if (quote.status !== "borrador") {
+  // Post-hot-fix QUOTES-FLOW: cancelable = 'borrador' (legacy) | 'emitida' (default).
+  // Para 'emitida' es el escape hatch obligatorio (T6 bloquea delete).
+  if (quote.status !== "borrador" && quote.status !== "emitida") {
     throw new MutationError(
-      `Solo se pueden cancelar cotizaciones en borrador. Estado actual: '${quote.status}'.`,
+      `Solo se pueden cancelar cotizaciones en borrador o emitidas. Estado actual: '${quote.status}'.`,
       400
     );
   }
@@ -855,9 +894,10 @@ export async function sendQuote(
 
   if (errFetch) throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
   if (!quote) throw new MutationError("Cotización no encontrada", 404);
-  if (quote.status !== "borrador") {
+  // Post-hot-fix QUOTES-FLOW: enviable = 'borrador' (legacy) | 'emitida' (default).
+  if (quote.status !== "borrador" && quote.status !== "emitida") {
     throw new MutationError(
-      `Solo se pueden enviar cotizaciones en borrador. Estado actual: '${quote.status}'.`,
+      `Solo se pueden enviar cotizaciones en borrador o emitidas. Estado actual: '${quote.status}'.`,
       400
     );
   }

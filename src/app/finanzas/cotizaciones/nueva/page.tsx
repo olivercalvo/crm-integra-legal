@@ -57,7 +57,7 @@ export default async function NuevaCotizacionPage() {
           <h1 className="text-2xl font-bold text-integra-navy">Nueva cotización</h1>
           <p className="text-sm text-gray-500">
             Completa los datos del cliente, las líneas y los términos.
-            La cotización se guarda como borrador y recibe un número COT-NNNNNN.
+            La cotización se emite con un número COT-NNNNNN al guardar.
           </p>
         </div>
       </div>

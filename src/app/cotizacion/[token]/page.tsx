@@ -80,10 +80,11 @@ async function fetchQuoteByToken(token: string): Promise<QuoteSummary | null> {
 
 function StatusBadge({ status }: { status: QuoteStatus }) {
   // Paleta consistente con QuoteStatusBadge interno, pero adaptada al
-  // contexto público (sin jerga interna — "borrador" o
+  // contexto público (sin jerga interna — "borrador", "emitida" o
   // "cancelada_pre_envio" no llegan acá porque NO tienen public_token).
   const palettes: Record<QuoteStatus, { bg: string; text: string; label: string }> = {
     borrador: { bg: "bg-gray-100", text: "text-gray-700", label: "Borrador" },
+    emitida: { bg: "bg-blue-100", text: "text-blue-800", label: "Emitida" },
     enviada: { bg: "bg-blue-100", text: "text-blue-800", label: "Enviada" },
     aceptada: { bg: "bg-green-100", text: "text-green-800", label: "Aceptada" },
     rechazada: { bg: "bg-red-100", text: "text-red-800", label: "Rechazada" },

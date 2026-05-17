@@ -25,6 +25,7 @@ interface Props {
 
 const STATUSES: QuoteStatus[] = [
   "borrador",
+  "emitida",
   "enviada",
   "aceptada",
   "rechazada",

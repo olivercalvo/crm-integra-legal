@@ -407,7 +407,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                     Cancelada pre-envío
                   </h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    Este borrador fue descartado antes de enviarlo al cliente.
+                    Esta cotización fue descartada antes de enviarla al cliente.
                     {quote.cancelled_at &&
                       ` Cancelada el ${formatDateTime(quote.cancelled_at)}.`}
                   </p>

@@ -16,6 +16,8 @@ function statusClasses(status: QuoteStatus): string {
   switch (status) {
     case "borrador":
       return "bg-gray-100 text-gray-700 border-gray-200";
+    case "emitida":
+      return "bg-blue-100 text-blue-800 border-blue-200";
     case "enviada":
       return "bg-blue-100 text-blue-800 border-blue-200";
     case "aceptada":

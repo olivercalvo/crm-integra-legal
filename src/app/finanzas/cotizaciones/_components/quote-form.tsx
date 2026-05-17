@@ -354,8 +354,14 @@ export function QuoteForm(props: Props) {
 
         const id = data.id ?? (props.mode === "edit" ? props.initial.id : null);
         if (id) {
-          const successParam = props.mode === "create" ? "created" : "saved";
-          router.push(`/finanzas/cotizaciones/${id}?${successParam}=1`);
+          // En create pasamos el quote_number como valor del param para que
+          // el toast pueda mostrar "Cotización emitida con número COT-..."
+          // (hot-fix QUOTES-FLOW). En edit basta con saved=1.
+          const successQuery =
+            props.mode === "create"
+              ? `created=${encodeURIComponent(data.quote_number ?? "1")}`
+              : "saved=1";
+          router.push(`/finanzas/cotizaciones/${id}?${successQuery}`);
           router.refresh();
         }
       } catch (err) {
@@ -389,8 +395,8 @@ export function QuoteForm(props: Props) {
           />
           {props.mode === "edit" && (
             <p className="text-xs text-gray-500">
-              El cliente no se puede cambiar desde el editor. Para cambiarlo,
-              elimina el borrador y crea una cotización nueva.
+              El cliente no se puede cambiar desde el editor. Para
+              cambiarlo, cancela la cotización y crea una nueva.
             </p>
           )}
 
@@ -635,7 +641,7 @@ export function QuoteForm(props: Props) {
             ) : (
               <>
                 <Save size={16} className="mr-2" />
-                {props.mode === "create" ? "Guardar borrador" : "Guardar cambios"}
+                {props.mode === "create" ? "Guardar cotización" : "Guardar cambios"}
               </>
             )}
           </Button>
@@ -649,9 +655,9 @@ export function QuoteForm(props: Props) {
           <p className="font-semibold text-gray-700 mb-1">Sobre la numeración</p>
           <p>
             Las cotizaciones reciben un número{" "}
-            <span className="font-mono">COT-NNNNNN</span> al guardar el
-            borrador. La numeración es definitiva — no cambia al enviar ni
-            al convertir a facturas.
+            <span className="font-mono">COT-NNNNNN</span> al guardar. La
+            numeración es definitiva — no cambia al enviar ni al convertir
+            a facturas.
           </p>
         </div>
       </aside>

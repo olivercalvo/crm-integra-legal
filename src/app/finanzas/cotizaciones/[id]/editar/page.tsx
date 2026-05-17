@@ -18,13 +18,14 @@ interface PageProps {
 }
 
 /**
- * Editar cotización en borrador.
+ * Editar cotización en borrador o emitida.
  *
- * Solo se permite editar cuando status='borrador' — T4-quote enforza
- * también server-side. Si la cotización está en otro estado redirigimos
- * al detalle (no usamos toast aquí porque sería un edge inalcanzable
- * desde el flujo normal: el botón Editar solo se renderiza si el estado
- * lo permite).
+ * Post-hot-fix QUOTES-FLOW: editable = 'borrador' (legacy) | 'emitida'
+ * (default). T5b-quote enforza también server-side la inmutabilidad de
+ * líneas cuando el padre está fuera de estos estados. Si la cotización
+ * está en otro estado redirigimos al detalle (no usamos toast porque
+ * sería un edge inalcanzable desde el flujo normal: el botón Editar
+ * solo se renderiza si el estado lo permite).
  */
 export default async function EditarCotizacionPage({ params }: PageProps) {
   const ctx = await getAuthenticatedContext();
@@ -36,7 +37,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
   const quote = await getQuoteById(db, tenantId, params.id);
   if (!quote) notFound();
 
-  if (quote.status !== "borrador") {
+  if (quote.status !== "borrador" && quote.status !== "emitida") {
     redirect(`/finanzas/cotizaciones/${params.id}`);
   }
 
@@ -95,8 +96,9 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
             <span className="font-mono">{quote.quote_number}</span>
           </h1>
           <p className="text-sm text-gray-500">
-            Cambios permitidos solo en estado borrador. El cliente no se
-            puede cambiar — para eso, elimina y crea una cotización nueva.
+            Cambios permitidos en estado borrador o emitida. El cliente no
+            se puede cambiar — para eso, cancela y crea una cotización
+            nueva.
           </p>
         </div>
       </div>

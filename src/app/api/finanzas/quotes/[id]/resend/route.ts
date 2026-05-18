@@ -27,6 +27,7 @@ import {
   downloadQuotePdfBuffer,
 } from "@/lib/finanzas/pdf/ensure-quote-pdf";
 import { sendQuoteEmail } from "@/lib/finanzas/email/send-quote-email";
+import { getPublicAppUrl } from "@/lib/utils/public-url";
 
 interface RouteParams {
   params: { id: string };
@@ -37,9 +38,6 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
-
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://crm-integra-legal.vercel.app";
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
@@ -122,7 +120,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   // ---------- 3. Enviar email (best effort) ----------
   const { bundle } = pdfResult;
-  const publicLink = `${APP_BASE_URL}/cotizacion/${resendResult.public_token}`;
+  const publicLink = `${getPublicAppUrl()}/cotizacion/${resendResult.public_token}`;
   const grandTotal = Number(bundle.quote.grand_total ?? 0);
   const subtotalHon = Number(bundle.quote.subtotal_hon ?? 0);
   const subtotalRei = Number(bundle.quote.subtotal_rei ?? 0);

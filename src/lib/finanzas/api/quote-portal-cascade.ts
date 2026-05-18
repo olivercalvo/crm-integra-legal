@@ -24,11 +24,9 @@ import {
   type SendResult,
 } from "@/lib/finanzas/email/send-portal-emails";
 import type { AcceptResult, RejectResult } from "@/lib/finanzas/api/quote-portal";
+import { getPublicAppUrl } from "@/lib/utils/public-url";
 
 type DB = SupabaseClient;
-
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://crm-integra-legal.vercel.app";
 
 function formatPanamaTimestamp(isoUtc: string): string {
   const d = new Date(isoUtc);
@@ -152,7 +150,7 @@ export async function runAcceptanceCascade(
 
   // 3. Emails (los datos del firmante ya los cargamos en el paso 0).
   const acceptedAtPanama = formatPanamaTimestamp(accepted_at);
-  const crmLink = `${APP_BASE_URL}/finanzas/cotizaciones/${bundle.id}`;
+  const crmLink = `${getPublicAppUrl()}/finanzas/cotizaciones/${bundle.id}`;
 
   try {
     const lawyers = await getLawyerEmails(db, ctx.tenantId);
@@ -254,7 +252,7 @@ export async function runRejectionCascade(
 ): Promise<RejectionCascadeResult> {
   const { bundle, rejected_at, reason } = rejectResult;
   const rejectedAtPanama = formatPanamaTimestamp(rejected_at);
-  const crmLink = `${APP_BASE_URL}/finanzas/cotizaciones/${bundle.id}`;
+  const crmLink = `${getPublicAppUrl()}/finanzas/cotizaciones/${bundle.id}`;
 
   const result: RejectionCascadeResult = {
     emails: { client: null, lawyers: [] },

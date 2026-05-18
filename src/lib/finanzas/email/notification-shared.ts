@@ -5,6 +5,8 @@
  * (header navy con logo + cuerpo + footer) — DRY para reducir mantenimiento.
  */
 
+import { getEmailLogoUrl } from "@/lib/utils/public-url";
+
 export const NAVY = "#1B2A4A";
 export const GOLD = "#C5A55A";
 export const GRAY_500 = "#6B7280";
@@ -12,9 +14,6 @@ export const GRAY_700 = "#374151";
 export const GRAY_200 = "#E5E7EB";
 export const GRAY_50 = "#F9FAFB";
 export const BG = "#F3F4F6";
-
-export const LOGO_URL =
-  "https://crm-integra-legal.vercel.app/email/integra-logo-email.png";
 
 export function escapeHtml(s: string): string {
   return s
@@ -66,7 +65,7 @@ export function wrapHtml(opts: {
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF;border-radius:6px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
             <tr>
               <td style="background-color:${NAVY};padding:20px 28px;" align="left">
-                <img src="${LOGO_URL}" width="120" alt="Integra Legal" style="display:block;height:auto;max-width:120px;" />
+                <img src="${getEmailLogoUrl()}" width="120" alt="Integra Legal" style="display:block;height:auto;max-width:120px;" />
               </td>
             </tr>
             <tr>

@@ -41,13 +41,11 @@ import { MarkRejectedDialog } from "../_components/mark-rejected-dialog";
 import { ConvertToInvoicesDialog } from "../_components/convert-to-invoices-dialog";
 import { PublicLinkDisplay } from "../_components/public-link-display";
 import { QuoteTermsCollapsible } from "../_components/quote-terms-collapsible";
+import { getPublicAppUrl } from "@/lib/utils/public-url";
 
 interface PageProps {
   params: { id: string };
 }
-
-const APP_BASE_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://crm-integra-legal.vercel.app";
 
 export default async function CotizacionDetallePage({ params }: PageProps) {
   const { db, tenantId } = await getAuthenticatedContext();
@@ -66,7 +64,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
   // Construir el link público si la cotización fue enviada y tiene token.
   const publicLink =
     quote.public_token && quote.status !== "borrador"
-      ? `${APP_BASE_URL}/cotizacion/${quote.public_token}`
+      ? `${getPublicAppUrl()}/cotizacion/${quote.public_token}`
       : null;
 
   // Líneas agrupadas: detectar si tiene HON, REI o ambos.
@@ -128,7 +126,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
               quoteId={quote.id}
               quoteNumber={quote.quote_number}
               defaultEmail={quote.client?.email ?? null}
-              publicPortalBaseUrl={APP_BASE_URL}
+              publicPortalBaseUrl={getPublicAppUrl()}
             />
           )}
           {resendable && (
@@ -137,7 +135,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
               quoteId={quote.id}
               quoteNumber={quote.quote_number}
               defaultEmail={quote.sent_to_email ?? quote.client?.email ?? null}
-              publicPortalBaseUrl={APP_BASE_URL}
+              publicPortalBaseUrl={getPublicAppUrl()}
               currentStatusLabel={QUOTE_STATUS_LABEL[quote.status]}
             />
           )}

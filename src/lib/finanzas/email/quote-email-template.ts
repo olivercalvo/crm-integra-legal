@@ -13,6 +13,8 @@
  *     que no renderizan HTML.
  */
 
+import { getEmailLogoUrl } from "@/lib/utils/public-url";
+
 export interface QuoteEmailLineSummary {
   description: string;
   /** "$123.45" o "—" si no aplica. Ya pre-formateado por el caller. */
@@ -76,9 +78,6 @@ function formatMoney(n: number, currency: string): string {
   return `${sign}${(Math.round(n * 100) / 100).toFixed(2)} ${currency}`;
 }
 
-const LOGO_URL =
-  "https://crm-integra-legal.vercel.app/email/integra-logo-email.png";
-
 export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
   const {
     client_name,
@@ -140,7 +139,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
             <!-- Header con logo real (Sprint 2E.4 P2) -->
             <tr>
               <td style="background-color:${NAVY};padding:20px 28px;" align="left">
-                <img src="${LOGO_URL}" width="120" alt="Integra Legal" style="display:block;height:auto;max-width:120px;" />
+                <img src="${getEmailLogoUrl()}" width="120" alt="Integra Legal" style="display:block;height:auto;max-width:120px;" />
               </td>
             </tr>
 

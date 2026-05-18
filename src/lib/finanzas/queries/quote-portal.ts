@@ -157,21 +157,50 @@ export async function getQuoteForPortal(
 }
 
 /**
- * Determina si una cotización está vencida comparando valid_until con la
- * fecha de hoy en hora de Panamá. Si está vencida, el portal muestra la
- * UI vencida (P9) sin importar el status.
- *
- * Usamos Intl.DateTimeFormat con timeZone='America/Panama' para evitar el
- * desfasaje entre el entorno (Vercel UTC vs localhost Panama UTC-5). El
- * locale 'en-CA' produce YYYY-MM-DD nativamente.
+ * Devuelve "YYYY-MM-DD" para el día actual en zona Panamá. Usamos
+ * `formatToParts` (no `format`) para extraer year/month/day por nombre y
+ * armar el string manualmente — así esquivamos cualquier quirk del locale
+ * en runtimes raros (Vercel Edge, ICU recortada, builds bundled) donde
+ * `format("en-CA", ...)` podría devolver un separador distinto a `-` o
+ * incluir caracteres invisibles (LRM, etc.).
  */
-export function isQuoteExpired(validUntilIso: string): boolean {
-  if (!validUntilIso) return false;
-  const todayIso = new Intl.DateTimeFormat("en-CA", {
+function todayInPanamaISO(now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Panama",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
-  return validUntilIso < todayIso;
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Determina si una cotización está vencida comparando valid_until con la
+ * fecha de hoy en hora de Panamá. Si está vencida, el portal muestra la
+ * UI vencida (P9) sin importar el status.
+ *
+ * Reglas (Sprint 2E.4 P9):
+ *   - El mismo día de valid_until NO está vencida (el cliente tiene hasta
+ *     el final del día Panamá para responder).
+ *   - El día siguiente sí está vencida.
+ *   - Aceptamos valid_until como "YYYY-MM-DD" puro (Supabase DATE) o como
+ *     timestamp ISO ("YYYY-MM-DDTHH:mm:ssZ") — normalizamos al prefijo
+ *     YYYY-MM-DD vía regex antes de comparar.
+ *   - Comparación lexicográfica de strings ISO funciona correctamente
+ *     (year-month-day es ordenable como texto).
+ *
+ * El parámetro `now` es opcional; por defecto usa el reloj actual. Se
+ * acepta principalmente para tests unitarios deterministas.
+ */
+export function isQuoteExpired(
+  validUntilIso: string | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!validUntilIso) return false;
+  const m = validUntilIso.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!m) return false;
+  const validUntilDate = m[1];
+  const today = todayInPanamaISO(now);
+  return today > validUntilDate;
 }

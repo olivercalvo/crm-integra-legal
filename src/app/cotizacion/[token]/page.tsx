@@ -1,112 +1,65 @@
 /**
- * Página pública del portal de cotizaciones.
+ * Portal público de cotizaciones — Sprint 2E.4 (funcional).
  *
- * Sprint 2E.3 hotfix (2026-05-14): PLACEHOLDER profesional. El portal de
- * aceptación digital (con acciones "Aceptar" / "Rechazar" + log de IP/UA)
- * llega recién en Sprint 2E.4. Hasta entonces, este endpoint sirve para
- * que cuando el cliente abre el link del email NO termine en /login del
- * CRM (UX confusa), sino en una página informativa con la marca Integra
- * Panamá y el resumen básico de la cotización + datos de contacto.
+ * El cliente accede vía link único en el correo. NO requiere auth: la
+ * "autenticación" es el public_token UUID en el path. Validación detallada
+ * (status, vigencia) corre server-side; los endpoints públicos
+ * (/api/public/cotizaciones/[token]/{accept,reject}) tienen guards
+ * independientes.
  *
  * Comportamiento:
- *   - Server component público (sin auth requirement, sin sidebar/CRM
- *     chrome — el cliente NO es usuario del CRM).
- *   - Valida que [token] tenga formato UUID v4 antes de tocar la BD.
- *   - Si el token es válido formato, busca la quote por public_token y
- *     muestra datos básicos + estado.
- *   - Si NO existe en BD: muestra "Cotización no disponible".
- *   - Si formato inválido: muestra "Link inválido".
- *   - Si quote en estado expirada / cancelada / convertida: muestra
- *     warning específico pero igual renderiza la página.
- *   - Bloqueo noindex/nofollow en layout (no indexable por buscadores).
+ *   - Formato token inválido → ErrorShell "Link inválido".
+ *   - No encontrado          → ErrorShell "Cotización no disponible".
+ *   - Vencida (P9, valid_until < hoy Panamá) → ExpiredCard sin datos.
+ *   - Estados terminales (aceptada/rechazada/convertida/cancelada_pre_envio)
+ *     → render read-only con mensaje específico.
+ *   - Estado enviada y NO vencida → render completo con botones de acción.
+ *
+ * SEO: layout root ya bloquea noindex/nofollow.
  */
 
-import Link from "next/link";
-import { AlertCircle, Mail, ExternalLink, Calendar } from "lucide-react";
+import { AlertCircle, Calendar, Mail } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { formatDate } from "@/lib/utils/format-date";
-import type { QuoteStatus } from "@/lib/finanzas/types/quote";
+import {
+  getQuoteForPortal,
+  isQuoteExpired,
+  type PortalQuoteBundle,
+} from "@/lib/finanzas/queries/quote-portal";
+import { PortalActions } from "./_components/portal-actions";
 
 interface PageProps {
   params: { token: string };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const CONTACT_EMAIL = "contacto@integra-panama.com";
-const SITE_URL = "https://integra-panama.com";
+const CONTACT_EMAIL = "legal@integra-panama.com";
 
-// El portal es contenido dinámico — no cachear (el status puede cambiar).
 export const dynamic = "force-dynamic";
 
-interface QuoteSummary {
-  id: string;
-  quote_number: string;
-  title: string;
-  valid_until: string;
-  status: QuoteStatus;
-  client_name: string;
+// ---------- Helpers de formato ---------------------------------------------
+
+function formatDateEs(iso: string): string {
+  if (!iso) return "—";
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
-async function fetchQuoteByToken(token: string): Promise<QuoteSummary | null> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("quotes")
-    .select("id, quote_number, title, valid_until, status, client:clients(name)")
-    .eq("public_token", token)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) return null;
-
-  // Supabase devuelve client como array-of-one cuando es FK; normalizamos.
-  const clientField = (data as { client: unknown }).client;
-  let clientName = "Cliente";
-  if (Array.isArray(clientField) && clientField[0]) {
-    clientName = (clientField[0] as { name?: string }).name ?? "Cliente";
-  } else if (clientField && typeof clientField === "object") {
-    clientName = (clientField as { name?: string }).name ?? "Cliente";
-  }
-
-  return {
-    id: data.id as string,
-    quote_number: data.quote_number as string,
-    title: (data.title as string | null) ?? "",
-    valid_until: data.valid_until as string,
-    status: data.status as QuoteStatus,
-    client_name: clientName,
-  };
+function formatUSD(n: number): string {
+  return `$${(Math.round(n * 100) / 100).toFixed(2)}`;
 }
 
-function StatusBadge({ status }: { status: QuoteStatus }) {
-  // Paleta consistente con QuoteStatusBadge interno, pero adaptada al
-  // contexto público (sin jerga interna — "borrador", "emitida" o
-  // "cancelada_pre_envio" no llegan acá porque NO tienen public_token).
-  const palettes: Record<QuoteStatus, { bg: string; text: string; label: string }> = {
-    borrador: { bg: "bg-gray-100", text: "text-gray-700", label: "Borrador" },
-    emitida: { bg: "bg-blue-100", text: "text-blue-800", label: "Emitida" },
-    enviada: { bg: "bg-blue-100", text: "text-blue-800", label: "Enviada" },
-    aceptada: { bg: "bg-green-100", text: "text-green-800", label: "Aceptada" },
-    rechazada: { bg: "bg-red-100", text: "text-red-800", label: "Rechazada" },
-    expirada: { bg: "bg-amber-100", text: "text-amber-800", label: "Expirada" },
-    convertida: { bg: "bg-violet-100", text: "text-violet-800", label: "Confirmada" },
-    cancelada_pre_envio: { bg: "bg-gray-100", text: "text-gray-700", label: "Cancelada" },
-  };
-  const p = palettes[status];
-  return (
-    <span
-      className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wider ${p.bg} ${p.text}`}
-    >
-      {p.label}
-    </span>
-  );
-}
+// ---------- Shell y errores ------------------------------------------------
 
 function ShellHeader() {
   return (
-    <header className="bg-integra-navy py-6 shadow-sm">
-      <div className="mx-auto max-w-2xl px-4 flex items-center justify-between">
-        <div className="text-white text-2xl font-bold tracking-[0.2em]">INTEGRA</div>
+    <header className="bg-integra-navy py-5 shadow-sm">
+      <div className="mx-auto max-w-3xl px-4 flex items-center justify-between">
+        <div className="text-white text-2xl font-bold tracking-[0.2em]">
+          INTEGRA
+        </div>
         <div className="text-integra-gold text-[10px] font-bold tracking-[0.3em]">
           LEGAL · PANAMÁ
         </div>
@@ -118,9 +71,19 @@ function ShellHeader() {
 function ShellFooter() {
   return (
     <footer className="mt-12 border-t bg-white py-6">
-      <p className="mx-auto max-w-2xl px-4 text-center text-xs text-gray-500">
-        © 2026 Integra Panamá — Servicios legales en Panamá
-      </p>
+      <div className="mx-auto max-w-3xl px-4 text-center text-xs text-gray-500 leading-relaxed">
+        <p>
+          ¿Tienes dudas? Escríbenos a{" "}
+          <a
+            href={`mailto:${CONTACT_EMAIL}`}
+            className="font-medium text-integra-navy hover:underline"
+          >
+            {CONTACT_EMAIL}
+          </a>
+          .
+        </p>
+        <p className="mt-2">© 2026 Integra Legal · Servicios legales en Panamá</p>
+      </div>
     </footer>
   );
 }
@@ -143,7 +106,7 @@ function ErrorShell({
           <h1 className="text-xl font-bold text-integra-navy">{title}</h1>
           <p className="mt-3 text-sm text-gray-700">{message}</p>
           <p className="mt-6 text-xs text-gray-500">
-            Si crees que es un error, contáctanos en{" "}
+            Si crees que es un error, escribinos a{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
               className="font-medium text-integra-navy hover:underline"
@@ -159,12 +122,43 @@ function ErrorShell({
   );
 }
 
+function ExpiredCard({ quote_number, valid_until }: { quote_number: string; valid_until: string }) {
+  return (
+    <>
+      <ShellHeader />
+      <main className="mx-auto max-w-2xl px-4 py-12">
+        <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <Calendar size={28} className="text-amber-600" />
+          </div>
+          <h1 className="text-xl font-bold text-integra-navy">
+            Esta cotización venció
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 font-mono">{quote_number}</p>
+          <p className="mt-4 text-sm text-gray-700 leading-relaxed">
+            Esta cotización venció el{" "}
+            <strong>{formatDateEs(valid_until)}</strong>. Contacta al bufete
+            para una cotización actualizada con condiciones vigentes.
+          </p>
+          <a
+            href={`mailto:${CONTACT_EMAIL}?subject=Cotización ${encodeURIComponent(quote_number)} vencida`}
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-md bg-integra-gold px-5 py-3 min-h-[48px] text-sm font-bold text-integra-navy hover:bg-integra-gold/90"
+          >
+            <Mail size={16} />
+            Contactar al bufete
+          </a>
+        </div>
+      </main>
+      <ShellFooter />
+    </>
+  );
+}
+
+// ---------- Vista principal -------------------------------------------------
+
 export default async function CotizacionPublicPage({ params }: PageProps) {
   const token = params.token?.trim() ?? "";
 
-  // 1. Validar formato del token (UUID v4 sin hyphen rigid → permitimos
-  //    UUID v1-5 porque generamos via randomUUID() y solo nos importa el
-  //    formato, no la versión). Esto evita queries innecesarios a BD.
   if (!UUID_RE.test(token)) {
     return (
       <ErrorShell
@@ -174,8 +168,8 @@ export default async function CotizacionPublicPage({ params }: PageProps) {
     );
   }
 
-  // 2. Buscar la quote por public_token.
-  const quote = await fetchQuoteByToken(token);
+  const db = createAdminClient();
+  const quote = await getQuoteForPortal(db, token);
 
   if (!quote) {
     return (
@@ -186,133 +180,286 @@ export default async function CotizacionPublicPage({ params }: PageProps) {
     );
   }
 
-  // 3. Render principal: card con datos + banner "próximamente" + contacto.
-  // Warning condicional para estados terminales.
-  const isTerminal =
-    quote.status === "expirada" ||
-    quote.status === "cancelada_pre_envio" ||
-    quote.status === "convertida";
+  // P9 — vencida.
+  if (isQuoteExpired(quote.valid_until)) {
+    return <ExpiredCard quote_number={quote.quote_number} valid_until={quote.valid_until} />;
+  }
 
-  const terminalMessage: Record<string, string> = {
-    expirada:
-      "Esta cotización venció y ya no está vigente. Contáctanos para coordinar una nueva propuesta.",
-    cancelada_pre_envio:
-      "Esta cotización fue cancelada antes de su envío. Si esperabas una propuesta, contáctanos para coordinar una nueva.",
-    convertida:
-      "Esta cotización ya fue confirmada y está en proceso de facturación.",
-  };
+  // Estados terminales — read-only.
+  const isTerminal =
+    quote.status === "aceptada" ||
+    quote.status === "rechazada" ||
+    quote.status === "convertida" ||
+    quote.status === "cancelada_pre_envio" ||
+    quote.status === "expirada";
 
   return (
     <>
       <ShellHeader />
-
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        {/* Título */}
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
+        {/* Encabezado */}
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-integra-navy sm:text-3xl">
-            Cotización{" "}
-            <span className="font-mono text-integra-gold">
-              {quote.quote_number}
-            </span>
+          <p className="text-xs uppercase tracking-[0.2em] text-gray-500 font-semibold">
+            Cotización
+          </p>
+          <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-integra-navy font-mono">
+            {quote.quote_number}
           </h1>
           {quote.title && (
-            <p className="mt-2 italic text-base text-gray-600 break-words">
+            <p className="mt-2 italic text-base text-gray-700 break-words leading-snug">
               {quote.title}
             </p>
           )}
-          <p className="mt-1 text-sm text-gray-500">Integra Panamá</p>
-        </div>
-
-        {/* Mensaje principal */}
-        <div className="rounded-xl border bg-white p-6 shadow-sm sm:p-8">
-          <p className="text-base text-gray-800">
-            Hola <strong className="text-integra-navy">{quote.client_name}</strong>,
+          <p className="mt-3 text-sm text-gray-600">
+            Preparada para <strong className="text-integra-navy">{quote.client.name}</strong>
           </p>
-          <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            Esta cotización está disponible para ti. El portal de aceptación
-            digital estará disponible muy pronto. Mientras tanto, contáctanos
-            para coordinar los próximos pasos.
-          </p>
-
-          {/* Datos básicos */}
-          <dl className="mt-6 grid grid-cols-1 gap-3 rounded-lg border bg-gray-50 p-4 sm:grid-cols-2">
-            <div>
-              <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Cotización
-              </dt>
-              <dd className="mt-0.5 font-mono text-sm font-semibold text-integra-navy">
-                {quote.quote_number}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold flex items-center gap-1">
-                <Calendar size={10} /> Vigencia hasta
-              </dt>
-              <dd className="mt-0.5 text-sm font-semibold text-integra-navy">
-                {formatDate(quote.valid_until)}
-              </dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Estado
-              </dt>
-              <dd className="mt-1">
-                <StatusBadge status={quote.status} />
-              </dd>
-            </div>
-          </dl>
-
-          {isTerminal && (
-            <div
-              role="alert"
-              className="mt-5 flex items-start gap-2 rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
-            >
-              <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" />
-              <p>{terminalMessage[quote.status]}</p>
-            </div>
-          )}
-
-          {/* Botones de contacto */}
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <a
-              href={`mailto:${CONTACT_EMAIL}`}
-              className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-md bg-integra-gold px-4 py-3 text-sm font-semibold text-integra-navy hover:bg-integra-gold/90"
-            >
-              <Mail size={16} />
-              {CONTACT_EMAIL}
-            </a>
-            <Link
-              href={SITE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-md border border-integra-navy/20 bg-white px-4 py-3 text-sm font-semibold text-integra-navy hover:bg-gray-50"
-            >
-              <ExternalLink size={16} />
-              integra-panama.com
-            </Link>
-          </div>
         </div>
 
-        {/* Banner próximamente */}
-        <div
-          role="alert"
-          className="mt-5 flex items-start gap-2 rounded-md border-l-4 border-amber-400 bg-amber-50 p-4 text-sm text-amber-900"
-        >
-          <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-600" />
-          <div>
-            <p className="font-semibold">
-              Portal de aceptación digital — Próximamente
+        {/* Datos clave */}
+        <SummaryCard quote={quote} />
+
+        {/* Estado terminal: card de mensaje específico */}
+        {isTerminal && <TerminalCard status={quote.status} approved_at={quote.approved_at} rejected_at={quote.rejected_at} />}
+
+        {/* Líneas */}
+        <Section title="Detalle de servicios">
+          <LinesTable quote={quote} />
+        </Section>
+
+        {/* Totales */}
+        <Section title="Totales">
+          <TotalsBlock quote={quote} />
+        </Section>
+
+        {/* Observaciones */}
+        {quote.observations && quote.observations.trim().length > 0 && (
+          <Section title="Observaciones">
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {quote.observations}
             </p>
-            <p className="mt-1 text-xs text-amber-800">
-              Mientras tanto, puedes coordinar la respuesta de esta
-              cotización directamente con el equipo de Integra Panamá
-              usando los datos de contacto de arriba.
-            </p>
-          </div>
-        </div>
+          </Section>
+        )}
+
+        {/* T&C collapsable */}
+        {quote.terms_and_conditions && quote.terms_and_conditions.trim().length > 0 && (
+          <Section title="Términos y Condiciones">
+            <details className="group">
+              <summary className="cursor-pointer text-sm text-integra-navy underline hover:no-underline">
+                Ver términos y condiciones completos
+              </summary>
+              <div className="mt-3 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {quote.terms_and_conditions}
+              </div>
+            </details>
+          </Section>
+        )}
+
+        {/* Acciones — solo si NO terminal */}
+        {!isTerminal && (
+          <PortalActions
+            token={token}
+            quote_number={quote.quote_number}
+            client_name={quote.client.name}
+          />
+        )}
+
+        {/* Aviso legal compacto */}
+        <p className="mt-8 text-center text-xs text-gray-400 leading-relaxed">
+          La aceptación electrónica de esta cotización tiene validez legal
+          según la Ley 51 de 2008 de la República de Panamá (Documentos
+          Electrónicos y Firmas Electrónicas).
+        </p>
       </main>
-
       <ShellFooter />
     </>
+  );
+}
+
+// ---------- Componentes inline (server) ------------------------------------
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-6 rounded-xl border bg-white p-5 shadow-sm sm:p-6">
+      <h2 className="text-xs uppercase tracking-[0.15em] font-bold text-integra-gold mb-3">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+function SummaryCard({ quote }: { quote: PortalQuoteBundle }) {
+  return (
+    <div className="rounded-xl border bg-white p-5 sm:p-6 shadow-sm">
+      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div>
+          <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+            Vigencia hasta
+          </dt>
+          <dd className="mt-1 text-base font-bold text-integra-navy">
+            {formatDateEs(quote.valid_until)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+            Fecha de emisión
+          </dt>
+          <dd className="mt-1 text-base font-bold text-integra-navy">
+            {formatDateEs(quote.issue_date)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+            Total
+          </dt>
+          <dd className="mt-1 text-xl font-bold text-integra-navy font-mono">
+            {formatUSD(quote.grand_total)} <span className="text-xs font-normal text-gray-500">{quote.currency}</span>
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+function TerminalCard({
+  status,
+  approved_at,
+  rejected_at,
+}: {
+  status: PortalQuoteBundle["status"];
+  approved_at: string | null;
+  rejected_at: string | null;
+}) {
+  const msg =
+    status === "aceptada"
+      ? `Esta cotización fue aceptada${approved_at ? ` el ${formatDateEs(approved_at)}` : ""}. El equipo del bufete está coordinando los siguientes pasos.`
+      : status === "rechazada"
+      ? `Esta cotización fue rechazada${rejected_at ? ` el ${formatDateEs(rejected_at)}` : ""}. Si tu decisión cambió, contacta al bufete.`
+      : status === "convertida"
+      ? "Esta cotización ya fue confirmada y está en proceso de facturación."
+      : status === "cancelada_pre_envio"
+      ? "Esta cotización fue cancelada por el bufete. Si esperabas una propuesta, contáctanos para coordinar una nueva."
+      : "Esta cotización venció y ya no está vigente.";
+
+  const palette =
+    status === "aceptada"
+      ? "border-green-200 bg-green-50 text-green-900"
+      : status === "rechazada"
+      ? "border-red-200 bg-red-50 text-red-900"
+      : status === "convertida"
+      ? "border-violet-200 bg-violet-50 text-violet-900"
+      : "border-amber-200 bg-amber-50 text-amber-900";
+
+  return (
+    <div
+      role="status"
+      className={`mt-5 rounded-md border-l-4 p-4 text-sm leading-relaxed ${palette}`}
+    >
+      {msg}
+    </div>
+  );
+}
+
+function LinesTable({ quote }: { quote: PortalQuoteBundle }) {
+  return (
+    <>
+      {/* Desktop: tabla */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+              <th className="text-left py-2 pr-2">Descripción</th>
+              <th className="text-right py-2 px-2 w-16">Cant.</th>
+              <th className="text-right py-2 px-2 w-24">Precio unit.</th>
+              <th className="text-right py-2 px-2 w-20">ITBMS</th>
+              <th className="text-right py-2 pl-2 w-28">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {quote.lines.map((ln) => (
+              <tr key={ln.id} className="border-b border-gray-100">
+                <td className="py-2 pr-2 text-gray-800 align-top">
+                  {ln.description}
+                </td>
+                <td className="py-2 px-2 text-right text-gray-700 align-top font-mono text-xs">
+                  {ln.quantity}
+                </td>
+                <td className="py-2 px-2 text-right text-gray-700 align-top font-mono text-xs">
+                  {formatUSD(ln.unit_price)}
+                </td>
+                <td className="py-2 px-2 text-right text-gray-700 align-top font-mono text-xs">
+                  {formatUSD(ln.tax_amount)}
+                </td>
+                <td className="py-2 pl-2 text-right text-gray-900 align-top font-mono font-semibold">
+                  {formatUSD(ln.line_total)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile: cards apiladas */}
+      <div className="sm:hidden space-y-3">
+        {quote.lines.map((ln) => (
+          <div key={ln.id} className="rounded-md border border-gray-200 p-3">
+            <p className="text-sm font-medium text-gray-800">{ln.description}</p>
+            <dl className="mt-2 grid grid-cols-2 gap-1 text-xs">
+              <dt className="text-gray-500">Cantidad</dt>
+              <dd className="text-right font-mono text-gray-700">{ln.quantity}</dd>
+              <dt className="text-gray-500">Precio unit.</dt>
+              <dd className="text-right font-mono text-gray-700">{formatUSD(ln.unit_price)}</dd>
+              <dt className="text-gray-500">ITBMS</dt>
+              <dd className="text-right font-mono text-gray-700">{formatUSD(ln.tax_amount)}</dd>
+              <dt className="text-gray-500 font-semibold">Subtotal</dt>
+              <dd className="text-right font-mono font-bold text-gray-900">
+                {formatUSD(ln.line_total)}
+              </dd>
+            </dl>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function TotalsBlock({ quote }: { quote: PortalQuoteBundle }) {
+  const hasHon = quote.subtotal_hon > 0;
+  const hasRei = quote.subtotal_rei > 0;
+  return (
+    <dl className="text-sm space-y-1.5">
+      {hasHon && (
+        <div className="flex justify-between">
+          <dt className="text-gray-600">Subtotal honorarios</dt>
+          <dd className="font-mono text-gray-800">{formatUSD(quote.subtotal_hon)}</dd>
+        </div>
+      )}
+      {hasRei && (
+        <div className="flex justify-between">
+          <dt className="text-gray-600">Subtotal reembolso de gastos</dt>
+          <dd className="font-mono text-gray-800">{formatUSD(quote.subtotal_rei)}</dd>
+        </div>
+      )}
+      <div className="flex justify-between border-t border-gray-200 pt-1.5">
+        <dt className="text-gray-600">Subtotal</dt>
+        <dd className="font-mono text-gray-800">{formatUSD(quote.subtotal_total)}</dd>
+      </div>
+      <div className="flex justify-between">
+        <dt className="text-gray-600">ITBMS</dt>
+        <dd className="font-mono text-gray-800">{formatUSD(quote.tax_total)}</dd>
+      </div>
+      <div className="flex justify-between border-t-2 border-integra-navy pt-2 mt-1">
+        <dt className="text-base font-bold text-integra-navy">Total</dt>
+        <dd className="font-mono font-bold text-lg text-integra-navy">
+          {formatUSD(quote.grand_total)} <span className="text-xs font-normal text-gray-500">{quote.currency}</span>
+        </dd>
+      </div>
+    </dl>
   );
 }

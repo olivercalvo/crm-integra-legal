@@ -95,6 +95,28 @@ export interface QuoteDocumentProps {
   terms_and_conditions: string | null;
   generated_at_label: string;
   generated_by_label: string;
+  /**
+   * Página final "EVIDENCIA DE ACEPTACIÓN ELECTRÓNICA" — solo se renderiza
+   * cuando la cotización fue aceptada vía portal (Sprint 2E.4). Si es null,
+   * el PDF es el normal sin la página de evidencia.
+   */
+  acceptance_evidence?: QuoteAcceptanceEvidence | null;
+}
+
+/** Datos del audit log FES que se imprimen en la página de evidencia. */
+export interface QuoteAcceptanceEvidence {
+  full_name: string;
+  position: string;
+  id_document: string | null;
+  accepted_at_iso: string;       // ISO UTC
+  accepted_at_panama: string;    // "DD/MM/YYYY HH:mm:ss · UTC-5"
+  ip_address: string | null;
+  user_agent: string | null;
+  origin_url: string | null;
+  consent_text_version: string;
+  signature_text: string;
+  /** SHA-256 hex (64 chars) sobre el payload firmado, para verificación posterior. */
+  evidence_hash: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,6 +416,97 @@ const styles = StyleSheet.create({
     fontSize: 6.5,          // antes 7
     color: COLOR_GRAY_400,
   },
+  // ---- Página de Evidencia FES (Sprint 2E.4) ----
+  evidenceTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 14,
+    color: COLOR_NAVY,
+    letterSpacing: 1.5,
+    marginTop: 4,
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  evidenceSubtitle: {
+    fontSize: 8.5,
+    color: COLOR_GRAY_500,
+    lineHeight: 1.5,
+    marginBottom: 14,
+    textAlign: "center",
+  },
+  evidenceSection: {
+    borderWidth: 1,
+    borderColor: COLOR_GRAY_200,
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 10,
+  },
+  evidenceSectionTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    color: COLOR_GOLD,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  evidenceRow: {
+    flexDirection: "row",
+    marginBottom: 3,
+  },
+  evidenceLabel: {
+    width: 85,
+    fontSize: 9,
+    color: COLOR_GRAY_500,
+  },
+  evidenceValue: {
+    flex: 1,
+    fontSize: 9.5,
+    fontFamily: "Helvetica-Bold",
+    color: COLOR_NAVY,
+  },
+  evidenceValueMono: {
+    flex: 1,
+    fontSize: 8.5,
+    fontFamily: "Helvetica",
+    color: COLOR_NAVY,
+  },
+  evidenceValueMonoSmall: {
+    flex: 1,
+    fontSize: 7.5,
+    fontFamily: "Helvetica",
+    color: COLOR_NAVY,
+    lineHeight: 1.3,
+  },
+  evidenceConsentBox: {
+    backgroundColor: COLOR_GRAY_50,
+    borderWidth: 0.5,
+    borderColor: COLOR_GRAY_300,
+    borderRadius: 3,
+    padding: 8,
+    marginBottom: 4,
+  },
+  evidenceConsentText: {
+    fontSize: 9,
+    color: COLOR_NAVY,
+    lineHeight: 1.5,
+    fontFamily: "Helvetica-Oblique",
+  },
+  evidenceConsentVersion: {
+    fontSize: 7,
+    color: COLOR_GRAY_400,
+    fontFamily: "Helvetica",
+    marginTop: 2,
+  },
+  evidenceLegalBox: {
+    marginTop: 6,
+    padding: 8,
+    backgroundColor: COLOR_BLUE_50,
+    borderLeftWidth: 3,
+    borderLeftColor: COLOR_BLUE_700,
+  },
+  evidenceLegalText: {
+    fontSize: 8,
+    color: COLOR_NAVY,
+    lineHeight: 1.5,
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -455,6 +568,7 @@ export function QuoteDocument(props: QuoteDocumentProps) {
     terms_and_conditions,
     generated_at_label,
     generated_by_label,
+    acceptance_evidence,
   } = props;
 
   const hasHon = subtotal_hon > 0 || lines.some((l) => l.invoice_kind === "HON");
@@ -651,6 +765,145 @@ export function QuoteDocument(props: QuoteDocumentProps) {
           />
         </View>
       </Page>
+
+      {/* ===== Página final de evidencia FES (Sprint 2E.4) ===== */}
+      {acceptance_evidence && (
+        <Page size="LETTER" style={styles.page}>
+          {/* Header reducido */}
+          <View style={styles.header}>
+            <View style={styles.brand}>
+              <Image src={LOGO_SRC} style={styles.brandLogo} />
+            </View>
+            <View style={styles.docHeader}>
+              <Text style={styles.docHeaderTitle}>EVIDENCIA FES</Text>
+              <Text style={styles.docHeaderNumber}>{quote_number}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.evidenceTitle}>
+            EVIDENCIA DE ACEPTACIÓN ELECTRÓNICA
+          </Text>
+          <Text style={styles.evidenceSubtitle}>
+            Documento generado automáticamente al recibir la aceptación del
+            cliente a través del portal web de Integra Legal. Esta página
+            sirve como evidencia legal según la Ley 51 de 2008 de la
+            República de Panamá (Documentos Electrónicos y Firmas
+            Electrónicas).
+          </Text>
+
+          <View style={styles.evidenceSection}>
+            <Text style={styles.evidenceSectionTitle}>DATOS DEL FIRMANTE</Text>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>Nombre completo</Text>
+              <Text style={styles.evidenceValue}>
+                {acceptance_evidence.full_name}
+              </Text>
+            </View>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>Cargo</Text>
+              <Text style={styles.evidenceValue}>
+                {acceptance_evidence.position}
+              </Text>
+            </View>
+            {acceptance_evidence.id_document && (
+              <View style={styles.evidenceRow}>
+                <Text style={styles.evidenceLabel}>Documento</Text>
+                <Text style={styles.evidenceValue}>
+                  {acceptance_evidence.id_document}
+                </Text>
+              </View>
+            )}
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>En nombre de</Text>
+              <Text style={styles.evidenceValue}>{client.name}</Text>
+            </View>
+          </View>
+
+          <View style={styles.evidenceSection}>
+            <Text style={styles.evidenceSectionTitle}>FECHA Y HORA</Text>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>Hora Panamá</Text>
+              <Text style={styles.evidenceValue}>
+                {acceptance_evidence.accepted_at_panama}
+              </Text>
+            </View>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>UTC</Text>
+              <Text style={styles.evidenceValueMono}>
+                {acceptance_evidence.accepted_at_iso}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.evidenceSection}>
+            <Text style={styles.evidenceSectionTitle}>
+              TEXTO ACEPTADO (CONSENT FES)
+            </Text>
+            <View style={styles.evidenceConsentBox}>
+              <Text style={styles.evidenceConsentText}>
+                {acceptance_evidence.signature_text}
+              </Text>
+            </View>
+            <Text style={styles.evidenceConsentVersion}>
+              Versión del consent: {acceptance_evidence.consent_text_version}
+            </Text>
+          </View>
+
+          <View style={styles.evidenceSection}>
+            <Text style={styles.evidenceSectionTitle}>METADATOS TÉCNICOS</Text>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>Dirección IP</Text>
+              <Text style={styles.evidenceValueMono}>
+                {acceptance_evidence.ip_address ?? "—"}
+              </Text>
+            </View>
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>User-Agent</Text>
+              <Text style={styles.evidenceValueMonoSmall}>
+                {acceptance_evidence.user_agent ?? "—"}
+              </Text>
+            </View>
+            {acceptance_evidence.origin_url && (
+              <View style={styles.evidenceRow}>
+                <Text style={styles.evidenceLabel}>URL de origen</Text>
+                <Text style={styles.evidenceValueMonoSmall}>
+                  {acceptance_evidence.origin_url}
+                </Text>
+              </View>
+            )}
+            <View style={styles.evidenceRow}>
+              <Text style={styles.evidenceLabel}>Hash SHA-256</Text>
+              <Text style={styles.evidenceValueMonoSmall}>
+                {acceptance_evidence.evidence_hash}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.evidenceLegalBox}>
+            <Text style={styles.evidenceLegalText}>
+              Esta evidencia electrónica forma parte integral de la
+              cotización {quote_number}. La aceptación registrada arriba
+              constituye un acuerdo vinculante entre {client.name} e Integra
+              Legal según los términos y condiciones de las páginas
+              anteriores. El hash SHA-256 permite verificar a futuro que
+              esta evidencia no ha sido alterada.
+            </Text>
+          </View>
+
+          <View style={styles.footer} fixed>
+            <Text style={styles.footerText}>
+              Integra Legal · Panamá · Evidencia FES generada el{" "}
+              {generated_at_label}
+            </Text>
+            <Text
+              style={styles.footerText}
+              render={({ pageNumber, totalPages }) =>
+                `Página ${pageNumber} de ${totalPages}`
+              }
+            />
+          </View>
+        </Page>
+      )}
     </Document>
   );
 }

@@ -13,6 +13,12 @@
  *     que no renderizan HTML.
  */
 
+export interface QuoteEmailLineSummary {
+  description: string;
+  /** "$123.45" o "—" si no aplica. Ya pre-formateado por el caller. */
+  amount_label: string;
+}
+
 export interface QuoteEmailProps {
   client_name: string;
   quote_number: string;
@@ -23,7 +29,21 @@ export interface QuoteEmailProps {
   currency: string;        // 'USD'
   public_link: string;
   sent_by_name: string;
-  /** Línea de resumen (1-2 servicios principales). Opcional. */
+  /**
+   * Resumen de líneas para mostrar en el cuerpo del email (Sprint 2E.4 P1).
+   * Mostrar 3-5 ítems máx; si hay más, agregar texto "y X más" desde el caller
+   * o pasar `extra_lines_count`.
+   */
+  line_summary?: QuoteEmailLineSummary[];
+  /** Si line_summary fue truncada, indica cuántas líneas adicionales hay. */
+  extra_lines_count?: number;
+  /** URL pública para descargar el PDF directamente (sin abrir el portal). */
+  pdf_download_link?: string;
+  /**
+   * @deprecated Antes (Sprint 2E.3) un único string. Mantenido por
+   * compatibilidad con callers existentes — si llega, se muestra abajo
+   * del resumen. Preferir `line_summary`.
+   */
   summary_line?: string | null;
 }
 
@@ -56,6 +76,9 @@ function formatMoney(n: number, currency: string): string {
   return `${sign}${(Math.round(n * 100) / 100).toFixed(2)} ${currency}`;
 }
 
+const LOGO_URL =
+  "https://crm-integra-legal.vercel.app/email/integra-logo-email.png";
+
 export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
   const {
     client_name,
@@ -66,6 +89,9 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
     currency,
     public_link,
     sent_by_name,
+    line_summary,
+    extra_lines_count,
+    pdf_download_link,
     summary_line,
   } = props;
 
@@ -76,7 +102,28 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
   const safeTotal = escapeHtml(formatMoney(grand_total, currency));
   const safeLink = escapeHtml(public_link);
   const safeSender = escapeHtml(sent_by_name);
-  const safeSummary = summary_line ? escapeHtml(summary_line) : "";
+  const safeLegacySummary = summary_line ? escapeHtml(summary_line) : "";
+
+  // Resumen de líneas (Sprint 2E.4 P1): tabla compacta con 3-5 ítems.
+  const summaryRows =
+    line_summary && line_summary.length > 0
+      ? line_summary
+          .slice(0, 5)
+          .map(
+            (ln) => `
+              <tr>
+                <td style="padding:6px 0;font-size:13px;color:${NAVY};line-height:1.4;border-top:1px solid ${GRAY_200};">${escapeHtml(ln.description)}</td>
+                <td align="right" style="padding:6px 0;font-size:13px;color:${NAVY};font-family:-apple-system,monospace;border-top:1px solid ${GRAY_200};white-space:nowrap;padding-left:12px;">${escapeHtml(ln.amount_label)}</td>
+              </tr>`
+          )
+          .join("")
+      : "";
+  const extraLinesHint =
+    extra_lines_count && extra_lines_count > 0
+      ? `<tr><td colspan="2" style="padding:6px 0 0;font-size:12px;color:${GRAY_500};font-style:italic;border-top:1px solid ${GRAY_200};">y ${extra_lines_count} línea${extra_lines_count === 1 ? "" : "s"} más en el PDF adjunto</td></tr>`
+      : "";
+
+  const safePdfLink = pdf_download_link ? escapeHtml(pdf_download_link) : "";
 
   return `<!doctype html>
 <html lang="es">
@@ -90,19 +137,10 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
       <tr>
         <td align="center">
           <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFFFF;border-radius:6px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-            <!-- Header (brand) -->
+            <!-- Header con logo real (Sprint 2E.4 P2) -->
             <tr>
-              <td style="background-color:${NAVY};padding:24px 28px;">
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="font-size:24px;font-weight:700;color:#FFFFFF;letter-spacing:2px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">
-                      INTEGRA
-                    </td>
-                    <td align="right" style="font-size:10px;font-weight:700;color:${GOLD};letter-spacing:3px;">
-                      LEGAL · PANAMÁ
-                    </td>
-                  </tr>
-                </table>
+              <td style="background-color:${NAVY};padding:20px 28px;" align="left">
+                <img src="${LOGO_URL}" width="120" alt="Integra Legal" style="display:block;height:auto;max-width:120px;" />
               </td>
             </tr>
 
@@ -110,62 +148,59 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
             <tr>
               <td style="padding:28px;">
                 <p style="margin:0 0 16px;font-size:16px;color:${NAVY};">
-                  Estimado/a <strong>${safeClient}</strong>:
+                  Hola, <strong>${safeClient}</strong>:
                 </p>
-                ${
-                  safeTitle
-                    ? `<p style="margin:0 0 12px;font-size:15px;font-weight:600;font-style:italic;color:${NAVY};line-height:1.4;">${safeTitle}</p>`
-                    : ""
-                }
-                <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-                  Te adjuntamos la cotización <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>
-                  para los servicios solicitados. La oferta tiene vigencia hasta el
-                  <strong style="color:${NAVY};">${safeValidUntil}</strong>.
+                <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
+                  Te enviamos la cotización <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>
+                  para los servicios solicitados${safeTitle ? `: <span style="font-style:italic;color:${NAVY};">${safeTitle}</span>` : ""}.
                 </p>
 
-                <!-- Resumen monto -->
+                <!-- Card resumen: número + monto + vigencia + líneas -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${GRAY_50};border:1px solid ${GRAY_200};border-radius:6px;margin:18px 0;">
                   <tr>
-                    <td style="padding:14px 18px;">
+                    <td style="padding:16px 18px;">
                       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
-                          <td style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:${GRAY_500};font-weight:600;">
-                            Total cotizado
-                          </td>
-                          <td align="right" style="font-size:22px;font-weight:700;color:${NAVY};font-family:-apple-system,monospace;">
-                            ${safeTotal}
-                          </td>
+                          <td style="font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:${GRAY_500};font-weight:600;padding-bottom:6px;">Cotización</td>
+                          <td align="right" style="font-size:13px;color:${NAVY};font-family:monospace;padding-bottom:6px;">${safeNumber}</td>
                         </tr>
-                        ${
-                          safeSummary
-                            ? `<tr><td colspan="2" style="padding-top:8px;font-size:12px;color:${GRAY_500};line-height:1.5;">${safeSummary}</td></tr>`
-                            : ""
-                        }
+                        <tr>
+                          <td style="font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:${GRAY_500};font-weight:600;padding-bottom:6px;">Vigencia hasta</td>
+                          <td align="right" style="font-size:13px;color:${NAVY};padding-bottom:6px;">${safeValidUntil}</td>
+                        </tr>
+                        <tr>
+                          <td style="font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:${GRAY_500};font-weight:600;">Monto total</td>
+                          <td align="right" style="font-size:20px;font-weight:700;color:${NAVY};font-family:-apple-system,monospace;">${safeTotal}</td>
+                        </tr>
+                        ${summaryRows ? `<tr><td colspan="2" style="padding-top:10px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${summaryRows}${extraLinesHint}</table></td></tr>` : ""}
+                        ${safeLegacySummary && !summaryRows ? `<tr><td colspan="2" style="padding-top:8px;font-size:12px;color:${GRAY_500};line-height:1.5;">${safeLegacySummary}</td></tr>` : ""}
                       </table>
                     </td>
                   </tr>
                 </table>
 
-                <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-                  Adjuntamos a este correo el PDF con el detalle completo, las líneas de servicio
-                  y los Términos y Condiciones aplicables.
-                </p>
-
-                <!-- CTA -->
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+                <!-- CTA hero -->
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 6px;">
                   <tr>
                     <td style="border-radius:6px;background-color:${GOLD};">
                       <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
                          style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:${NAVY};text-decoration:none;letter-spacing:0.5px;">
-                        Ver y aceptar cotización →
+                        Ver cotización online →
                       </a>
                     </td>
                   </tr>
                 </table>
 
-                <p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:${GRAY_500};">
-                  Si tienes cualquier consulta sobre esta cotización, responde directamente
-                  a este correo y atenderemos tu consulta a la brevedad.
+                ${safePdfLink ? `<p style="margin:6px 0 18px;font-size:13px;color:${GRAY_500};">
+                  O <a href="${safePdfLink}" style="color:${NAVY};text-decoration:underline;">descargar el PDF directamente</a>.
+                </p>` : `<p style="margin:6px 0 18px;font-size:13px;color:${GRAY_500};">
+                  El PDF también va adjunto a este correo.
+                </p>`}
+
+                <p style="margin:14px 0;font-size:14px;line-height:1.6;color:${GRAY_700};">
+                  Desde el portal online puedes aceptar o rechazar la cotización
+                  con tu firma electrónica. Si prefieres discutir algún detalle
+                  primero, basta con responder este correo.
                 </p>
 
                 <p style="margin:24px 0 4px;font-size:14px;color:${GRAY_700};">Cordialmente,</p>
@@ -178,17 +213,13 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
             <tr>
               <td style="background-color:${GRAY_50};padding:18px 28px;border-top:1px solid ${GRAY_200};">
                 <p style="margin:0;font-size:11px;line-height:1.6;color:${GRAY_500};">
-                  Este correo fue enviado desde el sistema de gestión de cotizaciones de Integra Legal.
-                  La información contenida es confidencial y está protegida por el secreto profesional
-                  conforme a las leyes de la República de Panamá.
+                  Integra Legal · Servicios legales en la República de Panamá.
+                  Esta comunicación es confidencial y está protegida por el
+                  secreto profesional conforme a las leyes panameñas.
                 </p>
               </td>
             </tr>
           </table>
-
-          <p style="margin:16px 0 0;font-size:11px;color:${GRAY_500};">
-            Integra Legal · Panamá
-          </p>
         </td>
       </tr>
     </table>
@@ -207,38 +238,47 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
     currency,
     public_link,
     sent_by_name,
+    line_summary,
+    extra_lines_count,
+    pdf_download_link,
     summary_line,
   } = props;
 
-  const lines = [
-    `Estimado/a ${client_name}:`,
-    "",
-  ];
-
-  if (title && title.trim().length > 0) {
-    lines.push(`Referencia: ${title}`, "");
-  }
+  const lines = [`Hola, ${client_name}:`, ""];
 
   lines.push(
-    `Te adjuntamos la cotización ${quote_number} para los servicios solicitados.`,
-    `La oferta tiene vigencia hasta el ${formatDateEs(valid_until)}.`,
+    title && title.trim().length > 0
+      ? `Te enviamos la cotización ${quote_number}: ${title}.`
+      : `Te enviamos la cotización ${quote_number}.`,
     "",
-    `Total cotizado: ${formatMoney(grand_total, currency)}`
+    `Monto total: ${formatMoney(grand_total, currency)}`,
+    `Vigencia hasta: ${formatDateEs(valid_until)}`
   );
 
-  if (summary_line) {
-    lines.push(summary_line);
+  if (line_summary && line_summary.length > 0) {
+    lines.push("", "Resumen:");
+    for (const ln of line_summary.slice(0, 5)) {
+      lines.push(`  • ${ln.description} — ${ln.amount_label}`);
+    }
+    if (extra_lines_count && extra_lines_count > 0) {
+      lines.push(
+        `  (y ${extra_lines_count} línea${extra_lines_count === 1 ? "" : "s"} más en el PDF adjunto)`
+      );
+    }
+  } else if (summary_line) {
+    lines.push("", summary_line);
   }
 
   lines.push(
     "",
-    "Adjuntamos el PDF con el detalle completo, las líneas de servicio y los",
-    "Términos y Condiciones aplicables.",
+    `Ver cotización online: ${public_link}`,
+    pdf_download_link
+      ? `Descargar PDF: ${pdf_download_link}`
+      : "El PDF también va adjunto a este correo.",
     "",
-    `Ver y aceptar la cotización: ${public_link}`,
-    "",
-    "Si tienes cualquier consulta sobre esta cotización, responde directamente a",
-    "este correo.",
+    "Desde el portal puedes aceptar o rechazar la cotización con tu firma",
+    "electrónica. Si prefieres discutir algún detalle primero, basta con",
+    "responder este correo.",
     "",
     "Cordialmente,",
     sent_by_name,

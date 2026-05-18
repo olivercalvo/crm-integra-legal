@@ -127,6 +127,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const subtotalHon = Number(bundle.quote.subtotal_hon ?? 0);
   const subtotalRei = Number(bundle.quote.subtotal_rei ?? 0);
 
+  // Sprint 2E.4 P1: line_summary igual que en /send.
+  const lineSummary = bundle.lines.slice(0, 5).map((ln) => ({
+    description: ln.description as string,
+    amount_label: `$${(Number(ln.line_total ?? 0)).toFixed(2)}`,
+  }));
+  const extraLinesCount = Math.max(0, bundle.lines.length - lineSummary.length);
+
   const compositionParts: string[] = [];
   if (subtotalHon > 0) compositionParts.push("honorarios profesionales");
   if (subtotalRei > 0) compositionParts.push("reembolso de gastos");
@@ -148,6 +155,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       currency: "USD",
       public_link: publicLink,
       sent_by_name: ctx.userName ?? "Equipo Integra Legal",
+      line_summary: lineSummary,
+      extra_lines_count: extraLinesCount,
       summary_line: summaryLine,
     },
   });

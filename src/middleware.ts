@@ -143,6 +143,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // API pública — endpoints expuestos sin sesión. La autenticación es el
+  // token único en el path (Sprint 2E.4 portal de cotizaciones: accept y
+  // reject). Cada handler valida el token y la validez del recurso.
+  if (pathname.startsWith("/api/public/")) {
+    return response;
+  }
+
   // API — auth chequeado dentro de cada handler.
   if (pathname.startsWith("/api/")) {
     if (!user) {

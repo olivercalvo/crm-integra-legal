@@ -411,8 +411,7 @@ export function QuoteForm(props: Props) {
                     <span className="font-mono">{props.source.quote_number}</span>
                   </p>
                   <p className="mt-0.5 text-amber-800">
-                    Verificá el cliente y las fechas antes de emitir. Si vas a
-                    facturar al mismo cliente, podés dejarlos tal cual.
+                    Verifica el cliente y las fechas antes de emitir.
                   </p>
                 </div>
               </div>

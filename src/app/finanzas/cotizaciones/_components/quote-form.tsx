@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, AlertCircle, FileText, MessageSquare } from "lucide-react";
+import { Save, Loader2, AlertCircle, FileText, MessageSquare, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +66,18 @@ interface EditProps extends BaseProps {
     terms_and_conditions: string;
     lines: QuoteLineEditorInput[];
   };
+  /**
+   * Si la cotización fue creada por "Duplicar", info del origen para
+   * renderizar el banner amarillo. Cuando viene, también se habilita el
+   * dropdown de cliente (la abogada necesita poder cambiarlo).
+   *
+   * El banner se oculta automáticamente cuando la abogada selecciona un
+   * cliente distinto al del origen (sourceClientId).
+   */
+  source?: {
+    quote_number: string;
+    client_id: string;
+  } | null;
 }
 
 type Props = CreateProps | EditProps;
@@ -384,6 +396,28 @@ export function QuoteForm(props: Props) {
         <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-integra-navy">Datos de la cotización</h2>
 
+          {/* Banner amarillo — solo para cotizaciones duplicadas que todavía
+              conservan el cliente del origen (Sprint 2E.4). Se oculta cuando
+              la abogada cambia el cliente a uno distinto. */}
+          {props.mode === "edit" &&
+            props.source &&
+            clientSelector.mode === "existing" &&
+            clientSelector.client_id === props.source.client_id && (
+              <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                <Copy size={18} className="mt-0.5 shrink-0 text-amber-700" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-900">
+                    Cotización duplicada de{" "}
+                    <span className="font-mono">{props.source.quote_number}</span>
+                  </p>
+                  <p className="mt-0.5 text-amber-800">
+                    Verificá el cliente y las fechas antes de emitir. Si vas a
+                    facturar al mismo cliente, podés dejarlos tal cual.
+                  </p>
+                </div>
+              </div>
+            )}
+
           {/* Cliente — toggle existente/nuevo (D1) */}
           <ClientSelectorToggle
             clients={props.clients}
@@ -391,9 +425,12 @@ export function QuoteForm(props: Props) {
             initialClientId={clientSelector.client_id ?? null}
             errors={errors}
             onChange={setClientSelector}
-            disabled={isPending || props.mode === "edit"}
+            disabled={
+              isPending ||
+              (props.mode === "edit" && !props.source)
+            }
           />
-          {props.mode === "edit" && (
+          {props.mode === "edit" && !props.source && (
             <p className="text-xs text-gray-500">
               El cliente no se puede cambiar desde el editor. Para
               cambiarlo, cancela la cotización y crea una nueva.

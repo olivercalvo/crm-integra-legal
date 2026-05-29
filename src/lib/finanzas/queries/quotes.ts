@@ -52,6 +52,7 @@ export async function listQuotes(
         rejected_at, rejected_by_ip, rejected_by_user_agent, rejection_reason,
         cancelled_at, cancellation_reason,
         converted_at, converted_invoice_ids, converted_by,
+        source_quote_id,
         client:clients!quotes_client_id_fkey(id, name, client_number, client_status),
         case:cases!quotes_case_id_fkey(id, case_code)
       `,
@@ -113,6 +114,7 @@ export async function getQuoteById(
         rejected_at, rejected_by_ip, rejected_by_user_agent, rejection_reason,
         cancelled_at, cancellation_reason,
         converted_at, converted_invoice_ids, converted_by,
+        source_quote_id,
         client:clients!quotes_client_id_fkey(id, name, client_number, client_status, client_type, ruc, email),
         case:cases!quotes_case_id_fkey(id, case_code, description)
       `
@@ -149,6 +151,30 @@ export async function getQuoteById(
 }
 
 /**
+ * Devuelve `{ quote_number, client_id }` del quote origen. Lo usa la página
+ * de edición de una cotización duplicada para renderizar el banner amarillo
+ * ("verificá cliente y fechas antes de emitir"). Si el source ya no existe
+ * (ON DELETE SET NULL del FK), devuelve null y la edit page oculta el banner.
+ */
+export async function getQuoteSourceInfo(
+  db: DB,
+  tenantId: string,
+  sourceQuoteId: string
+): Promise<{ quote_number: string; client_id: string } | null> {
+  const { data, error } = await db
+    .from("quotes")
+    .select("quote_number, client_id")
+    .eq("tenant_id", tenantId)
+    .eq("id", sourceQuoteId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    quote_number: data.quote_number as string,
+    client_id: data.client_id as string,
+  };
+}
+
+/**
  * Detalle por public_token. Usado por endpoints públicos del portal del
  * cliente (D1, D6) en Fase 2E.4. NO filtra por tenant_id porque el token
  * mismo es la credencial — pero sí filtra por status para evitar exponer
@@ -177,6 +203,7 @@ export async function getQuoteByPublicToken(
         rejected_at, rejected_by_ip, rejected_by_user_agent, rejection_reason,
         cancelled_at, cancellation_reason,
         converted_at, converted_invoice_ids, converted_by,
+        source_quote_id,
         client:clients!quotes_client_id_fkey(id, name, client_number, client_status, client_type, ruc, email),
         case:cases!quotes_case_id_fkey(id, case_code, description)
       `

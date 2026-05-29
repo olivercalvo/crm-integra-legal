@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Save, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   validateCreateBusinessExpense,
@@ -329,8 +330,7 @@ export function BusinessExpenseForm(props: Props) {
           {/* Subtotal */}
           <div data-error={!!errors.subtotal}>
             <Label className="mb-1 block">Subtotal (B/.) *</Label>
-            <Input
-              type="number"
+            <NumberInput
               inputMode="decimal"
               step="0.01"
               min="0"
@@ -387,8 +387,7 @@ export function BusinessExpenseForm(props: Props) {
                 </button>
               )}
             </Label>
-            <Input
-              type="number"
+            <NumberInput
               inputMode="decimal"
               step="0.01"
               min="0"

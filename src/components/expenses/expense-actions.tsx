@@ -6,6 +6,7 @@ import { Pencil, Trash2, Paperclip, X, Save, Loader2, FileText, Image as ImageIc
 import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/utils/format-date";
 
@@ -256,8 +257,7 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600" }: Ex
         <div className="grid gap-2 grid-cols-1 sm:grid-cols-3">
           <div className="space-y-1">
             <Label className="text-xs">Monto (B/.)</Label>
-            <Input
-              type="number"
+            <NumberInput
               min="0.01"
               step="0.01"
               value={editAmount}

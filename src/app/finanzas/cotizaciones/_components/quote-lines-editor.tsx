@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { ServiceCombobox, SERVICE_CUSTOM } from "@/components/finanzas/service-combobox";
 import { TaxCodeSelect } from "@/components/finanzas/tax-code-select";
 import { QuoteKindIndicator } from "@/components/finanzas/cotizaciones/quote-kind-indicator";
@@ -293,8 +294,7 @@ export function QuoteLinesEditor({
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Cantidad
                     </label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       min="0"
                       step="0.01"
                       inputMode="decimal"
@@ -319,8 +319,7 @@ export function QuoteLinesEditor({
                       >
                         $
                       </span>
-                      <Input
-                        type="number"
+                      <NumberInput
                         min="0"
                         step="0.01"
                         inputMode="decimal"

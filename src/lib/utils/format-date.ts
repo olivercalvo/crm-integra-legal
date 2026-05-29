@@ -45,18 +45,38 @@ export function formatDate(dateStr: string | Date | null | undefined): string {
   return `${day}/${month}/${year}`;
 }
 
-/** Format a date+time as DD/MM/YYYY hh:mm a */
+/** Format a date+time as DD/MM/YYYY hh:mm a en hora de Panamá.
+ *  Hot-fix BUG D: el server local en Vercel corre en UTC, así que
+ *  d.getDate()/getHours() devolvían valores UTC y mostraban horas
+ *  desfasadas en cotizaciones, gastos, audit log, facturas, etc.
+ *  Usamos Intl.DateTimeFormat con timeZone="America/Panama" para que
+ *  tanto la fecha como la hora se rindan en hora local panameña sin
+ *  importar el runtime. */
 export function formatDateTime(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "—";
   const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
   if (isNaN(d.getTime())) return "—";
-  const date = formatDate(d);
-  const time = d.toLocaleTimeString("es-PA", {
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Panama",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
-  });
-  return `${date} ${time}`;
+  }).formatToParts(d);
+
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const day = get("day");
+  const month = get("month");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+  // dayPeriod en en-GB devuelve "am"/"pm" — lo dejamos en minúsculas.
+  const period = get("dayPeriod").toLowerCase();
+
+  return `${day}/${month}/${year} ${hour}:${minute} ${period}`;
 }
 
 /** Calculate days between a date-only string and today. Returns null if missing.

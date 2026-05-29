@@ -6,6 +6,7 @@
  * traduce token → bundle de datos.
  */
 
+import { unstable_noStore as noStore } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { QuoteStatus, QuoteLineKind } from "@/lib/finanzas/types/quote";
 
@@ -67,6 +68,12 @@ export async function getQuoteForPortal(
   db: DB,
   token: string
 ): Promise<PortalQuoteBundle | null> {
+  // Hot-fix BUG C: el portal público no debe servir respuestas cacheadas.
+  // Sin esto, Next puede mostrar al cliente datos viejos tras un PATCH
+  // (ej. status sigue mostrándose como 'enviada' luego de aceptar).
+  // Scope: SOLO portal público — el CRM autenticado mantiene su cache normal.
+  noStore();
+
   const { data: header, error: errHeader } = await db
     .from("quotes")
     .select(

@@ -155,9 +155,15 @@ export async function runAcceptanceCascade(
   try {
     const lawyers = await getLawyerEmails(db, ctx.tenantId);
 
-    if (bundle.client.email) {
+    // Smoke Test 7 fix: el correo al cliente debe ir al mismo destinatario
+    // al que se envió la cotización (override del modal), no a client.email
+    // por defecto. Fallback a client.email para cotizaciones legacy pre
+    // Sprint 2E.3 que pudieran no tener sent_to_email persistido.
+    const clientTo = bundle.sent_to_email ?? bundle.client.email;
+
+    if (clientTo) {
       const emails = await sendAcceptanceEmails({
-        client_to: bundle.client.email,
+        client_to: clientTo,
         client_props: {
           client_name: bundle.client.name,
           quote_number: bundle.quote_number,
@@ -261,9 +267,12 @@ export async function runRejectionCascade(
   try {
     const lawyers = await getLawyerEmails(db, ctx.tenantId);
 
-    if (bundle.client.email) {
+    // Smoke Test 7 fix: ver runAcceptanceCascade — mismo criterio.
+    const clientTo = bundle.sent_to_email ?? bundle.client.email;
+
+    if (clientTo) {
       const emails = await sendRejectionEmails({
-        client_to: bundle.client.email,
+        client_to: clientTo,
         client_props: {
           client_name: bundle.client.name,
           quote_number: bundle.quote_number,

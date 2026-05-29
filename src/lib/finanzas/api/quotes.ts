@@ -693,7 +693,7 @@ export async function updateQuote(
   //    Post-hot-fix QUOTES-FLOW: editable = 'borrador' (legacy) | 'emitida' (default).
   const { data: quote, error: errFetch } = await db
     .from("quotes")
-    .select("id, status, client_id")
+    .select("id, status, client_id, issue_date, valid_until")
     .eq("tenant_id", tenantId)
     .eq("id", quoteId)
     .maybeSingle();
@@ -703,6 +703,26 @@ export async function updateQuote(
   if (quote.status !== "borrador" && quote.status !== "emitida") {
     throw new MutationError(
       `Solo se pueden modificar cotizaciones en borrador o emitidas. Estado actual: '${quote.status}'.`,
+      400
+    );
+  }
+
+  // Hot-fix BUG EDITOR: validar valid_until ≥ issue_date contra los valores
+  // EFECTIVOS post-merge (input || persistido). El validator solo cruza si
+  // ambos vienen en el payload, así que un edit donde el usuario solo cambia
+  // valid_until pasaba el validator y se estrellaba contra el CHECK
+  // quotes_valid_until_check con un mensaje feo. Acá lo atrapamos friendly.
+  const effectiveIssueDate =
+    (input.issue_date as string | undefined) ?? (quote.issue_date as string);
+  const effectiveValidUntil =
+    (input.valid_until as string | undefined) ?? (quote.valid_until as string);
+  if (
+    effectiveIssueDate &&
+    effectiveValidUntil &&
+    effectiveValidUntil < effectiveIssueDate
+  ) {
+    throw new MutationError(
+      "La fecha de vigencia debe ser igual o posterior a la fecha de emisión",
       400
     );
   }

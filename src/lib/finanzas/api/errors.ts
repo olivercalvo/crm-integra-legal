@@ -35,8 +35,17 @@ export function pgErrorToMessage(err: unknown): string {
   const e = err as { message?: string; code?: string; details?: string };
   if (e.message) {
     // 23514 = check_violation. El detail trae el constraint name + valores.
-    if (e.code === "23514" && e.details) {
-      return `Validación rechazada por la base de datos: ${e.details}`;
+    if (e.code === "23514") {
+      // Hot-fix BUG EDITOR: friendly específico para el CHECK valid_until ≥ issue_date.
+      // El validador de updateQuote ya intercepta el caso normal, pero esta
+      // red de seguridad cubre paths raros (RPC directo, edits concurrentes, etc.).
+      const haystack = `${e.message} ${e.details ?? ""}`;
+      if (haystack.includes("quotes_valid_until_check")) {
+        return "La fecha de vigencia debe ser igual o posterior a la fecha de emisión";
+      }
+      if (e.details) {
+        return `Validación rechazada por la base de datos: ${e.details}`;
+      }
     }
     return e.message;
   }

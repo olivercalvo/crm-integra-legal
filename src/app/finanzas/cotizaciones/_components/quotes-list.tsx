@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { QuoteStatusBadge } from "@/components/finanzas/cotizaciones/quote-status-badge";
+import { DuplicateQuoteButton } from "./duplicate-quote-button";
 import type { QuoteListItem } from "@/lib/finanzas/types/quote";
 
 interface Props {
@@ -28,6 +29,7 @@ export function QuotesList({ quotes }: Props) {
               <th className="px-4 py-3 font-semibold">Vence</th>
               <th className="px-4 py-3 font-semibold text-right">Total</th>
               <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 font-semibold text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -90,6 +92,15 @@ export function QuotesList({ quotes }: Props) {
                 <td className="px-4 py-3">
                   <QuoteStatusBadge status={q.status} />
                 </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end">
+                    <DuplicateQuoteButton
+                      quoteId={q.id}
+                      quoteNumber={q.quote_number}
+                      variant="icon"
+                    />
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -102,8 +113,15 @@ export function QuotesList({ quotes }: Props) {
           <Link
             key={q.id}
             href={`/finanzas/cotizaciones/${q.id}`}
-            className="block rounded-lg border bg-white p-4 shadow-sm hover:border-integra-navy"
+            className="relative block rounded-lg border bg-white p-4 shadow-sm hover:border-integra-navy"
           >
+            <div className="absolute top-2 right-2">
+              <DuplicateQuoteButton
+                quoteId={q.id}
+                quoteNumber={q.quote_number}
+                variant="icon"
+              />
+            </div>
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">

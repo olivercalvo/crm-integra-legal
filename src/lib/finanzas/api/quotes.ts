@@ -679,6 +679,166 @@ export async function createQuote(
 }
 
 // ---------------------------------------------------------------------------
+// DUPLICATE — copiar cotización para reutilizarla (Sprint 2E.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Duplica una cotización existente. La nueva nace en `borrador` con:
+ *   - Mismo cliente del origen (NOT NULL en BD obliga; la abogada puede
+ *     cambiarlo desde el editor, ver banner amarillo en edit page).
+ *   - Mismo título, observaciones y T&C (snapshot del origen).
+ *   - Todas las líneas copiadas (descripción, cantidad, precios, kind,
+ *     tax_code, tax_rate, service_id, tax_code_id). Los totales (subtotal,
+ *     tax_amount, line_total) se recalculan automáticamente por el trigger
+ *     T8b-quote sobre las líneas insertadas.
+ *   - issue_date = hoy, valid_until = hoy + 30 días (cumple el CHECK
+ *     quotes_valid_until_check).
+ *   - quote_number = nuevo COT-NNNNNN definitivo (consume la secuencia).
+ *   - source_quote_id = id del origen (para el banner amarillo en el editor).
+ *   - Campos de envío/decisión/cancelación/conversión: todos NULL (lógica
+ *     "vida nueva", el ciclo arranca de cero).
+ *
+ * Permitido desde TODOS los estados del origen (D4) — no hay razón legal
+ * ni operativa para bloquearlo.
+ *
+ * Patrón compensating delete idéntico a createQuote: si la inserción de
+ * líneas falla, se borra la cabecera. La cabecera nace 'borrador' (no
+ * 'emitida') para que el compensating delete pase T6-quote.
+ */
+export async function duplicateQuote(
+  db: DB,
+  tenantId: string,
+  userId: string,
+  sourceQuoteId: string
+): Promise<{ id: string; quote_number: string }> {
+  // 1. Cargar quote origen (cabecera).
+  const { data: source, error: errSource } = await db
+    .from("quotes")
+    .select(
+      `id, client_id, case_id, title, observations, terms_and_conditions, notes`
+    )
+    .eq("tenant_id", tenantId)
+    .eq("id", sourceQuoteId)
+    .maybeSingle();
+
+  if (errSource) throw new MutationError(pgErrorToMessage(errSource), 500, errSource);
+  if (!source) throw new MutationError("Cotización origen no encontrada", 404);
+
+  // 2. Cargar líneas del origen (ordenadas por line_order).
+  const { data: sourceLines, error: errLines } = await db
+    .from("quote_lines")
+    .select(
+      `line_order, invoice_kind, service_id, description, quantity,
+       unit_price, tax_code, tax_rate, tax_code_id`
+    )
+    .eq("tenant_id", tenantId)
+    .eq("quote_id", sourceQuoteId)
+    .order("line_order", { ascending: true });
+
+  if (errLines) throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
+  if (!sourceLines || sourceLines.length === 0) {
+    throw new MutationError(
+      "La cotización origen no tiene líneas para duplicar",
+      400
+    );
+  }
+
+  // 3. Calcular totales del nuevo quote (los mismos del origen porque las
+  //    líneas se copian tal cual). El trigger T8b-quote los recalcula al
+  //    insertar las líneas, pero la cabecera nace consistente.
+  const totals = calcTotals(
+    sourceLines.map((ln) => ({
+      invoice_kind: ln.invoice_kind as QuoteLineKind,
+      description: String(ln.description),
+      quantity: Number(ln.quantity),
+      unit_price: Number(ln.unit_price),
+      tax_rate: Number(ln.tax_rate),
+      tax_code: String(ln.tax_code),
+    }))
+  );
+
+  // 4. Consumir secuencia → COT-NNNNNN definitivo.
+  const { data: seqResult, error: errSeq } = await db.rpc("get_next_sequence_number", {
+    p_tenant_id: tenantId,
+    p_sequence_type: QUOTE_SEQUENCE_TYPE,
+  });
+  if (errSeq || typeof seqResult !== "number") {
+    throw new MutationError(pgErrorToMessage(errSeq), 500, errSeq);
+  }
+  const quoteNumber = `${QUOTE_NUMBER_PREFIX}-${String(seqResult).padStart(6, "0")}`;
+
+  // 5. Calcular fechas. issue_date=hoy, valid_until=hoy+30 (mismo default
+  //    que el editor). Cumple CHECK quotes_valid_until_check.
+  const today = new Date();
+  const issueDateStr = today.toISOString().slice(0, 10);
+  const validUntilDate = new Date(today);
+  validUntilDate.setDate(validUntilDate.getDate() + 30);
+  const validUntilStr = validUntilDate.toISOString().slice(0, 10);
+
+  // 6. INSERT cabecera en 'borrador'.
+  //    case_id: solo se copia si el caso pertenece al mismo cliente — como
+  //    el cliente puede cambiarse en el editor, dejamos el case_id por
+  //    ahora; el form de edición filtra los casos al cliente actual.
+  const { data: header, error: errHeader } = await db
+    .from("quotes")
+    .insert({
+      tenant_id: tenantId,
+      quote_number: quoteNumber,
+      client_id: source.client_id as string,
+      case_id: source.case_id as string | null,
+      issue_date: issueDateStr,
+      valid_until: validUntilStr,
+      title: source.title as string,
+      status: "borrador",
+      currency: "USD",
+      subtotal_total: totals.subtotal_total,
+      tax_total: totals.tax_total,
+      grand_total: totals.grand_total,
+      subtotal_hon: totals.subtotal_hon,
+      subtotal_rei: totals.subtotal_rei,
+      terms_and_conditions: source.terms_and_conditions as string | null,
+      notes: source.notes as string | null,
+      observations: source.observations as string | null,
+      source_quote_id: sourceQuoteId,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  if (errHeader || !header) {
+    throw new MutationError(pgErrorToMessage(errHeader), 400, errHeader);
+  }
+
+  const newQuoteId = header.id as string;
+
+  // 7. INSERT líneas (nuevo line_order desde 1).
+  const linesPayload = sourceLines.map((ln, idx) => ({
+    tenant_id: tenantId,
+    quote_id: newQuoteId,
+    line_order: idx + 1,
+    invoice_kind: ln.invoice_kind,
+    service_id: (ln.service_id as string | null) ?? null,
+    description: ln.description,
+    quantity: ln.quantity,
+    unit_price: ln.unit_price,
+    tax_code: ln.tax_code,
+    tax_rate: ln.tax_rate,
+    tax_code_id: (ln.tax_code_id as string | null) ?? null,
+    created_by: userId,
+  }));
+
+  const { error: errInsLines } = await db.from("quote_lines").insert(linesPayload);
+
+  if (errInsLines) {
+    // Compensating delete: la cabecera sigue en 'borrador', T6-quote lo permite.
+    await db.from("quotes").delete().eq("tenant_id", tenantId).eq("id", newQuoteId);
+    throw new MutationError(pgErrorToMessage(errInsLines), 400, errInsLines);
+  }
+
+  return { id: newQuoteId, quote_number: quoteNumber };
+}
+
+// ---------------------------------------------------------------------------
 // UPDATE (solo borradores)
 // ---------------------------------------------------------------------------
 

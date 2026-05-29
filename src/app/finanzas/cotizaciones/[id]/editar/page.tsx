@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
-import { getQuoteById } from "@/lib/finanzas/queries/quotes";
+import { getQuoteById, getQuoteSourceInfo } from "@/lib/finanzas/queries/quotes";
 import { getTermsTemplate } from "@/lib/finanzas/api/quote-terms";
 import {
   listClientsActive,
@@ -40,6 +40,13 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
   if (quote.status !== "borrador" && quote.status !== "emitida") {
     redirect(`/finanzas/cotizaciones/${params.id}`);
   }
+
+  // Si esta cotización fue creada por "Duplicar", cargamos info del origen
+  // para el banner amarillo (Sprint 2E.4). Si el origen ya no existe (ON
+  // DELETE SET NULL del FK), source queda null y el banner no se muestra.
+  const sourceInfo = quote.source_quote_id
+    ? await getQuoteSourceInfo(db, tenantId, quote.source_quote_id)
+    : null;
 
   // Cargar catálogos para el form (no necesitamos el default template
   // porque el quote ya tiene un snapshot de T&C).
@@ -96,9 +103,9 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
             <span className="font-mono">{quote.quote_number}</span>
           </h1>
           <p className="text-sm text-gray-500">
-            Cambios permitidos en estado borrador o emitida. El cliente no
-            se puede cambiar — para eso, cancela y crea una cotización
-            nueva.
+            {sourceInfo
+              ? "Cotización duplicada. Verificá el cliente y las fechas antes de emitir."
+              : "Cambios permitidos en estado borrador o emitida. El cliente no se puede cambiar — para eso, cancela y crea una cotización nueva."}
           </p>
         </div>
       </div>
@@ -111,6 +118,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
         taxCodes={taxCodes}
         defaultTerms={defaultTermsFallback}
         observationTemplates={observationTemplates}
+        source={sourceInfo}
         initial={{
           id: quote.id,
           client_id: quote.client_id,

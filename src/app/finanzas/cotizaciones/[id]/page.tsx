@@ -33,6 +33,7 @@ import { QuoteStatusBadge } from "@/components/finanzas/cotizaciones/quote-statu
 import { QuoteKindIndicator } from "@/components/finanzas/cotizaciones/quote-kind-indicator";
 import { QuoteSuccessToast } from "../_components/quote-success-toast";
 import { DeleteQuoteButton } from "../_components/delete-quote-button";
+import { DuplicateQuoteButton } from "../_components/duplicate-quote-button";
 import { SendQuoteDialog } from "../_components/send-quote-dialog";
 import { DownloadPdfButton } from "../_components/download-pdf-button";
 import { CancelQuoteDialog } from "../_components/cancel-quote-dialog";
@@ -107,6 +108,10 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
 
         <div className="flex flex-wrap items-center gap-2">
           <DownloadPdfButton quoteId={quote.id} quoteNumber={quote.quote_number} />
+          <DuplicateQuoteButton
+            quoteId={quote.id}
+            quoteNumber={quote.quote_number}
+          />
           {editable && (
             <Link href={`/finanzas/cotizaciones/${quote.id}/editar`}>
               <Button variant="outline" className="min-h-[48px]">

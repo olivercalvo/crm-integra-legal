@@ -144,6 +144,9 @@ export interface QuoteRow {
   converted_at: string | null;
   converted_invoice_ids: string[] | null;
   converted_by: string | null;
+  // Sprint 2E.4 — feature Duplicar.
+  /** UUID del quote del cual se duplicó. NULL = creada desde cero. */
+  source_quote_id: string | null;
 }
 
 /** Línea de quote tal como viene del SELECT. 18 columnas. */

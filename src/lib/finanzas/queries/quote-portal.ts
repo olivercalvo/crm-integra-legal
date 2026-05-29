@@ -45,6 +45,7 @@ export interface PortalQuoteBundle {
   observations: string | null;
   public_token: string | null;
   sent_at: string | null;
+  sent_to_email: string | null;
   approved_at: string | null;
   rejected_at: string | null;
   client: {
@@ -83,7 +84,7 @@ export async function getQuoteForPortal(
         subtotal_total, tax_total, grand_total,
         subtotal_hon, subtotal_rei,
         terms_and_conditions, notes, observations,
-        public_token, sent_at, approved_at, rejected_at,
+        public_token, sent_at, sent_to_email, approved_at, rejected_at,
         case_id,
         client:clients!quotes_client_id_fkey(id, name, email)
       `
@@ -151,6 +152,7 @@ export async function getQuoteForPortal(
     observations: header.observations as string | null,
     public_token: header.public_token as string | null,
     sent_at: header.sent_at as string | null,
+    sent_to_email: header.sent_to_email as string | null,
     approved_at: header.approved_at as string | null,
     rejected_at: header.rejected_at as string | null,
     case_id: header.case_id as string | null,

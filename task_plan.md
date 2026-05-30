@@ -159,6 +159,61 @@
 | 1A.13 | Build + smoke test (curl en dev) | — | ✅ Completo | 41 rutas, sin errores de tipos. Lint con errores pre-existentes (ignoreDuringBuilds). |
 | 1A.14 | Validación visual en preview de Vercel | — | ⬜ Pendiente | Oliver valida antes de merge a main. |
 
+## INTEGRACIÓN eFACTURA PTY (PAC DGI Panamá) — Sprint propio
+
+Sprint independiente: emisión electrónica de facturas via API del PAC eFactura PTY. Reemplaza el flujo "Camino 1" (captura manual del CUFE desde portal eFactura) por integración API directa.
+
+### Fase 1A — Modelo de datos · ✅ CERRADA (2026-05-30)
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.1A.1 | Migración SQL fundacional (ALTERs clients/invoices + tablas fe_emisiones, fe_secuencias) | ✅ Ejecutada en Supabase 2026-05-30 | `sql/pending/019_efactura_fase_1a_modelo_datos.sql` — commit **798d1c2** en develop+main |
+| eF.1A.2 | Decisiones de modelado consolidadas (reutilizar dgi_cufe / dgi_fecha_autorizacion / dgi_protocolo_autorizacion; derivar tipoContribuyente desde client_type; numero_documento BIGINT autoritativo del API) | ✅ Documentadas en el header del archivo SQL | — |
+
+Resultado en BD prod (verificado vía SELECT POST-CHECK del propio migration):
+- `clients` +8 columnas (digito_verificador, tipo_receptor_fe, codigo_ubicacion, corregimiento, distrito, provincia, id_extranjero, pais_receptor) + 1 CHECK.
+- `invoices` +9 columnas (fe_estado, dgi_protocolo_autorizacion, i_amb, punto_facturacion, numero_documento, qr_content, cafe_storage_key, xml_storage_key, ef_invoice_uuid) + 2 CHECK + 2 índices parciales.
+- Tablas nuevas `fe_emisiones` (log de intentos) y `fe_secuencias` (correlativo por punto de facturación) con RLS por tenant_id.
+
+### Fase 2 — Mapper (lógica pura) · ✅ COMMITEADA (2026-05-30)
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.2.1 | Swagger oficial guardado como fuente de verdad | ✅ | `docs/efactura/swagger-v1.json` (126 KB, OpenAPI 3.0.1, 101 schemas) |
+| eF.2.2 | Tipos TS InvoiceRequest + sub-tipos generados desde swagger | ✅ | `src/lib/finanzas/efactura/types/invoice-request.ts`, nombres español-camelCase |
+| eF.2.3 | Catálogos (ITBMS_RATE_TO_CODE, TIPO_RECEPTOR_FE, TIEMPO_PAGO, etc.) | ✅ | `src/lib/finanzas/efactura/types/catalogs.ts` |
+| eF.2.4 | EmisorConfig + loadEmisorConfig() con validación de env vars | ✅ | `src/lib/finanzas/efactura/config/emisor-config.ts` — falla si CPBS=0 |
+| eF.2.5 | Tipo standalone InvoiceEfacturaBundle (contrato de entrada del mapper) | ✅ | `src/lib/finanzas/efactura/data/invoice-efactura-bundle.ts` — NO toca invoice-pdf-data.ts |
+| eF.2.6 | Sub-mappers (item, receptor, emisor, totales, utils) | ✅ | `src/lib/finanzas/efactura/mapper/*.ts` |
+| eF.2.7 | Mapper público mapInvoiceToEfacturaRequest() | ✅ | `src/lib/finanzas/efactura/mapper/map-invoice.ts` — función pura, sin I/O |
+| eF.2.8 | Unit tests (10 casos: 8 reglas + 2 smoke) — node:test + tsx, sin agregar tooling nuevo | ✅ 10/10 verde | Correr: `npx tsx --test src/lib/finanzas/efactura/__tests__/map-invoice.test.ts` |
+
+**SHA del commit de la Fase 2:** `1e340c7` (develop). 14 archivos, +5778 líneas.
+
+### Punto de retoma (próxima sesión / otra máquina)
+1. **Verificar antes de tocar nada:**
+   - `npx tsc --noEmit` → debe pasar sin errores.
+   - `npx tsx --test src/lib/finanzas/efactura/__tests__/map-invoice.test.ts` → debe reportar 10/10 verde.
+2. **Revisar decisiones de implementación pendientes** (documentadas en el código pero sin validar con DGI/PAC):
+   - `numeroSecuenciaItem` 1-indexed (CRM usa line_order 0-indexed → mapper hace `+1`). Confirmar con la doc del PAC que el primer item es 1, no 0.
+   - `totalGravado` = suma de subtotales de líneas con `tax_rate > 0` (no incluye exentas). Confirmar con la doc del PAC si la convención esperada es esa o si debe incluir exentas.
+   - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00). Si el PAC requiere otra hora del día (ej. hora de emisión real), ajustar y agregar test.
+   - `tipoContribuyente=1` (natural) vs `=2` (jurídica): el swagger marca el campo como integer no nullable pero no documenta los códigos. Validar con el PAC.
+
+### En espera del PAC / eFactura PTY (BLOQUEA Fase 3)
+- **Credenciales de la API** (sandbox + producción) — sin esto no se puede llamar el endpoint POST /api/v1/Invoices.
+- **Configuración del bufete en eFactura PTY:** punto de facturación dedicado, RUC + DV registrados, ubicación geográfica DGI.
+- **Reglas de numeración:** ¿un rechazo del PAC quema el correlativo o se reutiliza? Define la política de allocate/commit/release sobre `fe_secuencias` (FOR UPDATE + reserva + commit/release).
+- **Catálogo formaPago oficial DGI:** códigos para efectivo / cheque / transferencia / crédito / etc. Hoy `defaultFormaPago="03"` es placeholder.
+- **Código CPBS de servicios legales:** para `cpbsServiciosLegalesHon` y `cpbsServiciosLegalesRei`. Hoy validados a != 0 pero sin valor real. Endpoint del PAC para consultar el catálogo: `GET /api/v1/Catalogs/CPBSsegs`.
+
+### Próxima fase técnica (BLOQUEADA hasta credenciales)
+**Fase 3 — Transport + integración real**
+- Cliente HTTP con OAuth (o API key según especifique el PAC) — capa separada, no en el mapper.
+- Fetch real del `InvoiceEfacturaBundle` desde Supabase (extender invoice-pdf-data.ts o crear `fetch-efactura-bundle.ts` análogo — Opción A vs B sin decidir aún).
+- Pieza de allocate de `(puntoFacturacion, numeroDocumento)` sobre `fe_secuencias` con FOR UPDATE.
+- Flujo completo: borrador → POST /api/v1/Invoices → cuando autoriza, persiste `dgi_cufe / dgi_protocolo_autorizacion / dgi_fecha_autorizacion / cafe_storage_key`, transiciona `fe_estado` y deja log en `fe_emisiones`.
+- UI: botón "Emitir en eFactura" en el detalle de factura (estado borrador / emitida pre-CUFE).
+- Cancelación: POST /api/v1/InvoiceEvents/CreateCancellation cuando ya hay CUFE.
+
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|

@@ -1,0 +1,4340 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "ElectronicInvoice.Application.Api 1.0",
+    "description": "Api efacturapty",
+    "version": "1.0"
+  },
+  "paths": {
+    "/api/v1/Catalogs/countries": {
+      "get": {
+        "tags": [
+          "Catalogs"
+        ],
+        "summary": "Obtiene la lista de paises",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Catalogs/currencies": {
+      "get": {
+        "tags": [
+          "Catalogs"
+        ],
+        "summary": "Obtiene la lista de monedas",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Catalogs/locations": {
+      "get": {
+        "tags": [
+          "Catalogs"
+        ],
+        "summary": "Obtiene el distrito, provincia y corregimiento de la ubicación",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Catalogs/CPBSfams": {
+      "get": {
+        "tags": [
+          "Catalogs"
+        ],
+        "summary": "Obtiene la lista de codificacion de productos y servicios - familias",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Catalogs/CPBSsegs": {
+      "get": {
+        "tags": [
+          "Catalogs"
+        ],
+        "summary": "Obtiene la lista de codificacion de productos y servicios - segmentos",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/InvoiceEvents/CreateCancellation": {
+      "post": {
+        "tags": [
+          "InvoiceEvents"
+        ],
+        "summary": "Anulación una factura electrónica por medio de CUFE",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "text/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            },
+            "application/*+xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse"
+                  }
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse"
+                  }
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Crea una factura y la autoriza a través del PAC",
+        "parameters": [
+          {
+            "name": "qr",
+            "in": "query",
+            "description": "Si es true se retorna la imagen del QR en base 64",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "xml",
+            "in": "query",
+            "description": "Si es true se retorna el XML de la factura en base 64",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Datos de la factura en formato JSON según estructura de datos referida en el tipo InvoiceRequest",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "text/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            },
+            "application/*+xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Lista paginada de facturas",
+        "parameters": [
+          {
+            "name": "DateFrom",
+            "in": "query",
+            "description": "Fecha de emisión desde",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "DateTo",
+            "in": "query",
+            "description": "Fecha de emisión hasta",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "Ruc",
+            "in": "query",
+            "description": "RUC del destinatario",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Name",
+            "in": "query",
+            "description": "Nombre o razón social del destinatario",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "DocumentNumber",
+            "in": "query",
+            "description": "Número de documento",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "BillingPoint",
+            "in": "query",
+            "description": "Punto de facturación",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "BranchOfficeCode",
+            "in": "query",
+            "description": "Código de sucursal",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Cantidad de registros por página",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Page",
+            "in": "query",
+            "description": "Página a consultar",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Status",
+            "in": "query",
+            "description": "Estado de la factura o documento",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceCommon.Enums.EnumInvoiceStatus+InvoiceStatus"
+              }
+            }
+          },
+          {
+            "name": "DocumentTypeCodes",
+            "in": "query",
+            "description": "Tipo de documento",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "Cufe",
+            "in": "query",
+            "description": "Cufe",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Environment",
+            "in": "query",
+            "description": "Deprecado",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "CreatedBy",
+            "in": "query",
+            "description": "Creado por",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ideati.Common.Repositories.IPaginated`1[[ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse, ElectronicInvoice.Application.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ideati.Common.Repositories.IPaginated`1[[ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse, ElectronicInvoice.Application.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ideati.Common.Repositories.IPaginated`1[[ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse, ElectronicInvoice.Application.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/Authorization/{cufe}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta por CUFE del protocolo de autorización y QR de una factura del contribuyente logueado",
+        "parameters": [
+          {
+            "name": "cufe",
+            "in": "path",
+            "description": "Cufe de la factura",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/{cufeId}/cafe-file": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Descarga el CAFE de una factura en formato PDF",
+        "parameters": [
+          {
+            "name": "cufeId",
+            "in": "path",
+            "description": "Id o CUFE de la factura",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/{cufeId}/xml-file": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Descarga de una factura en formato XML",
+        "parameters": [
+          {
+            "name": "cufeId",
+            "in": "path",
+            "description": "Id o CUFE de la factura",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/{cufeId}/html-cafe": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta el HTML de la factura (CLIENTE)",
+        "parameters": [
+          {
+            "name": "cufeId",
+            "in": "path",
+            "description": "Id o CUFE de la factura",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cafeFormat",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceCommon.Enums.EnumCafeFormat+CafeFormat"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/{invoiceId}/mailto": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Envia la factura al correo del contribuyente (CLIENTE)",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "application/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "text/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            },
+            "application/*+xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/id/{cufeId}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta del detalle de una factura de un contribuyente (CLIENTE)",
+        "parameters": [
+          {
+            "name": "cufeId",
+            "in": "path",
+            "description": "Id o CUFE de la factura",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/GetTaxpayerInvoiceResponse/{invoiceId}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta el resultado del procesamiento de factura (CLIENTE)",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/GetQrImage/{cufe}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta por CUFE de la imagen QR de una factura",
+        "parameters": [
+          {
+            "name": "cufe",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/GetXmlFromDGI/{cufe}": {
+      "get": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Consulta el XML de una factura en DGI por el CUFE",
+        "parameters": [
+          {
+            "name": "cufe",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "application/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              },
+              "text/xml": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Document"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/Invoices/CreateInvoiceFromXml": {
+      "post": {
+        "tags": [
+          "Invoices"
+        ],
+        "summary": "Crea una factura a partir de un XML",
+        "parameters": [
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "default": "es-PA"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "",
+          "content": {
+            "application/xml": {
+              "schema": {
+                "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceCommon.Invoice"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ElectronicInvoice.Application.Api.Catalogs.Models.CountryModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Id del pais",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string",
+            "description": "Codigo del pais",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Nombre del pais",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Modelo de pais"
+      },
+      "ElectronicInvoice.Application.Api.Catalogs.Models.CPBSfamModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Id del CPBS",
+            "format": "uuid"
+          },
+          "codigoFam": {
+            "type": "string",
+            "description": "Codigo de la familia",
+            "nullable": true
+          },
+          "codigoSeg": {
+            "type": "string",
+            "description": "Codigo del segmento",
+            "nullable": true
+          },
+          "nombreSeg": {
+            "type": "string",
+            "description": "Nombre del segmento",
+            "nullable": true
+          },
+          "nombreFam": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Modelo de CPBSseg"
+      },
+      "ElectronicInvoice.Application.Api.Catalogs.Models.CPBSsegModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Id del CPBS",
+            "format": "uuid"
+          },
+          "codigo": {
+            "type": "string",
+            "description": "Codigo del segmento",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Nombre del segmento",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Modelo de CPBSseg"
+      },
+      "ElectronicInvoice.Application.Api.Catalogs.Models.CurrencyModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Id de la moneda",
+            "format": "uuid"
+          },
+          "codigoPais": {
+            "type": "string",
+            "description": "Country code",
+            "nullable": true
+          },
+          "numeroMoneda": {
+            "type": "string",
+            "description": "Country code",
+            "nullable": true
+          },
+          "nombre": {
+            "type": "string",
+            "description": "Country name",
+            "nullable": true
+          },
+          "codigo": {
+            "type": "string",
+            "description": "Country code",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Modelo de moneda"
+      },
+      "ElectronicInvoice.Application.Api.Catalogs.Models.LocationModel": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "description": "Codigo de la ubicacion",
+            "nullable": true
+          },
+          "codigoProvincia": {
+            "type": "string",
+            "description": "Codigo de provincia",
+            "nullable": true
+          },
+          "provincia": {
+            "type": "string",
+            "description": "Nombre de la provincia",
+            "nullable": true
+          },
+          "codigoDistrito": {
+            "type": "string",
+            "description": "Codigo del distrito",
+            "nullable": true
+          },
+          "distrito": {
+            "type": "string",
+            "description": "Nombre del distrito",
+            "nullable": true
+          },
+          "codigoCorregimiento": {
+            "type": "string",
+            "description": "Codigo del corregimiento",
+            "nullable": true
+          },
+          "corregimiento": {
+            "type": "string",
+            "description": "Nombre del corregimiento",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": "Modelo de ubicacion"
+      },
+      "ElectronicInvoice.Application.Api.InvoiceEvents.Dtos.CancellationRequest": {
+        "type": "object",
+        "properties": {
+          "cufe": {
+            "type": "string",
+            "description": "CUFE de la factura que se anula",
+            "nullable": true
+          },
+          "cancellationReason": {
+            "type": "string",
+            "description": "Motivo de la anulación",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "ElectronicInvoice.Application.Api.Invoices.Document": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "type": "string",
+            "format": "byte",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "",
+            "format": "uuid"
+          },
+          "issueDate": {
+            "type": "string",
+            "description": "",
+            "format": "date-time"
+          },
+          "validationDate": {
+            "type": "string",
+            "description": "",
+            "format": "date-time",
+            "nullable": true
+          },
+          "rucReceiver": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "nameReceiver": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "totalAmount": {
+            "type": "number",
+            "description": "",
+            "format": "double"
+          },
+          "totalAmounttITBMS": {
+            "type": "number",
+            "description": "",
+            "format": "double"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Application.InvoiceCommon.Enums.EnumInvoiceStatus+InvoiceStatus"
+          },
+          "cufe": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "dv": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "documentType": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "documentTypeCode": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "ruc": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "invoiceNumber": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "receiverType": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "passportForeignIdNumber": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "ElectronicInvoice.Application.Api.Invoices.Models.InvoiceReceptionResultResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cufe": {
+            "type": "string",
+            "nullable": true
+          },
+          "secuence": {
+            "type": "string",
+            "nullable": true
+          },
+          "issueDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "response": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Common.Groups.gResProc"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.Api.Invoices.Models.SendInvoiceMailToRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "",
+            "format": "uuid"
+          },
+          "mail": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "subject": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "description": ""
+      },
+      "ElectronicInvoice.Application.InvoiceCommon.Enums.EnumCafeFormat+CafeFormat": {
+        "enum": [
+          "user_default",
+          "eighty_mm",
+          "eighty_mm_lite",
+          "thermal_logo"
+        ],
+        "type": "string"
+      },
+      "ElectronicInvoice.Application.InvoiceCommon.Enums.EnumInvoiceStatus+InvoiceStatus": {
+        "enum": [
+          "pending",
+          "authorized",
+          "canceled",
+          "error"
+        ],
+        "type": "string"
+      },
+      "ElectronicInvoice.Application.InvoiceCommon.Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secuence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dVerForm": {
+            "type": "string",
+            "nullable": true
+          },
+          "dId": {
+            "type": "string",
+            "nullable": true
+          },
+          "gdGen": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDGen"
+          },
+          "gItem": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gItem"
+            },
+            "nullable": true
+          },
+          "gTot": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gTot"
+          },
+          "gPedComGl": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gPedComGl"
+          },
+          "gInfoLog": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gInfoLog"
+          },
+          "gLcEntr": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gLcEntr"
+          },
+          "gNoFirm": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gNoFirm"
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deletedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "deletedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.InvoiceEvents.InvoiceEvents.Queries.Models.InvoiceCancellationEventResponse": {
+        "type": "object",
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "nullable": true
+          },
+          "mensaje": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.Invoices.Invoices.Commands.Models.CreateInvoiceResponse": {
+        "type": "object",
+        "properties": {
+          "qrContentImageBase64": {
+            "type": "string",
+            "nullable": true
+          },
+          "xml": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rRetEnviFe": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.InvoiceSend.rRetEnviFe"
+          },
+          "invoice": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cufe": {
+            "type": "string",
+            "nullable": true
+          },
+          "secuence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestTime": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "autorizada": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "protocoloAutorizacion": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "fechaAutorizacion": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "qrContent": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deletedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "deletedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.Invoices.Invoices.InvoiceReceptionResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rRetEnviFe": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.InvoiceSend.rRetEnviFe"
+          },
+          "invoice": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cufe": {
+            "type": "string",
+            "nullable": true
+          },
+          "secuence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requestTime": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "autorizada": {
+            "type": "boolean",
+            "readOnly": true
+          },
+          "protocoloAutorizacion": {
+            "type": "string",
+            "nullable": true,
+            "readOnly": true
+          },
+          "fechaAutorizacion": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "qrContent": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "deletedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "deletedDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Application.Invoices.Invoices.Queries.Models.QrImageResponse": {
+        "type": "object",
+        "properties": {
+          "qrContentImageBase64": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GAutXMLRequest": {
+        "type": "object",
+        "properties": {
+          "autorizacionDescargaFe": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRucAutXMLRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GCodItemRequest": {
+        "type": "object",
+        "properties": {
+          "codigoGTINComercializacion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cantidadProductoServicioGTINCom": {
+            "type": "number",
+            "format": "double"
+          },
+          "codigoGTINInventario": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cantidadProductoServicioCodigoGTIN": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GDatRecRequest": {
+        "type": "object",
+        "properties": {
+          "tipoReceptorFe": {
+            "type": "string",
+            "nullable": true
+          },
+          "datosRucReceptor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRucRecRequest"
+          },
+          "nombreRazonReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "direccionReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "ubicacionReceptor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GUbiRecRequest"
+          },
+          "grupoIdentificacionExtranjera": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GIdExtRequest"
+          },
+          "telefonoContactoReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "correoElectronicoRecepctor": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          },
+          "correoElectronicoReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "paisReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "paisReceptorNoExisteDescripcion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GDescBonifRequest": {
+        "type": "object",
+        "properties": {
+          "descripcionDescuentoBonificacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "montoDescuentoBonificacion": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFacIERequest": {
+        "type": "object",
+        "properties": {
+          "numeroFeImpresoraFiscal": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFacPapRequest": {
+        "type": "object",
+        "properties": {
+          "numeroFacturaPapel": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFERequest": {
+        "type": "object",
+        "properties": {
+          "cufeReferenciado": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gDFRefNumRequest": {
+        "type": "object",
+        "properties": {
+          "informacionReferencia": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFERequest"
+          },
+          "informacionReferenciaFacturaPapel": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFacPapRequest"
+          },
+          "informacionReferenciaImpresoraFiscal": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gDFRefFacIERequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GDFRefRequest": {
+        "type": "object",
+        "properties": {
+          "rucEmisorDocumentoReferenciado": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gRucEmDFRefRequest"
+          },
+          "nombreRazonSocialEmisor": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaEmisionDocumentoReferenciado": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "informacionReferencia": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gDFRefNumRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GDGenRequest": {
+        "type": "object",
+        "properties": {
+          "tipoEmision": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaHoraInicioContingencia": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "razonOperacionContingencia": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoDocumento": {
+            "pattern": "01|02|03|04|05|06|07|08|09|10",
+            "type": "string",
+            "nullable": true
+          },
+          "numeroDocumento": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "puntoFacturacion": {
+            "maxLength": 3,
+            "type": "string",
+            "nullable": true
+          },
+          "fechaEmision": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaSalidaEstimada": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "naturalezaOperacion": {
+            "pattern": "01|02|03|04|05|10|11|12|13|14|20|21",
+            "type": "string",
+            "nullable": true
+          },
+          "tipoOperacion": {
+            "pattern": "1|2",
+            "type": "integer",
+            "format": "int32"
+          },
+          "destinoOperacion": {
+            "pattern": "1|2",
+            "type": "integer",
+            "format": "int32"
+          },
+          "formatoGeneracionCafe": {
+            "pattern": "1|2|3",
+            "type": "integer",
+            "format": "int32"
+          },
+          "maneraEntregaCafe": {
+            "pattern": "1|2|3",
+            "type": "integer",
+            "format": "int32"
+          },
+          "envioContenedorReceptor": {
+            "pattern": "1|2",
+            "type": "integer",
+            "format": "int32"
+          },
+          "procesoGeneracionFe": {
+            "pattern": "1|2|3",
+            "type": "integer",
+            "format": "int32"
+          },
+          "tipoTransaccionVenta": {
+            "pattern": "1|2|3|4",
+            "type": "integer",
+            "format": "int32"
+          },
+          "tipoSucursal": {
+            "pattern": "1|2",
+            "type": "integer",
+            "format": "int32"
+          },
+          "informacionInteresEmisor": {
+            "maxLength": 5000,
+            "type": "string",
+            "nullable": true
+          },
+          "informacionEmisor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GEmisRequest"
+          },
+          "informacionReceptor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GDatRecRequest"
+          },
+          "facturaExportacion": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gFExpRquest"
+          },
+          "documentosFiscalesReferenciados": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GDFRefRequest"
+            },
+            "nullable": true
+          },
+          "grupoAutorizacionDescargaFe": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GAutXMLRequest"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GEmisRequest": {
+        "type": "object",
+        "properties": {
+          "datosRucEmisor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRucEmiRequest"
+          },
+          "nombreORazonSocial": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoSucursal": {
+            "type": "string",
+            "nullable": true
+          },
+          "coordenadaGeograficaSucursal": {
+            "type": "string",
+            "nullable": true
+          },
+          "direccionSucursal": {
+            "type": "string",
+            "nullable": true
+          },
+          "ubicacionEmisor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GUbiEmRequest"
+          },
+          "telefonoSucursal": {
+            "type": "string",
+            "nullable": true
+          },
+          "direccionCorreoElectronico": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gFExpRquest": {
+        "type": "object",
+        "properties": {
+          "condicionEntregaINCOTERMS": {
+            "type": "string",
+            "nullable": true
+          },
+          "monedaOperacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "descripcionMonedaNoExistente": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoDeCambio": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "montoMonedaExtranjera": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "puertoEmbarque": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GFormaPagoRequest": {
+        "type": "object",
+        "properties": {
+          "formaPago": {
+            "type": "string",
+            "nullable": true
+          },
+          "formaPagoDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "valorCuotaPagada": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GIdExtRequest": {
+        "type": "object",
+        "properties": {
+          "pasaportNumeroIdentificacionExtranjera": {
+            "type": "string",
+            "nullable": true
+          },
+          "paisExtranjero": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GInfoLogRequest": {
+        "type": "object",
+        "properties": {
+          "numeroVolumenes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pesoTotalCarga": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "unidadPesoTotalCarga": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "licenciaVehiculo": {
+            "type": "string",
+            "nullable": true
+          },
+          "nombreRazonTransportista": {
+            "type": "string",
+            "nullable": true
+          },
+          "rucTransportista": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRucTranspRequest"
+          },
+          "informacionInteresEmisor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GISCItemRequest": {
+        "type": "object",
+        "properties": {
+          "tasaISCAplicable": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "montoISC": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GITBMSItemRequest": {
+        "type": "object",
+        "properties": {
+          "tasaITBMSAplicable": {
+            "type": "string",
+            "nullable": true
+          },
+          "montoITBMS": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GItemRequest": {
+        "type": "object",
+        "properties": {
+          "numeroSecuenciaItem": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "descripcionProductoServicio": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoInternoItem": {
+            "type": "string",
+            "nullable": true
+          },
+          "unidadMedidaCodigoInterno": {
+            "type": "string",
+            "nullable": true
+          },
+          "cantidadProductoServicio": {
+            "type": "number",
+            "format": "double"
+          },
+          "fechaFabricacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaCaducidad": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoItemCodificacionPanamenaAbreviada": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "codigoItemCodificacionPanamena": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "unidadMedidaCodificacionPanamena": {
+            "type": "string",
+            "nullable": true
+          },
+          "imformacionInteresEmisor": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          },
+          "informacionInteresEmisor": {
+            "type": "string",
+            "nullable": true
+          },
+          "grupoPrecios": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GPreciosRequest"
+          },
+          "grupoOtrosCodigosItem": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GCodItemRequest"
+          },
+          "grupoITBMS": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GITBMSItemRequest"
+          },
+          "grupoISC": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GISCItemRequest"
+          },
+          "grupoOtrasTasasImpuesto": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gOTIItemRequest"
+            },
+            "nullable": true
+          },
+          "grupoDetalleVehiculo": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gVehicNuevoRequest"
+          },
+          "grupoDetalleMedicina": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GMedicinaRequest"
+          },
+          "grupoDetallePedidoComercial": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GPedComIrRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GLcEntrRequest": {
+        "type": "object",
+        "properties": {
+          "datosRucReceptor": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRucLcEntrRequest"
+          },
+          "nombreRazonLocalEntrega": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          },
+          "direccionLocal": {
+            "type": "string",
+            "nullable": true
+          },
+          "grupoUbicacion": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GUbiLcEntrRequest"
+          },
+          "telefonoContacto": {
+            "type": "string",
+            "nullable": true
+          },
+          "telofonoContactoAdicional": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          },
+          "telefonoContactoAdicional": {
+            "type": "string",
+            "nullable": true
+          },
+          "telefonoContactoLocal": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GMedicinaRequest": {
+        "type": "object",
+        "properties": {
+          "numeroLoteMedicina": {
+            "type": "string",
+            "nullable": true
+          },
+          "catidadProducto": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gOTIItemRequest": {
+        "type": "object",
+        "properties": {
+          "codigoTasaImpuesto": {
+            "type": "string",
+            "nullable": true
+          },
+          "valorTasaImpuesto": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gOTITotalRequest": {
+        "type": "object",
+        "properties": {
+          "codigoOtrasTasasImpuestos": {
+            "type": "string",
+            "nullable": true
+          },
+          "valorTotalTasasImpuestos": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gPagPlazoRequest": {
+        "type": "object",
+        "properties": {
+          "numeroSecuenciaCuota": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fechaVencimientoCuota": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "valorCuota": {
+            "type": "number",
+            "format": "double"
+          },
+          "informacionInteresEmisorCuota": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GPedComGlRequest": {
+        "type": "object",
+        "properties": {
+          "numeroPermisoCompra": {
+            "type": "string",
+            "nullable": true,
+            "deprecated": true
+          },
+          "numeroPedidoCompra": {
+            "type": "string",
+            "nullable": true
+          },
+          "numeroAceptacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoClienteReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "codigoSistemaEmisor": {
+            "type": "string",
+            "nullable": true
+          },
+          "informacionInteresEmisor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GPedComIrRequest": {
+        "type": "object",
+        "properties": {
+          "numeroPedidoCompra": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "numeroSecuenciapedido": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "informacionInteresEmisor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GPreciosRequest": {
+        "type": "object",
+        "properties": {
+          "precioUnitarioTransferencia": {
+            "type": "number",
+            "format": "double"
+          },
+          "descuento": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "precioItem": {
+            "type": "number",
+            "format": "double"
+          },
+          "precioSeguro": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "precioAcarreo": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "sumaPrecioItem": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRetencRequest": {
+        "type": "object",
+        "properties": {
+          "codigoRetencionAplicar": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "montoRetencionAplicar": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRucAutXMLRequest": {
+        "type": "object",
+        "properties": {
+          "tipoContribuyente": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ruc": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gRucEmDFRefRequest": {
+        "type": "object",
+        "properties": {
+          "tipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ruc": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRucEmiRequest": {
+        "type": "object",
+        "properties": {
+          "tipoContribuyente": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ruc": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRucLcEntrRequest": {
+        "type": "object",
+        "properties": {
+          "tipoContribuyente": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ruc": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          },
+          "nombreRazonLocal": {
+            "type": "string",
+            "nullable": true
+          },
+          "direccionLocal": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRucRecRequest": {
+        "type": "object",
+        "properties": {
+          "tipoContribuyente": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rucReceptor": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GRucTranspRequest": {
+        "type": "object",
+        "properties": {
+          "tipoContribuyente": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ruc": {
+            "type": "string",
+            "nullable": true
+          },
+          "digitoVerificador": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GTotRequest": {
+        "type": "object",
+        "properties": {
+          "tiempoPago": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "grupoDescuentosBonificaciones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GDescBonifRequest"
+            },
+            "nullable": true
+          },
+          "grupoFormasPago": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GFormaPagoRequest"
+            },
+            "nullable": true
+          },
+          "grupoRetencionesFactura": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GRetencRequest"
+          },
+          "grupoInformacionPago": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gPagPlazoRequest"
+            },
+            "nullable": true
+          },
+          "grupoTotalTasas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.gOTITotalRequest"
+            },
+            "nullable": true
+          },
+          "totalNeto": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalITBMS": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalISC": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalGrabado": {
+            "type": "number",
+            "format": "double",
+            "deprecated": true
+          },
+          "totalGravado": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalDescuento": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalAcarreo": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalSeguro": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "valorTotalFactura": {
+            "type": "number",
+            "format": "double"
+          },
+          "sumaValoresRecibidos": {
+            "type": "number",
+            "format": "double"
+          },
+          "vueltoEntregado": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "numeroTotalItems": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalTodosItems": {
+            "type": "number",
+            "format": "double"
+          },
+          "totalOtrosGastos": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GUbiEmRequest": {
+        "type": "object",
+        "properties": {
+          "codigoUbicacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "corregimiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "distrito": {
+            "type": "string",
+            "nullable": true
+          },
+          "provincia": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GUbiLcEntrRequest": {
+        "type": "object",
+        "properties": {
+          "codigoUbicacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "corregimiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "distrito": {
+            "type": "string",
+            "nullable": true
+          },
+          "provincia": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.GUbiRecRequest": {
+        "type": "object",
+        "properties": {
+          "codigoUbicacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "corregimiento": {
+            "type": "string",
+            "nullable": true
+          },
+          "distrito": {
+            "type": "string",
+            "nullable": true
+          },
+          "provincia": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.gVehicNuevoRequest": {
+        "type": "object",
+        "properties": {
+          "modalidadOperacion": {
+            "type": "string",
+            "nullable": true
+          },
+          "modalidadOperacionNoListada": {
+            "type": "string",
+            "nullable": true
+          },
+          "chasis": {
+            "type": "string",
+            "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
+          },
+          "colorDescripcion": {
+            "type": "string",
+            "nullable": true
+          },
+          "potenciaMotor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "capacidadMotor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pesoNeto": {
+            "type": "number",
+            "format": "double"
+          },
+          "pesoBruto": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "tipoCombustible": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoCombustibleNoListado": {
+            "type": "string",
+            "nullable": true
+          },
+          "numeroMotor": {
+            "type": "string",
+            "nullable": true
+          },
+          "capacidadMaximaTraccion": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "distanciaEjes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "anioModeloFabricacion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "aniofabricacion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tipoPintura": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tipoPinturaNoListado": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipovehiculo": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "usovehiculo": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "condicionVehiculo": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "capacidadMaxima": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Client.Dtos.Models.InvoiceRequest": {
+        "type": "object",
+        "properties": {
+          "cufe": {
+            "type": "string",
+            "nullable": true
+          },
+          "datosGenerales": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GDGenRequest"
+          },
+          "listaItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GItemRequest"
+            },
+            "nullable": true
+          },
+          "totales": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GTotRequest"
+          },
+          "detallePedido": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GPedComGlRequest"
+          },
+          "informacionLogistica": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GInfoLogRequest"
+          },
+          "datosLocal": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Client.Dtos.Models.GLcEntrRequest"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Common.Groups.gInfProt": {
+        "type": "object",
+        "properties": {
+          "dId": {
+            "type": "string",
+            "nullable": true
+          },
+          "iAmb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dVerApl": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCUFE": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFecProc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dProtAut": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDigVal": {
+            "type": "string",
+            "nullable": true
+          },
+          "gResProc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Common.Groups.gResProc"
+            },
+            "nullable": true
+          },
+          "signature": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Common.Groups.gResProc": {
+        "type": "object",
+        "properties": {
+          "dCodRes": {
+            "type": "string",
+            "nullable": true
+          },
+          "dMsgRes": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Common.Protocols.rProtFe": {
+        "type": "object",
+        "properties": {
+          "dVerForm": {
+            "type": "number",
+            "format": "double"
+          },
+          "gInfProt": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Common.Groups.gInfProt"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Common.Protocols.xProtFe": {
+        "type": "object",
+        "properties": {
+          "rProtFe": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Common.Protocols.rProtFe"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gAutXML": {
+        "type": "object",
+        "properties": {
+          "gRucAutXML": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucAutXML"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gCodItem": {
+        "type": "object",
+        "properties": {
+          "dGTINCom": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dCantGTINCom": {
+            "type": "number",
+            "format": "double"
+          },
+          "dGTINInv": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dCantComInvent": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDatRec": {
+        "type": "object",
+        "properties": {
+          "iTipoRec": {
+            "type": "string",
+            "nullable": true
+          },
+          "gRucRec": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucRec"
+          },
+          "dNombRec": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDirecRec": {
+            "type": "string",
+            "nullable": true
+          },
+          "gUbiRec": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiRec"
+          },
+          "gIdExt": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gIdExt"
+          },
+          "dTfnRec": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dCorElectRec": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "cPaisRec": {
+            "type": "string",
+            "nullable": true
+          },
+          "dPaisRecDesc": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDescBonif": {
+        "type": "object",
+        "properties": {
+          "dDetalDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dValDesc": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRef": {
+        "type": "object",
+        "properties": {
+          "gRucEmDFRef": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucEmDFRef"
+          },
+          "dNombEmRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFechaDFRef": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gDFRefNum": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefNum"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFacIE": {
+        "type": "object",
+        "properties": {
+          "dNroFacIE": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFacPap": {
+        "type": "object",
+        "properties": {
+          "dNroFacPap": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFE": {
+        "type": "object",
+        "properties": {
+          "dCUFERef": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefNum": {
+        "type": "object",
+        "properties": {
+          "gDFRefFE": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFE"
+          },
+          "gDFRefFacPap": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFacPap"
+          },
+          "gDFRefFacIE": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRefFacIE"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gDGen": {
+        "type": "object",
+        "properties": {
+          "iAmb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iTpEmis": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFechaCont": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dMotCont": {
+            "type": "string",
+            "nullable": true
+          },
+          "iDoc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dNroDF": {
+            "type": "string",
+            "nullable": true
+          },
+          "dPtoFacDF": {
+            "type": "string",
+            "nullable": true
+          },
+          "dSeg": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFechaEm": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dFechaSalida": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "iNatOp": {
+            "type": "string",
+            "nullable": true
+          },
+          "iTipoOp": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iDest": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iFormCAFE": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iEntCAFE": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dEnvFE": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iProGen": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iTipoTranVenta": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iTipoSuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dInfEmFE": {
+            "type": "string",
+            "nullable": true
+          },
+          "gEmis": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gEmis"
+          },
+          "gDatRec": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDatRec"
+          },
+          "gFExp": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gFExp"
+          },
+          "gDFRef": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDFRef"
+            },
+            "nullable": true
+          },
+          "gAutXML": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gAutXML"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gEmis": {
+        "type": "object",
+        "properties": {
+          "gRucEmi": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucEmi"
+          },
+          "dNombEm": {
+            "type": "string",
+            "nullable": true
+          },
+          "dSucEm": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCoordEm": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDirecEm": {
+            "type": "string",
+            "nullable": true
+          },
+          "gUbiEm": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiEm"
+          },
+          "dTfnEm": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dCorElectEmi": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gFExp": {
+        "type": "object",
+        "properties": {
+          "cCondEntr": {
+            "type": "string",
+            "nullable": true
+          },
+          "cMoneda": {
+            "type": "string",
+            "nullable": true
+          },
+          "cMonedaDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCambio": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dVTotEst": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dPuertoEmbarq": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gFormaPago": {
+        "type": "object",
+        "properties": {
+          "iFormaPago": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFormaPagoDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dVlrCuota": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gIdExt": {
+        "type": "object",
+        "properties": {
+          "dIdExt": {
+            "type": "string",
+            "nullable": true
+          },
+          "dPaisExt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gInfoLog": {
+        "type": "object",
+        "properties": {
+          "dNroVols": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dPesoTot": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dUnPesoTot": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dLicCamion": {
+            "type": "string",
+            "nullable": true
+          },
+          "dNomTransp": {
+            "type": "string",
+            "nullable": true
+          },
+          "gRucTransp": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucTransp"
+          },
+          "dInfEmLog": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gISCItem": {
+        "type": "object",
+        "properties": {
+          "dTasaISC": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dValISC": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gITBMSItem": {
+        "type": "object",
+        "properties": {
+          "dTasaITBMS": {
+            "type": "string",
+            "nullable": true
+          },
+          "dValITBMS": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gItem": {
+        "type": "object",
+        "properties": {
+          "dSecItem": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dDescProd": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCodProd": {
+            "type": "string",
+            "nullable": true
+          },
+          "cUnidad": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCantCodInt": {
+            "type": "number",
+            "format": "double"
+          },
+          "dFechaFab": {
+            "type": "string",
+            "nullable": true
+          },
+          "dFechaCad": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCodCPBSabr": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dCodCPBScmp": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cUnidadCPBS": {
+            "type": "string",
+            "nullable": true
+          },
+          "dInfEmFE": {
+            "type": "string",
+            "nullable": true
+          },
+          "gPrecios": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gPrecios"
+          },
+          "gCodItem": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gCodItem"
+          },
+          "gITBMSItem": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gITBMSItem"
+          },
+          "gISCItem": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gISCItem"
+          },
+          "gOTIItem": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gOTIItem"
+            },
+            "nullable": true
+          },
+          "gVehicNuevo": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gVehicNuevo"
+          },
+          "gMedicina": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gMedicina"
+          },
+          "gPedComIr": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gPedComIr"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gLcEntr": {
+        "type": "object",
+        "properties": {
+          "gRucLcEntr": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucLcEntr"
+          },
+          "dNombLcEntr": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDirecLcEntr": {
+            "type": "string",
+            "nullable": true
+          },
+          "gUbiLcEntr": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiLcEntr"
+          },
+          "dTfnLcEntr": {
+            "type": "string",
+            "nullable": true
+          },
+          "dTfnAdLcEntr": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gMedicina": {
+        "type": "object",
+        "properties": {
+          "dNroLote": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCtLote": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gNoFirm": {
+        "type": "object",
+        "properties": {
+          "dQRCode": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gOTIItem": {
+        "type": "object",
+        "properties": {
+          "dCodOTI": {
+            "type": "string",
+            "nullable": true
+          },
+          "dValOTI": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gOTITotal": {
+        "type": "object",
+        "properties": {
+          "dCodOTITotal": {
+            "type": "string",
+            "nullable": true
+          },
+          "dValOTITotal": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gPagPlazo": {
+        "type": "object",
+        "properties": {
+          "dSecItem": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dFecItPlazo": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dValItPlazo": {
+            "type": "number",
+            "format": "double"
+          },
+          "dInfPagPlazo": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gPedComGl": {
+        "type": "object",
+        "properties": {
+          "dNroPed": {
+            "type": "string",
+            "nullable": true
+          },
+          "dNumAcept": {
+            "type": "string",
+            "nullable": true
+          },
+          "dInfEmPedGl": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCodRec": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCodSisEm": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gPedComIr": {
+        "type": "object",
+        "properties": {
+          "dNroPed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dSecItemPed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dInfEmPedIt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gPrecios": {
+        "type": "object",
+        "properties": {
+          "dPrUnit": {
+            "type": "number",
+            "format": "double"
+          },
+          "dPrUnitDesc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dPrItem": {
+            "type": "number",
+            "format": "double"
+          },
+          "dPrAcarItem": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dPrSegItem": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dValTotItem": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRetenc": {
+        "type": "object",
+        "properties": {
+          "cCodRetenc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cValRetenc": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucAutXML": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDV": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucEmDFRef": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDv": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucEmi": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDV": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucLcEntr": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDV": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucRec": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDV": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gRucTransp": {
+        "type": "object",
+        "properties": {
+          "dTipoRuc": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dRuc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDV": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gTot": {
+        "type": "object",
+        "properties": {
+          "dTotNeto": {
+            "type": "number",
+            "format": "double"
+          },
+          "dTotITBMS": {
+            "type": "number",
+            "format": "double"
+          },
+          "dTotISC": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dTotGravado": {
+            "type": "number",
+            "format": "double"
+          },
+          "dTotDesc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dTotAcar": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dTotSeg": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dVTot": {
+            "type": "number",
+            "format": "double"
+          },
+          "dTotRec": {
+            "type": "number",
+            "format": "double"
+          },
+          "dVuelto": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "iPzPag": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dNroItems": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dVTotItems": {
+            "type": "number",
+            "format": "double"
+          },
+          "gDescBonif": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gDescBonif"
+            },
+            "nullable": true
+          },
+          "gFormaPago": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gFormaPago"
+            },
+            "nullable": true
+          },
+          "gRetenc": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gRetenc"
+          },
+          "gPagPlazo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gPagPlazo"
+            },
+            "nullable": true
+          },
+          "gOTITotal": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Invoice.gOTITotal"
+            },
+            "nullable": true
+          },
+          "dTotOtrosGastos": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiEm": {
+        "type": "object",
+        "properties": {
+          "dCodUbi": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCorreg": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDistr": {
+            "type": "string",
+            "nullable": true
+          },
+          "dProv": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiLcEntr": {
+        "type": "object",
+        "properties": {
+          "dCodUbi": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCorreg": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDistr": {
+            "type": "string",
+            "nullable": true
+          },
+          "dProv": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gUbiRec": {
+        "type": "object",
+        "properties": {
+          "dCodUbi": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCorreg": {
+            "type": "string",
+            "nullable": true
+          },
+          "dDistr": {
+            "type": "string",
+            "nullable": true
+          },
+          "dProv": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.Invoice.gVehicNuevo": {
+        "type": "object",
+        "properties": {
+          "iModOpVN": {
+            "type": "string",
+            "nullable": true
+          },
+          "dModOpVNDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dChasi": {
+            "type": "string",
+            "nullable": true
+          },
+          "dColorCod": {
+            "type": "string",
+            "nullable": true
+          },
+          "dColorNomb": {
+            "type": "string",
+            "nullable": true
+          },
+          "dPotVeh": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dCilin": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dPesoNet": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dPesoBruto": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "iCombust": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCombustDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "dNroMotor": {
+            "type": "string",
+            "nullable": true
+          },
+          "dCapTracc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dEntreEj": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "dAnoMod": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dAnoFab": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iTipoPintura": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dTipoPinturaDesc": {
+            "type": "string",
+            "nullable": true
+          },
+          "cTipoVehic": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cUsoVehic": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "iCondVehic": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "dLotac": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ElectronicInvoice.Common.Pac.Dtos.InvoiceSend.rRetEnviFe": {
+        "type": "object",
+        "properties": {
+          "dVerForm": {
+            "type": "string",
+            "nullable": true
+          },
+          "iAmb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dVerApl": {
+            "type": "string",
+            "nullable": true
+          },
+          "xProtFe": {
+            "$ref": "#/components/schemas/ElectronicInvoice.Common.Pac.Dtos.Common.Protocols.xProtFe"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Ideati.Common.Repositories.IPaginated`1[[ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse, ElectronicInvoice.Application.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ElectronicInvoice.Application.Api.Invoices.Models.InvoiceDocumentResponse"
+            },
+            "nullable": true
+          },
+          "currentPage": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pageSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rowCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "firstRowOnPage": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "lastRowOnPage": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "https://sec.efacturapty.com/connect/authorize",
+            "tokenUrl": "https://sec.efacturapty.com/connect/token",
+            "scopes": {
+              "apiApplication": "Web Api"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "oauth2": [ ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "Invoices",
+      "description": ""
+    },
+    {
+      "name": "InvoiceEvents",
+      "description": ""
+    },
+    {
+      "name": "Catalogs",
+      "description": "Controlador unificado de catálogos"
+    }
+  ]
+}

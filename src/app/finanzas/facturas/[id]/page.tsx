@@ -32,6 +32,7 @@ import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { PaymentsSection } from "../_components/payments-section";
 import { CreditNoteCard } from "../_components/credit-note-card";
+import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 
 interface PageProps {
   params: { id: string };
@@ -119,6 +120,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Descargar PDF disponible en todos los estados — documento interno. */}
+          <DownloadInvoicePdfButton
+            invoiceId={invoice.id}
+            invoiceLabel={displayNumber}
+          />
           {editable && (
             <Link href={`/finanzas/facturas/${invoice.id}/editar`}>
               <Button variant="outline" className="min-h-[48px]">

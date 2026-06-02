@@ -226,12 +226,69 @@ Los scripts `scripts/efactura/{fetch-catalogs,inspect-catalogs}.ts` son utilitar
 - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00).
 - `tipoContribuyente=1` (natural) vs `=2` (jurídica): swagger lo marca integer no nullable sin documentar códigos.
 
-### Próxima pieza técnica
-- **Allocator de `fe_secuencias`:** `(puntoFacturacion, numeroDocumento)` con `SELECT … FOR UPDATE` + política allocate/commit/release. Decidir si un rechazo del PAC quema el correlativo o se reutiliza.
-- **Fetch real del `InvoiceEfacturaBundle`** desde Supabase (extender `invoice-pdf-data.ts` o crear `fetch-efactura-bundle.ts` análogo — Opción A vs B sin decidir aún).
-- **Flujo completo de emisión:** borrador → POST `/api/v1/Invoices` → cuando autoriza, persistir `dgi_cufe / dgi_protocolo_autorizacion / dgi_fecha_autorizacion / cafe_storage_key`, transicionar `fe_estado` y registrar log en `fe_emisiones`.
-- **UI:** botón "Emitir en eFactura" en el detalle de factura (estado borrador / emitida pre-CUFE).
-- **Cancelación:** POST `/api/v1/InvoiceEvents/CreateCancellation` cuando ya hay CUFE.
+### Fase 4 — Flujo de emisión · ✅ COMMITEADA (2026-06-02) · 🟡 EN ESPERA de licenciada + proveedor
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.4.1 | Allocator de `fe_secuencias` — RPC `allocate_fe_numero(uuid, varchar(3))` | ✅ Aplicado en Supabase + commit | `sql/pending/020_efactura_allocator.sql` + wrapper TS `src/lib/finanzas/efactura/secuencias/allocate-fe-numero.ts`. Commit **fb7647d**. Política A (gaps tolerados). |
+| eF.4.2 | `loadEmisorConfig()` extendido con `puntoFacturacion` (req, 3 dígitos, ≠ '000') e `iAmb` (req, 1\|2) | ✅ | `src/lib/finanzas/efactura/config/emisor-config.ts`. Variables nuevas en `.env.example`. |
+| eF.4.3 | Fetcher real `fetchInvoiceEfacturaBundle()` + gate fiscal del cliente | ✅ | `src/lib/finanzas/efactura/data/fetch-invoice-efactura-bundle.ts`. Falla con `MutationError(400)` y lista accionable si falta `tax_id`/`ruc`, `tipo_receptor_fe`, o (según tipo) `id_extranjero`+`pais_receptor` ó `codigo_ubicacion`+`corregimiento`+`distrito`+`provincia`. |
+| eF.4.4 | Orquestación T0-T4 `emitInvoiceToEfactura()` | ✅ | `src/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura.ts`. T0 pre-check, T1 allocate-o-reuso (D-3), T2 mark pending + log fe_emisiones, T3 POST sin lock, T4 clasifica respuesta (`authorized` \| `pending_async` \| `rejected`) y persiste. Heurística de duplicado por sustring en `dMsgRes`. |
+| eF.4.5 | Route handler `POST /api/finanzas/invoices/[id]/emit-efactura` (admin + abogada, 403 al resto) | ✅ | `src/app/api/finanzas/invoices/[id]/emit-efactura/route.ts`. Mismo allowlist que `/emit` y `/dgi`. |
+| eF.4.6 | `.env.example` actualizado con 14 variables `EFACTURA_EMISOR_*` (placeholders comentados para `FORMA_PAGO_DEFAULT` y `CPBS_REI`) | ✅ | — |
+| eF.4.7 | Typecheck `tsc --noEmit` limpio | ✅ | — |
+
+**SHA del commit de la Fase 4:** `7336824` (develop). 6 archivos, +1072 líneas. Push a `origin/develop` realizado. `main` intacto en `6bf3c07`.
+
+### Estado actual del andamiaje de emisión
+
+Toda la pipeline está commiteada y funcional contra el PAC. Cadena de commits:
+- Fase 1A modelo de datos — **798d1c2**
+- Fase 2 mapper puro — **1e340c7**
+- Fase 3 transport + validación catálogos — **561f4ca** / **5ea986b**
+- Allocator RPC `allocate_fe_numero` — **fb7647d** (aplicado en Supabase)
+- Fase 4 flujo de emisión (orquestación + fetcher + route) — **7336824**
+
+**Datos confirmados:**
+- Punto de facturación del CRM = `001` (QuickBooks histórico usa `050`, se mantiene separado).
+- CPBS honorarios = `8012`.
+- Ambiente sandbox `i_amb=2`.
+- Base API = `eic-api.ideati.net`, auth Bearer API Key (no OAuth).
+- El PAC asigna el CUFE (no lo enviamos en el `InvoiceRequest`).
+
+### En espera
+
+**Licenciada** (Daveiva / Integra Legal):
+- Datos del emisor: razón social, dirección, ubicación + código DGI, RUC y DV confirmados, código de sucursal (`0000` propuesto), teléfono/email del bufete.
+- Certificado de firma electrónica registrado en la cuenta de pruebas del PAC.
+- Confirmación del código CPBS de **reembolsos** (candidato `8012` — mismo que honorarios).
+
+**Proveedor (ideati):**
+- Código oficial DGI de `formaPago` (transferencia bancaria, hoy placeholder `"03"`).
+- Confirmar si el `POST /api/v1/Invoices` es **síncrono** (response trae `cufe` + `autorizada=true` en la misma llamada) o **asíncrono** (response trae solo el UUID interno y hay que pollear `/Authorization/{cufe}`). El parser ya cubre los dos caminos defensivamente.
+
+### Al retomar — camino corto a la primera emisión de prueba
+
+1. Llenar `.env.local` con las variables `EFACTURA_EMISOR_*` que la licenciada confirme.
+2. Validar que `loadEmisorConfig()` parsea sin error (correr cualquier script que la importe, ej. `npx tsx scripts/efactura/fetch-catalogs.ts`).
+3. Cargar un cliente de prueba con datos fiscales completos (`tax_id`/`ruc` + `digito_verificador` + `tipo_receptor_fe` + `codigo_ubicacion`/`corregimiento`/`distrito`/`provincia`) vía SQL.
+4. Registrar el certificado de firma electrónica en el portal `eic.ideati.net` (cuenta de pruebas).
+5. Disparar la primera emisión por el route:
+   ```
+   POST /api/finanzas/invoices/{id}/emit-efactura
+   ```
+   y observar el response:
+   - `cufe` poblado + `autorizada=true` → flujo síncrono, `fe_estado='authorized'`.
+   - sin `cufe` pero con UUID → asíncrono, `fe_estado='pending'` → confirma necesidad del reconciliador.
+   - error → `fe_estado='error'`, leer `cod_res` en `fe_emisiones`.
+
+### Pendientes técnicos posteriores (orden sugerido)
+
+- **Reconciliador del estado `pending`** — cron + endpoint que pollea `/Invoices/Authorization/{cufe}` o `/Invoices/id/{cufeId}`. Su construcción depende de qué responde el PAC en la primera emisión real.
+- **Tests del clasificador de respuesta** — extraer `parsePacResponse` como función pura exportada y cubrir con node:test los caminos `authorized` / `pending_async` / `rejected` / `pac_duplicate`. Mejor armarlo **después** de la primera emisión real, con una respuesta auténtica como fixture.
+- **UI** — botón "Enviar al PAC" en el detalle de factura, badge de `fe_estado`, modal con el log de `fe_emisiones` (auditoría de intentos).
+- **Notas de crédito / anulación** — POST `/api/v1/InvoiceEvents/CreateCancellation` (cuando hay CUFE y < 182h) y NC obligatoria (≥ 182h). Sprint propio cada uno.
+- **Descarga y persistencia del CAFE/XML** en Supabase Storage (`cafe_storage_key`, `xml_storage_key` ya existen en el schema, falta la mecánica de bajada).
 
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |

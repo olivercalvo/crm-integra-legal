@@ -198,21 +198,40 @@ Resultado en BD prod (verificado vía SELECT POST-CHECK del propio migration):
    - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00). Si el PAC requiere otra hora del día (ej. hora de emisión real), ajustar y agregar test.
    - `tipoContribuyente=1` (natural) vs `=2` (jurídica): el swagger marca el campo como integer no nullable pero no documenta los códigos. Validar con el PAC.
 
-### En espera del PAC / eFactura PTY (BLOQUEA Fase 3)
-- **Credenciales de la API** (sandbox + producción) — sin esto no se puede llamar el endpoint POST /api/v1/Invoices.
-- **Configuración del bufete en eFactura PTY:** punto de facturación dedicado, RUC + DV registrados, ubicación geográfica DGI.
-- **Reglas de numeración:** ¿un rechazo del PAC quema el correlativo o se reutiliza? Define la política de allocate/commit/release sobre `fe_secuencias` (FOR UPDATE + reserva + commit/release).
-- **Catálogo formaPago oficial DGI:** códigos para efectivo / cheque / transferencia / crédito / etc. Hoy `defaultFormaPago="03"` es placeholder.
-- **Código CPBS de servicios legales:** para `cpbsServiciosLegalesHon` y `cpbsServiciosLegalesRei`. Hoy validados a != 0 pero sin valor real. Endpoint del PAC para consultar el catálogo: `GET /api/v1/Catalogs/CPBSsegs`.
+### Fase 3 — Transport + validación de catálogos · 🟡 EN CURSO (2026-06-02)
 
-### Próxima fase técnica (BLOQUEADA hasta credenciales)
-**Fase 3 — Transport + integración real**
-- Cliente HTTP con OAuth (o API key según especifique el PAC) — capa separada, no en el mapper.
-- Fetch real del `InvoiceEfacturaBundle` desde Supabase (extender invoice-pdf-data.ts o crear `fetch-efactura-bundle.ts` análogo — Opción A vs B sin decidir aún).
-- Pieza de allocate de `(puntoFacturacion, numeroDocumento)` sobre `fe_secuencias` con FOR UPDATE.
-- Flujo completo: borrador → POST /api/v1/Invoices → cuando autoriza, persiste `dgi_cufe / dgi_protocolo_autorizacion / dgi_fecha_autorizacion / cafe_storage_key`, transiciona `fe_estado` y deja log en `fe_emisiones`.
-- UI: botón "Emitir en eFactura" en el detalle de factura (estado borrador / emitida pre-CUFE).
-- Cancelación: POST /api/v1/InvoiceEvents/CreateCancellation cuando ya hay CUFE.
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.3.1 | Dev API Key obtenido (ambiente pruebas, base `eic-api.ideati.net`) | ✅ | Cargado en `.env.local` (no commiteado). Plantilla en `.env.example`. |
+| eF.3.2 | Cliente HTTP server-only con Bearer auth | ✅ | `src/lib/finanzas/efactura/transport/efactura-client.ts`. Lee `EFACTURA_API_BASE_URL` y `EFACTURA_API_KEY` de forma lazy. NO incluye el key en mensajes de error. |
+| eF.3.3 | Auth contra el PAC VALIDADA | ✅ | `npx tsx scripts/efactura/fetch-catalogs.ts` retorna 200 en 5 catálogos (CPBSsegs, CPBSfams, locations, countries, currencies). |
+| eF.3.4 | CPBS servicios legales — código identificado | 🟡 Parcial | **HON = 8012** confirmado (segmento legal services). REI por confirmar con el contador (candidato `8012`). Actualizar `cpbsServiciosLegalesHon` / `cpbsServiciosLegalesRei` en `emisor-config.ts` cuando se confirme REI. |
+| eF.3.5 | Catálogo formaPago | ❌ No existe como catálogo | El PAC retornó 404 en TODOS los paths candidatos (`/formaPago`, `/formasPago`, `/paymentTerms`, `/metodoPago`, etc.). Conclusión: `formaPago` es **enumeración cerrada DGI**, NO se baja del PAC — se codifica como constantes. Falta el código oficial (probablemente transferencia bancaria). |
+
+**Nota operativa (Windows / Node 24):** este equipo requiere `NODE_OPTIONS=--use-system-ca` para que `fetch` confíe en la cadena TLS local al llamar al PAC. Ejemplo PowerShell:
+```
+$env:NODE_OPTIONS = "--use-system-ca"; npx tsx scripts/efactura/inspect-catalogs.ts
+```
+Los scripts `scripts/efactura/{fetch-catalogs,inspect-catalogs}.ts` son utilitarios dev read-only — no requieren certificado de firma.
+
+### Bloqueadores restantes para emitir una factura de prueba
+- **Certificado de firma electrónica** instalado/registrado en la cuenta de pruebas del PAC. Sin esto, el POST `/api/v1/Invoices` rechaza el documento aunque el resto del payload sea válido.
+- **Código `formaPago` oficial DGI** (probablemente transferencia bancaria para el caso real). Hoy `defaultFormaPago="03"` en `emisor-config.ts` es placeholder.
+- **Datos fiscales del emisor:** RUC + DV del bufete, ubicación geográfica DGI (provincia/distrito/corregimiento codificados), punto de facturación asignado.
+- **Confirmación REI CPBS:** definir si el código de "reembolsos" comparte el `8012` con HON o si es distinto.
+
+### Decisiones de implementación pendientes (heredadas de Fase 2, sin validar con PAC todavía)
+- `numeroSecuenciaItem` 1-indexed (CRM usa `line_order` 0-indexed → mapper hace `+1`).
+- `totalGravado` = suma de subtotales de líneas con `tax_rate > 0` (no incluye exentas).
+- `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00).
+- `tipoContribuyente=1` (natural) vs `=2` (jurídica): swagger lo marca integer no nullable sin documentar códigos.
+
+### Próxima pieza técnica
+- **Allocator de `fe_secuencias`:** `(puntoFacturacion, numeroDocumento)` con `SELECT … FOR UPDATE` + política allocate/commit/release. Decidir si un rechazo del PAC quema el correlativo o se reutiliza.
+- **Fetch real del `InvoiceEfacturaBundle`** desde Supabase (extender `invoice-pdf-data.ts` o crear `fetch-efactura-bundle.ts` análogo — Opción A vs B sin decidir aún).
+- **Flujo completo de emisión:** borrador → POST `/api/v1/Invoices` → cuando autoriza, persistir `dgi_cufe / dgi_protocolo_autorizacion / dgi_fecha_autorizacion / cafe_storage_key`, transicionar `fe_estado` y registrar log en `fe_emisiones`.
+- **UI:** botón "Emitir en eFactura" en el detalle de factura (estado borrador / emitida pre-CUFE).
+- **Cancelación:** POST `/api/v1/InvoiceEvents/CreateCancellation` cuando ya hay CUFE.
 
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |

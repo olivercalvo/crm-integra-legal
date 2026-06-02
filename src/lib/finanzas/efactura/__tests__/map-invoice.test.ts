@@ -48,6 +48,8 @@ function emisor(): EmisorConfig {
     },
     telefonoSucursal: "+507-200-0000",
     direccionCorreoElectronico: "facturas@integra-panama.com",
+    puntoFacturacion: "001",
+    iAmb: 2,
     defaultTipoOperacion: 1,
     defaultDestinoOperacion: 1,
     defaultFormatoGeneracionCafe: 1,

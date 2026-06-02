@@ -32,6 +32,15 @@ export interface EmisorConfig {
   telefonoSucursal?: string;
   direccionCorreoElectronico?: string;
 
+  // Punto de facturación DGI (3 dígitos, != '000'). El allocator lo consume
+  // por (tenant, punto). Integra Legal arranca con '001'.
+  puntoFacturacion: string;
+
+  // Ambiente PAC: 1=producción, 2=pruebas (sandbox). Se persiste en
+  // invoices.i_amb y fe_emisiones.i_amb. La key del transport debe ser del
+  // ambiente correspondiente (no lo valida acá; es responsabilidad operativa).
+  iAmb: 1 | 2;
+
   // Defaults estructurales DGI (todos sobrescribibles por factura en el futuro)
   defaultTipoOperacion: 1 | 2;
   defaultDestinoOperacion: 1 | 2;
@@ -106,6 +115,20 @@ export function loadEmisorConfig(
     );
   }
 
+  const puntoFacturacion = required("EFACTURA_EMISOR_PUNTO_FACTURACION");
+  if (!/^[0-9]{3}$/.test(puntoFacturacion) || puntoFacturacion === "000") {
+    throw new Error(
+      `[efactura/emisor-config] EFACTURA_EMISOR_PUNTO_FACTURACION debe ser 3 dígitos numéricos distinto de "000", recibido: ${puntoFacturacion}`
+    );
+  }
+
+  const iAmbRaw = intRequired("EFACTURA_I_AMB");
+  if (iAmbRaw !== 1 && iAmbRaw !== 2) {
+    throw new Error(
+      `[efactura/emisor-config] EFACTURA_I_AMB debe ser 1 (producción) o 2 (pruebas), recibido: ${iAmbRaw}`
+    );
+  }
+
   return {
     ruc: required("EFACTURA_EMISOR_RUC"),
     digitoVerificador: required("EFACTURA_EMISOR_DV"),
@@ -122,6 +145,9 @@ export function loadEmisorConfig(
     },
     telefonoSucursal: optional("EFACTURA_EMISOR_TELEFONO"),
     direccionCorreoElectronico: optional("EFACTURA_EMISOR_EMAIL"),
+
+    puntoFacturacion,
+    iAmb: iAmbRaw as 1 | 2,
 
     defaultTipoOperacion: 1,
     defaultDestinoOperacion: 1,

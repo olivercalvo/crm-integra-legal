@@ -660,12 +660,18 @@ function parsePacResponse(raw: unknown): ParsedPacResponse {
 
 function extractCodRes(r: Record<string, unknown>): CodRes[] {
   // El response del POST envuelve los códigos en
-  // rRetEnviFe.rProtFe.gInfProt.gResProc según el swagger
-  // (ElectronicInvoice.Common.Pac.Dtos.InvoiceSend.rRetEnviFe).
+  // rRetEnviFe.xProtFe.rProtFe.gInfProt.gResProc[]. Verificado contra una
+  // respuesta real del sandbox (2026-06-03). El swagger sugería el path
+  // sin el wrapper `xProtFe` y por eso la versión previa devolvía vacío.
+  // Mantenemos el fallback al path sin `xProtFe` por si el PAC alguna vez
+  // cambia el shape de la respuesta.
   const out: CodRes[] = [];
 
   const ret = r.rRetEnviFe as Record<string, unknown> | undefined;
-  const rProt = ret?.rProtFe as Record<string, unknown> | undefined;
+  const xProt = ret?.xProtFe as Record<string, unknown> | undefined;
+  const rProt =
+    (xProt?.rProtFe as Record<string, unknown> | undefined) ??
+    (ret?.rProtFe as Record<string, unknown> | undefined);
   const gInf = rProt?.gInfProt as Record<string, unknown> | undefined;
   const gRes = gInf?.gResProc;
 

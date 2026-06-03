@@ -12,7 +12,13 @@
  *     mínimos; no requiere datosRucReceptor.
  *   - tipoReceptorFe='03' (gobierno): el cliente debe tener RUC; usamos
  *     la misma estructura que '01'.
+ *   - paisReceptor: para 01/02/03 (domésticos) se envía SIEMPRE 'PA'
+ *     (catálogo countries del PAC: {codigo:'PA', nombre:'Panamá'}). El XSD
+ *     DGI exige cPaisRec al final de gDatRec — sin él, rechazo 0100
+ *     "incomplete content". Para 04 se usa el código del cliente extranjero.
  */
+// Catálogo PAC /api/v1/Catalogs/countries — confirmado contra sandbox 2026-06-03.
+const CODIGO_PAIS_PANAMA = "PA";
 
 import type {
   InformacionReceptor,
@@ -58,6 +64,14 @@ export function mapReceptor(client: EfacturaBundleClient): InformacionReceptor {
     tipoReceptorFe === TIPO_RECEPTOR_FE.GOBIERNO
   ) {
     receptor.datosRucReceptor = buildRucReceptor(client);
+  }
+
+  if (
+    tipoReceptorFe === TIPO_RECEPTOR_FE.CONTRIBUYENTE ||
+    tipoReceptorFe === TIPO_RECEPTOR_FE.CONSUMIDOR_FINAL ||
+    tipoReceptorFe === TIPO_RECEPTOR_FE.GOBIERNO
+  ) {
+    receptor.paisReceptor = CODIGO_PAIS_PANAMA;
   }
 
   if (tipoReceptorFe === TIPO_RECEPTOR_FE.EXTRANJERO) {

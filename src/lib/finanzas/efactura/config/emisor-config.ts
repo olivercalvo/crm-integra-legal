@@ -51,7 +51,10 @@ export interface EmisorConfig {
   defaultTipoTransaccionVenta: 1 | 2 | 3 | 4;
   defaultTipoSucursal: 1 | 2;
 
-  // Forma de pago default (placeholder hasta confirmar code DGI)
+  // Forma de pago default. Código oficial DGI: 08 = "Transf./Depósito a
+  // cta. Bancaria" (fuente: documentación del proveedor eFactura PTY).
+  // Sobrescribible por factura vía EFACTURA_EMISOR_FORMA_PAGO_DEFAULT si
+  // el bufete cambia su forma de cobro habitual.
   defaultFormaPago: string;
 
   // Código CPBS de servicios legales (placeholder hasta confirmar code DGI).
@@ -158,7 +161,7 @@ export function loadEmisorConfig(
     defaultTipoTransaccionVenta: 1,
     defaultTipoSucursal: 1,
 
-    defaultFormaPago: optional("EFACTURA_EMISOR_FORMA_PAGO_DEFAULT") ?? "03",
+    defaultFormaPago: optional("EFACTURA_EMISOR_FORMA_PAGO_DEFAULT") ?? "08",
 
     cpbsServiciosLegalesHon: cpbsHon,
     cpbsServiciosLegalesRei: cpbsRei,

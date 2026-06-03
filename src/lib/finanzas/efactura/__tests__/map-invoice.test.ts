@@ -58,7 +58,7 @@ function emisor(): EmisorConfig {
     defaultProcesoGeneracionFe: 1,
     defaultTipoTransaccionVenta: 1,
     defaultTipoSucursal: 1,
-    defaultFormaPago: "03",
+    defaultFormaPago: "08",
     cpbsServiciosLegalesHon: 99999999,
     cpbsServiciosLegalesRei: 88888888,
   };
@@ -265,7 +265,7 @@ test("4. Factura de contado → tiempoPago=1 SIN grupoInformacionPago", () => {
   );
   assert.equal(req.totales.grupoFormasPago?.length, 1);
   assert.equal(req.totales.grupoFormasPago?.[0].valorCuotaPagada, 1000);
-  assert.equal(req.totales.grupoFormasPago?.[0].formaPago, "03");
+  assert.equal(req.totales.grupoFormasPago?.[0].formaPago, "08");
 });
 
 test("5. Receptor consumidor final (cédula → '02')", () => {

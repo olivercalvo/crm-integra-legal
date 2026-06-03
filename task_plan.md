@@ -163,6 +163,43 @@
 
 Sprint independiente: emisión electrónica de facturas via API del PAC eFactura PTY. Reemplaza el flujo "Camino 1" (captura manual del CUFE desde portal eFactura) por integración API directa.
 
+### ESTADO (cierre 2026-06-03)
+
+- **HITO: emisión de FE VALIDADA en sandbox** (`i_amb=2`) para AMBOS receptores:
+  - Tipo `02` consumidor final → invoice `45f53069` (`FAC-HON-000459`), `numero_documento=1`, autorizado (cod `0260`).
+  - Tipo `01` contribuyente RUC → invoice `57d9465a` (`FAC-HON-000460`), `numero_documento=2`, autorizado (cod `0260`).
+  - Ambos con `dgi_cufe` / `dgi_protocolo_autorizacion` / `dgi_fecha_autorizacion` / `qr_content` / `ef_invoice_uuid` persistidos; `fe_emisiones` audita cada intento.
+- `develop = b49e54a`; `main` intacto en `6bf3c07`. Cadena eFactura completa en `develop` (Fase 1A→4 + fix `formaPago=08` + fix país/classifier).
+- **Config emisor en `.env.local`** (NO en git): RUC `25046169-3-2021`, DV `40`, `INTEGRA LEGAL`, ubicación `8-8-7` (Bella Vista / Panamá / Panamá), dir `Calle 54 Obarrio Atrium Tower P20 Of 20-08`, tel `393-9496`, email `info@integra-panama.com`, punto `001`, `formaPago` default `08` (transferencia), CPBS HON/REI `8012`, `i_amb=2`.
+- **Decisiones validadas contra el PAC real:**
+  - El PAC asigna `CUFE` (no lo enviamos en el request).
+  - Respuesta **SÍNCRONA** (`cufe` + `autorizada=true` en la misma llamada al `POST /api/v1/Invoices`).
+  - Classifier lee `rRetEnviFe.xProtFe.rProtFe.gInfProt.gResProc[]` (no `rRetEnviFe.rProtFe...` como sugería el swagger).
+  - `cPaisRec="PA"` REQUERIDO para receptores domésticos (`01`/`02`/`03`) — XSD DGI rechaza con cod `0100` si falta.
+  - `emisor == receptor` aceptado en sandbox.
+  - Certificado de firma electrónica **NO** requerido en sandbox.
+- **Fixtures de prueba en BD (LIMPIAR luego):** clientes `TEST-FE-001` (`e5c201d9`, tipo `02`) y `TEST-FE-002` (`d3a203b9`, tipo `01`); facturas `FAC-HON-000459` y `FAC-HON-000460`.
+
+### AL RETOMAR (orden de valor)
+
+1. **UI: botón "Enviar al PAC" en detalle de factura + badge `fe_estado`** (recomendado). Hoy la emisión solo se dispara vía POST directo al route — la abogada no tiene affordance en pantalla.
+2. **Tests del clasificador de respuesta**: extraer `authorized` / `rejected` / `pending` / `duplicate` como función pura + tests unitarios. Ya tenemos la forma real del response (ver intento 2 de invoice `45f53069`).
+3. **Entrega del CAFE al cliente**: `GET /api/v1/Invoices/{cufeId}/cafe-file` + persistencia en Supabase Storage (`cafe_storage_key`).
+4. **Reconciliador del estado `pending`**; notas de crédito y anulación PAC (`POST /InvoiceEvents/CreateCancellation`).
+5. **Limpieza de la data de prueba** (fixtures listados arriba).
+6. **Producción**: certificado A+F (licenciadas) + credenciales prod (proveedor) + registrar punto/sucursal en prod + merge `develop → main` + env vars en Vercel.
+
+### EN ESPERA (terceros)
+
+- **Licenciadas (Daveiva, Integra Legal):**
+  - Certificado `.zip` A+F + PIN (para producción — sandbox no lo requirió).
+  - Confirmación CPBS de reembolsos (hoy `8012` igual a honorarios — candidato a confirmar).
+- **Proveedor (ideati):**
+  - Credenciales de producción (URL + API key prod).
+  - Confirmar registro de punto / sucursal en prod (sandbox usa `001`).
+
+---
+
 ### Fase 1A — Modelo de datos · ✅ CERRADA (2026-05-30)
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
@@ -198,7 +235,7 @@ Resultado en BD prod (verificado vía SELECT POST-CHECK del propio migration):
    - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00). Si el PAC requiere otra hora del día (ej. hora de emisión real), ajustar y agregar test.
    - `tipoContribuyente=1` (natural) vs `=2` (jurídica): el swagger marca el campo como integer no nullable pero no documenta los códigos. Validar con el PAC.
 
-### Fase 3 — Transport + validación de catálogos · 🟡 EN CURSO (2026-06-02)
+### Fase 3 — Transport + validación de catálogos · ✅ CERRADA (2026-06-03)
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
@@ -206,7 +243,7 @@ Resultado en BD prod (verificado vía SELECT POST-CHECK del propio migration):
 | eF.3.2 | Cliente HTTP server-only con Bearer auth | ✅ | `src/lib/finanzas/efactura/transport/efactura-client.ts`. Lee `EFACTURA_API_BASE_URL` y `EFACTURA_API_KEY` de forma lazy. NO incluye el key en mensajes de error. |
 | eF.3.3 | Auth contra el PAC VALIDADA | ✅ | `npx tsx scripts/efactura/fetch-catalogs.ts` retorna 200 en 5 catálogos (CPBSsegs, CPBSfams, locations, countries, currencies). |
 | eF.3.4 | CPBS servicios legales — código identificado | 🟡 Parcial | **HON = 8012** confirmado (segmento legal services). REI por confirmar con el contador (candidato `8012`). Actualizar `cpbsServiciosLegalesHon` / `cpbsServiciosLegalesRei` en `emisor-config.ts` cuando se confirme REI. |
-| eF.3.5 | Catálogo formaPago | ❌ No existe como catálogo | El PAC retornó 404 en TODOS los paths candidatos (`/formaPago`, `/formasPago`, `/paymentTerms`, `/metodoPago`, etc.). Conclusión: `formaPago` es **enumeración cerrada DGI**, NO se baja del PAC — se codifica como constantes. Falta el código oficial (probablemente transferencia bancaria). |
+| eF.3.5 | Catálogo formaPago + código transferencia | ✅ Confirmado por proveedor | El PAC NO expone catálogo descargable (es enumeración cerrada DGI). Código oficial **`08` = "Transf./Depósito a cta. Bancaria"** confirmado por el proveedor; cargado como `defaultFormaPago` en `emisor-config.ts` (commit **d5ecdf2**). |
 
 **Nota operativa (Windows / Node 24):** este equipo requiere `NODE_OPTIONS=--use-system-ca` para que `fetch` confíe en la cadena TLS local al llamar al PAC. Ejemplo PowerShell:
 ```
@@ -214,11 +251,11 @@ $env:NODE_OPTIONS = "--use-system-ca"; npx tsx scripts/efactura/inspect-catalogs
 ```
 Los scripts `scripts/efactura/{fetch-catalogs,inspect-catalogs}.ts` son utilitarios dev read-only — no requieren certificado de firma.
 
-### Bloqueadores restantes para emitir una factura de prueba
-- **Certificado de firma electrónica** instalado/registrado en la cuenta de pruebas del PAC. Sin esto, el POST `/api/v1/Invoices` rechaza el documento aunque el resto del payload sea válido.
-- **Código `formaPago` oficial DGI** (probablemente transferencia bancaria para el caso real). Hoy `defaultFormaPago="03"` en `emisor-config.ts` es placeholder.
-- **Datos fiscales del emisor:** RUC + DV del bufete, ubicación geográfica DGI (provincia/distrito/corregimiento codificados), punto de facturación asignado.
-- **Confirmación REI CPBS:** definir si el código de "reembolsos" comparte el `8012` con HON o si es distinto.
+### Bloqueadores históricos (todos superados — ver bloque "ESTADO (cierre 2026-06-03)" al inicio)
+- ~~Certificado de firma electrónica~~ → sandbox NO lo requirió. Sí necesario para producción (pendiente con licenciadas).
+- ~~Código `formaPago` oficial DGI~~ → confirmado `08` (transferencia) por el proveedor.
+- ~~Datos fiscales del emisor~~ → cargados en `.env.local` (RUC, DV, ubicación, punto, etc.).
+- **Confirmación REI CPBS:** sigue pendiente — candidato `8012` (mismo que HON), por confirmar con contador/licenciadas.
 
 ### Decisiones de implementación pendientes (heredadas de Fase 2, sin validar con PAC todavía)
 - `numeroSecuenciaItem` 1-indexed (CRM usa `line_order` 0-indexed → mapper hace `+1`).
@@ -226,7 +263,7 @@ Los scripts `scripts/efactura/{fetch-catalogs,inspect-catalogs}.ts` son utilitar
 - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00).
 - `tipoContribuyente=1` (natural) vs `=2` (jurídica): swagger lo marca integer no nullable sin documentar códigos.
 
-### Fase 4 — Flujo de emisión · ✅ COMMITEADA (2026-06-02) · 🟡 EN ESPERA de licenciada + proveedor
+### Fase 4 — Flujo de emisión · ✅ CERRADA (2026-06-02) — primera FE autorizada en sandbox 2026-06-03
 
 | # | Tarea | Estado | Notas |
 |---|-------|--------|-------|
@@ -256,31 +293,8 @@ Toda la pipeline está commiteada y funcional contra el PAC. Cadena de commits:
 - Base API = `eic-api.ideati.net`, auth Bearer API Key (no OAuth).
 - El PAC asigna el CUFE (no lo enviamos en el `InvoiceRequest`).
 
-### En espera
-
-**Licenciada** (Daveiva / Integra Legal):
-- Datos del emisor: razón social, dirección, ubicación + código DGI, RUC y DV confirmados, código de sucursal (`0000` propuesto), teléfono/email del bufete.
-- Certificado de firma electrónica registrado en la cuenta de pruebas del PAC.
-- Confirmación del código CPBS de **reembolsos** (candidato `8012` — mismo que honorarios).
-
-**Proveedor (ideati):**
-- Código oficial DGI de `formaPago` (transferencia bancaria, hoy placeholder `"03"`).
-- Confirmar si el `POST /api/v1/Invoices` es **síncrono** (response trae `cufe` + `autorizada=true` en la misma llamada) o **asíncrono** (response trae solo el UUID interno y hay que pollear `/Authorization/{cufe}`). El parser ya cubre los dos caminos defensivamente.
-
-### Al retomar — camino corto a la primera emisión de prueba
-
-1. Llenar `.env.local` con las variables `EFACTURA_EMISOR_*` que la licenciada confirme.
-2. Validar que `loadEmisorConfig()` parsea sin error (correr cualquier script que la importe, ej. `npx tsx scripts/efactura/fetch-catalogs.ts`).
-3. Cargar un cliente de prueba con datos fiscales completos (`tax_id`/`ruc` + `digito_verificador` + `tipo_receptor_fe` + `codigo_ubicacion`/`corregimiento`/`distrito`/`provincia`) vía SQL.
-4. Registrar el certificado de firma electrónica en el portal `eic.ideati.net` (cuenta de pruebas).
-5. Disparar la primera emisión por el route:
-   ```
-   POST /api/finanzas/invoices/{id}/emit-efactura
-   ```
-   y observar el response:
-   - `cufe` poblado + `autorizada=true` → flujo síncrono, `fe_estado='authorized'`.
-   - sin `cufe` pero con UUID → asíncrono, `fe_estado='pending'` → confirma necesidad del reconciliador.
-   - error → `fe_estado='error'`, leer `cod_res` en `fe_emisiones`.
+### En espera / Al retomar
+Las listas autoritativas están en el bloque **"ESTADO (cierre 2026-06-03)"** al inicio de esta sección. Acá quedaba documentado el camino corto a la primera emisión de prueba — ya realizado el 2026-06-03.
 
 ### Pendientes técnicos posteriores (orden sugerido)
 

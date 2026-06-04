@@ -24,6 +24,24 @@ export type InvoiceStatus =
   | "anulada"
   | "cancelada_pre_emision";
 
+/**
+ * Valores válidos de invoices.fe_estado (CHECK constraint en migración
+ * 019_efactura_fase_1a_modelo_datos.sql). Refleja el ciclo de vida del
+ * envío al PAC eFactura PTY:
+ *   - no_emitida → factura interna sin enviar todavía (default).
+ *   - pending    → envío en curso (T2 marcó pending y aún no llegó la
+ *                  respuesta T4, o respuesta async sin CUFE inmediato).
+ *   - authorized → DGI autorizó. Hay CUFE + protocolo + fecha.
+ *   - canceled   → anulada en DGI (post-autorización).
+ *   - error      → último intento rechazado. Se puede reintentar.
+ */
+export type FeEstado =
+  | "no_emitida"
+  | "pending"
+  | "authorized"
+  | "canceled"
+  | "error";
+
 /** Mapping invoice_kind → sequence_type para get_next_sequence_number(). */
 export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim"> = {
   HONORARIOS: "invoice_hon",
@@ -153,6 +171,15 @@ export interface InvoiceRow {
   dgi_cufe: string | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
+  // ----- eFactura PAC (orquestación T0-T4). Migration:
+  // 019_efactura_fase_1a_modelo_datos.sql. fe_estado tiene default
+  // 'no_emitida' en BD, los demás son NULL hasta que el PAC responda.
+  fe_estado: FeEstado;
+  dgi_protocolo_autorizacion: string | null;
+  qr_content: string | null;
+  punto_facturacion: string | null;
+  numero_documento: number | null;
+  ef_invoice_uuid: string | null;
   // ----- Anulación. Se llenan en el mismo UPDATE que cambia status a 'anulada'.
   // Schema: migration 20260507000001_finanzas_b4_anular_factura.sql
   cancellation_reason: string | null;
@@ -225,6 +252,29 @@ export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
   anulada: "Anulada",
   cancelada_pre_emision: "Cancelada (pre-emisión)",
 };
+
+/** Labels UI para fe_estado. "Error" cubre pac_rejected / pac_duplicate /
+ *  transport (D6 del sprint). */
+export const FE_ESTADO_LABEL: Record<FeEstado, string> = {
+  no_emitida: "Sin enviar",
+  pending: "Pendiente PAC",
+  authorized: "Autorizada DGI",
+  canceled: "Anulada en DGI",
+  error: "Error",
+};
+
+/**
+ * Si una factura puede dispararse al PAC eFactura. Replica el gate
+ * server-side de emitInvoiceToEfactura (T0 pre-check): la factura tiene
+ * que estar emitida internamente y fe_estado en no_emitida o error
+ * (reintento). El gate de rol vive aparte (admin|abogada).
+ */
+export function isEmittableToEfactura(
+  status: InvoiceStatus,
+  feEstado: FeEstado
+): boolean {
+  return status === "emitida" && (feEstado === "no_emitida" || feEstado === "error");
+}
 
 /** Si una factura puede editarse (líneas + cabecera). */
 export function isEditable(status: InvoiceStatus): boolean {

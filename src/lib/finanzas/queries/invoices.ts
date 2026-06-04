@@ -58,6 +58,8 @@ export async function listInvoices(
         subtotal_total, tax_total, grand_total, amount_paid, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
+        fe_estado, dgi_protocolo_autorizacion, qr_content,
+        punto_facturacion, numero_documento, ef_invoice_uuid,
         cancellation_reason, cancelled_at,
         client:clients!invoices_client_id_fkey(id, name, client_number),
         case:cases!invoices_case_id_fkey(id, case_code)
@@ -110,6 +112,8 @@ export async function getInvoiceById(
         subtotal_total, tax_total, grand_total, amount_paid, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
+        fe_estado, dgi_protocolo_autorizacion, qr_content,
+        punto_facturacion, numero_documento, ef_invoice_uuid,
         cancellation_reason, cancelled_at,
         client:clients!invoices_client_id_fkey(id, name, client_number, ruc),
         case:cases!invoices_case_id_fkey(id, case_code, description)

@@ -163,13 +163,19 @@
 
 Sprint independiente: emisión electrónica de facturas via API del PAC eFactura PTY. Reemplaza el flujo "Camino 1" (captura manual del CUFE desde portal eFactura) por integración API directa.
 
-### ESTADO (cierre 2026-06-03)
+### ESTADO (cierre 2026-06-04)
 
-- **HITO: emisión de FE VALIDADA en sandbox** (`i_amb=2`) para AMBOS receptores:
-  - Tipo `02` consumidor final → invoice `45f53069` (`FAC-HON-000459`), `numero_documento=1`, autorizado (cod `0260`).
-  - Tipo `01` contribuyente RUC → invoice `57d9465a` (`FAC-HON-000460`), `numero_documento=2`, autorizado (cod `0260`).
-  - Ambos con `dgi_cufe` / `dgi_protocolo_autorizacion` / `dgi_fecha_autorizacion` / `qr_content` / `ef_invoice_uuid` persistidos; `fe_emisiones` audita cada intento.
-- `develop = b49e54a`; `main` intacto en `6bf3c07`. Cadena eFactura completa en `develop` (Fase 1A→4 + fix `formaPago=08` + fix país/classifier).
+- **HITO: emisión de FE VALIDADA end-to-end desde la UI**, sandbox `i_amb=2`. La abogada ya emite y ve el estado fiscal sin tocar consola.
+  - `FAC-HON-000461`, `numero_documento=3`, autorizada vía botón "Enviar al PAC" desde el detalle (tipo `01` contribuyente, sandbox 2026-06-04).
+  - Acumulado de pruebas autorizadas: 459 (nro 1) + 460 (nro 2) + 461 (nro 3) — todos punto `001`, `i_amb=2`.
+- **UI de emisión COMMITEADA** (`7538d9e` en develop):
+  - Card "Facturación Electrónica" en el detalle con badge `fe_estado` (no_emitida / pending / authorized / error / canceled) y render por estado.
+  - Botón "Enviar al PAC" con modal de confirmación (preview número/total/RUC + advertencia fiscal). Reintento desde estado `error`. Manejo inline de `errorMessage` + `codRes[]` + nota especial para `pac_duplicate`.
+  - Columna "Fiscal" en el listado de facturas (escritorio + mobile).
+  - Toast `?fe=sent|pending|error` integrado a `InvoiceSuccessToast` (verde / ámbar warning / rojo).
+  - `DgiDataCard` legacy ahora condicional: solo aparece para facturas con datos manuales capturados que nunca entraron al flujo automático (fallback de transición).
+  - Texto en tuteo neutro panameño (estándar del proyecto).
+- `develop = 7538d9e`; `main` intacto en `6bf3c07`. Cadena eFactura completa en `develop` (Fase 1A→4 + fix `formaPago=08` + fix país/classifier + UI de emisión).
 - **Config emisor en `.env.local`** (NO en git): RUC `25046169-3-2021`, DV `40`, `INTEGRA LEGAL`, ubicación `8-8-7` (Bella Vista / Panamá / Panamá), dir `Calle 54 Obarrio Atrium Tower P20 Of 20-08`, tel `393-9496`, email `info@integra-panama.com`, punto `001`, `formaPago` default `08` (transferencia), CPBS HON/REI `8012`, `i_amb=2`.
 - **Decisiones validadas contra el PAC real:**
   - El PAC asigna `CUFE` (no lo enviamos en el request).
@@ -178,11 +184,11 @@ Sprint independiente: emisión electrónica de facturas via API del PAC eFactura
   - `cPaisRec="PA"` REQUERIDO para receptores domésticos (`01`/`02`/`03`) — XSD DGI rechaza con cod `0100` si falta.
   - `emisor == receptor` aceptado en sandbox.
   - Certificado de firma electrónica **NO** requerido en sandbox.
-- **Fixtures de prueba en BD (LIMPIAR luego):** clientes `TEST-FE-001` (`e5c201d9`, tipo `02`) y `TEST-FE-002` (`d3a203b9`, tipo `01`); facturas `FAC-HON-000459` y `FAC-HON-000460`.
+- **Fixtures de prueba en BD (LIMPIAR luego):** clientes `TEST-FE-001` (`e5c201d9`, tipo `02`) y `TEST-FE-002` (`d3a203b9`, tipo `01`); facturas `FAC-HON-000459`, `FAC-HON-000460`, `FAC-HON-000461`.
 
 ### AL RETOMAR (orden de valor)
 
-1. **UI: botón "Enviar al PAC" en detalle de factura + badge `fe_estado`** (recomendado). Hoy la emisión solo se dispara vía POST directo al route — la abogada no tiene affordance en pantalla.
+1. **Re-verificación visual rápida de la UI** (pre-cierre del sprint UI): (a) confirmar que una factura nueva `no_emitida` muestra SOLO la card "Facturación Electrónica" (sin la legacy DGI duplicada); (b) confirmar tuteo neutro en todos los strings nuevos. Si OK → UI cerrada.
 2. **Tests del clasificador de respuesta**: extraer `authorized` / `rejected` / `pending` / `duplicate` como función pura + tests unitarios. Ya tenemos la forma real del response (ver intento 2 de invoice `45f53069`).
 3. **Entrega del CAFE al cliente**: `GET /api/v1/Invoices/{cufeId}/cafe-file` + persistencia en Supabase Storage (`cafe_storage_key`).
 4. **Reconciliador del estado `pending`**; notas de crédito y anulación PAC (`POST /InvoiceEvents/CreateCancellation`).
@@ -300,7 +306,7 @@ Las listas autoritativas están en el bloque **"ESTADO (cierre 2026-06-03)"** al
 
 - **Reconciliador del estado `pending`** — cron + endpoint que pollea `/Invoices/Authorization/{cufe}` o `/Invoices/id/{cufeId}`. Su construcción depende de qué responde el PAC en la primera emisión real.
 - **Tests del clasificador de respuesta** — extraer `parsePacResponse` como función pura exportada y cubrir con node:test los caminos `authorized` / `pending_async` / `rejected` / `pac_duplicate`. Mejor armarlo **después** de la primera emisión real, con una respuesta auténtica como fixture.
-- **UI** — botón "Enviar al PAC" en el detalle de factura, badge de `fe_estado`, modal con el log de `fe_emisiones` (auditoría de intentos).
+- ~~**UI** — botón "Enviar al PAC" en el detalle de factura, badge de `fe_estado`~~ ✅ COMMITEADA (`7538d9e`, 2026-06-04). Falta solo modal de auditoría de intentos contra `fe_emisiones` (opcional, scope futuro).
 - **Notas de crédito / anulación** — POST `/api/v1/InvoiceEvents/CreateCancellation` (cuando hay CUFE y < 182h) y NC obligatoria (≥ 182h). Sprint propio cada uno.
 - **Descarga y persistencia del CAFE/XML** en Supabase Storage (`cafe_storage_key`, `xml_storage_key` ya existen en el schema, falta la mecánica de bajada).
 

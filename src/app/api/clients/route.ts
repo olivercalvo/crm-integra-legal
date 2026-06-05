@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  allocateClientNumber,
+  formatClientNumber,
+  previewNextClientNumber,
+} from "@/lib/clients/numbering";
 
-// GET — suggest next client_number
+// GET — suggest next client_number (lee numbering_sequences sin consumir)
 export async function GET() {
   try {
     const supabase = createClient();
@@ -22,23 +27,12 @@ export async function GET() {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    const { data: lastClient } = await admin
-      .from("clients")
-      .select("client_number")
-      .eq("tenant_id", profile.tenant_id)
-      .order("client_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const suggested = await previewNextClientNumber(admin, profile.tenant_id);
 
-    let nextNumber = 1;
-    if (lastClient?.client_number) {
-      const match = lastClient.client_number.match(/CLI-(\d+)/);
-      if (match) {
-        nextNumber = parseInt(match[1], 10) + 1;
-      }
-    }
-
-    return NextResponse.json({ suggested: `CLI-${String(nextNumber).padStart(3, "0")}` });
+    // Si la secuencia no está seedeada (misconfig de migración) caemos al
+    // primer número del padding como sugerencia visual; la creación real
+    // explotaría en allocateClientNumber con un error explícito.
+    return NextResponse.json({ suggested: suggested ?? formatClientNumber(1) });
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
@@ -95,23 +89,8 @@ export async function POST(request: NextRequest) {
       }
       client_number = customNumber.trim();
     } else {
-      // Auto-generate client_number: CLI-NNN
-      const { data: lastClient } = await admin
-        .from("clients")
-        .select("client_number")
-        .eq("tenant_id", profile.tenant_id)
-        .order("client_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      let nextNumber = 1;
-      if (lastClient?.client_number) {
-        const match = lastClient.client_number.match(/CLI-(\d+)/);
-        if (match) {
-          nextNumber = parseInt(match[1], 10) + 1;
-        }
-      }
-      client_number = `CLI-${String(nextNumber).padStart(3, "0")}`;
+      // Auto-generate via allocator atómico (numbering_sequences + RPC).
+      client_number = await allocateClientNumber(admin, profile.tenant_id);
     }
 
     const { data: newClient, error: insertError } = await admin

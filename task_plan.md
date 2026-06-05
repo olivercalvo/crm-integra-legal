@@ -1,5 +1,26 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ⚠️ HOTFIX EN VUELO — Allocator de `client_number` (2026-06-04)
+
+Hotfix del bug que tumbó la cotización de Daveiva (`duplicate key idx_clients_number_tenant` al crear prospecto nuevo). Código construido y commiteado en `develop`; migración SQL **pendiente de aplicar en prod**.
+
+### Estado
+- ✅ Allocator centralizado en `src/lib/clients/numbering.ts` (RPC `get_next_sequence_number` atómica, misma que facturas/cotizaciones).
+- ✅ 5 copias del algoritmo viejo (lex-sort + regex) reemplazadas: `clients/route.ts` GET+POST, `quotes.ts insertProspectClient`, `prospects/[id]/convert/route.ts`, `import/route.ts` (loop clientes + auto-create en loop cases).
+- ✅ `npx tsc --noEmit` limpio. Cero residuos del patrón viejo en `src/`.
+- ⬜ Migración `sql/pending/021_client_numbering_sequence.sql` **NO ejecutada**.
+- ⬜ Merge `develop → main` bloqueado hasta seedear.
+
+### ORDEN DE DEPLOY (no negociable)
+1. **Migración 021 en Supabase prod** (manual, SQL Editor): extiende CHECK `numbering_sequences_sequence_type_check` con `'client'` + INSERT per-tenant con `last_number = MAX(suffix de CLI-NNN canónico)`. Filtra `^CLI-\d+$` para que `TEST-FE-*` no contamine el seed (esperado `last_number ≈ 75`).
+2. Verificar con los SELECTs comentados en el header de la migración.
+3. **Después** merge `develop → main` (auto-deploy Vercel).
+
+Si el código vuela antes que el seed, `get_next_sequence_number(tenant, 'client')` lanza `no_data_found` y rompe toda creación de cliente (módulo Clientes, prospect-inline en Cotización, convert desde pipeline Prospectos, import masivo).
+
+### Mitigación previa opcional
+- Renombrar `TEST-FE-001/002` a prefijo lex-bajo (ej. `0TEST-FE-001`). UPDATE de 2 filas, FKs intactas, cosmético — el filtro del seed ya las excluye.
+
 ## FASE 1: Setup & Infraestructura
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|

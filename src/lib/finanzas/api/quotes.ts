@@ -33,6 +33,7 @@ import {
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createInvoice } from "@/lib/finanzas/api/invoices";
 import { getTermsTemplate } from "@/lib/finanzas/api/quote-terms";
+import { allocateClientNumber } from "@/lib/clients/numbering";
 
 type DB = SupabaseClient;
 
@@ -365,33 +366,6 @@ export function validateMarkRejected(
 // ---------------------------------------------------------------------------
 
 /**
- * Genera el siguiente client_number CLI-NNN para un tenant. Replica el patrón
- * existente del módulo Clientes (ver src/app/api/clients/route.ts). Acá no
- * hay sequence en numbering_sequences para clients — se usa max+1.
- *
- * Race condition: si dos requests concurrentes computan el mismo CLI-NNN,
- * la segunda INSERT falla por UNIQUE constraint y el caller debe reintentar.
- * Aceptable para MVP; documento volúmenes esperados (un puñado de prospects
- * por día).
- */
-async function generateNextClientNumber(db: DB, tenantId: string): Promise<string> {
-  const { data: lastClient } = await db
-    .from("clients")
-    .select("client_number")
-    .eq("tenant_id", tenantId)
-    .order("client_number", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let nextNumber = 1;
-  if (lastClient?.client_number) {
-    const match = (lastClient.client_number as string).match(/CLI-(\d+)/);
-    if (match) nextNumber = parseInt(match[1], 10) + 1;
-  }
-  return `CLI-${String(nextNumber).padStart(3, "0")}`;
-}
-
-/**
  * Crea un prospect (cliente con client_status='prospect') a partir de los
  * datos mínimos D13. Devuelve el client_id generado.
  *
@@ -402,7 +376,7 @@ async function insertProspectClient(
   tenantId: string,
   data: NewProspectInput
 ): Promise<string> {
-  const clientNumber = await generateNextClientNumber(db, tenantId);
+  const clientNumber = await allocateClientNumber(db, tenantId);
 
   const { data: newClient, error } = await db
     .from("clients")

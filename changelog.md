@@ -1,5 +1,47 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Hotfix] - 2026-06-04 - Allocator atómico de `client_number` (numbering_sequences)
+
+Hotfix del incidente reportado por Daveiva al crear una cotización con prospecto nuevo:
+`duplicate key value violates unique constraint idx_clients_number_tenant`.
+
+### Root cause
+- Algoritmo `ORDER BY client_number DESC LIMIT 1` + `regex /CLI-(\d+)/` + `max+1` con sort lexicográfico sobre TEXT. Filas con prefijo lex-mayor que `CLI-` (fixtures `TEST-FE-001/002` de la integración eFactura) ganaban el ORDER BY; el regex no matcheaba; fallback `nextNum=1` → colisión con el `CLI-001` ya existente.
+- Bug latente adicional: `CLI-1000` queda lex-menor que `CLI-999` (rompe en el primer cliente que cruce el milar). Race condition entre requests concurrentes ya documentada en el código viejo.
+
+### Added
+- `src/lib/clients/numbering.ts` — módulo centralizado:
+  - `allocateClientNumber(db, tenantId)` — consume secuencia atómicamente vía RPC `get_next_sequence_number` (SELECT FOR UPDATE + UPDATE server-side; misma RPC que facturas y cotizaciones).
+  - `previewNextClientNumber(db, tenantId)` — lee `last_number + 1` sin consumir (sugerencia visual para el form).
+  - `formatClientNumber(n)` — `CLI-{padStart 3}`. Comparación INT, sin overflow lex en `CLI-1000`.
+
+### Changed
+- Reemplazo de las **5 copias** del algoritmo viejo por el allocator (cero referencias a `order("client_number")` o `match(/CLI-/)` en `src/` post-cambio):
+  - `src/app/api/clients/route.ts` — GET (sugerencia) + POST (auto-generate, branch custom-number sin cambios).
+  - `src/lib/finanzas/api/quotes.ts` — `insertProspectClient` (helper `generateNextClientNumber` eliminado).
+  - `src/app/api/prospects/[id]/convert/route.ts` — convert prospect → cliente.
+  - `src/app/api/import/route.ts` — loop principal de clientes **y** auto-create dentro del loop de cases.
+
+### Migración requerida (NO ejecutada en este commit)
+- `sql/pending/021_client_numbering_sequence.sql`:
+  - `ALTER TABLE numbering_sequences DROP/ADD CONSTRAINT numbering_sequences_sequence_type_check` → agrega `'client'` a la lista existente (`'quote'`, `'invoice_hon'`, `'invoice_reim'`, `'credit_note'`).
+  - `INSERT … ON CONFLICT DO NOTHING` por tenant con `last_number = COALESCE(MAX((regexp_match(client_number, '^CLI-(\d+)$'))[1]::INT), 0)` filtrando `client_number ~ '^CLI-\d+$'` para excluir `TEST-FE-*` y prefijos no canónicos.
+  - Idempotente; BEGIN/COMMIT explícito; bloque ROLLBACK comentado al final.
+
+### ⚠️ DEPLOY ORDER (no negociable)
+1. **Ejecutar la migración 021 en Supabase prod PRIMERO** (manual, SQL Editor).
+2. Verificar con los SELECTs del bloque VERIFICACIÓN: `'client'` en el CHECK, fila seedeada con `last_number ≈ 75` para el tenant de Integra Legal, cross-check vs MAX real.
+3. **Después** mergear `develop → main` para gatillar el auto-deploy de Vercel.
+
+Si el código entra vivo antes de seedear la fila, `get_next_sequence_number(tenant, 'client')` lanza `no_data_found` y rompe TODO flujo de creación de cliente (Clientes, Cotizaciones prospect-inline, Prospectos convert, Import masivo).
+
+### Mitigación previa recomendada (opcional, NO incluida en el script)
+- Renombrar las filas `TEST-FE-001` / `TEST-FE-002` a un prefijo lex-bajo (ej. `0TEST-FE-001`). Cosmético — el filtro del seed ya las excluye, pero limpia reportes que ordenen por `client_number`. UPDATE de 2 filas, FKs intactas.
+
+### Verified
+- `npx tsc --noEmit` limpio (0 errores).
+- Grep en `src/`: 0 matches de `order("client_number"` y 0 matches de `match(/CLI-`. La única referencia textual al patrón viejo es el comentario explicativo dentro de `numbering.ts`.
+
 ## [Sprint 2E.3.2] - 2026-05-14 - Campo `title` obligatorio en cotizaciones
 
 ### Added

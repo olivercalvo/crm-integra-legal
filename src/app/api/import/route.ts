@@ -7,6 +7,7 @@ import {
   type ImportClientRow,
   type ImportCaseRow,
 } from "@/lib/utils/import-parser";
+import { allocateClientNumber } from "@/lib/clients/numbering";
 
 // ---------------------------------------------------------------------------
 // POST /api/import — Parse & validate (preview mode) or execute import
@@ -107,20 +108,10 @@ export async function POST(request: NextRequest) {
     );
 
     // ----- Insert clients -----
-    // Get current max client_number
-    const { data: lastClient } = await admin
-      .from("clients")
-      .select("client_number")
-      .eq("tenant_id", profile.tenant_id)
-      .order("client_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    let nextClientNum = 1;
-    if (lastClient?.client_number) {
-      const match = lastClient.client_number.match(/CLI-(\d+)/);
-      if (match) nextClientNum = parseInt(match[1], 10) + 1;
-    }
+    // Cada cliente nuevo consume la secuencia atómicamente vía
+    // allocateClientNumber (numbering_sequences + RPC). Antes el flujo
+    // pre-calculaba con ORDER BY DESC + regex y luego incrementaba en JS;
+    // ese patrón colisionaba si había prefijos lex-mayores en clients.
 
     // Map: name (lowercase) → client_id (for linking cases)
     const clientMap = new Map<string, string>();
@@ -149,8 +140,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const clientNumber = `CLI-${String(nextClientNum).padStart(3, "0")}`;
-      nextClientNum++;
+      const clientNumber = await allocateClientNumber(admin, profile.tenant_id);
 
       const { data: newClient, error } = await admin
         .from("clients")
@@ -240,8 +230,7 @@ export async function POST(request: NextRequest) {
 
       // If client not found, create it
       if (!clientId && caseRow.clientName) {
-        const clientNumber = `CLI-${String(nextClientNum).padStart(3, "0")}`;
-        nextClientNum++;
+        const clientNumber = await allocateClientNumber(admin, profile.tenant_id);
 
         const { data: autoClient, error: autoErr } = await admin
           .from("clients")

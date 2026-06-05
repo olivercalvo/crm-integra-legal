@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { allocateClientNumber } from "@/lib/clients/numbering";
 
 // POST — convert prospect to client
 export async function POST(
@@ -29,21 +30,10 @@ export async function POST(
       return NextResponse.json({ error: "Este prospecto ya fue convertido a cliente" }, { status: 400 });
     }
 
-    // Generate next client_number
-    const { data: maxClient } = await admin
-      .from("clients")
-      .select("client_number")
-      .eq("tenant_id", profile.tenant_id)
-      .order("client_number", { ascending: false })
-      .limit(1)
-      .single();
-
-    let nextNum = 1;
-    if (maxClient?.client_number) {
-      const match = (maxClient.client_number as string).match(/CLI-(\d+)/);
-      if (match) nextNum = parseInt(match[1], 10) + 1;
-    }
-    const clientNumber = `CLI-${String(nextNum).padStart(3, "0")}`;
+    // Generate next client_number via allocator atómico
+    // (numbering_sequences + RPC). Reemplaza la lógica vieja lex-sort+regex
+    // que colisionaba cuando había filas con prefijo > 'CLI-' (ej. TEST-FE-).
+    const clientNumber = await allocateClientNumber(admin, profile.tenant_id);
 
     // Create client from prospect data
     const { data: newClient, error: clientError } = await admin

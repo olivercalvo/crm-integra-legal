@@ -330,16 +330,19 @@ export function QuoteForm(props: Props) {
             : `/api/finanzas/quotes/${props.initial.id}`;
         const method = props.mode === "create" ? "POST" : "PATCH";
 
-        // En edición no enviamos new_prospect ni cambiamos el cliente acá
-        // (decisión D11/D12: el cliente de una cotización en borrador no se
-        // cambia desde el editor — si se necesita otro cliente, se elimina
-        // el borrador y se crea uno nuevo). Igual mandamos client_id por si
-        // alguna vez se habilita.
+        // En edición soportamos los dos modos del toggle, igual que en create.
+        // Bugfix: al duplicar una cotización y cambiar a "Crear prospecto
+        // nuevo", el PATCH ignoraba ese modo y conservaba el client_id
+        // heredado. Ahora replicamos la rama XOR: si mode === "new" mandamos
+        // new_prospect y NO client_id; si "existing" mandamos client_id y NO
+        // new_prospect. El handler valida exclusión mutua server-side.
         const body =
           props.mode === "create"
             ? createBody
             : {
-                client_id: clientId,
+                ...(clientSelector.mode === "new"
+                  ? { new_prospect: newProspect }
+                  : { client_id: clientId }),
                 case_id: caseId ?? null,
                 issue_date: issueDate,
                 valid_until: validUntil,

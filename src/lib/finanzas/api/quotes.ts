@@ -264,8 +264,23 @@ export function validateUpdateQuote(
 ): QuoteValidationResult<UpdateQuoteInput> {
   const errors: QuoteValidationErrors = {};
 
-  if (raw.client_id !== undefined && !UUID_RE.test(String(raw.client_id))) {
+  // Cliente: XOR entre client_id y new_prospect. En update, AMBOS pueden
+  // ausentarse (significa "no cambiar el cliente"), pero NO pueden venir los
+  // dos a la vez. Mismo mensaje y semántica que create cuando ambos vienen.
+  const hasClientId = raw.client_id !== undefined;
+  const hasNewProspect = raw.new_prospect !== undefined && raw.new_prospect !== null;
+  if (hasClientId && hasNewProspect) {
+    errors.client_id =
+      "Indica un cliente existente O los datos de un cliente nuevo (no ambos)";
+  } else if (hasClientId && !UUID_RE.test(String(raw.client_id))) {
     errors.client_id = "Cliente inválido";
+  } else if (hasNewProspect) {
+    const v = validateNewProspectInput(raw.new_prospect);
+    if (!v.ok) {
+      for (const [k, msg] of Object.entries(v.errors)) {
+        errors[`new_prospect.${k}`] = msg;
+      }
+    }
   }
   if (raw.case_id != null && !UUID_RE.test(String(raw.case_id))) {
     errors.case_id = "Caso inválido";
@@ -312,12 +327,22 @@ export function validateUpdateQuote(
   }
 
   // Normalizar title con trim para que el UPDATE persista la versión limpia
-  // (consistente con createQuote). Idem observations.
+  // (consistente con createQuote). Idem observations. Idem new_prospect
+  // (re-corremos validateNewProspectInput para reusar su normalización de
+  // trims). En este punto ya sabemos que si new_prospect vino, era válido.
+  const normalizedProspect =
+    hasNewProspect && !errors["new_prospect.name"]
+      ? validateNewProspectInput(raw.new_prospect)
+      : null;
+
   const normalized: UpdateQuoteInput = {
     ...(raw as UpdateQuoteInput),
     ...(raw.title !== undefined ? { title: String(raw.title).trim() } : {}),
     ...(raw.observations !== undefined
       ? { observations: normalizeObservations(raw.observations) }
+      : {}),
+    ...(normalizedProspect && normalizedProspect.ok
+      ? { new_prospect: normalizedProspect.data }
       : {}),
   };
 
@@ -861,9 +886,27 @@ export async function updateQuote(
     );
   }
 
-  // 2. UPDATE header con campos cambiados.
+  // 2. Resolver cliente final.
+  //    - input.new_prospect → INSERT prospect ANTES del UPDATE para tener su
+  //      id disponible, luego se setea como client_id del header.
+  //    - input.client_id     → modo existente, se setea tal cual.
+  //    - ninguno             → no se toca el client_id actual.
+  //    Si la creación del prospect falla, abortamos antes de tocar la
+  //    cotización (mismo trade-off semántico que createQuote: el prospect
+  //    no se elimina si la cotización falla más adelante, pero acá ni
+  //    siquiera llegamos a tocar la cotización si el INSERT del prospect
+  //    falla).
   const headerUpdate: Record<string, unknown> = {};
-  if (input.client_id !== undefined) headerUpdate.client_id = input.client_id;
+  if (input.new_prospect) {
+    const newProspectId = await insertProspectClient(
+      db,
+      tenantId,
+      input.new_prospect
+    );
+    headerUpdate.client_id = newProspectId;
+  } else if (input.client_id !== undefined) {
+    headerUpdate.client_id = input.client_id;
+  }
   if (input.case_id !== undefined) headerUpdate.case_id = input.case_id;
   if (input.issue_date !== undefined) headerUpdate.issue_date = input.issue_date;
   if (input.valid_until !== undefined) headerUpdate.valid_until = input.valid_until;

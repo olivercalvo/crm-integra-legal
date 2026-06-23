@@ -1,25 +1,41 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ⚠️ HOTFIX EN VUELO — Allocator de `client_number` (2026-06-04)
+## Estado actual (cerrado 2026-06-23, en producción en `main` @ `e7231b3`)
 
-Hotfix del bug que tumbó la cotización de Daveiva (`duplicate key idx_clients_number_tenant` al crear prospecto nuevo). Código construido y commiteado en `develop`; migración SQL **pendiente de aplicar en prod**.
+- **Fix bug de Milena**: "crear prospecto nuevo" al editar/duplicar cotización (`5b85a61` en develop → cherry-pick `e7231b3` en main). Validado en prod (CLI-089 creado vía smoke).
+- **Hotfix numeración**: allocator atómico vía `numbering_sequences` (`87fb6fd` en develop → `983f3ec` en hotfix → mergeado en main). Vivo en prod.
+- `numbering_sequences.client.last_number = 89` (gaps aceptados de smokes; estado seguro, adelantada vs MAX real CLI-086).
+- Migración `sql/pending/021_client_numbering_sequence.sql` ya aplicada en prod.
+- Herramienta de diagnóstico en `scripts/diag-numbering.ts` (`NODE_OPTIONS="--use-system-ca" npx tsx scripts/diag-numbering.ts`).
 
-### Estado
-- ✅ Allocator centralizado en `src/lib/clients/numbering.ts` (RPC `get_next_sequence_number` atómica, misma que facturas/cotizaciones).
-- ✅ 5 copias del algoritmo viejo (lex-sort + regex) reemplazadas: `clients/route.ts` GET+POST, `quotes.ts insertProspectClient`, `prospects/[id]/convert/route.ts`, `import/route.ts` (loop clientes + auto-create en loop cases).
-- ✅ `npx tsc --noEmit` limpio. Cero residuos del patrón viejo en `src/`.
-- ⬜ Migración `sql/pending/021_client_numbering_sequence.sql` **NO ejecutada**.
-- ⬜ Merge `develop → main` bloqueado hasta seedear.
+## Backlog próxima sesión (orden de prioridad)
 
-### ORDEN DE DEPLOY (no negociable)
-1. **Migración 021 en Supabase prod** (manual, SQL Editor): extiende CHECK `numbering_sequences_sequence_type_check` con `'client'` + INSERT per-tenant con `last_number = MAX(suffix de CLI-NNN canónico)`. Filtra `^CLI-\d+$` para que `TEST-FE-*` no contamine el seed (esperado `last_number ≈ 75`).
-2. Verificar con los SELECTs comentados en el header de la migración.
-3. **Después** merge `develop → main` (auto-deploy Vercel).
+### A. Bug buscador de clientes en form de cotización (alta, rápido)
+El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Arreglar el filtro para incluir prospects. Misma raíz conceptual que **B (PROSPECTOS-UNIFY)** pero se puede hacer como fix puntual antes.
 
-Si el código vuela antes que el seed, `get_next_sequence_number(tenant, 'client')` lanza `no_data_found` y rompe toda creación de cliente (módulo Clientes, prospect-inline en Cotización, convert desde pipeline Prospectos, import masivo).
+### B. PROSPECTOS-UNIFY (Camino X) — sprint grande, **ahora desbloqueado**
+Prerrequisito (hotfix numeración en prod) ya cumplido. Decisión ya tomada: fuente única = tabla `prospects`. Alcance:
+- Crear prospecto desde cotización escribe en `prospects` (etapa `propuesta_enviada`).
+- `quotes.client_id` nullable + `prospect_id` + CHECK XOR.
+- Cotizar para prospecto existente (3er modo en el toggle).
+- Dedup: `UNIQUE(tenant_id, lower(email))` en `prospects`.
+- Convertir cotización → factura auto-convierte prospecto → cliente vía `/convert`.
+- Cableado en API, **no en triggers**.
+- El bug del buscador (A) se absorbe acá si no se hizo antes.
 
-### Mitigación previa opcional
-- Renombrar `TEST-FE-001/002` a prefijo lex-bajo (ej. `0TEST-FE-001`). UPDATE de 2 filas, FKs intactas, cosmético — el filtro del seed ya las excluye.
+### C. eFactura a producción
+Certificado **ya configurado** en la cuenta de Ideati (Eduardo lo confirmó por correo — no requiere los $107, no se descarga, firma del lado de ellos). Falta del lado nuestro:
+1. Generar API key de producción en opción **Integración** de `admin.efacturapty.com`.
+2. Variables `EFACTURA_*` en Vercel + `i_amb=1` (prod).
+3. Usar un punto de facturación **distinto** al de QuickBooks para no colisionar secuencias en DGI.
+4. Confirmar plan de folios disponible.
+5. Aplicar migraciones FE en Supabase prod.
+6. Merge del trabajo eFactura (está en `develop`) a `main`.
+7. Validar UNA emisión real con cuidado (es documento fiscal real).
+
+### D. Pendientes menores
+- **ROLANDO MCLEAN (CLI-086)**: prospecto válido creado en pruebas del 2026-06-23. Decidir si se deja o se conecta a COT-001303 (la cotización original de Milena que quedó con cliente equivocado).
+- **COT-001303**: quedó apuntando al cliente equivocado (MIGUEL VALDES) por el bug ya arreglado. Milena iba a rehacerla; confirmar si lo hizo o si hay que limpiarla.
 
 ## FASE 1: Setup & Infraestructura
 | # | Tarea | Feature | Estado | Notas |

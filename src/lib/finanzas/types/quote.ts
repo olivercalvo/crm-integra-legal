@@ -251,9 +251,23 @@ export interface CreateQuoteInput {
   lines: NewQuoteLineInput[];
 }
 
-/** Payload para actualizar (solo permitido si status='borrador'). */
+/**
+ * Payload para actualizar (solo permitido si status='borrador' o 'emitida').
+ *
+ * Reglas de cliente (XOR, validado en runtime por validateUpdateQuote):
+ *   - Si se quiere mantener el cliente actual: omitir AMBOS client_id y new_prospect.
+ *   - Si se quiere cambiar a uno existente: enviar SOLO client_id.
+ *   - Si se quiere crear un prospect inline y asignarlo: enviar SOLO new_prospect.
+ *   - Enviar AMBOS es error.
+ */
 export interface UpdateQuoteInput {
   client_id?: string;
+  /**
+   * Datos del prospect inline al editar. Mutuamente excluyente con client_id.
+   * Útil cuando se duplica una cotización y se decide cambiar el cliente
+   * heredado por uno recién capturado.
+   */
+  new_prospect?: NewProspectInput;
   case_id?: string | null;
   issue_date?: string;
   valid_until?: string;

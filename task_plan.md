@@ -1,10 +1,11 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## Estado actual (cerrado 2026-06-23, en producción en `main` @ `e7231b3`)
+## Estado actual (cerrado 2026-07-01, en producción en `main` @ `bdd1229`)
 
+- **Fix creación manual de cliente**: número siempre automático desde el wizard `/clientes/nuevo` (`f21c51e` en develop → cherry-pick `bdd1229` en main). El form ya no envía `client_number` en create; el POST cae siempre en `allocateClientNumber` (atómico). Test `numbering.test.ts` cubre que la RPC se invoca y no se valida UNIQUE app-level. Deploy Vercel verificado Ready el 2026-07-01.
 - **Fix bug de Milena**: "crear prospecto nuevo" al editar/duplicar cotización (`5b85a61` en develop → cherry-pick `e7231b3` en main). Validado en prod (CLI-089 creado vía smoke).
 - **Hotfix numeración**: allocator atómico vía `numbering_sequences` (`87fb6fd` en develop → `983f3ec` en hotfix → mergeado en main). Vivo en prod.
-- `numbering_sequences.client.last_number = 89` (gaps aceptados de smokes; estado seguro, adelantada vs MAX real CLI-086).
+- `numbering_sequences.client.last_number = 97` al cierre 2026-07-01 (gaps aceptados de smokes; estado seguro, adelantada vs MAX real).
 - Migración `sql/pending/021_client_numbering_sequence.sql` ya aplicada en prod.
 - Herramienta de diagnóstico en `scripts/diag-numbering.ts` (`NODE_OPTIONS="--use-system-ca" npx tsx scripts/diag-numbering.ts`).
 

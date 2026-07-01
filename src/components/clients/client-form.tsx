@@ -109,6 +109,12 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
     setError(null);
 
     try {
+      // En modo create NO enviamos client_number: el servidor lo asigna
+      // atómicamente vía allocateClientNumber (numbering_sequences).
+      // El preview mostrado en la UI es solo informativo; enviarlo dispararía
+      // la rama "custom" del POST (que valida UNIQUE en app-level y sufre
+      // races bajo concurrencia). En modo edit permitimos que el PATCH decida
+      // qué hacer con el campo (comportamiento actual sin cambios).
       const payload = {
         name: formData.name.trim(),
         ruc: formData.ruc.trim() || null,
@@ -118,7 +124,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
         email: formData.email.trim() || null,
         observations: formData.observations.trim() || null,
         responsible_lawyer_id: formData.responsible_lawyer_id || null,
-        ...(mode === "create" && formData.client_number.trim()
+        ...(mode === "edit" && formData.client_number.trim()
           ? { client_number: formData.client_number.trim() }
           : {}),
       };
@@ -194,7 +200,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
           {/* Step 0: Identificación */}
           {step === 0 && (
             <div className="space-y-4">
-              {/* Editable client number */}
+              {/* Auto-assigned client number (read-only preview) */}
               {mode === "create" && (
                 <div className="rounded-lg border-2 border-integra-gold/50 bg-integra-gold/5 p-3 space-y-1.5">
                   <Label htmlFor="client_number" className="text-integra-navy font-semibold">
@@ -203,16 +209,15 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   <Input
                     id="client_number"
                     value={formData.client_number}
-                    onChange={set("client_number")}
-                    placeholder="Ej. CLI-024"
-                    className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
+                    readOnly
+                    aria-readonly
+                    tabIndex={-1}
+                    placeholder="Se asignará al guardar"
+                    className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-gray-100 text-integra-navy cursor-not-allowed focus-visible:ring-0"
                   />
                   <p className="text-xs text-integra-navy/70">
-                    Puedes cambiar este número para seguir tu propia numeración.
+                    El sistema asignará este número automáticamente al guardar.
                   </p>
-                  {fieldErrors.client_number && (
-                    <p className="text-xs text-red-500">{fieldErrors.client_number}</p>
-                  )}
                 </div>
               )}
 

@@ -1,41 +1,58 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## Estado actual (cerrado 2026-07-01, en producción en `main` @ `bdd1229`)
+## Estado actual (cerrado 2026-07-01)
 
-- **Fix creación manual de cliente**: número siempre automático desde el wizard `/clientes/nuevo` (`f21c51e` en develop → cherry-pick `bdd1229` en main). El form ya no envía `client_number` en create; el POST cae siempre en `allocateClientNumber` (atómico). Test `numbering.test.ts` cubre que la RPC se invoca y no se valida UNIQUE app-level. Deploy Vercel verificado Ready el 2026-07-01.
-- **Fix bug de Milena**: "crear prospecto nuevo" al editar/duplicar cotización (`5b85a61` en develop → cherry-pick `e7231b3` en main). Validado en prod (CLI-089 creado vía smoke).
-- **Hotfix numeración**: allocator atómico vía `numbering_sequences` (`87fb6fd` en develop → `983f3ec` en hotfix → mergeado en main). Vivo en prod.
-- `numbering_sequences.client.last_number = 97` al cierre 2026-07-01 (gaps aceptados de smokes; estado seguro, adelantada vs MAX real).
-- Migración `sql/pending/021_client_numbering_sequence.sql` ya aplicada en prod.
+### Producción (`main` @ `bdd1229`)
+3 fixes de la familia numeración/prospectos, verificados en prod:
+- `983f3ec` — allocator atómico de `client_number` vía RPC `get_next_sequence_number` sobre `numbering_sequences`.
+- `e7231b3` — fix bug Milena: "crear prospecto nuevo" al editar/duplicar cotización.
+- `bdd1229` — número de cliente siempre automático en creación manual (`/clientes/nuevo` ya no envía `client_number` en create; el POST cae siempre en `allocateClientNumber`).
+- `numbering_sequences.client.last_number = 97` (gaps aceptados de smokes; NUNCA rebobinar).
 - Herramienta de diagnóstico en `scripts/diag-numbering.ts` (`NODE_OPTIONS="--use-system-ca" npx tsx scripts/diag-numbering.ts`).
+
+### Git reunificado (`develop` @ `5f0a991`)
+- Back-merge `main → develop` completado. **`develop` es ahora la base autoritativa**: todo `main` + toda la fase eFactura + los 3 fixes. Conflictos resueltos con la versión de develop (EfacturaCard supersede DgiDataCard legacy).
+- **`main` intacto** en `bdd1229`. El merge eventual `develop → main` para eFactura será fast-forward limpio.
+- Rama `hotfix/client-numbering` **BORRADA** (local + remota) — cumplió su función.
+
+### eFactura go-live — estado del checklist
+- [OK] Certificado configurado en Ideati (confirmado por Eduardo).
+- [OK] Migraciones FE 019/020/021 ya aplicadas en Supabase prod (verificado 12/12 OK con query de introspección — clients +8 col, invoices +9 col, tablas `fe_emisiones`/`fe_secuencias`, RPC `allocate_fe_numero`, CHECK `numbering_sequences.sequence_type='client'`).
+- [OK] API key de producción generada en `admin.efacturapty.com` → Integración (nombre "CRM Integra Legal"). Oliver la tiene guardada.
+- [OK] Vercel Production: **16/19 variables** `EFACTURA_*` cargadas vía CLI (14 emisor + `EFACTURA_I_AMB=1` + `EFACTURA_API_BASE_URL=https://api.efacturapty.com`). UTF-8 verificado en tildes (`Panamá`, `Bella Vista`).
+- [PENDIENTE] **3 variables faltan en Vercel Production**:
+  - `EFACTURA_API_KEY` → Oliver la carga manual en el dashboard (sensible, no por CLI).
+  - `EFACTURA_EMISOR_PUNTO_FACTURACION` → **espera respuesta de Eduardo** (QuickBooks usa `050`; el CRM necesita otro, ≠ 050, ≠ 000, ≠ 001). Correo ya enviado.
+  - `EFACTURA_EMISOR_CPBS_REI` → **confirmar con contador** (candidato `8012`, igual que HON).
+- [PENDIENTE] Merge `develop → main` (release eFactura) — SOLO cuando las 3 variables estén cargadas.
+- [PENDIENTE] Primera emisión real de prueba (documento fiscal real, con cuidado — factura pequeña a receptor conocido).
 
 ## Backlog próxima sesión (orden de prioridad)
 
-### A. Bug buscador de clientes en form de cotización (alta, rápido)
-El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Arreglar el filtro para incluir prospects. Misma raíz conceptual que **B (PROSPECTOS-UNIFY)** pero se puede hacer como fix puntual antes.
+### A. eFactura go-live (prioridad de Oliver)
+Desbloqueo = respuesta de Eduardo (punto de facturación + confirmación de folios) + `CPBS_REI` del contador. Luego, en ese orden:
+1. Cargar las 3 variables pendientes en Vercel Production.
+2. Merge `develop → main` (fast-forward, disparará auto-deploy).
+3. Primera emisión real de prueba con factura pequeña a receptor conocido.
 
-### B. PROSPECTOS-UNIFY (Camino X) — sprint grande, **ahora desbloqueado**
-Prerrequisito (hotfix numeración en prod) ya cumplido. Decisión ya tomada: fuente única = tabla `prospects`. Alcance:
+### B. Bug buscador de clientes en form de cotización (alta, rápido)
+El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
+
+### C. PROSPECTOS-UNIFY (Camino X) — sprint grande, desbloqueado
+Corta la raíz de la familia de bugs de esta sesión. **Ahora sobre historia git ya reunificada.** Decisión ya tomada: fuente única = tabla `prospects`. Alcance:
 - Crear prospecto desde cotización escribe en `prospects` (etapa `propuesta_enviada`).
 - `quotes.client_id` nullable + `prospect_id` + CHECK XOR.
 - Cotizar para prospecto existente (3er modo en el toggle).
 - Dedup: `UNIQUE(tenant_id, lower(email))` en `prospects`.
 - Convertir cotización → factura auto-convierte prospecto → cliente vía `/convert`.
 - Cableado en API, **no en triggers**.
-- El bug del buscador (A) se absorbe acá si no se hizo antes.
+- El bug del buscador (B) se absorbe acá si no se hizo antes.
 
-### C. eFactura a producción
-Certificado **ya configurado** en la cuenta de Ideati (Eduardo lo confirmó por correo — no requiere los $107, no se descarga, firma del lado de ellos). Falta del lado nuestro:
-1. Generar API key de producción en opción **Integración** de `admin.efacturapty.com`.
-2. Variables `EFACTURA_*` en Vercel + `i_amb=1` (prod).
-3. Usar un punto de facturación **distinto** al de QuickBooks para no colisionar secuencias en DGI.
-4. Confirmar plan de folios disponible.
-5. Aplicar migraciones FE en Supabase prod.
-6. Merge del trabajo eFactura (está en `develop`) a `main`.
-7. Validar UNA emisión real con cuidado (es documento fiscal real).
+### D. Backlog eFactura post-go-live
+Soportar **retención de ITBMS** en emisión (algunos clientes son agentes de retención). Detectado en facturas reales del 2026-07-01. Sprint propio, después de que la emisión básica esté viva en prod.
 
-### D. Pendientes menores
-- **ROLANDO MCLEAN (CLI-086)**: prospecto válido creado en pruebas del 2026-06-23. Decidir si se deja o se conecta a COT-001303 (la cotización original de Milena que quedó con cliente equivocado).
+### E. Pendientes menores
+- **ROLANDO MCLEAN (CLI-086)**: prospecto válido creado en pruebas del 2026-06-23. Decidir si se deja o se conecta a COT-001303.
 - **COT-001303**: quedó apuntando al cliente equivocado (MIGUEL VALDES) por el bug ya arreglado. Milena iba a rehacerla; confirmar si lo hizo o si hay que limpiarla.
 
 ## FASE 1: Setup & Infraestructura

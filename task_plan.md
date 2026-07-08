@@ -1,5 +1,17 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## Estado eFactura (cerrado 2026-07-07 — LISTO PARA MERGE)
+
+- **Vercel Production: 18/19 variables `EFACTURA_*` cargadas.** Falta solo `EFACTURA_EMISOR_CPBS_REI` (confirmar con contador, candidato `8012`; **NO bloquea** primera emisión sin retención).
+- `EFACTURA_EMISOR_PUNTO_FACTURACION=051` (Eduardo/Ideati confirmó; QuickBooks usa `050`). Punto nuevo **NO requiere alta en DGI**, basta enviarlo en la API. Folios se consumen del plan del RUC.
+- **Merge `develop → main` VERIFICADO con dry-run**: FF posible, CERO conflictos, 34 commits (fase eFactura sandbox-validada + Cotizaciones + fixes numbering). **NO ejecutado aún.**
+- `main` intacto en `bdd1229`. `develop` es base autoritativa (`5f0a991` + commits posteriores).
+
+### Próxima sesión (secuencia go-live)
+1. Ejecutar merge `develop → main` (recomendado `--no-ff` para punto de merge explícito del go-live) → push → auto-deploy Vercel.
+2. Primera emisión REAL de prueba: factura chica, receptor conocido, **SIN retención de ITBMS**. Validar CUFE contra DGI prod (https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE).
+3. Post-go-live backlog: soportar retención ITBMS en emisión; cargar `EFACTURA_EMISOR_CPBS_REI` cuando el contador confirme.
+
 ## Estado actual (cerrado 2026-07-01)
 
 ### Producción (`main` @ `bdd1229`)

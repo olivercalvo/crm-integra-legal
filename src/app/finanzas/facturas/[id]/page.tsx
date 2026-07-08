@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Calendar,
   FileText,
-  AlertTriangle,
   XCircle,
 } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
@@ -30,6 +29,7 @@ import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { CancelInvoiceDialog } from "../_components/cancel-invoice-dialog";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
+import { EfacturaCard } from "../_components/efactura-card";
 import { PaymentsSection } from "../_components/payments-section";
 import { CreditNoteCard } from "../_components/credit-note-card";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
@@ -72,20 +72,33 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       : Promise.resolve([]),
     isAnulada ? getCreditNoteForInvoice(db, tenantId, invoice.id) : Promise.resolve(null),
   ]);
-  // Conserva la card DGI en facturas anuladas SI tienen algún dato cargado,
-  // como referencia histórica. Si nunca se llenó, no la mostramos.
-  const hasDgiData =
+  // Card "Facturación Electrónica" (PAC) — visible en facturas emitidas y
+  // en anuladas que hayan llegado a interactuar con DGI (para conservar
+  // historial post-anulación).
+  const showEfacturaCard =
+    isEmitida || (isAnulada && invoice.fe_estado !== "no_emitida");
+  // Permiso para disparar envío al PAC (D7 del sprint 2E.2 / consistente
+  // con route handler que devuelve 403 a roles no permitidos).
+  const canEmitToPac = userRole === "admin" || userRole === "abogada";
+  // Card DGI manual — legacy MVP pre-integración PAC. Queda visible SOLO
+  // si la abogada efectivamente cargó datos manuales (hay al menos un
+  // campo DGI manual presente) y la factura nunca entró al flujo
+  // automático (sin punto_facturacion ni numero_documento asignados por
+  // la orquestación T2). Esto cubre el caso "factura legacy con CUFE
+  // capturado a mano" como puente — para facturas nuevas que arrancan
+  // en no_emitida sin manual data, NO se renderiza (sería ruido frente
+  // a la card nueva que ya tiene el CTA "Enviar al PAC"). Una vez que
+  // la factura entra al flujo automático (T2 asigna punto+número), este
+  // fallback se oculta y la card EfacturaCard toma el relevo.
+  const hasLegacyDgiData =
     !!invoice.dgi_numero_documento ||
     !!invoice.dgi_cufe ||
     !!invoice.dgi_fecha_autorizacion ||
     !!invoice.dgi_cafe_url;
-  const showDgiCard = isEmitida || (isAnulada && hasDgiData);
-  // Banner pre-integración eFactura: visible mientras la abogada no haya
-  // capturado el CUFE oficial. Una vez registrado, el flujo se considera
-  // completo y ocultamos el banner para reducir ruido visual. Si la factura
-  // fue anulada, isEmitida queda en false → el banner no se muestra
-  // (el estado de anulación tiene su propia sección dedicada).
-  const showInternalBanner = isEmitida && !invoice.dgi_cufe;
+  const neverEnteredAutoFlow =
+    !invoice.punto_facturacion && invoice.numero_documento === null;
+  const showLegacyDgiCard =
+    (isEmitida || isAnulada) && hasLegacyDgiData && neverEnteredAutoFlow;
 
   const numberPreview = emittable
     ? await previewNextInvoiceNumber(db, tenantId, invoice.invoice_kind)
@@ -158,26 +171,6 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           )}
         </div>
       </div>
-
-      {/* Banner pre-integración eFactura (decisión D2 del sprint).
-          Sólo visible en facturas emitidas que aún no tienen CUFE registrado.
-          shadcn/ui no incluye Alert en este proyecto, así que armamos un
-          banner custom con la paleta corporativa. */}
-      {showInternalBanner && (
-        <div
-          role="alert"
-          className="flex items-start gap-3 rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4 text-amber-900"
-        >
-          <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
-          <div className="text-sm">
-            <p className="font-semibold">📄 Documento interno</p>
-            <p>
-              La factura fiscal oficial debe emitirse en eFactura. Cuando
-              termines, registra el número y el CUFE en la sección de abajo.
-            </p>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         {/* Cuerpo principal */}
@@ -329,12 +322,34 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             />
           )}
 
-          {/* Datos DGI — visible cuando status='emitida' (caso primario,
-              D4 del sprint Camino 1) o cuando la factura fue anulada y aún
-              conserva datos DGI cargados (referencia histórica). El propio
-              componente DgiDataCard no permite editar si el invoice no está
-              emitida — el backend (updateInvoiceDgiData) ya lo gate-ea. */}
-          {showDgiCard && (
+          {/* Facturación Electrónica (orquestación PAC eFactura PTY).
+              Muestra el estado fiscal real (no_emitida / pending / authorized /
+              error / canceled) y el CTA "Enviar al PAC" o "Reintentar" según
+              corresponda. */}
+          {showEfacturaCard && (
+            <EfacturaCard
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoice_number}
+              grandTotal={Number(invoice.grand_total)}
+              receptorRuc={invoice.client?.ruc ?? null}
+              receptorNombre={invoice.client?.name ?? null}
+              feEstado={invoice.fe_estado}
+              cufe={invoice.dgi_cufe}
+              protocoloAutorizacion={invoice.dgi_protocolo_autorizacion}
+              fechaAutorizacion={invoice.dgi_fecha_autorizacion}
+              qrContent={invoice.qr_content}
+              puntoFacturacion={invoice.punto_facturacion}
+              numeroDocumento={invoice.numero_documento}
+              canEmitToPac={canEmitToPac}
+            />
+          )}
+
+          {/* Fallback legacy: captura manual DGI para facturas anteriores a
+              la integración PAC. Solo aparece si la factura nunca entró al
+              flujo automático (sin punto/número asignado) o si fue anulada
+              con datos manuales históricos. Una vez que se envía al PAC,
+              EfacturaCard toma el relevo. */}
+          {showLegacyDgiCard && (
             <DgiDataCard
               invoiceId={invoice.id}
               initial={{

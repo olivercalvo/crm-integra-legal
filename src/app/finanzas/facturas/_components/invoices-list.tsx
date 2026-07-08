@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
+import { FeEstadoBadge } from "@/components/finanzas/fe-estado-badge";
 import { INVOICE_KIND_LABEL, type InvoiceListItem } from "@/lib/finanzas/types/invoice";
 
 interface Props {
@@ -29,6 +30,7 @@ export function InvoicesList({ invoices }: Props) {
               <th className="px-4 py-3 font-semibold text-right">Total</th>
               <th className="px-4 py-3 font-semibold text-right">Saldo</th>
               <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 font-semibold">Fiscal</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -87,6 +89,9 @@ export function InvoicesList({ invoices }: Props) {
                 <td className="px-4 py-3">
                   <InvoiceStatusBadge status={inv.status} />
                 </td>
+                <td className="px-4 py-3">
+                  <FeEstadoBadge estado={inv.fe_estado} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -122,7 +127,10 @@ export function InvoicesList({ invoices }: Props) {
                   )}
                 </p>
               </div>
-              <InvoiceStatusBadge status={inv.status} />
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <InvoiceStatusBadge status={inv.status} />
+                <FeEstadoBadge estado={inv.fe_estado} />
+              </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">
               <span className="text-gray-500">Vence {formatDate(inv.due_date)}</span>

@@ -1,25 +1,71 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ⚠️ HOTFIX EN VUELO — Allocator de `client_number` (2026-06-04)
+## Estado eFactura (cerrado 2026-07-07 — LISTO PARA MERGE)
 
-Hotfix del bug que tumbó la cotización de Daveiva (`duplicate key idx_clients_number_tenant` al crear prospecto nuevo). Código construido y commiteado en `develop`; migración SQL **pendiente de aplicar en prod**.
+- **Vercel Production: 18/19 variables `EFACTURA_*` cargadas.** Falta solo `EFACTURA_EMISOR_CPBS_REI` (confirmar con contador, candidato `8012`; **NO bloquea** primera emisión sin retención).
+- `EFACTURA_EMISOR_PUNTO_FACTURACION=051` (Eduardo/Ideati confirmó; QuickBooks usa `050`). Punto nuevo **NO requiere alta en DGI**, basta enviarlo en la API. Folios se consumen del plan del RUC.
+- **Merge `develop → main` VERIFICADO con dry-run**: FF posible, CERO conflictos, 34 commits (fase eFactura sandbox-validada + Cotizaciones + fixes numbering). **NO ejecutado aún.**
+- `main` intacto en `bdd1229`. `develop` es base autoritativa (`5f0a991` + commits posteriores).
 
-### Estado
-- ✅ Allocator centralizado en `src/lib/clients/numbering.ts` (RPC `get_next_sequence_number` atómica, misma que facturas/cotizaciones).
-- ✅ 5 copias del algoritmo viejo (lex-sort + regex) reemplazadas: `clients/route.ts` GET+POST, `quotes.ts insertProspectClient`, `prospects/[id]/convert/route.ts`, `import/route.ts` (loop clientes + auto-create en loop cases).
-- ✅ `npx tsc --noEmit` limpio. Cero residuos del patrón viejo en `src/`.
-- ⬜ Migración `sql/pending/021_client_numbering_sequence.sql` **NO ejecutada**.
-- ⬜ Merge `develop → main` bloqueado hasta seedear.
+### Próxima sesión (secuencia go-live)
+1. Ejecutar merge `develop → main` (recomendado `--no-ff` para punto de merge explícito del go-live) → push → auto-deploy Vercel.
+2. Primera emisión REAL de prueba: factura chica, receptor conocido, **SIN retención de ITBMS**. Validar CUFE contra DGI prod (https://dgi-fep.mef.gob.pa/Consultas/FacturasPorCUFE).
+3. Post-go-live backlog: soportar retención ITBMS en emisión; cargar `EFACTURA_EMISOR_CPBS_REI` cuando el contador confirme.
 
-### ORDEN DE DEPLOY (no negociable)
-1. **Migración 021 en Supabase prod** (manual, SQL Editor): extiende CHECK `numbering_sequences_sequence_type_check` con `'client'` + INSERT per-tenant con `last_number = MAX(suffix de CLI-NNN canónico)`. Filtra `^CLI-\d+$` para que `TEST-FE-*` no contamine el seed (esperado `last_number ≈ 75`).
-2. Verificar con los SELECTs comentados en el header de la migración.
-3. **Después** merge `develop → main` (auto-deploy Vercel).
+## Estado actual (cerrado 2026-07-01)
 
-Si el código vuela antes que el seed, `get_next_sequence_number(tenant, 'client')` lanza `no_data_found` y rompe toda creación de cliente (módulo Clientes, prospect-inline en Cotización, convert desde pipeline Prospectos, import masivo).
+### Producción (`main` @ `bdd1229`)
+3 fixes de la familia numeración/prospectos, verificados en prod:
+- `983f3ec` — allocator atómico de `client_number` vía RPC `get_next_sequence_number` sobre `numbering_sequences`.
+- `e7231b3` — fix bug Milena: "crear prospecto nuevo" al editar/duplicar cotización.
+- `bdd1229` — número de cliente siempre automático en creación manual (`/clientes/nuevo` ya no envía `client_number` en create; el POST cae siempre en `allocateClientNumber`).
+- `numbering_sequences.client.last_number = 97` (gaps aceptados de smokes; NUNCA rebobinar).
+- Herramienta de diagnóstico en `scripts/diag-numbering.ts` (`NODE_OPTIONS="--use-system-ca" npx tsx scripts/diag-numbering.ts`).
 
-### Mitigación previa opcional
-- Renombrar `TEST-FE-001/002` a prefijo lex-bajo (ej. `0TEST-FE-001`). UPDATE de 2 filas, FKs intactas, cosmético — el filtro del seed ya las excluye.
+### Git reunificado (`develop` @ `5f0a991`)
+- Back-merge `main → develop` completado. **`develop` es ahora la base autoritativa**: todo `main` + toda la fase eFactura + los 3 fixes. Conflictos resueltos con la versión de develop (EfacturaCard supersede DgiDataCard legacy).
+- **`main` intacto** en `bdd1229`. El merge eventual `develop → main` para eFactura será fast-forward limpio.
+- Rama `hotfix/client-numbering` **BORRADA** (local + remota) — cumplió su función.
+
+### eFactura go-live — estado del checklist
+- [OK] Certificado configurado en Ideati (confirmado por Eduardo).
+- [OK] Migraciones FE 019/020/021 ya aplicadas en Supabase prod (verificado 12/12 OK con query de introspección — clients +8 col, invoices +9 col, tablas `fe_emisiones`/`fe_secuencias`, RPC `allocate_fe_numero`, CHECK `numbering_sequences.sequence_type='client'`).
+- [OK] API key de producción generada en `admin.efacturapty.com` → Integración (nombre "CRM Integra Legal"). Oliver la tiene guardada.
+- [OK] Vercel Production: **16/19 variables** `EFACTURA_*` cargadas vía CLI (14 emisor + `EFACTURA_I_AMB=1` + `EFACTURA_API_BASE_URL=https://api.efacturapty.com`). UTF-8 verificado en tildes (`Panamá`, `Bella Vista`).
+- [PENDIENTE] **3 variables faltan en Vercel Production**:
+  - `EFACTURA_API_KEY` → Oliver la carga manual en el dashboard (sensible, no por CLI).
+  - `EFACTURA_EMISOR_PUNTO_FACTURACION` → **espera respuesta de Eduardo** (QuickBooks usa `050`; el CRM necesita otro, ≠ 050, ≠ 000, ≠ 001). Correo ya enviado.
+  - `EFACTURA_EMISOR_CPBS_REI` → **confirmar con contador** (candidato `8012`, igual que HON).
+- [PENDIENTE] Merge `develop → main` (release eFactura) — SOLO cuando las 3 variables estén cargadas.
+- [PENDIENTE] Primera emisión real de prueba (documento fiscal real, con cuidado — factura pequeña a receptor conocido).
+
+## Backlog próxima sesión (orden de prioridad)
+
+### A. eFactura go-live (prioridad de Oliver)
+Desbloqueo = respuesta de Eduardo (punto de facturación + confirmación de folios) + `CPBS_REI` del contador. Luego, en ese orden:
+1. Cargar las 3 variables pendientes en Vercel Production.
+2. Merge `develop → main` (fast-forward, disparará auto-deploy).
+3. Primera emisión real de prueba con factura pequeña a receptor conocido.
+
+### B. Bug buscador de clientes en form de cotización (alta, rápido)
+El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
+
+### C. PROSPECTOS-UNIFY (Camino X) — sprint grande, desbloqueado
+Corta la raíz de la familia de bugs de esta sesión. **Ahora sobre historia git ya reunificada.** Decisión ya tomada: fuente única = tabla `prospects`. Alcance:
+- Crear prospecto desde cotización escribe en `prospects` (etapa `propuesta_enviada`).
+- `quotes.client_id` nullable + `prospect_id` + CHECK XOR.
+- Cotizar para prospecto existente (3er modo en el toggle).
+- Dedup: `UNIQUE(tenant_id, lower(email))` en `prospects`.
+- Convertir cotización → factura auto-convierte prospecto → cliente vía `/convert`.
+- Cableado en API, **no en triggers**.
+- El bug del buscador (B) se absorbe acá si no se hizo antes.
+
+### D. Backlog eFactura post-go-live
+Soportar **retención de ITBMS** en emisión (algunos clientes son agentes de retención). Detectado en facturas reales del 2026-07-01. Sprint propio, después de que la emisión básica esté viva en prod.
+
+### E. Pendientes menores
+- **ROLANDO MCLEAN (CLI-086)**: prospecto válido creado en pruebas del 2026-06-23. Decidir si se deja o se conecta a COT-001303.
+- **COT-001303**: quedó apuntando al cliente equivocado (MIGUEL VALDES) por el bug ya arreglado. Milena iba a rehacerla; confirmar si lo hizo o si hay que limpiarla.
 
 ## FASE 1: Setup & Infraestructura
 | # | Tarea | Feature | Estado | Notas |
@@ -179,6 +225,157 @@ Si el código vuela antes que el seed, `get_next_sequence_number(tenant, 'client
 | 1A.12 | Login + auth callback: redirect a `/` (era `/dashboard`) | — | ✅ Completo | `/dashboard` redirige 301 a `/`. |
 | 1A.13 | Build + smoke test (curl en dev) | — | ✅ Completo | 41 rutas, sin errores de tipos. Lint con errores pre-existentes (ignoreDuringBuilds). |
 | 1A.14 | Validación visual en preview de Vercel | — | ⬜ Pendiente | Oliver valida antes de merge a main. |
+
+## INTEGRACIÓN eFACTURA PTY (PAC DGI Panamá) — Sprint propio
+
+Sprint independiente: emisión electrónica de facturas via API del PAC eFactura PTY. Reemplaza el flujo "Camino 1" (captura manual del CUFE desde portal eFactura) por integración API directa.
+
+### ESTADO (cierre 2026-06-04)
+
+- **HITO: emisión de FE VALIDADA end-to-end desde la UI**, sandbox `i_amb=2`. La abogada ya emite y ve el estado fiscal sin tocar consola.
+  - `FAC-HON-000461`, `numero_documento=3`, autorizada vía botón "Enviar al PAC" desde el detalle (tipo `01` contribuyente, sandbox 2026-06-04).
+  - Acumulado de pruebas autorizadas: 459 (nro 1) + 460 (nro 2) + 461 (nro 3) — todos punto `001`, `i_amb=2`.
+- **UI de emisión COMMITEADA** (`7538d9e` en develop):
+  - Card "Facturación Electrónica" en el detalle con badge `fe_estado` (no_emitida / pending / authorized / error / canceled) y render por estado.
+  - Botón "Enviar al PAC" con modal de confirmación (preview número/total/RUC + advertencia fiscal). Reintento desde estado `error`. Manejo inline de `errorMessage` + `codRes[]` + nota especial para `pac_duplicate`.
+  - Columna "Fiscal" en el listado de facturas (escritorio + mobile).
+  - Toast `?fe=sent|pending|error` integrado a `InvoiceSuccessToast` (verde / ámbar warning / rojo).
+  - `DgiDataCard` legacy ahora condicional: solo aparece para facturas con datos manuales capturados que nunca entraron al flujo automático (fallback de transición).
+  - Texto en tuteo neutro panameño (estándar del proyecto).
+- `develop = 7538d9e`; `main` intacto en `6bf3c07`. Cadena eFactura completa en `develop` (Fase 1A→4 + fix `formaPago=08` + fix país/classifier + UI de emisión).
+- **Config emisor en `.env.local`** (NO en git): RUC `25046169-3-2021`, DV `40`, `INTEGRA LEGAL`, ubicación `8-8-7` (Bella Vista / Panamá / Panamá), dir `Calle 54 Obarrio Atrium Tower P20 Of 20-08`, tel `393-9496`, email `info@integra-panama.com`, punto `001`, `formaPago` default `08` (transferencia), CPBS HON/REI `8012`, `i_amb=2`.
+- **Decisiones validadas contra el PAC real:**
+  - El PAC asigna `CUFE` (no lo enviamos en el request).
+  - Respuesta **SÍNCRONA** (`cufe` + `autorizada=true` en la misma llamada al `POST /api/v1/Invoices`).
+  - Classifier lee `rRetEnviFe.xProtFe.rProtFe.gInfProt.gResProc[]` (no `rRetEnviFe.rProtFe...` como sugería el swagger).
+  - `cPaisRec="PA"` REQUERIDO para receptores domésticos (`01`/`02`/`03`) — XSD DGI rechaza con cod `0100` si falta.
+  - `emisor == receptor` aceptado en sandbox.
+  - Certificado de firma electrónica **NO** requerido en sandbox.
+- **Fixtures de prueba en BD (LIMPIAR luego):** clientes `TEST-FE-001` (`e5c201d9`, tipo `02`) y `TEST-FE-002` (`d3a203b9`, tipo `01`); facturas `FAC-HON-000459`, `FAC-HON-000460`, `FAC-HON-000461`.
+
+### AL RETOMAR (orden de valor)
+
+1. **Re-verificación visual rápida de la UI** (pre-cierre del sprint UI): (a) confirmar que una factura nueva `no_emitida` muestra SOLO la card "Facturación Electrónica" (sin la legacy DGI duplicada); (b) confirmar tuteo neutro en todos los strings nuevos. Si OK → UI cerrada.
+2. **Tests del clasificador de respuesta**: extraer `authorized` / `rejected` / `pending` / `duplicate` como función pura + tests unitarios. Ya tenemos la forma real del response (ver intento 2 de invoice `45f53069`).
+3. **Entrega del CAFE al cliente**: `GET /api/v1/Invoices/{cufeId}/cafe-file` + persistencia en Supabase Storage (`cafe_storage_key`).
+4. **Reconciliador del estado `pending`**; notas de crédito y anulación PAC (`POST /InvoiceEvents/CreateCancellation`).
+5. **Limpieza de la data de prueba** (fixtures listados arriba).
+6. **Producción**: certificado A+F (licenciadas) + credenciales prod (proveedor) + registrar punto/sucursal en prod + merge `develop → main` + env vars en Vercel.
+
+### EN ESPERA (terceros)
+
+- **Licenciadas (Daveiva, Integra Legal):**
+  - Certificado `.zip` A+F + PIN (para producción — sandbox no lo requirió).
+  - Confirmación CPBS de reembolsos (hoy `8012` igual a honorarios — candidato a confirmar).
+- **Proveedor (ideati):**
+  - Credenciales de producción (URL + API key prod).
+  - Confirmar registro de punto / sucursal en prod (sandbox usa `001`).
+
+---
+
+### Fase 1A — Modelo de datos · ✅ CERRADA (2026-05-30)
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.1A.1 | Migración SQL fundacional (ALTERs clients/invoices + tablas fe_emisiones, fe_secuencias) | ✅ Ejecutada en Supabase 2026-05-30 | `sql/pending/019_efactura_fase_1a_modelo_datos.sql` — commit **798d1c2** en develop+main |
+| eF.1A.2 | Decisiones de modelado consolidadas (reutilizar dgi_cufe / dgi_fecha_autorizacion / dgi_protocolo_autorizacion; derivar tipoContribuyente desde client_type; numero_documento BIGINT autoritativo del API) | ✅ Documentadas en el header del archivo SQL | — |
+
+Resultado en BD prod (verificado vía SELECT POST-CHECK del propio migration):
+- `clients` +8 columnas (digito_verificador, tipo_receptor_fe, codigo_ubicacion, corregimiento, distrito, provincia, id_extranjero, pais_receptor) + 1 CHECK.
+- `invoices` +9 columnas (fe_estado, dgi_protocolo_autorizacion, i_amb, punto_facturacion, numero_documento, qr_content, cafe_storage_key, xml_storage_key, ef_invoice_uuid) + 2 CHECK + 2 índices parciales.
+- Tablas nuevas `fe_emisiones` (log de intentos) y `fe_secuencias` (correlativo por punto de facturación) con RLS por tenant_id.
+
+### Fase 2 — Mapper (lógica pura) · ✅ COMMITEADA (2026-05-30)
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.2.1 | Swagger oficial guardado como fuente de verdad | ✅ | `docs/efactura/swagger-v1.json` (126 KB, OpenAPI 3.0.1, 101 schemas) |
+| eF.2.2 | Tipos TS InvoiceRequest + sub-tipos generados desde swagger | ✅ | `src/lib/finanzas/efactura/types/invoice-request.ts`, nombres español-camelCase |
+| eF.2.3 | Catálogos (ITBMS_RATE_TO_CODE, TIPO_RECEPTOR_FE, TIEMPO_PAGO, etc.) | ✅ | `src/lib/finanzas/efactura/types/catalogs.ts` |
+| eF.2.4 | EmisorConfig + loadEmisorConfig() con validación de env vars | ✅ | `src/lib/finanzas/efactura/config/emisor-config.ts` — falla si CPBS=0 |
+| eF.2.5 | Tipo standalone InvoiceEfacturaBundle (contrato de entrada del mapper) | ✅ | `src/lib/finanzas/efactura/data/invoice-efactura-bundle.ts` — NO toca invoice-pdf-data.ts |
+| eF.2.6 | Sub-mappers (item, receptor, emisor, totales, utils) | ✅ | `src/lib/finanzas/efactura/mapper/*.ts` |
+| eF.2.7 | Mapper público mapInvoiceToEfacturaRequest() | ✅ | `src/lib/finanzas/efactura/mapper/map-invoice.ts` — función pura, sin I/O |
+| eF.2.8 | Unit tests (10 casos: 8 reglas + 2 smoke) — node:test + tsx, sin agregar tooling nuevo | ✅ 10/10 verde | Correr: `npx tsx --test src/lib/finanzas/efactura/__tests__/map-invoice.test.ts` |
+
+**SHA del commit de la Fase 2:** `1e340c7` (develop). 14 archivos, +5778 líneas.
+
+### Punto de retoma (próxima sesión / otra máquina)
+1. **Verificar antes de tocar nada:**
+   - `npx tsc --noEmit` → debe pasar sin errores.
+   - `npx tsx --test src/lib/finanzas/efactura/__tests__/map-invoice.test.ts` → debe reportar 10/10 verde.
+2. **Revisar decisiones de implementación pendientes** (documentadas en el código pero sin validar con DGI/PAC):
+   - `numeroSecuenciaItem` 1-indexed (CRM usa line_order 0-indexed → mapper hace `+1`). Confirmar con la doc del PAC que el primer item es 1, no 0.
+   - `totalGravado` = suma de subtotales de líneas con `tax_rate > 0` (no incluye exentas). Confirmar con la doc del PAC si la convención esperada es esa o si debe incluir exentas.
+   - `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00). Si el PAC requiere otra hora del día (ej. hora de emisión real), ajustar y agregar test.
+   - `tipoContribuyente=1` (natural) vs `=2` (jurídica): el swagger marca el campo como integer no nullable pero no documenta los códigos. Validar con el PAC.
+
+### Fase 3 — Transport + validación de catálogos · ✅ CERRADA (2026-06-03)
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.3.1 | Dev API Key obtenido (ambiente pruebas, base `eic-api.ideati.net`) | ✅ | Cargado en `.env.local` (no commiteado). Plantilla en `.env.example`. |
+| eF.3.2 | Cliente HTTP server-only con Bearer auth | ✅ | `src/lib/finanzas/efactura/transport/efactura-client.ts`. Lee `EFACTURA_API_BASE_URL` y `EFACTURA_API_KEY` de forma lazy. NO incluye el key en mensajes de error. |
+| eF.3.3 | Auth contra el PAC VALIDADA | ✅ | `npx tsx scripts/efactura/fetch-catalogs.ts` retorna 200 en 5 catálogos (CPBSsegs, CPBSfams, locations, countries, currencies). |
+| eF.3.4 | CPBS servicios legales — código identificado | 🟡 Parcial | **HON = 8012** confirmado (segmento legal services). REI por confirmar con el contador (candidato `8012`). Actualizar `cpbsServiciosLegalesHon` / `cpbsServiciosLegalesRei` en `emisor-config.ts` cuando se confirme REI. |
+| eF.3.5 | Catálogo formaPago + código transferencia | ✅ Confirmado por proveedor | El PAC NO expone catálogo descargable (es enumeración cerrada DGI). Código oficial **`08` = "Transf./Depósito a cta. Bancaria"** confirmado por el proveedor; cargado como `defaultFormaPago` en `emisor-config.ts` (commit **d5ecdf2**). |
+
+**Nota operativa (Windows / Node 24):** este equipo requiere `NODE_OPTIONS=--use-system-ca` para que `fetch` confíe en la cadena TLS local al llamar al PAC. Ejemplo PowerShell:
+```
+$env:NODE_OPTIONS = "--use-system-ca"; npx tsx scripts/efactura/inspect-catalogs.ts
+```
+Los scripts `scripts/efactura/{fetch-catalogs,inspect-catalogs}.ts` son utilitarios dev read-only — no requieren certificado de firma.
+
+### Bloqueadores históricos (todos superados — ver bloque "ESTADO (cierre 2026-06-03)" al inicio)
+- ~~Certificado de firma electrónica~~ → sandbox NO lo requirió. Sí necesario para producción (pendiente con licenciadas).
+- ~~Código `formaPago` oficial DGI~~ → confirmado `08` (transferencia) por el proveedor.
+- ~~Datos fiscales del emisor~~ → cargados en `.env.local` (RUC, DV, ubicación, punto, etc.).
+- **Confirmación REI CPBS:** sigue pendiente — candidato `8012` (mismo que HON), por confirmar con contador/licenciadas.
+
+### Decisiones de implementación pendientes (heredadas de Fase 2, sin validar con PAC todavía)
+- `numeroSecuenciaItem` 1-indexed (CRM usa `line_order` 0-indexed → mapper hace `+1`).
+- `totalGravado` = suma de subtotales de líneas con `tax_rate > 0` (no incluye exentas).
+- `toPanamaIso()` interpreta `'YYYY-MM-DD'` como medianoche local Panamá (00:00 -05:00).
+- `tipoContribuyente=1` (natural) vs `=2` (jurídica): swagger lo marca integer no nullable sin documentar códigos.
+
+### Fase 4 — Flujo de emisión · ✅ CERRADA (2026-06-02) — primera FE autorizada en sandbox 2026-06-03
+
+| # | Tarea | Estado | Notas |
+|---|-------|--------|-------|
+| eF.4.1 | Allocator de `fe_secuencias` — RPC `allocate_fe_numero(uuid, varchar(3))` | ✅ Aplicado en Supabase + commit | `sql/pending/020_efactura_allocator.sql` + wrapper TS `src/lib/finanzas/efactura/secuencias/allocate-fe-numero.ts`. Commit **fb7647d**. Política A (gaps tolerados). |
+| eF.4.2 | `loadEmisorConfig()` extendido con `puntoFacturacion` (req, 3 dígitos, ≠ '000') e `iAmb` (req, 1\|2) | ✅ | `src/lib/finanzas/efactura/config/emisor-config.ts`. Variables nuevas en `.env.example`. |
+| eF.4.3 | Fetcher real `fetchInvoiceEfacturaBundle()` + gate fiscal del cliente | ✅ | `src/lib/finanzas/efactura/data/fetch-invoice-efactura-bundle.ts`. Falla con `MutationError(400)` y lista accionable si falta `tax_id`/`ruc`, `tipo_receptor_fe`, o (según tipo) `id_extranjero`+`pais_receptor` ó `codigo_ubicacion`+`corregimiento`+`distrito`+`provincia`. |
+| eF.4.4 | Orquestación T0-T4 `emitInvoiceToEfactura()` | ✅ | `src/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura.ts`. T0 pre-check, T1 allocate-o-reuso (D-3), T2 mark pending + log fe_emisiones, T3 POST sin lock, T4 clasifica respuesta (`authorized` \| `pending_async` \| `rejected`) y persiste. Heurística de duplicado por sustring en `dMsgRes`. |
+| eF.4.5 | Route handler `POST /api/finanzas/invoices/[id]/emit-efactura` (admin + abogada, 403 al resto) | ✅ | `src/app/api/finanzas/invoices/[id]/emit-efactura/route.ts`. Mismo allowlist que `/emit` y `/dgi`. |
+| eF.4.6 | `.env.example` actualizado con 14 variables `EFACTURA_EMISOR_*` (placeholders comentados para `FORMA_PAGO_DEFAULT` y `CPBS_REI`) | ✅ | — |
+| eF.4.7 | Typecheck `tsc --noEmit` limpio | ✅ | — |
+
+**SHA del commit de la Fase 4:** `7336824` (develop). 6 archivos, +1072 líneas. Push a `origin/develop` realizado. `main` intacto en `6bf3c07`.
+
+### Estado actual del andamiaje de emisión
+
+Toda la pipeline está commiteada y funcional contra el PAC. Cadena de commits:
+- Fase 1A modelo de datos — **798d1c2**
+- Fase 2 mapper puro — **1e340c7**
+- Fase 3 transport + validación catálogos — **561f4ca** / **5ea986b**
+- Allocator RPC `allocate_fe_numero` — **fb7647d** (aplicado en Supabase)
+- Fase 4 flujo de emisión (orquestación + fetcher + route) — **7336824**
+
+**Datos confirmados:**
+- Punto de facturación del CRM = `001` (QuickBooks histórico usa `050`, se mantiene separado).
+- CPBS honorarios = `8012`.
+- Ambiente sandbox `i_amb=2`.
+- Base API = `eic-api.ideati.net`, auth Bearer API Key (no OAuth).
+- El PAC asigna el CUFE (no lo enviamos en el `InvoiceRequest`).
+
+### En espera / Al retomar
+Las listas autoritativas están en el bloque **"ESTADO (cierre 2026-06-03)"** al inicio de esta sección. Acá quedaba documentado el camino corto a la primera emisión de prueba — ya realizado el 2026-06-03.
+
+### Pendientes técnicos posteriores (orden sugerido)
+
+- **Reconciliador del estado `pending`** — cron + endpoint que pollea `/Invoices/Authorization/{cufe}` o `/Invoices/id/{cufeId}`. Su construcción depende de qué responde el PAC en la primera emisión real.
+- **Tests del clasificador de respuesta** — extraer `parsePacResponse` como función pura exportada y cubrir con node:test los caminos `authorized` / `pending_async` / `rejected` / `pac_duplicate`. Mejor armarlo **después** de la primera emisión real, con una respuesta auténtica como fixture.
+- ~~**UI** — botón "Enviar al PAC" en el detalle de factura, badge de `fe_estado`~~ ✅ COMMITEADA (`7538d9e`, 2026-06-04). Falta solo modal de auditoría de intentos contra `fe_emisiones` (opcional, scope futuro).
+- **Notas de crédito / anulación** — POST `/api/v1/InvoiceEvents/CreateCancellation` (cuando hay CUFE y < 182h) y NC obligatoria (≥ 182h). Sprint propio cada uno.
+- **Descarga y persistencia del CAFE/XML** en Supabase Storage (`cafe_storage_key`, `xml_storage_key` ya existen en el schema, falta la mecánica de bajada).
 
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |

@@ -156,6 +156,62 @@ function bundle(opts: {
 const sequence = { puntoFacturacion: "001", numeroDocumento: 1 };
 const fechaFija = "2026-05-30";
 
+const r2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Valida las DOS reglas de cuadre de totales de la Ficha Técnica DGI V1.00
+ * (§8.4.4 "Subtotales y Totales", pág. 117) sobre el payload generado. Estas
+ * reglas son las que la DGI rechazaba con los códigos 2503 y 2507.
+ *
+ * CLAVE: en la DGI, "monto gravado" (dTotGravado, D05) NO es la base imponible
+ * — es la SUMA DE IMPUESTOS aplicados (ITBMS + ISC + OTI).
+ *
+ *   2503:  D05 (dTotGravado) == D03 (dTotITBMS) + D04 (dTotISC) + D602 (dTotOTI)
+ *   2507:  D09 (dVTot) == D05 − D06 (desc) + D07 (acarreo) + D08 (seguro) + D02 (dTotNeto)
+ *
+ * Si estos asserts fallan, la DGI rechazaría la factura. Codifican la regla
+ * REAL del estándar, no la interpretación previa (base gravada) que era errónea.
+ */
+function assertDgiTotalsBalance(req: {
+  totales: {
+    totalNeto: number;
+    totalITBMS: number;
+    totalISC?: number;
+    totalGravado?: number;
+    totalGrabado?: number;
+    totalDescuento?: number;
+    totalAcarreo?: number;
+    totalSeguro?: number;
+    valorTotalFactura: number;
+  };
+}): void {
+  const t = req.totales;
+  const totalISC = t.totalISC ?? 0;
+  const totalOTI = 0; // OTI no se maneja hoy
+  const totalDesc = t.totalDescuento ?? 0;
+  const totalAcar = t.totalAcarreo ?? 0;
+  const totalSeg = t.totalSeguro ?? 0;
+
+  // Regla 2503: dTotGravado = suma de impuestos.
+  assert.equal(
+    t.totalGravado,
+    r2(t.totalITBMS + totalISC + totalOTI),
+    "DGI 2503: dTotGravado debe == dTotITBMS + dTotISC + dTotOTI"
+  );
+  // El alias con misspelling debe llevar el mismo valor.
+  assert.equal(
+    t.totalGrabado,
+    t.totalGravado,
+    "alias totalGrabado debe == totalGravado"
+  );
+  // Regla 2507: dVTot = dTotGravado − dTotDesc + dTotAcar + dTotSeg + dTotNeto.
+  assert.equal(
+    t.valorTotalFactura,
+    r2(t.totalGravado! - totalDesc + totalAcar + totalSeg + t.totalNeto),
+    "DGI 2507: dVTot debe == dTotGravado − dTotDesc + dTotAcar + dTotSeg + dTotNeto"
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -191,6 +247,10 @@ test("1. HON exento a cliente con RUC → tipoReceptorFe '01' y ITBMS '00'", () 
   assert.equal(req.listaItems[0].grupoITBMS.tasaITBMSAplicable, "00");
   assert.equal(req.listaItems[0].grupoITBMS.montoITBMS, 0);
   assert.equal(req.listaItems[0].codigoItemCodificacionPanamena, 99999999);
+  // Factura 100% exenta: sin impuestos → dTotGravado = 0, dVTot = dTotNeto.
+  assert.equal(req.totales.totalGravado, 0);
+  assert.equal(req.totales.totalGrabado, 0);
+  assertDgiTotalsBalance(req);
 });
 
 test("2. Factura multi-línea HON + REI con totales", () => {
@@ -312,9 +372,10 @@ test("6. Línea con tax_rate 0.07 → tasaITBMSAplicable '01' + montoITBMS calcu
   assert.equal(req.listaItems[0].grupoITBMS.tasaITBMSAplicable, "01");
   assert.equal(req.listaItems[0].grupoITBMS.montoITBMS, 70);
   assert.equal(req.totales.totalITBMS, 70);
-  // Base gravada: la DGI valida `totalGrabado` (misspelling); enviamos ambos.
-  assert.equal(req.totales.totalGrabado, 1000);
-  assert.equal(req.totales.totalGravado, 1000);
+  // dTotGravado (D05) = SUMA DE IMPUESTOS, no la base. Sin ISC/OTI → = totalITBMS.
+  // (Ficha DGI §8.4.4 regla 2503). El valor va bajo ambas claves.
+  assert.equal(req.totales.totalGravado, 70);
+  assert.equal(req.totales.totalGrabado, 70);
   // dValTotItem (sumaPrecioItem) y precioItem son NETOS (sin ITBMS).
   assert.equal(req.listaItems[0].grupoPrecios.precioItem, 1000);
   assert.equal(req.listaItems[0].grupoPrecios.sumaPrecioItem, 1000);
@@ -322,6 +383,8 @@ test("6. Línea con tax_rate 0.07 → tasaITBMSAplicable '01' + montoITBMS calcu
   assert.equal(req.totales.totalNeto, 1000);
   assert.equal(req.totales.totalTodosItems, 1000);
   assert.equal(req.totales.valorTotalFactura, 1070);
+  // Cuadre DGI de las dos reglas (2503 + 2507).
+  assertDgiTotalsBalance(req);
 });
 
 test("7. tax_rate fuera de la tabla → error explícito", () => {
@@ -365,10 +428,12 @@ test("8. Totales cuadran con la suma de líneas (multi-tasa)", () => {
   assert.equal(req.totales.totalNeto, expectedSubtotal);
   assert.equal(req.totales.totalITBMS, expectedTax);
   assert.equal(req.totales.valorTotalFactura, expectedGrand);
-  // Base gravada = solo las líneas con tax_rate > 0. La DGI valida
-  // `totalGrabado` (misspelling); enviamos ambos con el mismo valor.
-  assert.equal(req.totales.totalGrabado, 500 + 300);
-  assert.equal(req.totales.totalGravado, 500 + 300);
+  // dTotGravado (D05) = SUMA DE IMPUESTOS de TODAS las líneas (no la base):
+  // 35 (línea 7%) + 30 (línea 10%) + 0 (línea exenta) = 65 = totalITBMS.
+  // (Ficha DGI §8.4.4 regla 2503). Va bajo ambas claves.
+  assert.equal(req.totales.totalGravado, 35 + 30);
+  assert.equal(req.totales.totalGrabado, 35 + 30);
+  assert.equal(req.totales.totalGravado, req.totales.totalITBMS);
   assert.equal(req.totales.numeroTotalItems, 3);
   // dVTotItems (totalTodosItems) es NETO: cuadra con totalNeto, NO con grand.
   assert.equal(req.totales.totalTodosItems, expectedSubtotal);
@@ -378,6 +443,34 @@ test("8. Totales cuadran con la suma de líneas (multi-tasa)", () => {
   assert.equal(req.listaItems[2].grupoPrecios.sumaPrecioItem, 300);
   // sumaValoresRecibidos (dTotRec) sí es el grand total (lo que se cobra).
   assert.equal(req.totales.sumaValoresRecibidos, expectedGrand);
+  // Cuadre DGI de las dos reglas (2503 + 2507) sobre el caso multi-tasa.
+  assertDgiTotalsBalance(req);
+});
+
+test("9. Regresión FAC-HON-000463: $1 + ITBMS 7% → dTotGravado=0.07 y cuadre DGI", () => {
+  // Reproduce EXACTO el caso que producción rechazaba con 2503/2507:
+  // 1 línea HON, base 1.00, ITBMS "01" (7%) = 0.07, total 1.07.
+  const ln = line({ unit_price: 1, tax_rate: 0.07 });
+  const req = mapInvoiceToEfacturaRequest({
+    bundle: bundle({
+      invoice: { subtotal_total: 1, tax_total: 0.07, grand_total: 1.07 },
+      lines: [ln],
+    }),
+    emisor: emisor(),
+    sequence,
+    options: { fechaEmision: fechaFija },
+  });
+
+  // El valor que la DGI validaba como inválido: antes enviábamos 1.00 (base),
+  // ahora 0.07 (suma de impuestos).
+  assert.equal(req.totales.totalGravado, 0.07);
+  assert.equal(req.totales.totalGrabado, 0.07);
+  assert.equal(req.totales.totalNeto, 1);
+  assert.equal(req.totales.totalITBMS, 0.07);
+  assert.equal(req.totales.totalTodosItems, 1);
+  assert.equal(req.totales.valorTotalFactura, 1.07);
+  // Las dos fórmulas de cuadre que la DGI aplica (2503 y 2507) dan verdadero.
+  assertDgiTotalsBalance(req);
 });
 
 // ---------------------------------------------------------------------------

@@ -11,16 +11,20 @@
  *     fechaVencimientoCuota=due_date (ISO -05:00).
  *
  * Subtotales:
- *   - totalNeto: suma de subtotales por línea (sin impuestos).
- *   - totalITBMS: suma de tax_amount por línea.
- *   - totalGrabado / totalGravado: suma de subtotales de líneas con
- *     tax_rate > 0 (la parte gravada con ITBMS). Si todo exento → 0.
- *     OJO: el campo que la DGI valida es `totalGrabado` (con el misspelling
- *     oficial "Grabado"); `totalGravado` (bien escrito) es un alias nullable
- *     que la DGI ignora. Enviamos AMBOS con el mismo valor.
- *   - totalTodosItems: suma de subtotales NETOS por línea (dVTotItems debe
- *     cuadrar con dTotNeto; NO incluye ITBMS).
- *   - valorTotalFactura: grand_total (= totalNeto + totalITBMS).
+ *   - totalNeto (D02 = dTotNeto): suma de subtotales por línea (sin impuestos).
+ *   - totalITBMS (D03 = dTotITBMS): suma de tax_amount por línea.
+ *   - totalGravado / totalGrabado (D05 = dTotGravado): CONTRAINTUITIVO. Según
+ *     la Ficha Técnica DGI V1.00 (§6.6 diccionario de campos y §8.4.4 regla
+ *     2503), "monto gravado" NO es la base imponible: es la SUMA DE IMPUESTOS
+ *     aplicados = dTotITBMS + dTotISC + dTotOTI (D03 + D04 + D602). Por eso
+ *     `totalGravado = round2(totalITBMS + totalISC + totalOTI)`. Hoy no
+ *     manejamos ISC ni OTI, así que ambos son 0 y en la práctica queda
+ *     = totalITBMS, pero la estructura ya suma los tres. Enviamos el valor
+ *     bajo ambas claves (`totalGravado` bien escrito, que es el que el PAC
+ *     mapea a dTotGravado, y `totalGrabado` con el misspelling por defensa).
+ *   - totalTodosItems (D14 = dVTotItems): suma de dValTotItem NETOS por línea.
+ *   - valorTotalFactura (D09 = dVTot): grand_total. Cuadre DGI regla 2507:
+ *     dVTot = dTotGravado − dTotDesc + dTotAcar + dTotSeg + dTotNeto.
  *   - numeroTotalItems: cantidad de líneas.
  *   - sumaValoresRecibidos: grand_total (sin vuelto en este flujo).
  */
@@ -48,11 +52,15 @@ export function mapTotales(
   const totalITBMS = round2(
     lines.reduce((acc, ln) => acc + ln.tax_amount, 0)
   );
-  const totalGravado = round2(
-    lines
-      .filter((ln) => ln.tax_rate > 0)
-      .reduce((acc, ln) => acc + ln.subtotal, 0)
-  );
+  // ISC y OTI (otras tasas/impuestos) no se manejan en este flujo hoy → 0.
+  // Se dejan explícitos para que el cálculo de dTotGravado sume los tres
+  // componentes cuando existan (D03 + D04 + D602).
+  const totalISC = 0;
+  const totalOTI = 0;
+  // dTotGravado (D05) = SUMA DE IMPUESTOS, no la base imponible. Ver Ficha
+  // Técnica DGI §8.4.4 regla 2503: D05 <> D03 + D04 + D602. En este caso
+  // (sin ISC ni OTI) queda = totalITBMS.
+  const totalGravado = round2(totalITBMS + totalISC + totalOTI);
   const totalTodosItems = round2(
     lines.reduce((acc, ln) => acc + ln.subtotal, 0)
   );
@@ -72,8 +80,9 @@ export function mapTotales(
     grupoFormasPago: formasPago,
     totalNeto,
     totalITBMS,
-    // La DGI valida `totalGrabado` (misspelling oficial); `totalGravado` es
-    // alias nullable ignorado. Enviamos ambos con el mismo valor.
+    // dTotGravado = suma de impuestos (ver cálculo arriba). El PAC mapea
+    // `totalGravado` (bien escrito) → dTotGravado; `totalGrabado` es un alias
+    // defensivo con el misspelling. Enviamos ambos con el mismo valor.
     totalGrabado: totalGravado,
     totalGravado,
     valorTotalFactura,

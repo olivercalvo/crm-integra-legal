@@ -6,7 +6,15 @@ import { XCircle, AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
-import { INVOICE_KIND_LABEL, type InvoiceKind } from "@/lib/finanzas/types/invoice";
+import {
+  INVOICE_KIND_LABEL,
+  type InvoiceKind,
+  type FeEstado,
+} from "@/lib/finanzas/types/invoice";
+import {
+  invoiceHasAuthorizedCufe,
+  isCancelConfirmDisabled,
+} from "./cancel-invoice-dialog.logic";
 
 interface Props {
   invoiceId: string;
@@ -16,6 +24,11 @@ interface Props {
   /** Total ya pagado en B/. Si > 0, el dialog se renderiza en modo bloqueo
    *  (sin textarea, mensaje pidiendo eliminar pagos primero). Sprint 2C, D3.d. */
   amountPaid: number;
+  /** Estado eFactura de la factura. Junto con `dgiCufe` determina si la
+   *  factura ya tiene CUFE autorizado por la DGI (→ disclaimer + checkbox). */
+  feEstado?: FeEstado | null;
+  /** CUFE registrado (vía PAC o carga manual). Ver `feEstado`. */
+  dgiCufe?: string | null;
   disabled?: boolean;
 }
 
@@ -36,6 +49,8 @@ export function CancelInvoiceDialog({
   invoiceKind,
   grandTotal,
   amountPaid,
+  feEstado,
+  dgiCufe,
   disabled,
 }: Props) {
   const router = useRouter();
@@ -46,8 +61,14 @@ export function CancelInvoiceDialog({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Confirmación DGI: solo relevante para facturas con CUFE autorizado.
+  const [dgiConfirmed, setDgiConfirmed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const OBSERVATIONS_MAX = 2000;
+
+  // ¿La factura ya tiene CUFE autorizado por la DGI? Anularla acá NO la anula
+  // ante la DGI (cancelInvoice sólo cambia estado local) → disclaimer + checkbox.
+  const hasCufe = invoiceHasAuthorizedCufe(feEstado, dgiCufe);
 
   // Autofocus al textarea cuando se abre el dialog. Pequeño delay para que
   // el render del modal termine antes; sin él el focus se pierde porque el
@@ -69,12 +90,19 @@ export function CancelInvoiceDialog({
     setReasonError(null);
     setObservationsError(null);
     setSubmitError(null);
+    setDgiConfirmed(false);
   }
 
   function submit() {
     setReasonError(null);
     setObservationsError(null);
     setSubmitError(null);
+
+    // Guardia defensiva: el botón ya está deshabilitado sin el checkbox, pero
+    // evitamos cualquier submit programático si falta la confirmación DGI.
+    if (hasCufe && !dgiConfirmed) {
+      return;
+    }
 
     const trimmed = reason.trim();
     if (trimmed.length < 3) {
@@ -151,6 +179,9 @@ export function CancelInvoiceDialog({
         }}
         onConfirm={isBlocked ? () => setOpen(false) : submit}
         loading={isPending}
+        confirmDisabled={
+          !isBlocked && isCancelConfirmDisabled({ hasCufe, dgiConfirmed })
+        }
         title={isBlocked ? "No se puede anular" : "Anular factura"}
         confirmButtonText={
           isBlocked
@@ -179,7 +210,7 @@ export function CancelInvoiceDialog({
                     registrados.
                   </p>
                   <p className="mt-1">
-                    Para anular esta factura, eliminá primero los pagos uno
+                    Para anular esta factura, elimina primero los pagos uno
                     por uno desde la sección &quot;Pagos registrados&quot;.
                     Una vez que el saldo pagado vuelva a cero, vas a poder
                     anular la factura y se generará una nota de crédito
@@ -212,6 +243,28 @@ export function CancelInvoiceDialog({
             </>
           ) : (
             <>
+              {/* DISCLAIMER DGI: solo para facturas con CUFE autorizado.
+                  Anular en el CRM NO notifica a la DGI. */}
+              {hasCufe && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900"
+                >
+                  <AlertTriangle
+                    size={16}
+                    className="mt-0.5 shrink-0 text-amber-600"
+                  />
+                  <p>
+                    Esta factura ya fue autorizada por la DGI. Anularla aquí
+                    solo la marca como anulada en el CRM; no la anula ante la
+                    DGI. Para anularla oficialmente, primero debes anularla en
+                    el portal de eFactura PTY (admin.efacturapty.com). Ten en
+                    cuenta que la DGI tiene una ventana de tiempo limitada para
+                    anular desde la autorización.
+                  </p>
+                </div>
+              )}
+
               {/* MODO ANULACIÓN: factura sin pagos */}
               <div
                 role="alert"
@@ -350,6 +403,28 @@ export function CancelInvoiceDialog({
                   </span>
                 </div>
               </div>
+
+              {/* CHECKBOX DGI obligatorio: solo para facturas con CUFE.
+                  Habilita el botón "confirmar" recién al marcarlo. */}
+              {hasCufe && (
+                <label
+                  htmlFor="cancel_dgi_confirmed"
+                  className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50/60 p-3 text-sm text-amber-900 cursor-pointer"
+                >
+                  <input
+                    id="cancel_dgi_confirmed"
+                    type="checkbox"
+                    checked={dgiConfirmed}
+                    onChange={(e) => setDgiConfirmed(e.target.checked)}
+                    disabled={isPending}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-integra-navy"
+                  />
+                  <span>
+                    Confirmo que ya anulé esta factura en el portal de la DGI
+                    (o que soy consciente de que debo hacerlo).
+                  </span>
+                </label>
+              )}
 
               {/* Error del backend (solo si no es field-level) */}
               {submitError && (

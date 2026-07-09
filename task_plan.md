@@ -1,5 +1,24 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === ESTADO 09/07/2026 ===
+
+eFactura PRODUCTION-READY y en uso real por las licenciadas.
+- Primera factura a cliente REAL autorizada: FAC-HON-000464 (LABORATORIOS HERMANI, $80.25) — ES REAL, NO ANULAR.
+- FAC-HON-000463 (prueba Integra-a-Integra $1.07) — dejar como está o anular por el portal del PAC (NO por el botón del CRM).
+- Escenario probado: solo tipo 01 (contribuyente jurídico con RUC+DV). FALTA PROBAR tipo 02 (consumidor final, cédula sin DV) cuando surja un cliente natural.
+- Disclaimer de anulación FE desplegado (merge 27f01af): el botón Anular del CRM avisa que la anulación real se hace en el portal del PAC + checkbox obligatorio para facturas con CUFE.
+
+### === BACKLOG PRÓXIMA SESIÓN (en orden) ===
+1. Fix "sin RUC" en diálogo de emisión (bug cosmético, YA diagnosticado, fix listo de 3 líneas): el diálogo lee client.ruc legacy en vez de tax_id. Fix en 3 lugares: types/invoice.ts:229 (agregar tax_id al tipo), queries/invoices.ts:118 (agregar tax_id al select del fkey), facturas/[id]/page.tsx:336 (receptorRuc = tax_id ?? ruc ?? null). No toca emisión ni mapper. Aplicar mañana.
+2. RUC obligatorio para tipo 01/03 en el form de cliente (hoy solo se valida DV).
+3. Backfill/validación de client_type NULL en clientes (afecta inferencia de tipo_receptor_fe).
+4. Sprint FE-ANULACIÓN: implementar el evento CreateCancellation al PAC para que el botón haga la anulación fiscal real ante la DGI (hoy solo anula local). Al completarlo, el disclaimer del punto anterior desaparece.
+5. Link "Abrir en portal DGI" con digestValue mal formado (consulta por QR falla; por CUFE directo funciona).
+6. Retención de ITBMS en emisión (facturas con agente de retención) + confirmar CPBS_REI real con contador.
+
+### === ESPERANDO RESPUESTA EXTERNA ===
+- Ideati: si exponen endpoint feConsRucDV (RUC→DV+tipo) vía su API → automatizaría el DV y las licenciadas dejarían de cargarlo a mano. Correo enviado.
+
 ## Estado eFactura (cerrado 2026-07-07 — LISTO PARA MERGE)
 
 - **Vercel Production: 18/19 variables `EFACTURA_*` cargadas.** Falta solo `EFACTURA_EMISOR_CPBS_REI` (confirmar con contador, candidato `8012`; **NO bloquea** primera emisión sin retención).

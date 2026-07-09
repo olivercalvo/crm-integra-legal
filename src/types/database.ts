@@ -46,6 +46,10 @@ export interface Client {
   client_status: "prospect" | "active" | "inactive";
   /** Tipo fiscal: persona natural (cédula/pasaporte) o jurídica (RUC). NULL en registros legacy donde no se distinguió. */
   client_type: "persona_natural" | "persona_juridica" | null;
+  /** Tipo de receptor para FE DGI: 01 contribuyente · 02 consumidor final · 03 gobierno · 04 extranjero. NULL si no se cargó. */
+  tipo_receptor_fe: "01" | "02" | "03" | "04" | null;
+  /** Dígito verificador del RUC (DGI). Obligatorio para tipo_receptor_fe 01/03. NULL para 02/04 o si no se cargó. */
+  digito_verificador: string | null;
   created_at: string;
   updated_at: string;
 }

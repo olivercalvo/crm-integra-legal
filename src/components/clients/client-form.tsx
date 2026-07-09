@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import type { Client, CatClassification } from "@/types/database";
+import {
+  TIPO_RECEPTOR_FE_OPTIONS,
+  tipoRequiresDV,
+  suggestTipoReceptorFe,
+  validateFiscalFields,
+} from "@/lib/clients/fiscal-fields";
 
 interface LawyerOption {
   id: string;
@@ -26,6 +32,8 @@ interface FormData {
   name: string;
   ruc: string;
   type: string;
+  tipo_receptor_fe: string;
+  digito_verificador: string;
   responsible_lawyer_id: string;
   contact: string;
   phone: string;
@@ -50,6 +58,10 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
     name: client?.name ?? "",
     ruc: client?.ruc ?? "",
     type: client?.type ?? "",
+    // FE DGI: si el cliente ya lo tiene cargado se respeta; sino se sugiere
+    // desde client_type (juridica→01; natural queda a elección de la abogada).
+    tipo_receptor_fe: client?.tipo_receptor_fe ?? suggestTipoReceptorFe(client?.client_type),
+    digito_verificador: client?.digito_verificador ?? "",
     responsible_lawyer_id: client?.responsible_lawyer_id ?? "",
     contact: client?.contact ?? "",
     phone: client?.phone ?? "",
@@ -84,6 +96,12 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
       if (!formData.name.trim()) {
         errors.name = "El nombre es requerido";
       }
+      // FE DGI: coherencia de los campos fiscales (DV obligatorio si 01/03).
+      const fiscalErrors = validateFiscalFields({
+        tipo_receptor_fe: formData.tipo_receptor_fe,
+        digito_verificador: formData.digito_verificador,
+      });
+      Object.assign(errors, fiscalErrors);
     }
     if (s === 1) {
       if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -119,6 +137,8 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
         name: formData.name.trim(),
         ruc: formData.ruc.trim() || null,
         type: formData.type || null,
+        tipo_receptor_fe: formData.tipo_receptor_fe || null,
+        digito_verificador: formData.digito_verificador.trim() || null,
         contact: formData.contact.trim() || null,
         phone: formData.phone.trim() || null,
         email: formData.email.trim() || null,
@@ -268,6 +288,52 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   </p>
                 )}
               </div>
+
+              {/* Datos fiscales para Facturación Electrónica (DGI) */}
+              <div className="space-y-1.5">
+                <Label htmlFor="tipo_receptor_fe">Tipo de receptor FE</Label>
+                <select
+                  id="tipo_receptor_fe"
+                  value={formData.tipo_receptor_fe}
+                  onChange={set("tipo_receptor_fe")}
+                  className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">— Seleccionar —</option>
+                  {TIPO_RECEPTOR_FE_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">
+                  Para facturación electrónica ante la DGI.
+                </p>
+                {fieldErrors.tipo_receptor_fe && (
+                  <p className="text-xs text-red-500">{fieldErrors.tipo_receptor_fe}</p>
+                )}
+              </div>
+
+              {tipoRequiresDV(formData.tipo_receptor_fe) && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="digito_verificador">
+                    Dígito verificador (DV) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="digito_verificador"
+                    value={formData.digito_verificador}
+                    onChange={set("digito_verificador")}
+                    placeholder="Ej. 40"
+                    inputMode="numeric"
+                    maxLength={2}
+                    className="min-h-[48px] w-24"
+                  />
+                  <p className="text-xs text-gray-500">
+                    DV que asigna la DGI al RUC (2 dígitos). Aparece por separado
+                    en la ficha RUC de la DGI, no dentro del número de RUC.
+                  </p>
+                  {fieldErrors.digito_verificador && (
+                    <p className="text-xs text-red-500">{fieldErrors.digito_verificador}</p>
+                  )}
+                </div>
+              )}
 
               {lawyers.length > 0 && (
                 <div className="space-y-1.5">

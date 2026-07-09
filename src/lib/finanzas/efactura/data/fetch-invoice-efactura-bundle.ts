@@ -170,19 +170,33 @@ export async function fetchInvoiceEfacturaBundle(
 }
 
 /**
- * Valida el gate fiscal del cliente. Lanza `MutationError(400)` con mensaje
- * accionable si falta algo. Reglas:
+ * Valida el gate fiscal del cliente (RECEPTOR). Lanza `MutationError(400)` con
+ * mensaje accionable si falta algo. Reglas:
  *   - client_status === 'active' (el gate de createInvoice ya lo enforza,
  *     pero al re-emitir conviene rechequear: el cliente puede haberse
  *     desactivado entre creación y emisión PAC).
- *   - tax_id o ruc presente (tax_id es el nuevo, ruc legacy — uno alcanza).
- *   - tipo_receptor_fe presente: requerido por el mapper para el bloque
- *     informacionReceptor del PAC.
- *   - Para tipo '04' (extranjero) el mapper exige id_extranjero +
- *     pais_receptor; los demás tipos exigen codigo_ubicacion +
- *     corregimiento + distrito + provincia.
+ *   - tipo_receptor_fe presente (SIEMPRE): requerido por el mapper para el
+ *     bloque informacionReceptor del PAC.
+ *   - tipo '01' (contribuyente) / '03' (gobierno): tax_id (o ruc legacy) +
+ *     digito_verificador (DV). Ambos son rechazo DGI si faltan
+ *     (Ficha Técnica v1.00: 1601/1602 RUC, 1605 razón social, DV asociado).
+ *   - tipo '02' (consumidor final): solo tipo_receptor_fe. RUC/DV opcionales
+ *     (B402 gRucRec es 0-1 para 02 en la ficha).
+ *   - tipo '04' (extranjero): id_extranjero + pais_receptor (1618/1610 = R).
+ *
+ * UBICACIÓN DEL RECEPTOR (codigo_ubicacion/corregimiento/distrito/provincia):
+ *   NO se valida. Confirmado contra Ficha Técnica DGI v1.00: el grupo B405
+ *   gUbiRec es opcional (Ocu 0-1) y su ausencia sólo dispara los códigos
+ *   1617/1616/1607/1608/1609, todos de efecto "N" (Notificación) — NO rechazan
+ *   la FE (§8, def. de la columna "E"; Tabla 7: una FE que sólo incumple reglas
+ *   N igual obtiene el código 0260 "Autorizado"). El mapper (map-receptor.ts)
+ *   ya la envía condicional cuando existe.
+ *
+ * UBICACIÓN DEL EMISOR: NO se valida acá. Vive en `loadEmisorConfig()`
+ *   (emisor-config.ts) como campos `required(...)` y SIGUE siendo obligatoria
+ *   (códigos 1571/1572 = Rechazo). Este gate es exclusivamente del receptor.
  */
-function validateClientFiscalGate(row: Record<string, unknown>): void {
+export function validateClientFiscalGate(row: Record<string, unknown>): void {
   const missing: string[] = [];
 
   const clientStatus = row.client_status;
@@ -195,28 +209,27 @@ function validateClientFiscalGate(row: Record<string, unknown>): void {
     );
   }
 
-  const taxId = toStringOrNull(row.tax_id);
-  const rucLegacy = toStringOrNull(row.ruc);
-  if (!taxId && !rucLegacy) {
-    missing.push("RUC o documento de identidad (tax_id)");
-  }
-
   const tipoReceptor = row.tipo_receptor_fe;
   if (!tipoReceptor) {
     missing.push("tipo de receptor FE");
   }
 
-  // Extranjero (04): id_extranjero + pais_receptor.
-  // Resto (01/02/03): codigo_ubicacion + corregimiento + distrito + provincia.
-  if (tipoReceptor === "04") {
+  // Requisitos por tipo de receptor (todos rechazo DGI si faltan). La
+  // ubicación del receptor NO entra acá (ver docstring: efecto "N").
+  if (tipoReceptor === "01" || tipoReceptor === "03") {
+    const taxId = toStringOrNull(row.tax_id);
+    const rucLegacy = toStringOrNull(row.ruc);
+    if (!taxId && !rucLegacy) {
+      missing.push("RUC o documento de identidad (tax_id)");
+    }
+    if (!toStringOrNull(row.digito_verificador)) {
+      missing.push("dígito verificador (DV)");
+    }
+  } else if (tipoReceptor === "04") {
     if (!toStringOrNull(row.id_extranjero)) missing.push("ID extranjero");
     if (!toStringOrNull(row.pais_receptor)) missing.push("país del receptor");
-  } else if (tipoReceptor === "01" || tipoReceptor === "02" || tipoReceptor === "03") {
-    if (!toStringOrNull(row.codigo_ubicacion)) missing.push("código de ubicación DGI");
-    if (!toStringOrNull(row.corregimiento)) missing.push("corregimiento");
-    if (!toStringOrNull(row.distrito)) missing.push("distrito");
-    if (!toStringOrNull(row.provincia)) missing.push("provincia");
   }
+  // tipo '02' (consumidor final): sin requisitos adicionales.
 
   if (missing.length > 0) {
     throw new MutationError(

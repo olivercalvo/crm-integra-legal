@@ -6,6 +6,7 @@ import {
   formatClientNumber,
   previewNextClientNumber,
 } from "@/lib/clients/numbering";
+import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
 export async function GET() {
@@ -64,10 +65,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id } = body;
+    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id, tipo_receptor_fe, digito_verificador } = body;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
+    }
+
+    // FE DGI: validar coherencia de campos fiscales (DV obligatorio si 01/03).
+    const fiscalErrors = validateFiscalFields({ tipo_receptor_fe, digito_verificador });
+    if (Object.keys(fiscalErrors).length > 0) {
+      return NextResponse.json(
+        { error: Object.values(fiscalErrors)[0], fieldErrors: fiscalErrors },
+        { status: 400 }
+      );
     }
 
     let client_number: string;
@@ -106,6 +116,8 @@ export async function POST(request: NextRequest) {
         email: email?.trim() || null,
         observations: observations?.trim() || null,
         responsible_lawyer_id: responsible_lawyer_id || null,
+        tipo_receptor_fe: tipo_receptor_fe || null,
+        digito_verificador: digito_verificador?.trim() || null,
         client_status: "active",
       })
       .select()

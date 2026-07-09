@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
 
 interface RouteContext {
   params: { id: string };
@@ -59,6 +60,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       client_type,
       tax_id,
       tax_id_type,
+      // FE DGI — datos fiscales del receptor
+      tipo_receptor_fe,
+      digito_verificador,
     } = body;
 
     if (name !== undefined && (!name || !String(name).trim())) {
@@ -84,6 +88,26 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         { error: "client_type inválido (valores válidos: persona_natural, persona_juridica)" },
         { status: 400 }
       );
+    }
+
+    // FE DGI: validar coherencia de campos fiscales sobre la "vista combinada"
+    // (valor del body si viene, sino el existente). Solo si se toca alguno de
+    // los dos campos fiscales, para no bloquear updates ajenos.
+    if (tipo_receptor_fe !== undefined || digito_verificador !== undefined) {
+      const finalTipo =
+        tipo_receptor_fe !== undefined ? tipo_receptor_fe : existing.tipo_receptor_fe;
+      const finalDV =
+        digito_verificador !== undefined ? digito_verificador : existing.digito_verificador;
+      const fiscalErrors = validateFiscalFields({
+        tipo_receptor_fe: finalTipo,
+        digito_verificador: finalDV,
+      });
+      if (Object.keys(fiscalErrors).length > 0) {
+        return NextResponse.json(
+          { error: Object.values(fiscalErrors)[0], fieldErrors: fiscalErrors },
+          { status: 400 }
+        );
+      }
     }
 
     // Gate de promoción prospect → active (D12). Si el cliente está en
@@ -132,6 +156,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (client_type !== undefined) updates.client_type = client_type || null;
     if (tax_id !== undefined) updates.tax_id = tax_id?.trim() || null;
     if (tax_id_type !== undefined) updates.tax_id_type = tax_id_type || null;
+    if (tipo_receptor_fe !== undefined) updates.tipo_receptor_fe = tipo_receptor_fe || null;
+    if (digito_verificador !== undefined) updates.digito_verificador = digito_verificador?.trim() || null;
 
     const { data: updated, error: updateError } = await admin
       .from("clients")

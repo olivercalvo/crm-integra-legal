@@ -46,7 +46,6 @@ export function mapItem(
   const precioUnitario = round2(line.unit_price);
   const subtotal = round2(line.subtotal);
   const taxAmount = round2(line.tax_amount);
-  const lineTotal = round2(line.line_total);
 
   return {
     numeroSecuenciaItem: line.line_order + 1,
@@ -56,7 +55,10 @@ export function mapItem(
     grupoPrecios: {
       precioUnitarioTransferencia: precioUnitario,
       precioItem: subtotal,
-      sumaPrecioItem: lineTotal,
+      // dValTotItem (sumaPrecioItem) es el valor NETO del item (sin ITBMS);
+      // el ITBMS se reporta aparte en grupoITBMS. Enviar el line_total (con
+      // ITBMS) descuadra el cuadre de la DGI (dVTotItems debe == dTotNeto).
+      sumaPrecioItem: subtotal,
     },
     grupoITBMS: {
       tasaITBMSAplicable,

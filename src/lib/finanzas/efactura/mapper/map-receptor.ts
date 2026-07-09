@@ -57,6 +57,9 @@ export function mapReceptor(client: EfacturaBundleClient): InformacionReceptor {
     ubicacionReceptor: ubicacion,
     telefonoContactoReceptor: client.phone ?? undefined,
     correoElectronicoReceptor: client.email ?? undefined,
+    // Alias defensivo con el misspelling DGI ("Recepctor"): mismo valor bajo
+    // ambas claves, igual que totalGrabado/totalGravado.
+    correoElectronicoRecepctor: client.email ?? undefined,
   };
 
   if (

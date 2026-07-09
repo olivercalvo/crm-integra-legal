@@ -178,6 +178,15 @@ test("1. HON exento a cliente con RUC → tipoReceptorFe '01' y ITBMS '00'", () 
     req.datosGenerales.informacionReceptor.datosRucReceptor?.rucReceptor,
     "987654321-1"
   );
+  // Alias defensivo: el email va bajo AMBAS claves (correcta + misspelling DGI).
+  assert.equal(
+    req.datosGenerales.informacionReceptor.correoElectronicoReceptor,
+    "contacto@ejemplo.com"
+  );
+  assert.equal(
+    req.datosGenerales.informacionReceptor.correoElectronicoRecepctor,
+    "contacto@ejemplo.com"
+  );
   assert.equal(req.listaItems.length, 1);
   assert.equal(req.listaItems[0].grupoITBMS.tasaITBMSAplicable, "00");
   assert.equal(req.listaItems[0].grupoITBMS.montoITBMS, 0);
@@ -303,7 +312,16 @@ test("6. Línea con tax_rate 0.07 → tasaITBMSAplicable '01' + montoITBMS calcu
   assert.equal(req.listaItems[0].grupoITBMS.tasaITBMSAplicable, "01");
   assert.equal(req.listaItems[0].grupoITBMS.montoITBMS, 70);
   assert.equal(req.totales.totalITBMS, 70);
+  // Base gravada: la DGI valida `totalGrabado` (misspelling); enviamos ambos.
+  assert.equal(req.totales.totalGrabado, 1000);
   assert.equal(req.totales.totalGravado, 1000);
+  // dValTotItem (sumaPrecioItem) y precioItem son NETOS (sin ITBMS).
+  assert.equal(req.listaItems[0].grupoPrecios.precioItem, 1000);
+  assert.equal(req.listaItems[0].grupoPrecios.sumaPrecioItem, 1000);
+  // dVTotItems (totalTodosItems) = neto, cuadra con totalNeto (NO con grand).
+  assert.equal(req.totales.totalNeto, 1000);
+  assert.equal(req.totales.totalTodosItems, 1000);
+  assert.equal(req.totales.valorTotalFactura, 1070);
 });
 
 test("7. tax_rate fuera de la tabla → error explícito", () => {
@@ -347,10 +365,18 @@ test("8. Totales cuadran con la suma de líneas (multi-tasa)", () => {
   assert.equal(req.totales.totalNeto, expectedSubtotal);
   assert.equal(req.totales.totalITBMS, expectedTax);
   assert.equal(req.totales.valorTotalFactura, expectedGrand);
-  // totalGravado = solo las líneas con tax_rate > 0.
+  // Base gravada = solo las líneas con tax_rate > 0. La DGI valida
+  // `totalGrabado` (misspelling); enviamos ambos con el mismo valor.
+  assert.equal(req.totales.totalGrabado, 500 + 300);
   assert.equal(req.totales.totalGravado, 500 + 300);
   assert.equal(req.totales.numeroTotalItems, 3);
-  assert.equal(req.totales.totalTodosItems, expectedGrand);
+  // dVTotItems (totalTodosItems) es NETO: cuadra con totalNeto, NO con grand.
+  assert.equal(req.totales.totalTodosItems, expectedSubtotal);
+  // Cada dValTotItem (sumaPrecioItem) es el subtotal neto de su línea.
+  assert.equal(req.listaItems[0].grupoPrecios.sumaPrecioItem, 1000);
+  assert.equal(req.listaItems[1].grupoPrecios.sumaPrecioItem, 500);
+  assert.equal(req.listaItems[2].grupoPrecios.sumaPrecioItem, 300);
+  // sumaValoresRecibidos (dTotRec) sí es el grand total (lo que se cobra).
   assert.equal(req.totales.sumaValoresRecibidos, expectedGrand);
 });
 

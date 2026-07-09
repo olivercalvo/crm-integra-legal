@@ -109,6 +109,12 @@ export interface InformacionReceptor {
   grupoIdentificacionExtranjera?: IdentificacionExtranjera;
   telefonoContactoReceptor?: string;
   correoElectronicoReceptor?: string;
+  /**
+   * Alias defensivo con el misspelling que aparece en algunos contratos de
+   * la DGI ("Recepctor"). Mismo patrón que totalGrabado/totalGravado: se
+   * envía el mismo valor bajo ambas claves para no depender de la ortografía.
+   */
+  correoElectronicoRecepctor?: string;
   paisReceptor?: string;
   paisReceptorNoExisteDescripcion?: string;
 }
@@ -137,6 +143,13 @@ export interface Totales {
   totalNeto: number;
   totalITBMS: number;
   totalISC?: number;
+  /**
+   * Base gravada con ITBMS. `totalGrabado` (con el misspelling oficial de la
+   * DGI) es el campo que la DGI valida — NO nullable en el contrato PAC.
+   * `totalGravado` (bien escrito) es un alias nullable que la DGI ignora.
+   * El mapper envía ambos con el mismo valor para no depender de la ortografía.
+   */
+  totalGrabado?: number;
   totalGravado?: number;
   totalDescuento?: number;
   totalAcarreo?: number;

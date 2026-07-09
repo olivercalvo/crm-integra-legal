@@ -13,11 +13,14 @@
  * Subtotales:
  *   - totalNeto: suma de subtotales por línea (sin impuestos).
  *   - totalITBMS: suma de tax_amount por línea.
- *   - totalGravado: suma de subtotales de líneas con tax_rate > 0
- *     (la parte gravada con ITBMS). Si todo exento → 0.
- *   - totalTodosItems: suma de line_total por línea.
- *   - valorTotalFactura: grand_total (= totalTodosItems para facturas sin
- *     descuentos / cargos extra).
+ *   - totalGrabado / totalGravado: suma de subtotales de líneas con
+ *     tax_rate > 0 (la parte gravada con ITBMS). Si todo exento → 0.
+ *     OJO: el campo que la DGI valida es `totalGrabado` (con el misspelling
+ *     oficial "Grabado"); `totalGravado` (bien escrito) es un alias nullable
+ *     que la DGI ignora. Enviamos AMBOS con el mismo valor.
+ *   - totalTodosItems: suma de subtotales NETOS por línea (dVTotItems debe
+ *     cuadrar con dTotNeto; NO incluye ITBMS).
+ *   - valorTotalFactura: grand_total (= totalNeto + totalITBMS).
  *   - numeroTotalItems: cantidad de líneas.
  *   - sumaValoresRecibidos: grand_total (sin vuelto en este flujo).
  */
@@ -51,7 +54,7 @@ export function mapTotales(
       .reduce((acc, ln) => acc + ln.subtotal, 0)
   );
   const totalTodosItems = round2(
-    lines.reduce((acc, ln) => acc + ln.line_total, 0)
+    lines.reduce((acc, ln) => acc + ln.subtotal, 0)
   );
   const valorTotalFactura = round2(invoice.grand_total);
   const isCredito = invoice.due_date > invoice.issue_date;
@@ -69,6 +72,9 @@ export function mapTotales(
     grupoFormasPago: formasPago,
     totalNeto,
     totalITBMS,
+    // La DGI valida `totalGrabado` (misspelling oficial); `totalGravado` es
+    // alias nullable ignorado. Enviamos ambos con el mismo valor.
+    totalGrabado: totalGravado,
     totalGravado,
     valorTotalFactura,
     sumaValoresRecibidos: valorTotalFactura,

@@ -167,6 +167,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               invoiceKind={invoice.invoice_kind}
               grandTotal={Number(invoice.grand_total)}
               amountPaid={Number(invoice.amount_paid)}
+              feEstado={invoice.fe_estado}
+              dgiCufe={invoice.dgi_cufe}
             />
           )}
         </div>

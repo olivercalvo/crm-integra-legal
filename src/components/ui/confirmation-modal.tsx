@@ -13,6 +13,10 @@ interface ConfirmationModalProps {
   children: React.ReactNode;
   confirmButtonText?: string;
   cancelButtonText?: string;
+  /** Deshabilita el botón de confirmar sin bloquear el cierre (default false).
+   *  Se combina con `loading`. Usado por el modal de anulación para exigir un
+   *  checkbox antes de confirmar. */
+  confirmDisabled?: boolean;
 }
 
 export function ConfirmationModal({
@@ -24,6 +28,7 @@ export function ConfirmationModal({
   children,
   confirmButtonText = "Confirmar",
   cancelButtonText = "Cancelar",
+  confirmDisabled = false,
 }: ConfirmationModalProps) {
   useEffect(() => {
     if (!open) return;
@@ -70,7 +75,7 @@ export function ConfirmationModal({
             </Button>
             <Button
               onClick={onConfirm}
-              disabled={loading}
+              disabled={loading || confirmDisabled}
               className="min-h-[48px] flex-1 bg-integra-navy text-white hover:bg-integra-navy/90"
             >
               {loading ? "Procesando..." : confirmButtonText}

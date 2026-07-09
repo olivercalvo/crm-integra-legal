@@ -54,11 +54,15 @@ export function mapItem(
     codigoItemCodificacionPanamena: cpbs,
     grupoPrecios: {
       precioUnitarioTransferencia: precioUnitario,
+      // dPrItem (C203): precio del item NETO (sin impuestos).
       precioItem: subtotal,
-      // dValTotItem (sumaPrecioItem) es el valor NETO del item (sin ITBMS);
-      // el ITBMS se reporta aparte en grupoITBMS. Enviar el line_total (con
-      // ITBMS) descuadra el cuadre de la DGI (dVTotItems debe == dTotNeto).
-      sumaPrecioItem: subtotal,
+      // dValTotItem (sumaPrecioItem, C206): BRUTO. Ficha Técnica DGI §6.5.1
+      // lo define como "suma del precio del item con los montos de los
+      // impuestos", y §8.4.3.1 regla 2056 exige:
+      //   C206 = C203 (precioItem) + C204 (acarreo) + C205 (seguro)
+      //          + C402 (ITBMS) + C502 (ISC) + C602 (OTI)
+      // Sin acarreo/seguro/ISC/OTI en este flujo → = subtotal + tax_amount.
+      sumaPrecioItem: round2(subtotal + taxAmount),
     },
     grupoITBMS: {
       tasaITBMSAplicable,

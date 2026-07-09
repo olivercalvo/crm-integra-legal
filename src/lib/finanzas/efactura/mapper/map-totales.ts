@@ -22,7 +22,9 @@
  *     = totalITBMS, pero la estructura ya suma los tres. Enviamos el valor
  *     bajo ambas claves (`totalGravado` bien escrito, que es el que el PAC
  *     mapea a dTotGravado, y `totalGrabado` con el misspelling por defensa).
- *   - totalTodosItems (D14 = dVTotItems): suma de dValTotItem NETOS por línea.
+ *   - totalTodosItems (D14 = dVTotItems): suma de dValTotItem (C206) BRUTOS
+ *     por línea (precio + impuestos). Ficha DGI regla 2514: D14 = Σ C206.
+ *     NO confundir con dTotNeto (D02), que es la suma de subtotales netos.
  *   - valorTotalFactura (D09 = dVTot): grand_total. Cuadre DGI regla 2507:
  *     dVTot = dTotGravado − dTotDesc + dTotAcar + dTotSeg + dTotNeto.
  *   - numeroTotalItems: cantidad de líneas.
@@ -61,8 +63,12 @@ export function mapTotales(
   // Técnica DGI §8.4.4 regla 2503: D05 <> D03 + D04 + D602. En este caso
   // (sin ISC ni OTI) queda = totalITBMS.
   const totalGravado = round2(totalITBMS + totalISC + totalOTI);
+  // dVTotItems (D14) = Σ dValTotItem. Ficha Técnica DGI regla 2514: D14 debe
+  // == suma de C206 (dValTotItem), que es BRUTO (precio + impuestos). Por eso
+  // suma subtotal + tax_amount por línea (NO solo subtotal). OJO: es distinto
+  // de dTotNeto (D02), que sí es la suma de subtotales netos.
   const totalTodosItems = round2(
-    lines.reduce((acc, ln) => acc + ln.subtotal, 0)
+    lines.reduce((acc, ln) => acc + ln.subtotal + ln.tax_amount, 0)
   );
   const valorTotalFactura = round2(invoice.grand_total);
   const isCredito = invoice.due_date > invoice.issue_date;

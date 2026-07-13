@@ -1,5 +1,46 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-13 - Gate fiscal eFactura valida `client_type` (receptor 01/03)
+
+Fix del incidente reportado por la licenciada al intentar emitir al PAC la factura
+`FAC-REI-000039` (receptor CLI-116 "INMOBILIARIA CAMAY, S.A."): el diálogo devolvía
+un genérico **"Error interno"** 500 en vez de un mensaje accionable.
+
+### Root cause
+- El receptor CLI-116 es tipo `01` (contribuyente RUC) pero tenía `client_type = NULL`
+  (uno de ~30 clientes legacy sin `client_type` poblado tras las importaciones).
+- `validateClientFiscalGate` (`src/lib/finanzas/efactura/data/fetch-invoice-efactura-bundle.ts`)
+  **no** validaba `client_type`, así que el cliente pasaba el gate.
+- Luego el mapper puro `buildRucReceptor` (`src/lib/finanzas/efactura/mapper/map-receptor.ts:90-96`)
+  usa `client_type` para derivar el `tipoContribuyente` del receptor y lanza un `Error`
+  PLANO (no `MutationError`) cuando falta. El route (`emit-efactura/route.ts:42-55`) degrada
+  cualquier throw no-`MutationError` a "Error interno" 500. Verificado en prod: 0 filas en
+  `fe_emisiones` para esa factura (el throw ocurre en el mapper, antes de T2).
+- La correlación aparente "REI falla / HON funciona" era **coincidental**: todas las
+  emisiones HON exitosas fueron a clientes con `client_type` poblado. Cualquier factura
+  (HON o REI) a un receptor 01/03 con `client_type` NULL fallaba igual.
+
+### Changed
+- `validateClientFiscalGate` ahora exige `client_type` **solo** para `tipo_receptor_fe`
+  `01` (contribuyente) y `03` (gobierno) — los únicos que llaman `buildRucReceptor`. Si
+  falta, suma `"tipo de contribuyente (persona natural/jurídica)"` al array `missing` y sale
+  como `MutationError(400)` accionable ANTES de llegar al mapper. Los tipos `02` (consumidor
+  final) y `04` (extranjero) NO lo requieren y no se ven afectados.
+- El throw del mapper (`map-receptor.ts:91`) se deja intacto como defensa en profundidad.
+
+### Tests
+- `src/lib/finanzas/efactura/__tests__/validate-client-fiscal-gate.test.ts`:
+  - Fixture base `receptor01SinUbicacion()` ahora incluye `client_type: "persona_juridica"`.
+  - Nuevo caso negativo: receptor `01` con `client_type` NULL → `MutationError 400` mencionando "tipo de contribuyente" (caso FAC-REI-000039).
+  - Nuevo caso negativo: receptor `03` con `client_type` NULL → `MutationError 400`.
+  - Nuevo caso de control: receptor `02` con `client_type` NULL → NO falla.
+  - `17/17` verde. `tsc --noEmit` limpio (exit 0).
+
+### Pendiente operativo (NO incluido en este cambio)
+- Backfill de `client_type` para los ~30 clientes legacy con NULL (dato, no código). El
+  fix solo cambia el mensaje de error; la abogada aún debe completar `client_type` en el
+  cliente para poder emitir. Hay un `sql/pending/hotfix_cli116_client_type.sql` sin revisar.
+
 ## [Hotfix] - 2026-06-04 - Allocator atómico de `client_number` (numbering_sequences)
 
 Hotfix del incidente reportado por Daveiva al crear una cotización con prospecto nuevo:

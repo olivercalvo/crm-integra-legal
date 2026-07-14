@@ -1,5 +1,61 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-14 - eFactura: REUSO del correlativo — el número no autorizado ya no se quema por reintento
+
+El PAC (Ideati) confirmó las reglas de numeración del `numeroDocumento` FE por punto de
+facturación: (a) no tiene que ser estrictamente consecutivo, pero (b) debe ir ascendente,
+(c) los saltos no deben ser amplios, y (d) **los números que nunca recibieron CUFE SE PUEDEN
+REUTILIZAR**. Este cambio hace que el asignador reuse el número reservado en los reintentos,
+para que los saltos queden en ~0.
+
+### Root cause del salto 3-4-5 en el punto 051 (FAC-REI-000039)
+- La orquestación ya tenía la lógica de reuso D-3 (`emit-invoice-to-efactura.ts`): si la
+  factura queda en `fe_estado='error'` con `punto_facturacion`/`numero_documento`
+  persistidos, el reintento REUSA ese número en vez de allocar uno nuevo.
+- **Pero nunca era alcanzable ante el bug de `client_type`.** El orden era: T1 `allocateFeNumero`
+  (quema el número, commit del RPC) → mapper (`mapInvoiceToEfacturaRequest`, PURE) → T2 UPDATE
+  `invoices` que reservaba el número y marcaba `pending`. El mapper (`buildRucReceptor`,
+  `map-receptor.ts:91`) lanzaba **antes de T2**, así que el número asignado NO se persistía en
+  la factura y `fe_estado` quedaba en `no_emitida`. En el reintento, la condición de reuso D-3
+  (`fe_estado === 'error'` + número persistido) era falsa → allocaba OTRO número.
+- Efecto real: los 3 reintentos fallidos de FAC-REI-000039 quemaron 3, 4 y 5; la emisión
+  exitosa (tras corregir `client_type` en CLI-116) quedó en el 6. Autorizadas: 1, 2, 6.
+
+### Changed — `src/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura.ts`
+- Se **mueve la reserva del correlativo (UPDATE `invoices` → `pending` + `punto`/`numero`) a
+  ANTES del mapper** (nuevo paso T1.5). El número queda guardado en la factura apenas se
+  asigna, antes del primer punto que puede lanzar.
+- El mapper se envuelve en `try/catch`: si lanza, se deja la factura en `fe_estado='error'`
+  (best-effort) con el número ya reservado y se re-lanza como `MutationError(500)`. El
+  reintento entra por la rama de reuso D-3 y reusa ESE mismo número, sin volver a llamar al
+  allocator.
+- Resultado: **cada factura quema como máximo UN correlativo**, reusado en todos sus
+  reintentos hasta autorizar → saltos ~0 aun ante rachas de fallos. Nunca se reusa un número
+  ya autorizado con CUFE (la factura autorizada queda fuera del gate T0 y el allocator sólo
+  incrementa).
+
+### NO cambiado (decisión) — la RPC `allocate_fe_numero` queda igual
+- No se modificó la numeración fiscal en BD. La RPC sigue siendo el UPSERT atómico ascendente
+  de `sql/pending/020_efactura_allocator.sql`. El reuso se resuelve enteramente en la
+  orquestación (a nivel factura), que es el caso reportado ("el siguiente intento lo reusa").
+- Reuso **entre facturas distintas** (reclamar el número de una factura definitivamente
+  abandonada para otra factura nueva) NO es seguro sin una señal explícita de descarte: el
+  número reservado de una factura en `error` está reclamado por su propio reintento (D-3), así
+  que un allocator que lo "libere" colisionaría con ese reintento. Queda como trabajo futuro
+  (requiere estado `descartada`/void). El residuo actual —una factura abandonada deja UN hueco—
+  cae dentro de la tolerancia DGI (1-4).
+
+### Tests — `src/lib/finanzas/efactura/__tests__/emit-invoice-reuso-correlativo.test.ts` (nuevo, 4 tests)
+- Intento fallido por el mapper deja el número RESERVADO (no lo quema) y `fe_estado='error'`.
+- El siguiente intento REUSA el mismo número sin volver a allocar (D-3).
+- Un número ya autorizado (con CUFE) nunca se re-emite ni se re-allocatea (gate T0).
+- Atomicidad: el guard de la reserva rechaza (409) al proceso que perdió la carrera.
+- Suite eFactura completa: **32/32 pass**. `tsc --noEmit`: limpio (exit 0).
+
+### Pendiente (Oliver, cambio fiscal — pausa obligatoria)
+- Ninguno para producción en este cambio: es code-only en `develop`, sin migración. Si en el
+  futuro se quiere reuso entre facturas, hay que diseñar el estado de descarte + revisar la RPC.
+
 ## [Fix] - 2026-07-13 - Gate fiscal eFactura valida `client_type` (receptor 01/03)
 
 Fix del incidente reportado por la licenciada al intentar emitir al PAC la factura

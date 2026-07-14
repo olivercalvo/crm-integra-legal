@@ -1,5 +1,43 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === ESTADO 13/07/2026 ===
+
+### Cerrado hoy
+- **Bug eFactura "Error interno" (FAC-REI-000039)** → causa raíz: el receptor CLI-116 tenía `client_type` NULL; el gate no lo validaba y el mapper (`buildRucReceptor`) lanzaba Error plano → 500 genérico. No era REI-específico. Verificado en prod (0 filas en `fe_emisiones`).
+- **Fix del gate** (`validateClientFiscalGate` valida `client_type` para tipo 01/03) → en `develop` (**b735408**), tests 17/17 verde, tsc limpio. **SIN desplegar** (pendiente decisión de merge a main).
+- **Backfill `client_type`**: 26 clientes legacy con NULL corregidos en prod (7 jurídicas / 19 naturales). Quedan 3 dudosos esperando confirmación de licenciadas: CLI-068, CLI-093, CLI-094. SQL en `sql/pending/backfill_client_type_null.sql`.
+- **Seguridad — Storage aislado por tenant (APLICADO en prod)**: se reemplazaron las 7 políticas abiertas del bucket `documents` por 4 `tenant_scoped_*` (RLS por primer folder = tenant_id). Verificado + smoke test OK. `sql/pending/storage_rls_tenant_scoped.sql`. **OJO**: `auth.tenant_id()` NO existe en prod (migración `20260403000001` nunca se aplicó); las políticas leen el claim JWT `app_metadata.tenant_id` inline. Implicación: la RLS de tablas que dependa de esa función probablemente tampoco está operativa (la app bypassa RLS con service-role de todos modos — ver roadmap de seguridad).
+- **Docs de cumplimiento/seguridad** (fuera del repo, en carpeta Ciberseguridad del cliente): revisión OWASP del código real, roadmap de cumplimiento legal Panamá (DE 34/1998, Ley 81, Ley 23, Ley 52), gap analysis. Decisiones tomadas: el CRM **reemplazará a QuickBooks** (implica núcleo contable inmutable + aval CPA) y **SaaS a futuro** (priorizar aislamiento multi-tenant real, hoy dependiente de filtro manual).
+
+### Esperando a las licenciadas
+- Reintento de emisión de FAC-REI-000039 (client_type ya corregido). **Riesgo latente**: es una factura REEMBOLSO con una línea gravada al 7% + reembolsos exentos; el mapper manda el CPBS de reembolso (`8012`, provisional) a las 3 líneas → posible rechazo del PAC. El modelo es "una factura = un solo tipo"; una factura mixta puede ser error de armado. Confirmar con licenciadas si esa línea gravada debía ir en una FAC-HON aparte.
+- Confirmar los 3 clientes dudosos (naturaleza jurídica/natural).
+
+### Backlog — Features solicitadas por licenciadas (13/07)
+1. **T&C por defecto (XS)** — La infra YA existe (`terms-template-editor.tsx`, `quote-terms.ts`, admin-only, quote-scoped; `InvoiceDocument.tsx`/`CreditNoteDocument.tsx` ya referencian términos). Solo falta cargar el texto final aprobado como default. Decisión: ¿solo cotizaciones o también en el PDF de facturas/recibos? Solo-cotizaciones = cero código.
+2. **Recibo de venta no fiscal (M)** — No existe (invoice_kind solo HON/REI, todo va al PAC). Nuevo tipo de documento que NO toca el PAC, sin CUFE/QR, numeración propia (REC-NNN). Reusar infra de facturas (líneas/PDF/pagos). **Diseñar como ingreso de primera clase que alimente reportes y el futuro núcleo contable; evitar doble conteo si luego se factura.**
+3. **Agenda / calendario (M el MVP, L completo)** — Greenfield (no hay tabla events ni vista calendario). MVP: tabla eventos + vista mensual + evento opcional ligado a cliente/caso. v2 (lo que lo hace L): traer deadlines de casos + tareas al calendario + recordatorios por correo (Resend ya integrado). Menor prioridad de cumplimiento.
+
+> Prioridad honesta: ninguna de las 3 compite con MFA (Fase 0 seguridad) ni con el núcleo contable (obligatorio por reemplazo de QuickBooks). T&C es gratis; el recibo se diseña de la mano del trabajo contable.
+
+### Regla fiscal confirmada — numeración FE (PAC / Ideati, 14/07)
+Daniel Tarqui (Ideati) confirmó por correo, sobre el `numeroDocumento` por punto de facturación:
+- Las secuencias **no son estrictas**, pero **deben ir en orden ascendente**.
+- Se permiten **saltos** (números no autorizados entre autorizados), pero **no muy amplios**: recomendado que la diferencia sea de **1 a 4** (no saltar de la 1 a la 100).
+- **Los números NO autorizados se pueden reutilizar** (solo los que nunca recibieron CUFE).
+- Estado actual punto 051: autorizadas 1, 2, 6 → ascendente OK, salto 2→6 = diferencia 4 (borde del rango, DENTRO de tolerancia). Sin problema fiscal hoy.
+
+**Backlog (no urgente): ajustar el asignador `fe_secuencias` / `allocate_fe_numero` para REUSAR números no autorizados** en vez de quemarlos (hoy "Política A: quema y no reusa"). Así los saltos quedan en ~0 y nunca se acercan al límite aunque haya rachas de intentos fallidos. Existe ya lógica "allocate-o-reuso (D-3)" en T1 de la orquestación — revisar por qué no reusó en FAC-REI-000039 (quemó 3,4,5).
+
+### DV auto-resolución — respuesta de Ideati (Daniel Tarqui, 10/07)
+Ideati expone endpoint `/QueryRucDvPac/{tipo}/{ruc}` (tipo: 1=natural, 2=jurídica; ej. `/QueryRucDvPac/2/1-1-1`). Resuelve el pendiente "esperando Ideati" del bloque 09/07. **Pendiente confirmar el formato de respuesta**: ¿devuelve el DV + tipo, o solo verifica existencia? Requiere enviar el tipo de contribuyente ya conocido. Backlog: auto-completar DV desde el RUC en el form de cliente (ahorra la captura manual a las licenciadas).
+
+### ⏳ PENDIENTE DE DEPLOY (develop → main, requiere OK de Oliver + smoke test)
+En `develop` hay **2 fixes de la ruta de emisión eFactura SIN desplegar**, para ir juntos en el próximo deploy:
+1. **Gate valida `client_type`** para receptor 01/03 (b735408) → convierte "Error interno" en mensaje accionable.
+2. **Reuso del correlativo FE** → una factura quema como máximo UN número, reusado en sus reintentos (antes cada reintento quemaba otro). **Code-only, SIN migración** (AG decidió, con razón, no tocar la RPC fiscal `allocate_fe_numero`; el reuso entre facturas distintas sería inseguro).
+- Al mergear develop→main (**pausa obligatoria**): smoke test post-deploy = emitir una factura normal y confirmar CUFE limpio. Los dos tocan la misma ruta, así que se prueban de una.
+
 ## === ESTADO 09/07/2026 ===
 
 eFactura PRODUCTION-READY y en uso real por las licenciadas.

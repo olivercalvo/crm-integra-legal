@@ -1,5 +1,61 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Security] - 2026-07-14 - Autorización por rol + anti-IDOR en endpoints legales /api
+
+El middleware protege páginas pero NO gatea `/api/**`; el rol se valida dentro de cada
+handler. Los endpoints de finanzas ya validaban rol; los legales en su mayoría NO → un
+`asistente` o `contador` podía mutar recursos legales por API directa. Además había 2 IDOR
+de escritura. Este cambio aplica la matriz de roles y cierra los IDOR. Todo en `develop`,
+sin deploy, sin migraciones.
+
+### Helpers nuevos — `src/lib/supabase/server-query.ts`
+- `requireRole(role, allowed)` → devuelve un 403 estandarizado (`{ error: "Sin permiso" }`,
+  status 403) cuando el rol no está en `allowed`, o `null` cuando pasa. Forma de menor riesgo:
+  puramente aditiva (`const denied = requireRole(...); if (denied) return denied;`), no altera
+  el flujo de los roles permitidos. Falla CERRADO ante rol null/desconocido. Reusable por el
+  patrón finanzas (`getAuthenticatedContext`) y el patrón legal inline.
+- `requireEntityInTenant(db, table, id, tenantId, notFoundMessage?)` → guard anti-IDOR:
+  verifica pertenencia al tenant con un `SELECT id ... eq(id).eq(tenant_id).maybeSingle()` y
+  devuelve 404 si la fila no existe o es de otro tenant. Espeja el patrón correcto ya presente
+  en `cases/[id]/comments/route.ts`.
+
+### Matriz de roles aplicada (agregado el check de rol; varios ya seleccionaban `role` sin usarlo)
+- `POST /api/clients` → [admin, abogada]
+- `PATCH` + `DELETE /api/clients/[id]` → [admin, abogada]
+- `POST /api/cases` → [admin, abogada]
+- `PATCH /api/cases/[id]` → [admin, abogada]
+- `POST /api/prospects` → [admin, abogada]
+- `PATCH` + `DELETE /api/prospects/[id]` → [admin, abogada]
+- `POST /api/prospects/[id]/convert` → [admin, abogada]
+- `POST /api/comments` → [admin, abogada, asistente] (contador queda fuera)
+- `POST /api/documents/register` → [admin, abogada, asistente] (contador queda fuera)
+
+### IDOR de escritura cerrados
+- `POST /api/comments`: antes insertaba con el `case_id` del body SIN verificar pertenencia →
+  un usuario podía comentar en el caso de otro tenant. Ahora verifica el caso por
+  (id=case_id, tenant_id) antes del insert; si no existe → 404.
+- `POST /api/documents/register`: solo validaba que `storage_path` empezara con el tenant_id,
+  pero NO que `entity_id` perteneciera al tenant. Ahora mapea `entity_type` → tabla
+  (client→clients, case→cases, task→tasks, comment→comments, quote→quotes, invoice→invoices;
+  `entity_type` desconocido → 400) y verifica (id=entity_id, tenant_id) antes del insert; si no
+  existe → 404.
+
+### NO tocado (anotado, sin cambios)
+- No se modificó el middleware ni los endpoints de finanzas (ya validaban rol).
+- Los `GET` de listado no se tocaron (fuera del alcance; la tarea es sobre mutaciones legales).
+
+### Tests — `src/lib/supabase/__tests__/authz-guards.test.ts` (nuevo, 29 tests)
+- Por cada endpoint tocado: caso rol-no-permitido → 403 y caso rol-permitido → OK, con su lista
+  `allowed` exacta. Más: falla-cerrado ante rol null/desconocido; `contador` bloqueado en todos
+  los endpoints legales.
+- IDOR: entidad/caso de OTRO tenant → 404; mismo tenant → OK; inexistente → 404 (con fake del
+  builder de Supabase).
+- Nota de alcance: los route handlers de Next no se drivean end-to-end (`next/headers`
+  `cookies()` lanza fuera de un request scope, y el runner no soporta module-mocks que compongan
+  con tsx). La lógica de autorización agregada vive 100% en los dos helpers, que sí son
+  deterministas; cada handler delega su decisión a ellos.
+- Suite repo-wide: **94/94 pass**. `tsc --noEmit`: limpio (exit 0).
+
 ## [Fix] - 2026-07-14 - eFactura: REUSO del correlativo — el número no autorizado ya no se quema por reintento
 
 El PAC (Ideati) confirmó las reglas de numeración del `numeroDocumento` FE por punto de

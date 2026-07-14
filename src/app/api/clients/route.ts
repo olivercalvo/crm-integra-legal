@@ -7,6 +7,7 @@ import {
   previewNextClientNumber,
 } from "@/lib/clients/numbering";
 import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
+import { requireRole } from "@/lib/supabase/server-query";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
 export async function GET() {
@@ -56,13 +57,17 @@ export async function POST(request: NextRequest) {
     // Get tenant_id from user profile
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada crean clientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const body = await request.json();
     const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id, tipo_receptor_fe, digito_verificador } = body;

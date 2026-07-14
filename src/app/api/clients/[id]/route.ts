@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
+import { requireRole } from "@/lib/supabase/server-query";
 
 interface RouteContext {
   params: { id: string };
@@ -23,13 +24,17 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada editan/desactivan clientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const { id } = params;
 
@@ -214,13 +219,17 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada editan/desactivan clientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const { id } = params;
 

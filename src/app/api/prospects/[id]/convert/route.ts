@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
 import { allocateClientNumber } from "@/lib/clients/numbering";
 
 // POST — convert prospect to client
@@ -14,8 +15,12 @@ export async function POST(
     if (authError || !user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
     const admin = createAdminClient();
-    const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
+    const { data: profile } = await admin.from("users").select("tenant_id, role").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
+
+    // Solo admin y abogada convierten prospectos a cliente (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     // Get prospect
     const { data: prospect } = await admin

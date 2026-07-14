@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole, requireEntityInTenant } from "@/lib/supabase/server-query";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     // Get user's tenant_id
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
@@ -25,12 +26,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Perfil de usuario no encontrado" }, { status: 403 });
     }
 
+    // Comentar es acción de admin/abogada/asistente (matriz de roles). Contador
+    // no toca recursos legales.
+    const denied = requireRole(profile.role, ["admin", "abogada", "asistente"]);
+    if (denied) return denied;
+
     const body = await request.json();
     const { case_id, text, follow_up_date } = body;
 
     if (!case_id || !text?.trim()) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, text" }, { status: 400 });
     }
+
+    // IDOR: verificar que el caso exista y pertenezca al tenant ANTES de
+    // insertar. Sin esto, un usuario podría comentar en el caso de otro tenant
+    // pasando su case_id. (Mismo patrón que cases/[id]/comments/route.ts.)
+    const idor = await requireEntityInTenant(
+      admin,
+      "cases",
+      case_id,
+      profile.tenant_id,
+      "Caso no encontrado"
+    );
+    if (idor) return idor;
 
     const { data: comment, error: insertError } = await admin
       .from("comments")

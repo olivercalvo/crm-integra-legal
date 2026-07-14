@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole, requireEntityInTenant } from "@/lib/supabase/server-query";
+
+// Mapa entity_type → tabla tenant-scoped para verificar pertenencia (anti-IDOR).
+// Cubre los 6 valores de DocumentEntityType (src/types/database.ts).
+const ENTITY_TABLE: Record<string, string> = {
+  client: "clients",
+  case: "cases",
+  task: "tasks",
+  comment: "comments",
+  quote: "quotes",
+  invoice: "invoices",
+};
 
 // POST /api/documents/register — Save document metadata after direct upload to Storage
 export async function POST(request: NextRequest) {
@@ -14,13 +26,18 @@ export async function POST(request: NextRequest) {
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (!profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Subir documentos es acción de admin/abogada/asistente (matriz de roles).
+    // Contador no toca recursos legales.
+    const denied = requireRole(profile.role, ["admin", "abogada", "asistente"]);
+    if (denied) return denied;
 
     const body = await request.json();
     const { entity_type, entity_id, file_name, storage_path } = body;
@@ -36,6 +53,19 @@ export async function POST(request: NextRequest) {
     if (!storage_path.startsWith(profile.tenant_id + "/")) {
       return NextResponse.json({ error: "Ruta de storage no válida" }, { status: 403 });
     }
+
+    // IDOR: verificar que la entidad referenciada exista y pertenezca al tenant
+    // ANTES de insertar la metadata. Sin esto, un usuario podría colgar un
+    // documento del recurso de otro tenant pasando su entity_id.
+    const entityTable = ENTITY_TABLE[entity_type as string];
+    if (!entityTable) {
+      return NextResponse.json(
+        { error: `entity_type no soportado: ${String(entity_type)}` },
+        { status: 400 }
+      );
+    }
+    const idor = await requireEntityInTenant(admin, entityTable, entity_id, profile.tenant_id);
+    if (idor) return idor;
 
     const { data: doc, error: insertError } = await admin
       .from("documents")

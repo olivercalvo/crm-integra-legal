@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
 import {
   buildCaseCode,
   getClassificationPrefix,
@@ -35,6 +36,10 @@ export async function PATCH(
     if (!profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada editan expedientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     // Verify case exists and belongs to tenant
     const { data: existingCase } = await admin

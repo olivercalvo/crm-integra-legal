@@ -6,7 +6,7 @@ import {
   formatClientNumber,
   previewNextClientNumber,
 } from "@/lib/clients/numbering";
-import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
+import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
 import { requireRole } from "@/lib/supabase/server-query";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
@@ -70,10 +70,19 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
 
     const body = await request.json();
-    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id, tipo_receptor_fe, digito_verificador } = body;
+    const { name, ruc, type, contact, phone, email, observations, client_number: customNumber, responsible_lawyer_id, tipo_receptor_fe, digito_verificador, client_type } = body;
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
+    }
+
+    // OBLIGATORIO: sin client_type la FE explota al mapear el receptor.
+    const clientTypeError = validateClientType(client_type);
+    if (clientTypeError) {
+      return NextResponse.json(
+        { error: clientTypeError, fieldErrors: { client_type: clientTypeError } },
+        { status: 400 }
+      );
     }
 
     // FE DGI: validar coherencia de campos fiscales (DV obligatorio si 01/03).
@@ -116,6 +125,7 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         ruc: ruc?.trim() || null,
         type: type || null,
+        client_type,
         contact: contact?.trim() || null,
         phone: phone?.trim() || null,
         email: email?.trim() || null,

@@ -32,6 +32,7 @@ interface FormData {
   name: string;
   ruc: string;
   type: string;
+  client_type: string;
   tipo_receptor_fe: string;
   digito_verificador: string;
   responsible_lawyer_id: string;
@@ -58,6 +59,10 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
     name: client?.name ?? "",
     ruc: client?.ruc ?? "",
     type: client?.type ?? "",
+    // Persona natural/jurídica — OBLIGATORIO. Alimenta tipoContribuyente del
+    // receptor FE; su ausencia rompía la emisión con "Error interno"
+    // (map-receptor.ts buildRucReceptor).
+    client_type: client?.client_type ?? "",
     // FE DGI: si el cliente ya lo tiene cargado se respeta; sino se sugiere
     // desde client_type (juridica→01; natural queda a elección de la abogada).
     tipo_receptor_fe: client?.tipo_receptor_fe ?? suggestTipoReceptorFe(client?.client_type),
@@ -90,11 +95,32 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
+  // client_type alimenta el default de tipo_receptor_fe (juridica→01). No
+  // pisamos una selección explícita de la abogada cuando la sugerencia es
+  // vacía (persona_natural), para no borrarle un 01/02 ya elegido.
+  const setClientType = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setFormData((prev) => {
+      const suggested = suggestTipoReceptorFe(value);
+      return {
+        ...prev,
+        client_type: value,
+        tipo_receptor_fe: suggested || prev.tipo_receptor_fe,
+      };
+    });
+    setFieldErrors((prev) => ({ ...prev, client_type: undefined }));
+  };
+
   const validateStep = (s: number): boolean => {
     const errors: Partial<Record<keyof FormData, string>> = {};
     if (s === 0) {
       if (!formData.name.trim()) {
         errors.name = "El nombre es requerido";
+      }
+      // OBLIGATORIO: sin client_type la emisión de FE falla con "Error interno"
+      // (buildRucReceptor). Mismo dominio que el flujo de cotizaciones.
+      if (!["persona_natural", "persona_juridica"].includes(formData.client_type)) {
+        errors.client_type = "El tipo de persona es requerido (natural o jurídica)";
       }
       // FE DGI: coherencia de los campos fiscales (DV obligatorio si 01/03).
       const fiscalErrors = validateFiscalFields({
@@ -137,6 +163,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
         name: formData.name.trim(),
         ruc: formData.ruc.trim() || null,
         type: formData.type || null,
+        client_type: formData.client_type || null,
         tipo_receptor_fe: formData.tipo_receptor_fe || null,
         digito_verificador: formData.digito_verificador.trim() || null,
         contact: formData.contact.trim() || null,
@@ -286,6 +313,29 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   <p className="text-xs text-integra-gold font-medium">
                     Cliente con contrato continuo y múltiples casos
                   </p>
+                )}
+              </div>
+
+              {/* Tipo de persona (fiscal) — OBLIGATORIO para emitir FE */}
+              <div className="space-y-1.5">
+                <Label htmlFor="client_type">
+                  Tipo de persona <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="client_type"
+                  value={formData.client_type}
+                  onChange={setClientType}
+                  className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">— Seleccionar —</option>
+                  <option value="persona_natural">Persona natural</option>
+                  <option value="persona_juridica">Persona jurídica</option>
+                </select>
+                <p className="text-xs text-gray-500">
+                  Requerido para la facturación electrónica ante la DGI.
+                </p>
+                {fieldErrors.client_type && (
+                  <p className="text-xs text-red-500">{fieldErrors.client_type}</p>
                 )}
               </div>
 

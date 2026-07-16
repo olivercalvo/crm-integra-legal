@@ -49,6 +49,22 @@ export function suggestTipoReceptorFe(
   return "";
 }
 
+export const CLIENT_TYPE_VALUES = ["persona_natural", "persona_juridica"] as const;
+export type ClientType = (typeof CLIENT_TYPE_VALUES)[number];
+
+/**
+ * Valida client_type (persona_natural | persona_juridica). OBLIGATORIO para
+ * poder emitir FE: sin él, buildRucReceptor (map-receptor.ts) lanza y la
+ * factura muere con "Error interno". Fuente única para el POST y el PATCH.
+ * Retorna null si es válido, o un mensaje accionable si falta / es inválido.
+ */
+export function validateClientType(value: unknown): string | null {
+  if (typeof value !== "string" || !CLIENT_TYPE_VALUES.includes(value as ClientType)) {
+    return "El tipo de persona es requerido (persona natural o jurídica).";
+  }
+  return null;
+}
+
 export interface FiscalFieldsInput {
   tipo_receptor_fe?: string | null;
   digito_verificador?: string | null;

@@ -1,5 +1,45 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-16 - client_type OBLIGATORIO en el form/API de cliente (causa raíz del "Error interno" al facturar)
+
+Dos facturas fallaron con "Error interno" en dos días (CLI-116 el 13/07, CLI-121 el 16/07)
+porque el cliente receptor tenía `client_type` NULL. `buildRucReceptor` (map-receptor.ts:91)
+lanza cuando `client_type` es NULL para receptor 01/03, y la emisión de FE muere.
+
+**Causa raíz:** el form de cliente (`client-form.tsx`) NUNCA seteaba `client_type` — solo lo
+LEÍA para sugerir `tipo_receptor_fe`. Y el `POST /api/clients` ni siquiera lo aceptaba en el
+body. Resultado: TODO cliente creado desde `/clientes/nuevo` entraba con `client_type` NULL.
+El flujo de cotizaciones sí lo exigía (quote-form / quotes.ts); este cambio lleva esa misma
+regla al alta/edición de clientes. Todo en `develop`, sin deploy, sin migraciones.
+
+### Cambios
+- **`src/lib/clients/fiscal-fields.ts`** — nuevo validador puro `validateClientType(value)`
+  (+ `CLIENT_TYPE_VALUES`, tipo `ClientType`). Fuente única usada por POST y PATCH. Retorna
+  mensaje accionable si falta / es inválido, o `null` si ok.
+- **`src/components/clients/client-form.tsx`** — selector `Tipo de persona` OBLIGATORIO
+  (persona_natural | persona_juridica) en el paso 0, en crear Y editar. Al cambiarlo alimenta
+  el default de `tipo_receptor_fe` vía `suggestTipoReceptorFe()` (juridica→01, sin pisar una
+  selección explícita). Validación en `validateStep(0)` + `client_type` en el payload.
+- **`POST /api/clients`** — acepta, valida (presencia + dominio) y persiste `client_type`.
+  Falta/invalid → 400 con `fieldErrors.client_type`.
+- **`PATCH /api/clients/[id]`** — se endureció el check existente: si se envía `client_type`,
+  ya no puede ser null/vacío/inválido (un edit que lo borrara reintroduciría el bug). El único
+  caller del PATCH es el propio form, que ahora siempre manda un valor válido.
+- NO se tocó la columna legacy `type` ni su lógica (cambio aditivo).
+
+### Tests — `src/app/api/clients/__tests__/client-type.route.test.ts` (node:test + tsx)
+- 3 unit del validador puro (falta → error, inválido → error, cada valor válido → ok).
+- 5 sobre los handlers reales POST/PATCH con fake de Supabase vía `mock.module`:
+  crear sin client_type → 400 (no inserta); crear con cada valor válido → 201 (persiste);
+  editar cambiando client_type → 200 (persiste); editar borrándolo (null) → 400 (no actualiza).
+- Los 5 de handlers requieren `--experimental-test-module-mocks`; sin el flag se **skipean**
+  (no fallan) y quedan los 3 puros. Suite completo: 102 tests, 97 pass, 0 fail, 5 skipped.
+  Con flag sobre el archivo: 8/8 pass. `tsc --noEmit`: exit 0.
+
+### Pendiente (no técnico)
+- Backfill de `client_type` para los ~5 clientes legacy con NULL (CLI-068, 093, 094, 120, y el
+  ya corregido 121). Cuando se editen desde la UI, el form ahora los fuerza a completarlo.
+
 ## [Security] - 2026-07-14 - Autorización por rol + anti-IDOR en endpoints legales /api
 
 El middleware protege páginas pero NO gatea `/api/**`; el rol se valida dentro de cada

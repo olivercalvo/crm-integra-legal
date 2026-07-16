@@ -33,6 +33,7 @@ function receptor01SinUbicacion(): ClientRow {
   return {
     client_status: "active",
     tipo_receptor_fe: "01",
+    client_type: "persona_juridica",
     tax_id: "155555555-2-2020",
     ruc: null,
     digito_verificador: "45",
@@ -89,6 +90,22 @@ test("receptor 01 con ruc legacy (sin tax_id) + DV PASA", () => {
   assert.doesNotThrow(() => validateClientFiscalGate(row));
 });
 
+test("receptor 02 (consumidor final) con client_type NULL PASA (control: 02 no usa client_type)", () => {
+  const row: ClientRow = {
+    client_status: "active",
+    tipo_receptor_fe: "02",
+    client_type: null,
+    tax_id: null,
+    ruc: null,
+    digito_verificador: null,
+    codigo_ubicacion: null,
+    corregimiento: null,
+    distrito: null,
+    provincia: null,
+  };
+  assert.doesNotThrow(() => validateClientFiscalGate(row));
+});
+
 // ---------------------------------------------------------------------------
 // RECEPTOR — casos que deben FALLAR (lanzan MutationError 400)
 // ---------------------------------------------------------------------------
@@ -113,6 +130,32 @@ test("receptor 01 SIN RUC ni tax_id FALLA", () => {
     (err: unknown) => {
       assert.ok(err instanceof MutationError);
       assert.match((err as MutationError).message, /RUC o documento de identidad/);
+      return true;
+    }
+  );
+});
+
+test("receptor 01 con client_type NULL FALLA (caso FAC-REI-000039 / CLI-116)", () => {
+  const row = { ...receptor01SinUbicacion(), client_type: null };
+  assert.throws(
+    () => validateClientFiscalGate(row),
+    (err: unknown) => {
+      assert.ok(err instanceof MutationError);
+      assert.equal((err as MutationError).status, 400);
+      assert.match((err as MutationError).message, /tipo de contribuyente/);
+      return true;
+    }
+  );
+});
+
+test("receptor 03 (gobierno) con client_type NULL FALLA", () => {
+  const row = { ...receptor01SinUbicacion(), tipo_receptor_fe: "03", client_type: null };
+  assert.throws(
+    () => validateClientFiscalGate(row),
+    (err: unknown) => {
+      assert.ok(err instanceof MutationError);
+      assert.equal((err as MutationError).status, 400);
+      assert.match((err as MutationError).message, /tipo de contribuyente/);
       return true;
     }
   );

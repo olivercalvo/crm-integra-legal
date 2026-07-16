@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  parseImportFile,
-  validateImport,
-  type ImportClientRow,
-  type ImportCaseRow,
-} from "@/lib/utils/import-parser";
+import { parseImportFile, validateImport } from "@/lib/utils/import-parser";
 import { allocateClientNumber } from "@/lib/clients/numbering";
 
 // ---------------------------------------------------------------------------
@@ -150,6 +145,7 @@ export async function POST(request: NextRequest) {
           name: client.name.trim(),
           ruc: client.ruc,
           type: client.type,
+          client_type: client.client_type, // validado en validateImport (no-null en validClients)
           contact: client.contact,
           phone: client.phone,
           email: client.email,
@@ -226,37 +222,17 @@ export async function POST(request: NextRequest) {
     for (const caseRow of preview.cases) {
       // Find client_id
       const clientNameLower = caseRow.clientName.toLowerCase().trim();
-      let clientId = clientMap.get(clientNameLower);
+      const clientId = clientMap.get(clientNameLower);
 
-      // If client not found, create it
-      if (!clientId && caseRow.clientName) {
-        const clientNumber = await allocateClientNumber(admin, profile.tenant_id);
-
-        const { data: autoClient, error: autoErr } = await admin
-          .from("clients")
-          .insert({
-            tenant_id: profile.tenant_id,
-            client_number: clientNumber,
-            name: caseRow.clientName.trim(),
-            ruc: caseRow.clientRuc,
-            client_status: "active",
-          })
-          .select("id")
-          .single();
-
-        if (autoErr) {
-          results.errors.push(`Fila ${caseRow.rowNumber}: No se pudo crear cliente "${caseRow.clientName}": ${autoErr.message}`);
-          results.casesSkipped++;
-          continue;
-        }
-
-        clientId = autoClient!.id;
-        clientMap.set(clientNameLower, clientId!);
-        results.clientsCreated++;
-      }
-
+      // Si el cliente del caso no existe, ANTES se auto-creaba con solo
+      // name+ruc → quedaba con client_type NULL y rompía la emisión de FE
+      // ("Error interno"). Ahora NO se auto-crea: exigimos que el cliente esté
+      // en la hoja "Clientes" (con su Tipo de persona) o ya exista en la BD.
       if (!clientId) {
-        results.errors.push(`Fila ${caseRow.rowNumber}: Cliente no encontrado`);
+        results.errors.push(
+          `Fila ${caseRow.rowNumber}: Cliente "${caseRow.clientName}" no existe. ` +
+          `Agrégalo a la hoja "Clientes" (con su Tipo de persona) antes de importar sus casos.`
+        );
         results.casesSkipped++;
         continue;
       }

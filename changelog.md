@@ -1,5 +1,272 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-16 - Regresión Fase 1: asistente bloqueado al cambiar estado de caso (gate de rol por acción)
+
+La Fase 1 de seguridad restringió TODO `PATCH /api/cases/[id]` a [admin, abogada]. Pero
+`<CaseStatusChanger>` se le renderiza al ASISTENTE sin gate (a diferencia de `DeleteCaseButton`)
+y hace `PATCH` con `action="change-status"`. CLAUDE.md permite al asistente "actualizar estado" de
+sus casos asignados → con la Fase 1 recibía **403** y se le rompía el flujo diario. NO se desplegó;
+corregido antes del merge. Todo en `develop`, sin deploy, sin migraciones.
+
+### Fix — `PATCH /api/cases/[id]` gatea por ACCIÓN
+- El body se parsea ANTES del check de rol (seguro: ya autenticado, solo se lee el JSON).
+- `action === "change-status"` → [admin, abogada, **asistente**]; cualquier otra edición → [admin, abogada].
+
+### Revisión amplia (matriz Fase 1 vs. UI real)
+Se cruzó cada endpoint restringido con los componentes que lo llaman y su gating de render. Único
+rol *legítimo* bloqueado: el asistente en change-status (este fix). Hallazgo secundario (NO tocado,
+reportado a Oliver): `<InlineCaseInfoEditor>` muestra "Editar Información" al asistente sin gate →
+al guardar da 403 (edición completa NO es acción legítima del asistente; es UX, no regresión de
+permiso). El resto de controles restringidos ya están ocultos por `nav-config.ts` (Clientes,
+Prospectos, Importar fuera del asistente) y/o gates `userRole` en las páginas.
+
+### Tests (node:test + tsx)
+- `src/app/api/cases/__tests__/patch-role-by-action.test.ts` (4, requieren
+  `--experimental-test-module-mocks`; sin flag se skipean): asistente + change-status → 200
+  (persiste status_id); asistente + edición completa → 403 (no actualiza); contador + change-status
+  → 403; abogada + change-status → 200.
+- `authz-guards.test.ts`: la entrada `PATCH /api/cases/[id]` se dividió en "(edición general)" =
+  [admin, abogada] y "(change-status)" = [admin, abogada, asistente] para reflejar el gate por acción.
+- Suite completo con flag: **116 tests, 116 pass, 0 fail**. `tsc --noEmit`: exit 0.
+
+## [Fix] - 2026-07-16 - Cerradas las 2 vías restantes que dejaban client_type NULL (conversión de prospecto + importación masiva)
+
+El fix anterior cerró `/clientes/nuevo`, pero quedaban DOS vías que seguían creando clientes con
+`client_type` NULL (y rompían la emisión de FE con "Error interno"): la conversión de prospecto a
+cliente y la importación masiva. Todo en `develop`, sin deploy, sin migraciones.
+
+### Verificación de schema (previa)
+- La tabla legal `prospects` (Kanban, migración `20260403000012`) **NO tiene `client_type`** —
+  es OTRA cosa que el "prospecto" del flujo de cotizaciones (ese es un `clients` con
+  `client_status='prospect'` y ya setea `client_type`). `client_type` vive solo en `clients`
+  (`20260508000001`). → La conversión debe **capturar** el tipo, no arrastrarlo. Sin cambio de schema.
+
+### Conversión de prospecto (`POST /api/prospects/[id]/convert`)
+- El handler ya no ignora el body (`_request` → `request`): ahora **exige `client_type`** en el
+  body y lo valida con `validateClientType()` (400 accionable si falta/es inválido). Lo persiste
+  en el `clients` insert.
+- UI `prospect-pipeline.tsx`: "Crear como Cliente" ahora abre un selector inline
+  **Persona natural / Persona jurídica** (requerido) que dispara la conversión con el tipo elegido.
+
+### Importación masiva (`import-parser.ts` + `POST /api/import`)
+- Nueva columna **"Tipo Fiscal"** (Natural/Jurídica) en la plantilla descargable, obligatoria para FE.
+- `ImportClientRow.client_type` se deriva de "Tipo Fiscal" y, en su defecto, de la legacy "Tipo"
+  (vía `normalizeClientType()`, nuevo helper puro en `fiscal-fields.ts`). "Retainer" NO es tipo de
+  persona → no deriva.
+- `validateImport()` marca error accionable por fila si no se pudo determinar el tipo; esas filas
+  quedan fuera de `validClients` (no se insertan).
+- **Cambio de comportamiento (flag):** el path que auto-creaba un cliente cuando un caso
+  referenciaba un cliente inexistente **ya no auto-crea** (no había forma de darle un `client_type`
+  válido). Ahora ese caso **falla con mensaje accionable** pidiendo agregar el cliente a la hoja
+  "Clientes" con su tipo. Reversible si se decide otra política.
+- Helper puro nuevo `normalizeClientType()` en `src/lib/clients/fiscal-fields.ts`.
+
+### Tests (node:test + tsx)
+- `src/lib/utils/__tests__/import-client-type.test.ts` (4, siempre corren): deriva de "Tipo Fiscal",
+  fallback a "Tipo", fila sin tipo → error accionable (fuera de validClients), fila válida → con tipo.
+- `src/app/api/prospects/__tests__/convert-client-type.test.ts` (4, requieren
+  `--experimental-test-module-mocks`; sin el flag se skipean): convertir sin `client_type` → 400
+  (no inserta); inválido → 400; cada valor válido → 201 con el cliente creado CON `client_type`.
+- Suite completo con flag: **110 tests, 110 pass, 0 fail**. Sin flag: 101 pass, 9 skipped, 0 fail.
+  `tsc --noEmit`: exit 0. Lint de archivos tocados limpio (queda 1 error preexistente ajeno:
+  `sheetName` sin usar en la firma de `parseImportFile`).
+
+### Limpieza incidental
+- Removidos 2 imports de tipo muertos (`ImportClientRow`, `ImportCaseRow`) en `import/route.ts`.
+
+## [Fix] - 2026-07-16 - client_type OBLIGATORIO en el form/API de cliente (causa raíz del "Error interno" al facturar)
+
+Dos facturas fallaron con "Error interno" en dos días (CLI-116 el 13/07, CLI-121 el 16/07)
+porque el cliente receptor tenía `client_type` NULL. `buildRucReceptor` (map-receptor.ts:91)
+lanza cuando `client_type` es NULL para receptor 01/03, y la emisión de FE muere.
+
+**Causa raíz:** el form de cliente (`client-form.tsx`) NUNCA seteaba `client_type` — solo lo
+LEÍA para sugerir `tipo_receptor_fe`. Y el `POST /api/clients` ni siquiera lo aceptaba en el
+body. Resultado: TODO cliente creado desde `/clientes/nuevo` entraba con `client_type` NULL.
+El flujo de cotizaciones sí lo exigía (quote-form / quotes.ts); este cambio lleva esa misma
+regla al alta/edición de clientes. Todo en `develop`, sin deploy, sin migraciones.
+
+### Cambios
+- **`src/lib/clients/fiscal-fields.ts`** — nuevo validador puro `validateClientType(value)`
+  (+ `CLIENT_TYPE_VALUES`, tipo `ClientType`). Fuente única usada por POST y PATCH. Retorna
+  mensaje accionable si falta / es inválido, o `null` si ok.
+- **`src/components/clients/client-form.tsx`** — selector `Tipo de persona` OBLIGATORIO
+  (persona_natural | persona_juridica) en el paso 0, en crear Y editar. Al cambiarlo alimenta
+  el default de `tipo_receptor_fe` vía `suggestTipoReceptorFe()` (juridica→01, sin pisar una
+  selección explícita). Validación en `validateStep(0)` + `client_type` en el payload.
+- **`POST /api/clients`** — acepta, valida (presencia + dominio) y persiste `client_type`.
+  Falta/invalid → 400 con `fieldErrors.client_type`.
+- **`PATCH /api/clients/[id]`** — se endureció el check existente: si se envía `client_type`,
+  ya no puede ser null/vacío/inválido (un edit que lo borrara reintroduciría el bug). El único
+  caller del PATCH es el propio form, que ahora siempre manda un valor válido.
+- NO se tocó la columna legacy `type` ni su lógica (cambio aditivo).
+
+### Tests — `src/app/api/clients/__tests__/client-type.route.test.ts` (node:test + tsx)
+- 3 unit del validador puro (falta → error, inválido → error, cada valor válido → ok).
+- 5 sobre los handlers reales POST/PATCH con fake de Supabase vía `mock.module`:
+  crear sin client_type → 400 (no inserta); crear con cada valor válido → 201 (persiste);
+  editar cambiando client_type → 200 (persiste); editar borrándolo (null) → 400 (no actualiza).
+- Los 5 de handlers requieren `--experimental-test-module-mocks`; sin el flag se **skipean**
+  (no fallan) y quedan los 3 puros. Suite completo: 102 tests, 97 pass, 0 fail, 5 skipped.
+  Con flag sobre el archivo: 8/8 pass. `tsc --noEmit`: exit 0.
+
+### Pendiente (no técnico)
+- Backfill de `client_type` para los ~5 clientes legacy con NULL (CLI-068, 093, 094, 120, y el
+  ya corregido 121). Cuando se editen desde la UI, el form ahora los fuerza a completarlo.
+
+## [Security] - 2026-07-14 - Autorización por rol + anti-IDOR en endpoints legales /api
+
+El middleware protege páginas pero NO gatea `/api/**`; el rol se valida dentro de cada
+handler. Los endpoints de finanzas ya validaban rol; los legales en su mayoría NO → un
+`asistente` o `contador` podía mutar recursos legales por API directa. Además había 2 IDOR
+de escritura. Este cambio aplica la matriz de roles y cierra los IDOR. Todo en `develop`,
+sin deploy, sin migraciones.
+
+### Helpers nuevos — `src/lib/supabase/server-query.ts`
+- `requireRole(role, allowed)` → devuelve un 403 estandarizado (`{ error: "Sin permiso" }`,
+  status 403) cuando el rol no está en `allowed`, o `null` cuando pasa. Forma de menor riesgo:
+  puramente aditiva (`const denied = requireRole(...); if (denied) return denied;`), no altera
+  el flujo de los roles permitidos. Falla CERRADO ante rol null/desconocido. Reusable por el
+  patrón finanzas (`getAuthenticatedContext`) y el patrón legal inline.
+- `requireEntityInTenant(db, table, id, tenantId, notFoundMessage?)` → guard anti-IDOR:
+  verifica pertenencia al tenant con un `SELECT id ... eq(id).eq(tenant_id).maybeSingle()` y
+  devuelve 404 si la fila no existe o es de otro tenant. Espeja el patrón correcto ya presente
+  en `cases/[id]/comments/route.ts`.
+
+### Matriz de roles aplicada (agregado el check de rol; varios ya seleccionaban `role` sin usarlo)
+- `POST /api/clients` → [admin, abogada]
+- `PATCH` + `DELETE /api/clients/[id]` → [admin, abogada]
+- `POST /api/cases` → [admin, abogada]
+- `PATCH /api/cases/[id]` → [admin, abogada]
+- `POST /api/prospects` → [admin, abogada]
+- `PATCH` + `DELETE /api/prospects/[id]` → [admin, abogada]
+- `POST /api/prospects/[id]/convert` → [admin, abogada]
+- `POST /api/comments` → [admin, abogada, asistente] (contador queda fuera)
+- `POST /api/documents/register` → [admin, abogada, asistente] (contador queda fuera)
+
+### IDOR de escritura cerrados
+- `POST /api/comments`: antes insertaba con el `case_id` del body SIN verificar pertenencia →
+  un usuario podía comentar en el caso de otro tenant. Ahora verifica el caso por
+  (id=case_id, tenant_id) antes del insert; si no existe → 404.
+- `POST /api/documents/register`: solo validaba que `storage_path` empezara con el tenant_id,
+  pero NO que `entity_id` perteneciera al tenant. Ahora mapea `entity_type` → tabla
+  (client→clients, case→cases, task→tasks, comment→comments, quote→quotes, invoice→invoices;
+  `entity_type` desconocido → 400) y verifica (id=entity_id, tenant_id) antes del insert; si no
+  existe → 404.
+
+### NO tocado (anotado, sin cambios)
+- No se modificó el middleware ni los endpoints de finanzas (ya validaban rol).
+- Los `GET` de listado no se tocaron (fuera del alcance; la tarea es sobre mutaciones legales).
+
+### Tests — `src/lib/supabase/__tests__/authz-guards.test.ts` (nuevo, 29 tests)
+- Por cada endpoint tocado: caso rol-no-permitido → 403 y caso rol-permitido → OK, con su lista
+  `allowed` exacta. Más: falla-cerrado ante rol null/desconocido; `contador` bloqueado en todos
+  los endpoints legales.
+- IDOR: entidad/caso de OTRO tenant → 404; mismo tenant → OK; inexistente → 404 (con fake del
+  builder de Supabase).
+- Nota de alcance: los route handlers de Next no se drivean end-to-end (`next/headers`
+  `cookies()` lanza fuera de un request scope, y el runner no soporta module-mocks que compongan
+  con tsx). La lógica de autorización agregada vive 100% en los dos helpers, que sí son
+  deterministas; cada handler delega su decisión a ellos.
+- Suite repo-wide: **94/94 pass**. `tsc --noEmit`: limpio (exit 0).
+
+## [Fix] - 2026-07-14 - eFactura: REUSO del correlativo — el número no autorizado ya no se quema por reintento
+
+El PAC (Ideati) confirmó las reglas de numeración del `numeroDocumento` FE por punto de
+facturación: (a) no tiene que ser estrictamente consecutivo, pero (b) debe ir ascendente,
+(c) los saltos no deben ser amplios, y (d) **los números que nunca recibieron CUFE SE PUEDEN
+REUTILIZAR**. Este cambio hace que el asignador reuse el número reservado en los reintentos,
+para que los saltos queden en ~0.
+
+### Root cause del salto 3-4-5 en el punto 051 (FAC-REI-000039)
+- La orquestación ya tenía la lógica de reuso D-3 (`emit-invoice-to-efactura.ts`): si la
+  factura queda en `fe_estado='error'` con `punto_facturacion`/`numero_documento`
+  persistidos, el reintento REUSA ese número en vez de allocar uno nuevo.
+- **Pero nunca era alcanzable ante el bug de `client_type`.** El orden era: T1 `allocateFeNumero`
+  (quema el número, commit del RPC) → mapper (`mapInvoiceToEfacturaRequest`, PURE) → T2 UPDATE
+  `invoices` que reservaba el número y marcaba `pending`. El mapper (`buildRucReceptor`,
+  `map-receptor.ts:91`) lanzaba **antes de T2**, así que el número asignado NO se persistía en
+  la factura y `fe_estado` quedaba en `no_emitida`. En el reintento, la condición de reuso D-3
+  (`fe_estado === 'error'` + número persistido) era falsa → allocaba OTRO número.
+- Efecto real: los 3 reintentos fallidos de FAC-REI-000039 quemaron 3, 4 y 5; la emisión
+  exitosa (tras corregir `client_type` en CLI-116) quedó en el 6. Autorizadas: 1, 2, 6.
+
+### Changed — `src/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura.ts`
+- Se **mueve la reserva del correlativo (UPDATE `invoices` → `pending` + `punto`/`numero`) a
+  ANTES del mapper** (nuevo paso T1.5). El número queda guardado en la factura apenas se
+  asigna, antes del primer punto que puede lanzar.
+- El mapper se envuelve en `try/catch`: si lanza, se deja la factura en `fe_estado='error'`
+  (best-effort) con el número ya reservado y se re-lanza como `MutationError(500)`. El
+  reintento entra por la rama de reuso D-3 y reusa ESE mismo número, sin volver a llamar al
+  allocator.
+- Resultado: **cada factura quema como máximo UN correlativo**, reusado en todos sus
+  reintentos hasta autorizar → saltos ~0 aun ante rachas de fallos. Nunca se reusa un número
+  ya autorizado con CUFE (la factura autorizada queda fuera del gate T0 y el allocator sólo
+  incrementa).
+
+### NO cambiado (decisión) — la RPC `allocate_fe_numero` queda igual
+- No se modificó la numeración fiscal en BD. La RPC sigue siendo el UPSERT atómico ascendente
+  de `sql/pending/020_efactura_allocator.sql`. El reuso se resuelve enteramente en la
+  orquestación (a nivel factura), que es el caso reportado ("el siguiente intento lo reusa").
+- Reuso **entre facturas distintas** (reclamar el número de una factura definitivamente
+  abandonada para otra factura nueva) NO es seguro sin una señal explícita de descarte: el
+  número reservado de una factura en `error` está reclamado por su propio reintento (D-3), así
+  que un allocator que lo "libere" colisionaría con ese reintento. Queda como trabajo futuro
+  (requiere estado `descartada`/void). El residuo actual —una factura abandonada deja UN hueco—
+  cae dentro de la tolerancia DGI (1-4).
+
+### Tests — `src/lib/finanzas/efactura/__tests__/emit-invoice-reuso-correlativo.test.ts` (nuevo, 4 tests)
+- Intento fallido por el mapper deja el número RESERVADO (no lo quema) y `fe_estado='error'`.
+- El siguiente intento REUSA el mismo número sin volver a allocar (D-3).
+- Un número ya autorizado (con CUFE) nunca se re-emite ni se re-allocatea (gate T0).
+- Atomicidad: el guard de la reserva rechaza (409) al proceso que perdió la carrera.
+- Suite eFactura completa: **32/32 pass**. `tsc --noEmit`: limpio (exit 0).
+
+### Pendiente (Oliver, cambio fiscal — pausa obligatoria)
+- Ninguno para producción en este cambio: es code-only en `develop`, sin migración. Si en el
+  futuro se quiere reuso entre facturas, hay que diseñar el estado de descarte + revisar la RPC.
+
+## [Fix] - 2026-07-13 - Gate fiscal eFactura valida `client_type` (receptor 01/03)
+
+Fix del incidente reportado por la licenciada al intentar emitir al PAC la factura
+`FAC-REI-000039` (receptor CLI-116 "INMOBILIARIA CAMAY, S.A."): el diálogo devolvía
+un genérico **"Error interno"** 500 en vez de un mensaje accionable.
+
+### Root cause
+- El receptor CLI-116 es tipo `01` (contribuyente RUC) pero tenía `client_type = NULL`
+  (uno de ~30 clientes legacy sin `client_type` poblado tras las importaciones).
+- `validateClientFiscalGate` (`src/lib/finanzas/efactura/data/fetch-invoice-efactura-bundle.ts`)
+  **no** validaba `client_type`, así que el cliente pasaba el gate.
+- Luego el mapper puro `buildRucReceptor` (`src/lib/finanzas/efactura/mapper/map-receptor.ts:90-96`)
+  usa `client_type` para derivar el `tipoContribuyente` del receptor y lanza un `Error`
+  PLANO (no `MutationError`) cuando falta. El route (`emit-efactura/route.ts:42-55`) degrada
+  cualquier throw no-`MutationError` a "Error interno" 500. Verificado en prod: 0 filas en
+  `fe_emisiones` para esa factura (el throw ocurre en el mapper, antes de T2).
+- La correlación aparente "REI falla / HON funciona" era **coincidental**: todas las
+  emisiones HON exitosas fueron a clientes con `client_type` poblado. Cualquier factura
+  (HON o REI) a un receptor 01/03 con `client_type` NULL fallaba igual.
+
+### Changed
+- `validateClientFiscalGate` ahora exige `client_type` **solo** para `tipo_receptor_fe`
+  `01` (contribuyente) y `03` (gobierno) — los únicos que llaman `buildRucReceptor`. Si
+  falta, suma `"tipo de contribuyente (persona natural/jurídica)"` al array `missing` y sale
+  como `MutationError(400)` accionable ANTES de llegar al mapper. Los tipos `02` (consumidor
+  final) y `04` (extranjero) NO lo requieren y no se ven afectados.
+- El throw del mapper (`map-receptor.ts:91`) se deja intacto como defensa en profundidad.
+
+### Tests
+- `src/lib/finanzas/efactura/__tests__/validate-client-fiscal-gate.test.ts`:
+  - Fixture base `receptor01SinUbicacion()` ahora incluye `client_type: "persona_juridica"`.
+  - Nuevo caso negativo: receptor `01` con `client_type` NULL → `MutationError 400` mencionando "tipo de contribuyente" (caso FAC-REI-000039).
+  - Nuevo caso negativo: receptor `03` con `client_type` NULL → `MutationError 400`.
+  - Nuevo caso de control: receptor `02` con `client_type` NULL → NO falla.
+  - `17/17` verde. `tsc --noEmit` limpio (exit 0).
+
+### Pendiente operativo (NO incluido en este cambio)
+- Backfill de `client_type` para los ~30 clientes legacy con NULL (dato, no código). El
+  fix solo cambia el mensaje de error; la abogada aún debe completar `client_type` en el
+  cliente para poder emitir. Hay un `sql/pending/hotfix_cli116_client_type.sql` sin revisar.
+
 ## [Hotfix] - 2026-06-04 - Allocator atómico de `client_number` (numbering_sequences)
 
 Hotfix del incidente reportado por Daveiva al crear una cotización con prospecto nuevo:

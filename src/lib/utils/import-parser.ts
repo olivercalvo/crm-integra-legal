@@ -3,6 +3,7 @@
  * Handles Excel/CSV parsing, validation, normalization, and duplicate detection.
  */
 import * as XLSX from "xlsx";
+import { normalizeClientType, type ClientType } from "@/lib/clients/fiscal-fields";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,6 +14,9 @@ export interface ImportClientRow {
   name: string;
   ruc: string | null;
   type: string | null;
+  // OBLIGATORIO para FE. Se deriva de la columna "Tipo Fiscal" o, en su defecto,
+  // de la columna legacy "Tipo" (Natural/Jurídica). null = no se pudo determinar.
+  client_type: ClientType | null;
   contact: string | null;
   phone: string | null;
   email: string | null;
@@ -153,6 +157,13 @@ const CLIENT_COLUMN_MAP: Record<string, keyof ImportClientRow> = {
   tipo: "type",
   type: "type",
   "tipo de persona": "type",
+  // Columna fiscal dedicada (Natural/Jurídica) — obligatoria para FE.
+  "tipo fiscal": "client_type",
+  "tipo persona": "client_type",
+  "tipo persona (fe)": "client_type",
+  "persona (natural/juridica)": "client_type",
+  "persona (natural/jurídica)": "client_type",
+  client_type: "client_type",
   contacto: "contact",
   contact: "contact",
   telefono: "phone",
@@ -291,6 +302,10 @@ export function parseImportFile(buffer: ArrayBuffer, sheetName?: string): {
             name: client.name as string,
             ruc: (client.ruc as string) || null,
             type: (client.type as string) || null,
+            // Fuente única: columna "Tipo Fiscal"; fallback a la legacy "Tipo".
+            client_type:
+              normalizeClientType(client.client_type) ??
+              normalizeClientType(client.type),
             contact: (client.contact as string) || null,
             phone: (client.phone as string) || null,
             email: (client.email as string) || null,
@@ -442,6 +457,19 @@ export function validateImport(
       hasError = true;
     }
 
+    // Required: client_type (obligatorio para emitir FE; sin él la factura
+    // muere con "Error interno" al mapear el receptor).
+    if (!client.client_type) {
+      errors.push({
+        row: client.rowNumber,
+        field: "tipo fiscal",
+        message:
+          "Tipo de persona requerido: indica 'Natural' o 'Jurídica' en la columna Tipo Fiscal (o Tipo)",
+        severity: "error",
+      });
+      hasError = true;
+    }
+
     // Check email format if provided
     if (client.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(client.email)) {
       warnings.push({ row: client.rowNumber, field: "email", message: "Formato de email inválido", severity: "warning" });
@@ -543,16 +571,16 @@ export function generateTemplate(): ArrayBuffer {
 
   // Clients sheet
   const clientHeaders = [
-    "Nombre", "RUC/Cédula", "Tipo", "Contacto", "Teléfono", "Email", "Observaciones",
+    "Nombre", "RUC/Cédula", "Tipo", "Tipo Fiscal", "Contacto", "Teléfono", "Email", "Observaciones",
   ];
   const clientExample = [
-    "Empresa ABC, S.A.", "1234567-1-890", "Jurídica", "Juan Pérez", "+507 6000-0000", "contacto@empresa.com", "Cliente referido",
+    "Empresa ABC, S.A.", "1234567-1-890", "Retainer", "Jurídica", "Juan Pérez", "+507 6000-0000", "contacto@empresa.com", "Cliente referido",
   ];
   const clientSheet = XLSX.utils.aoa_to_sheet([clientHeaders, clientExample]);
 
   // Set column widths
   clientSheet["!cols"] = [
-    { wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 30 },
+    { wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, clientSheet, "Clientes");
 
@@ -577,10 +605,10 @@ export function generateTemplate(): ArrayBuffer {
 
 export function generateClientTemplate(): ArrayBuffer {
   const wb = XLSX.utils.book_new();
-  const headers = ["Nombre", "RUC/Cédula", "Tipo", "Contacto", "Teléfono", "Email", "Observaciones"];
-  const example = ["Empresa ABC, S.A.", "1234567-1-890", "Jurídica", "Juan Pérez", "+507 6000-0000", "contacto@empresa.com", "Cliente referido"];
+  const headers = ["Nombre", "RUC/Cédula", "Tipo", "Tipo Fiscal", "Contacto", "Teléfono", "Email", "Observaciones"];
+  const example = ["Empresa ABC, S.A.", "1234567-1-890", "Retainer", "Jurídica", "Juan Pérez", "+507 6000-0000", "contacto@empresa.com", "Cliente referido"];
   const sheet = XLSX.utils.aoa_to_sheet([headers, example]);
-  sheet["!cols"] = [{ wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 30 }];
+  sheet["!cols"] = [{ wch: 30 }, { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 18 }, { wch: 25 }, { wch: 30 }];
   XLSX.utils.book_append_sheet(wb, sheet, "Clientes");
   return XLSX.write(wb, { bookType: "xlsx", type: "array" });
 }

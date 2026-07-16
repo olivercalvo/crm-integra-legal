@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
 import { allocateClientNumber } from "@/lib/clients/numbering";
+import { validateClientType } from "@/lib/clients/fiscal-fields";
 
 // POST — convert prospect to client
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -13,9 +15,26 @@ export async function POST(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
+    // La tabla `prospects` NO tiene client_type (es OTRA cosa que el prospect
+    // del flujo de cotizaciones). Al convertir a cliente hay que CAPTURARLO:
+    // sin él, el cliente entraría con client_type NULL y rompería la emisión
+    // de FE ("Error interno").
+    const body = await request.json().catch(() => ({}));
+    const clientTypeError = validateClientType(body?.client_type);
+    if (clientTypeError) {
+      return NextResponse.json(
+        { error: clientTypeError, fieldErrors: { client_type: clientTypeError } },
+        { status: 400 }
+      );
+    }
+
     const admin = createAdminClient();
-    const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
+    const { data: profile } = await admin.from("users").select("tenant_id, role").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
+
+    // Solo admin y abogada convierten prospectos a cliente (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     // Get prospect
     const { data: prospect } = await admin
@@ -42,6 +61,7 @@ export async function POST(
         tenant_id: profile.tenant_id,
         client_number: clientNumber,
         name: prospect.name,
+        client_type: body.client_type,
         phone: prospect.phone,
         email: prospect.email,
         observations: prospect.notes ? `Convertido desde prospecto. ${prospect.notes}` : "Convertido desde prospecto.",

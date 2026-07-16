@@ -225,6 +225,16 @@ export function validateClientFiscalGate(row: Record<string, unknown>): void {
     if (!toStringOrNull(row.digito_verificador)) {
       missing.push("dígito verificador (DV)");
     }
+    // client_type SOLO se exige para 01/03: el mapper (map-receptor.ts →
+    // buildRucReceptor) lo usa para derivar el tipoContribuyente del receptor
+    // (persona_natural→1, persona_juridica→2). Si falta, buildRucReceptor lanza
+    // un Error PLANO (no MutationError) que el route degrada a "Error interno"
+    // 500. Lo atrapamos acá para que salga como 400 accionable. Los tipos '02'
+    // (consumidor final) y '04' (extranjero) NO llaman buildRucReceptor, así
+    // que no lo necesitan.
+    if (!toStringOrNull(row.client_type)) {
+      missing.push("tipo de contribuyente (persona natural/jurídica)");
+    }
   } else if (tipoReceptor === "04") {
     if (!toStringOrNull(row.id_extranjero)) missing.push("ID extranjero");
     if (!toStringOrNull(row.pais_receptor)) missing.push("país del receptor");

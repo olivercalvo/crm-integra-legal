@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
 import {
   getClassificationPrefix,
   getNextCaseCodeForPrefix,
@@ -62,6 +63,10 @@ export async function POST(request: NextRequest) {
     if (!profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada crean expedientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const body = await request.json();
     const {

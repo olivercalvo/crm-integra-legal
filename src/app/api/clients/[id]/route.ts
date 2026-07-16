@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { validateFiscalFields } from "@/lib/clients/fiscal-fields";
+import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
+import { requireRole } from "@/lib/supabase/server-query";
 
 interface RouteContext {
   params: { id: string };
@@ -23,13 +24,17 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada editan/desactivan clientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const { id } = params;
 
@@ -79,15 +84,16 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         { status: 400 }
       );
     }
-    if (
-      client_type !== undefined &&
-      client_type !== null &&
-      !["persona_natural", "persona_juridica"].includes(client_type)
-    ) {
-      return NextResponse.json(
-        { error: "client_type inválido (valores válidos: persona_natural, persona_juridica)" },
-        { status: 400 }
-      );
+    // client_type es OBLIGATORIO: si se envía, no puede ser null/vacío/ inválido
+    // (un edit que lo borre reintroduciría el bug de "Error interno" al facturar).
+    if (client_type !== undefined) {
+      const clientTypeError = validateClientType(client_type);
+      if (clientTypeError) {
+        return NextResponse.json(
+          { error: clientTypeError, fieldErrors: { client_type: clientTypeError } },
+          { status: 400 }
+        );
+      }
     }
 
     // FE DGI: validar coherencia de campos fiscales sobre la "vista combinada"
@@ -214,13 +220,17 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
+
+    // Solo admin y abogada editan/desactivan clientes (matriz de roles).
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
+    if (denied) return denied;
 
     const { id } = params;
 

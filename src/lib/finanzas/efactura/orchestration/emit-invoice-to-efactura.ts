@@ -8,18 +8,30 @@
  *   - `allocateFeNumero`        (secuencias/allocate-fe-numero.ts)
  *   - `post`                    (transport/efactura-client.ts)
  *
- * Política de correlativo: Política A — gaps tolerados. El allocator
- * commitea por sí solo antes del POST; si el PAC falla, el número se quema
- * y el reintento usa OTRO número... salvo que el estado quede en 'error',
- * donde D-3 dice REUSAR el mismo número/punto allocados en el primer intento
- * (no quemamos uno por reintento).
+ * Política de correlativo: REUSO por factura. El allocator commitea el número
+ * por sí solo, pero lo RESERVAMOS en la factura (punto+numero, fe_estado
+ * 'pending') ANTES del mapper — es decir, antes del primer punto que puede
+ * lanzar. Así cualquier fallo posterior (mapper, POST, DB) deja la factura en
+ * 'error' con el número ya guardado, y el reintento entra por la rama de reuso
+ * D-3 (T1) reusando ESE MISMO número, sin volver a llamar al allocator. Cada
+ * factura quema como MÁXIMO un correlativo, reusado en todos sus reintentos
+ * hasta autorizar → los saltos de numeración quedan en ~0 aun ante rachas de
+ * fallos. Nunca se reusa un número YA autorizado: la factura autorizada queda
+ * fuera del gate T0 y el allocator sólo incrementa (jamás retrocede).
+ *
+ * (Antes: Política A — cada reintento quemaba OTRO número porque el throw del
+ * mapper ocurría entre el allocate y la reserva, dejando la factura en
+ * 'no_emitida' sin número persistido; el reuso D-3 nunca era alcanzable. Caso
+ * real FAC-REI-000039: los intentos fallidos quemaron 3, 4 y 5.)
  *
  * Frontera transaccional:
- *   - T1 (allocate)                          → commit del RPC.
- *   - T2 (UPDATE invoices → pending + INSERT fe_emisiones) → dos statements
- *                                              independientes; el UPDATE actúa
- *                                              como lock optimista vía CHECK
- *                                              del estado actual.
+ *   - T1 (allocate o reuso D-3)              → commit del RPC (sólo 1ra vez).
+ *   - T1.5 (UPDATE invoices → pending + numero) → reserva el correlativo en la
+ *                                              factura ANTES del mapper. Lock
+ *                                              optimista vía guard del estado.
+ *   - T2 (map + INSERT fe_emisiones)         → el mapper puede lanzar; se
+ *                                              atrapa y se deja 'error' para
+ *                                              que el reintento reuse (D-3).
  *   - T3 (POST HTTP)                          → sin transacción, sin lock.
  *   - T4 (persist outcome)                    → dos UPDATEs, idempotentes
  *                                              individualmente.
@@ -143,21 +155,20 @@ export async function emitInvoiceToEfactura(
     });
   }
 
-  // Map a InvoiceRequest. PURE; sin I/O.
-  const request = mapInvoiceToEfacturaRequest({
-    bundle,
-    emisor,
-    sequence: { puntoFacturacion, numeroDocumento },
-    options: { iAmb: emisor.iAmb },
-  });
-
   // -------------------------------------------------------------------------
-  // T2 — Marca 'pending' + INSERT del intento.
-  //   T2.a UPDATE invoices con guard fe_estado IN ('no_emitida','error').
-  //        Si count=0 → race perdida → 409. NO se hace el INSERT.
-  //   T2.b INSERT fe_emisiones (request_payload, autorizada=null).
-  //        Si falla por DB → UPDATE invoices SET fe_estado='error' (best
-  //        effort) y throw 500.
+  // T1.5 — Reserva del correlativo EN LA FACTURA, ANTES del mapper.
+  //   El correlativo que devuelve allocateFeNumero se "quema" en cuanto el RPC
+  //   commitea. Para que un fallo posterior (mapper, POST, DB) NO obligue a
+  //   quemar OTRO número en el reintento, persistimos punto+numero en la
+  //   factura y la marcamos 'pending' ACÁ — antes del mapper, que es la primera
+  //   parte que puede lanzar (buildRucReceptor con client_type NULL, caso
+  //   FAC-REI-000039). Si algo falla luego, la factura queda 'error' con el
+  //   número ya guardado y el reintento entra por la rama de reuso D-3 (T1) sin
+  //   volver a llamar al allocator. Cada factura quema como MÁXIMO un
+  //   correlativo, reusado en todos sus reintentos.
+  //
+  //   Guard fe_estado IN ('no_emitida','error'): lock optimista. count=0 →
+  //   otro proceso ya avanzó → 409, sin tocar nada más.
   // -------------------------------------------------------------------------
   const { count: updatedCount, error: errMark } = await db
     .from("invoices")
@@ -181,6 +192,38 @@ export async function emitInvoiceToEfactura(
     throw new MutationError(
       "Otro proceso ya inició la emisión al PAC. Refrescá y volvé a intentar.",
       409
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // T2 — Map a InvoiceRequest (PURE; sin I/O) + INSERT del intento.
+  //   El mapper puede lanzar (Error plano) si el cliente tiene datos fiscales
+  //   inconsistentes que el gate no atrapó. Como el número YA quedó reservado
+  //   en la factura (T1.5), atrapamos el throw, dejamos la factura en 'error'
+  //   (best-effort) y re-lanzamos: el reintento reusará el mismo número (D-3),
+  //   sin quemar otro correlativo.
+  //   Luego INSERT fe_emisiones (request_payload, autorizada=null). Si falla
+  //   por DB → UPDATE invoices SET fe_estado='error' (best effort) y throw 500.
+  // -------------------------------------------------------------------------
+  let request: ReturnType<typeof mapInvoiceToEfacturaRequest>;
+  try {
+    request = mapInvoiceToEfacturaRequest({
+      bundle,
+      emisor,
+      sequence: { puntoFacturacion, numeroDocumento },
+      options: { iAmb: emisor.iAmb },
+    });
+  } catch (err) {
+    await db
+      .from("invoices")
+      .update({ fe_estado: "error" })
+      .eq("tenant_id", tenantId)
+      .eq("id", invoiceId);
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new MutationError(
+      `No se pudo construir el documento electrónico para el PAC: ${msg}`,
+      500,
+      err
     );
   }
 

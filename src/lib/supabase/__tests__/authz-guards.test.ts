@@ -43,7 +43,10 @@ const ENDPOINTS: Array<{ name: string; allowed: readonly string[] }> = [
   { name: "PATCH /api/clients/[id]", allowed: LEGAL_WRITE },
   { name: "DELETE /api/clients/[id]", allowed: LEGAL_WRITE },
   { name: "POST /api/cases", allowed: LEGAL_WRITE },
-  { name: "PATCH /api/cases/[id]", allowed: LEGAL_WRITE },
+  // PATCH /api/cases/[id] gatea por ACCIÓN: change-status permite asistente
+  // (actualizar estado de sus casos, CLAUDE.md); el resto de la edición NO.
+  { name: "PATCH /api/cases/[id] (edición general)", allowed: LEGAL_WRITE },
+  { name: "PATCH /api/cases/[id] (change-status)", allowed: LEGAL_CONTRIB },
   { name: "POST /api/prospects", allowed: LEGAL_WRITE },
   { name: "PATCH /api/prospects/[id]", allowed: LEGAL_WRITE },
   { name: "DELETE /api/prospects/[id]", allowed: LEGAL_WRITE },

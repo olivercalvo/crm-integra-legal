@@ -37,22 +37,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    // Solo admin y abogada editan expedientes (matriz de roles).
-    const denied = requireRole(profile.role, ["admin", "abogada"]);
-    if (denied) return denied;
-
-    // Verify case exists and belongs to tenant
-    const { data: existingCase } = await admin
-      .from("cases")
-      .select("*")
-      .eq("id", caseId)
-      .eq("tenant_id", profile.tenant_id)
-      .single();
-
-    if (!existingCase) {
-      return NextResponse.json({ error: "Caso no encontrado" }, { status: 404 });
-    }
-
+    // Parseamos el body ANTES del check de rol para poder gatear por acción.
+    // Es seguro: el usuario ya está autenticado; solo leemos el JSON.
     const body = await request.json();
     const {
       action,
@@ -76,6 +62,30 @@ export async function PATCH(
       deadline,
       assistant_id,
     } = body;
+
+    // Check de rol DEPENDIENTE DE LA ACCIÓN (matriz de roles vs. UI real):
+    // el asistente puede CAMBIAR EL ESTADO de sus casos asignados (CLAUDE.md),
+    // pero NO editar el resto del expediente. Restringir todo el PATCH a
+    // [admin, abogada] rompía el flujo diario del asistente (403 al cambiar
+    // estado desde <CaseStatusChanger>, que se le renderiza sin gate).
+    const allowedRoles =
+      action === "change-status"
+        ? ["admin", "abogada", "asistente"]
+        : ["admin", "abogada"];
+    const denied = requireRole(profile.role, allowedRoles);
+    if (denied) return denied;
+
+    // Verify case exists and belongs to tenant
+    const { data: existingCase } = await admin
+      .from("cases")
+      .select("*")
+      .eq("id", caseId)
+      .eq("tenant_id", profile.tenant_id)
+      .single();
+
+    if (!existingCase) {
+      return NextResponse.json({ error: "Caso no encontrado" }, { status: 404 });
+    }
 
     // Handle status change action
     if (action === "change-status") {

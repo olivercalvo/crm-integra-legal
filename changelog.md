@@ -1,5 +1,34 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-16 - Regresión Fase 1: asistente bloqueado al cambiar estado de caso (gate de rol por acción)
+
+La Fase 1 de seguridad restringió TODO `PATCH /api/cases/[id]` a [admin, abogada]. Pero
+`<CaseStatusChanger>` se le renderiza al ASISTENTE sin gate (a diferencia de `DeleteCaseButton`)
+y hace `PATCH` con `action="change-status"`. CLAUDE.md permite al asistente "actualizar estado" de
+sus casos asignados → con la Fase 1 recibía **403** y se le rompía el flujo diario. NO se desplegó;
+corregido antes del merge. Todo en `develop`, sin deploy, sin migraciones.
+
+### Fix — `PATCH /api/cases/[id]` gatea por ACCIÓN
+- El body se parsea ANTES del check de rol (seguro: ya autenticado, solo se lee el JSON).
+- `action === "change-status"` → [admin, abogada, **asistente**]; cualquier otra edición → [admin, abogada].
+
+### Revisión amplia (matriz Fase 1 vs. UI real)
+Se cruzó cada endpoint restringido con los componentes que lo llaman y su gating de render. Único
+rol *legítimo* bloqueado: el asistente en change-status (este fix). Hallazgo secundario (NO tocado,
+reportado a Oliver): `<InlineCaseInfoEditor>` muestra "Editar Información" al asistente sin gate →
+al guardar da 403 (edición completa NO es acción legítima del asistente; es UX, no regresión de
+permiso). El resto de controles restringidos ya están ocultos por `nav-config.ts` (Clientes,
+Prospectos, Importar fuera del asistente) y/o gates `userRole` en las páginas.
+
+### Tests (node:test + tsx)
+- `src/app/api/cases/__tests__/patch-role-by-action.test.ts` (4, requieren
+  `--experimental-test-module-mocks`; sin flag se skipean): asistente + change-status → 200
+  (persiste status_id); asistente + edición completa → 403 (no actualiza); contador + change-status
+  → 403; abogada + change-status → 200.
+- `authz-guards.test.ts`: la entrada `PATCH /api/cases/[id]` se dividió en "(edición general)" =
+  [admin, abogada] y "(change-status)" = [admin, abogada, asistente] para reflejar el gate por acción.
+- Suite completo con flag: **116 tests, 116 pass, 0 fail**. `tsc --noEmit`: exit 0.
+
 ## [Fix] - 2026-07-16 - Cerradas las 2 vías restantes que dejaban client_type NULL (conversión de prospecto + importación masiva)
 
 El fix anterior cerró `/clientes/nuevo`, pero quedaban DOS vías que seguían creando clientes con

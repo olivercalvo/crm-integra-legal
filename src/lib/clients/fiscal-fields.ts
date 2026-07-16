@@ -65,6 +65,28 @@ export function validateClientType(value: unknown): string | null {
   return null;
 }
 
+/**
+ * Normaliza texto libre a un ClientType canónico, o null si no se reconoce.
+ * Sirve para la importación masiva y para derivar client_type desde la columna
+ * legacy "Tipo" (que la UI llena con "Persona Natural" / "Persona Jurídica").
+ * NO reconoce "Retainer" (es categoría de contrato, no tipo de persona) → null.
+ */
+export function normalizeClientType(raw: unknown): ClientType | null {
+  if (typeof raw !== "string") return null;
+  const v = raw.toLowerCase().trim().replace(/\s+/g, " ");
+  if (
+    ["persona_natural", "natural", "persona natural", "pn", "física", "fisica", "persona física", "persona fisica"].includes(v)
+  ) {
+    return "persona_natural";
+  }
+  if (
+    ["persona_juridica", "juridica", "jurídica", "persona juridica", "persona jurídica", "pj"].includes(v)
+  ) {
+    return "persona_juridica";
+  }
+  return null;
+}
+
 export interface FiscalFieldsInput {
   tipo_receptor_fe?: string | null;
   digito_verificador?: string | null;

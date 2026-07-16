@@ -60,6 +60,8 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
   const [commentLoading, setCommentLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [search, setSearch] = useState("");
+  // Prospecto en modo "elegir tipo de persona" antes de convertir a cliente.
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   const filteredProspects = search.trim()
     ? initialProspects.filter((p) =>
@@ -121,12 +123,17 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
     }
   }
 
-  async function handleConvert(prospectId: string) {
+  async function handleConvert(prospectId: string, clientType: "persona_natural" | "persona_juridica") {
     setActionLoading(prospectId);
     try {
-      const res = await fetch(`/api/prospects/${prospectId}/convert`, { method: "POST" });
+      const res = await fetch(`/api/prospects/${prospectId}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_type: clientType }),
+      });
       if (res.ok) {
         const data = await res.json();
+        setConvertingId(null);
         router.refresh();
         // Navigate to edit the new client
         router.push(`/legal/clientes/${data.client.id}`);
@@ -259,16 +266,50 @@ export function ProspectPipeline({ initialProspects }: ProspectPipelineProps) {
                   </Button>
                 </>
               )}
-              {prospect.status === "ganado" && !prospect.converted_client_id && (
+              {prospect.status === "ganado" && !prospect.converted_client_id && convertingId !== prospect.id && (
                 <Button
                   size="sm"
-                  onClick={() => handleConvert(prospect.id)}
+                  onClick={() => setConvertingId(prospect.id)}
                   disabled={loading}
                   className="h-7 text-xs gap-1 bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
                 >
                   {loading ? <Loader2 size={12} className="animate-spin" /> : <UserCheck size={12} />}
                   Crear como Cliente
                 </Button>
+              )}
+              {prospect.status === "ganado" && !prospect.converted_client_id && convertingId === prospect.id && (
+                <div className="w-full space-y-1.5 rounded-md border border-integra-gold/40 bg-integra-gold/5 p-2">
+                  <p className="text-xs font-medium text-integra-navy">
+                    Tipo de persona <span className="text-red-500">*</span> (requerido para facturar)
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => handleConvert(prospect.id, "persona_natural")}
+                      disabled={loading}
+                      className="h-7 flex-1 text-xs bg-integra-navy hover:bg-integra-navy/90"
+                    >
+                      {loading ? <Loader2 size={12} className="animate-spin" /> : "Persona natural"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleConvert(prospect.id, "persona_juridica")}
+                      disabled={loading}
+                      className="h-7 flex-1 text-xs bg-integra-navy hover:bg-integra-navy/90"
+                    >
+                      {loading ? <Loader2 size={12} className="animate-spin" /> : "Persona jurídica"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setConvertingId(null)}
+                      disabled={loading}
+                      className="h-7 text-xs"
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
+                </div>
               )}
               {prospect.converted_client_id && (
                 <Badge className="text-xs bg-green-100 text-green-700 border-transparent">

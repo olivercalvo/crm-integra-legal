@@ -1,5 +1,50 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-07-16 - Cerradas las 2 vías restantes que dejaban client_type NULL (conversión de prospecto + importación masiva)
+
+El fix anterior cerró `/clientes/nuevo`, pero quedaban DOS vías que seguían creando clientes con
+`client_type` NULL (y rompían la emisión de FE con "Error interno"): la conversión de prospecto a
+cliente y la importación masiva. Todo en `develop`, sin deploy, sin migraciones.
+
+### Verificación de schema (previa)
+- La tabla legal `prospects` (Kanban, migración `20260403000012`) **NO tiene `client_type`** —
+  es OTRA cosa que el "prospecto" del flujo de cotizaciones (ese es un `clients` con
+  `client_status='prospect'` y ya setea `client_type`). `client_type` vive solo en `clients`
+  (`20260508000001`). → La conversión debe **capturar** el tipo, no arrastrarlo. Sin cambio de schema.
+
+### Conversión de prospecto (`POST /api/prospects/[id]/convert`)
+- El handler ya no ignora el body (`_request` → `request`): ahora **exige `client_type`** en el
+  body y lo valida con `validateClientType()` (400 accionable si falta/es inválido). Lo persiste
+  en el `clients` insert.
+- UI `prospect-pipeline.tsx`: "Crear como Cliente" ahora abre un selector inline
+  **Persona natural / Persona jurídica** (requerido) que dispara la conversión con el tipo elegido.
+
+### Importación masiva (`import-parser.ts` + `POST /api/import`)
+- Nueva columna **"Tipo Fiscal"** (Natural/Jurídica) en la plantilla descargable, obligatoria para FE.
+- `ImportClientRow.client_type` se deriva de "Tipo Fiscal" y, en su defecto, de la legacy "Tipo"
+  (vía `normalizeClientType()`, nuevo helper puro en `fiscal-fields.ts`). "Retainer" NO es tipo de
+  persona → no deriva.
+- `validateImport()` marca error accionable por fila si no se pudo determinar el tipo; esas filas
+  quedan fuera de `validClients` (no se insertan).
+- **Cambio de comportamiento (flag):** el path que auto-creaba un cliente cuando un caso
+  referenciaba un cliente inexistente **ya no auto-crea** (no había forma de darle un `client_type`
+  válido). Ahora ese caso **falla con mensaje accionable** pidiendo agregar el cliente a la hoja
+  "Clientes" con su tipo. Reversible si se decide otra política.
+- Helper puro nuevo `normalizeClientType()` en `src/lib/clients/fiscal-fields.ts`.
+
+### Tests (node:test + tsx)
+- `src/lib/utils/__tests__/import-client-type.test.ts` (4, siempre corren): deriva de "Tipo Fiscal",
+  fallback a "Tipo", fila sin tipo → error accionable (fuera de validClients), fila válida → con tipo.
+- `src/app/api/prospects/__tests__/convert-client-type.test.ts` (4, requieren
+  `--experimental-test-module-mocks`; sin el flag se skipean): convertir sin `client_type` → 400
+  (no inserta); inválido → 400; cada valor válido → 201 con el cliente creado CON `client_type`.
+- Suite completo con flag: **110 tests, 110 pass, 0 fail**. Sin flag: 101 pass, 9 skipped, 0 fail.
+  `tsc --noEmit`: exit 0. Lint de archivos tocados limpio (queda 1 error preexistente ajeno:
+  `sheetName` sin usar en la firma de `parseImportFile`).
+
+### Limpieza incidental
+- Removidos 2 imports de tipo muertos (`ImportClientRow`, `ImportCaseRow`) en `import/route.ts`.
+
 ## [Fix] - 2026-07-16 - client_type OBLIGATORIO en el form/API de cliente (causa raíz del "Error interno" al facturar)
 
 Dos facturas fallaron con "Error interno" en dos días (CLI-116 el 13/07, CLI-121 el 16/07)

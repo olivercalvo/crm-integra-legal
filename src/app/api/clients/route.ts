@@ -7,6 +7,7 @@ import {
   previewNextClientNumber,
 } from "@/lib/clients/numbering";
 import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
+import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
 import { requireRole } from "@/lib/supabase/server-query";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
@@ -92,6 +93,24 @@ export async function POST(request: NextRequest) {
         { error: Object.values(fiscalErrors)[0], fieldErrors: fiscalErrors },
         { status: 400 }
       );
+    }
+
+    // Unicidad de RUC: un RUC ya usado por un cliente ACTIVO no puede
+    // reingresarse (vive en `ruc` legacy o `tax_id`). Evita duplicados como
+    // CLI-116 vs CLI-104. Chequea contra AMBAS columnas vía helper único.
+    const rucTrimmed = typeof ruc === "string" ? ruc.trim() : "";
+    if (rucTrimmed) {
+      const existingByRuc = await findActiveClientByRuc(admin, profile.tenant_id, rucTrimmed);
+      if (existingByRuc) {
+        return NextResponse.json(
+          {
+            error: rucConflictMessage(existingByRuc),
+            fieldErrors: { ruc: rucConflictMessage(existingByRuc) },
+            existingClient: existingByRuc,
+          },
+          { status: 409 }
+        );
+      }
     }
 
     let client_number: string;

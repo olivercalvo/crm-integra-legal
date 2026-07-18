@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
+import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
 import { requireRole } from "@/lib/supabase/server-query";
 
 interface RouteContext {
@@ -146,6 +147,31 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
           },
           { status: 400 }
         );
+      }
+    }
+
+    // Unicidad de RUC en edición: si el nuevo RUC ya lo usa OTRO cliente activo
+    // (contra `ruc` OR `tax_id`), 409 accionable. excludeClientId = este mismo
+    // id, para que reguardar sin cambiar el RUC no se auto-bloquee.
+    if (ruc !== undefined) {
+      const rucTrimmed = typeof ruc === "string" ? ruc.trim() : "";
+      if (rucTrimmed) {
+        const existingByRuc = await findActiveClientByRuc(
+          admin,
+          profile.tenant_id,
+          rucTrimmed,
+          id
+        );
+        if (existingByRuc) {
+          return NextResponse.json(
+            {
+              error: rucConflictMessage(existingByRuc),
+              fieldErrors: { ruc: rucConflictMessage(existingByRuc) },
+              existingClient: existingByRuc,
+            },
+            { status: 409 }
+          );
+        }
       }
     }
 

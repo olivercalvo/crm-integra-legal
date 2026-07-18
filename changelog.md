@@ -1,5 +1,56 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-07-18 - RUC único: no permitir clientes con RUC duplicado (todas las vías)
+
+CLI-116 (INMOBILIARIA CAMAY) se creó con el mismo RUC que CLI-104 ya existente, sin ninguna
+alerta → duplicado que confundió a la licenciada y hubo que limpiar a mano. El `POST /api/clients`
+solo validaba unicidad de `client_number`, **nunca del RUC**. Regla nueva: un RUC ya usado por un
+cliente **ACTIVO** no puede volver a ingresarse. El RUC vive en `ruc` (legacy) o `tax_id` (nuevos)
+→ se chequea contra AMBAS. Todo en `develop`, sin deploy, sin migraciones, sin índice único en BD.
+
+### Helper único — `src/lib/clients/ruc-lookup.ts`
+- `findActiveClientByRuc(admin, tenantId, ruc, excludeClientId?)` → devuelve `{id, client_number, name}`
+  del cliente ACTIVO que ya usa ese RUC (contra `ruc` OR `tax_id`, trim), excluyendo inactivos y el
+  `excludeClientId` opcional. Núcleo PURO (`findActiveClientMatch` / `normalizeRucKey` / `clientMatchesRuc`)
+  testeable sin BD; el wrapper hace el I/O. Fuente única para las 3 vías.
+- `rucConflictMessage(existing)` → mensaje accionable en tuteo neutro que NOMBRA la ficha.
+
+### `POST /api/clients`
+- Si el body trae RUC no vacío y el helper encuentra un cliente activo → **409** con `error`,
+  `fieldErrors.ruc` y `existingClient: {id, client_number, name}`. No inserta.
+
+### `PATCH /api/clients/[id]`
+- Si el edit cambia el RUC a uno que ya usa OTRO cliente activo (`excludeClientId = id` propio) →
+  mismo **409** accionable. Reguardar sin cambiar el RUC no se auto-bloquea.
+
+### Importación masiva (`validateImport` + `/api/import`)
+- El fetch de existentes ahora trae `id, tax_id, client_status`. Una fila cuyo RUC ya está en un
+  cliente ACTIVO de la BD (contra `ruc` OR `tax_id`) → **NO se importa**, error accionable
+  "RUC ya registrado en CLI-XXX (NOMBRE)". Antes era una señal blanda (bucket `duplicateClients`).
+- Dos filas con el **mismo RUC dentro del archivo** → la 2da (y siguientes) NO se importan
+  (antes era solo warning). La 1ra se conserva.
+- **Bug latente corregido**: la plantilla oficial usa el header acentuado `RUC/Cédula`, que NO
+  matcheaba el mapa de columnas (solo tenía `ruc/cedula` sin acento) → el RUC nunca se parseaba en
+  importación real. Agregados los alias `ruc/cédula` y `cédula`. Sin esto la unicidad de RUC en
+  importación estaría muerta con la plantilla oficial.
+
+### UI — `client-form.tsx`
+- Ante el 409, el mensaje se muestra bajo el campo RUC (salta al paso 0) con un botón
+  **"Abrir CLI-XXX"** que navega a la ficha existente (`existingClient.id`). Sin flujo de override:
+  el objetivo es frenar el duplicado. Al editar el RUC se limpia el conflicto.
+
+### Tests (node:test + tsx)
+- `src/app/api/clients/__tests__/ruc-unique.route.test.ts` (13; los de handler requieren
+  `--experimental-test-module-mocks`): núcleo puro (match por `ruc`/`tax_id`, trim, inactivo libre,
+  `excludeClientId`); POST con RUC activo → 409 nombrando la ficha (no inserta); POST RUC nuevo → 201;
+  POST RUC de inactivo → 201; PATCH con RUC de otro activo → 409 (no actualiza); PATCH sin cambiar RUC
+  → 200.
+- `src/lib/utils/__tests__/import-ruc-unique.test.ts` (5): RUC ya registrado (por `ruc` y por
+  `tax_id`) → fuera de `validClients` + error; RUC de inactivo → permitido; RUC nuevo → permitido;
+  dos filas con mismo RUC → 2da fuera con error.
+- Regresión verde: `import-client-type` (4) y `client-type.route` (8). `tsc --noEmit`: exit 0.
+- Lint: sin errores nuevos (2 preexistentes en `import-parser.ts:254` y `client-form.tsx:51`, ya en HEAD).
+
 ## [Fix] - 2026-07-16 - Regresión Fase 1: asistente bloqueado al cambiar estado de caso (gate de rol por acción)
 
 La Fase 1 de seguridad restringió TODO `PATCH /api/cases/[id]` a [admin, abogada]. Pero

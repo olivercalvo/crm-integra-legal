@@ -90,9 +90,20 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
 
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
+  // Ficha existente que ya usa este RUC (409 del API). Se muestra bajo el campo
+  // RUC con un botón para abrirla, en vez de dejar crear un duplicado.
+  const [rucConflict, setRucConflict] = useState<{ id: string; client_number: string; name: string } | null>(null);
+
   const set = (key: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData((prev) => ({ ...prev, [key]: e.target.value }));
     setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
+  // Al editar el RUC se limpia el conflicto previo (el usuario está corrigiendo).
+  const setRuc = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, ruc: e.target.value }));
+    setFieldErrors((prev) => ({ ...prev, ruc: undefined }));
+    setRucConflict(null);
   };
 
   // client_type alimenta el default de tipo_receptor_fe (juridica→01). No
@@ -195,6 +206,15 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
       const data = await response.json();
 
       if (!response.ok) {
+        // 409 de RUC duplicado: mostrarlo bajo el campo RUC (paso 0) con el
+        // botón a la ficha existente, sin banner genérico. Sin flujo de override.
+        if (response.status === 409 && data.existingClient) {
+          setRucConflict(data.existingClient);
+          setFieldErrors((prev) => ({ ...prev, ruc: data.fieldErrors?.ruc || data.error }));
+          setStep(0);
+          setError(null);
+          return;
+        }
         setError(data.error || "Error al guardar el cliente");
         return;
       }
@@ -290,10 +310,22 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                 <Input
                   id="ruc"
                   value={formData.ruc}
-                  onChange={set("ruc")}
+                  onChange={setRuc}
                   placeholder="Ej. 12-345-6789"
                   className="min-h-[48px]"
                 />
+                {fieldErrors.ruc && (
+                  <p className="text-xs text-red-500">{fieldErrors.ruc}</p>
+                )}
+                {rucConflict && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/legal/clientes/${rucConflict.id}`)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-integra-navy bg-white px-3 py-2 text-sm font-medium text-integra-navy hover:bg-integra-navy/5 min-h-[44px]"
+                  >
+                    Abrir {rucConflict.client_number}
+                  </button>
+                )}
               </div>
 
               <div className="space-y-1.5">

@@ -1,5 +1,57 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-07-25 - Plan de Cuentas: gestión (CRUD) de chart_of_accounts desde el CRM
+
+El contador ya puede administrar las cuentas contables desde el CRM. Hasta ahora `chart_of_accounts`
+era una tabla semilla de **solo lectura** (sin UI ni endpoints de escritura). Se agrega una pantalla
+de gestión + endpoints POST/PATCH. Todo en `develop`, **sin deploy, sin migraciones, sin borrar data**
+(la tabla ya existe con las columnas necesarias: `is_system`, `account_name_qb`, `description`). La
+tabla se mantiene **PLANA** (sin jerarquía/`parent_id`) por ahora.
+
+### Pantalla — `/finanzas/configuracion/cuentas`
+- Server component gateado a **admin / abogada / contador** (mismo set que el resto de /finanzas);
+  otros roles → redirect a `/finanzas`.
+- Lista las cuentas **AGRUPADAS por tipo** en orden contable (Activo → Pasivo → Patrimonio → Ingreso →
+  Gasto). Labels en **español** mapeando el valor inglés de BD (`asset|liability|equity|income|expense`).
+- Cada fila muestra código, nombre, nombre QB (`account_name_qb`) y estado activo. Buscador
+  client-side (código/nombre/QB/estado) con normalización sin acentos.
+- Componente cliente `chart-of-accounts-manager.tsx`: crear/editar en un formulario inline y
+  activar/desactivar desde la fila. Las cuentas `is_system` llevan badge **"Sistema"** con candado.
+
+### Reglas de negocio
+- **Crear**: código (único por tenant), nombre, tipo (selector español→inglés), descripción opcional,
+  activa. Código duplicado → **400 accionable** (guard app-level + UNIQUE de BD como red final).
+- **Editar**: nombre, tipo, descripción, activa. El **código es INMUTABLE para TODAS las cuentas**
+  (no solo `is_system`): intentar cambiarlo → **400 accionable** ("El código de una cuenta no se
+  puede modificar. Si está mal, desactivala y creá una nueva."). Razón: `business_expenses.chart_account_code`
+  es un **FK LÓGICO sin constraint ni `ON UPDATE CASCADE`** (010_create_business_expenses.sql) →
+  renombrar orfanaría en silencio los gastos que la referencian. En la UI el campo Código se muestra
+  solo-lectura al editar.
+- **Desactivar** (nunca hard delete): `active=false`. **Bloqueado** para cuentas `is_system=true`
+  (1201, 1202, 2301, 4101, 4102 — las que usan los reportes) → **409**. Reactivar sí se permite.
+- Toda mutación graba en `audit_log` (`entity='chart_of_accounts'`, action create/update con diff).
+
+### Backend
+- `types/chart-of-account.ts` — `AccountType`, labels ES, orden de tipos, `ChartAccountRow`, inputs.
+- `validators/chart-of-account.ts` — `validateCreate/UpdateChartAccount` (código opcional en update).
+- `queries/chart-of-accounts.ts` — `listChartAccounts` (activas + inactivas), `getChartAccountById`,
+  `findChartAccountByCode` (unicidad). Independiente de `queries/catalogs.ts:listAccountsActive`
+  (que sigue sirviendo los comboboxes de facturas/cotizaciones, solo activas).
+- `api/chart-of-accounts.ts` — `createChartAccount` / `updateChartAccount` (MutationError + audit).
+- Endpoints: `GET|POST /api/finanzas/configuracion/chart-of-accounts` y
+  `PATCH /api/finanzas/configuracion/chart-of-accounts/[id]`, con `getAuthenticatedContext` +
+  `requireRole(['admin','abogada','contador'])` y filtro por tenant.
+- Sidebar: nueva entrada **"Plan de Cuentas"** en el tab Finanzas (admin/abogada/contador).
+
+### Tests (node:test + tsx) — `chart-of-accounts.route.test.ts`, 12 pasan
+- Validadores puros: crear válida normaliza; sin código → error; tipo en español crudo → error;
+  código con caracteres inválidos → error; update sin código → ok.
+- Handlers (requieren `--experimental-test-module-mocks`): crear código duplicado → 400 (no inserta);
+  crear válida → 201 (`is_system=false` + audit); editar → 200; desactivar `is_system` → 409 (no
+  actualiza); cambiar el código de una cuenta **normal** → 400 (código inmutable, no actualiza); rol
+  asistente en POST/PATCH → 403.
+- `npx tsc --noEmit` → exit 0. `eslint` sobre los archivos nuevos → exit 0.
+
 ## [Feature] - 2026-07-18 - RUC único: no permitir clientes con RUC duplicado (todas las vías)
 
 CLI-116 (INMOBILIARIA CAMAY) se creó con el mismo RUC que CLI-104 ya existente, sin ninguna

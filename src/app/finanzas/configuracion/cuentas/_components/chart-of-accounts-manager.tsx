@@ -1,0 +1,525 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Plus,
+  Pencil,
+  Check,
+  X,
+  Search,
+  PowerOff,
+  Power,
+  Loader2,
+  Lock,
+} from "lucide-react";
+import { matchesSearchQuery } from "@/lib/utils/search";
+import {
+  validateCreateChartAccount,
+  validateUpdateChartAccount,
+  type ValidationErrors,
+} from "@/lib/finanzas/validators/chart-of-account";
+import {
+  ACCOUNT_TYPES,
+  ACCOUNT_TYPE_ORDER,
+  ACCOUNT_TYPE_LABEL_ES,
+  type AccountType,
+  type ChartAccountRow,
+} from "@/lib/finanzas/types/chart-of-account";
+
+const API_BASE = "/api/finanzas/configuracion/chart-of-accounts";
+
+interface Props {
+  initialAccounts: ChartAccountRow[];
+  canMutate: boolean;
+}
+
+type FormState = {
+  mode: "create" | "edit";
+  id: string | null;
+  isSystem: boolean;
+  code: string;
+  name: string;
+  account_type: AccountType;
+  description: string;
+  active: boolean;
+};
+
+function emptyCreateForm(): FormState {
+  return {
+    mode: "create",
+    id: null,
+    isSystem: false,
+    code: "",
+    name: "",
+    account_type: "asset",
+    description: "",
+    active: true,
+  };
+}
+
+const selectClass =
+  "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none border-gray-300";
+
+export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
+  const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState<FormState | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ValidationErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const filtered = useMemo(
+    () =>
+      accounts.filter((a) =>
+        matchesSearchQuery(
+          search,
+          a.code,
+          a.name,
+          a.account_name_qb,
+          ACCOUNT_TYPE_LABEL_ES[a.account_type],
+          a.active ? "activa" : "inactiva"
+        )
+      ),
+    [accounts, search]
+  );
+
+  const grouped = useMemo(
+    () =>
+      ACCOUNT_TYPE_ORDER.map((type) => ({
+        type,
+        rows: filtered
+          .filter((a) => a.account_type === type)
+          .sort((x, y) => x.code.localeCompare(y.code, "en", { numeric: true })),
+      })).filter((g) => g.rows.length > 0),
+    [filtered]
+  );
+
+  function startCreate() {
+    setError(null);
+    setFieldErrors({});
+    setForm(emptyCreateForm());
+  }
+
+  function startEdit(a: ChartAccountRow) {
+    setError(null);
+    setFieldErrors({});
+    setForm({
+      mode: "edit",
+      id: a.id,
+      isSystem: a.is_system,
+      code: a.code,
+      name: a.name,
+      account_type: a.account_type,
+      description: a.description ?? "",
+      active: a.active,
+    });
+  }
+
+  function cancelForm() {
+    setForm(null);
+    setFieldErrors({});
+    setError(null);
+  }
+
+  async function submitForm() {
+    if (!form) return;
+    setSaving(true);
+    setError(null);
+    setFieldErrors({});
+
+    const payloadRaw = {
+      code: form.code.trim(),
+      name: form.name.trim(),
+      account_type: form.account_type,
+      description: form.description.trim() || null,
+      active: form.active,
+    };
+
+    const validation =
+      form.mode === "create"
+        ? validateCreateChartAccount(payloadRaw)
+        : // El código es INMUTABLE al editar (para todas las cuentas): no lo
+          // mandamos. El campo se muestra solo-lectura en el form.
+          validateUpdateChartAccount({ ...payloadRaw, code: undefined });
+
+    if (!validation.ok) {
+      setFieldErrors(validation.errors);
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const url =
+        form.mode === "create" ? API_BASE : `${API_BASE}/${form.id}`;
+      const method = form.mode === "create" ? "POST" : "PATCH";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validation.data),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (json.fieldErrors) setFieldErrors(json.fieldErrors);
+        setError(json.error ?? "Error al guardar");
+        setSaving(false);
+        return;
+      }
+
+      const saved = json.account as ChartAccountRow;
+      setAccounts((prev) => {
+        if (form.mode === "create") return [...prev, saved];
+        return prev.map((a) => (a.id === saved.id ? saved : a));
+      });
+      setForm(null);
+    } catch {
+      setError("Error de red al guardar. Intentá de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleActive(a: ChartAccountRow) {
+    if (a.is_system && a.active) return; // bloqueado en UI (y en server)
+    setActionLoadingId(a.id);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/${a.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: a.name,
+          account_type: a.account_type,
+          description: a.description,
+          active: !a.active,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error ?? "Error al cambiar el estado");
+        return;
+      }
+      const saved = json.account as ChartAccountRow;
+      setAccounts((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+    } catch {
+      setError("Error de red. Intentá de nuevo.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  const activeCount = accounts.filter((a) => a.active).length;
+
+  return (
+    <div className="space-y-5">
+      {/* Barra superior: buscar + agregar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <Input
+            placeholder="Buscar por código, nombre o QB…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        {canMutate && (
+          <Button
+            onClick={startCreate}
+            disabled={!!form}
+            className="min-h-[44px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
+          >
+            <Plus size={18} className="mr-1" />
+            Nueva cuenta
+          </Button>
+        )}
+      </div>
+
+      {/* Error global */}
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Form crear/editar */}
+      {form && (
+        <div className="rounded-lg border border-integra-gold/40 bg-integra-gold/5 p-4 space-y-4">
+          <p className="text-sm font-semibold text-integra-navy">
+            {form.mode === "create" ? "Nueva cuenta" : `Editar cuenta ${form.code}`}
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Código */}
+            <div>
+              <Label className="mb-1 block text-xs">Código *</Label>
+              <Input
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                disabled={saving || form.mode === "edit"}
+                readOnly={form.mode === "edit"}
+                placeholder="Ej. 5210"
+                className={fieldErrors.code ? "border-red-300" : ""}
+              />
+              {form.mode === "edit" && (
+                <p className="mt-1 text-xs text-gray-500">
+                  El código no se puede modificar. Si está mal, desactivá la cuenta y creá una nueva.
+                </p>
+              )}
+              {fieldErrors.code && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>
+              )}
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <Label className="mb-1 block text-xs">Tipo *</Label>
+              <select
+                value={form.account_type}
+                onChange={(e) =>
+                  setForm({ ...form, account_type: e.target.value as AccountType })
+                }
+                disabled={saving}
+                className={
+                  selectClass + (fieldErrors.account_type ? " border-red-300" : "")
+                }
+              >
+                {ACCOUNT_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {ACCOUNT_TYPE_LABEL_ES[t]}
+                  </option>
+                ))}
+              </select>
+              {fieldErrors.account_type && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.account_type}</p>
+              )}
+            </div>
+
+            {/* Nombre */}
+            <div className="sm:col-span-2">
+              <Label className="mb-1 block text-xs">Nombre *</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                disabled={saving}
+                placeholder='Ej. "Gastos de capacitación"'
+                className={fieldErrors.name ? "border-red-300" : ""}
+              />
+              {fieldErrors.name && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>
+              )}
+            </div>
+
+            {/* Descripción */}
+            <div className="sm:col-span-2">
+              <Label className="mb-1 block text-xs">Descripción (opcional)</Label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                disabled={saving}
+                rows={2}
+                placeholder="Notas operativas sobre la cuenta…"
+                className={
+                  "block w-full rounded-md border px-3 py-2 text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                  (fieldErrors.description ? "border-red-300" : "border-gray-300")
+                }
+              />
+              {fieldErrors.description && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.description}</p>
+              )}
+            </div>
+
+            {/* Activa */}
+            <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                  disabled={saving || (form.isSystem && form.active)}
+                  className="h-4 w-4 rounded border-gray-300 text-integra-navy focus:ring-integra-navy"
+                />
+                Cuenta activa
+              </label>
+              {form.isSystem && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Cuenta del sistema: no se puede desactivar.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              onClick={submitForm}
+              disabled={saving}
+              className="min-h-[40px] bg-integra-navy text-white hover:bg-integra-navy/90"
+            >
+              {saving ? (
+                <Loader2 size={14} className="mr-1 animate-spin" />
+              ) : (
+                <Check size={14} className="mr-1" />
+              )}
+              Guardar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={cancelForm}
+              disabled={saving}
+              className="min-h-[40px]"
+            >
+              <X size={14} className="mr-1" />
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Listado agrupado por tipo */}
+      {grouped.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500">
+          {search.trim()
+            ? `No se encontraron cuentas para: "${search.trim()}"`
+            : "No hay cuentas en el plan."}
+        </p>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <section key={group.type} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-integra-navy">
+                  {ACCOUNT_TYPE_LABEL_ES[group.type]}
+                </h2>
+                <span className="text-xs text-gray-400">({group.rows.length})</span>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="px-3 py-2 font-semibold">Código</th>
+                      <th className="px-3 py-2 font-semibold">Nombre</th>
+                      <th className="px-3 py-2 font-semibold">Nombre QB</th>
+                      <th className="px-3 py-2 text-right font-semibold">Estado</th>
+                      {canMutate && (
+                        <th className="px-3 py-2 text-right font-semibold">Acciones</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {group.rows.map((a) => {
+                      const isActionLoading = actionLoadingId === a.id;
+                      const lockDeactivate = a.is_system && a.active;
+                      return (
+                        <tr key={a.id} className="group hover:bg-gray-50">
+                          <td className="px-3 py-3 font-mono text-xs text-gray-700">
+                            <span className={!a.active ? "text-gray-400 line-through" : ""}>
+                              {a.code}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={
+                                "inline-flex items-center gap-1.5 " +
+                                (!a.active ? "text-gray-400 line-through" : "")
+                              }
+                            >
+                              {a.name}
+                              {a.is_system && (
+                                <Badge
+                                  variant="secondary"
+                                  className="gap-1 bg-integra-navy/10 text-integra-navy hover:bg-integra-navy/10"
+                                >
+                                  <Lock size={10} />
+                                  Sistema
+                                </Badge>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-gray-500">
+                            {a.account_name_qb || "—"}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <Badge
+                              variant={a.active ? "default" : "secondary"}
+                              className={
+                                a.active
+                                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                                  : "bg-gray-100 text-gray-500"
+                              }
+                            >
+                              {a.active ? "Activa" : "Inactiva"}
+                            </Badge>
+                          </td>
+                          {canMutate && (
+                            <td className="px-3 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => startEdit(a)}
+                                  disabled={!!form}
+                                  title="Editar"
+                                  className="h-8 w-8 text-integra-navy hover:bg-integra-navy/10"
+                                >
+                                  <Pencil size={14} />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => toggleActive(a)}
+                                  disabled={isActionLoading || lockDeactivate}
+                                  title={
+                                    lockDeactivate
+                                      ? "Cuenta del sistema — no se puede desactivar"
+                                      : a.active
+                                        ? "Desactivar"
+                                        : "Activar"
+                                  }
+                                  className={
+                                    "h-8 w-8 " +
+                                    (lockDeactivate
+                                      ? "text-gray-300"
+                                      : a.active
+                                        ? "text-red-500 hover:bg-red-50"
+                                        : "text-emerald-600 hover:bg-emerald-50")
+                                  }
+                                >
+                                  {isActionLoading ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : lockDeactivate ? (
+                                    <Lock size={14} />
+                                  ) : a.active ? (
+                                    <PowerOff size={14} />
+                                  ) : (
+                                    <Power size={14} />
+                                  )}
+                                </Button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {/* Conteo */}
+      <p className="text-xs text-gray-400">
+        {activeCount} activa(s) · {accounts.length} total
+      </p>
+    </div>
+  );
+}

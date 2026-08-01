@@ -311,9 +311,14 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   id="ruc"
                   value={formData.ruc}
                   onChange={setRuc}
-                  placeholder="Ej. 12-345-6789"
+                  placeholder="Ej. 1725894-1-691335 (RUC completo, sin el DV)"
                   className="min-h-[48px]"
                 />
+                <p className="text-xs text-gray-500">
+                  Ingresa el RUC COMPLETO tal como aparece en la ficha de la DGI,
+                  con todos sus segmentos y guiones. El dígito verificador (DV) va
+                  aparte, en su propio campo.
+                </p>
                 {fieldErrors.ruc && (
                   <p className="text-xs text-red-500">{fieldErrors.ruc}</p>
                 )}

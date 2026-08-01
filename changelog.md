@@ -1,5 +1,24 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [UX] - 2026-08-01 - Formulario de cliente: guía en el campo RUC / Cédula
+
+Un cliente quedó cargado con el RUC **incompleto** (solo el último segmento, `691335`, en vez del
+completo `1725894-1-691335`) y la DGI lo rechazó al momento de emitir. El campo era texto libre, sin
+ejemplo ni ayuda: nada indicaba que se esperaban **todos** los segmentos.
+
+### Cambio (`src/components/clients/client-form.tsx`)
+- **Placeholder** del input `ruc`: `Ej. 12-345-6789` → `Ej. 1725894-1-691335 (RUC completo, sin el DV)`.
+- **Texto de ayuda** nuevo debajo del campo (`text-xs text-gray-500`, mismo patrón que Tipo de persona
+  y Tipo de receptor FE): aclara que se ingresa el RUC completo tal como aparece en la ficha de la DGI,
+  con todos sus segmentos y guiones, y que el **dígito verificador (DV) va aparte en su propio campo**.
+
+### Explícitamente NO se hizo
+- **Sin validación de formato rígida.** Los RUCs varían según el caso (empresa, cédula, pasaporte,
+  extranjero); un regex estricto rompería fichas válidas. El fix es de **guía**, no de bloqueo.
+- Sin migraciones, sin cambios de backend, sin deploy. Solo `develop`.
+
+`tsc --noEmit` limpio.
+
 ## [Feature] - 2026-07-25 - Plan de Cuentas: gestión (CRUD) de chart_of_accounts desde el CRM
 
 El contador ya puede administrar las cuentas contables desde el CRM. Hasta ahora `chart_of_accounts`

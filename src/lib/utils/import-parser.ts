@@ -4,6 +4,7 @@
  */
 import * as XLSX from "xlsx";
 import { normalizeClientType, type ClientType } from "@/lib/clients/fiscal-fields";
+import { normalizeRucKey } from "@/lib/clients/ruc-lookup";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -151,7 +152,11 @@ const CLIENT_COLUMN_MAP: Record<string, keyof ImportClientRow> = {
   "nombre cliente": "name",
   ruc: "ruc",
   "ruc/cedula": "ruc",
+  // La plantilla oficial usa el header acentuado "RUC/Cédula"; sin estos alias
+  // la columna NO se mapeaba y el RUC quedaba null (unicidad de RUC muerta).
+  "ruc/cédula": "ruc",
   cedula: "ruc",
+  "cédula": "ruc",
   "n° cliente": "ruc",
   "no. cliente": "ruc",
   tipo: "type",
@@ -430,7 +435,16 @@ export function parseImportFile(buffer: ArrayBuffer, sheetName?: string): {
 export function validateImport(
   clientRows: ImportClientRow[],
   caseRows: ImportCaseRow[],
-  existingClients: { name: string; ruc: string | null; client_number: string }[]
+  existingClients: {
+    id?: string;
+    name: string;
+    ruc: string | null;
+    // El RUC puede vivir en `ruc` (legacy) o `tax_id` (registros nuevos).
+    tax_id?: string | null;
+    client_number: string;
+    // Solo los ACTIVOS bloquean; un cliente inactivo libera el RUC.
+    client_status?: string | null;
+  }[]
 ): ImportPreview {
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
@@ -438,9 +452,19 @@ export function validateImport(
 
   // Build sets for duplicate detection
   const existingNames = new Set(existingClients.map((c) => c.name.toLowerCase().trim()));
-  const existingRucs = new Set(
-    existingClients.filter((c) => c.ruc).map((c) => c.ruc!.toLowerCase().trim())
-  );
+
+  // Índice de RUC → ficha existente ACTIVA (contra `ruc` OR `tax_id`, trim). Un
+  // RUC ya usado por un cliente activo BLOQUEA la fila (no se importa). Los
+  // inactivos se excluyen: liberan el RUC.
+  const activeRucIndex = new Map<string, { client_number: string; name: string }>();
+  for (const c of existingClients) {
+    if (c.client_status === "inactive") continue;
+    for (const key of [normalizeRucKey(c.ruc), normalizeRucKey(c.tax_id)]) {
+      if (key && !activeRucIndex.has(key)) {
+        activeRucIndex.set(key, { client_number: c.client_number, name: c.name });
+      }
+    }
+  }
 
   // Track within-file duplicates
   const seenNames = new Map<string, number>();
@@ -475,14 +499,26 @@ export function validateImport(
       warnings.push({ row: client.rowNumber, field: "email", message: "Formato de email inválido", severity: "warning" });
     }
 
-    // Check for duplicate by name in DB
+    // Check for duplicate by name in DB (señal blanda; el skip por nombre en la
+    // ejecución usa este bucket. NO bloquea la fila).
     if (client.name && existingNames.has(client.name.toLowerCase().trim())) {
       duplicateClients.push({ row: client.rowNumber, name: client.name, matchField: "nombre" });
     }
 
-    // Check for duplicate by RUC in DB
-    if (client.ruc && existingRucs.has(client.ruc.toLowerCase().trim())) {
-      duplicateClients.push({ row: client.rowNumber, name: client.name, matchField: "RUC" });
+    // RUC ya registrado en un cliente ACTIVO de la BD (contra `ruc` OR
+    // `tax_id`) → la fila NO se importa. Mensaje accionable que nombra la ficha.
+    const rucKey = normalizeRucKey(client.ruc);
+    if (rucKey) {
+      const dbMatch = activeRucIndex.get(rucKey);
+      if (dbMatch) {
+        errors.push({
+          row: client.rowNumber,
+          field: "ruc",
+          message: `RUC ya registrado en ${dbMatch.client_number} (${dbMatch.name}). Usa esa ficha en lugar de crear un cliente nuevo.`,
+          severity: "error",
+        });
+        hasError = true;
+      }
     }
 
     // Check for duplicate within file (by name)
@@ -498,18 +534,19 @@ export function validateImport(
       seenNames.set(nameLower, client.rowNumber);
     }
 
-    // Check for duplicate within file (by RUC)
-    if (client.ruc) {
-      const rucLower = client.ruc.toLowerCase().trim();
-      if (seenRucs.has(rucLower)) {
-        warnings.push({
+    // Duplicado de RUC DENTRO del mismo archivo → la 2da fila (y siguientes) NO
+    // se importan. La 1ra se conserva.
+    if (rucKey) {
+      if (seenRucs.has(rucKey)) {
+        errors.push({
           row: client.rowNumber,
           field: "ruc",
-          message: `RUC duplicado en archivo (misma fila ${seenRucs.get(rucLower)})`,
-          severity: "warning",
+          message: `RUC duplicado en el archivo (ya aparece en la fila ${seenRucs.get(rucKey)}).`,
+          severity: "error",
         });
+        hasError = true;
       } else {
-        seenRucs.set(rucLower, client.rowNumber);
+        seenRucs.set(rucKey, client.rowNumber);
       }
     }
 

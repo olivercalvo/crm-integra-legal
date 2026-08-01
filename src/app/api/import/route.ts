@@ -68,10 +68,12 @@ export async function POST(request: NextRequest) {
     const filteredClients = importType === "cases" ? [] : clientRows;
     const filteredCases = importType === "clients" ? [] : caseRows;
 
-    // Get existing clients for duplicate detection
+    // Get existing clients for duplicate detection. Incluimos tax_id y
+    // client_status: el RUC puede vivir en `ruc` o `tax_id`, y solo los ACTIVOS
+    // bloquean (unicidad de RUC — ver validateImport / ruc-lookup).
     const { data: existingClients } = await admin
       .from("clients")
-      .select("name, ruc, client_number")
+      .select("id, name, ruc, tax_id, client_status, client_number")
       .eq("tenant_id", profile.tenant_id);
 
     const preview = validateImport(filteredClients, filteredCases, existingClients || []);

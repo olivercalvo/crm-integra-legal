@@ -1,5 +1,265 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-01 - Emisión FE: no mostrar "duplicado/autorizado" cuando hay códigos de rechazo
+
+Al emitir con un RUC inválido, el diálogo mostraba **dos cosas contradictorias a la vez**:
+
+> El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado — revisá en el portal…
+> · 1601: Regla de formación del RUC inválida
+> · 1602: RUC inexistente en el Registro Único de Contribuyentes
+
+La licenciada leyó "ya fue autorizado" y creyó que debía **ANULAR**, cuando era un rechazo por RUC
+y bastaba corregir la ficha y reintentar.
+
+### Diagnóstico — dos bugs sumados
+
+1. **Substring.** `detectsDuplicate` hacía `msg.includes("existente")`, y `"RUC in`**`existente`**`"`
+   contiene esa subcadena. Un código que dice **exactamente lo contrario** (el RUC *no* existe) se
+   leía como "el documento ya existe". Este es el bug que disparó el caso real.
+2. **Precedencia.** Usaba `.some(...)`: con UN match dudoso entre varios códigos, todo el rechazo se
+   reclasificaba a `pac_duplicate` y el motivo real quedaba tapado. El mensaje se elegía con un
+   ternario sobre `parsed.isDuplicate` en la orquestación, así que el texto de duplicado **sustituía**
+   al resumen de códigos — pero la lista `codRes[]` se seguía renderizando aparte en el diálogo. De
+   ahí que aparecieran las dos cosas juntas.
+
+### Cambio
+- **Nuevo** `src/lib/finanzas/efactura/orchestration/classify-pac-error.ts` — módulo PURO con la
+  clasificación, la heurística y las guías. Fuente única: el `errorKind` que se **persiste** en
+  `fe_emisiones.response_payload._meta` ya no puede divergir del que se le muestra a la usuaria.
+- **Regla de precedencia**: si hay ≥1 código de rechazo duro → `pac_rejected`, y el mensaje enumera
+  **solo esos** códigos (los duplicate-ish se descartan del texto). `pac_duplicate` únicamente cuando
+  el PAC señala duplicado y **no** hay ningún código de rechazo.
+- **Heurística arreglada**: `\bexistente\b` con límite de palabra (ya no matchea "inexistente") más
+  una guarda explícita de negaciones — `inexistente`, `no existe`, `no se encuentra` nunca son
+  duplicado, aunque otra subcadena matchee.
+- **Códigos no-rechazo**: `0260` ("Autorizado el uso de la FE", Ficha Técnica DGI v1.00) y las
+  variantes de cero no cuentan como rechazo, así que un `0260` suelto no bloquea la detección de
+  duplicado legítimo.
+- **Guía accionable** para 1601/1602: *"El RUC del cliente parece inválido o incompleto. Verifica el
+  RUC en la ficha del cliente y reintenta."* Viaja en un campo nuevo `errorHint` de
+  `EmitToEfacturaResult` y se pinta **arriba** del detalle técnico. Los códigos del PAC se siguen
+  mostrando como referencia.
+- **Diálogo**: renderiza `errorHint`; el bloque de "posiblemente autorizado" queda condicionado a
+  `errorKind === 'pac_duplicate'`, que con el fix ya no se activa ante un rechazo.
+
+### Nota de estilo
+La guía usa **tuteo** ("Verifica… reintenta"), no el voseo del pedido original: CLAUDE.md marca el
+voseo como anti-patrón y el resto del diálogo ya usa tuteo ("Verifica antes de enviar", "Revisa el
+portal"). Hay un test que lo asserta. Los mensajes viejos de la orquestación siguen en voseo
+("Reintentá en unos minutos") — deuda pre-existente, no se tocó en este fix.
+
+### Sin cambios de contrato
+`errorHint` es aditivo y opcional del lado del diálogo; la ruta
+`/api/finanzas/invoices/[id]/emit-efactura` devuelve el result completo sin transformarlo, así que no
+necesitó tocarse. **Sin migraciones, sin deploy, sin borrar data.**
+
+### Tests (20/20 pass)
+- `src/lib/finanzas/efactura/__tests__/classify-pac-error.test.ts` (16) — unitarios del clasificador:
+  caso real 1601/1602, regresión del substring `inexistente`, precedencia, variantes de duplicado que
+  deben seguir funcionando, `0260`, bordes sin códigos.
+- `src/lib/finanzas/efactura/__tests__/emit-invoice-rechazo-vs-duplicado.test.ts` (4) — **end-to-end**
+  por `emitInvoiceToEfactura` completo (fake de Supabase + stub de fetch): valida el
+  `EmitToEfacturaResult` real que consume el diálogo **y** el `errorKind` persistido en `fe_emisiones`.
+
+```
+npx tsx --test src/lib/finanzas/efactura/__tests__/classify-pac-error.test.ts
+npx tsx --test src/lib/finanzas/efactura/__tests__/emit-invoice-rechazo-vs-duplicado.test.ts
+```
+
+Regresión en verde: `emit-invoice-reuso-correlativo` + `map-invoice` + `validate-client-fiscal-gate`
+(32/32). `tsc --noEmit` limpio.
+
+## [Fix] - 2026-08-01 - Sincronizar `ruc` → `tax_id` (la ficha edita uno, la emisión lee el otro)
+
+Bug estructural confirmado en prod (CLI-057 MI CONDADO): el RUC del cliente vive en **DOS columnas**
+y cada mitad del sistema usa una distinta.
+
+- La ficha (`client-form.tsx`) edita **solo `ruc`** y nunca manda `tax_id`.
+- La emisión eFactura lee `client.tax_id ?? client.ruc` — o sea **PREFIERE `tax_id`**
+  (`map-receptor.ts:102`, `buildRucReceptor`).
+
+Al corregir el RUC desde la ficha, `tax_id` se quedaba con el valor viejo/incompleto y la factura
+se emitía con el RUC equivocado **mostrando el correcto en pantalla**. Falla silenciosa: la única
+señal era el rechazo de la DGI.
+
+### Cambio
+- **Nuevo** `src/lib/clients/ruc-sync.ts` — helper PURO (`normalizeRucInput`, `mirroredTaxId`,
+  `rucFieldWrites`) para que POST y PATCH no puedan divergir. Mismo criterio que `ruc-lookup.ts`.
+- **`POST /api/clients`** — el insert pasa de `ruc: ruc?.trim() || null` a `...rucFieldWrites(ruc)`:
+  con RUC no vacío escribe **`ruc` Y `tax_id` con el mismo valor trimmeado**.
+- **`PATCH /api/clients/[id]`** — la asignación de `ruc` se **movió DESPUÉS de la de `tax_id`** y
+  ahora usa `Object.assign(updates, rucFieldWrites(ruc))`. El orden es la implementación de la
+  regla de precedencia.
+
+### Decisión: body con `ruc` y `tax_id` distintos → **gana `ruc`** (no 400)
+Opción de menor riesgo, y por qué:
+- **Nadie en la app manda hoy `tax_id` a estos endpoints** (único caller: `client-form.tsx`, cuyo
+  payload no incluye el campo). Un 400 sería un rechazo nuevo para un escenario que solo se alcanza
+  por curl/replay de la cola offline — introduce un modo de falla sin cubrir ningún caso real.
+- El conflicto tiene resolución inequívoca: `ruc` es el campo que gestiona la abogada en la ficha,
+  y hacerlo ganar es exactamente la invariante que arregla el bug.
+- En el POST, `tax_id` del body **se sigue ignorando** (nunca se leyó ahí); comportamiento sin cambio.
+
+### No rompe (verificado con tests)
+- **Unicidad de RUC** (`findActiveClientByRuc`, compara `ruc` OR `tax_id`): con ambas columnas
+  iguales el cotejo da el mismo resultado. El 409 sigue disparando antes del insert.
+- **Gate fiscal FE** (valida `tax_id`): ahora `tax_id` está poblado en todo cliente creado/editado
+  con RUC, así que el gate ve más data, no menos.
+- **Promoción prospect→active** (exige `tax_id`): comportamiento **sin cambios**. Ojo — el gate lee
+  `body.tax_id` y corre ANTES del espejo, así que mandar solo `ruc` NO lo satisface. Es la conducta
+  previa, no una regresión; queda documentada en un test.
+
+### Sin backfill (a propósito)
+0 clientes divergentes hoy (CLI-057 ya se limpió a mano). Los que tienen una sola columna poblada
+los resuelve `tax_id ?? ruc` sin ambigüedad. **Sin migraciones, sin deploy, sin borrar data.**
+
+### Residual conocido (NO cubierto por este fix)
+- **Vaciar el RUC en la ficha no borra `tax_id`.** `rucFieldWrites("")` devuelve `{ ruc: null }` y
+  omite `tax_id` deliberadamente: destruir un `tax_id` que la pantalla nunca mostró violaría la regla
+  de no borrar data. Si alguien vacía el campo, la divergencia reaparece en ese caso puntual.
+- **No hay espejo inverso `tax_id` → `ruc`.** Ningún flujo de la app manda `tax_id` a estos endpoints,
+  pero si mañana lo hace (ej. promoción de prospecto desde cotizaciones), la ficha mostraría el `ruc`
+  viejo. La emisión sería correcta; lo que quedaría desactualizado es la pantalla.
+- **Importación masiva** (`/api/import`) escribe solo `ruc`, con `tax_id` en null → `tax_id ?? ruc`
+  resuelve a `ruc`. Consistente, no requiere cambio.
+
+### Tests — `src/app/api/clients/__tests__/ruc-taxid-sync.route.test.ts` (16/16 pass)
+Corre los **handlers reales** con el fake de Supabase de `ruc-unique.route.test.ts`, y para el
+aserto clave llama al **mapper real** (`mapReceptor`) en vez de replicar `tax_id ?? ruc` a mano:
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/clients/__tests__/ruc-taxid-sync.route.test.ts
+```
+
+Cubre: crear con `ruc` → `tax_id` igual; editar el `ruc` → `tax_id` se actualiza; regresión CLI-057
+(el RUC que emitiría el mapper es el nuevo, no el viejo); precedencia de `ruc` sobre `tax_id`;
+`ruc` vacío no borra `tax_id`; PATCH ajeno no toca ninguna de las dos; gate de promoción y 409 de
+unicidad intactos. Suites de regresión también en verde: `ruc-unique.route` (13/13),
+`validate-client-fiscal-gate` + `map-invoice` + `import-ruc-unique` (33/33). `tsc --noEmit` limpio.
+
+## [UX] - 2026-08-01 - Formulario de cliente: guía en el campo RUC / Cédula
+
+Un cliente quedó cargado con el RUC **incompleto** (solo el último segmento, `691335`, en vez del
+completo `1725894-1-691335`) y la DGI lo rechazó al momento de emitir. El campo era texto libre, sin
+ejemplo ni ayuda: nada indicaba que se esperaban **todos** los segmentos.
+
+### Cambio (`src/components/clients/client-form.tsx`)
+- **Placeholder** del input `ruc`: `Ej. 12-345-6789` → `Ej. 1725894-1-691335 (RUC completo, sin el DV)`.
+- **Texto de ayuda** nuevo debajo del campo (`text-xs text-gray-500`, mismo patrón que Tipo de persona
+  y Tipo de receptor FE): aclara que se ingresa el RUC completo tal como aparece en la ficha de la DGI,
+  con todos sus segmentos y guiones, y que el **dígito verificador (DV) va aparte en su propio campo**.
+
+### Explícitamente NO se hizo
+- **Sin validación de formato rígida.** Los RUCs varían según el caso (empresa, cédula, pasaporte,
+  extranjero); un regex estricto rompería fichas válidas. El fix es de **guía**, no de bloqueo.
+- Sin migraciones, sin cambios de backend, sin deploy. Solo `develop`.
+
+`tsc --noEmit` limpio.
+
+## [Feature] - 2026-07-25 - Plan de Cuentas: gestión (CRUD) de chart_of_accounts desde el CRM
+
+El contador ya puede administrar las cuentas contables desde el CRM. Hasta ahora `chart_of_accounts`
+era una tabla semilla de **solo lectura** (sin UI ni endpoints de escritura). Se agrega una pantalla
+de gestión + endpoints POST/PATCH. Todo en `develop`, **sin deploy, sin migraciones, sin borrar data**
+(la tabla ya existe con las columnas necesarias: `is_system`, `account_name_qb`, `description`). La
+tabla se mantiene **PLANA** (sin jerarquía/`parent_id`) por ahora.
+
+### Pantalla — `/finanzas/configuracion/cuentas`
+- Server component gateado a **admin / abogada / contador** (mismo set que el resto de /finanzas);
+  otros roles → redirect a `/finanzas`.
+- Lista las cuentas **AGRUPADAS por tipo** en orden contable (Activo → Pasivo → Patrimonio → Ingreso →
+  Gasto). Labels en **español** mapeando el valor inglés de BD (`asset|liability|equity|income|expense`).
+- Cada fila muestra código, nombre, nombre QB (`account_name_qb`) y estado activo. Buscador
+  client-side (código/nombre/QB/estado) con normalización sin acentos.
+- Componente cliente `chart-of-accounts-manager.tsx`: crear/editar en un formulario inline y
+  activar/desactivar desde la fila. Las cuentas `is_system` llevan badge **"Sistema"** con candado.
+
+### Reglas de negocio
+- **Crear**: código (único por tenant), nombre, tipo (selector español→inglés), descripción opcional,
+  activa. Código duplicado → **400 accionable** (guard app-level + UNIQUE de BD como red final).
+- **Editar**: nombre, tipo, descripción, activa. El **código es INMUTABLE para TODAS las cuentas**
+  (no solo `is_system`): intentar cambiarlo → **400 accionable** ("El código de una cuenta no se
+  puede modificar. Si está mal, desactivala y creá una nueva."). Razón: `business_expenses.chart_account_code`
+  es un **FK LÓGICO sin constraint ni `ON UPDATE CASCADE`** (010_create_business_expenses.sql) →
+  renombrar orfanaría en silencio los gastos que la referencian. En la UI el campo Código se muestra
+  solo-lectura al editar.
+- **Desactivar** (nunca hard delete): `active=false`. **Bloqueado** para cuentas `is_system=true`
+  (1201, 1202, 2301, 4101, 4102 — las que usan los reportes) → **409**. Reactivar sí se permite.
+- Toda mutación graba en `audit_log` (`entity='chart_of_accounts'`, action create/update con diff).
+
+### Backend
+- `types/chart-of-account.ts` — `AccountType`, labels ES, orden de tipos, `ChartAccountRow`, inputs.
+- `validators/chart-of-account.ts` — `validateCreate/UpdateChartAccount` (código opcional en update).
+- `queries/chart-of-accounts.ts` — `listChartAccounts` (activas + inactivas), `getChartAccountById`,
+  `findChartAccountByCode` (unicidad). Independiente de `queries/catalogs.ts:listAccountsActive`
+  (que sigue sirviendo los comboboxes de facturas/cotizaciones, solo activas).
+- `api/chart-of-accounts.ts` — `createChartAccount` / `updateChartAccount` (MutationError + audit).
+- Endpoints: `GET|POST /api/finanzas/configuracion/chart-of-accounts` y
+  `PATCH /api/finanzas/configuracion/chart-of-accounts/[id]`, con `getAuthenticatedContext` +
+  `requireRole(['admin','abogada','contador'])` y filtro por tenant.
+- Sidebar: nueva entrada **"Plan de Cuentas"** en el tab Finanzas (admin/abogada/contador).
+
+### Tests (node:test + tsx) — `chart-of-accounts.route.test.ts`, 12 pasan
+- Validadores puros: crear válida normaliza; sin código → error; tipo en español crudo → error;
+  código con caracteres inválidos → error; update sin código → ok.
+- Handlers (requieren `--experimental-test-module-mocks`): crear código duplicado → 400 (no inserta);
+  crear válida → 201 (`is_system=false` + audit); editar → 200; desactivar `is_system` → 409 (no
+  actualiza); cambiar el código de una cuenta **normal** → 400 (código inmutable, no actualiza); rol
+  asistente en POST/PATCH → 403.
+- `npx tsc --noEmit` → exit 0. `eslint` sobre los archivos nuevos → exit 0.
+
+## [Feature] - 2026-07-18 - RUC único: no permitir clientes con RUC duplicado (todas las vías)
+
+CLI-116 (INMOBILIARIA CAMAY) se creó con el mismo RUC que CLI-104 ya existente, sin ninguna
+alerta → duplicado que confundió a la licenciada y hubo que limpiar a mano. El `POST /api/clients`
+solo validaba unicidad de `client_number`, **nunca del RUC**. Regla nueva: un RUC ya usado por un
+cliente **ACTIVO** no puede volver a ingresarse. El RUC vive en `ruc` (legacy) o `tax_id` (nuevos)
+→ se chequea contra AMBAS. Todo en `develop`, sin deploy, sin migraciones, sin índice único en BD.
+
+### Helper único — `src/lib/clients/ruc-lookup.ts`
+- `findActiveClientByRuc(admin, tenantId, ruc, excludeClientId?)` → devuelve `{id, client_number, name}`
+  del cliente ACTIVO que ya usa ese RUC (contra `ruc` OR `tax_id`, trim), excluyendo inactivos y el
+  `excludeClientId` opcional. Núcleo PURO (`findActiveClientMatch` / `normalizeRucKey` / `clientMatchesRuc`)
+  testeable sin BD; el wrapper hace el I/O. Fuente única para las 3 vías.
+- `rucConflictMessage(existing)` → mensaje accionable en tuteo neutro que NOMBRA la ficha.
+
+### `POST /api/clients`
+- Si el body trae RUC no vacío y el helper encuentra un cliente activo → **409** con `error`,
+  `fieldErrors.ruc` y `existingClient: {id, client_number, name}`. No inserta.
+
+### `PATCH /api/clients/[id]`
+- Si el edit cambia el RUC a uno que ya usa OTRO cliente activo (`excludeClientId = id` propio) →
+  mismo **409** accionable. Reguardar sin cambiar el RUC no se auto-bloquea.
+
+### Importación masiva (`validateImport` + `/api/import`)
+- El fetch de existentes ahora trae `id, tax_id, client_status`. Una fila cuyo RUC ya está en un
+  cliente ACTIVO de la BD (contra `ruc` OR `tax_id`) → **NO se importa**, error accionable
+  "RUC ya registrado en CLI-XXX (NOMBRE)". Antes era una señal blanda (bucket `duplicateClients`).
+- Dos filas con el **mismo RUC dentro del archivo** → la 2da (y siguientes) NO se importan
+  (antes era solo warning). La 1ra se conserva.
+- **Bug latente corregido**: la plantilla oficial usa el header acentuado `RUC/Cédula`, que NO
+  matcheaba el mapa de columnas (solo tenía `ruc/cedula` sin acento) → el RUC nunca se parseaba en
+  importación real. Agregados los alias `ruc/cédula` y `cédula`. Sin esto la unicidad de RUC en
+  importación estaría muerta con la plantilla oficial.
+
+### UI — `client-form.tsx`
+- Ante el 409, el mensaje se muestra bajo el campo RUC (salta al paso 0) con un botón
+  **"Abrir CLI-XXX"** que navega a la ficha existente (`existingClient.id`). Sin flujo de override:
+  el objetivo es frenar el duplicado. Al editar el RUC se limpia el conflicto.
+
+### Tests (node:test + tsx)
+- `src/app/api/clients/__tests__/ruc-unique.route.test.ts` (13; los de handler requieren
+  `--experimental-test-module-mocks`): núcleo puro (match por `ruc`/`tax_id`, trim, inactivo libre,
+  `excludeClientId`); POST con RUC activo → 409 nombrando la ficha (no inserta); POST RUC nuevo → 201;
+  POST RUC de inactivo → 201; PATCH con RUC de otro activo → 409 (no actualiza); PATCH sin cambiar RUC
+  → 200.
+- `src/lib/utils/__tests__/import-ruc-unique.test.ts` (5): RUC ya registrado (por `ruc` y por
+  `tax_id`) → fuera de `validClients` + error; RUC de inactivo → permitido; RUC nuevo → permitido;
+  dos filas con mismo RUC → 2da fuera con error.
+- Regresión verde: `import-client-type` (4) y `client-type.route` (8). `tsc --noEmit`: exit 0.
+- Lint: sin errores nuevos (2 preexistentes en `import-parser.ts:254` y `client-form.tsx:51`, ya en HEAD).
+
 ## [Fix] - 2026-07-16 - Regresión Fase 1: asistente bloqueado al cambiar estado de caso (gate de rol por acción)
 
 La Fase 1 de seguridad restringió TODO `PATCH /api/cases/[id]` a [admin, abogada]. Pero

@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Scale,
   Wallet,
+  BookOpenCheck,
 } from "lucide-react";
 
 export type Role = "admin" | "abogada" | "asistente" | "contador";
@@ -74,8 +75,9 @@ export const TABS: TabDef[] = [
       { label: "Cotizaciones",      href: "/finanzas/cotizaciones",               icon: FileText,    roles: ["admin", "abogada"] },
       { label: "Plantilla T&C",     href: "/finanzas/cotizaciones/configuracion", icon: Settings,    roles: ["admin"] },
       { label: "Facturas",          href: "/finanzas/facturas",                   icon: Receipt,     roles: ["admin", "abogada"] },
-      { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag, roles: ["admin", "abogada", "contador"] },
-      { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,   roles: ["admin", "abogada", "contador"] },
+      { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
+      { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },
+      { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
     ],
   },
   {

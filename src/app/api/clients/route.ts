@@ -7,6 +7,8 @@ import {
   previewNextClientNumber,
 } from "@/lib/clients/numbering";
 import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
+import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
+import { rucFieldWrites } from "@/lib/clients/ruc-sync";
 import { requireRole } from "@/lib/supabase/server-query";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
@@ -94,6 +96,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Unicidad de RUC: un RUC ya usado por un cliente ACTIVO no puede
+    // reingresarse (vive en `ruc` legacy o `tax_id`). Evita duplicados como
+    // CLI-116 vs CLI-104. Chequea contra AMBAS columnas vía helper único.
+    const rucTrimmed = typeof ruc === "string" ? ruc.trim() : "";
+    if (rucTrimmed) {
+      const existingByRuc = await findActiveClientByRuc(admin, profile.tenant_id, rucTrimmed);
+      if (existingByRuc) {
+        return NextResponse.json(
+          {
+            error: rucConflictMessage(existingByRuc),
+            fieldErrors: { ruc: rucConflictMessage(existingByRuc) },
+            existingClient: existingByRuc,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     let client_number: string;
 
     if (customNumber && typeof customNumber === "string" && customNumber.trim()) {
@@ -123,7 +143,11 @@ export async function POST(request: NextRequest) {
         tenant_id: profile.tenant_id,
         client_number,
         name: name.trim(),
-        ruc: ruc?.trim() || null,
+        // `ruc` alimenta AMBAS columnas: la emisión eFactura lee
+        // `tax_id ?? ruc` y prefiere tax_id (map-receptor.ts). Ver ruc-sync.ts.
+        // Un `tax_id` explícito del body se sigue ignorando en el POST (como
+        // siempre): la ficha es la única fuente del RUC al crear.
+        ...rucFieldWrites(ruc),
         type: type || null,
         client_type,
         contact: contact?.trim() || null,

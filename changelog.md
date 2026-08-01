@@ -1,5 +1,74 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-01 - Sincronizar `ruc` → `tax_id` (la ficha edita uno, la emisión lee el otro)
+
+Bug estructural confirmado en prod (CLI-057 MI CONDADO): el RUC del cliente vive en **DOS columnas**
+y cada mitad del sistema usa una distinta.
+
+- La ficha (`client-form.tsx`) edita **solo `ruc`** y nunca manda `tax_id`.
+- La emisión eFactura lee `client.tax_id ?? client.ruc` — o sea **PREFIERE `tax_id`**
+  (`map-receptor.ts:102`, `buildRucReceptor`).
+
+Al corregir el RUC desde la ficha, `tax_id` se quedaba con el valor viejo/incompleto y la factura
+se emitía con el RUC equivocado **mostrando el correcto en pantalla**. Falla silenciosa: la única
+señal era el rechazo de la DGI.
+
+### Cambio
+- **Nuevo** `src/lib/clients/ruc-sync.ts` — helper PURO (`normalizeRucInput`, `mirroredTaxId`,
+  `rucFieldWrites`) para que POST y PATCH no puedan divergir. Mismo criterio que `ruc-lookup.ts`.
+- **`POST /api/clients`** — el insert pasa de `ruc: ruc?.trim() || null` a `...rucFieldWrites(ruc)`:
+  con RUC no vacío escribe **`ruc` Y `tax_id` con el mismo valor trimmeado**.
+- **`PATCH /api/clients/[id]`** — la asignación de `ruc` se **movió DESPUÉS de la de `tax_id`** y
+  ahora usa `Object.assign(updates, rucFieldWrites(ruc))`. El orden es la implementación de la
+  regla de precedencia.
+
+### Decisión: body con `ruc` y `tax_id` distintos → **gana `ruc`** (no 400)
+Opción de menor riesgo, y por qué:
+- **Nadie en la app manda hoy `tax_id` a estos endpoints** (único caller: `client-form.tsx`, cuyo
+  payload no incluye el campo). Un 400 sería un rechazo nuevo para un escenario que solo se alcanza
+  por curl/replay de la cola offline — introduce un modo de falla sin cubrir ningún caso real.
+- El conflicto tiene resolución inequívoca: `ruc` es el campo que gestiona la abogada en la ficha,
+  y hacerlo ganar es exactamente la invariante que arregla el bug.
+- En el POST, `tax_id` del body **se sigue ignorando** (nunca se leyó ahí); comportamiento sin cambio.
+
+### No rompe (verificado con tests)
+- **Unicidad de RUC** (`findActiveClientByRuc`, compara `ruc` OR `tax_id`): con ambas columnas
+  iguales el cotejo da el mismo resultado. El 409 sigue disparando antes del insert.
+- **Gate fiscal FE** (valida `tax_id`): ahora `tax_id` está poblado en todo cliente creado/editado
+  con RUC, así que el gate ve más data, no menos.
+- **Promoción prospect→active** (exige `tax_id`): comportamiento **sin cambios**. Ojo — el gate lee
+  `body.tax_id` y corre ANTES del espejo, así que mandar solo `ruc` NO lo satisface. Es la conducta
+  previa, no una regresión; queda documentada en un test.
+
+### Sin backfill (a propósito)
+0 clientes divergentes hoy (CLI-057 ya se limpió a mano). Los que tienen una sola columna poblada
+los resuelve `tax_id ?? ruc` sin ambigüedad. **Sin migraciones, sin deploy, sin borrar data.**
+
+### Residual conocido (NO cubierto por este fix)
+- **Vaciar el RUC en la ficha no borra `tax_id`.** `rucFieldWrites("")` devuelve `{ ruc: null }` y
+  omite `tax_id` deliberadamente: destruir un `tax_id` que la pantalla nunca mostró violaría la regla
+  de no borrar data. Si alguien vacía el campo, la divergencia reaparece en ese caso puntual.
+- **No hay espejo inverso `tax_id` → `ruc`.** Ningún flujo de la app manda `tax_id` a estos endpoints,
+  pero si mañana lo hace (ej. promoción de prospecto desde cotizaciones), la ficha mostraría el `ruc`
+  viejo. La emisión sería correcta; lo que quedaría desactualizado es la pantalla.
+- **Importación masiva** (`/api/import`) escribe solo `ruc`, con `tax_id` en null → `tax_id ?? ruc`
+  resuelve a `ruc`. Consistente, no requiere cambio.
+
+### Tests — `src/app/api/clients/__tests__/ruc-taxid-sync.route.test.ts` (16/16 pass)
+Corre los **handlers reales** con el fake de Supabase de `ruc-unique.route.test.ts`, y para el
+aserto clave llama al **mapper real** (`mapReceptor`) en vez de replicar `tax_id ?? ruc` a mano:
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/clients/__tests__/ruc-taxid-sync.route.test.ts
+```
+
+Cubre: crear con `ruc` → `tax_id` igual; editar el `ruc` → `tax_id` se actualiza; regresión CLI-057
+(el RUC que emitiría el mapper es el nuevo, no el viejo); precedencia de `ruc` sobre `tax_id`;
+`ruc` vacío no borra `tax_id`; PATCH ajeno no toca ninguna de las dos; gate de promoción y 409 de
+unicidad intactos. Suites de regresión también en verde: `ruc-unique.route` (13/13),
+`validate-client-fiscal-gate` + `map-invoice` + `import-ruc-unique` (33/33). `tsc --noEmit` limpio.
+
 ## [UX] - 2026-08-01 - Formulario de cliente: guía en el campo RUC / Cédula
 
 Un cliente quedó cargado con el RUC **incompleto** (solo el último segmento, `691335`, en vez del

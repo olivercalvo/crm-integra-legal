@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-fields";
 import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
+import { rucFieldWrites } from "@/lib/clients/ruc-sync";
 import { requireRole } from "@/lib/supabase/server-query";
 
 interface RouteContext {
@@ -177,7 +178,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const updates: Record<string, string | null> = {};
     if (name !== undefined) updates.name = String(name).trim();
-    if (ruc !== undefined) updates.ruc = ruc?.trim() || null;
     if (type !== undefined) updates.type = type || null;
     if (contact !== undefined) updates.contact = contact?.trim() || null;
     if (phone !== undefined) updates.phone = phone?.trim() || null;
@@ -188,6 +188,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (client_type !== undefined) updates.client_type = client_type || null;
     if (tax_id !== undefined) updates.tax_id = tax_id?.trim() || null;
     if (tax_id_type !== undefined) updates.tax_id_type = tax_id_type || null;
+    // `ruc` VA DESPUÉS de `tax_id` A PROPÓSITO. Editar el RUC en la ficha debe
+    // arrastrar tax_id, porque la emisión eFactura lee `tax_id ?? ruc` y
+    // prefiere tax_id (map-receptor.ts) → si no, se emite el RUC viejo
+    // mientras la pantalla muestra el nuevo (CLI-057). Si el body trae AMBOS y
+    // difieren, gana `ruc`: es el campo que gestiona la abogada. Ver ruc-sync.ts.
+    if (ruc !== undefined) Object.assign(updates, rucFieldWrites(ruc));
     if (tipo_receptor_fe !== undefined) updates.tipo_receptor_fe = tipo_receptor_fe || null;
     if (digito_verificador !== undefined) updates.digito_verificador = digito_verificador?.trim() || null;
 

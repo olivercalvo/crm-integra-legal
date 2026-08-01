@@ -1,7 +1,7 @@
 # Roadmap Contable — CRM Integra Legal
 
-**Fecha:** 18/07/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
-**Fuentes:** reunión con el contador nuevo (Josuar) · `reconciliacion-legal-finanzas.md` · borrador de ledger `sql/pending/023_...` (EN ESPERA) · DE 34/1998
+**Fecha:** 18/07/2026 · **Actualizado:** 01/08/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
+**Fuentes:** reunión con el contador nuevo (Josuar) · correo Josuar 31/07/2026 + respuesta 01/08/2026 · `reconciliacion-legal-finanzas.md` · borrador de ledger `sql/pending/023_...` (EN ESPERA) · DE 34/1998
 
 ---
 
@@ -52,12 +52,36 @@ Entregable concreto del módulo. Varios ya existen como **placeholder vacío** e
 | Balance de Comprobación (balance de prueba) | No existe |
 | VAT Summary (ITBMS) | ✅ Implementado |
 
+**Nota:** estos 6 reportes son exactamente los mismos que Josuar pidió descargar del histórico de QuickBooks (§5.1). O sea, lo que baja de QB para los saldos iniciales es también el checklist de salidas que el módulo debe reproducir → sirve para validar que el CRM da los mismos números.
+
 ## 5. Insumos / decisiones pendientes del contador
 
-- **Balance de comprobación de QuickBooks** (Edwin lo descarga) → da los saldos iniciales y valida el plan de cuentas.
-- **Plan de cuentas validado** (revisará el `chart_of_accounts` de 34 cuentas extraído de QB — le mandamos el Excel).
-- **Tratamientos contables específicos** (las 9 preguntas ya enviadas): reembolsos (¿pasivo 2201 o ingreso?), fondos en custodia/trust (1103/2201), reconocimiento de honorarios (devengado vs caja), ITBMS en reembolsos, anticipos.
-- **Ya respondido en la reunión:** ruta contable = **Diario/Mayor** (Art. 2a); él es la cabeza de la certificación/aval.
+### 5.1 Reportes históricos de QuickBooks — ENVIADOS a Josuar el 01/08/2026
+
+Josuar pidió (reunión) descargar de QuickBooks **6 reportes** del histórico, no solo el balance de comprobación. Se exportaron de QBO ("Todas las fechas", hasta el cierre de QB) y se enviaron por correo el 01/08/2026:
+
+| Reporte pedido | Nombre en QuickBooks Online | Dónde se saca |
+|---|---|---|
+| Libro Mayor | Libro mayor | Exportar datos |
+| Balance General | Balance general | Exportar datos |
+| Estado de Resultado (P&L) | Beneficios y pérdidas | Exportar datos |
+| Balance de Comprobación | Balance de sumas y saldos | Exportar datos |
+| Antigüedad de Cuentas por Cobrar (clientes) | Informe detallado de antigüedad de C_C | **Página de Informes** (no está en Exportar datos) |
+| Antigüedad de Cuentas por Pagar (proveedores) | Informe detallado de antigüedad de C_P | **Página de Informes** (no está en Exportar datos) |
+
+Extras enviados: Libro Diario ("Diario") + listados de Clientes y Proveedores. Los saldos de apertura salen del **Balance de Comprobación** (todas las cuentas) + las **dos antigüedades** (detalle de quién debe / a quién se debe al corte).
+
+### 5.2 Insumos / decisiones pendientes de Josuar
+
+- **Plan de cuentas final.** ⚠️ Los modelos que Josuar mandó (`EJEMPLOS DE LIBROS CONTABLES.xlsx`, 01/08) usan una estructura de cuentas **distinta** a las 34 extraídas de QB: ingresos `4xxxxx` (400001 Derecho Corporativo…), costos `5xxxxx`, gastos operativos `6xxx`, activos `1xxxxx`, pasivos `2xxxxx`, patrimonio `3xxxxx`. La Fase 1 será un **mapeo**, no una validación directa. Falta que confirme el plan definitivo (código, nombre, tipo).
+- **Saldos de apertura** a la fecha de corte que él defina (aún sin confirmar la fecha).
+- **Tratamientos contables (4 preguntas ENVIADAS el 01/08/2026)** — el roadmap las daba por enviadas pero no se habían mandado hasta esa fecha: reembolsos (¿ingreso o recuperación de gasto?), honorarios (devengado vs caja), ITBMS en reembolsos (hoy exento, confirmar), anticipos/fondos de clientes en custodia (¿pasivo hasta aplicar a factura? ¿cuenta específica?).
+- **Modelos de los otros informes** — Josuar enviará más además de los 3 ya compartidos (Estado de Resultado, Balance General, Balance de Comprobación).
+
+### 5.3 Ya confirmado por Josuar
+
+- **Conexión bancaria = importación del Excel de Banco General + reglas de registro** (NO API en vivo). Confirmado por correo 31/07/2026. Alinea con la Fase 5.
+- **Ruta contable = Diario/Mayor** (Art. 2a, reunión); él es la cabeza de la certificación/aval.
 
 ## 6. ⚠️ Decisión de negocio abierta — proforma vs factura fiscal ("todo o nada")
 
@@ -86,7 +110,7 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 
 ## 9. Próximos pasos
 
-1. Esperar del contador: balance de comprobación + plan de cuentas validado + respuestas a las 9 preguntas.
-2. Mientras: verificar el estado de la gestión de plan de cuentas en el CRM (¿hay UI de crear cuentas hoy?) para dimensionar la Fase 1.
-3. Con el material del contador: reescribir el `023` sobre el COA existente y arrancar la Fase 1 (estructura + ledger + saldos iniciales).
+1. **Esperar de Josuar:** plan de cuentas final + saldos de apertura (con fecha de corte) + respuestas a las 4 preguntas contables + modelos de los otros informes. (Reportes históricos de QB ya enviados 01/08.)
+2. ✅ **Hecho (01/08/2026):** UI de gestión de plan de cuentas en producción (`/finanzas/configuracion/cuentas`, CRUD con `is_system`, sin hard delete, audit_log).
+3. Con el plan de cuentas final: **mapear** las cuentas de Josuar contra el `chart_of_accounts` actual (no coinciden, ver §5.2), reescribir el `023` sobre esa base y arrancar la Fase 1 (estructura + ledger + saldos iniciales por asiento manual).
 4. Fase 2 (factura→asiento) puede empezar en paralelo apenas esté el ledger — deriva de Finanzas, no depende de la reconciliación legal.

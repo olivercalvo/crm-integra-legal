@@ -194,7 +194,9 @@ class FakeQuery {
 function makeDb(b: Backend) {
   return {
     from: (table: string) => new FakeQuery(b, table),
-    rpc: (_name: string, _args: Record<string, unknown>) => {
+    // Emula allocate_fe_numero: incrementa y devuelve. No inspeccionamos los
+    // argumentos acá — eso ya lo cubre emit-invoice-reuso-correlativo.test.ts.
+    rpc: () => {
       b.seq.ultimo += 1;
       return Promise.resolve({ data: b.seq.ultimo, error: null });
     },

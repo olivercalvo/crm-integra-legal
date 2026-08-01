@@ -21,6 +21,8 @@ interface EmitToEfacturaResult {
   feEstado: "authorized" | "pending" | "error";
   errorKind: "pac_rejected" | "pac_duplicate" | "transport" | null;
   errorMessage: string | null;
+  /** Guía accionable en lenguaje claro (ej. RUC inválido). Opcional. */
+  errorHint?: string | null;
   codRes: CodRes[];
 }
 
@@ -66,6 +68,7 @@ export function EmitEfacturaDialog({
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [errorHint, setErrorHint] = useState<string | null>(null);
   const [codRes, setCodRes] = useState<CodRes[]>([]);
   const [errorKind, setErrorKind] = useState<
     "pac_rejected" | "pac_duplicate" | "transport" | null
@@ -77,6 +80,7 @@ export function EmitEfacturaDialog({
 
   function submit() {
     setError(null);
+    setErrorHint(null);
     setCodRes([]);
     setErrorKind(null);
 
@@ -118,6 +122,7 @@ export function EmitEfacturaDialog({
 
         // result.feEstado === 'error' → dejar modal abierto con detalles
         setError(result.errorMessage ?? "El PAC rechazó la factura.");
+        setErrorHint(result.errorHint ?? null);
         setCodRes(result.codRes ?? []);
         setErrorKind(result.errorKind);
         // refrescamos en segundo plano para que la card del detalle
@@ -135,6 +140,7 @@ export function EmitEfacturaDialog({
         type="button"
         onClick={() => {
           setError(null);
+          setErrorHint(null);
           setCodRes([]);
           setErrorKind(null);
           setOpen(true);
@@ -207,6 +213,18 @@ export function EmitEfacturaDialog({
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <span className="font-medium">{error}</span>
               </div>
+              {/* Guía accionable (ej. RUC inválido). Va ARRIBA del detalle
+                  técnico: es lo que la usuaria necesita para resolver. */}
+              {errorHint && (
+                <p className="rounded bg-white/70 px-2 py-1.5 text-xs font-medium text-red-800">
+                  {errorHint}
+                </p>
+              )}
+              {/* Solo cuando el PAC señaló duplicado SIN códigos de rechazo.
+                  Si hay códigos de rechazo, errorKind ya no es pac_duplicate
+                  (classify-pac-error.ts) y este bloque no se pinta: mostrar
+                  "posiblemente autorizado" junto a un rechazo por RUC llevó a
+                  la licenciada a creer que debía anular. */}
               {errorKind === "pac_duplicate" && (
                 <p className="text-xs italic">
                   Es posible que un envío anterior haya quedado autorizado en

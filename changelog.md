@@ -1,5 +1,74 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-01 - Emisión FE: no mostrar "duplicado/autorizado" cuando hay códigos de rechazo
+
+Al emitir con un RUC inválido, el diálogo mostraba **dos cosas contradictorias a la vez**:
+
+> El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado — revisá en el portal…
+> · 1601: Regla de formación del RUC inválida
+> · 1602: RUC inexistente en el Registro Único de Contribuyentes
+
+La licenciada leyó "ya fue autorizado" y creyó que debía **ANULAR**, cuando era un rechazo por RUC
+y bastaba corregir la ficha y reintentar.
+
+### Diagnóstico — dos bugs sumados
+
+1. **Substring.** `detectsDuplicate` hacía `msg.includes("existente")`, y `"RUC in`**`existente`**`"`
+   contiene esa subcadena. Un código que dice **exactamente lo contrario** (el RUC *no* existe) se
+   leía como "el documento ya existe". Este es el bug que disparó el caso real.
+2. **Precedencia.** Usaba `.some(...)`: con UN match dudoso entre varios códigos, todo el rechazo se
+   reclasificaba a `pac_duplicate` y el motivo real quedaba tapado. El mensaje se elegía con un
+   ternario sobre `parsed.isDuplicate` en la orquestación, así que el texto de duplicado **sustituía**
+   al resumen de códigos — pero la lista `codRes[]` se seguía renderizando aparte en el diálogo. De
+   ahí que aparecieran las dos cosas juntas.
+
+### Cambio
+- **Nuevo** `src/lib/finanzas/efactura/orchestration/classify-pac-error.ts` — módulo PURO con la
+  clasificación, la heurística y las guías. Fuente única: el `errorKind` que se **persiste** en
+  `fe_emisiones.response_payload._meta` ya no puede divergir del que se le muestra a la usuaria.
+- **Regla de precedencia**: si hay ≥1 código de rechazo duro → `pac_rejected`, y el mensaje enumera
+  **solo esos** códigos (los duplicate-ish se descartan del texto). `pac_duplicate` únicamente cuando
+  el PAC señala duplicado y **no** hay ningún código de rechazo.
+- **Heurística arreglada**: `\bexistente\b` con límite de palabra (ya no matchea "inexistente") más
+  una guarda explícita de negaciones — `inexistente`, `no existe`, `no se encuentra` nunca son
+  duplicado, aunque otra subcadena matchee.
+- **Códigos no-rechazo**: `0260` ("Autorizado el uso de la FE", Ficha Técnica DGI v1.00) y las
+  variantes de cero no cuentan como rechazo, así que un `0260` suelto no bloquea la detección de
+  duplicado legítimo.
+- **Guía accionable** para 1601/1602: *"El RUC del cliente parece inválido o incompleto. Verifica el
+  RUC en la ficha del cliente y reintenta."* Viaja en un campo nuevo `errorHint` de
+  `EmitToEfacturaResult` y se pinta **arriba** del detalle técnico. Los códigos del PAC se siguen
+  mostrando como referencia.
+- **Diálogo**: renderiza `errorHint`; el bloque de "posiblemente autorizado" queda condicionado a
+  `errorKind === 'pac_duplicate'`, que con el fix ya no se activa ante un rechazo.
+
+### Nota de estilo
+La guía usa **tuteo** ("Verifica… reintenta"), no el voseo del pedido original: CLAUDE.md marca el
+voseo como anti-patrón y el resto del diálogo ya usa tuteo ("Verifica antes de enviar", "Revisa el
+portal"). Hay un test que lo asserta. Los mensajes viejos de la orquestación siguen en voseo
+("Reintentá en unos minutos") — deuda pre-existente, no se tocó en este fix.
+
+### Sin cambios de contrato
+`errorHint` es aditivo y opcional del lado del diálogo; la ruta
+`/api/finanzas/invoices/[id]/emit-efactura` devuelve el result completo sin transformarlo, así que no
+necesitó tocarse. **Sin migraciones, sin deploy, sin borrar data.**
+
+### Tests (20/20 pass)
+- `src/lib/finanzas/efactura/__tests__/classify-pac-error.test.ts` (16) — unitarios del clasificador:
+  caso real 1601/1602, regresión del substring `inexistente`, precedencia, variantes de duplicado que
+  deben seguir funcionando, `0260`, bordes sin códigos.
+- `src/lib/finanzas/efactura/__tests__/emit-invoice-rechazo-vs-duplicado.test.ts` (4) — **end-to-end**
+  por `emitInvoiceToEfactura` completo (fake de Supabase + stub de fetch): valida el
+  `EmitToEfacturaResult` real que consume el diálogo **y** el `errorKind` persistido en `fe_emisiones`.
+
+```
+npx tsx --test src/lib/finanzas/efactura/__tests__/classify-pac-error.test.ts
+npx tsx --test src/lib/finanzas/efactura/__tests__/emit-invoice-rechazo-vs-duplicado.test.ts
+```
+
+Regresión en verde: `emit-invoice-reuso-correlativo` + `map-invoice` + `validate-client-fiscal-gate`
+(32/32). `tsc --noEmit` limpio.
+
 ## [Fix] - 2026-08-01 - Sincronizar `ruc` → `tax_id` (la ficha edita uno, la emisión lee el otro)
 
 Bug estructural confirmado en prod (CLI-057 MI CONDADO): el RUC del cliente vive en **DOS columnas**

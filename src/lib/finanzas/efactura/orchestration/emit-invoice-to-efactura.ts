@@ -51,16 +51,20 @@ import { fetchInvoiceEfacturaBundle } from "@/lib/finanzas/efactura/data/fetch-i
 import { mapInvoiceToEfacturaRequest } from "@/lib/finanzas/efactura/mapper/map-invoice";
 import { allocateFeNumero } from "@/lib/finanzas/efactura/secuencias/allocate-fe-numero";
 import { post } from "@/lib/finanzas/efactura/transport/efactura-client";
+import {
+  classifyPacError,
+  isHardRejection,
+  isDuplicateSignal,
+  summarizeCodRes,
+  type CodRes,
+} from "@/lib/finanzas/efactura/orchestration/classify-pac-error";
 
 type DB = SupabaseClient;
 
 export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error";
 export type EmitErrorKind = "pac_rejected" | "pac_duplicate" | "transport";
 
-export interface CodRes {
-  dCodRes?: string;
-  dMsgRes?: string;
-}
+export type { CodRes };
 
 export interface EmitToEfacturaResult {
   invoiceId: string;
@@ -79,6 +83,12 @@ export interface EmitToEfacturaResult {
   errorKind: EmitErrorKind | null;
   /** Mensaje user-friendly (null si fe_estado === 'authorized'). */
   errorMessage: string | null;
+  /**
+   * Guía accionable en lenguaje claro para el error (ej. RUC inválido → "revisa
+   * la ficha del cliente"). null si el código no tiene guía asociada. El detalle
+   * técnico sigue viajando en `codRes`.
+   */
+  errorHint: string | null;
 }
 
 interface InvoiceMeta {
@@ -284,6 +294,7 @@ export async function emitInvoiceToEfactura(
       errorMessage:
         "Fallo de comunicación con el PAC. Reintentá en unos minutos. Detalle: " +
         truncate(msg, 200),
+      errorHint: null,
     });
   }
 
@@ -308,6 +319,7 @@ export async function emitInvoiceToEfactura(
       codRes: parsed.codRes,
       errorKind: null,
       errorMessage: null,
+      errorHint: null,
     });
   }
 
@@ -333,10 +345,15 @@ export async function emitInvoiceToEfactura(
       codRes: parsed.codRes,
       errorKind: null,
       errorMessage: null,
+      errorHint: null,
     });
   }
 
-  // kind === 'rejected'
+  // kind === 'rejected'. La clasificación (rechazo duro vs duplicado) y el
+  // mensaje los decide classifyPacError: si hay códigos de rechazo GANAN sobre
+  // la heurística de duplicado y el texto de "posiblemente autorizado" NO se
+  // muestra. Ver classify-pac-error.ts para la causa raíz.
+  const classification = classifyPacError(parsed.codRes, parsed.summary);
   await persistRejected(db, tenantId, invoiceId, emisionId, parsed);
   return buildResult({
     invoiceId,
@@ -350,10 +367,9 @@ export async function emitInvoiceToEfactura(
     efInvoiceUuid: parsed.efInvoiceUuid,
     qrContent: null,
     codRes: parsed.codRes,
-    errorKind: parsed.isDuplicate ? "pac_duplicate" : "pac_rejected",
-    errorMessage: parsed.isDuplicate
-      ? "El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado — revisá en el portal del PAC antes de reintentar."
-      : parsed.summary,
+    errorKind: classification.errorKind,
+    errorMessage: classification.errorMessage,
+    errorHint: classification.errorHint,
   });
 }
 
@@ -732,39 +748,20 @@ function extractCodRes(r: Record<string, unknown>): CodRes[] {
   return out;
 }
 
-function summarizeCodRes(codRes: CodRes[]): string | null {
-  if (codRes.length === 0) return null;
-  const parts = codRes
-    .map((c) => {
-      const code = c.dCodRes ? `[${c.dCodRes}] ` : "";
-      const msg = c.dMsgRes ?? "(sin mensaje)";
-      return `${code}${msg}`;
-    })
-    .filter(Boolean);
-  return parts.join(" · ");
-}
-
 /**
- * Heurística de detección de duplicado. El swagger no documenta los códigos
- * dCodRes, así que pattern-matcheamos el mensaje en español devuelto por DGI
- * vía el PAC. Las sustrings cubren las formas más comunes de reportar "este
- * documento ya existe / ya fue autorizado" sin disparar falsos positivos.
+ * Duplicado REAL: el PAC señala "ya existe / ya autorizado" y NO hay ningún
+ * código de rechazo duro acompañándolo. La precedencia (rechazo > duplicado)
+ * y la heurística de mensajes viven en classify-pac-error.ts, que es la fuente
+ * única — así el `errorKind` que se PERSISTE en fe_emisiones no puede divergir
+ * del que se le muestra a la usuaria.
  *
- * Si el PAC alguna vez publica el código numérico oficial, agregar la
- * comparación de dCodRes acá.
+ * Antes esto era un `.some(msg.includes("existente"))` local, que clasificaba
+ * "RUC inexistente" (1602) como duplicado y tapaba el motivo real.
  */
 function detectsDuplicate(codRes: CodRes[]): boolean {
   if (codRes.length === 0) return false;
-  return codRes.some((c) => {
-    const msg = (c.dMsgRes ?? "").toLowerCase();
-    return (
-      msg.includes("duplicad") ||
-      msg.includes("ya autoriz") ||
-      msg.includes("ya emitid") ||
-      msg.includes("ya existe") ||
-      msg.includes("existente")
-    );
-  });
+  if (codRes.some(isHardRejection)) return false;
+  return codRes.some(isDuplicateSignal);
 }
 
 // ---------------------------------------------------------------------------

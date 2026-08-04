@@ -56,6 +56,23 @@ npx tsx --test --experimental-test-module-mocks \
 Regresión en verde: `ruc-taxid-sync` + `ruc-unique` + `client-type` (37/37). `tsc --noEmit` limpio,
 `eslint` limpio.
 
+### Verificación en navegador (localhost:3000, sesión real, SOP-009)
+| Caso | Resultado |
+|---|---|
+| `CLI-001` JUMBO CAPITAL (6 casos + 1 factura) | Gana el mensaje de **casos**, precedencia intacta |
+| `0TEST-FE-001` (0 casos, 2 facturas) | Modal: *"…: 2 factura(s). Desactívalo en su lugar."*, sin input de confirmación, solo **Cerrar** |
+| `POST /api/clients/0TEST-FE-001/delete` saltando el botón | **400** con el mismo texto (antes: 500 con el error de Postgres) |
+| Cliente descartable `CLI-131` (creado y borrado en la prueba) | **200**, redirige al listado, `audit_log` registrado |
+
+Post-verificación en BD: `0TEST-FE-001` **sigue existiendo con sus 2 facturas** (nada se borró en el
+intento bloqueado) y `CLI-131` ya no existe. Log del server sin 500 ni excepciones.
+
+**Nota:** el escenario "bloquea sin borrar documentos" no se pudo reproducir contra datos reales
+porque **ningún cliente del tenant tiene facturas Y documentos a la vez**. Esa combinación queda
+cubierta por el test del handler (`assertNadaBorrado()`), no por la prueba de navegador.
+
+`CLI-131` quemó un número de la secuencia de clientes — gap esperado de smoke test, **no rebobinar**.
+
 ### Sin migración
 Las FKs ya estaban bien: el problema era que el código no las respetaba. **Sin cambios de schema,
 sin deploy pendiente de SQL.**

@@ -1,5 +1,65 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-04 - Borrado de cliente con registros financieros: error crudo y borrado parcial
+
+Al intentar eliminar un cliente con facturas, el CRM mostraba en un `alert()` del navegador:
+
+> update or delete on table "clients" violates foreign key constraint
+> "invoices_client_id_fkey" on table "invoices"
+
+Y —lo grave— **los documentos del cliente ya se habían borrado** para cuando aparecía ese mensaje.
+
+### Diagnóstico — dos bugs, uno cosmético y uno de pérdida de datos
+
+1. **Chequeos incompletos.** El handler solo miraba `cases`. Pero `invoices`, `quotes`,
+   `credit_notes` y `payments` también referencian `clients(id)` **sin `ON DELETE`**, o sea
+   NO ACTION / RESTRICT. Sin chequeo previo, el `.delete()` explotaba y el
+   `deleteError.message` de Postgres se devolvía como 500 y llegaba tal cual al `alert()`.
+2. **Orden de operaciones.** Los documentos (storage + filas en `documents`) se borraban en el
+   paso 1 y el cliente en el paso 2. Al fallar la FK del paso 2, el paso 1 ya era irreversible:
+   **cliente vivo, documentos perdidos**. No hay transacción que los cubra: son dos sistemas
+   distintos (Storage y Postgres).
+
+Sobre la base real: **45 de 126 clientes** del tenant caían en este camino.
+
+### Cambio
+- **Nuevo** `src/lib/clients/delete-guards.ts` — núcleo PURO (sin Supabase):
+  `FINANCIAL_DEPENDENCIES`, `buildFinancialBlockMessage()`, `isForeignKeyViolation()`.
+- **Chequeo previo** de las 4 tablas (`count exact`, `head: true`, por `client_id` + `tenant_id`,
+  en paralelo) **antes de tocar nada**. Si hay alguno → **400** y cero borrados.
+- **Mensaje específico**, enumerando solo los tipos presentes:
+  *"Este cliente tiene registros financieros y no se puede eliminar: 3 factura(s), 1 pago(s).
+  Desactívalo en su lugar."*
+- **Orden corregido**: el bloque que borra documentos ahora está después de TODAS las
+  validaciones, con un comentario marcando la frontera (`---- No blocking check remains ----`).
+- **Defensa en profundidad**: si el `.delete()` final igual falla con `23503`, se devuelve **400**
+  con mensaje genérico amigable en vez del error crudo con 500. Esto cubre
+  `prospects.converted_client_id`, que también es RESTRICT y no está en la lista de conteos.
+- **Front**: `DeleteClientButton` recibe los conteos y **deshabilita el botón proactivamente**
+  (mismo patrón que `caseCount`), reusando `buildFinancialBlockMessage()` — UI y API dicen
+  literalmente lo mismo. El `alert()` se reemplazó por **error inline dentro del modal**
+  (`role="alert"`), que ya no borra el contexto de la pantalla.
+- El chequeo de `cases` quedó **intacto** y sigue teniendo precedencia, en el handler y en la UI.
+
+### Tests (17/17 pass)
+`src/app/api/clients/__tests__/delete-financial-guard.route.test.ts` — 5 unitarios del núcleo puro
++ 12 sobre el **handler real** con fake de Supabase. El aserto que importa no es el 400 sino
+`assertNadaBorrado()`: ni documentos, ni storage, ni cliente. Cubre los 4 tipos por separado,
+conteos mixtos, camino feliz (borra + audita), `23503` inesperado → 400, error no-FK → sigue 500,
+y 401/403/404 sin borrar.
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/clients/__tests__/delete-financial-guard.route.test.ts
+```
+
+Regresión en verde: `ruc-taxid-sync` + `ruc-unique` + `client-type` (37/37). `tsc --noEmit` limpio,
+`eslint` limpio.
+
+### Sin migración
+Las FKs ya estaban bien: el problema era que el código no las respetaba. **Sin cambios de schema,
+sin deploy pendiente de SQL.**
+
 ## [Feature] - 2026-08-04 - Contable Fase 1: schema del motor de asientos (DE 34/1998)
 
 Reescritura completa de `sql/pending/023_contabilidad_fase1_ledger.sql`. **Solo el archivo SQL: NO se

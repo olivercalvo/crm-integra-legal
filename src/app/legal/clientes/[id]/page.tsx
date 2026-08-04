@@ -83,6 +83,20 @@ export default async function ClienteDetailPage({ params }: PageProps) {
     .eq("tenant_id", typedClient.tenant_id)
     .eq("client_id", id);
 
+  // Conteos que bloquean el hard delete por FK RESTRICT (solo para avisar en el
+  // botón de eliminar; el API los revalida). `quotes` ya viene de la query de
+  // arriba, así que solo faltan las otras tres.
+  const [invoiceCount, creditNoteCount, paymentCount] = await Promise.all(
+    ["invoices", "credit_notes", "payments"].map(async (table) => {
+      const { count } = await db
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", typedClient.tenant_id)
+        .eq("client_id", id);
+      return count ?? 0;
+    })
+  );
+
   const quoteNumberById = new Map<string, string>(
     (clientQuotes ?? []).map((q: { id: string; quote_number: string }) => [
       q.id,
@@ -174,6 +188,12 @@ export default async function ClienteDetailPage({ params }: PageProps) {
               clientNumber={typedClient.client_number}
               clientName={typedClient.name}
               caseCount={cases?.length ?? 0}
+              financialCounts={{
+                invoices: invoiceCount,
+                quotes: clientQuotes?.length ?? 0,
+                credit_notes: creditNoteCount,
+                payments: paymentCount,
+              }}
             />
           )}
         </div>

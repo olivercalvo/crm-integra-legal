@@ -220,3 +220,42 @@
    - Mobile viewport (375px) se ve correcto
 4. Si hay errores → Self-Annealing (SOP-008)
 5. Si OK → commit y reportar
+
+---
+
+## SOP-010: Borrado de entidades con dependencias (FK RESTRICT)
+
+Regla general para cualquier hard delete: **todas las validaciones van ANTES del primer
+borrado**. Si una validación queda después de un borrado parcial (documentos, storage,
+filas hijas), un fallo posterior deja el sistema en estado inconsistente y con pérdida
+de datos.
+
+### Orden obligatorio en el handler
+1. Auth + rol.
+2. La entidad existe y pertenece al tenant.
+3. **Todos** los chequeos de dependencias (conteos).
+4. — recién acá — borrados en cascada manual (storage, documentos).
+5. DELETE de la entidad.
+6. `audit_log`.
+
+### Cliente (`POST /api/clients/[id]/delete`)
+Bloquean el borrado:
+- `cases` → mensaje propio ("Elimina los casos primero").
+- `invoices`, `quotes`, `credit_notes`, `payments` → FK sin `ON DELETE`
+  (NO ACTION / RESTRICT). Conteo por `client_id` + `tenant_id`; el mensaje enumera
+  solo los tipos con conteo > 0 y sugiere desactivar en lugar de eliminar.
+
+Helpers en `src/lib/clients/delete-guards.ts` (núcleo puro, sin Supabase). El mismo
+`buildFinancialBlockMessage()` lo usa el front (`delete-client-button.tsx`) para
+deshabilitar el botón, así que UI y API dicen exactamente lo mismo.
+
+### Defensa en profundidad
+El `DELETE` final siempre debe capturar `error.code === '23503'`
+(`foreign_key_violation`) y devolver **400 con mensaje amigable**, nunca el mensaje
+crudo de Postgres con 500. Hoy cubre `prospects.converted_client_id`, que no está en
+la lista de conteos. Al agregar una tabla nueva que referencie `clients`, sumarla a
+`FINANCIAL_DEPENDENCIES` (o a su propio chequeo) para dar un mensaje específico.
+
+### Nunca
+- Exponer `error.message` de Postgres al usuario final.
+- Borrar documentos o archivos de storage antes de saber que el DELETE va a proceder.

@@ -5,12 +5,22 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmationModal } from "@/components/ui/delete-confirmation-modal";
+import {
+  buildFinancialBlockMessage,
+  type FinancialCounts,
+} from "@/lib/clients/delete-guards";
 
 interface DeleteClientButtonProps {
   clientId: string;
   clientNumber: string;
   clientName: string;
   caseCount: number;
+  /**
+   * Conteos de facturas/cotizaciones/NCs/pagos. Bloquean el borrado por FK
+   * RESTRICT; se pasan para avisar ANTES de que la usuaria escriba el código.
+   * El API valida igual — esto es solo UX.
+   */
+  financialCounts?: FinancialCounts;
 }
 
 export function DeleteClientButton({
@@ -18,15 +28,27 @@ export function DeleteClientButton({
   clientNumber,
   clientName,
   caseCount,
+  financialCounts,
 }: DeleteClientButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const hasCases = caseCount > 0;
+  const financialBlock = buildFinancialBlockMessage(financialCounts ?? {});
+  // Mismo orden de precedencia que el route handler: casos primero.
+  const blocked = hasCases || financialBlock !== null;
+
+  const handleClose = () => {
+    if (loading) return;
+    setError(null);
+    setOpen(false);
+  };
 
   const handleDelete = async () => {
     setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/clients/${clientId}/delete`, {
         method: "POST",
@@ -34,7 +56,7 @@ export function DeleteClientButton({
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || "Error al eliminar el cliente");
+        setError(data.error || "Error al eliminar el cliente");
         setLoading(false);
         return;
       }
@@ -42,10 +64,16 @@ export function DeleteClientButton({
       router.push(`/legal/clientes?deleted=${encodeURIComponent(clientNumber)}`);
       router.refresh();
     } catch {
-      alert("Error de conexión. Intenta de nuevo.");
+      setError("Error de conexion. Intenta de nuevo.");
       setLoading(false);
     }
   };
+
+  const warningText = hasCases
+    ? `Este cliente tiene ${caseCount} caso(s) asociado(s). Debes eliminar los casos primero antes de poder eliminar el cliente.`
+    : financialBlock
+      ? financialBlock
+      : "Esta accion no se puede deshacer. Se eliminaran tambien los documentos asociados a este cliente.";
 
   return (
     <>
@@ -60,18 +88,14 @@ export function DeleteClientButton({
 
       <DeleteConfirmationModal
         open={open}
-        onClose={() => !loading && setOpen(false)}
+        onClose={handleClose}
         onConfirm={handleDelete}
         loading={loading}
         title="Eliminar cliente"
         confirmCode={clientNumber}
-        warningText={
-          hasCases
-            ? `Este cliente tiene ${caseCount} caso(s) asociado(s). Debes eliminar los casos primero antes de poder eliminar el cliente.`
-            : "Esta accion no se puede deshacer. Se eliminaran tambien los documentos asociados a este cliente."
-        }
+        warningText={warningText}
         confirmButtonText="Si, eliminar cliente"
-        forceDisabled={hasCases}
+        forceDisabled={blocked}
       >
         <div className="space-y-2">
           <p><span className="font-medium">Codigo:</span> {clientNumber}</p>
@@ -80,6 +104,19 @@ export function DeleteClientButton({
             <p className="font-medium text-amber-700">
               Este cliente tiene {caseCount} caso(s) asociado(s).
             </p>
+          )}
+          {!hasCases && financialBlock && (
+            <p className="font-medium text-amber-700">
+              Tiene registros financieros asociados.
+            </p>
+          )}
+          {error && (
+            <div
+              role="alert"
+              className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+            >
+              {error}
+            </div>
           )}
         </div>
       </DeleteConfirmationModal>

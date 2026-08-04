@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  FINANCIAL_DEPENDENCIES,
+  buildFinancialBlockMessage,
+  isForeignKeyViolation,
+  GENERIC_FK_BLOCK_MESSAGE,
+  type FinancialCounts,
+} from "@/lib/clients/delete-guards";
 
 export async function POST(
   _request: NextRequest,
@@ -59,6 +66,30 @@ export async function POST(
       );
     }
 
+    // Check finance FKs (invoices/quotes/credit_notes/payments reference
+    // clients(id) with RESTRICT). This MUST run before any deletion: otherwise
+    // the documents get wiped and the client survives the FK violation.
+    const financialCounts: FinancialCounts = {};
+    await Promise.all(
+      FINANCIAL_DEPENDENCIES.map(async ({ table }) => {
+        const { count: rows, error } = await admin
+          .from(table)
+          .select("id", { count: "exact", head: true })
+          .eq("client_id", clientId)
+          .eq("tenant_id", profile.tenant_id);
+
+        if (error) throw error;
+        financialCounts[table] = rows ?? 0;
+      })
+    );
+
+    const financialBlock = buildFinancialBlockMessage(financialCounts);
+    if (financialBlock) {
+      return NextResponse.json({ error: financialBlock }, { status: 400 });
+    }
+
+    // ---- No blocking check remains: from here on we delete. ----
+
     // 1. Delete documents from storage + DB
     const { data: docs } = await admin
       .from("documents")
@@ -91,6 +122,13 @@ export async function POST(
 
     if (deleteError) {
       console.error("Error deleting client:", deleteError);
+
+      // Defense in depth: a FK we don't check above (today
+      // prospects.converted_client_id) must not leak the raw Postgres error.
+      if (isForeignKeyViolation(deleteError)) {
+        return NextResponse.json({ error: GENERIC_FK_BLOCK_MESSAGE }, { status: 400 });
+      }
+
       return NextResponse.json({ error: deleteError.message }, { status: 500 });
     }
 

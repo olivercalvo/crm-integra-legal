@@ -49,11 +49,20 @@ La partida doble (Σdébitos = Σcréditos) **no se puede expresar como CHECK** 
 filas; se valida en el RPC de posteo. Hasta que exista ese RPC, las tablas quedan creadas pero sin
 camino de escritura desde la app.
 
-### Aplicación
-`CREATE TABLE`/`CREATE INDEX` usan `IF NOT EXISTS`, pero `CREATE TRIGGER` y `CREATE POLICY` **no**
-(Postgres no lo soporta para triggers). El archivo **no es re-ejecutable**: correrlo dos veces falla
-en el primer trigger. Aplicar una sola vez, sentencia por sentencia, con las 4 queries de
-verificación del pie (5 tablas / 6 triggers / 5 políticas / FK al COA).
+### Aplicación — el archivo ES re-ejecutable (idempotente)
+Correrlo dos veces **no falla**. Postgres no soporta `CREATE TRIGGER IF NOT EXISTS` ni
+`CREATE POLICY IF NOT EXISTS`, así que cada uno va precedido de su `DROP ... IF EXISTS`:
+los 6 triggers explícitamente, y la política `tenant_isolation` vía
+`EXECUTE format('DROP POLICY IF EXISTS ...')` dentro del loop del bloque `DO`. Lo demás ya era
+idempotente y se dejó igual: `CREATE EXTENSION`/`CREATE TABLE`/`CREATE INDEX` con `IF NOT EXISTS`,
+`CREATE OR REPLACE FUNCTION`, y `ENABLE ROW LEVEL SECURITY` (no-op si ya está activo).
+
+**El schema resultante es idéntico** — solo se agregó tolerancia a re-ejecución. Re-correrlo no
+borra datos: recrea objetos de schema iguales. Igual conviene aplicar el archivo **completo de una
+pasada** (no sentencia por sentencia): así el DROP+CREATE de cada trigger ocurre dentro de la misma
+transacción y no queda una ventana en la que `journal_entries` esté sin su trigger de inmutabilidad.
+
+Verificación al final del archivo, 4 queries: 5 tablas / 6 triggers / 5 políticas / FK al COA.
 
 **Sin cambios de código, sin deploy, sin migración aplicada.** Tenant Integra:
 `a0000000-0000-0000-0000-000000000001`.

@@ -11,9 +11,11 @@ Ahora crea **solo el motor**: `accounting_periods`, `accounting_sequences`, `jou
 tenant, con `journal_entry_lines.account_id` por **FK al COA existente**. Aditivo, 5 tablas nuevas
 y vacías. Detalle completo en `changelog.md`.
 
-- [ ] **Aplicar en Supabase prod** (Oliver — **pausa obligatoria**, cambio de schema). Una sola
-      pasada, sentencia por sentencia: el archivo **no es re-ejecutable** (`CREATE TRIGGER` y
-      `CREATE POLICY` no admiten `IF NOT EXISTS`). Correr las 4 queries de verificación del pie:
+- [ ] **Aplicar en Supabase prod** (Oliver — **pausa obligatoria**, cambio de schema). El archivo
+      es **idempotente**: se puede re-ejecutar sin error (`DROP ... IF EXISTS` antes de los 6
+      triggers y de la política, porque Postgres no admite `IF NOT EXISTS` en ninguno de los dos).
+      Aplicarlo **completo de una pasada**, no sentencia por sentencia, para que el DROP+CREATE de
+      cada trigger caiga en la misma transacción. Correr las 4 queries de verificación del pie:
       5 tablas / 6 triggers / 5 políticas / FK al COA.
 - Sin código, sin deploy. **Tipos TypeScript a propósito NO creados** — van en la Fase 2, con la
   lógica que los use.

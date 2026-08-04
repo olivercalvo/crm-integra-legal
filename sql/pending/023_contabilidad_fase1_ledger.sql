@@ -33,6 +33,12 @@
 --    validación Σdébitos=Σcréditos + período abierto) y la función verificadora
 --    de la cadena van en la FASE 2 (migración aparte), una vez el contador
 --    confirme el plan de cuentas y los tratamientos.
+--
+-- IDEMPOTENTE: el archivo se puede re-ejecutar completo sin error. Tablas e
+--    índices usan IF NOT EXISTS, la función es CREATE OR REPLACE, y triggers y
+--    políticas van precedidos de su DROP ... IF EXISTS (Postgres no soporta
+--    CREATE TRIGGER/POLICY IF NOT EXISTS). Re-ejecutar NO borra datos: solo
+--    recrea objetos de schema idénticos.
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- digest() SHA-256 para la Fase 2
@@ -156,16 +162,29 @@ BEGIN
 END;
 $$;
 
+-- Cada trigger va precedido de su DROP ... IF EXISTS: Postgres no soporta
+-- CREATE TRIGGER IF NOT EXISTS, y sin esto la segunda pasada del archivo falla.
+DROP TRIGGER IF EXISTS trg_je_no_update  ON public.journal_entries;
 CREATE TRIGGER trg_je_no_update  BEFORE UPDATE ON public.journal_entries
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
+
+DROP TRIGGER IF EXISTS trg_je_no_delete  ON public.journal_entries;
 CREATE TRIGGER trg_je_no_delete  BEFORE DELETE ON public.journal_entries
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
+
+DROP TRIGGER IF EXISTS trg_jel_no_update ON public.journal_entry_lines;
 CREATE TRIGGER trg_jel_no_update BEFORE UPDATE ON public.journal_entry_lines
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
+
+DROP TRIGGER IF EXISTS trg_jel_no_delete ON public.journal_entry_lines;
 CREATE TRIGGER trg_jel_no_delete BEFORE DELETE ON public.journal_entry_lines
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
+
+DROP TRIGGER IF EXISTS trg_leg_no_update ON public.accounting_legajos;
 CREATE TRIGGER trg_leg_no_update BEFORE UPDATE ON public.accounting_legajos
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
+
+DROP TRIGGER IF EXISTS trg_leg_no_delete ON public.accounting_legajos;
 CREATE TRIGGER trg_leg_no_delete BEFORE DELETE ON public.accounting_legajos
   FOR EACH ROW EXECUTE FUNCTION public.reject_accounting_mutation();
 
@@ -188,6 +207,8 @@ BEGIN
     'accounting_periods','accounting_sequences',
     'journal_entries','journal_entry_lines','accounting_legajos'
   ] LOOP
+    -- DROP previo: CREATE POLICY tampoco admite IF NOT EXISTS.
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON public.%I', t);
     EXECUTE format($f$
       CREATE POLICY tenant_isolation ON public.%I
         FOR ALL TO authenticated

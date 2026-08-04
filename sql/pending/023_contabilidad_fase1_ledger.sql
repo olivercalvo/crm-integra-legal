@@ -1,65 +1,48 @@
 -- ============================================================================
--- ⛔ NO APLICAR — EN ESPERA (14/07/2026)
---    Este borrador CHOCA con el chart_of_accounts que YA existe en producción
---    (account_type en inglés asset/liability/..., ~34 cuentas aprobadas por el
---    contador). Además, antes del ledger hay que resolver la reconciliación
---    Legal↔Finanzas (dos silos de dinero sin unir). Ver:
---    docs/finanzas/reconciliacion-legal-finanzas.md
---    Este archivo se REESCRIBIRÁ para construir sobre el COA existente una vez
---    definida la reconciliación y el tratamiento contable con el contador.
--- ============================================================================
 -- MÓDULO CONTABLE — FASE 1: schema del ledger (DE 34/1998)
 -- ----------------------------------------------------------------------------
+-- Reescrito 04/08/2026 para CONSTRUIR SOBRE el chart_of_accounts que YA existe
+-- en producción (creado en 20260505000002_finanzas_catalogos.sql, account_type
+-- en inglés asset/liability/equity/income/expense, con is_system/active, +34
+-- cuentas). Esta migración NO recrea ni siembra el plan de cuentas: solo agrega
+-- el motor de asientos y lo referencia por FK. El plan de cuentas final del
+-- contador (Josuar) se carga aparte, vía la UI de Plan de Cuentas ya existente
+-- o una migración de datos, DESPUÉS de la reunión — el ledger es chart-agnostic.
+--
 -- Núcleo de contabilidad de partida doble, inmutable y avalable por CPA.
--- Base legal verificada contra el texto del DE 34/1998 (Gaceta 23.520):
---   Art. 2a/9/10  → registros indispensables Diario y Mayor + 6 tipos de cuenta.
+-- Base legal (DE 34/1998, Gaceta 23.520):
+--   Art. 2a/9/10  → registros indispensables Diario y Mayor.
 --   Art. 5.1-5.7  → cronología, español, balboas, monto, naturaleza, reversión.
 --   Art. 6a-c     → irreversible/inalterable, conservación, recuperación.
---   Art. 13a      → al día = registrado dentro de 60 días del mes.
+--   Art. 13a      → al día = registrado dentro de 60 días.
 --   Art. 22       → prohibido alterar, dejar espacios en blanco, borrar.
 --
--- Decisiones aprobadas por Oliver (14/07):
---   (1) Inmutabilidad a nivel BD (triggers rechazan UPDATE/DELETE; corrección
---       solo por asiento de reversión).
+-- Decisiones aprobadas por Oliver:
+--   (1) Inmutabilidad a nivel BD (triggers rechazan UPDATE/DELETE incluso al
+--       service-role de la app; la corrección es SIEMPRE un asiento de reversión).
 --   (2) Hash-chain SHA-256; se computa en la app, se verifica en la BD (Fase 2).
---   (3) Correlativo SIN huecos (Art. 22.2) — al contrario del folio fiscal FE.
---   (4) Plan de cuentas panameño estándar provisional (se reemplaza cuando el
---       contador confirme el suyo).
+--   (3) Correlativo SIN huecos (Art. 22.2) — distinto del folio fiscal FE.
 --
 -- ⚠️ CAMBIO DE SCHEMA EN PRODUCCIÓN — pausa obligatoria. Revisar y aplicar
---    sentencia por sentencia. Tenant Integra: a0000000-0000-0000-0000-000000000001
+--    sentencia por sentencia. Son tablas NUEVAS y VACÍAS (aditivo, no toca data
+--    existente ni el chart_of_accounts). Tenant Integra:
+--    a0000000-0000-0000-0000-000000000001
 --
--- Esta Fase 1 crea: tablas + constraints + índices + triggers de inmutabilidad
--- + RLS. La lógica de posteo (RPC con allocación sin huecos + cálculo de hash +
--- validación débitos=créditos) y la función verificadora de la cadena van en la
--- Fase 2 (migración aparte).
+-- ALCANCE FASE 1: tablas + constraints + índices + triggers de inmutabilidad +
+--    RLS. La lógica de posteo (RPC: correlativo sin huecos + hash-chain +
+--    validación Σdébitos=Σcréditos + período abierto) y la función verificadora
+--    de la cadena van en la FASE 2 (migración aparte), una vez el contador
+--    confirme el plan de cuentas y los tratamientos.
 -- ============================================================================
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- digest() SHA-256 para Fase 2
+CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- digest() SHA-256 para la Fase 2
 
 -- ----------------------------------------------------------------------------
--- 1) PLAN DE CUENTAS (Art. 10: activo/pasivo/patrimonio/ingreso/gasto/orden)
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
-  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id    uuid NOT NULL,
-  code         varchar(20) NOT NULL,
-  name         text NOT NULL,
-  account_type text NOT NULL
-    CHECK (account_type IN ('activo','pasivo','patrimonio','ingreso','gasto','orden')),
-  parent_id    uuid REFERENCES public.chart_of_accounts(id),
-  is_active    boolean NOT NULL DEFAULT true,
-  created_at   timestamptz NOT NULL DEFAULT now(),
-  created_by   uuid,
-  UNIQUE (tenant_id, code)
-);
-
--- ----------------------------------------------------------------------------
--- 2) PERÍODOS CONTABLES (cierre mensual)
+-- 1) PERÍODOS CONTABLES (cierre mensual)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.accounting_periods (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id  uuid NOT NULL,
+  tenant_id  uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   year       int NOT NULL,
   month      int NOT NULL CHECK (month BETWEEN 1 AND 12),
   status     text NOT NULL DEFAULT 'abierto' CHECK (status IN ('abierto','cerrado')),
@@ -70,10 +53,10 @@ CREATE TABLE IF NOT EXISTS public.accounting_periods (
 );
 
 -- ----------------------------------------------------------------------------
--- 3) SECUENCIA DEL CORRELATIVO — SIN huecos, atómica por tenant (Fase 2 la usa)
+-- 2) SECUENCIA DEL CORRELATIVO — SIN huecos, atómica por tenant (la usa Fase 2)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.accounting_sequences (
-  tenant_id     uuid NOT NULL,
+  tenant_id     uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   sequence_type text NOT NULL DEFAULT 'journal_entry',
   last_number   bigint NOT NULL DEFAULT 0,
   updated_at    timestamptz NOT NULL DEFAULT now(),
@@ -81,14 +64,14 @@ CREATE TABLE IF NOT EXISTS public.accounting_sequences (
 );
 
 -- ----------------------------------------------------------------------------
--- 4) ASIENTOS (journal entries) — append-only, encadenados por hash
+-- 3) ASIENTOS (journal entries) — append-only, encadenados por hash
 --    Doble fecha: transaction_date (operación) + record_date (registro).
 --    "Reversado" es DERIVADO: existe otro asiento con reverses_entry_id = id.
 --    El original NUNCA se modifica.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.journal_entries (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id         uuid NOT NULL,
+  tenant_id         uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   entry_number      bigint NOT NULL,                       -- correlativo SIN huecos
   period_id         uuid NOT NULL REFERENCES public.accounting_periods(id),
   transaction_date  date NOT NULL,                         -- Art. 5.1 (operación)
@@ -114,13 +97,14 @@ CREATE TABLE IF NOT EXISTS public.journal_entries (
 );
 
 -- ----------------------------------------------------------------------------
--- 5) PARTIDAS DEL ASIENTO (líneas débito/crédito)
+-- 4) PARTIDAS DEL ASIENTO (líneas débito/crédito)
+--    account_id -> chart_of_accounts EXISTENTE (no se recrea la tabla).
 --    Regla partida doble (Σdébitos = Σcréditos) se valida en el RPC de posteo
 --    (Fase 2), porque abarca varias filas.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.journal_entry_lines (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id        uuid NOT NULL,
+  tenant_id        uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   entry_id         uuid NOT NULL REFERENCES public.journal_entries(id),
   line_order       int NOT NULL,
   account_id       uuid NOT NULL REFERENCES public.chart_of_accounts(id),
@@ -132,11 +116,11 @@ CREATE TABLE IF NOT EXISTS public.journal_entry_lines (
 );
 
 -- ----------------------------------------------------------------------------
--- 6) LEGAJOS ANUALES SELLADOS (Art. 14: conservación 5 años, borrado rechazado)
+-- 5) LEGAJOS ANUALES SELLADOS (Art. 14: conservación 5 años, borrado rechazado)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.accounting_legajos (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id    uuid NOT NULL,
+  tenant_id    uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
   year         int NOT NULL,
   sealed_at    timestamptz NOT NULL DEFAULT now(),
   sealed_by    uuid,
@@ -149,19 +133,19 @@ CREATE TABLE IF NOT EXISTS public.accounting_legajos (
 -- ----------------------------------------------------------------------------
 -- ÍNDICES
 -- ----------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_coa_tenant           ON public.chart_of_accounts (tenant_id, code);
-CREATE INDEX IF NOT EXISTS idx_periods_tenant       ON public.accounting_periods (tenant_id, year, month);
-CREATE INDEX IF NOT EXISTS idx_je_tenant_number     ON public.journal_entries (tenant_id, entry_number);
-CREATE INDEX IF NOT EXISTS idx_je_tenant_period     ON public.journal_entries (tenant_id, period_id);
-CREATE INDEX IF NOT EXISTS idx_je_tenant_source     ON public.journal_entries (tenant_id, source_type, source_id);
-CREATE INDEX IF NOT EXISTS idx_je_tenant_txdate     ON public.journal_entries (tenant_id, transaction_date);
-CREATE INDEX IF NOT EXISTS idx_jel_entry            ON public.journal_entry_lines (entry_id);
-CREATE INDEX IF NOT EXISTS idx_jel_tenant_account   ON public.journal_entry_lines (tenant_id, account_id);
+CREATE INDEX IF NOT EXISTS idx_periods_tenant     ON public.accounting_periods (tenant_id, year, month);
+CREATE INDEX IF NOT EXISTS idx_je_tenant_number   ON public.journal_entries (tenant_id, entry_number);
+CREATE INDEX IF NOT EXISTS idx_je_tenant_period   ON public.journal_entries (tenant_id, period_id);
+CREATE INDEX IF NOT EXISTS idx_je_tenant_source   ON public.journal_entries (tenant_id, source_type, source_id);
+CREATE INDEX IF NOT EXISTS idx_je_tenant_txdate   ON public.journal_entries (tenant_id, transaction_date);
+CREATE INDEX IF NOT EXISTS idx_jel_entry          ON public.journal_entry_lines (entry_id);
+CREATE INDEX IF NOT EXISTS idx_jel_tenant_account ON public.journal_entry_lines (tenant_id, account_id);
 
 -- ----------------------------------------------------------------------------
 -- INMUTABILIDAD (Art. 6a, 22): rechazar UPDATE y DELETE sobre asientos, líneas
--- y legajos. Aplica a TODOS los roles (incluido service-role de la app): los
+-- y legajos. Aplica a TODOS los roles (incluido el service-role de la app): los
 -- asientos son append-only; la corrección es un asiento nuevo de reversión.
+-- (Períodos y secuencia SÍ mutan: cerrar período, incrementar correlativo.)
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.reject_accounting_mutation()
 RETURNS trigger LANGUAGE plpgsql AS $$
@@ -189,19 +173,19 @@ CREATE TRIGGER trg_leg_no_delete BEFORE DELETE ON public.accounting_legajos
 -- RLS por tenant (defensa en profundidad; la app usa service-role que la
 -- bypassa). Se lee el tenant del claim JWT app_metadata.tenant_id inline
 -- (auth.tenant_id() NO existe en esta base — ver hallazgo de seguridad).
+-- SOLO las 5 tablas nuevas; el chart_of_accounts ya tiene su propia config.
 -- ----------------------------------------------------------------------------
-ALTER TABLE public.chart_of_accounts   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.accounting_periods  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_periods   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounting_sequences ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.journal_entries     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.journal_entry_lines ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.accounting_legajos  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.journal_entries      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.journal_entry_lines  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.accounting_legajos   ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'chart_of_accounts','accounting_periods','accounting_sequences',
+    'accounting_periods','accounting_sequences',
     'journal_entries','journal_entry_lines','accounting_legajos'
   ] LOOP
     EXECUTE format($f$
@@ -213,34 +197,13 @@ BEGIN
   END LOOP;
 END $$;
 
--- ----------------------------------------------------------------------------
--- SEED — plan de cuentas panameño PROVISIONAL para bufete (reemplazable por el
--- del contador). Flat (sin jerarquía) por ahora. ITBMS por pagar = 2102 (igual
--- que la referencia de Adelys). ON CONFLICT: idempotente.
--- ----------------------------------------------------------------------------
-INSERT INTO public.chart_of_accounts (tenant_id, code, name, account_type) VALUES
-  ('a0000000-0000-0000-0000-000000000001','1101','Caja','activo'),
-  ('a0000000-0000-0000-0000-000000000001','1102','Banco','activo'),
-  ('a0000000-0000-0000-0000-000000000001','1103','Cuentas por Cobrar Clientes','activo'),
-  ('a0000000-0000-0000-0000-000000000001','2101','Cuentas por Pagar','pasivo'),
-  ('a0000000-0000-0000-0000-000000000001','2102','ITBMS por Pagar','pasivo'),
-  ('a0000000-0000-0000-0000-000000000001','2103','Retenciones por Pagar','pasivo'),
-  ('a0000000-0000-0000-0000-000000000001','3101','Capital','patrimonio'),
-  ('a0000000-0000-0000-0000-000000000001','3102','Utilidades Retenidas','patrimonio'),
-  ('a0000000-0000-0000-0000-000000000001','4101','Honorarios Profesionales','ingreso'),
-  ('a0000000-0000-0000-0000-000000000001','4102','Reembolsos de Gastos','ingreso'),
-  ('a0000000-0000-0000-0000-000000000001','5101','Gastos Operativos','gasto'),
-  ('a0000000-0000-0000-0000-000000000001','5102','Gastos de Personal','gasto'),
-  ('a0000000-0000-0000-0000-000000000001','6101','Cuentas de Orden','orden')
-ON CONFLICT (tenant_id, code) DO NOTHING;
-
 -- ============================================================================
 -- VERIFICACIÓN (correr después)
 -- ============================================================================
--- a) Tablas creadas (esperado: 6)
+-- a) Tablas nuevas creadas (esperado: 5)
 SELECT table_name FROM information_schema.tables
 WHERE table_schema='public'
-  AND table_name IN ('chart_of_accounts','accounting_periods','accounting_sequences',
+  AND table_name IN ('accounting_periods','accounting_sequences',
                      'journal_entries','journal_entry_lines','accounting_legajos')
 ORDER BY table_name;
 
@@ -249,11 +212,23 @@ SELECT event_object_table, trigger_name, event_manipulation
 FROM information_schema.triggers
 WHERE trigger_name LIKE 'trg_%no_%' ORDER BY event_object_table;
 
--- c) Plan de cuentas sembrado (esperado: 13)
-SELECT code, name, account_type FROM public.chart_of_accounts
-WHERE tenant_id='a0000000-0000-0000-0000-000000000001' ORDER BY code;
+-- c) Políticas RLS de las tablas nuevas (esperado: 5 'tenant_isolation')
+SELECT tablename, policyname FROM pg_policies
+WHERE schemaname='public'
+  AND tablename IN ('accounting_periods','accounting_sequences',
+                    'journal_entries','journal_entry_lines','accounting_legajos')
+ORDER BY tablename;
 
--- d) PRUEBA de inmutabilidad (debe FALLAR con el mensaje del trigger):
--- DELETE FROM public.chart_of_accounts WHERE code='9999';  -- (esto no lanza: COA es mutable)
--- Para probar el trigger, tras insertar un asiento en Fase 2:
---   UPDATE public.journal_entries SET description='x' WHERE ...;  -- debe RECHAZAR.
+-- d) El FK del ledger apunta al chart_of_accounts existente (esperado: 1 fila)
+SELECT tc.constraint_name, kcu.column_name, ccu.table_name AS referenced_table
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+WHERE tc.constraint_type='FOREIGN KEY'
+  AND tc.table_name='journal_entry_lines'
+  AND kcu.column_name='account_id';
+
+-- e) PRUEBA de inmutabilidad (correr en la Fase 2, tras insertar un asiento):
+--    UPDATE public.journal_entries SET description='x' WHERE ...;  -- debe RECHAZAR
+--    DELETE FROM public.journal_entries WHERE ...;                 -- debe RECHAZAR
+-- ============================================================================

@@ -1,5 +1,63 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-04 - Contable Fase 1: schema del motor de asientos (DE 34/1998)
+
+Reescritura completa de `sql/pending/023_contabilidad_fase1_ledger.sql`. **Solo el archivo SQL: NO se
+aplicó en Supabase** (lo aplica Oliver, pausa obligatoria por cambio de schema en producción).
+
+### Por qué se reescribió
+El borrador anterior estaba **⛔ EN ESPERA** porque **recreaba `chart_of_accounts`** con otra
+estructura (`account_type` en español, seed propio de cuentas). Choca de frente con el
+`chart_of_accounts` que **ya existe en producción** — creado en
+`20260505000002_finanzas_catalogos.sql`, con `account_type` en inglés
+(`asset/liability/equity/income/expense`), `is_system`/`active`, 34 cuentas extraídas de QuickBooks
+y una UI de gestión ya desplegada (`/finanzas/configuracion/cuentas`, 01/08).
+
+### Qué cambió
+- **Eliminada** la recreación de `chart_of_accounts` y **eliminado** el seed del plan de cuentas.
+  El plan definitivo de Josuar se carga aparte (UI o migración de datos) **después** de que lo
+  confirme — el ledger es *chart-agnostic*.
+- `journal_entry_lines.account_id` ahora es **FK al `chart_of_accounts` existente**.
+- La migración queda **puramente aditiva**: 5 tablas nuevas y vacías, no toca data existente.
+
+### Qué crea (Fase 1 = solo schema)
+| Tabla | Rol |
+|---|---|
+| `accounting_periods` | cierre mensual (`abierto`/`cerrado`), UNIQUE por (tenant, año, mes) |
+| `accounting_sequences` | correlativo **sin huecos** por tenant (Art. 22.2), distinto del folio fiscal FE |
+| `journal_entries` | asientos append-only, hash-chain (`prev_hash`/`content_hash`/`hash`), doble fecha `transaction_date` + `record_date` |
+| `journal_entry_lines` | líneas débito/crédito, FK al COA existente |
+| `accounting_legajos` | legajos anuales sellados (Art. 14, conservación 5 años) |
+
+Más: 7 índices, **6 triggers de inmutabilidad** (rechazan UPDATE/DELETE en asientos, líneas y
+legajos **incluso al service-role** — la corrección es siempre un asiento de reversión) y RLS
+`tenant_isolation` en las 5 tablas. La RLS lee el claim JWT `app_metadata.tenant_id` **inline**,
+porque `auth.tenant_id()` NO existe en esta base (hallazgo del 13/07).
+
+Constraints de negocio en la BD: `jel_debit_xor_credit` (débito O crédito, no ambos),
+`jel_not_zero` (sin líneas en cero) y `je_reversion_requires_ref` (una reversión exige apuntar al
+asiento original **y** un motivo ≥3 chars, Art. 5.7).
+
+### Qué NO entra en esta fase
+- **RPC de posteo** (correlativo sin huecos + hash-chain + validación Σdébitos = Σcréditos +
+  período abierto) → Fase 2.
+- **Función verificadora** de la cadena de hashes → Fase 2.
+- **Enganche factura→asiento** → Fase 2.
+- **Tipos TypeScript** → van con la lógica que los consuma (Fase 2), no antes.
+
+La partida doble (Σdébitos = Σcréditos) **no se puede expresar como CHECK** porque abarca varias
+filas; se valida en el RPC de posteo. Hasta que exista ese RPC, las tablas quedan creadas pero sin
+camino de escritura desde la app.
+
+### Aplicación
+`CREATE TABLE`/`CREATE INDEX` usan `IF NOT EXISTS`, pero `CREATE TRIGGER` y `CREATE POLICY` **no**
+(Postgres no lo soporta para triggers). El archivo **no es re-ejecutable**: correrlo dos veces falla
+en el primer trigger. Aplicar una sola vez, sentencia por sentencia, con las 4 queries de
+verificación del pie (5 tablas / 6 triggers / 5 políticas / FK al COA).
+
+**Sin cambios de código, sin deploy, sin migración aplicada.** Tenant Integra:
+`a0000000-0000-0000-0000-000000000001`.
+
 ## [Fix] - 2026-08-01 - Emisión FE: no mostrar "duplicado/autorizado" cuando hay códigos de rechazo
 
 Al emitir con un RUC inválido, el diálogo mostraba **dos cosas contradictorias a la vez**:

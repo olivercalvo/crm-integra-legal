@@ -1,7 +1,7 @@
 # Roadmap Contable — CRM Integra Legal
 
-**Fecha:** 18/07/2026 · **Actualizado:** 01/08/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
-**Fuentes:** reunión con el contador nuevo (Josuar) · correo Josuar 31/07/2026 + respuesta 01/08/2026 · `reconciliacion-legal-finanzas.md` · borrador de ledger `sql/pending/023_...` (EN ESPERA) · DE 34/1998
+**Fecha:** 18/07/2026 · **Actualizado:** 04/08/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
+**Fuentes:** reunión con el contador nuevo (Josuar) · correo Josuar 31/07/2026 + respuesta 01/08/2026 · `reconciliacion-legal-finanzas.md` · ledger `sql/pending/023_...` (reescrito 04/08, pendiente de aplicar) · DE 34/1998
 
 ---
 
@@ -20,7 +20,7 @@ El CRM debe llevar la contabilidad de Integra de forma **automática**, de modo 
 ### Fase 1 — Estructura contable + saldos iniciales
 - **Plan de cuentas** validado por el contador (ingresos = cuenta 4, costos = 5, gastos = 6; balance: banco, cuentas por cobrar, cuentas por pagar, patrimonio).
 - **UI para crear/administrar cuentas** ("crear la manera de crear cuentas").
-- **Ledger de partida doble** (asientos inmutables, hash-chain, correlativo sin huecos) — ya diseñado en `023` (EN ESPERA), a reescribir sobre el `chart_of_accounts` existente.
+- **Ledger de partida doble** (asientos inmutables, hash-chain, correlativo sin huecos) — ✅ `023` **reescrito el 04/08** sobre el `chart_of_accounts` existente (ya no lo recrea; lo referencia por FK). Solo schema; **pendiente de aplicar en Supabase**. El posteo va en la Fase 2 del ledger.
 - **Carga de saldos iniciales** vía **asientos de diario manuales** (`source_type='manual'`, ya contemplado) que cuadren con lo declarado a la DGI (el CRM arranca de cero, NO importa el histórico de QB — solo los saldos de cierre como saldos de apertura).
 
 ### Fase 2 — Factura → asiento automático
@@ -93,10 +93,10 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 - `chart_of_accounts` — 34 cuentas (extraídas de QB, pendiente validación del contador), con `is_system`, mapeo a QB.
 - `tax_codes`, `services_catalog`, `numbering_sequences` + RPC `get_next_sequence_number`.
 - VAT Summary implementado. P&L / Balance / Aging como placeholders.
-- Diseño del ledger (`023`, en espera) y de la reconciliación Legal↔Finanzas.
+- Schema del ledger (`023`, reescrito 04/08 sobre el COA existente — **falta aplicarlo**) y diseño de la reconciliación Legal↔Finanzas.
 
 **Hay que construir:**
-- Ledger (reescrito sobre el COA existente) + asientos manuales (saldos iniciales).
+- Motor de posteo del ledger (RPC + verificador de hash-chain) + asientos manuales (saldos iniciales).
 - UI de gestión de plan de cuentas (crear/editar cuentas).
 - Enganche factura→asiento y pago→asiento (Fase 2).
 - Los 6 reportes contables (Fase 4).
@@ -112,5 +112,6 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 
 1. **Esperar de Josuar:** plan de cuentas final + saldos de apertura (con fecha de corte) + respuestas a las 4 preguntas contables + modelos de los otros informes. (Reportes históricos de QB ya enviados 01/08.)
 2. ✅ **Hecho (01/08/2026):** UI de gestión de plan de cuentas en producción (`/finanzas/configuracion/cuentas`, CRUD con `is_system`, sin hard delete, audit_log).
-3. Con el plan de cuentas final: **mapear** las cuentas de Josuar contra el `chart_of_accounts` actual (no coinciden, ver §5.2), reescribir el `023` sobre esa base y arrancar la Fase 1 (estructura + ledger + saldos iniciales por asiento manual).
-4. Fase 2 (factura→asiento) puede empezar en paralelo apenas esté el ledger — deriva de Finanzas, no depende de la reconciliación legal.
+3. ✅ **Hecho (04/08/2026):** `023` reescrito como schema puro del ledger sobre el COA existente (chart-agnostic, FK al `chart_of_accounts`). **Pendiente: aplicarlo en Supabase** (pausa obligatoria).
+4. Con el plan de cuentas final: **mapear** las cuentas de Josuar contra el `chart_of_accounts` actual (no coinciden, ver §5.2) y cargar los saldos iniciales por asiento manual. El mapeo ya no bloquea el schema del ledger, solo la lógica de posteo.
+5. Fase 2 del ledger (RPC de posteo + verificador de hash-chain + factura→asiento) apenas el `023` esté aplicado y el plan de cuentas confirmado — deriva de Finanzas, no depende de la reconciliación legal.

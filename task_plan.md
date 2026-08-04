@@ -1,5 +1,46 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === ESTADO 04/08/2026 — MÓDULO CONTABLE ===
+
+### Fase 1 (schema del ledger) — LISTA EN CÓDIGO, PENDIENTE DE APLICAR
+`sql/pending/023_contabilidad_fase1_ledger.sql` **reescrito y commiteado a `develop`**. Sale del
+estado ⛔ EN ESPERA: ya no recrea `chart_of_accounts` (choque con el de producción,
+`20260505000002_finanzas_catalogos.sql`, `account_type` en inglés + 34 cuentas + UI desplegada).
+Ahora crea **solo el motor**: `accounting_periods`, `accounting_sequences`, `journal_entries`,
+`journal_entry_lines`, `accounting_legajos` + 7 índices + 6 triggers de inmutabilidad + RLS por
+tenant, con `journal_entry_lines.account_id` por **FK al COA existente**. Aditivo, 5 tablas nuevas
+y vacías. Detalle completo en `changelog.md`.
+
+- [ ] **Aplicar en Supabase prod** (Oliver — **pausa obligatoria**, cambio de schema). Una sola
+      pasada, sentencia por sentencia: el archivo **no es re-ejecutable** (`CREATE TRIGGER` y
+      `CREATE POLICY` no admiten `IF NOT EXISTS`). Correr las 4 queries de verificación del pie:
+      5 tablas / 6 triggers / 5 políticas / FK al COA.
+- Sin código, sin deploy. **Tipos TypeScript a propósito NO creados** — van en la Fase 2, con la
+  lógica que los use.
+
+### Fase 2 (posteo + verificador + factura→asiento) — BLOQUEADA POR EL CONTADOR
+No arranca hasta que **Josuar confirme el plan de cuentas definitivo**. Los modelos que mandó el
+01/08 usan una codificación **distinta** a las 34 cuentas de QB (ingresos `4xxxxx`, costos `5xxxxx`,
+gastos `6xxx`, activos `1xxxxx`, pasivos `2xxxxx`, patrimonio `3xxxxx`) → la Fase 1 contable de
+negocio es un **mapeo**, no una validación directa. El ledger en sí es chart-agnostic, así que el
+schema no se bloquea; sí se bloquea la lógica que decide **qué cuenta** se afecta.
+
+Alcance de la Fase 2 cuando se desbloquee:
+- RPC de posteo: correlativo sin huecos + hash-chain + validación **Σdébitos = Σcréditos** (no es
+  expresable como CHECK, abarca varias filas) + período abierto.
+- Función verificadora de la cadena de hashes (auditoría / aval CPA).
+- Enganche **factura→asiento** (DEBE cuentas por cobrar / HABER ingreso + HABER ITBMS por pagar).
+- Tipos TypeScript del ledger.
+- Asientos manuales para **saldos de apertura** (esperan fecha de corte de Josuar).
+
+### Sigue esperando de Josuar
+Plan de cuentas final · saldos de apertura + fecha de corte · respuestas a las 4 preguntas de
+tratamiento contable (reembolsos, devengado vs caja, ITBMS en reembolsos, anticipos en custodia,
+enviadas 01/08) · modelos de los informes restantes. Ver `docs/finanzas/roadmap-contable.md`.
+
+### No commiteado
+`sql/pending/022_backfill_dv_embebido.sql` sigue **untracked** — fuera del alcance de este cambio.
+
 ## === ESTADO 13/07/2026 ===
 
 ### Cerrado hoy

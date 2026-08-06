@@ -51,7 +51,7 @@ export default async function ExpedienteDetailPage({
   params,
   searchParams,
 }: PageProps) {
-  const { db, tenantId, userRole, user } = await getAuthenticatedContext();
+  const { db, tenantId, userRole } = await getAuthenticatedContext();
   const activeTab = searchParams.tab ?? "info";
   const backUrl = searchParams.from === "client" && searchParams.client_id
     ? `/legal/clientes/${searchParams.client_id}`
@@ -74,27 +74,18 @@ export default async function ExpedienteDetailPage({
     `
     )
     .eq("id", params.id)
+    // Aislamiento multi-tenant: `db` es el admin client (bypassea RLS), así que
+    // el filtro por tenant va explícito. Un caso de otro bufete → notFound().
+    .eq("tenant_id", tenantId)
     .single();
 
   if (!caseData || error) {
     notFound();
   }
 
-  // Acceso por rol: asistente solo puede ver casos donde es assistant_id
-  // o donde tiene una tarea asignada. Abogada/admin tienen acceso completo.
-  if (userRole === "asistente") {
-    const isAssistant = caseData.assistant_id === user.id;
-    if (!isAssistant) {
-      const { data: assignedTask } = await db
-        .from("tasks")
-        .select("id")
-        .eq("case_id", params.id)
-        .eq("assigned_to", user.id)
-        .limit(1)
-        .maybeSingle();
-      if (!assignedTask) notFound();
-    }
-  }
+  // Acceso por rol: cualquier usuario del tenant (admin, abogada, asistente)
+  // puede ABRIR cualquier caso del bufete. Lo que cambia por rol son las
+  // acciones dentro del detalle (borrar y editar quedan en admin/abogada).
 
   const client = caseData.clients as unknown as {
     id: string; name: string; client_number: string;

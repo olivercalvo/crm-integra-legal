@@ -1,5 +1,66 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cambio de rol] - 2026-08-06 - El asistente ve TODOS los casos del bufete
+
+Decisión de negocio: el rol `asistente` pasa a tener el **mismo alcance de LECTURA de casos que
+`abogada`**. Antes solo veía (y podía abrir) los casos donde figuraba como `assistant_id` o donde
+tenía una tarea asignada; en la práctica eso le impedía dar seguimiento a expedientes del bufete
+que no estuvieran formalmente asignados a él. Afecta a todos los asistentes (hoy el único activo
+es `asistente@integra-panama.com` / Harry Boyd).
+
+### Cambios de código
+
+1. **`src/app/legal/casos/page.tsx`** — eliminado el pre-cálculo de `asistenteCaseIds` (2 queries:
+   `tasks` por `assigned_to` + `cases` por `assistant_id`) y el `query.in("id", asistenteCaseIds)`
+   que intersectaba el listado. El único filtro de lectura que queda es `tenant_id`. Efecto
+   colateral positivo: se ahorran 2 roundtrips a la DB por render del listado para ese rol.
+2. **`src/app/legal/casos/[id]/page.tsx`** — eliminado el gate de acceso (`if (userRole ===
+   "asistente")` → `notFound()` cuando no era `assistant_id` ni tenía tarea en el caso).
+3. **`src/app/legal/casos/[id]/page.tsx`** — al quitar ese gate se agregó `.eq("tenant_id",
+   tenantId)` al fetch del caso. `getAuthenticatedContext()` devuelve el **admin client, que
+   bypassea RLS**, y la query filtraba solo por `id`: el aislamiento multi-tenant queda ahora
+   explícito en vez de depender del gate de rol. Un caso de otro bufete → `notFound()`.
+
+### Lo que NO cambió (verificado, no tocado)
+
+- **Borrar casos/clientes:** sigue admin/abogada (`DeleteCaseButton` gateado por rol).
+- **Editar expediente completo:** sigue admin/abogada. `PATCH /api/cases/[id]` gatea por acción —
+  `change-status` permite asistente, la edición general no (403).
+- **Finanzas:** el asistente sigue sin acceso; `/finanzas` redirige a `/legal` por middleware.
+- **Menú Clientes:** sigue oculto para el rol en `nav-config.ts`.
+- **Comentar y adjuntar documentos:** sigue permitido (`LEGAL_CONTRIB`).
+- **Dashboard del asistente y "Mis Pendientes":** siguen siendo vistas **personales** (solo lo
+  asignado a él). Es intencional: el listado de Casos es la vista del bufete, el dashboard es la
+  vista propia.
+
+### Verificación en navegador (localhost:3000, sesión real de Harry Boyd / Asistente)
+
+| # | Qué | Resultado |
+|---|-----|-----------|
+| a | `/legal/casos` | **188 casos encontrados**; las filas visibles (ADM-045, ADM-044, ADM-043, ADM-042 de MI CONDADO, S.A) tienen columna Asistente en `—`, o sea NO asignados a él. Antes ese listado le daba 0. |
+| b | Detalle de caso no asignado | Abre ADM-045 (`Asistente Responsable de Seguimiento: —`) con las 4 pestañas completas. Antes → 404. |
+| c | Finanzas | El sidebar solo muestra Dashboard / Casos / Gastos / Mis Pendientes. `/finanzas` por URL directa → redirige a `/legal`. |
+| c | Botón borrar | El header del detalle solo tiene Imprimir Tarjeta · Etiqueta Simple · Cambiar Estado. Sin Eliminar. |
+
+Tests: `npx tsc --noEmit` limpio; `patch-role-by-action.test.ts` 4/4 (incluye "asistente + edición
+completa (sin action) → 403 y NO actualiza") y `authz-guards.test.ts` 31/31.
+
+### Deuda detectada, NO tocada en este cambio (fuera de alcance)
+
+- `/legal/clientes` es alcanzable por **URL directa** para el asistente (el rol solo está excluido
+  del menú, no del route). Muestra el listado y hasta el botón "Nuevo Cliente" — el POST sí
+  responde 403. Es **pre-existente**, no lo introduce este cambio, pero conviene decidir si el
+  gate debe ser real (redirect en middleware) o si alcanza con esconderlo del menú.
+- El botón "Editar Información" del detalle se le renderiza al asistente aunque el PATCH le
+  responda 403. También pre-existente; ahora se ve en más casos, porque puede abrir más casos.
+
+### Documentación actualizada
+`CLAUDE.md` §4 (tabla de roles), `docs/USUARIOS.md` §1, `sop.md` (nota de routing),
+comentarios en `casos/page.tsx`, `casos/[id]/page.tsx`, `api/cases/[id]/route.ts` y
+`authz-guards.test.ts`.
+
+---
+
 ## [Fix] - 2026-08-04 - Borrado de cliente con registros financieros: error crudo y borrado parcial
 
 Al intentar eliminar un cliente con facturas, el CRM mostraba en un `alert()` del navegador:

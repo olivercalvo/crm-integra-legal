@@ -48,6 +48,7 @@
    **Notas sobre routing**:
    - El selector en `/` está abierto a todo rol autenticado. Las cards visibles dependen del rol.
    - `/legal/*` es accesible para abogada/asistente/admin (NO contador). El gating fino de botones/acciones está en los componentes.
+   - **Visibilidad de casos:** la LECTURA de casos es del tenant completo para los 3 roles legales — el asistente ve y abre TODOS los casos del bufete, igual que abogada (cambio 06/08/2026). Lo que sí sigue siendo personal es el dashboard `/legal` y `/legal/pendientes` del asistente (solo lo asignado a él). Las ACCIONES siguen gateadas por rol: crear/editar/borrar caso es admin/abogada; el asistente solo cambia estado, comenta y sube documentos.
    - `/legal/admin/*` es admin-only (subset transversal).
    - `/finanzas/*` está abierto a todos los 4 roles (incluido contador). En Fase 1B tendrá su propia gating.
    - Rutas legacy (`/abogada/*`, `/asistente/*`, `/admin/*`, `/dashboard`) hacen redirect 301 al destino nuevo. Mantenidas ~4 semanas para preservar bookmarks y emails ya enviados.

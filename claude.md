@@ -26,7 +26,7 @@
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
 | **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva |
-| **Asistente** | Ver sus casos asignados, actualizar estado, registrar gastos, cumplir tareas, comentar, subir documentos |
+| **Asistente** | Ver todos los casos del bufete (mismo alcance de lectura que Abogada), actualizar estado, registrar gastos, cumplir tareas, comentar, subir documentos. NO crea/edita/borra casos ni clientes; NO accede a Finanzas |
 
 ## 5. REGLAS DE DESARROLLO (NON-NEGOTIABLE)
 

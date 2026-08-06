@@ -64,7 +64,7 @@ export async function PATCH(
     } = body;
 
     // Check de rol DEPENDIENTE DE LA ACCIÓN (matriz de roles vs. UI real):
-    // el asistente puede CAMBIAR EL ESTADO de sus casos asignados (CLAUDE.md),
+    // el asistente puede CAMBIAR EL ESTADO de los casos del bufete (CLAUDE.md),
     // pero NO editar el resto del expediente. Restringir todo el PATCH a
     // [admin, abogada] rompía el flujo diario del asistente (403 al cambiar
     // estado desde <CaseStatusChanger>, que se le renderiza sin gate).

@@ -17,6 +17,17 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
 
+// Clientes para el rol asistente: puede abrir la FICHA de un cliente puntual
+// (llega a ella desde el detalle de un caso), pero NO el directorio completo ni
+// las pantallas de alta/edición — esas acciones ya le responden 403 en la API.
+// Por eso el gate es por ruta EXACTA y no por prefijo: /legal/clientes/{id}
+// tiene que seguir pasando.
+const ASISTENTE_BLOCKED_PATTERNS: RegExp[] = [
+  /^\/legal\/clientes\/?$/,                 // directorio
+  /^\/legal\/clientes\/nuevo\/?$/,          // alta
+  /^\/legal\/clientes\/[^/]+\/editar\/?$/,  // edición
+];
+
 // El contador es un rol especializado en cierre contable.
 // Dentro de /finanzas puede ver /finanzas/reportes/* (hub + sub-páginas) y
 // /finanzas/gastos-bufete/* (carga de compras del bufete con ITBMS recuperable;
@@ -222,6 +233,17 @@ export async function middleware(request: NextRequest) {
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/finanzas/reportes";
+    return NextResponse.redirect(url);
+  }
+
+  // Gating extra para el asistente dentro de /legal: el directorio de clientes y
+  // las pantallas de alta/edición quedan fuera; la ficha por id sí pasa.
+  if (
+    userRole === "asistente" &&
+    ASISTENTE_BLOCKED_PATTERNS.some((p) => p.test(pathname))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = ROLE_HOME[userRole] ?? "/legal";
     return NextResponse.redirect(url);
   }
 

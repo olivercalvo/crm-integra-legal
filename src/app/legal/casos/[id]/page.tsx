@@ -301,7 +301,11 @@ export default async function ExpedienteDetailPage({
       {/* TAB: Información */}
       {activeTab === "info" && (
         <div className="space-y-4">
-          {/* Per-tab inline editor */}
+          {/* Per-tab inline editor — solo admin/abogada. El asistente puede
+              cambiar el estado (botón del header) pero NO editar el resto del
+              expediente: PATCH /api/cases/[id] sin action le responde 403, así
+              que renderizarle el botón era puro ruido. */}
+          {(userRole === "admin" || userRole === "abogada") && (
           <InlineCaseInfoEditor
             caseId={params.id}
             caseCode={caseData.case_code}
@@ -330,6 +334,7 @@ export default async function ExpedienteDetailPage({
             users={allUsers}
             userRole={userRole as "admin" | "abogada" | "asistente"}
           />
+          )}
 
           <div className="grid gap-5 lg:grid-cols-2">
             {/* Case info card */}

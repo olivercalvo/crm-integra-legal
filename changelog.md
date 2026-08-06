@@ -1,5 +1,82 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cambio de rol] - 2026-08-06 - Clientes para el asistente: ficha sí, directorio no
+
+Complemento del cambio anterior (asistente ve todos los casos). Al abrir un caso, el link al
+cliente llevaba a `/legal/clientes/{id}`, que estaba accesible pero con los botones de gestión
+visibles; y el directorio `/legal/clientes` era alcanzable por URL directa aunque no figurara en
+el menú. Decisión: **el asistente ve la ficha de un cliente puntual en solo lectura, y nada más**.
+
+### 1. Gate de ruta (`src/middleware.ts`)
+
+Nuevo `ASISTENTE_BLOCKED_PATTERNS` — gate por ruta **exacta**, no por prefijo, porque
+`/legal/clientes/{id}` tiene que seguir pasando:
+
+| Ruta | Asistente |
+|---|---|
+| `/legal/clientes` | redirect → `/legal` |
+| `/legal/clientes/nuevo` | redirect → `/legal` |
+| `/legal/clientes/{id}/editar` | redirect → `/legal` |
+| `/legal/clientes/{id}` | **permitida** |
+
+El check corre después del gate admin-only y del gate del contador, y antes del gating genérico
+por prefijo. No toca a admin/abogada (condicionado a `userRole === "asistente"`).
+
+### 2. Ficha de cliente en solo lectura (`src/app/legal/clientes/[id]/page.tsx`)
+
+Nuevo `canManageClient = admin || abogada`. Se ocultan al asistente las acciones que la API ya le
+rechaza — verificado uno por uno contra el gate real, no por analogía:
+
+| Botón | Endpoint | Roles | ¿Se oculta? |
+|---|---|---|---|
+| Crear Caso / + Nuevo Caso | `POST /api/cases` | admin, abogada | Sí |
+| Editar | `PATCH /api/clients/[id]` | admin, abogada | Sí |
+| Desactivar | `PATCH /api/clients/[id]` | admin, abogada | Sí |
+| Eliminar | `DELETE /api/clients/[id]` | admin, abogada | Sí (ya lo estaba) |
+| Adjuntar Documento | `POST /api/documents/register` | admin, abogada, **asistente** | **No** — se mantiene |
+
+Nota: los dos botones de crear caso NO estaban en el pedido original (que nombraba Editar,
+Desactivar y Eliminar), pero `POST /api/cases` es admin+abogada, así que al asistente le daban 403
+igual — y el listado de Casos ya se los escondía. Se ocultan por consistencia con el gate real.
+
+El breadcrumb "Clientes" se renderiza como texto plano para el asistente: como link apuntaría a un
+directorio que el middleware le rebota, y un link muerto es peor que ninguno.
+
+### 3. Limpieza en el detalle de caso (`src/app/legal/casos/[id]/page.tsx`)
+
+`<InlineCaseInfoEditor>` (botón "Editar Información") solo se renderiza para admin/abogada. El
+`PATCH /api/cases/[id]` sin `action` ya le respondía 403 al asistente; el botón era ruido. El botón
+"Cambiar Estado" del header NO se toca — esa acción sí la tiene permitida.
+
+### Verificación en navegador (localhost:3000, sesión real de Harry Boyd / Asistente)
+
+| Qué | Resultado |
+|---|---|
+| `/legal/clientes` por URL | Redirige a `/legal` (Mi Panel). El server log no registra ningún `GET /legal/clientes`, solo el `GET /legal` del destino. |
+| `/legal/clientes/nuevo` por URL | Redirige a `/legal`. |
+| `/legal/clientes/{id}/editar` por URL | Redirige a `/legal`. |
+| `/legal/clientes/{id}` por URL | Carga (`200`). Ficha completa de MI CONDADO, S.A: datos, 20+ casos vinculados y documentos. El árbol de accesibilidad de la página entera devuelve **un solo botón: "Adjuntar Documento"** — sin Crear Caso, Editar, Desactivar ni Eliminar. Breadcrumb "Clientes" sin `href`. |
+| Link al cliente desde el detalle del caso | Click en "MI CONDADO, S.A" (Datos del Cliente) → navega a la ficha correctamente. |
+| Detalle de caso | Ya NO aparece "Editar Información". El header conserva Imprimir Tarjeta · Etiqueta Simple · Cambiar Estado. |
+
+Admin/abogada: sin cambios verificados por código (ambos gates condicionan sobre el rol y
+`canManageClient` es true para los dos; el `DeleteClientButton` conserva su condición previa). No
+se re-verificó en navegador con esos roles.
+
+Tests: `npx tsc --noEmit` limpio. Lint sin errores nuevos.
+
+### Deuda detectada, NO tocada (pre-existente, confirmada por bisección)
+
+El detalle de caso emite un **error de hidratación** en dev: `<div> cannot be a descendant of <p>`
+→ `Badge` dentro de un `<p>` en la card "Datos del Caso" (los bloques de `case_start_date`,
+`procedure_start_date`, `deadline` y `last_followup_at` que muestran un Badge de "N días" dentro
+del `<p>` de la fecha). React descarta el HTML del server y re-renderiza todo el root en cliente.
+Se confirmó pre-existente stasheando los cambios de este commit y recargando: el error sigue.
+Fix ≈ 4 líneas (`<p>` → `<div>`), pendiente de decisión — no entra acá para no mezclarlo con un
+commit de roles.
+
+---
+
 ## [Cambio de rol] - 2026-08-06 - El asistente ve TODOS los casos del bufete
 
 Decisión de negocio: el rol `asistente` pasa a tener el **mismo alcance de LECTURA de casos que

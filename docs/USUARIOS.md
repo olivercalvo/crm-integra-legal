@@ -8,7 +8,7 @@ Documento operativo. Cubre cómo se crean, modifican y reparan usuarios del CRM,
 |-------------|-------------------------------------------------------------------------------------------|
 | `admin`     | Todo: gestión de usuarios y catálogos, importación masiva, auditoría, todos los CRUD.     |
 | `abogada`   | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios; importación masiva.  |
-| `asistente` | Ve TODOS los casos del bufete (lectura completa): actualizar estado, registrar gastos, cumplir tareas, comentar, subir documentos. No crea/edita/borra casos ni clientes; sin acceso a Finanzas. |
+| `asistente` | Ve TODOS los casos del bufete (lectura completa): actualizar estado, registrar gastos, cumplir tareas, comentar, subir documentos. Ficha de cliente individual en solo lectura; SIN directorio de Clientes ni alta/edición. No crea/edita/borra casos ni clientes; sin acceso a Finanzas. |
 
 ## 2. Cómo crear un usuario correctamente
 

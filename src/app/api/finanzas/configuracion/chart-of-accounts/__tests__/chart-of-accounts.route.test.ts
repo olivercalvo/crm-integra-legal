@@ -2,11 +2,15 @@
  * Tests del CRUD del Plan de Cuentas (chart_of_accounts).
  *
  * Cubre:
- *   1) validadores puros (sin mocks) — código, tipo, longitudes.
+ *   1) validadores puros (sin mocks) — código, tipo, longitudes,
+ *      saldo_inicial (default 0, negativos, rango) y subcategoria.
  *   2) handlers reales POST / PATCH con un fake de Supabase:
  *      - crear con código duplicado → 400
  *      - crear válida               → 201
+ *      - crear con saldo_inicial + subcategoria → 201, persiste y audita
+ *      - crear sin saldo_inicial    → 201 con saldo_inicial = 0
  *      - editar                     → 200
+ *      - editar saldo_inicial + subcategoria → 200, persiste y audita
  *      - desactivar una is_system   → 409 (bloqueado), no actualiza
  *      - rol no permitido           → 403
  *
@@ -82,6 +86,138 @@ test("validateUpdateChartAccount: sin código → ok (code opcional)", () => {
   if (r.ok) {
     assert.equal(r.data.code, undefined);
     assert.equal(r.data.active, false);
+  }
+});
+
+// ---- saldo_inicial + subcategoria (Paso 1a plan contable) ----
+
+test("validateCreateChartAccount: saldo_inicial + subcategoria válidos → ok", () => {
+  const r = validateCreateChartAccount({
+    code: "130003",
+    name: "Fondo Legales de Clientes",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    saldo_inicial: 1500.5,
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.data.subcategoria, "activo_corriente");
+    assert.equal(r.data.saldo_inicial, 1500.5);
+  }
+});
+
+test("validateCreateChartAccount: sin saldo_inicial → default 0", () => {
+  const r = validateCreateChartAccount({
+    code: "600001",
+    name: "Alquiler de oficina",
+    account_type: "expense",
+    subcategoria: "gasto_operativo",
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.data.saldo_inicial, 0);
+    assert.equal(r.data.subcategoria, "gasto_operativo");
+  }
+});
+
+test("validateCreateChartAccount: sin subcategoria → null (sin clasificar)", () => {
+  const r = validateCreateChartAccount({
+    code: "600002",
+    name: "Otros gastos",
+    account_type: "expense",
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.subcategoria, null);
+});
+
+test("validateCreateChartAccount: subcategoria vacía ('') → null, no error", () => {
+  const r = validateCreateChartAccount({
+    code: "600003",
+    name: "Sin clasificar",
+    account_type: "expense",
+    subcategoria: "",
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.subcategoria, null);
+});
+
+test("validateCreateChartAccount: subcategoria inválida (label en español) → error", () => {
+  const r = validateCreateChartAccount({
+    code: "600004",
+    name: "Cuenta",
+    account_type: "expense",
+    subcategoria: "Gasto operativo", // debe llegar en snake_case
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.subcategoria);
+});
+
+test("validateCreateChartAccount: saldo_inicial NEGATIVO → permitido (contra-cuenta)", () => {
+  const r = validateCreateChartAccount({
+    code: "120009",
+    name: "Depreciación acumulada",
+    account_type: "asset",
+    subcategoria: "propiedad_planta_equipo",
+    saldo_inicial: -8400.25,
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.saldo_inicial, -8400.25);
+});
+
+test("validateCreateChartAccount: saldo_inicial redondea a 2 decimales", () => {
+  const r = validateCreateChartAccount({
+    code: "100001",
+    name: "Caja",
+    account_type: "asset",
+    saldo_inicial: "1234.567",
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.saldo_inicial, 1234.57);
+});
+
+test("validateCreateChartAccount: saldo_inicial no numérico → error", () => {
+  const r = validateCreateChartAccount({
+    code: "100002",
+    name: "Banco",
+    account_type: "asset",
+    saldo_inicial: "mil quinientos",
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.saldo_inicial);
+});
+
+test("validateCreateChartAccount: saldo_inicial fuera de numeric(14,2) → error", () => {
+  const r = validateCreateChartAccount({
+    code: "100003",
+    name: "Banco",
+    account_type: "asset",
+    saldo_inicial: 1e13,
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.saldo_inicial);
+});
+
+test("validateUpdateChartAccount: saldo_inicial + subcategoria llegan al payload", () => {
+  const r = validateUpdateChartAccount({
+    name: "Fondo Legales de Clientes",
+    account_type: "asset",
+    subcategoria: "activo_no_corriente",
+    saldo_inicial: 999.99,
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) {
+    assert.equal(r.data.subcategoria, "activo_no_corriente");
+    assert.equal(r.data.saldo_inicial, 999.99);
   }
 });
 
@@ -250,6 +386,95 @@ test("POST crear VÁLIDA → 201, inserta con is_system=false", { skip: skipNoMo
   assert.equal(state.captured.audit.length, 1, "debe registrar audit_log de create");
 });
 
+test(
+  "POST crear con saldo_inicial + subcategoria → 201, persiste ambos y los audita",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    state.dupByCode = null;
+    const res = await POST(
+      req({
+        code: "130003",
+        name: "Fondo Legales de Clientes",
+        account_type: "asset",
+        subcategoria: "activo_corriente",
+        saldo_inicial: 12500.75,
+        active: true,
+      })
+    );
+    const json = (await res.json()) as {
+      account: { subcategoria: string; saldo_inicial: number };
+    };
+    assert.equal(res.status, 201);
+
+    // Persistencia: ambos campos llegan al INSERT.
+    assert.equal(state.captured.insert?.subcategoria, "activo_corriente");
+    assert.equal(state.captured.insert?.saldo_inicial, 12500.75);
+
+    // Y vuelven en la respuesta que la UI mete en su estado local.
+    assert.equal(json.account.subcategoria, "activo_corriente");
+    assert.equal(json.account.saldo_inicial, 12500.75);
+
+    // Auditoría: el new_value del audit_log incluye ambos campos.
+    assert.equal(state.captured.audit.length, 1);
+    const audited = JSON.parse(String(state.captured.audit[0].new_value)) as {
+      subcategoria: string;
+      saldo_inicial: number;
+    };
+    assert.equal(audited.subcategoria, "activo_corriente");
+    assert.equal(audited.saldo_inicial, 12500.75);
+  }
+);
+
+test(
+  "POST crear SIN saldo_inicial → 201 con saldo_inicial = 0 (default)",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    state.dupByCode = null;
+    const res = await POST(
+      req({
+        code: "600001",
+        name: "Alquiler de oficina",
+        account_type: "expense",
+        subcategoria: "gasto_operativo",
+        active: true,
+      })
+    );
+    const json = (await res.json()) as { account: { saldo_inicial: number } };
+    assert.equal(res.status, 201);
+    assert.equal(state.captured.insert?.saldo_inicial, 0, "default explícito 0");
+    assert.equal(json.account.saldo_inicial, 0);
+
+    const audited = JSON.parse(String(state.captured.audit[0].new_value)) as {
+      saldo_inicial: number;
+    };
+    assert.equal(audited.saldo_inicial, 0);
+  }
+);
+
+test(
+  "POST crear con subcategoria INVÁLIDA → 400 con fieldError, no inserta",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    state.dupByCode = null;
+    const res = await POST(
+      req({
+        code: "600009",
+        name: "Cuenta",
+        account_type: "expense",
+        subcategoria: "gastos_varios", // no está en SUBCATEGORIAS
+        active: true,
+      })
+    );
+    const json = (await res.json()) as { fieldErrors?: Record<string, string> };
+    assert.equal(res.status, 400);
+    assert.ok(json.fieldErrors?.subcategoria);
+    assert.equal(state.captured.insert, null, "no debe llegar al insert");
+  }
+);
+
 test("POST con rol NO permitido (asistente) → 403, no inserta", { skip: skipNoMocks }, async () => {
   reset();
   state.profile.role = "asistente";
@@ -282,6 +507,94 @@ test("PATCH editar nombre/tipo/desc → 200, actualiza", { skip: skipNoMocks }, 
   assert.equal(state.captured.update?.name, "Gastos de formación");
   assert.equal(json.account.name, "Gastos de formación");
 });
+
+test(
+  "PATCH editar saldo_inicial + subcategoria → 200, persiste ambos y los audita",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    state.existingAccount = {
+      id: "acc-saldo",
+      code: "130003",
+      name: "Fondo Legales de Clientes",
+      account_type: "asset",
+      subcategoria: null,
+      saldo_inicial: 0,
+      description: null,
+      active: true,
+      is_system: false,
+    };
+    const res = await PATCH(
+      req({
+        name: "Fondo Legales de Clientes",
+        account_type: "asset",
+        subcategoria: "activo_corriente",
+        saldo_inicial: 8300.4,
+        description: null,
+        active: true,
+      }),
+      { params: { id: "acc-saldo" } }
+    );
+    const json = (await res.json()) as {
+      account: { subcategoria: string; saldo_inicial: number };
+    };
+    assert.equal(res.status, 200);
+
+    // Persistencia
+    assert.equal(state.captured.update?.subcategoria, "activo_corriente");
+    assert.equal(state.captured.update?.saldo_inicial, 8300.4);
+    assert.equal(json.account.saldo_inicial, 8300.4);
+
+    // Auditoría: el diff registra los dos campos con su old → new.
+    assert.equal(state.captured.audit.length, 1);
+    const entry = state.captured.audit[0];
+    assert.match(String(entry.field), /subcategoria/);
+    assert.match(String(entry.field), /saldo_inicial/);
+    const oldVal = JSON.parse(String(entry.old_value)) as Record<string, unknown>;
+    const newVal = JSON.parse(String(entry.new_value)) as Record<string, unknown>;
+    assert.equal(oldVal.subcategoria, null);
+    assert.equal(oldVal.saldo_inicial, 0);
+    assert.equal(newVal.subcategoria, "activo_corriente");
+    assert.equal(newVal.saldo_inicial, 8300.4);
+  }
+);
+
+test(
+  "PATCH que reenvía el MISMO saldo_inicial como string numeric → no audita cambio fantasma",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    state.existingAccount = {
+      id: "acc-fantasma",
+      code: "130003",
+      name: "Fondo Legales de Clientes",
+      account_type: "asset",
+      subcategoria: "activo_corriente",
+      // Postgres/PostgREST puede devolver numeric como string "8300.40".
+      saldo_inicial: "8300.40",
+      description: null,
+      active: true,
+      is_system: false,
+    };
+    const res = await PATCH(
+      req({
+        name: "Fondo Legales de Clientes",
+        account_type: "asset",
+        subcategoria: "activo_corriente",
+        saldo_inicial: 8300.4,
+        description: null,
+        active: true,
+      }),
+      { params: { id: "acc-fantasma" } }
+    );
+    assert.equal(res.status, 200);
+    assert.equal(
+      state.captured.audit.length,
+      0,
+      "8300.40 (string) y 8300.4 (number) son el mismo saldo: no hay nada que auditar"
+    );
+  }
+);
 
 test("PATCH desactivar una cuenta is_system → 409 (bloqueado), no actualiza", { skip: skipNoMocks }, async () => {
   reset();

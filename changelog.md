@@ -1,5 +1,105 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-14 - Plan de cuentas: saldo inicial + subcategoría (Paso 1a contable)
+
+Primera mitad del **Paso 1** del plan contable acordado con Josuar (ver
+`docs/finanzas/roadmap-contable.md` §10). El `chart_of_accounts` y su UI ya existían; faltaba
+poder cargar cada cuenta con su **saldo de apertura** y una **subcategoría** que agrupe los
+reportes. La carga masiva por Excel (Paso 1b) va en un cambio aparte.
+
+### 1. Migración — `sql/pending/024_chart_of_accounts_saldo_subcategoria.sql`
+
+Aditiva e idempotente (`ADD COLUMN IF NOT EXISTS`), **pendiente de aplicar** por Oliver en el SQL
+Editor de Supabase:
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `saldo_inicial` | `numeric(14,2) NOT NULL DEFAULT 0` | Admite negativos (patrimonio con pérdida acumulada, contra-cuentas). Las 34 cuentas existentes quedan en 0. |
+| `subcategoria` | `text NULL` | Sin CHECK a propósito: el vocabulario se valida en la app y puede crecer con el import del Paso 1b. NULL = sin clasificar. |
+
+Incluye `COMMENT ON COLUMN` en ambas, un `DO $$` que aborta si no quedaron las 2 columnas, y
+`SELECT` de verificación sobre `information_schema.columns` + conteo de cuentas en 0.
+
+**Decisión de diseño (puente deliberado):** `saldo_inicial` vive como columna porque calza con el
+modelo mental de Josuar y con el import por Excel. Cuando exista el motor de posteo del ledger
+(Paso 3), ese saldo se convierte en un **asiento de apertura** (`source_type='manual'`) y los
+reportes pasan a leer del ledger. La columna no se borra sin migrar los saldos primero.
+
+### 2. Tipos — `src/lib/finanzas/types/chart-of-account.ts`
+
+Nuevo tipo `Subcategoria` con sus 10 valores, `SUBCATEGORIAS` (orden del dropdown),
+`SUBCATEGORIA_LABEL_ES`, `isSubcategoria()` y `subcategoriaLabel()` (fallback `—` para NULL).
+Se guarda el value en **snake_case**, se muestra el label en español:
+
+`activo_corriente` · `activo_no_corriente` · `propiedad_planta_equipo` · `pasivo_corriente` ·
+`pasivo_no_corriente` · `patrimonio` · `ingreso` · `costo` · `gasto_operativo` · `otro`
+
+`ChartAccountRow`, `CreateChartAccountInput` y `UpdateChartAccountInput` suman
+`subcategoria: Subcategoria | null` y `saldo_inicial: number`.
+
+### 3. Validadores — `src/lib/finanzas/validators/chart-of-account.ts`
+
+- `subcategoria`: opcional (`null` / `""` / ausente → `null`). Si llega un valor tiene que estar en
+  `SUBCATEGORIAS`; este validador es la **única barrera** contra vocabulario inventado, porque la
+  columna no tiene CHECK.
+- `saldo_inicial`: opcional → **default 0**. Acepta number o string numérico, redondea a 2 decimales
+  con `round2()` (mismo patrón que `validators/business-expense.ts`), **permite negativos**, y corta
+  en `1e12` para dar un error accionable en vez de un `22003 numeric field overflow` de Postgres.
+
+### 4. Backend — API y queries
+
+- `createChartAccount` / `updateChartAccount` escriben ambos campos y **los mandan al `audit_log`**
+  como el resto: en `create` dentro del `new_value`, en `update` dentro del diff `old → new`.
+- El diff de `saldo_inicial` compara por **valor numérico**, no por identidad: PostgREST puede
+  devolver un `numeric` como string (`"8300.40"`), y comparar con `!==` registraba un cambio
+  fantasma `8300.40 → 8300.4` en cada guardado.
+- `SELECT_COLS` de `api/` y `queries/` incluyen las 2 columnas nuevas. Ambos módulos normalizan
+  `saldo_inicial` con `Number()` al devolver la fila, para que la UI no reciba un string.
+
+### 5. UI — `chart-of-accounts-manager.tsx`
+
+- Form de crear/editar: **"Saldo inicial (B/.)"** (`type=number`, `step=0.01`, alineado a la
+  derecha, default `0`, admite negativos) y **"Subcategoría (opcional)"** (dropdown con
+  `— Sin clasificar —` + los 10 labels en español).
+- Listado: 2 columnas nuevas. Subcategoría como badge gris (`—` si es NULL); saldo inicial en
+  `font-mono tabular-nums` alineado a la derecha con separador de miles `es-PA`, en **rojo si es
+  negativo** y gris claro si es 0.
+- El buscador ahora también matchea por label de subcategoría.
+- El estado del form guarda `saldo_inicial` como **string** para no pelear con el input mientras se
+  tipea (`-`, `1500.`, vacío al borrar todo); se convierte al guardar.
+
+**Bug evitado en el toggle activar/desactivar:** el `PATCH` es **reemplazo total**, no parche
+parcial — el validador defaultea los campos ausentes. `toggleActive()` mandaba solo
+`name/account_type/description/active`, así que con los campos nuevos habría **puesto el saldo en 0
+y la subcategoría en NULL** cada vez que alguien activaba o desactivaba una cuenta. Ahora reenvía la
+fila completa, y el contrato quedó documentado en el header de `api/chart-of-accounts.ts`.
+
+### 6. Sin cambios (a propósito)
+
+- El CHECK de `account_type` sigue con sus **5 valores en inglés** (`asset/liability/equity/income/
+  expense`). La distinción **costos vs gastos** se resuelve con `subcategoria` (`costo` vs
+  `gasto_operativo`), no abriendo el CHECK.
+- El código de cuenta sigue **inmutable**; `is_system` sin cambios.
+
+### 7. Tests — `chart-of-accounts.route.test.ts` (27 pass, 0 fail)
+
+12 tests nuevos: validador (saldo con default 0, negativos, redondeo a 2 decimales, no numérico,
+fuera de rango; subcategoría válida / vacía / inválida / ausente) y handlers (POST y PATCH
+persisten **y auditan** ambos campos, POST sin `saldo_inicial` → 0, subcategoría inválida → 400 con
+`fieldErrors`, y el caso del cambio fantasma `"8300.40"` vs `8300.4` que no debe auditarse).
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/finanzas/configuracion/chart-of-accounts/__tests__/chart-of-accounts.route.test.ts
+```
+
+### 8. Doc
+
+`docs/finanzas/roadmap-contable.md` §10 (plan de 5 pasos de la reunión del 10/08/2026 con Josuar)
+se editó fuera de AG y entra en este commit.
+
+---
+
 ## [Cambio de rol] - 2026-08-06 - Clientes para el asistente: ficha sí, directorio no
 
 Complemento del cambio anterior (asistente ve todos los casos). Al abrir un caso, el link al

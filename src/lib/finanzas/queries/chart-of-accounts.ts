@@ -19,7 +19,19 @@ import type {
 type DB = SupabaseClient;
 
 const SELECT_COLS =
-  "id, code, name, account_type, account_name_qb, description, is_trust_pass_through, is_system, active";
+  "id, code, name, account_type, subcategoria, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
+
+/**
+ * Normaliza una fila cruda a ChartAccountRow. `saldo_inicial` es numeric en BD:
+ * PostgREST lo devuelve como number, pero lo forzamos igual para que la UI
+ * pueda hacer aritmética/toFixed sin defenderse de un string.
+ */
+function toRow(raw: Record<string, unknown>): ChartAccountRow {
+  return {
+    ...(raw as unknown as ChartAccountRow),
+    saldo_inicial: Number(raw.saldo_inicial ?? 0),
+  };
+}
 
 /**
  * Lista TODAS las cuentas del tenant (activas e inactivas), ordenadas por
@@ -39,7 +51,7 @@ export async function listChartAccounts(
     console.error("[finanzas/queries] listChartAccounts failed", error);
     return [];
   }
-  return (data ?? []) as ChartAccountRow[];
+  return (data ?? []).map((r) => toRow(r as Record<string, unknown>));
 }
 
 /** Detalle de una cuenta por id (con tenant guard). null si no existe. */
@@ -59,7 +71,7 @@ export async function getChartAccountById(
     console.error("[finanzas/queries] getChartAccountById failed", error);
     return null;
   }
-  return (data as ChartAccountRow | null) ?? null;
+  return data ? toRow(data as Record<string, unknown>) : null;
 }
 
 /**

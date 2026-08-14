@@ -115,3 +115,28 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 3. ✅ **Hecho (04/08/2026):** `023` reescrito como schema puro del ledger sobre el COA existente (chart-agnostic, FK al `chart_of_accounts`). **Pendiente: aplicarlo en Supabase** (pausa obligatoria).
 4. Con el plan de cuentas final: **mapear** las cuentas de Josuar contra el `chart_of_accounts` actual (no coinciden, ver §5.2) y cargar los saldos iniciales por asiento manual. El mapeo ya no bloquea el schema del ledger, solo la lógica de posteo.
 5. Fase 2 del ledger (RPC de posteo + verificador de hash-chain + factura→asiento) apenas el `023` esté aplicado y el plan de cuentas confirmado — deriva de Finanzas, no depende de la reconciliación legal.
+
+## 10. Plan de trabajo aterrizado con Josuar (reunión 10/08/2026)
+
+Josuar bajó el requerimiento a 5 pasos secuenciales. Fuente: `Temas Contables/EJEMPLOS DE LIBROS CONTABLES (1).xlsx` (plan de cuentas de 62 cuentas con saldos iniciales reales + formatos de Balance General y Estado de Resultado). Deadline informal: Oliver le manda video + avance para revisión.
+
+### Paso 1 — Módulo de plan de cuentas (crear + saldo inicial + subcategoría + import) ← EN CURSO
+El `chart_of_accounts` y su UI ya existen, pero falta:
+- **Saldo inicial** por cuenta (monto de apertura). **Decisión de diseño:** por ahora columna `saldo_inicial numeric` en `chart_of_accounts` (calza con el modelo mental de Josuar y con el import). Cuando exista el motor de posteo (Paso 3), ese saldo se convierte en un **asiento de apertura** (`source='manual'`) y los reportes pasan a leer del ledger. Puente deliberado por el deadline.
+- **Subcategoría** (campo nuevo): activo_corriente / activo_no_corriente / propiedad_planta_equipo / pasivo_corriente / pasivo_no_corriente / patrimonio / ingreso / costo / gasto_operativo. Resuelve el agrupamiento del Balance General y la separación **costos (5xxxxx) vs gastos (6xxxxx)** en el Estado de Resultado.
+- **Carga masiva por Excel** (como QuickBooks): plantilla descargable con columnas `código, nombre, tipo, subcategoría, saldo_inicial`; preview; crear en lote. Mapeo de tipo español → `account_type` inglés (Activo→asset, Pasivos→liability, Patrimonio→equity, Ingresos→income, costos→expense+subcat 'costo', gastos→expense+subcat 'gasto_operativo'). El import carga las 62 cuentas de Josuar; las 34 viejas de QB se desactivan aparte (no colisionan, códigos distintos).
+
+### Paso 2 — Reportes Balance General y Estado de Resultado
+Generados por reglas sobre las cuentas, con los formatos que Josuar mandó. Estado de Resultado: ingresos (4) − costos (5) = Ganancia Bruta; − gastos (6) = Utilidad Operativa; − ISR = Utilidad Neta. Balance General: cuentas 1/2/3 agrupadas por subcategoría. Por ahora leen `saldo_inicial`; cuando llegue el Paso 3 leen saldo_inicial + movimientos del ledger.
+
+### Paso 3 — Enganche factura→asiento (el "centro de costo")
+Mapear cada línea de factura / servicio a su cuenta de ingreso (ej. "Derecho Corporativo" → 400001). Al emitir, el sistema postea el asiento (usa el motor de posteo de la Fase 2 del ledger). Reembolsos y gastos de caso → cuenta `130003 Fondo Legales de Clientes` (neto cero, ya confirmado por Josuar).
+
+### Paso 4 — Módulo de compra
+Registrar compras/gastos del período afectando las cuentas seleccionadas.
+
+### Paso 5 — Asientos de diario manuales + auxiliares (Antigüedad CxP/CxC)
+Área para asientos manuales y los reportes auxiliares enlazados.
+
+### Certificación (dato reutilizable)
+Josuar confirmó que **puede certificar el sistema sin ser el contador de la empresa**: solo necesita acceso y validar que cumple las normas/resoluciones. Aplica también al otro cliente de Oliver (empresa familiar). Ver marco contable reutilizable.

@@ -1,5 +1,31 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === ESTADO 14/08/2026 — PLAN DE TRABAJO CON JOSUAR (5 PASOS) ===
+
+Josuar bajó el requerimiento contable a **5 pasos secuenciales** en la reunión del 10/08/2026.
+Detalle completo en `docs/finanzas/roadmap-contable.md` §10.
+
+### Paso 1a — Plan de cuentas: saldo inicial + subcategoría — CÓDIGO LISTO, MIGRACIÓN PENDIENTE
+- [x] Migración `sql/pending/024_chart_of_accounts_saldo_subcategoria.sql` escrita (aditiva e
+      idempotente: `saldo_inicial numeric(14,2) NOT NULL DEFAULT 0` + `subcategoria text NULL`).
+- [ ] **Aplicar en Supabase** (Oliver — **pausa obligatoria**, cambio de schema). Hasta que corra,
+      `/finanzas/configuracion/cuentas` lista **0 cuentas**: el `SELECT` pide columnas que no
+      existen y `listChartAccounts` loguea el error y devuelve `[]`. No hay DB de dev separada —
+      localhost apunta al mismo proyecto Supabase del cliente.
+- [ ] **Verificación en navegador** — bloqueada por lo anterior.
+- [x] Backend (tipos, validadores, create/update + audit_log, route handlers) y UI (form + 2
+      columnas nuevas en el listado). Tests 27/27 verde, `tsc --noEmit` limpio, lint sin hallazgos
+      nuevos. Detalle en `changelog.md`.
+
+### Paso 1b — Carga masiva por Excel de las 62 cuentas de Josuar — NO ARRANCADO
+Plantilla descargable (`código, nombre, tipo, subcategoría, saldo_inicial`) + preview + creación en
+lote, con mapeo de tipo español → `account_type` inglés. Las 34 cuentas viejas de QB se desactivan
+aparte (códigos distintos, no colisionan).
+
+### Pasos 2 a 5 — NO ARRANCADOS
+2) Reportes Balance General y Estado de Resultado · 3) enganche factura→asiento (centro de costo) ·
+4) módulo de compra · 5) asientos manuales + auxiliares de antigüedad.
+
 ## === ESTADO 04/08/2026 — MÓDULO CONTABLE ===
 
 ### Fase 1 (schema del ledger) — LISTA EN CÓDIGO, PENDIENTE DE APLICAR

@@ -1,5 +1,66 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [DEPLOY] - 2026-08-14 18:03 UTC - develop → main (11 commits)
+
+**Merge:** `060fed7` · **Punto de rollback:** `f149735` · **Aprobado por:** Oliver
+
+### Qué salió
+Ledger Fase 1 (schema, sin uso en código todavía) · plan de cuentas con `saldo_inicial` +
+`subcategoria` · importador de cuentas por Excel · reportes Balance General y Estado de Resultado ·
+rol asistente (ve todos los casos + ficha de cliente en solo lectura, sin directorio) · fix del
+borrado de cliente con registros financieros.
+
+**Migraciones:** ninguna en este deploy. `sql/pending/023` y `024` ya habían sido aplicadas por
+Oliver en el Supabase de producción; código y BD ya estaban en sync.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa de tests | **281/281 verde**, 0 fail (22 archivos) |
+| `tsc --noEmit` | limpio |
+| `next build` local | **exitoso** (`✓ Compiled successfully`, exit 0) |
+| Lint | 5 errores **preexistentes**, todos en archivos que este release NO toca; `next.config` tiene `eslint.ignoreDuringBuilds` → no bloquean el build |
+| Diff review `origin/main..origin/develop` | limpio: sin secretos, sin endpoints de debug, sin scripts de scratch; `build` es `next build` a secas (ningún hook que corra migraciones) |
+| Migraciones en prod | ya aplicadas (023, 024) |
+| Changelog | actualizado |
+
+**Verificación extra antes de mergear:** `main` NO era ancestro de `develop` (9 merge commits viven
+solo en main, patrón normal del repo), así que el fast-forward era imposible y se usó merge commit
+`--no-ff` — que además es la palanca de rollback. Se comprobó con `merge-tree` que el merge no tenía
+conflictos y que **el árbol resultante es idéntico al de `develop`**, o sea que producción quedó
+exactamente con el código probado. También se verificó que main no tuviera ningún hotfix ausente en
+develop (lo único "único de main" era el 023 viejo, que develop reescribió).
+
+### Deploy
+
+- Push a `origin/main` 18:03:24 UTC → auto-deploy disparado.
+- Vercel: `crm-integra-legal-28gehse9m` · **Ready** · build **1m** · creado 18:03:25 UTC.
+- Deploy anterior (rollback en Vercel): `crm-integra-legal-qb1fnqhga`.
+
+### Post-deploy smoke (producción, `crm-integra-legal.vercel.app`)
+
+Sin sesión: `/api/health` → 401 (el gate, no un 500) y las 4 rutas nuevas → 307 al login
+(middleware corriendo, sin crash).
+
+Con sesión de admin:
+
+| Check | Resultado |
+|---|---|
+| (a) `/finanzas/reportes/balance` | **OK** — los 5 totales exactos (Activos corrientes 252,967.57 · Activo 257,902.46 · Pasivos -13,425.55 · Patrimonio -244,476.91 · Pasivo+Patrimonio -257,902.46) y "El balance cuadra" |
+| (a) `/finanzas/reportes/pyl` | **OK** — los 5 totales exactos (Ingresos -289,137.06 · Costos 9,878.38 · Bruta -279,258.68 · Gastos 34,781.77 · Utilidad Operativa -244,476.91) + ISR 61,119.23 y Neta -183,357.68 |
+| (b) `/finanzas/configuracion/cuentas` | **OK** — "62 activa(s) · 97 total", con las columnas Subcategoría y Saldo inicial y el botón Importar cuentas |
+| (c) Ficha de cliente (CLI-001) | **OK** — carga sin error, con las acciones de admin |
+| (d) Asistente ve todos los casos | **Verificado PRE-DEPLOY en localhost**, no re-verificado en producción — decisión de Oliver: es el mismo código que quedó en prod (commits `bb8bc16` y `547c312`, con el gate del middleware cubierto por los tests de la suite). No se re-probó en prod porque exige iniciar sesión con el usuario asistente y Claude no ingresa contraseñas. |
+
+Sin errores de consola en las páginas verificadas.
+
+**Nota de alcance del smoke:** (a), (b) y (c) se verificaron directamente contra la URL de
+producción. (d) descansa en la verificación previa en localhost sobre el mismo commit. Si alguna vez
+hay que auditar este deploy, esa es la distinción que importa.
+
+---
+
 ## [Feature] - 2026-08-14 - Balance General y Estado de Resultado (Paso 2 contable)
 
 Los dos reportes que pidió Josuar, reemplazando los placeholders de

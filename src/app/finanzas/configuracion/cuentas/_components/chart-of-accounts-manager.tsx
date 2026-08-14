@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +16,10 @@ import {
   Power,
   Loader2,
   Lock,
+  FileSpreadsheet,
 } from "lucide-react";
 import { matchesSearchQuery } from "@/lib/utils/search";
+import { ImportAccountsPanel } from "@/app/finanzas/configuracion/cuentas/_components/import-accounts-panel";
 import {
   validateCreateChartAccount,
   validateUpdateChartAccount,
@@ -84,6 +87,7 @@ const selectClass =
   "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none border-gray-300";
 
 export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
@@ -91,6 +95,27 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  /**
+   * Recarga el listado desde el server tras una carga masiva. Es más simple y
+   * más seguro que reconciliar en el cliente: el bulk puede haber creado y
+   * actualizado decenas de filas en una pasada.
+   */
+  async function reloadAccounts() {
+    try {
+      const res = await fetch(API_BASE);
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(json.accounts)) {
+        setAccounts(json.accounts as ChartAccountRow[]);
+      }
+    } catch {
+      setError("La carga se aplicó, pero no se pudo refrescar el listado. Recargá la página.");
+    }
+    // El conteo del encabezado ("N cuentas contables") lo renderiza el server
+    // component de la página, así que sin esto queda viejo tras la carga.
+    router.refresh();
+  }
 
   const filtered = useMemo(
     () =>
@@ -202,6 +227,8 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
         return prev.map((a) => (a.id === saved.id ? saved : a));
       });
       setForm(null);
+      // Mantiene sincronizado el conteo del encabezado (server component).
+      router.refresh();
     } catch {
       setError("Error de red al guardar. Intentá de nuevo.");
     } finally {
@@ -262,16 +289,39 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           />
         </div>
         {canMutate && (
-          <Button
-            onClick={startCreate}
-            disabled={!!form}
-            className="min-h-[44px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
-          >
-            <Plus size={18} className="mr-1" />
-            Nueva cuenta
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null);
+                setForm(null);
+                setImporting(true);
+              }}
+              disabled={importing}
+              className="min-h-[44px]"
+            >
+              <FileSpreadsheet size={18} className="mr-1" />
+              Importar cuentas
+            </Button>
+            <Button
+              onClick={startCreate}
+              disabled={!!form || importing}
+              className="min-h-[44px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
+            >
+              <Plus size={18} className="mr-1" />
+              Nueva cuenta
+            </Button>
+          </div>
         )}
       </div>
+
+      {/* Carga masiva desde Excel */}
+      {canMutate && importing && (
+        <ImportAccountsPanel
+          onImported={reloadAccounts}
+          onClose={() => setImporting(false)}
+        />
+      )}
 
       {/* Error global */}
       {error && (

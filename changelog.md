@@ -1,5 +1,127 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-14 - Plan de cuentas: carga masiva por Excel (Paso 1b contable)
+
+Segunda mitad del **Paso 1** del plan contable con Josuar (ver
+`docs/finanzas/roadmap-contable.md` §10). Botón **"Importar cuentas"** en
+`/finanzas/configuracion/cuentas`: plantilla descargable, subida de .xlsx/.csv, preview con
+crear/actualizar/error por fila, y upsert por `(tenant, código)` al confirmar.
+
+**Sin migración**: usa las columnas `saldo_inicial` y `subcategoria` del Paso 1a.
+
+### 1. Módulo PURO de mapeo — `src/lib/finanzas/import/chart-of-accounts-mapping.ts`
+
+Separado a propósito de la capa XLSX: recibe una matriz `unknown[][]` y devuelve filas tipadas,
+así que se testea sin fixtures binarios ni mocks.
+
+- **Lectura tolerante de encabezados**, case/acento-insensible vía NFD + borrado de marcas
+  combinantes (`Código` y `Codigo` caen en la misma clave, sin enumerar variantes). Alias por
+  campo: código/codigo/número/numero/cuenta · nombre/nombre de cuenta/descripción ·
+  tipo/tipo de cuenta · subcategoría · saldo inicial/saldo_inicial/balance inicial.
+- Match por **igualdad exacta** de la clave normalizada, no por `includes()`: así `Saldo final` no
+  se confunde con `Saldo inicial` ni `Tipo de cuenta` con el alias `cuenta` del código. Hay test
+  para ambos.
+- **Detección de la fila de encabezado** (no se asume la fila 1): recorre hasta 30 filas y toma la
+  primera que identifique código Y nombre. Las filas de título del balance de comprobación de
+  Josuar ("INTEGRA LEGAL, S.A.", "Al 31/12/2025") se saltan solas.
+- **Mapeo de tipo** → `account_type` + subcategoría default, singular y plural, más los 5 valores
+  crudos en inglés: Activo→asset · Pasivo→liability · Patrimonio→equity · Ingreso→income ·
+  Costo→expense+`costo` · Gasto→expense+`gasto_operativo`.
+- **Subcategoría explícita del archivo gana** sobre el default del tipo. Acepta el value snake_case
+  o el label en español; el label necesita un **lookup inverso real**, no un `replace(" ", "_")`
+  ("Propiedad, planta y equipo" → `propiedad_planta_equipo` no sale de ninguna transformación
+  mecánica). Bug encontrado por el test.
+- **Parseo de saldo** tolerante: vacío→0, negativos con signo o entre paréntesis contables
+  (`(1,234.00)` = -1234), símbolo `B/.`/`$`, y separadores de miles/decimales US o europeos. La
+  regla de desambiguación está documentada en el código (si hay `,` y `.`, el último es el decimal).
+- **Filas sin código válido se descartan EN SILENCIO** (títulos, subtotales "TOTAL ACTIVOS",
+  vacías). Una fila **con** código pero con tipo/nombre inválido sí es error: el usuario claramente
+  quiso importarla.
+- `classifyRows()` decide crear/actualizar/error y detecta **códigos repetidos dentro del archivo**
+  (la 1ra se procesa, las siguientes quedan en error). Sin ese guard dos filas con el mismo código
+  se escribirían una sobre la otra y el resumen mentiría.
+
+### 2. Capa XLSX — `src/lib/finanzas/import/chart-of-accounts-workbook.ts`
+
+Solo convierte el archivo a matriz (`sheet_to_json` con `raw: true` para que los saldos lleguen
+como number) y delega. Genera además la plantilla `.xlsx` con 2 hojas: **Cuentas** (5 ejemplos que
+cubren un costo, un gasto y un saldo negativo) e **Instrucciones** (qué es obligatorio + tabla de
+subcategorías válidas con su valor interno).
+
+### 3. Endpoint — `POST /api/finanzas/configuracion/chart-of-accounts/bulk`
+
+`multipart/form-data` con `mode=preview|commit`, mismos roles que la creación de cuentas
+(admin/abogada/contador). Topes: 5 MB y 1000 filas.
+
+- **El commit re-parsea el archivo** en vez de confiar en el JSON del cliente: si el navegador
+  posteara las filas ya clasificadas, un cliente modificado podría inyectar filas que nunca pasaron
+  por la validación del preview.
+- Reusa `createChartAccount` / `updateChartAccount`, así que el **`audit_log` por fila** y los
+  guards de unicidad salen gratis y son los mismos que en el alta manual.
+- **Una fila que falla no aborta el resto**: se reporta y se sigue. Rehacer una carga de 62 cuentas
+  por un typo en la fila 40 es peor que un resumen con 1 error.
+- **En el update PRESERVA `description` y `active`.** El PATCH es reemplazo total y ninguno de los
+  dos viene en el Excel: sin esto, importar borraba las notas del contador y podía reactivar
+  cuentas desactivadas. Mismo tipo de bug que el del toggle en el Paso 1a. Hay test dedicado.
+
+### 4. UI — `import-accounts-panel.tsx` + botón en el manager
+
+Panel inline de 3 pasos (subir → preview → resumen). Preview con badges Crear/Actualizar/Error,
+motivo por fila, aviso ámbar si el archivo no trae columna de saldo, y contador de filas ignoradas.
+Descarga con anchor programático, **no `window.open`** (bug ya visto en el PDF de cotizaciones).
+
+**Bug preexistente corregido de paso:** el conteo del encabezado ("N cuentas contables") lo
+renderiza el server component, así que quedaba viejo después de cualquier mutación desde el
+cliente — se veía "36 cuentas contables" con "41 total" en el pie. Se agregó `router.refresh()`
+tras la carga masiva y tras crear/editar una cuenta.
+
+### 5. Fuera de alcance (a propósito)
+
+- **NO genera asientos de apertura**: el saldo vive en la columna; el asiento formal es el Paso 3.
+- **NO desactiva las 34 cuentas viejas de QB** (lo hace Oliver aparte).
+- Activo/Pasivo/Patrimonio/Ingreso **no reciben subcategoría por defecto**: para el Balance General
+  hay que distinguir corriente de no corriente y eso no se puede inferir del tipo. Quedan sin
+  clasificar y se completan con la columna Subcategoría o editando la cuenta.
+
+### 6. Tests — 45 nuevos (72 en total en el módulo, 0 fail)
+
+- `src/lib/finanzas/import/__tests__/chart-of-accounts-mapping.test.ts` — **34 tests** del módulo
+  puro: encabezados (plantilla, balance de comprobación, `Saldo final` que no matchea), mapeo de
+  tipo, saldos (vacío→0, negativos, paréntesis, miles US/EU, moneda, fuera de rango), filas basura,
+  subcategoría explícita gana, snake_case vs label, y `classifyRows` (update por código existente,
+  duplicado en archivo, isSystem).
+- `src/app/api/.../bulk/__tests__/bulk.route.test.ts` — **11 tests** del endpoint, armando un
+  `.xlsx` real en memoria con SheetJS: preview no escribe nada, commit crea con `is_system=false` y
+  audita, update preserva description/active, fila inválida no aborta el resto, duplicado se
+  escribe una sola vez, formato de Josuar, 400 sin encabezados, 403 asistente.
+
+```
+npx tsx --test src/lib/finanzas/import/__tests__/chart-of-accounts-mapping.test.ts
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/finanzas/configuracion/chart-of-accounts/bulk/__tests__/bulk.route.test.ts
+```
+
+### 7. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+| Paso | Resultado |
+|---|---|
+| Descargar plantilla | `plantilla-plan-de-cuentas.xlsx`, 2 hojas, 5 filas de ejemplo (verificado leyendo el archivo bajado) |
+| Subir Excel con formato de Josuar (títulos arriba, `Nombre de cuenta`/`Tipo de Cuenta`/`Balance Inicial`, columnas Débito/Crédito/Saldo final, fila TOTALES) | Preview **5 a crear · 0 a actualizar · 1 fila ignorada** |
+| Mapeo en el preview | `Costos`→Gasto+**Costo**; `Gastos`→Gasto+**Gasto operativo**; `"1,200.50"`→1,200.50; `"B/. 3,400.00"`→3,400.00; `-15000`→**-15,000.00** en rojo |
+| Confirmar | **5 creadas · 0 actualizadas · 0 con error · 1 ignorada** |
+| Listado | Las 5 agrupadas por tipo, con su saldo y subcategoría; total 36 → 41 |
+| Volver a subir el MISMO archivo | Preview **0 a crear · 5 a actualizar** → confirmado: **0 creadas · 5 actualizadas**, total sigue en 41 (sin duplicados) |
+
+En BD: los 5 códigos con `account_type`/`subcategoria`/`saldo_inicial` correctos, `is_system=false`,
+y `saldo_inicial` de tipo `number`. El `audit_log` tiene **5 create y 0 update**: el segundo import
+mandó valores idénticos y el diff no registró cambios fantasma — la comparación numérica del Paso 1a
+funcionando sobre datos reales.
+
+Quedan las 5 cuentas de prueba `910001`–`910005` en la BD del cliente; el `DELETE` para limpiarlas
+está en `task_plan.md`.
+
+---
+
 ## [Feature] - 2026-08-14 - Plan de cuentas: saldo inicial + subcategoría (Paso 1a contable)
 
 Primera mitad del **Paso 1** del plan contable acordado con Josuar (ver

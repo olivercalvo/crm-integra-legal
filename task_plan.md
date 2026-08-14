@@ -17,14 +17,24 @@ Detalle completo en `docs/finanzas/roadmap-contable.md` §10.
       desactivar. `audit_log` con 3 entradas correctas; el toggle auditó **solo `active`**,
       confirmando que ya no pisa saldo ni subcategoría.
 - [ ] **Limpieza pendiente (Oliver):** la cuenta de prueba `999001` quedó en la BD del cliente,
-      **inactiva**. No hay hard delete desde la UI. Para borrarla:
-      `DELETE FROM chart_of_accounts WHERE code='999001' AND tenant_id='a0000000-0000-0000-0000-000000000001';`
-      No colisiona con las 62 cuentas de Josuar (códigos distintos).
+      **inactiva**. No hay hard delete desde la UI. El `DELETE` está consolidado en el Paso 1b junto
+      con las de esa verificación. No colisiona con las 62 cuentas de Josuar (códigos distintos).
 
-### Paso 1b — Carga masiva por Excel de las 62 cuentas de Josuar — NO ARRANCADO
-Plantilla descargable (`código, nombre, tipo, subcategoría, saldo_inicial`) + preview + creación en
-lote, con mapeo de tipo español → `account_type` inglés. Las 34 cuentas viejas de QB se desactivan
-aparte (códigos distintos, no colisionan).
+### Paso 1b — Carga masiva por Excel — CERRADO 14/08/2026
+- [x] Sin migración (usa las columnas del 1a). Módulo puro de mapeo + capa XLSX + endpoint
+      `POST /api/finanzas/configuracion/chart-of-accounts/bulk` (preview/commit) + panel de UI.
+- [x] Lectura tolerante: traga la plantilla propia Y el balance de comprobación de Josuar (filas de
+      título arriba, encabezados alternativos, columnas extra, fila TOTALES).
+- [x] Upsert por `(tenant, código)`; el update **preserva `description` y `active`** (no vienen en
+      el Excel y el PATCH es reemplazo total).
+- [x] Tests 45 nuevos (34 del módulo puro + 11 del endpoint), `tsc` limpio, lint sin hallazgos.
+- [x] **Verificado en navegador**: plantilla descargada, Excel formato Josuar subido → 5 creadas;
+      mismo archivo de nuevo → 5 actualizadas sin duplicados; `audit_log` con 5 create y 0 update.
+      Detalle en `changelog.md`.
+- [ ] **Limpieza pendiente (Oliver):** cuentas de prueba en la BD del cliente. Para borrarlas:
+      `DELETE FROM chart_of_accounts WHERE code IN ('999001','910001','910002','910003','910004','910005') AND tenant_id='a0000000-0000-0000-0000-000000000001';`
+- [ ] **Pendiente de Josuar:** el archivo real de 62 cuentas para cargarlo. La herramienta ya está.
+      Las 34 cuentas viejas de QB se desactivan aparte (códigos distintos, no colisionan).
 
 ### Pasos 2 a 5 — NO ARRANCADOS
 2) Reportes Balance General y Estado de Resultado · 3) enganche factura→asiento (centro de costo) ·

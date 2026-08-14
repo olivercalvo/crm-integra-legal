@@ -29,7 +29,7 @@ import { requireRole, requireEntityInTenant } from "@/lib/supabase/server-query"
 // Matriz de roles del proyecto:
 //   admin     → todo
 //   abogada   → CRUD legal + finanzas
-//   asistente → ver casos asignados, registrar gastos, cumplir tareas,
+//   asistente → ver TODOS los casos del tenant, registrar gastos, cumplir tareas,
 //               comentar, subir documentos (NO crea/edita clientes/casos/prospectos)
 //   contador  → solo finanzas (NO recursos legales)
 // ---------------------------------------------------------------------------

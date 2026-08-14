@@ -1,5 +1,662 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-14 - Balance General y Estado de Resultado (Paso 2 contable)
+
+Los dos reportes que pidió Josuar, reemplazando los placeholders de
+`/finanzas/reportes/balance` y `/finanzas/reportes/pyl`. **Sin migración**: se arman con el
+`saldo_inicial` y la `subcategoria` de las 62 cuentas cargadas en los Pasos 1a/1b.
+
+**Los 10 totales dan exactamente los mismos números que el Excel de Josuar** (ver §4).
+
+### 1. Convención de signos — la de Josuar, sin invertir
+
+Los saldos se suman TAL CUAL vienen de la balanza de comprobación: débitos (activos, costos,
+gastos) positivos, créditos (pasivos, patrimonio, ingresos) negativos. Consecuencias que son
+correctas y NO bugs, documentadas en el código y en una nota al pie de los dos reportes:
+
+- "Total de Ingresos" sale **negativo** (-289,137.06).
+- Una **ganancia aparece en negativo**; una pérdida, positiva. De ahí que el guard del ISR sea
+  `utilidadOperativa < 0`, no `> 0`.
+- "Total Pasivo + Patrimonio" queda **igual y opuesto** al "Total de Activo". El balance cuadra
+  cuando la SUMA de los dos da cero, no cuando son iguales.
+
+### 2. Capa de datos aislada — `src/lib/finanzas/reports/accounting-source.ts`
+
+Único archivo a cambiar en el Paso 3. Hoy el saldo de cada cuenta ES su `saldo_inicial`; cuando
+entre el motor de posteo pasa a ser `saldo_inicial + Σ movimientos del ledger`. `ReportAccount` no
+cambia de forma, así que el armado puro y la UI quedan intactos. Filtra `active = true` (las 35
+cuentas viejas de QB están desactivadas y ensuciarían el reporte con renglones en 0).
+
+### 3. Armado PURO — `src/lib/finanzas/reports/accounting-reports.ts`
+
+Sin BD: recibe `ReportAccount[]` y devuelve las estructuras que renderiza la UI.
+
+**Estado de Resultado:** INGRESOS → Total de Ingresos · COSTOS → Total de Costos · GANANCIA O
+PÉRDIDA BRUTA · GASTOS OPERATIVOS → Total de Gastos · UTILIDAD OPERATIVA · ISR · UTILIDAD NETA.
+COSTOS y GASTOS parten `account_type='expense'` en dos por `subcategoria` — que es exactamente para
+lo que se agregó el campo en el Paso 1a: en BD ambos son el mismo tipo.
+
+**Balance General:** ACTIVOS agrupado en el orden de Josuar (corriente → propiedad, planta y equipo
+→ no corriente, que **no** es el orden de `SUBCATEGORIAS`), PASIVOS (corriente / no corriente) y
+PATRIMONIO (cuentas + renglón calculado "Utilidad del Ejercicio"). Renglones ordenados por código,
+numeric-aware.
+
+**Nada se cae del reporte en silencio.** Una cuenta con `subcategoria` NULL o inesperada entra en un
+grupo **"Sin clasificar"** al final de su tipo, suma al total, y la UI avisa cuántas hay. Sin eso,
+un `expense` mal clasificado desaparecía del P&L y el total mentía sin que nadie lo notara. Con las
+62 cuentas actuales no hay ninguna (hay test que lo verifica).
+
+**ISR como parámetro, no regla fiscal:** tasa plana configurable (default 25%) sobre la utilidad
+operativa, aplicada solo si hubo ganancia. La tasa y el método (base gravable, ajustes, tarifa
+alternativa) están pendientes de Josuar; la UI lo dice explícitamente ("tasa provisional 25% — a
+confirmar").
+
+`buildAccountingReports()` arma los dos juntos para que la "Utilidad del Ejercicio" del Balance sea
+**literalmente** la utilidad operativa del Estado de Resultado y no puedan divergir.
+
+### 4. Totales verificados contra el Excel de Josuar
+
+| Estado de Resultado | Valor | Balance General | Valor |
+|---|---|---|---|
+| Total de Ingresos | -289,137.06 | Total Activos corrientes | 252,967.57 |
+| Total de Costos | 9,878.38 | Total de Activo | 257,902.46 |
+| Ganancia o Pérdida Bruta | -279,258.68 | Total de Pasivos | -13,425.55 |
+| Total de Gastos | 34,781.77 | Total de Patrimonio | -244,476.91 |
+| Utilidad Operativa | -244,476.91 | Total Pasivo + Patrimonio | -257,902.46 |
+
+ISR (25% provisional) 61,119.23 · Utilidad Neta -183,357.68 · **el balance cuadra** (descuadre 0.00).
+
+### 5. ⚠️ Riesgo de doble conteo detectado y mitigado
+
+El plan de Josuar **ya tiene una cuenta `300003 Utilidad del Ejercicio`** (equity/patrimonio) y este
+reporte además agrega el renglón calculado con el mismo nombre, tal como pide su modelo. Hoy `300003`
+está en 0 y los totales dan bien, pero si alguien le carga un saldo **el resultado se contaría dos
+veces** y el balance se descuadraría.
+
+Mitigaciones: el descuadre se **calcula y se muestra** (banner rojo con la diferencia y qué revisar)
+en vez de esconderse; y si las cuentas de patrimonio tienen cualquier saldo distinto de cero aparece
+un aviso ámbar pidiendo confirmar que no se está duplicando. El chequeo mira el **saldo**, no el
+nombre de la cuenta, así que no es frágil. Cuando llegue el cierre de ejercicio con asientos, el
+resultado se postea a la cuenta y el renglón calculado desaparece.
+
+### 6. UI
+
+Formato de los modelos de Josuar: encabezado centrado con razón social + título + fecha de
+generación, secciones en mayúsculas, subgrupos con subtotal, totales en negrita con reglas, montos
+`font-mono tabular-nums` con separador de miles `es-PA` y **negativos en rojo**. Piezas compartidas
+en `_components/financial-statement.tsx`; la razón social sale de
+`EFACTURA_EMISOR_RAZON_SOCIAL` (el nombre legal ante la DGI) leyendo `process.env` directo —
+**no** vía `loadEmisorConfig()`, que lanza si falta cualquier variable del emisor y tiraría abajo un
+reporte contable por una config de facturación incompleta.
+
+Los badges del índice pasaron de "Mensual / Anual" y "Fecha de corte" a **"Saldos de apertura"**:
+todavía no hay selector de período y el badge anterior prometía algo que el reporte no hace.
+
+### 7. Tests — 22 nuevos (`accounting-reports.test.ts`), 0 fail
+
+Fixture `josuar-accounts.fixture.ts` con las **62 cuentas reales** exportadas de la BD (generado, no
+escrito a mano). Cubre: los 10 totales contra el Excel de Josuar, el cuadre del balance, que la
+Utilidad del Ejercicio del Balance sea la utilidad operativa del ER, el orden de los grupos de
+activo, el orden por código, la separación costo/gasto_operativo, que nada caiga en "Sin clasificar"
+con los datos reales, que un `expense` huérfano SÍ aparezca en "Sin clasificar" y sume, el descuadre
+reportado, el ISR (ganancia / pérdida / cero / tasa parametrizada / número real), y que los centavos
+no arrastren error binario.
+
+```
+npx tsx --test src/lib/finanzas/reports/__tests__/accounting-reports.test.ts
+```
+
+### 8. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+Ambos reportes abiertos y leídos renglón por renglón. **Los 10 totales coinciden exactamente** con
+la tabla de §4. El Balance muestra el banner verde "El balance cuadra. Total de Activo 257,902.46 y
+Total Pasivo + Patrimonio -257,902.46 son iguales y opuestos". El aviso de doble conteo NO se
+dispara (las 3 cuentas de patrimonio están en 0), que es el comportamiento correcto. El renglón
+calculado se distingue visualmente del de la cuenta `300003` por la nota gris al lado ("del Estado
+de Resultado (operativa)").
+
+### 9. Pendiente de Josuar (marcado en la UI, no asumido)
+
+- **Tasa y método del ISR.**
+- Si el patrimonio debe llevar la utilidad **operativa o la neta** (hoy: operativa).
+- **Fecha de corte** de los saldos de apertura.
+
+---
+
+## [Feature] - 2026-08-14 - Plan de cuentas: carga masiva por Excel (Paso 1b contable)
+
+Segunda mitad del **Paso 1** del plan contable con Josuar (ver
+`docs/finanzas/roadmap-contable.md` §10). Botón **"Importar cuentas"** en
+`/finanzas/configuracion/cuentas`: plantilla descargable, subida de .xlsx/.csv, preview con
+crear/actualizar/error por fila, y upsert por `(tenant, código)` al confirmar.
+
+**Sin migración**: usa las columnas `saldo_inicial` y `subcategoria` del Paso 1a.
+
+### 1. Módulo PURO de mapeo — `src/lib/finanzas/import/chart-of-accounts-mapping.ts`
+
+Separado a propósito de la capa XLSX: recibe una matriz `unknown[][]` y devuelve filas tipadas,
+así que se testea sin fixtures binarios ni mocks.
+
+- **Lectura tolerante de encabezados**, case/acento-insensible vía NFD + borrado de marcas
+  combinantes (`Código` y `Codigo` caen en la misma clave, sin enumerar variantes). Alias por
+  campo: código/codigo/número/numero/cuenta · nombre/nombre de cuenta/descripción ·
+  tipo/tipo de cuenta · subcategoría · saldo inicial/saldo_inicial/balance inicial.
+- Match por **igualdad exacta** de la clave normalizada, no por `includes()`: así `Saldo final` no
+  se confunde con `Saldo inicial` ni `Tipo de cuenta` con el alias `cuenta` del código. Hay test
+  para ambos.
+- **Detección de la fila de encabezado** (no se asume la fila 1): recorre hasta 30 filas y toma la
+  primera que identifique código Y nombre. Las filas de título del balance de comprobación de
+  Josuar ("INTEGRA LEGAL, S.A.", "Al 31/12/2025") se saltan solas.
+- **Mapeo de tipo** → `account_type` + subcategoría default, singular y plural, más los 5 valores
+  crudos en inglés: Activo→asset · Pasivo→liability · Patrimonio→equity · Ingreso→income ·
+  Costo→expense+`costo` · Gasto→expense+`gasto_operativo`.
+- **Subcategoría explícita del archivo gana** sobre el default del tipo. Acepta el value snake_case
+  o el label en español; el label necesita un **lookup inverso real**, no un `replace(" ", "_")`
+  ("Propiedad, planta y equipo" → `propiedad_planta_equipo` no sale de ninguna transformación
+  mecánica). Bug encontrado por el test.
+- **Parseo de saldo** tolerante: vacío→0, negativos con signo o entre paréntesis contables
+  (`(1,234.00)` = -1234), símbolo `B/.`/`$`, y separadores de miles/decimales US o europeos. La
+  regla de desambiguación está documentada en el código (si hay `,` y `.`, el último es el decimal).
+- **Filas sin código válido se descartan EN SILENCIO** (títulos, subtotales "TOTAL ACTIVOS",
+  vacías). Una fila **con** código pero con tipo/nombre inválido sí es error: el usuario claramente
+  quiso importarla.
+- `classifyRows()` decide crear/actualizar/error y detecta **códigos repetidos dentro del archivo**
+  (la 1ra se procesa, las siguientes quedan en error). Sin ese guard dos filas con el mismo código
+  se escribirían una sobre la otra y el resumen mentiría.
+
+### 2. Capa XLSX — `src/lib/finanzas/import/chart-of-accounts-workbook.ts`
+
+Solo convierte el archivo a matriz (`sheet_to_json` con `raw: true` para que los saldos lleguen
+como number) y delega. Genera además la plantilla `.xlsx` con 2 hojas: **Cuentas** (5 ejemplos que
+cubren un costo, un gasto y un saldo negativo) e **Instrucciones** (qué es obligatorio + tabla de
+subcategorías válidas con su valor interno).
+
+### 3. Endpoint — `POST /api/finanzas/configuracion/chart-of-accounts/bulk`
+
+`multipart/form-data` con `mode=preview|commit`, mismos roles que la creación de cuentas
+(admin/abogada/contador). Topes: 5 MB y 1000 filas.
+
+- **El commit re-parsea el archivo** en vez de confiar en el JSON del cliente: si el navegador
+  posteara las filas ya clasificadas, un cliente modificado podría inyectar filas que nunca pasaron
+  por la validación del preview.
+- Reusa `createChartAccount` / `updateChartAccount`, así que el **`audit_log` por fila** y los
+  guards de unicidad salen gratis y son los mismos que en el alta manual.
+- **Una fila que falla no aborta el resto**: se reporta y se sigue. Rehacer una carga de 62 cuentas
+  por un typo en la fila 40 es peor que un resumen con 1 error.
+- **En el update PRESERVA `description` y `active`.** El PATCH es reemplazo total y ninguno de los
+  dos viene en el Excel: sin esto, importar borraba las notas del contador y podía reactivar
+  cuentas desactivadas. Mismo tipo de bug que el del toggle en el Paso 1a. Hay test dedicado.
+
+### 4. UI — `import-accounts-panel.tsx` + botón en el manager
+
+Panel inline de 3 pasos (subir → preview → resumen). Preview con badges Crear/Actualizar/Error,
+motivo por fila, aviso ámbar si el archivo no trae columna de saldo, y contador de filas ignoradas.
+Descarga con anchor programático, **no `window.open`** (bug ya visto en el PDF de cotizaciones).
+
+**Bug preexistente corregido de paso:** el conteo del encabezado ("N cuentas contables") lo
+renderiza el server component, así que quedaba viejo después de cualquier mutación desde el
+cliente — se veía "36 cuentas contables" con "41 total" en el pie. Se agregó `router.refresh()`
+tras la carga masiva y tras crear/editar una cuenta.
+
+### 5. Fuera de alcance (a propósito)
+
+- **NO genera asientos de apertura**: el saldo vive en la columna; el asiento formal es el Paso 3.
+- **NO desactiva las 34 cuentas viejas de QB** (lo hace Oliver aparte).
+- Activo/Pasivo/Patrimonio/Ingreso **no reciben subcategoría por defecto**: para el Balance General
+  hay que distinguir corriente de no corriente y eso no se puede inferir del tipo. Quedan sin
+  clasificar y se completan con la columna Subcategoría o editando la cuenta.
+
+### 6. Tests — 45 nuevos (72 en total en el módulo, 0 fail)
+
+- `src/lib/finanzas/import/__tests__/chart-of-accounts-mapping.test.ts` — **34 tests** del módulo
+  puro: encabezados (plantilla, balance de comprobación, `Saldo final` que no matchea), mapeo de
+  tipo, saldos (vacío→0, negativos, paréntesis, miles US/EU, moneda, fuera de rango), filas basura,
+  subcategoría explícita gana, snake_case vs label, y `classifyRows` (update por código existente,
+  duplicado en archivo, isSystem).
+- `src/app/api/.../bulk/__tests__/bulk.route.test.ts` — **11 tests** del endpoint, armando un
+  `.xlsx` real en memoria con SheetJS: preview no escribe nada, commit crea con `is_system=false` y
+  audita, update preserva description/active, fila inválida no aborta el resto, duplicado se
+  escribe una sola vez, formato de Josuar, 400 sin encabezados, 403 asistente.
+
+```
+npx tsx --test src/lib/finanzas/import/__tests__/chart-of-accounts-mapping.test.ts
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/finanzas/configuracion/chart-of-accounts/bulk/__tests__/bulk.route.test.ts
+```
+
+### 7. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+| Paso | Resultado |
+|---|---|
+| Descargar plantilla | `plantilla-plan-de-cuentas.xlsx`, 2 hojas, 5 filas de ejemplo (verificado leyendo el archivo bajado) |
+| Subir Excel con formato de Josuar (títulos arriba, `Nombre de cuenta`/`Tipo de Cuenta`/`Balance Inicial`, columnas Débito/Crédito/Saldo final, fila TOTALES) | Preview **5 a crear · 0 a actualizar · 1 fila ignorada** |
+| Mapeo en el preview | `Costos`→Gasto+**Costo**; `Gastos`→Gasto+**Gasto operativo**; `"1,200.50"`→1,200.50; `"B/. 3,400.00"`→3,400.00; `-15000`→**-15,000.00** en rojo |
+| Confirmar | **5 creadas · 0 actualizadas · 0 con error · 1 ignorada** |
+| Listado | Las 5 agrupadas por tipo, con su saldo y subcategoría; total 36 → 41 |
+| Volver a subir el MISMO archivo | Preview **0 a crear · 5 a actualizar** → confirmado: **0 creadas · 5 actualizadas**, total sigue en 41 (sin duplicados) |
+
+En BD: los 5 códigos con `account_type`/`subcategoria`/`saldo_inicial` correctos, `is_system=false`,
+y `saldo_inicial` de tipo `number`. El `audit_log` tiene **5 create y 0 update**: el segundo import
+mandó valores idénticos y el diff no registró cambios fantasma — la comparación numérica del Paso 1a
+funcionando sobre datos reales.
+
+Quedan las 5 cuentas de prueba `910001`–`910005` en la BD del cliente; el `DELETE` para limpiarlas
+está en `task_plan.md`.
+
+---
+
+## [Feature] - 2026-08-14 - Plan de cuentas: saldo inicial + subcategoría (Paso 1a contable)
+
+Primera mitad del **Paso 1** del plan contable acordado con Josuar (ver
+`docs/finanzas/roadmap-contable.md` §10). El `chart_of_accounts` y su UI ya existían; faltaba
+poder cargar cada cuenta con su **saldo de apertura** y una **subcategoría** que agrupe los
+reportes. La carga masiva por Excel (Paso 1b) va en un cambio aparte.
+
+### 1. Migración — `sql/pending/024_chart_of_accounts_saldo_subcategoria.sql`
+
+Aditiva e idempotente (`ADD COLUMN IF NOT EXISTS`), **pendiente de aplicar** por Oliver en el SQL
+Editor de Supabase:
+
+| Columna | Tipo | Notas |
+|---|---|---|
+| `saldo_inicial` | `numeric(14,2) NOT NULL DEFAULT 0` | Admite negativos (patrimonio con pérdida acumulada, contra-cuentas). Las 34 cuentas existentes quedan en 0. |
+| `subcategoria` | `text NULL` | Sin CHECK a propósito: el vocabulario se valida en la app y puede crecer con el import del Paso 1b. NULL = sin clasificar. |
+
+Incluye `COMMENT ON COLUMN` en ambas, un `DO $$` que aborta si no quedaron las 2 columnas, y
+`SELECT` de verificación sobre `information_schema.columns` + conteo de cuentas en 0.
+
+**Decisión de diseño (puente deliberado):** `saldo_inicial` vive como columna porque calza con el
+modelo mental de Josuar y con el import por Excel. Cuando exista el motor de posteo del ledger
+(Paso 3), ese saldo se convierte en un **asiento de apertura** (`source_type='manual'`) y los
+reportes pasan a leer del ledger. La columna no se borra sin migrar los saldos primero.
+
+### 2. Tipos — `src/lib/finanzas/types/chart-of-account.ts`
+
+Nuevo tipo `Subcategoria` con sus 10 valores, `SUBCATEGORIAS` (orden del dropdown),
+`SUBCATEGORIA_LABEL_ES`, `isSubcategoria()` y `subcategoriaLabel()` (fallback `—` para NULL).
+Se guarda el value en **snake_case**, se muestra el label en español:
+
+`activo_corriente` · `activo_no_corriente` · `propiedad_planta_equipo` · `pasivo_corriente` ·
+`pasivo_no_corriente` · `patrimonio` · `ingreso` · `costo` · `gasto_operativo` · `otro`
+
+`ChartAccountRow`, `CreateChartAccountInput` y `UpdateChartAccountInput` suman
+`subcategoria: Subcategoria | null` y `saldo_inicial: number`.
+
+### 3. Validadores — `src/lib/finanzas/validators/chart-of-account.ts`
+
+- `subcategoria`: opcional (`null` / `""` / ausente → `null`). Si llega un valor tiene que estar en
+  `SUBCATEGORIAS`; este validador es la **única barrera** contra vocabulario inventado, porque la
+  columna no tiene CHECK.
+- `saldo_inicial`: opcional → **default 0**. Acepta number o string numérico, redondea a 2 decimales
+  con `round2()` (mismo patrón que `validators/business-expense.ts`), **permite negativos**, y corta
+  en `1e12` para dar un error accionable en vez de un `22003 numeric field overflow` de Postgres.
+
+### 4. Backend — API y queries
+
+- `createChartAccount` / `updateChartAccount` escriben ambos campos y **los mandan al `audit_log`**
+  como el resto: en `create` dentro del `new_value`, en `update` dentro del diff `old → new`.
+- El diff de `saldo_inicial` compara por **valor numérico**, no por identidad: PostgREST puede
+  devolver un `numeric` como string (`"8300.40"`), y comparar con `!==` registraba un cambio
+  fantasma `8300.40 → 8300.4` en cada guardado.
+- `SELECT_COLS` de `api/` y `queries/` incluyen las 2 columnas nuevas. Ambos módulos normalizan
+  `saldo_inicial` con `Number()` al devolver la fila, para que la UI no reciba un string.
+
+### 5. UI — `chart-of-accounts-manager.tsx`
+
+- Form de crear/editar: **"Saldo inicial (B/.)"** (`type=number`, `step=0.01`, alineado a la
+  derecha, default `0`, admite negativos) y **"Subcategoría (opcional)"** (dropdown con
+  `— Sin clasificar —` + los 10 labels en español).
+- Listado: 2 columnas nuevas. Subcategoría como badge gris (`—` si es NULL); saldo inicial en
+  `font-mono tabular-nums` alineado a la derecha con separador de miles `es-PA`, en **rojo si es
+  negativo** y gris claro si es 0.
+- El buscador ahora también matchea por label de subcategoría.
+- El estado del form guarda `saldo_inicial` como **string** para no pelear con el input mientras se
+  tipea (`-`, `1500.`, vacío al borrar todo); se convierte al guardar.
+
+**Bug evitado en el toggle activar/desactivar:** el `PATCH` es **reemplazo total**, no parche
+parcial — el validador defaultea los campos ausentes. `toggleActive()` mandaba solo
+`name/account_type/description/active`, así que con los campos nuevos habría **puesto el saldo en 0
+y la subcategoría en NULL** cada vez que alguien activaba o desactivaba una cuenta. Ahora reenvía la
+fila completa, y el contrato quedó documentado en el header de `api/chart-of-accounts.ts`.
+
+### 6. Sin cambios (a propósito)
+
+- El CHECK de `account_type` sigue con sus **5 valores en inglés** (`asset/liability/equity/income/
+  expense`). La distinción **costos vs gastos** se resuelve con `subcategoria` (`costo` vs
+  `gasto_operativo`), no abriendo el CHECK.
+- El código de cuenta sigue **inmutable**; `is_system` sin cambios.
+
+### 7. Tests — `chart-of-accounts.route.test.ts` (27 pass, 0 fail)
+
+12 tests nuevos: validador (saldo con default 0, negativos, redondeo a 2 decimales, no numérico,
+fuera de rango; subcategoría válida / vacía / inválida / ausente) y handlers (POST y PATCH
+persisten **y auditan** ambos campos, POST sin `saldo_inicial` → 0, subcategoría inválida → 400 con
+`fieldErrors`, y el caso del cambio fantasma `"8300.40"` vs `8300.4` que no debe auditarse).
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/finanzas/configuracion/chart-of-accounts/__tests__/chart-of-accounts.route.test.ts
+```
+
+### 8. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+Migración 024 aplicada en Supabase por Oliver antes de verificar. Recorrido completo:
+
+| Paso | Resultado |
+|---|---|
+| Listado inicial | Columnas **SUBCATEGORÍA** y **SALDO INICIAL** presentes; las 34 cuentas viejas en `—` y `0.00` |
+| Dropdown de subcategoría | Los 10 valores con label español y `value` en snake_case, más `— Sin clasificar —` |
+| Crear `999001` (saldo `12500.75`, *Activo corriente*) | Fila nueva con badge gris y `12,500.75` (separador de miles `es-PA`) |
+| Editar → *Activo no corriente*, saldo `-8400.25` | Form pre-cargado con ambos campos; persiste y el negativo sale **en rojo** |
+| Buscar "Activo no corriente" | Filtra a 1 fila → el buscador matchea por label de subcategoría |
+| Desactivar la cuenta | `Inactiva`, y **saldo + subcategoría intactos** → confirma el fix del toggle |
+
+`audit_log` de la cuenta (leído directo de la BD) — 3 entradas, exactamente las esperadas:
+
+```
+[create] new: {...,"subcategoria":"activo_corriente","saldo_inicial":12500.75,...}
+[update] field=subcategoria,saldo_inicial
+         old: {"subcategoria":"activo_corriente","saldo_inicial":12500.75}
+         new: {"subcategoria":"activo_no_corriente","saldo_inicial":-8400.25}
+[update] field=active   old: {"active":true}   new: {"active":false}
+```
+
+La tercera entrada es la prueba dura del fix: el toggle auditó **solo `active`** — antes habría
+registrado también `saldo_inicial: -8400.25 → 0` y `subcategoria: activo_no_corriente → null`.
+`saldo_inicial` vuelve de PostgREST como `number` (verificado con `typeof`).
+
+Queda la cuenta de prueba `999001` **inactiva** en la BD del cliente; el `DELETE` para limpiarla
+está en `task_plan.md` (no se ejecuta acá: borrar datos es pausa obligatoria).
+
+### 9. Doc
+
+`docs/finanzas/roadmap-contable.md` §10 (plan de 5 pasos de la reunión del 10/08/2026 con Josuar)
+se editó fuera de AG y entra en este commit.
+
+---
+
+## [Cambio de rol] - 2026-08-06 - Clientes para el asistente: ficha sí, directorio no
+
+Complemento del cambio anterior (asistente ve todos los casos). Al abrir un caso, el link al
+cliente llevaba a `/legal/clientes/{id}`, que estaba accesible pero con los botones de gestión
+visibles; y el directorio `/legal/clientes` era alcanzable por URL directa aunque no figurara en
+el menú. Decisión: **el asistente ve la ficha de un cliente puntual en solo lectura, y nada más**.
+
+### 1. Gate de ruta (`src/middleware.ts`)
+
+Nuevo `ASISTENTE_BLOCKED_PATTERNS` — gate por ruta **exacta**, no por prefijo, porque
+`/legal/clientes/{id}` tiene que seguir pasando:
+
+| Ruta | Asistente |
+|---|---|
+| `/legal/clientes` | redirect → `/legal` |
+| `/legal/clientes/nuevo` | redirect → `/legal` |
+| `/legal/clientes/{id}/editar` | redirect → `/legal` |
+| `/legal/clientes/{id}` | **permitida** |
+
+El check corre después del gate admin-only y del gate del contador, y antes del gating genérico
+por prefijo. No toca a admin/abogada (condicionado a `userRole === "asistente"`).
+
+### 2. Ficha de cliente en solo lectura (`src/app/legal/clientes/[id]/page.tsx`)
+
+Nuevo `canManageClient = admin || abogada`. Se ocultan al asistente las acciones que la API ya le
+rechaza — verificado uno por uno contra el gate real, no por analogía:
+
+| Botón | Endpoint | Roles | ¿Se oculta? |
+|---|---|---|---|
+| Crear Caso / + Nuevo Caso | `POST /api/cases` | admin, abogada | Sí |
+| Editar | `PATCH /api/clients/[id]` | admin, abogada | Sí |
+| Desactivar | `PATCH /api/clients/[id]` | admin, abogada | Sí |
+| Eliminar | `DELETE /api/clients/[id]` | admin, abogada | Sí (ya lo estaba) |
+| Adjuntar Documento | `POST /api/documents/register` | admin, abogada, **asistente** | **No** — se mantiene |
+
+Nota: los dos botones de crear caso NO estaban en el pedido original (que nombraba Editar,
+Desactivar y Eliminar), pero `POST /api/cases` es admin+abogada, así que al asistente le daban 403
+igual — y el listado de Casos ya se los escondía. Se ocultan por consistencia con el gate real.
+
+El breadcrumb "Clientes" se renderiza como texto plano para el asistente: como link apuntaría a un
+directorio que el middleware le rebota, y un link muerto es peor que ninguno.
+
+### 3. Limpieza en el detalle de caso (`src/app/legal/casos/[id]/page.tsx`)
+
+`<InlineCaseInfoEditor>` (botón "Editar Información") solo se renderiza para admin/abogada. El
+`PATCH /api/cases/[id]` sin `action` ya le respondía 403 al asistente; el botón era ruido. El botón
+"Cambiar Estado" del header NO se toca — esa acción sí la tiene permitida.
+
+### Verificación en navegador (localhost:3000, sesión real de Harry Boyd / Asistente)
+
+| Qué | Resultado |
+|---|---|
+| `/legal/clientes` por URL | Redirige a `/legal` (Mi Panel). El server log no registra ningún `GET /legal/clientes`, solo el `GET /legal` del destino. |
+| `/legal/clientes/nuevo` por URL | Redirige a `/legal`. |
+| `/legal/clientes/{id}/editar` por URL | Redirige a `/legal`. |
+| `/legal/clientes/{id}` por URL | Carga (`200`). Ficha completa de MI CONDADO, S.A: datos, 20+ casos vinculados y documentos. El árbol de accesibilidad de la página entera devuelve **un solo botón: "Adjuntar Documento"** — sin Crear Caso, Editar, Desactivar ni Eliminar. Breadcrumb "Clientes" sin `href`. |
+| Link al cliente desde el detalle del caso | Click en "MI CONDADO, S.A" (Datos del Cliente) → navega a la ficha correctamente. |
+| Detalle de caso | Ya NO aparece "Editar Información". El header conserva Imprimir Tarjeta · Etiqueta Simple · Cambiar Estado. |
+
+Admin/abogada: sin cambios verificados por código (ambos gates condicionan sobre el rol y
+`canManageClient` es true para los dos; el `DeleteClientButton` conserva su condición previa). No
+se re-verificó en navegador con esos roles.
+
+Tests: `npx tsc --noEmit` limpio. Lint sin errores nuevos.
+
+### Deuda detectada, NO tocada (pre-existente, confirmada por bisección)
+
+El detalle de caso emite un **error de hidratación** en dev: `<div> cannot be a descendant of <p>`
+→ `Badge` dentro de un `<p>` en la card "Datos del Caso" (los bloques de `case_start_date`,
+`procedure_start_date`, `deadline` y `last_followup_at` que muestran un Badge de "N días" dentro
+del `<p>` de la fecha). React descarta el HTML del server y re-renderiza todo el root en cliente.
+Se confirmó pre-existente stasheando los cambios de este commit y recargando: el error sigue.
+Fix ≈ 4 líneas (`<p>` → `<div>`), pendiente de decisión — no entra acá para no mezclarlo con un
+commit de roles.
+
+---
+
+## [Cambio de rol] - 2026-08-06 - El asistente ve TODOS los casos del bufete
+
+Decisión de negocio: el rol `asistente` pasa a tener el **mismo alcance de LECTURA de casos que
+`abogada`**. Antes solo veía (y podía abrir) los casos donde figuraba como `assistant_id` o donde
+tenía una tarea asignada; en la práctica eso le impedía dar seguimiento a expedientes del bufete
+que no estuvieran formalmente asignados a él. Afecta a todos los asistentes (hoy el único activo
+es `asistente@integra-panama.com` / Harry Boyd).
+
+### Cambios de código
+
+1. **`src/app/legal/casos/page.tsx`** — eliminado el pre-cálculo de `asistenteCaseIds` (2 queries:
+   `tasks` por `assigned_to` + `cases` por `assistant_id`) y el `query.in("id", asistenteCaseIds)`
+   que intersectaba el listado. El único filtro de lectura que queda es `tenant_id`. Efecto
+   colateral positivo: se ahorran 2 roundtrips a la DB por render del listado para ese rol.
+2. **`src/app/legal/casos/[id]/page.tsx`** — eliminado el gate de acceso (`if (userRole ===
+   "asistente")` → `notFound()` cuando no era `assistant_id` ni tenía tarea en el caso).
+3. **`src/app/legal/casos/[id]/page.tsx`** — al quitar ese gate se agregó `.eq("tenant_id",
+   tenantId)` al fetch del caso. `getAuthenticatedContext()` devuelve el **admin client, que
+   bypassea RLS**, y la query filtraba solo por `id`: el aislamiento multi-tenant queda ahora
+   explícito en vez de depender del gate de rol. Un caso de otro bufete → `notFound()`.
+
+### Lo que NO cambió (verificado, no tocado)
+
+- **Borrar casos/clientes:** sigue admin/abogada (`DeleteCaseButton` gateado por rol).
+- **Editar expediente completo:** sigue admin/abogada. `PATCH /api/cases/[id]` gatea por acción —
+  `change-status` permite asistente, la edición general no (403).
+- **Finanzas:** el asistente sigue sin acceso; `/finanzas` redirige a `/legal` por middleware.
+- **Menú Clientes:** sigue oculto para el rol en `nav-config.ts`.
+- **Comentar y adjuntar documentos:** sigue permitido (`LEGAL_CONTRIB`).
+- **Dashboard del asistente y "Mis Pendientes":** siguen siendo vistas **personales** (solo lo
+  asignado a él). Es intencional: el listado de Casos es la vista del bufete, el dashboard es la
+  vista propia.
+
+### Verificación en navegador (localhost:3000, sesión real de Harry Boyd / Asistente)
+
+| # | Qué | Resultado |
+|---|-----|-----------|
+| a | `/legal/casos` | **188 casos encontrados**; las filas visibles (ADM-045, ADM-044, ADM-043, ADM-042 de MI CONDADO, S.A) tienen columna Asistente en `—`, o sea NO asignados a él. Antes ese listado le daba 0. |
+| b | Detalle de caso no asignado | Abre ADM-045 (`Asistente Responsable de Seguimiento: —`) con las 4 pestañas completas. Antes → 404. |
+| c | Finanzas | El sidebar solo muestra Dashboard / Casos / Gastos / Mis Pendientes. `/finanzas` por URL directa → redirige a `/legal`. |
+| c | Botón borrar | El header del detalle solo tiene Imprimir Tarjeta · Etiqueta Simple · Cambiar Estado. Sin Eliminar. |
+
+Tests: `npx tsc --noEmit` limpio; `patch-role-by-action.test.ts` 4/4 (incluye "asistente + edición
+completa (sin action) → 403 y NO actualiza") y `authz-guards.test.ts` 31/31.
+
+### Deuda detectada, NO tocada en este cambio (fuera de alcance)
+
+- `/legal/clientes` es alcanzable por **URL directa** para el asistente (el rol solo está excluido
+  del menú, no del route). Muestra el listado y hasta el botón "Nuevo Cliente" — el POST sí
+  responde 403. Es **pre-existente**, no lo introduce este cambio, pero conviene decidir si el
+  gate debe ser real (redirect en middleware) o si alcanza con esconderlo del menú.
+- El botón "Editar Información" del detalle se le renderiza al asistente aunque el PATCH le
+  responda 403. También pre-existente; ahora se ve en más casos, porque puede abrir más casos.
+
+### Documentación actualizada
+`CLAUDE.md` §4 (tabla de roles), `docs/USUARIOS.md` §1, `sop.md` (nota de routing),
+comentarios en `casos/page.tsx`, `casos/[id]/page.tsx`, `api/cases/[id]/route.ts` y
+`authz-guards.test.ts`.
+
+---
+
+## [Fix] - 2026-08-04 - Borrado de cliente con registros financieros: error crudo y borrado parcial
+
+Al intentar eliminar un cliente con facturas, el CRM mostraba en un `alert()` del navegador:
+
+> update or delete on table "clients" violates foreign key constraint
+> "invoices_client_id_fkey" on table "invoices"
+
+Y —lo grave— **los documentos del cliente ya se habían borrado** para cuando aparecía ese mensaje.
+
+### Diagnóstico — dos bugs, uno cosmético y uno de pérdida de datos
+
+1. **Chequeos incompletos.** El handler solo miraba `cases`. Pero `invoices`, `quotes`,
+   `credit_notes` y `payments` también referencian `clients(id)` **sin `ON DELETE`**, o sea
+   NO ACTION / RESTRICT. Sin chequeo previo, el `.delete()` explotaba y el
+   `deleteError.message` de Postgres se devolvía como 500 y llegaba tal cual al `alert()`.
+2. **Orden de operaciones.** Los documentos (storage + filas en `documents`) se borraban en el
+   paso 1 y el cliente en el paso 2. Al fallar la FK del paso 2, el paso 1 ya era irreversible:
+   **cliente vivo, documentos perdidos**. No hay transacción que los cubra: son dos sistemas
+   distintos (Storage y Postgres).
+
+Sobre la base real: **45 de 126 clientes** del tenant caían en este camino.
+
+### Cambio
+- **Nuevo** `src/lib/clients/delete-guards.ts` — núcleo PURO (sin Supabase):
+  `FINANCIAL_DEPENDENCIES`, `buildFinancialBlockMessage()`, `isForeignKeyViolation()`.
+- **Chequeo previo** de las 4 tablas (`count exact`, `head: true`, por `client_id` + `tenant_id`,
+  en paralelo) **antes de tocar nada**. Si hay alguno → **400** y cero borrados.
+- **Mensaje específico**, enumerando solo los tipos presentes:
+  *"Este cliente tiene registros financieros y no se puede eliminar: 3 factura(s), 1 pago(s).
+  Desactívalo en su lugar."*
+- **Orden corregido**: el bloque que borra documentos ahora está después de TODAS las
+  validaciones, con un comentario marcando la frontera (`---- No blocking check remains ----`).
+- **Defensa en profundidad**: si el `.delete()` final igual falla con `23503`, se devuelve **400**
+  con mensaje genérico amigable en vez del error crudo con 500. Esto cubre
+  `prospects.converted_client_id`, que también es RESTRICT y no está en la lista de conteos.
+- **Front**: `DeleteClientButton` recibe los conteos y **deshabilita el botón proactivamente**
+  (mismo patrón que `caseCount`), reusando `buildFinancialBlockMessage()` — UI y API dicen
+  literalmente lo mismo. El `alert()` se reemplazó por **error inline dentro del modal**
+  (`role="alert"`), que ya no borra el contexto de la pantalla.
+- El chequeo de `cases` quedó **intacto** y sigue teniendo precedencia, en el handler y en la UI.
+
+### Tests (17/17 pass)
+`src/app/api/clients/__tests__/delete-financial-guard.route.test.ts` — 5 unitarios del núcleo puro
++ 12 sobre el **handler real** con fake de Supabase. El aserto que importa no es el 400 sino
+`assertNadaBorrado()`: ni documentos, ni storage, ni cliente. Cubre los 4 tipos por separado,
+conteos mixtos, camino feliz (borra + audita), `23503` inesperado → 400, error no-FK → sigue 500,
+y 401/403/404 sin borrar.
+
+```
+npx tsx --test --experimental-test-module-mocks \
+  src/app/api/clients/__tests__/delete-financial-guard.route.test.ts
+```
+
+Regresión en verde: `ruc-taxid-sync` + `ruc-unique` + `client-type` (37/37). `tsc --noEmit` limpio,
+`eslint` limpio.
+
+### Verificación en navegador (localhost:3000, sesión real, SOP-009)
+| Caso | Resultado |
+|---|---|
+| `CLI-001` JUMBO CAPITAL (6 casos + 1 factura) | Gana el mensaje de **casos**, precedencia intacta |
+| `0TEST-FE-001` (0 casos, 2 facturas) | Modal: *"…: 2 factura(s). Desactívalo en su lugar."*, sin input de confirmación, solo **Cerrar** |
+| `POST /api/clients/0TEST-FE-001/delete` saltando el botón | **400** con el mismo texto (antes: 500 con el error de Postgres) |
+| Cliente descartable `CLI-131` (creado y borrado en la prueba) | **200**, redirige al listado, `audit_log` registrado |
+
+Post-verificación en BD: `0TEST-FE-001` **sigue existiendo con sus 2 facturas** (nada se borró en el
+intento bloqueado) y `CLI-131` ya no existe. Log del server sin 500 ni excepciones.
+
+**Nota:** el escenario "bloquea sin borrar documentos" no se pudo reproducir contra datos reales
+porque **ningún cliente del tenant tiene facturas Y documentos a la vez**. Esa combinación queda
+cubierta por el test del handler (`assertNadaBorrado()`), no por la prueba de navegador.
+
+`CLI-131` quemó un número de la secuencia de clientes — gap esperado de smoke test, **no rebobinar**.
+
+### Sin migración
+Las FKs ya estaban bien: el problema era que el código no las respetaba. **Sin cambios de schema,
+sin deploy pendiente de SQL.**
+
+## [Feature] - 2026-08-04 - Contable Fase 1: schema del motor de asientos (DE 34/1998)
+
+Reescritura completa de `sql/pending/023_contabilidad_fase1_ledger.sql`. **Solo el archivo SQL: NO se
+aplicó en Supabase** (lo aplica Oliver, pausa obligatoria por cambio de schema en producción).
+
+### Por qué se reescribió
+El borrador anterior estaba **⛔ EN ESPERA** porque **recreaba `chart_of_accounts`** con otra
+estructura (`account_type` en español, seed propio de cuentas). Choca de frente con el
+`chart_of_accounts` que **ya existe en producción** — creado en
+`20260505000002_finanzas_catalogos.sql`, con `account_type` en inglés
+(`asset/liability/equity/income/expense`), `is_system`/`active`, 34 cuentas extraídas de QuickBooks
+y una UI de gestión ya desplegada (`/finanzas/configuracion/cuentas`, 01/08).
+
+### Qué cambió
+- **Eliminada** la recreación de `chart_of_accounts` y **eliminado** el seed del plan de cuentas.
+  El plan definitivo de Josuar se carga aparte (UI o migración de datos) **después** de que lo
+  confirme — el ledger es *chart-agnostic*.
+- `journal_entry_lines.account_id` ahora es **FK al `chart_of_accounts` existente**.
+- La migración queda **puramente aditiva**: 5 tablas nuevas y vacías, no toca data existente.
+
+### Qué crea (Fase 1 = solo schema)
+| Tabla | Rol |
+|---|---|
+| `accounting_periods` | cierre mensual (`abierto`/`cerrado`), UNIQUE por (tenant, año, mes) |
+| `accounting_sequences` | correlativo **sin huecos** por tenant (Art. 22.2), distinto del folio fiscal FE |
+| `journal_entries` | asientos append-only, hash-chain (`prev_hash`/`content_hash`/`hash`), doble fecha `transaction_date` + `record_date` |
+| `journal_entry_lines` | líneas débito/crédito, FK al COA existente |
+| `accounting_legajos` | legajos anuales sellados (Art. 14, conservación 5 años) |
+
+Más: 7 índices, **6 triggers de inmutabilidad** (rechazan UPDATE/DELETE en asientos, líneas y
+legajos **incluso al service-role** — la corrección es siempre un asiento de reversión) y RLS
+`tenant_isolation` en las 5 tablas. La RLS lee el claim JWT `app_metadata.tenant_id` **inline**,
+porque `auth.tenant_id()` NO existe en esta base (hallazgo del 13/07).
+
+Constraints de negocio en la BD: `jel_debit_xor_credit` (débito O crédito, no ambos),
+`jel_not_zero` (sin líneas en cero) y `je_reversion_requires_ref` (una reversión exige apuntar al
+asiento original **y** un motivo ≥3 chars, Art. 5.7).
+
+### Qué NO entra en esta fase
+- **RPC de posteo** (correlativo sin huecos + hash-chain + validación Σdébitos = Σcréditos +
+  período abierto) → Fase 2.
+- **Función verificadora** de la cadena de hashes → Fase 2.
+- **Enganche factura→asiento** → Fase 2.
+- **Tipos TypeScript** → van con la lógica que los consuma (Fase 2), no antes.
+
+La partida doble (Σdébitos = Σcréditos) **no se puede expresar como CHECK** porque abarca varias
+filas; se valida en el RPC de posteo. Hasta que exista ese RPC, las tablas quedan creadas pero sin
+camino de escritura desde la app.
+
+### Aplicación — el archivo ES re-ejecutable (idempotente)
+Correrlo dos veces **no falla**. Postgres no soporta `CREATE TRIGGER IF NOT EXISTS` ni
+`CREATE POLICY IF NOT EXISTS`, así que cada uno va precedido de su `DROP ... IF EXISTS`:
+los 6 triggers explícitamente, y la política `tenant_isolation` vía
+`EXECUTE format('DROP POLICY IF EXISTS ...')` dentro del loop del bloque `DO`. Lo demás ya era
+idempotente y se dejó igual: `CREATE EXTENSION`/`CREATE TABLE`/`CREATE INDEX` con `IF NOT EXISTS`,
+`CREATE OR REPLACE FUNCTION`, y `ENABLE ROW LEVEL SECURITY` (no-op si ya está activo).
+
+**El schema resultante es idéntico** — solo se agregó tolerancia a re-ejecución. Re-correrlo no
+borra datos: recrea objetos de schema iguales. Igual conviene aplicar el archivo **completo de una
+pasada** (no sentencia por sentencia): así el DROP+CREATE de cada trigger ocurre dentro de la misma
+transacción y no queda una ventana en la que `journal_entries` esté sin su trigger de inmutabilidad.
+
+Verificación al final del archivo, 4 queries: 5 tablas / 6 triggers / 5 políticas / FK al COA.
+
+**Sin cambios de código, sin deploy, sin migración aplicada.** Tenant Integra:
+`a0000000-0000-0000-0000-000000000001`.
+
 ## [Fix] - 2026-08-01 - Emisión FE: no mostrar "duplicado/autorizado" cuando hay códigos de rechazo
 
 Al emitir con un RUC inválido, el diálogo mostraba **dos cosas contradictorias a la vez**:

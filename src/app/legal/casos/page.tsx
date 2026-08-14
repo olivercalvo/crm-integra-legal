@@ -45,28 +45,12 @@ interface PageProps {
 }
 
 export default async function ExpedientesPage({ searchParams }: PageProps) {
-  const { db, tenantId, userRole, user } = await getAuthenticatedContext();
+  const { db, tenantId, userRole } = await getAuthenticatedContext();
 
-  // Asistente: solo ve los casos donde es assistant_id o tiene una tarea asignada.
-  // Resolvemos los IDs aquí para luego intersectar con el query principal.
-  let asistenteCaseIds: string[] | null = null;
-  if (userRole === "asistente") {
-    const { data: taskCases } = await db
-      .from("tasks")
-      .select("case_id")
-      .eq("assigned_to", user.id);
-    const taskCaseIdsRaw = (taskCases ?? []).map((t) => t.case_id as string);
-    const taskCaseIds = Array.from(new Set(taskCaseIdsRaw));
-
-    const { data: ownedCases } = await db
-      .from("cases")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("assistant_id", user.id);
-    const ownedIds = (ownedCases ?? []).map((c) => c.id as string);
-
-    asistenteCaseIds = Array.from(new Set([...taskCaseIds, ...ownedIds]));
-  }
+  // Visibilidad de casos: el asistente ve TODO el listado del tenant, igual que
+  // abogada/admin. Lo que sigue diferenciándolo son las acciones (no crea ni
+  // edita ni borra casos) y el dashboard / "Mis Pendientes", que sí son
+  // personales. El único filtro de lectura acá es tenant_id.
 
   const currentPage = Number(searchParams.page ?? "1");
   const offset = (currentPage - 1) * PAGE_SIZE;
@@ -134,15 +118,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
   if (searchParams.classification) query = query.eq("classification_id", searchParams.classification);
   if (searchParams.responsible) query = query.eq("responsible_id", searchParams.responsible);
   if (searchParams.institution) query = query.eq("institution_id", searchParams.institution);
-
-  // Restringir a casos visibles para el asistente.
-  if (asistenteCaseIds !== null) {
-    if (asistenteCaseIds.length === 0) {
-      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
-    } else {
-      query = query.in("id", asistenteCaseIds);
-    }
-  }
 
   if (searchParams.q) {
     // Búsqueda universal: RPC (unaccent + multi-campo + multi-JOIN) si está

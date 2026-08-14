@@ -1,7 +1,7 @@
 # Roadmap Contable — CRM Integra Legal
 
-**Fecha:** 18/07/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
-**Fuentes:** reunión con el contador nuevo (Josuar) · `reconciliacion-legal-finanzas.md` · borrador de ledger `sql/pending/023_...` (EN ESPERA) · DE 34/1998
+**Fecha:** 18/07/2026 · **Actualizado:** 04/08/2026 · **Estado:** plan de trabajo (consolida la reunión con el contador + el diseño previo)
+**Fuentes:** reunión con el contador nuevo (Josuar) · correo Josuar 31/07/2026 + respuesta 01/08/2026 · `reconciliacion-legal-finanzas.md` · ledger `sql/pending/023_...` (reescrito 04/08, pendiente de aplicar) · DE 34/1998
 
 ---
 
@@ -20,7 +20,7 @@ El CRM debe llevar la contabilidad de Integra de forma **automática**, de modo 
 ### Fase 1 — Estructura contable + saldos iniciales
 - **Plan de cuentas** validado por el contador (ingresos = cuenta 4, costos = 5, gastos = 6; balance: banco, cuentas por cobrar, cuentas por pagar, patrimonio).
 - **UI para crear/administrar cuentas** ("crear la manera de crear cuentas").
-- **Ledger de partida doble** (asientos inmutables, hash-chain, correlativo sin huecos) — ya diseñado en `023` (EN ESPERA), a reescribir sobre el `chart_of_accounts` existente.
+- **Ledger de partida doble** (asientos inmutables, hash-chain, correlativo sin huecos) — ✅ `023` **reescrito el 04/08** sobre el `chart_of_accounts` existente (ya no lo recrea; lo referencia por FK). Solo schema; **pendiente de aplicar en Supabase**. El posteo va en la Fase 2 del ledger.
 - **Carga de saldos iniciales** vía **asientos de diario manuales** (`source_type='manual'`, ya contemplado) que cuadren con lo declarado a la DGI (el CRM arranca de cero, NO importa el histórico de QB — solo los saldos de cierre como saldos de apertura).
 
 ### Fase 2 — Factura → asiento automático
@@ -52,12 +52,36 @@ Entregable concreto del módulo. Varios ya existen como **placeholder vacío** e
 | Balance de Comprobación (balance de prueba) | No existe |
 | VAT Summary (ITBMS) | ✅ Implementado |
 
+**Nota:** estos 6 reportes son exactamente los mismos que Josuar pidió descargar del histórico de QuickBooks (§5.1). O sea, lo que baja de QB para los saldos iniciales es también el checklist de salidas que el módulo debe reproducir → sirve para validar que el CRM da los mismos números.
+
 ## 5. Insumos / decisiones pendientes del contador
 
-- **Balance de comprobación de QuickBooks** (Edwin lo descarga) → da los saldos iniciales y valida el plan de cuentas.
-- **Plan de cuentas validado** (revisará el `chart_of_accounts` de 34 cuentas extraído de QB — le mandamos el Excel).
-- **Tratamientos contables específicos** (las 9 preguntas ya enviadas): reembolsos (¿pasivo 2201 o ingreso?), fondos en custodia/trust (1103/2201), reconocimiento de honorarios (devengado vs caja), ITBMS en reembolsos, anticipos.
-- **Ya respondido en la reunión:** ruta contable = **Diario/Mayor** (Art. 2a); él es la cabeza de la certificación/aval.
+### 5.1 Reportes históricos de QuickBooks — ENVIADOS a Josuar el 01/08/2026
+
+Josuar pidió (reunión) descargar de QuickBooks **6 reportes** del histórico, no solo el balance de comprobación. Se exportaron de QBO ("Todas las fechas", hasta el cierre de QB) y se enviaron por correo el 01/08/2026:
+
+| Reporte pedido | Nombre en QuickBooks Online | Dónde se saca |
+|---|---|---|
+| Libro Mayor | Libro mayor | Exportar datos |
+| Balance General | Balance general | Exportar datos |
+| Estado de Resultado (P&L) | Beneficios y pérdidas | Exportar datos |
+| Balance de Comprobación | Balance de sumas y saldos | Exportar datos |
+| Antigüedad de Cuentas por Cobrar (clientes) | Informe detallado de antigüedad de C_C | **Página de Informes** (no está en Exportar datos) |
+| Antigüedad de Cuentas por Pagar (proveedores) | Informe detallado de antigüedad de C_P | **Página de Informes** (no está en Exportar datos) |
+
+Extras enviados: Libro Diario ("Diario") + listados de Clientes y Proveedores. Los saldos de apertura salen del **Balance de Comprobación** (todas las cuentas) + las **dos antigüedades** (detalle de quién debe / a quién se debe al corte).
+
+### 5.2 Insumos / decisiones pendientes de Josuar
+
+- **Plan de cuentas final.** ⚠️ Los modelos que Josuar mandó (`EJEMPLOS DE LIBROS CONTABLES.xlsx`, 01/08) usan una estructura de cuentas **distinta** a las 34 extraídas de QB: ingresos `4xxxxx` (400001 Derecho Corporativo…), costos `5xxxxx`, gastos operativos `6xxx`, activos `1xxxxx`, pasivos `2xxxxx`, patrimonio `3xxxxx`. La Fase 1 será un **mapeo**, no una validación directa. Falta que confirme el plan definitivo (código, nombre, tipo).
+- **Saldos de apertura** a la fecha de corte que él defina (aún sin confirmar la fecha).
+- **Tratamientos contables (4 preguntas ENVIADAS el 01/08/2026)** — el roadmap las daba por enviadas pero no se habían mandado hasta esa fecha: reembolsos (¿ingreso o recuperación de gasto?), honorarios (devengado vs caja), ITBMS en reembolsos (hoy exento, confirmar), anticipos/fondos de clientes en custodia (¿pasivo hasta aplicar a factura? ¿cuenta específica?).
+- **Modelos de los otros informes** — Josuar enviará más además de los 3 ya compartidos (Estado de Resultado, Balance General, Balance de Comprobación).
+
+### 5.3 Ya confirmado por Josuar
+
+- **Conexión bancaria = importación del Excel de Banco General + reglas de registro** (NO API en vivo). Confirmado por correo 31/07/2026. Alinea con la Fase 5.
+- **Ruta contable = Diario/Mayor** (Art. 2a, reunión); él es la cabeza de la certificación/aval.
 
 ## 6. ⚠️ Decisión de negocio abierta — proforma vs factura fiscal ("todo o nada")
 
@@ -69,10 +93,10 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 - `chart_of_accounts` — 34 cuentas (extraídas de QB, pendiente validación del contador), con `is_system`, mapeo a QB.
 - `tax_codes`, `services_catalog`, `numbering_sequences` + RPC `get_next_sequence_number`.
 - VAT Summary implementado. P&L / Balance / Aging como placeholders.
-- Diseño del ledger (`023`, en espera) y de la reconciliación Legal↔Finanzas.
+- Schema del ledger (`023`, reescrito 04/08 sobre el COA existente — **falta aplicarlo**) y diseño de la reconciliación Legal↔Finanzas.
 
 **Hay que construir:**
-- Ledger (reescrito sobre el COA existente) + asientos manuales (saldos iniciales).
+- Motor de posteo del ledger (RPC + verificador de hash-chain) + asientos manuales (saldos iniciales).
 - UI de gestión de plan de cuentas (crear/editar cuentas).
 - Enganche factura→asiento y pago→asiento (Fase 2).
 - Los 6 reportes contables (Fase 4).
@@ -86,7 +110,33 @@ El contador fue tajante: **no se puede mezclar** (algunas facturas al PAC y otra
 
 ## 9. Próximos pasos
 
-1. Esperar del contador: balance de comprobación + plan de cuentas validado + respuestas a las 9 preguntas.
-2. Mientras: verificar el estado de la gestión de plan de cuentas en el CRM (¿hay UI de crear cuentas hoy?) para dimensionar la Fase 1.
-3. Con el material del contador: reescribir el `023` sobre el COA existente y arrancar la Fase 1 (estructura + ledger + saldos iniciales).
-4. Fase 2 (factura→asiento) puede empezar en paralelo apenas esté el ledger — deriva de Finanzas, no depende de la reconciliación legal.
+1. **Esperar de Josuar:** plan de cuentas final + saldos de apertura (con fecha de corte) + respuestas a las 4 preguntas contables + modelos de los otros informes. (Reportes históricos de QB ya enviados 01/08.)
+2. ✅ **Hecho (01/08/2026):** UI de gestión de plan de cuentas en producción (`/finanzas/configuracion/cuentas`, CRUD con `is_system`, sin hard delete, audit_log).
+3. ✅ **Hecho (04/08/2026):** `023` reescrito como schema puro del ledger sobre el COA existente (chart-agnostic, FK al `chart_of_accounts`). **Pendiente: aplicarlo en Supabase** (pausa obligatoria).
+4. Con el plan de cuentas final: **mapear** las cuentas de Josuar contra el `chart_of_accounts` actual (no coinciden, ver §5.2) y cargar los saldos iniciales por asiento manual. El mapeo ya no bloquea el schema del ledger, solo la lógica de posteo.
+5. Fase 2 del ledger (RPC de posteo + verificador de hash-chain + factura→asiento) apenas el `023` esté aplicado y el plan de cuentas confirmado — deriva de Finanzas, no depende de la reconciliación legal.
+
+## 10. Plan de trabajo aterrizado con Josuar (reunión 10/08/2026)
+
+Josuar bajó el requerimiento a 5 pasos secuenciales. Fuente: `Temas Contables/EJEMPLOS DE LIBROS CONTABLES (1).xlsx` (plan de cuentas de 62 cuentas con saldos iniciales reales + formatos de Balance General y Estado de Resultado). Deadline informal: Oliver le manda video + avance para revisión.
+
+### Paso 1 — Módulo de plan de cuentas (crear + saldo inicial + subcategoría + import) ← EN CURSO
+El `chart_of_accounts` y su UI ya existen, pero falta:
+- **Saldo inicial** por cuenta (monto de apertura). **Decisión de diseño:** por ahora columna `saldo_inicial numeric` en `chart_of_accounts` (calza con el modelo mental de Josuar y con el import). Cuando exista el motor de posteo (Paso 3), ese saldo se convierte en un **asiento de apertura** (`source='manual'`) y los reportes pasan a leer del ledger. Puente deliberado por el deadline.
+- **Subcategoría** (campo nuevo): activo_corriente / activo_no_corriente / propiedad_planta_equipo / pasivo_corriente / pasivo_no_corriente / patrimonio / ingreso / costo / gasto_operativo. Resuelve el agrupamiento del Balance General y la separación **costos (5xxxxx) vs gastos (6xxxxx)** en el Estado de Resultado.
+- **Carga masiva por Excel** (como QuickBooks): plantilla descargable con columnas `código, nombre, tipo, subcategoría, saldo_inicial`; preview; crear en lote. Mapeo de tipo español → `account_type` inglés (Activo→asset, Pasivos→liability, Patrimonio→equity, Ingresos→income, costos→expense+subcat 'costo', gastos→expense+subcat 'gasto_operativo'). El import carga las 62 cuentas de Josuar; las 34 viejas de QB se desactivan aparte (no colisionan, códigos distintos).
+
+### Paso 2 — Reportes Balance General y Estado de Resultado
+Generados por reglas sobre las cuentas, con los formatos que Josuar mandó. Estado de Resultado: ingresos (4) − costos (5) = Ganancia Bruta; − gastos (6) = Utilidad Operativa; − ISR = Utilidad Neta. Balance General: cuentas 1/2/3 agrupadas por subcategoría. Por ahora leen `saldo_inicial`; cuando llegue el Paso 3 leen saldo_inicial + movimientos del ledger.
+
+### Paso 3 — Enganche factura→asiento (el "centro de costo")
+Mapear cada línea de factura / servicio a su cuenta de ingreso (ej. "Derecho Corporativo" → 400001). Al emitir, el sistema postea el asiento (usa el motor de posteo de la Fase 2 del ledger). Reembolsos y gastos de caso → cuenta `130003 Fondo Legales de Clientes` (neto cero, ya confirmado por Josuar).
+
+### Paso 4 — Módulo de compra
+Registrar compras/gastos del período afectando las cuentas seleccionadas.
+
+### Paso 5 — Asientos de diario manuales + auxiliares (Antigüedad CxP/CxC)
+Área para asientos manuales y los reportes auxiliares enlazados.
+
+### Certificación (dato reutilizable)
+Josuar confirmó que **puede certificar el sistema sin ser el contador de la empresa**: solo necesita acceso y validar que cumple las normas/resoluciones. Aplica también al otro cliente de Oliver (empresa familiar). Ver marco contable reutilizable.

@@ -11,6 +11,14 @@
  *   - is_system=true (1201,1202,2301,4101,4102): NO se puede desactivar ni
  *     cambiar el código. El nombre/tipo/descripción sí se pueden editar.
  *   - Sin hard delete: "borrar" = active=false.
+ *
+ * CONTRATO DEL PATCH — reemplazo total, no parche parcial:
+ *   updateChartAccount escribe TODOS los campos editables (incluidos
+ *   subcategoria y saldo_inicial) con lo que traiga el input validado. Como el
+ *   validador defaultea saldo_inicial a 0 y subcategoria a null cuando el campo
+ *   no viene en el body, un PATCH que omita esos campos los RESETEA. Quien
+ *   llame al endpoint debe mandar la fila completa — así lo hace la UI, tanto
+ *   en el form de edición como en el toggle de activar/desactivar.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -26,11 +34,24 @@ type DB = SupabaseClient;
 
 const ENTITY = "chart_of_accounts";
 const SELECT_COLS =
-  "id, code, name, account_type, account_name_qb, description, is_trust_pass_through, is_system, active";
+  "id, code, name, account_type, subcategoria, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
 
 /** true si el error de Postgres es una violación de UNIQUE (código 23505). */
 function isUniqueViolation(err: unknown): boolean {
   return !!err && typeof err === "object" && (err as { code?: string }).code === "23505";
+}
+
+/**
+ * Normaliza la fila devuelta por el INSERT/UPDATE. `saldo_inicial` es numeric
+ * en BD; lo forzamos a number para que la UI (que consume esta respuesta
+ * directamente y reemplaza la fila en su estado local) no reciba un string.
+ */
+function toRow(raw: unknown): ChartAccountRow {
+  const r = raw as Record<string, unknown>;
+  return {
+    ...(r as unknown as ChartAccountRow),
+    saldo_inicial: Number(r.saldo_inicial ?? 0),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +80,8 @@ export async function createChartAccount(
       code: input.code,
       name: input.name,
       account_type: input.account_type,
+      subcategoria: input.subcategoria,
+      saldo_inicial: input.saldo_inicial,
       description: input.description,
       active: input.active,
       // La pantalla mantiene la tabla PLANA y no gestiona trust/QB/is_system:
@@ -93,12 +116,14 @@ export async function createChartAccount(
       code: input.code,
       name: input.name,
       account_type: input.account_type,
+      subcategoria: input.subcategoria,
+      saldo_inicial: input.saldo_inicial,
       description: input.description,
       active: input.active,
     }),
   });
 
-  return data as ChartAccountRow;
+  return toRow(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +140,9 @@ export async function updateChartAccount(
   // Existencia + tenant ownership (defensa en profundidad sobre RLS).
   const { data: existing, error: errExisting } = await db
     .from("chart_of_accounts")
-    .select("id, code, name, account_type, description, active, is_system")
+    .select(
+      "id, code, name, account_type, subcategoria, saldo_inicial, description, active, is_system"
+    )
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -155,6 +182,8 @@ export async function updateChartAccount(
   const updatePayload: Record<string, unknown> = {
     name: input.name,
     account_type: input.account_type,
+    subcategoria: input.subcategoria,
+    saldo_inicial: input.saldo_inicial,
     description: input.description,
     active: input.active,
   };
@@ -177,6 +206,8 @@ export async function updateChartAccount(
   const fields: Array<keyof typeof updatePayload> = [
     "name",
     "account_type",
+    "subcategoria",
+    "saldo_inicial",
     "description",
     "active",
   ];
@@ -185,6 +216,15 @@ export async function updateChartAccount(
     if (!(f in updatePayload)) continue;
     const oldVal = (existing as unknown as Record<string, unknown>)[f];
     const newVal = updatePayload[f];
+    // saldo_inicial es numeric en BD: según la config de PostgREST puede volver
+    // como number o como string ("1500.00"). Comparamos por valor numérico para
+    // no registrar un cambio fantasma 1500 → 1500 en cada guardado.
+    if (f === "saldo_inicial") {
+      if (Number(oldVal ?? 0) !== Number(newVal ?? 0)) {
+        changed[f] = { old: Number(oldVal ?? 0), new: newVal };
+      }
+      continue;
+    }
     if (oldVal !== newVal) changed[f] = { old: oldVal, new: newVal };
   }
 
@@ -205,5 +245,5 @@ export async function updateChartAccount(
     });
   }
 
-  return data as ChartAccountRow;
+  return toRow(data);
 }

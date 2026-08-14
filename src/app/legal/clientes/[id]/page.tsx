@@ -48,6 +48,12 @@ export default async function ClienteDetailPage({ params }: PageProps) {
   const { db, userRole } = await getAuthenticatedContext();
   const { id } = params;
 
+  // El asistente llega a esta ficha desde el detalle de un caso y la ve en modo
+  // SOLO LECTURA: se ocultan las acciones que la API ya le rechaza con 403
+  // (crear caso, editar / desactivar / eliminar cliente — todas admin+abogada).
+  // Lo que sí conserva: ver datos, casos vinculados y adjuntar documentos.
+  const canManageClient = userRole === "admin" || userRole === "abogada";
+
   const { data: client, error } = await db
     .from("clients")
     .select("*, responsible_lawyer:users!clients_responsible_lawyer_id_fkey(full_name)")
@@ -82,6 +88,20 @@ export default async function ClienteDetailPage({ params }: PageProps) {
     .select("id, quote_number")
     .eq("tenant_id", typedClient.tenant_id)
     .eq("client_id", id);
+
+  // Conteos que bloquean el hard delete por FK RESTRICT (solo para avisar en el
+  // botón de eliminar; el API los revalida). `quotes` ya viene de la query de
+  // arriba, así que solo faltan las otras tres.
+  const [invoiceCount, creditNoteCount, paymentCount] = await Promise.all(
+    ["invoices", "credit_notes", "payments"].map(async (table) => {
+      const { count } = await db
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", typedClient.tenant_id)
+        .eq("client_id", id);
+      return count ?? 0;
+    })
+  );
 
   const quoteNumberById = new Map<string, string>(
     (clientQuotes ?? []).map((q: { id: string; quote_number: string }) => [
@@ -122,12 +142,20 @@ export default async function ClienteDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-5 max-w-3xl mx-auto">
-      {/* Breadcrumb */}
+      {/* Breadcrumb — para el asistente el directorio está bloqueado por
+          middleware, así que se muestra como texto y no como link muerto. */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/legal/clientes" className="flex items-center gap-1 hover:text-integra-navy">
-          <ChevronLeft size={16} />
-          Clientes
-        </Link>
+        {canManageClient ? (
+          <Link href="/legal/clientes" className="flex items-center gap-1 hover:text-integra-navy">
+            <ChevronLeft size={16} />
+            Clientes
+          </Link>
+        ) : (
+          <span className="flex items-center gap-1">
+            <ChevronLeft size={16} />
+            Clientes
+          </span>
+        )}
         <span>/</span>
         <span className="text-integra-navy font-medium truncate">{typedClient.name}</span>
       </div>
@@ -145,38 +173,44 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           </div>
           <p className="text-sm font-mono text-gray-400">{typedClient.client_number}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            asChild
-            className="min-h-[48px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold"
-          >
-            <Link href={`/legal/casos/nuevo?client_id=${id}`}>
-              <FolderOpen size={18} className="mr-1" />
-              Crear Caso
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            className="min-h-[48px] border-integra-navy text-integra-navy hover:bg-integra-navy hover:text-white"
-          >
-            <Link href={`/legal/clientes/${id}/editar`}>
-              <Pencil size={18} />
-              Editar
-            </Link>
-          </Button>
-          {typedClient.client_status === "active" && (
-            <DeactivateClientButton clientId={id} clientName={typedClient.name} />
-          )}
-          {(userRole === "admin" || userRole === "abogada") && (
+        {canManageClient && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              asChild
+              className="min-h-[48px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90 font-semibold"
+            >
+              <Link href={`/legal/casos/nuevo?client_id=${id}`}>
+                <FolderOpen size={18} className="mr-1" />
+                Crear Caso
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="min-h-[48px] border-integra-navy text-integra-navy hover:bg-integra-navy hover:text-white"
+            >
+              <Link href={`/legal/clientes/${id}/editar`}>
+                <Pencil size={18} />
+                Editar
+              </Link>
+            </Button>
+            {typedClient.client_status === "active" && (
+              <DeactivateClientButton clientId={id} clientName={typedClient.name} />
+            )}
             <DeleteClientButton
               clientId={id}
               clientNumber={typedClient.client_number}
               clientName={typedClient.name}
               caseCount={cases?.length ?? 0}
+              financialCounts={{
+                invoices: invoiceCount,
+                quotes: clientQuotes?.length ?? 0,
+                credit_notes: creditNoteCount,
+                payments: paymentCount,
+              }}
             />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Client info */}
@@ -234,13 +268,15 @@ export default async function ClienteDetailPage({ params }: PageProps) {
                 </span>
               )}
             </CardTitle>
-            <Button
-              asChild
-              size="sm"
-              className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90 text-white text-xs"
-            >
-              <Link href={`/legal/casos/nuevo?client_id=${id}`}>+ Nuevo Caso</Link>
-            </Button>
+            {canManageClient && (
+              <Button
+                asChild
+                size="sm"
+                className="min-h-[40px] bg-integra-navy hover:bg-integra-navy/90 text-white text-xs"
+              >
+                <Link href={`/legal/casos/nuevo?client_id=${id}`}>+ Nuevo Caso</Link>
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>

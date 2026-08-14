@@ -26,19 +26,22 @@ const REPORTS: ReportItem[] = [
     icon: <Receipt size={22} />,
     badge: "Mensual",
   },
+  // El badge dice "Saldos de apertura" y no "Mensual / Anual" porque todavía no
+  // hay selector de período: ambos reportes se arman con los saldos cargados en
+  // el Plan de Cuentas. Cambia cuando entre el motor de asientos (Paso 3).
   {
     slug: "pyl",
-    title: "Estado de Resultados (P&L)",
-    description: "Ingresos vs gastos del período.",
+    title: "Estado de Resultado",
+    description: "Ingresos, costos, gastos y utilidad del ejercicio.",
     icon: <TrendingUp size={22} />,
-    badge: "Mensual / Anual",
+    badge: "Saldos de apertura",
   },
   {
     slug: "balance",
     title: "Balance General",
-    description: "Activos, pasivos y patrimonio a fecha de corte.",
+    description: "Activos, pasivos y patrimonio agrupados por subcategoría.",
     icon: <Scale size={22} />,
-    badge: "Fecha de corte",
+    badge: "Saldos de apertura",
   },
   {
     slug: "ventas-mensuales",

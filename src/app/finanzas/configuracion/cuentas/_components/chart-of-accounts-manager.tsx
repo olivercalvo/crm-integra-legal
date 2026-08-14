@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +16,10 @@ import {
   Power,
   Loader2,
   Lock,
+  FileSpreadsheet,
 } from "lucide-react";
 import { matchesSearchQuery } from "@/lib/utils/search";
+import { ImportAccountsPanel } from "@/app/finanzas/configuracion/cuentas/_components/import-accounts-panel";
 import {
   validateCreateChartAccount,
   validateUpdateChartAccount,
@@ -26,7 +29,11 @@ import {
   ACCOUNT_TYPES,
   ACCOUNT_TYPE_ORDER,
   ACCOUNT_TYPE_LABEL_ES,
+  SUBCATEGORIAS,
+  SUBCATEGORIA_LABEL_ES,
+  subcategoriaLabel,
   type AccountType,
+  type Subcategoria,
   type ChartAccountRow,
 } from "@/lib/finanzas/types/chart-of-account";
 
@@ -44,6 +51,11 @@ type FormState = {
   code: string;
   name: string;
   account_type: AccountType;
+  /** "" = sin clasificar (se manda como null). */
+  subcategoria: Subcategoria | "";
+  /** Se mantiene como STRING para no pelear con el input mientras se tipea
+   *  ("-", "1500.", "" al borrar todo). Se convierte a número al guardar. */
+  saldo_inicial: string;
   description: string;
   active: boolean;
 };
@@ -56,15 +68,26 @@ function emptyCreateForm(): FormState {
     code: "",
     name: "",
     account_type: "asset",
+    subcategoria: "",
+    saldo_inicial: "0",
     description: "",
     active: true,
   };
+}
+
+/** Formatea un saldo para el listado: B/. con 2 decimales y separador de miles. */
+function formatSaldo(n: number): string {
+  return n.toLocaleString("es-PA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 const selectClass =
   "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none border-gray-300";
 
 export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState | null>(null);
@@ -72,6 +95,27 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  /**
+   * Recarga el listado desde el server tras una carga masiva. Es más simple y
+   * más seguro que reconciliar en el cliente: el bulk puede haber creado y
+   * actualizado decenas de filas en una pasada.
+   */
+  async function reloadAccounts() {
+    try {
+      const res = await fetch(API_BASE);
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(json.accounts)) {
+        setAccounts(json.accounts as ChartAccountRow[]);
+      }
+    } catch {
+      setError("La carga se aplicó, pero no se pudo refrescar el listado. Recargá la página.");
+    }
+    // El conteo del encabezado ("N cuentas contables") lo renderiza el server
+    // component de la página, así que sin esto queda viejo tras la carga.
+    router.refresh();
+  }
 
   const filtered = useMemo(
     () =>
@@ -82,6 +126,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           a.name,
           a.account_name_qb,
           ACCOUNT_TYPE_LABEL_ES[a.account_type],
+          subcategoriaLabel(a.subcategoria),
           a.active ? "activa" : "inactiva"
         )
       ),
@@ -115,6 +160,8 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       code: a.code,
       name: a.name,
       account_type: a.account_type,
+      subcategoria: a.subcategoria ?? "",
+      saldo_inicial: String(a.saldo_inicial ?? 0),
       description: a.description ?? "",
       active: a.active,
     });
@@ -136,6 +183,10 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       code: form.code.trim(),
       name: form.name.trim(),
       account_type: form.account_type,
+      subcategoria: form.subcategoria || null,
+      // Campo vacío = 0 (el validador también defaultea a 0). Un "-" o "abc"
+      // suelto llega tal cual y el validador lo rechaza con mensaje inline.
+      saldo_inicial: form.saldo_inicial.trim() === "" ? 0 : form.saldo_inicial.trim(),
       description: form.description.trim() || null,
       active: form.active,
     };
@@ -176,6 +227,8 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
         return prev.map((a) => (a.id === saved.id ? saved : a));
       });
       setForm(null);
+      // Mantiene sincronizado el conteo del encabezado (server component).
+      router.refresh();
     } catch {
       setError("Error de red al guardar. Intentá de nuevo.");
     } finally {
@@ -191,9 +244,14 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       const res = await fetch(`${API_BASE}/${a.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        // El PATCH es REEMPLAZO TOTAL (ver api/chart-of-accounts.ts): hay que
+        // reenviar subcategoria y saldo_inicial o el toggle los resetearía a
+        // null / 0.
         body: JSON.stringify({
           name: a.name,
           account_type: a.account_type,
+          subcategoria: a.subcategoria,
+          saldo_inicial: a.saldo_inicial,
           description: a.description,
           active: !a.active,
         }),
@@ -231,16 +289,39 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           />
         </div>
         {canMutate && (
-          <Button
-            onClick={startCreate}
-            disabled={!!form}
-            className="min-h-[44px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
-          >
-            <Plus size={18} className="mr-1" />
-            Nueva cuenta
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null);
+                setForm(null);
+                setImporting(true);
+              }}
+              disabled={importing}
+              className="min-h-[44px]"
+            >
+              <FileSpreadsheet size={18} className="mr-1" />
+              Importar cuentas
+            </Button>
+            <Button
+              onClick={startCreate}
+              disabled={!!form || importing}
+              className="min-h-[44px] bg-integra-gold text-integra-navy hover:bg-integra-gold/90"
+            >
+              <Plus size={18} className="mr-1" />
+              Nueva cuenta
+            </Button>
+          </div>
         )}
       </div>
+
+      {/* Carga masiva desde Excel */}
+      {canMutate && importing && (
+        <ImportAccountsPanel
+          onImported={reloadAccounts}
+          onClose={() => setImporting(false)}
+        />
+      )}
 
       {/* Error global */}
       {error && (
@@ -299,6 +380,61 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               </select>
               {fieldErrors.account_type && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.account_type}</p>
+              )}
+            </div>
+
+            {/* Subcategoría (opcional) — agrupa los reportes */}
+            <div>
+              <Label className="mb-1 block text-xs">Subcategoría (opcional)</Label>
+              <select
+                value={form.subcategoria}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    subcategoria: e.target.value as Subcategoria | "",
+                  })
+                }
+                disabled={saving}
+                className={
+                  selectClass + (fieldErrors.subcategoria ? " border-red-300" : "")
+                }
+              >
+                <option value="">— Sin clasificar —</option>
+                {SUBCATEGORIAS.map((s) => (
+                  <option key={s} value={s}>
+                    {SUBCATEGORIA_LABEL_ES[s]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Agrupa los reportes (Balance General y Estado de Resultado).
+              </p>
+              {fieldErrors.subcategoria && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.subcategoria}</p>
+              )}
+            </div>
+
+            {/* Saldo inicial — permite negativos */}
+            <div>
+              <Label className="mb-1 block text-xs">Saldo inicial (B/.)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                inputMode="decimal"
+                value={form.saldo_inicial}
+                onChange={(e) => setForm({ ...form, saldo_inicial: e.target.value })}
+                disabled={saving}
+                placeholder="0.00"
+                className={
+                  "text-right font-mono " +
+                  (fieldErrors.saldo_inicial ? "border-red-300" : "")
+                }
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Monto de apertura. Admite negativos.
+              </p>
+              {fieldErrors.saldo_inicial && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.saldo_inicial}</p>
               )}
             </div>
 
@@ -406,6 +542,10 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                     <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                       <th className="px-3 py-2 font-semibold">Código</th>
                       <th className="px-3 py-2 font-semibold">Nombre</th>
+                      <th className="px-3 py-2 font-semibold">Subcategoría</th>
+                      <th className="px-3 py-2 text-right font-semibold">
+                        Saldo inicial
+                      </th>
                       <th className="px-3 py-2 font-semibold">Nombre QB</th>
                       <th className="px-3 py-2 text-right font-semibold">Estado</th>
                       {canMutate && (
@@ -442,6 +582,30 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                                 </Badge>
                               )}
                             </span>
+                          </td>
+                          <td className="px-3 py-3 text-gray-500">
+                            {a.subcategoria ? (
+                              <Badge
+                                variant="secondary"
+                                className="bg-gray-100 font-normal text-gray-600 hover:bg-gray-100"
+                              >
+                                {subcategoriaLabel(a.subcategoria)}
+                              </Badge>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td
+                            className={
+                              "px-3 py-3 text-right font-mono text-xs tabular-nums " +
+                              (a.saldo_inicial < 0
+                                ? "text-red-600"
+                                : a.saldo_inicial > 0
+                                  ? "text-gray-700"
+                                  : "text-gray-400")
+                            }
+                          >
+                            {formatSaldo(a.saldo_inicial)}
                           </td>
                           <td className="px-3 py-3 text-gray-500">
                             {a.account_name_qb || "—"}

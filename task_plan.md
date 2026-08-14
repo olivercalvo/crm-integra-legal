@@ -1,5 +1,107 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === ESTADO 14/08/2026 — PLAN DE TRABAJO CON JOSUAR (5 PASOS) ===
+
+Josuar bajó el requerimiento contable a **5 pasos secuenciales** en la reunión del 10/08/2026.
+Detalle completo en `docs/finanzas/roadmap-contable.md` §10.
+
+### Paso 1a — Plan de cuentas: saldo inicial + subcategoría — CERRADO 14/08/2026
+- [x] Migración `sql/pending/024_chart_of_accounts_saldo_subcategoria.sql` **aplicada en Supabase**
+      por Oliver (aditiva e idempotente: `saldo_inicial numeric(14,2) NOT NULL DEFAULT 0` +
+      `subcategoria text NULL`).
+- [x] Backend (tipos, validadores, create/update + audit_log, route handlers) y UI (form + 2
+      columnas nuevas en el listado). Tests 27/27 verde, `tsc --noEmit` limpio, lint sin hallazgos
+      nuevos. Detalle en `changelog.md`.
+- [x] **Verificado en navegador** (localhost:3000, admin): crear `999001` con saldo `12500.75` +
+      subcategoría *Activo corriente* → editar a *Activo no corriente* / `-8400.25` (rojo) →
+      desactivar. `audit_log` con 3 entradas correctas; el toggle auditó **solo `active`**,
+      confirmando que ya no pisa saldo ni subcategoría.
+- [ ] **Limpieza pendiente (Oliver):** la cuenta de prueba `999001` quedó en la BD del cliente,
+      **inactiva**. No hay hard delete desde la UI. El `DELETE` está consolidado en el Paso 1b junto
+      con las de esa verificación. No colisiona con las 62 cuentas de Josuar (códigos distintos).
+
+### Paso 1b — Carga masiva por Excel — CERRADO 14/08/2026
+- [x] Sin migración (usa las columnas del 1a). Módulo puro de mapeo + capa XLSX + endpoint
+      `POST /api/finanzas/configuracion/chart-of-accounts/bulk` (preview/commit) + panel de UI.
+- [x] Lectura tolerante: traga la plantilla propia Y el balance de comprobación de Josuar (filas de
+      título arriba, encabezados alternativos, columnas extra, fila TOTALES).
+- [x] Upsert por `(tenant, código)`; el update **preserva `description` y `active`** (no vienen en
+      el Excel y el PATCH es reemplazo total).
+- [x] Tests 45 nuevos (34 del módulo puro + 11 del endpoint), `tsc` limpio, lint sin hallazgos.
+- [x] **Verificado en navegador**: plantilla descargada, Excel formato Josuar subido → 5 creadas;
+      mismo archivo de nuevo → 5 actualizadas sin duplicados; `audit_log` con 5 create y 0 update.
+      Detalle en `changelog.md`.
+- [ ] **Limpieza pendiente (Oliver):** cuentas de prueba en la BD del cliente. Para borrarlas:
+      `DELETE FROM chart_of_accounts WHERE code IN ('999001','910001','910002','910003','910004','910005') AND tenant_id='a0000000-0000-0000-0000-000000000001';`
+- [x] **Las 62 cuentas de Josuar ya están cargadas** con el importador ("62 creada(s) · 0
+      actualizada(s) · 0 con error") y las 35 viejas de QB quedaron desactivadas. Total en BD: 97
+      filas, 62 activas.
+
+### Paso 2 — Balance General y Estado de Resultado — CERRADO 14/08/2026
+- [x] Sin migración. Capa de datos aislada (`accounting-source.ts`, único archivo a cambiar en el
+      Paso 3) + armado puro (`accounting-reports.ts`) + UI que reemplaza los placeholders de
+      `/finanzas/reportes/{balance,pyl}`.
+- [x] Convención de signos de Josuar (balanza, sin invertir): ganancia en negativo, Total Pasivo +
+      Patrimonio igual y opuesto al Total de Activo.
+- [x] **Los 10 totales coinciden exactamente con el Excel de Josuar** y el balance cuadra
+      (descuadre 0.00). Verificado en tests (fixture con las 62 cuentas reales) y en navegador.
+- [x] ISR como parámetro (default 25%, solo si hay utilidad), marcado como provisional en la UI.
+- [x] Cuentas sin subcategoría caen en un grupo "Sin clasificar" que suma al total y se avisa, en
+      vez de desaparecer del reporte.
+- [ ] **Pendiente de Josuar** (marcado en la UI, no asumido): tasa y método del ISR · si el
+      patrimonio lleva la utilidad operativa o la neta · fecha de corte de los saldos de apertura.
+- [ ] **Riesgo abierto:** la cuenta `300003 Utilidad del Ejercicio` existe en el plan Y el reporte
+      agrega el renglón calculado. Hoy da bien porque está en 0; si le cargan saldo se contaría dos
+      veces. Hay aviso ámbar automático (mira el saldo, no el nombre) y el descuadre se muestra. Se
+      resuelve cuando el cierre de ejercicio postee el resultado a la cuenta (Paso 3+).
+
+### Pasos 3 a 5 — NO ARRANCADOS
+3) enganche factura→asiento (centro de costo) · 4) módulo de compra · 5) asientos manuales +
+auxiliares de antigüedad.
+
+## === ESTADO 04/08/2026 — MÓDULO CONTABLE ===
+
+### Fase 1 (schema del ledger) — LISTA EN CÓDIGO, PENDIENTE DE APLICAR
+`sql/pending/023_contabilidad_fase1_ledger.sql` **reescrito y commiteado a `develop`**. Sale del
+estado ⛔ EN ESPERA: ya no recrea `chart_of_accounts` (choque con el de producción,
+`20260505000002_finanzas_catalogos.sql`, `account_type` en inglés + 34 cuentas + UI desplegada).
+Ahora crea **solo el motor**: `accounting_periods`, `accounting_sequences`, `journal_entries`,
+`journal_entry_lines`, `accounting_legajos` + 7 índices + 6 triggers de inmutabilidad + RLS por
+tenant, con `journal_entry_lines.account_id` por **FK al COA existente**. Aditivo, 5 tablas nuevas
+y vacías. Detalle completo en `changelog.md`.
+
+- [ ] **Aplicar en Supabase prod** (Oliver — **pausa obligatoria**, cambio de schema). El archivo
+      es **idempotente**: se puede re-ejecutar sin error (`DROP ... IF EXISTS` antes de los 6
+      triggers y de la política, porque Postgres no admite `IF NOT EXISTS` en ninguno de los dos).
+      Aplicarlo **completo de una pasada**, no sentencia por sentencia, para que el DROP+CREATE de
+      cada trigger caiga en la misma transacción. Correr las 4 queries de verificación del pie:
+      5 tablas / 6 triggers / 5 políticas / FK al COA.
+- Sin código, sin deploy. **Tipos TypeScript a propósito NO creados** — van en la Fase 2, con la
+  lógica que los use.
+
+### Fase 2 (posteo + verificador + factura→asiento) — BLOQUEADA POR EL CONTADOR
+No arranca hasta que **Josuar confirme el plan de cuentas definitivo**. Los modelos que mandó el
+01/08 usan una codificación **distinta** a las 34 cuentas de QB (ingresos `4xxxxx`, costos `5xxxxx`,
+gastos `6xxx`, activos `1xxxxx`, pasivos `2xxxxx`, patrimonio `3xxxxx`) → la Fase 1 contable de
+negocio es un **mapeo**, no una validación directa. El ledger en sí es chart-agnostic, así que el
+schema no se bloquea; sí se bloquea la lógica que decide **qué cuenta** se afecta.
+
+Alcance de la Fase 2 cuando se desbloquee:
+- RPC de posteo: correlativo sin huecos + hash-chain + validación **Σdébitos = Σcréditos** (no es
+  expresable como CHECK, abarca varias filas) + período abierto.
+- Función verificadora de la cadena de hashes (auditoría / aval CPA).
+- Enganche **factura→asiento** (DEBE cuentas por cobrar / HABER ingreso + HABER ITBMS por pagar).
+- Tipos TypeScript del ledger.
+- Asientos manuales para **saldos de apertura** (esperan fecha de corte de Josuar).
+
+### Sigue esperando de Josuar
+Plan de cuentas final · saldos de apertura + fecha de corte · respuestas a las 4 preguntas de
+tratamiento contable (reembolsos, devengado vs caja, ITBMS en reembolsos, anticipos en custodia,
+enviadas 01/08) · modelos de los informes restantes. Ver `docs/finanzas/roadmap-contable.md`.
+
+### No commiteado
+`sql/pending/022_backfill_dv_embebido.sql` sigue **untracked** — fuera del alcance de este cambio.
+
 ## === ESTADO 13/07/2026 ===
 
 ### Cerrado hoy

@@ -93,7 +93,37 @@ npx tsx --test --experimental-test-module-mocks \
   src/app/api/finanzas/configuracion/chart-of-accounts/__tests__/chart-of-accounts.route.test.ts
 ```
 
-### 8. Doc
+### 8. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+Migración 024 aplicada en Supabase por Oliver antes de verificar. Recorrido completo:
+
+| Paso | Resultado |
+|---|---|
+| Listado inicial | Columnas **SUBCATEGORÍA** y **SALDO INICIAL** presentes; las 34 cuentas viejas en `—` y `0.00` |
+| Dropdown de subcategoría | Los 10 valores con label español y `value` en snake_case, más `— Sin clasificar —` |
+| Crear `999001` (saldo `12500.75`, *Activo corriente*) | Fila nueva con badge gris y `12,500.75` (separador de miles `es-PA`) |
+| Editar → *Activo no corriente*, saldo `-8400.25` | Form pre-cargado con ambos campos; persiste y el negativo sale **en rojo** |
+| Buscar "Activo no corriente" | Filtra a 1 fila → el buscador matchea por label de subcategoría |
+| Desactivar la cuenta | `Inactiva`, y **saldo + subcategoría intactos** → confirma el fix del toggle |
+
+`audit_log` de la cuenta (leído directo de la BD) — 3 entradas, exactamente las esperadas:
+
+```
+[create] new: {...,"subcategoria":"activo_corriente","saldo_inicial":12500.75,...}
+[update] field=subcategoria,saldo_inicial
+         old: {"subcategoria":"activo_corriente","saldo_inicial":12500.75}
+         new: {"subcategoria":"activo_no_corriente","saldo_inicial":-8400.25}
+[update] field=active   old: {"active":true}   new: {"active":false}
+```
+
+La tercera entrada es la prueba dura del fix: el toggle auditó **solo `active`** — antes habría
+registrado también `saldo_inicial: -8400.25 → 0` y `subcategoria: activo_no_corriente → null`.
+`saldo_inicial` vuelve de PostgREST como `number` (verificado con `typeof`).
+
+Queda la cuenta de prueba `999001` **inactiva** en la BD del cliente; el `DELETE` para limpiarla
+está en `task_plan.md` (no se ejecuta acá: borrar datos es pausa obligatoria).
+
+### 9. Doc
 
 `docs/finanzas/roadmap-contable.md` §10 (plan de 5 pasos de la reunión del 10/08/2026 con Josuar)
 se editó fuera de AG y entra en este commit.

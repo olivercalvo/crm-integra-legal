@@ -1,5 +1,128 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-14 - Balance General y Estado de Resultado (Paso 2 contable)
+
+Los dos reportes que pidió Josuar, reemplazando los placeholders de
+`/finanzas/reportes/balance` y `/finanzas/reportes/pyl`. **Sin migración**: se arman con el
+`saldo_inicial` y la `subcategoria` de las 62 cuentas cargadas en los Pasos 1a/1b.
+
+**Los 10 totales dan exactamente los mismos números que el Excel de Josuar** (ver §4).
+
+### 1. Convención de signos — la de Josuar, sin invertir
+
+Los saldos se suman TAL CUAL vienen de la balanza de comprobación: débitos (activos, costos,
+gastos) positivos, créditos (pasivos, patrimonio, ingresos) negativos. Consecuencias que son
+correctas y NO bugs, documentadas en el código y en una nota al pie de los dos reportes:
+
+- "Total de Ingresos" sale **negativo** (-289,137.06).
+- Una **ganancia aparece en negativo**; una pérdida, positiva. De ahí que el guard del ISR sea
+  `utilidadOperativa < 0`, no `> 0`.
+- "Total Pasivo + Patrimonio" queda **igual y opuesto** al "Total de Activo". El balance cuadra
+  cuando la SUMA de los dos da cero, no cuando son iguales.
+
+### 2. Capa de datos aislada — `src/lib/finanzas/reports/accounting-source.ts`
+
+Único archivo a cambiar en el Paso 3. Hoy el saldo de cada cuenta ES su `saldo_inicial`; cuando
+entre el motor de posteo pasa a ser `saldo_inicial + Σ movimientos del ledger`. `ReportAccount` no
+cambia de forma, así que el armado puro y la UI quedan intactos. Filtra `active = true` (las 35
+cuentas viejas de QB están desactivadas y ensuciarían el reporte con renglones en 0).
+
+### 3. Armado PURO — `src/lib/finanzas/reports/accounting-reports.ts`
+
+Sin BD: recibe `ReportAccount[]` y devuelve las estructuras que renderiza la UI.
+
+**Estado de Resultado:** INGRESOS → Total de Ingresos · COSTOS → Total de Costos · GANANCIA O
+PÉRDIDA BRUTA · GASTOS OPERATIVOS → Total de Gastos · UTILIDAD OPERATIVA · ISR · UTILIDAD NETA.
+COSTOS y GASTOS parten `account_type='expense'` en dos por `subcategoria` — que es exactamente para
+lo que se agregó el campo en el Paso 1a: en BD ambos son el mismo tipo.
+
+**Balance General:** ACTIVOS agrupado en el orden de Josuar (corriente → propiedad, planta y equipo
+→ no corriente, que **no** es el orden de `SUBCATEGORIAS`), PASIVOS (corriente / no corriente) y
+PATRIMONIO (cuentas + renglón calculado "Utilidad del Ejercicio"). Renglones ordenados por código,
+numeric-aware.
+
+**Nada se cae del reporte en silencio.** Una cuenta con `subcategoria` NULL o inesperada entra en un
+grupo **"Sin clasificar"** al final de su tipo, suma al total, y la UI avisa cuántas hay. Sin eso,
+un `expense` mal clasificado desaparecía del P&L y el total mentía sin que nadie lo notara. Con las
+62 cuentas actuales no hay ninguna (hay test que lo verifica).
+
+**ISR como parámetro, no regla fiscal:** tasa plana configurable (default 25%) sobre la utilidad
+operativa, aplicada solo si hubo ganancia. La tasa y el método (base gravable, ajustes, tarifa
+alternativa) están pendientes de Josuar; la UI lo dice explícitamente ("tasa provisional 25% — a
+confirmar").
+
+`buildAccountingReports()` arma los dos juntos para que la "Utilidad del Ejercicio" del Balance sea
+**literalmente** la utilidad operativa del Estado de Resultado y no puedan divergir.
+
+### 4. Totales verificados contra el Excel de Josuar
+
+| Estado de Resultado | Valor | Balance General | Valor |
+|---|---|---|---|
+| Total de Ingresos | -289,137.06 | Total Activos corrientes | 252,967.57 |
+| Total de Costos | 9,878.38 | Total de Activo | 257,902.46 |
+| Ganancia o Pérdida Bruta | -279,258.68 | Total de Pasivos | -13,425.55 |
+| Total de Gastos | 34,781.77 | Total de Patrimonio | -244,476.91 |
+| Utilidad Operativa | -244,476.91 | Total Pasivo + Patrimonio | -257,902.46 |
+
+ISR (25% provisional) 61,119.23 · Utilidad Neta -183,357.68 · **el balance cuadra** (descuadre 0.00).
+
+### 5. ⚠️ Riesgo de doble conteo detectado y mitigado
+
+El plan de Josuar **ya tiene una cuenta `300003 Utilidad del Ejercicio`** (equity/patrimonio) y este
+reporte además agrega el renglón calculado con el mismo nombre, tal como pide su modelo. Hoy `300003`
+está en 0 y los totales dan bien, pero si alguien le carga un saldo **el resultado se contaría dos
+veces** y el balance se descuadraría.
+
+Mitigaciones: el descuadre se **calcula y se muestra** (banner rojo con la diferencia y qué revisar)
+en vez de esconderse; y si las cuentas de patrimonio tienen cualquier saldo distinto de cero aparece
+un aviso ámbar pidiendo confirmar que no se está duplicando. El chequeo mira el **saldo**, no el
+nombre de la cuenta, así que no es frágil. Cuando llegue el cierre de ejercicio con asientos, el
+resultado se postea a la cuenta y el renglón calculado desaparece.
+
+### 6. UI
+
+Formato de los modelos de Josuar: encabezado centrado con razón social + título + fecha de
+generación, secciones en mayúsculas, subgrupos con subtotal, totales en negrita con reglas, montos
+`font-mono tabular-nums` con separador de miles `es-PA` y **negativos en rojo**. Piezas compartidas
+en `_components/financial-statement.tsx`; la razón social sale de
+`EFACTURA_EMISOR_RAZON_SOCIAL` (el nombre legal ante la DGI) leyendo `process.env` directo —
+**no** vía `loadEmisorConfig()`, que lanza si falta cualquier variable del emisor y tiraría abajo un
+reporte contable por una config de facturación incompleta.
+
+Los badges del índice pasaron de "Mensual / Anual" y "Fecha de corte" a **"Saldos de apertura"**:
+todavía no hay selector de período y el badge anterior prometía algo que el reporte no hace.
+
+### 7. Tests — 22 nuevos (`accounting-reports.test.ts`), 0 fail
+
+Fixture `josuar-accounts.fixture.ts` con las **62 cuentas reales** exportadas de la BD (generado, no
+escrito a mano). Cubre: los 10 totales contra el Excel de Josuar, el cuadre del balance, que la
+Utilidad del Ejercicio del Balance sea la utilidad operativa del ER, el orden de los grupos de
+activo, el orden por código, la separación costo/gasto_operativo, que nada caiga en "Sin clasificar"
+con los datos reales, que un `expense` huérfano SÍ aparezca en "Sin clasificar" y sume, el descuadre
+reportado, el ISR (ganancia / pérdida / cero / tasa parametrizada / número real), y que los centavos
+no arrastren error binario.
+
+```
+npx tsx --test src/lib/finanzas/reports/__tests__/accounting-reports.test.ts
+```
+
+### 8. Verificación en navegador (localhost:3000, rol admin) — 14/08/2026
+
+Ambos reportes abiertos y leídos renglón por renglón. **Los 10 totales coinciden exactamente** con
+la tabla de §4. El Balance muestra el banner verde "El balance cuadra. Total de Activo 257,902.46 y
+Total Pasivo + Patrimonio -257,902.46 son iguales y opuestos". El aviso de doble conteo NO se
+dispara (las 3 cuentas de patrimonio están en 0), que es el comportamiento correcto. El renglón
+calculado se distingue visualmente del de la cuenta `300003` por la nota gris al lado ("del Estado
+de Resultado (operativa)").
+
+### 9. Pendiente de Josuar (marcado en la UI, no asumido)
+
+- **Tasa y método del ISR.**
+- Si el patrimonio debe llevar la utilidad **operativa o la neta** (hoy: operativa).
+- **Fecha de corte** de los saldos de apertura.
+
+---
+
 ## [Feature] - 2026-08-14 - Plan de cuentas: carga masiva por Excel (Paso 1b contable)
 
 Segunda mitad del **Paso 1** del plan contable con Josuar (ver

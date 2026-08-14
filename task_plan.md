@@ -33,12 +33,31 @@ Detalle completo en `docs/finanzas/roadmap-contable.md` §10.
       Detalle en `changelog.md`.
 - [ ] **Limpieza pendiente (Oliver):** cuentas de prueba en la BD del cliente. Para borrarlas:
       `DELETE FROM chart_of_accounts WHERE code IN ('999001','910001','910002','910003','910004','910005') AND tenant_id='a0000000-0000-0000-0000-000000000001';`
-- [ ] **Pendiente de Josuar:** el archivo real de 62 cuentas para cargarlo. La herramienta ya está.
-      Las 34 cuentas viejas de QB se desactivan aparte (códigos distintos, no colisionan).
+- [x] **Las 62 cuentas de Josuar ya están cargadas** con el importador ("62 creada(s) · 0
+      actualizada(s) · 0 con error") y las 35 viejas de QB quedaron desactivadas. Total en BD: 97
+      filas, 62 activas.
 
-### Pasos 2 a 5 — NO ARRANCADOS
-2) Reportes Balance General y Estado de Resultado · 3) enganche factura→asiento (centro de costo) ·
-4) módulo de compra · 5) asientos manuales + auxiliares de antigüedad.
+### Paso 2 — Balance General y Estado de Resultado — CERRADO 14/08/2026
+- [x] Sin migración. Capa de datos aislada (`accounting-source.ts`, único archivo a cambiar en el
+      Paso 3) + armado puro (`accounting-reports.ts`) + UI que reemplaza los placeholders de
+      `/finanzas/reportes/{balance,pyl}`.
+- [x] Convención de signos de Josuar (balanza, sin invertir): ganancia en negativo, Total Pasivo +
+      Patrimonio igual y opuesto al Total de Activo.
+- [x] **Los 10 totales coinciden exactamente con el Excel de Josuar** y el balance cuadra
+      (descuadre 0.00). Verificado en tests (fixture con las 62 cuentas reales) y en navegador.
+- [x] ISR como parámetro (default 25%, solo si hay utilidad), marcado como provisional en la UI.
+- [x] Cuentas sin subcategoría caen en un grupo "Sin clasificar" que suma al total y se avisa, en
+      vez de desaparecer del reporte.
+- [ ] **Pendiente de Josuar** (marcado en la UI, no asumido): tasa y método del ISR · si el
+      patrimonio lleva la utilidad operativa o la neta · fecha de corte de los saldos de apertura.
+- [ ] **Riesgo abierto:** la cuenta `300003 Utilidad del Ejercicio` existe en el plan Y el reporte
+      agrega el renglón calculado. Hoy da bien porque está en 0; si le cargan saldo se contaría dos
+      veces. Hay aviso ámbar automático (mira el saldo, no el nombre) y el descuadre se muestra. Se
+      resuelve cuando el cierre de ejercicio postee el resultado a la cuenta (Paso 3+).
+
+### Pasos 3 a 5 — NO ARRANCADOS
+3) enganche factura→asiento (centro de costo) · 4) módulo de compra · 5) asientos manuales +
+auxiliares de antigüedad.
 
 ## === ESTADO 04/08/2026 — MÓDULO CONTABLE ===
 

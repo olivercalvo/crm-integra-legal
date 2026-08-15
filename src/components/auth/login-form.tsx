@@ -71,16 +71,17 @@ export function LoginForm({ notice }: { notice?: string }) {
     setError("");
     setResetSent(false);
     try {
-      const supabase = createClient();
-      // /auth/recuperar canjea el código y manda a /nueva-contrasena. NO apuntar
-      // a /auth/callback: esa ruta no existe (la real es /api/auth/callback) y
-      // el link terminaba rebotando al login sin cambiar nada.
-      // Esta URL tiene que estar en Supabase → Authentication → URL
-      // Configuration → Redirect URLs, o Supabase la ignora y usa el Site URL.
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/recuperar`,
+      // Pasa por un endpoint NUESTRO a propósito. Llamando a
+      // resetPasswordForEmail desde acá, el browser client usa PKCE y el token
+      // del correo sale con prefijo `pkce_`: solo se puede canjear desde ESTE
+      // navegador, así que el correo abierto en el celular no sirve. El
+      // endpoint lo pide sin PKCE y el link funciona en cualquier dispositivo.
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
-      if (resetError) {
+      if (!res.ok) {
         setError("Error al enviar el correo de recuperación. Intente de nuevo.");
       } else {
         setResetSent(true);

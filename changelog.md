@@ -1,5 +1,178 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-15 - Recuperación de contraseña: pasar de PKCE a token_hash (cross-device)
+
+El deploy de esta mañana dejó el flujo llegando a `/auth/recuperar`, pero el canje fallaba y la
+persona terminaba en `/login?error=recovery`. Enlace real del correo (token ya gastado):
+
+```
+https://<proyecto>.supabase.co/auth/v1/verify?token=pkce_8fc1f1ea…&type=recovery
+  &redirect_to=https://crm-integra-legal.vercel.app/auth/recuperar
+```
+
+### La causa, y por qué la plantilla sola NO alcanzaba
+
+El prefijo **`pkce_`** lo pone **quien PIDE el reset**, no la plantilla de email. El login llamaba
+`resetPasswordForEmail` con el **browser client**, que usa flujo PKCE: supabase-js guarda un
+`code_verifier` local y GoTrue almacena el token prefijado. Al hacer clic, `/auth/v1/verify`
+redirige con `?code=…`, y ese code **solo se puede canjear con el verifier del navegador que
+inició el reset**. Correo abierto en el celular = imposible.
+
+Confirmado con dos pruebas:
+
+1. `admin.auth.admin.generateLink({ type: "recovery" })` (server-side, sin PKCE) devuelve
+   `hashed_token = b058b1cf…` — **token plano, sin prefijo**. El del correo traía `pkce_8fc1…`.
+   La diferencia está en el cliente que lo pide.
+2. El log del servidor ante un `?code=` sin verifier lo dice con las palabras de Supabase:
+   *"PKCE code verifier not found in storage. This can happen if the auth flow was initiated in a
+   different browser or device."*
+
+**Conclusión operativa:** cambiar la plantilla a `{{ .TokenHash }}` sin sacar el PKCE del pedido
+habría renderizado `pkce_8fc1…` dentro del `token_hash`, y `verifyOtp` habría seguido fallando.
+Hacían falta las dos mitades.
+
+### Qué se cambió
+
+| Archivo | Qué |
+|---|---|
+| `src/app/api/auth/reset-password/route.ts` (nuevo) | Pide el correo desde el SERVIDOR con `flowType: "implicit"` → el token del email sale plano. Responde `{ ok: true }` exista o no el usuario (no permite enumerar cuentas) |
+| `src/app/auth/recuperar/route.ts` | Ahora acepta `?token_hash=…&type=recovery` y lo verifica con `verifyOtp` — **sin `code_verifier`, sin continuidad de navegador**. Mantiene la rama `?code=` para los correos ya enviados |
+| `src/components/auth/login-form.tsx` | El botón hace `POST /api/auth/reset-password` en vez de llamar a Supabase directo |
+| `src/app/(auth)/login/page.tsx` | Aviso nuevo `recovery_otro_navegador` para el caso PKCE heredado |
+
+**Efecto lateral bueno:** pedir el reset por un endpoint propio crea el chokepoint que faltaba para
+el rate limiting de Seguridad Fase 0 punto A. Antes la llamada iba del browser directo a Supabase y
+no había dónde contar.
+
+La rama `?code=` se puede borrar cuando no queden correos viejos circulando (el token de
+recuperación caduca a las 24 h por defecto).
+
+### ⚠️ REQUIERE cambio en el dashboard de Supabase (lo hace Oliver)
+
+**Authentication → Emails → Templates → "Reset Password"**, reemplazar el `href` del botón por:
+
+```html
+<a href="{{ .SiteURL }}/auth/recuperar?token_hash={{ .TokenHash }}&type=recovery">
+  Restablecer contraseña
+</a>
+```
+
+Lo que importa es que el enlace deje de usar `{{ .ConfirmationURL }}` y pase a
+`token_hash` + `type=recovery` apuntando a `/auth/recuperar`.
+
+Verificar además **Authentication → URL Configuration → Site URL** =
+`https://crm-integra-legal.vercel.app`. Con esta plantilla el enlace se arma con el Site URL y ya
+NO pasa por `/auth/v1/verify?redirect_to=…`, así que la allowlist de Redirect URLs deja de
+intervenir en este flujo (las entradas que ya cargó siguen sirviendo para los correos viejos que
+todavía usan la rama `?code=`).
+
+**Alternativa** si alguna vez se quiere que los correos de localhost apunten a localhost: usar
+`{{ .RedirectTo }}` en lugar de `{{ .SiteURL }}`. Funciona porque el endpoint siempre manda el
+`redirectTo`, pero un correo disparado desde el dashboard (que no manda ninguno) generaría un
+enlace roto. Para probar en local sin correos conviene `generateLink`, como se hizo acá.
+
+### Verificación — 15/08/2026
+
+Prueba de punta a punta con un `token_hash` REAL de la cuenta `contador.test@integra-panama.com`,
+generado con `generateLink` (sin enviar correo) y consumido **desde `curl`** — es decir, sin
+`code_verifier`, sin cookies previas y sin ningún estado del navegador que lo pidió: exactamente el
+escenario "otro dispositivo" que estaba roto.
+
+| Caso | Resultado |
+|---|---|
+| `?token_hash=<real>&type=recovery` | **307 → `/nueva-contrasena`** + cookie de sesión. El JWT decodifica al usuario correcto (`contador.test`, `user_role: contador`) |
+| `/nueva-contrasena` con esa sesión | **HTTP 200** — la pantalla carga y la excepción del gating por rol funciona también para `contador` |
+| Reusar el mismo token | 307 → `/login?error=recovery_expired` (un solo uso, confirmado) |
+| `?token_hash=novale` / `?token_hash=pkce_…` | 307 → `/login?error=recovery_expired` |
+| `?code=FAKE123` | 307 → `/login?error=recovery_otro_navegador` |
+| sin parámetros | 307 → `/login?error=recovery` |
+| `?error=…&error_code=otp_expired` | 307 → `/login?error=recovery_expired` |
+| `POST /api/auth/reset-password` email inválido / sin body | 400 |
+| `POST` con email inexistente | 200 `{"ok":true}` — sin filtrar si la cuenta existe |
+
+**NO se cambió ninguna contraseña** y **no se envió ningún correo**: la cuenta de prueba solo quedó
+con el `last_sign_in_at` actualizado. El clic real en el botón del login tampoco se ejecutó (habría
+mandado un correo de verdad); el endpoint que consume está verificado por separado.
+
+`tsc --noEmit` limpio · suite **292/292 verde** · `next build` exitoso (`/api/auth/reset-password` y
+`/auth/recuperar` compilan como route handlers dinámicos) · lint sin cambios (22 preexistentes, 0 en
+estos archivos).
+
+**Pendiente de Oliver:** cambiar la plantilla y después probar el round-trip real — pedir el reset
+en la computadora y abrir el correo en el celular, que es el caso que hoy falla.
+
+---
+
+## [DEPLOY] - 2026-08-15 18:43 UTC - develop → main (4 commits)
+
+**Merge:** `9f8f243` · **Punto de rollback:** `060fed7` · **Aprobado por:** Oliver
+
+### Qué salió
+
+| Commit | Qué |
+|---|---|
+| `8a084bf` | Filtro "solo cuentas con saldo" en Balance General y Estado de Resultado |
+| `198013e` | DV en su propio renglón, separado del RUC, en la ficha de cliente |
+| `5203c24` | Recuperación de contraseña arreglada (Seguridad Fase 0 B): `/auth/recuperar` + `/nueva-contrasena`, fix del `redirectTo` y del gating del middleware, avisos del login |
+| `9aab6ca` | Log del deploy anterior (docs) |
+
+**Migraciones: NINGUNA.** Deploy 100% de código — verificado con
+`git diff --name-only origin/main origin/develop | grep -iE "\.sql$|migration|supabase/"` → vacío.
+No se tocó nada en Supabase.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa de tests | **292/292 verde**, 0 fail (283 + 9 del archivo suelto de cancel-invoice-dialog) |
+| `tsc --noEmit` | limpio (exit 0) |
+| `next build` local | **exitoso** (`✓ Compiled successfully`, exit 0). `/auth/recuperar` compila como route handler dinámico (ƒ) y `/nueva-contrasena` como estática (○) — correcto: el gate lo pone el middleware |
+| Lint | 22 errores + 5 warnings, **todos preexistentes**; **0 en los archivos de este release**. `next.config` tiene `eslint.ignoreDuringBuilds` → no bloquean |
+| Diff review | limpio: sin secretos, sin claves, sin endpoints de debug, sin scripts scratch. El único `console` nuevo loguea `error.message` de Supabase (sin token ni code) |
+| Migraciones en prod | ninguna que aplicar |
+| Config de Supabase | Redirect URLs de `/auth/recuperar` (localhost + prod) ya cargadas por Oliver |
+| Changelog | actualizado |
+
+**Verificación previa al merge:** `main` NO era ancestro de `develop` (10 merge commits viven solo
+en main, patrón normal del repo) → merge `--no-ff`, que además es la palanca de rollback. Se
+comprobó con `merge-tree` que no había conflictos, que los 10 commits únicos de main son TODOS
+merge commits (ningún hotfix suelto que se perdiera), y que **el árbol del merge es idéntico al de
+`develop`** (`991012af…` en ambos): producción quedó exactamente con el código probado.
+
+### Deploy
+
+- Push a `origin/main` **18:43:40 UTC** → auto-deploy disparado.
+- Código nuevo detectado en vivo en producción a las **18:45:49 UTC** (~2 min).
+- Marcador usado para detectar el deploy: antes `/auth/recuperar` redirigía a `/login` pelado
+  (ruta inexistente, la agarraba el gate de rutas protegidas); después redirige a
+  `/login?error=recovery`, que solo puede producir el código nuevo.
+- **Nota:** el "Ready" se verificó contra la URL de producción, no en el dashboard de Vercel (es
+  la cuenta del cliente y no tengo acceso). El ID del deployment y el target de rollback en
+  Vercel los tiene que sacar Oliver del dashboard si alguna vez hace falta.
+
+### Post-deploy smoke (producción, `crm-integra-legal.vercel.app`)
+
+Sin sesión: `/login` 200 · `/api/health` 401 (el gate, no un 500) · `/finanzas/reportes/balance`,
+`/finanzas/reportes/pyl`, `/legal/clientes` y `/nueva-contrasena` → 307 al login · sin un solo 500.
+
+| Check | Resultado |
+|---|---|
+| (a) `/finanzas/reportes/balance` | **OK — EL BALANCE CUADRA.** Activo 257,902.46 y Pasivo+Patrimonio -257,902.46. El descuadre de 10,000.00 del 15/08 desapareció al borrar Oliver la cuenta de prueba `100006 PRUEBA` |
+| (a) Toggle en el Balance | **OK** — default "solo con saldo" con "10 cuenta(s) en 0 ocultas"; al pasar a "todas" aparecen las 10 y los grupos "Propiedad, planta y equipo" y "Pasivo no corriente". **Los 5 totales IDÉNTICOS entre vistas** |
+| (b) `/finanzas/reportes/pyl` | **OK** — "30 cuenta(s) en 0 ocultas"; los **7 totales IDÉNTICOS** entre vistas: Ingresos -289,137.06 · Costos 9,878.38 · Bruta -279,258.68 · Gastos 34,781.77 · Operativa -244,476.91 · ISR 61,119.23 · Neta -183,357.68. Coinciden exactamente con los del deploy del 14/08 |
+| (c) Ficha de cliente (CLI-001) | **OK** — "RUC / CÉDULA 2676824-1-844561" y debajo "DÍGITO VERIFICADOR (DV) 85", en renglones separados |
+| (d) `/auth/recuperar` | **OK** — sin code → `/login?error=recovery`; con `error_code=otp_expired` → `/login?error=recovery_expired` |
+| (d) `/nueva-contrasena` | **OK** — renderiza con sesión (confirma la excepción del gating por rol) y redirige al login sin ella |
+| (d) Avisos del login | **OK** — los tres textos salen server-rendered en prod con `?error=recovery_expired`, `?error=recovery` y `?expired=true` |
+
+Sin errores de consola en ninguna de las páginas verificadas.
+
+**Nota de alcance del smoke:** NO se ejecutó el round-trip completo de recuperación con un correo
+real, ni se envió el formulario con una contraseña válida — habría cambiado la contraseña real de
+Oliver. Eso lo cierra él. Todo lo demás se verificó directo contra la URL de producción.
+
+---
+
 ## [Fix/Seguridad] - 2026-08-15 - Recuperar contraseña: el flujo ahora existe (Fase 0, punto B)
 
 Diagnóstico previo: el botón "¿Olvidaste tu contraseña?" mandaba un correo real que **no

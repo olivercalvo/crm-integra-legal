@@ -1,5 +1,75 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [DEPLOY] - 2026-08-15 18:43 UTC - develop → main (4 commits)
+
+**Merge:** `9f8f243` · **Punto de rollback:** `060fed7` · **Aprobado por:** Oliver
+
+### Qué salió
+
+| Commit | Qué |
+|---|---|
+| `8a084bf` | Filtro "solo cuentas con saldo" en Balance General y Estado de Resultado |
+| `198013e` | DV en su propio renglón, separado del RUC, en la ficha de cliente |
+| `5203c24` | Recuperación de contraseña arreglada (Seguridad Fase 0 B): `/auth/recuperar` + `/nueva-contrasena`, fix del `redirectTo` y del gating del middleware, avisos del login |
+| `9aab6ca` | Log del deploy anterior (docs) |
+
+**Migraciones: NINGUNA.** Deploy 100% de código — verificado con
+`git diff --name-only origin/main origin/develop | grep -iE "\.sql$|migration|supabase/"` → vacío.
+No se tocó nada en Supabase.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa de tests | **292/292 verde**, 0 fail (283 + 9 del archivo suelto de cancel-invoice-dialog) |
+| `tsc --noEmit` | limpio (exit 0) |
+| `next build` local | **exitoso** (`✓ Compiled successfully`, exit 0). `/auth/recuperar` compila como route handler dinámico (ƒ) y `/nueva-contrasena` como estática (○) — correcto: el gate lo pone el middleware |
+| Lint | 22 errores + 5 warnings, **todos preexistentes**; **0 en los archivos de este release**. `next.config` tiene `eslint.ignoreDuringBuilds` → no bloquean |
+| Diff review | limpio: sin secretos, sin claves, sin endpoints de debug, sin scripts scratch. El único `console` nuevo loguea `error.message` de Supabase (sin token ni code) |
+| Migraciones en prod | ninguna que aplicar |
+| Config de Supabase | Redirect URLs de `/auth/recuperar` (localhost + prod) ya cargadas por Oliver |
+| Changelog | actualizado |
+
+**Verificación previa al merge:** `main` NO era ancestro de `develop` (10 merge commits viven solo
+en main, patrón normal del repo) → merge `--no-ff`, que además es la palanca de rollback. Se
+comprobó con `merge-tree` que no había conflictos, que los 10 commits únicos de main son TODOS
+merge commits (ningún hotfix suelto que se perdiera), y que **el árbol del merge es idéntico al de
+`develop`** (`991012af…` en ambos): producción quedó exactamente con el código probado.
+
+### Deploy
+
+- Push a `origin/main` **18:43:40 UTC** → auto-deploy disparado.
+- Código nuevo detectado en vivo en producción a las **18:45:49 UTC** (~2 min).
+- Marcador usado para detectar el deploy: antes `/auth/recuperar` redirigía a `/login` pelado
+  (ruta inexistente, la agarraba el gate de rutas protegidas); después redirige a
+  `/login?error=recovery`, que solo puede producir el código nuevo.
+- **Nota:** el "Ready" se verificó contra la URL de producción, no en el dashboard de Vercel (es
+  la cuenta del cliente y no tengo acceso). El ID del deployment y el target de rollback en
+  Vercel los tiene que sacar Oliver del dashboard si alguna vez hace falta.
+
+### Post-deploy smoke (producción, `crm-integra-legal.vercel.app`)
+
+Sin sesión: `/login` 200 · `/api/health` 401 (el gate, no un 500) · `/finanzas/reportes/balance`,
+`/finanzas/reportes/pyl`, `/legal/clientes` y `/nueva-contrasena` → 307 al login · sin un solo 500.
+
+| Check | Resultado |
+|---|---|
+| (a) `/finanzas/reportes/balance` | **OK — EL BALANCE CUADRA.** Activo 257,902.46 y Pasivo+Patrimonio -257,902.46. El descuadre de 10,000.00 del 15/08 desapareció al borrar Oliver la cuenta de prueba `100006 PRUEBA` |
+| (a) Toggle en el Balance | **OK** — default "solo con saldo" con "10 cuenta(s) en 0 ocultas"; al pasar a "todas" aparecen las 10 y los grupos "Propiedad, planta y equipo" y "Pasivo no corriente". **Los 5 totales IDÉNTICOS entre vistas** |
+| (b) `/finanzas/reportes/pyl` | **OK** — "30 cuenta(s) en 0 ocultas"; los **7 totales IDÉNTICOS** entre vistas: Ingresos -289,137.06 · Costos 9,878.38 · Bruta -279,258.68 · Gastos 34,781.77 · Operativa -244,476.91 · ISR 61,119.23 · Neta -183,357.68. Coinciden exactamente con los del deploy del 14/08 |
+| (c) Ficha de cliente (CLI-001) | **OK** — "RUC / CÉDULA 2676824-1-844561" y debajo "DÍGITO VERIFICADOR (DV) 85", en renglones separados |
+| (d) `/auth/recuperar` | **OK** — sin code → `/login?error=recovery`; con `error_code=otp_expired` → `/login?error=recovery_expired` |
+| (d) `/nueva-contrasena` | **OK** — renderiza con sesión (confirma la excepción del gating por rol) y redirige al login sin ella |
+| (d) Avisos del login | **OK** — los tres textos salen server-rendered en prod con `?error=recovery_expired`, `?error=recovery` y `?expired=true` |
+
+Sin errores de consola en ninguna de las páginas verificadas.
+
+**Nota de alcance del smoke:** NO se ejecutó el round-trip completo de recuperación con un correo
+real, ni se envió el formulario con una contraseña válida — habría cambiado la contraseña real de
+Oliver. Eso lo cierra él. Todo lo demás se verificó directo contra la URL de producción.
+
+---
+
 ## [Fix/Seguridad] - 2026-08-15 - Recuperar contraseña: el flujo ahora existe (Fase 0, punto B)
 
 Diagnóstico previo: el botón "¿Olvidaste tu contraseña?" mandaba un correo real que **no

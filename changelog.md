@@ -1,5 +1,75 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [DEPLOY] - 2026-08-15 19:52 UTC - develop → main (2 commits)
+
+**Merge:** `fd0bf88` · **Punto de rollback:** `9f8f243` · **Aprobado por:** Oliver
+
+### Qué salió
+
+| Commit | Qué |
+|---|---|
+| `f7f978c` | Recuperación de contraseña por `token_hash` en vez de PKCE (cross-device) |
+| `d194f75` | Log del deploy de las 18:43 UTC (docs) |
+
+**Salieron 2 commits, no 1.** `d194f75` es el deploy log del release anterior, que quedó en
+`develop` después de aquel merge — el mismo patrón que `9aab6ca` en el deploy del 14/08. Es solo
+`changelog.md`, sin código.
+
+**Migraciones: NINGUNA.** Verificado con
+`git diff --name-only origin/main origin/develop | grep -iE "\.sql$|migration|supabase/"` → vacío.
+
+**Acompaña un cambio de configuración ya hecho por Oliver:** la plantilla de email "Reset Password"
+en Supabase pasó a `{{ .SiteURL }}/auth/recuperar?token_hash={{ .TokenHash }}&type=recovery`. El
+código de este deploy es la otra mitad del arreglo; sin la plantilla no sirve, y sin el código la
+plantilla tampoco.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa | **292/292 verde** (283 + 9 del archivo suelto), 0 fail |
+| `tsc --noEmit` | limpio (exit 0) |
+| `next build` local | **exitoso**. `/api/auth/reset-password` y `/auth/recuperar` compilan como route handlers dinámicos (ƒ) |
+| Lint | 22 errores + 5 warnings, **todos preexistentes**, **0 en los archivos del release** |
+| Diff review | 5 archivos, +303/-25. Sin SQL, sin scratch, sin secretos. Los 2 `console.warn` nuevos loguean `error.message` y un booleano de diagnóstico — sin tokens ni correos |
+| Migraciones en prod | ninguna que aplicar |
+| Changelog | actualizado |
+
+**Verificación previa al merge:** `main` no era ancestro de `develop` (11 merge commits solo en
+main, todos merge commits, ningún hotfix suelto) → `--no-ff`. `merge-tree` sin conflictos, y el
+**árbol del merge idéntico al de `develop`** (`da076224…`).
+
+### Deploy
+
+- Push a `origin/main` **19:52:28 UTC**.
+- Código nuevo en vivo **19:53:42 UTC** (~1 min).
+- **Marcador usado:** `/auth/recuperar?token_hash=falso&type=recovery` daba `?error=recovery` con el
+  código viejo (que solo miraba `code`) y pasa a `?error=recovery_expired` con el nuevo (verifyOtp
+  rechaza el token). Solo lo puede producir el código nuevo.
+- El "Ready" se verificó contra la URL de producción, no en el dashboard de Vercel (cuenta del
+  cliente, sin acceso).
+
+### Post-deploy smoke (producción)
+
+| Check | Resultado |
+|---|---|
+| `/auth/recuperar` sin parámetros | **307 → `/login?error=recovery`** |
+| `/auth/recuperar?token_hash=falso&type=recovery` | **307 → `/login?error=recovery_expired`** |
+| `/nueva-contrasena` sin sesión | **307 → `/login`** |
+| `/auth/recuperar?code=FAKE` | 307 → `/login?error=recovery_otro_navegador` (rama heredada viva) |
+| `/login` | 200 |
+| `POST /api/auth/reset-password` con email inválido | 400 |
+| `/finanzas/reportes/balance` | 307 al login (el release anterior sigue sano) |
+| Avisos del login | los tres textos salen server-rendered, incluido el nuevo `recovery_otro_navegador` |
+
+Sin un solo 500.
+
+**Pendiente de Oliver (cierra el caso):** el round-trip real — pedir el reset en la computadora y
+abrir el correo en el celular. Es el escenario que estaba roto y que no se puede verificar sin una
+casilla de correo real.
+
+---
+
 ## [Fix] - 2026-08-15 - Recuperación de contraseña: pasar de PKCE a token_hash (cross-device)
 
 El deploy de esta mañana dejó el flujo llegando a `/auth/recuperar`, pero el canje fallaba y la

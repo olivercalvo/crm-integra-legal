@@ -4,14 +4,12 @@ import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildEstadoResultado } from "@/lib/finanzas/reports/accounting-reports";
 import {
   StatementHeader,
-  StatementTable,
-  StatementSection,
-  ComputedRow,
   OpeningBalancesNotice,
   UnclassifiedWarning,
   SignConventionNote,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
+import { EstadoResultadoStatement } from "./_components/estado-resultado-statement";
 
 // Mismo set de roles que el resto de /finanzas/reportes.
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];
@@ -42,25 +40,9 @@ export default async function EstadoResultadoPage() {
       <OpeningBalancesNotice />
       <UnclassifiedWarning sections={[er.ingresos, er.costos, er.gastos]} />
 
-      <StatementTable>
-        <StatementSection section={er.ingresos} />
-        <StatementSection section={er.costos} />
-        <ComputedRow label="GANANCIA O PÉRDIDA BRUTA" value={er.gananciaBruta} emphasis />
-
-        <StatementSection section={er.gastos} />
-        <ComputedRow label="UTILIDAD OPERATIVA" value={er.utilidadOperativa} emphasis />
-
-        <ComputedRow
-          label="Impuesto sobre la Renta"
-          value={er.isr.amount}
-          note={
-            er.isr.applied
-              ? `tasa provisional ${isrPct}% — a confirmar`
-              : "no aplica: el período no cerró con utilidad"
-          }
-        />
-        <ComputedRow label="UTILIDAD NETA" value={er.utilidadNeta} emphasis />
-      </StatementTable>
+      {/* La tabla es client component por el toggle de cuentas con saldo; el
+          reporte se arma acá en el server y llega ya calculado. */}
+      <EstadoResultadoStatement er={er} isrPct={isrPct} />
 
       <div className="space-y-2">
         <SignConventionNote />

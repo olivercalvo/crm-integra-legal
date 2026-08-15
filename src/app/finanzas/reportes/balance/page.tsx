@@ -5,18 +5,13 @@ import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildAccountingReports } from "@/lib/finanzas/reports/accounting-reports";
 import {
   StatementHeader,
-  StatementTable,
-  StatementSection,
-  SectionHeaderRow,
-  SectionAccountRows,
-  SectionTotalRow,
-  ComputedRow,
   OpeningBalancesNotice,
   UnclassifiedWarning,
   SignConventionNote,
   formatAmount,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
+import { BalanceStatement } from "./_components/balance-statement";
 
 // Mismo set de roles que el resto de /finanzas/reportes.
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];
@@ -76,28 +71,9 @@ export default async function BalanceGeneralPage() {
         </p>
       )}
 
-      <StatementTable>
-        <StatementSection section={bg.activos} />
-
-        <StatementSection section={bg.pasivos} />
-
-        {/* PATRIMONIO se compone a mano porque intercala un renglón CALCULADO
-            (la utilidad del ejercicio) entre las cuentas y el total. */}
-        <SectionHeaderRow label={bg.patrimonio.label} />
-        <SectionAccountRows section={bg.patrimonio} />
-        <ComputedRow
-          label="Utilidad del Ejercicio"
-          value={bg.utilidadDelEjercicio}
-          note="del Estado de Resultado (operativa)"
-        />
-        <SectionTotalRow label={bg.patrimonio.totalLabel} value={bg.patrimonio.total} />
-
-        <ComputedRow
-          label="TOTAL PASIVO + PATRIMONIO"
-          value={bg.totalPasivoPatrimonio}
-          emphasis
-        />
-      </StatementTable>
+      {/* La tabla es client component por el toggle de cuentas con saldo; el
+          reporte se arma acá en el server y llega ya calculado. */}
+      <BalanceStatement bg={bg} />
 
       {/* Cuadre */}
       {bg.cuadra ? (

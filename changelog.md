@@ -1,5 +1,360 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix/Seguridad] - 2026-08-15 - Recuperar contraseña: el flujo ahora existe (Fase 0, punto B)
+
+Diagnóstico previo: el botón "¿Olvidaste tu contraseña?" mandaba un correo real que **no
+servía para nada**. Dos fallas encadenadas:
+
+1. **El link apuntaba a una ruta inexistente.** `redirectTo` era `/auth/callback`; la ruta real
+   del proyecto es `/api/auth/callback`. Sin página ni rewrite, el middleware lo trataba como
+   ruta protegida, veía que no había sesión y lo mandaba al login. Verificado:
+   `/auth/callback?code=FAKE` → 307 a `/login?code=FAKE123`.
+2. **No existía dónde escribir la contraseña nueva.** Cero ocurrencias de `auth.updateUser()`
+   en todo `src/`, y cero de `PASSWORD_RECOVERY`. Aunque el link hubiera llegado bien,
+   `/api/auth/callback` canjea el código y redirige a `/`: **el correo de recuperación
+   simplemente logueaba a la persona sin pedirle contraseña nueva**.
+
+### Qué se construyó
+
+| Archivo | Qué hace |
+|---|---|
+| `src/app/auth/recuperar/route.ts` (nuevo) | Aterrizaje del link. Canjea el `code` por sesión y manda a `/nueva-contrasena`. Distingue el link vencido (`?error=...&error_code=otp_expired`, que es lo que manda Supabase) del código inválido |
+| `src/app/(auth)/nueva-contrasena/page.tsx` (nuevo) | Pantalla con la identidad navy/gold del login |
+| `src/components/auth/new-password-form.tsx` (nuevo) | Dos campos (nueva + repetir), `updateUser({ password })`, mínimo 8 caracteres — la misma regla que el alta de usuarios. Mensaje específico si la sesión de recuperación venció mientras completaba el form |
+| `src/middleware.ts` | Dos excepciones nuevas (ver abajo) |
+| `src/components/auth/login-form.tsx` | `redirectTo` → `/auth/recuperar`, con el comentario de por qué NO es `/auth/callback` |
+| `src/app/(auth)/login/page.tsx` | Muestra los avisos que llegan por query string |
+
+**La pantalla sirve para los dos caminos:** recuperación por email y cambio voluntario de la
+propia contraseña estando logueado. Antes no había ninguna forma de cambiarse la contraseña
+sin pedirle al admin que la resetee.
+
+### Las dos trampas del middleware (documentadas en SOP-011)
+
+1. **`/auth/recuperar` va exceptuada ANTES del bloque de rutas públicas.** Ese bloque rebota a
+   `/` a cualquier usuario **con** sesión: alguien con la sesión viva que pide recuperar su
+   contraseña nunca llegaría a canjear el código. Por eso es ruta propia y no `/api/auth/*`.
+2. **`/nueva-contrasena` va exceptuada ANTES de resolver el rol.** `ROLE_ROUTES` solo permite
+   `/`, `/legal` y `/finanzas`, y `"/"` matchea EXACTO — una ruta nueva de primer nivel no
+   matchea ningún prefijo y el usuario sale rebotado a su home sin ver nada. Además, un usuario
+   sin rol en el JWT tiene que poder arreglar su contraseña igual.
+
+Se agregó **SOP-011** en `sop.md` para que la próxima ruta de primer nivel no repita el error.
+
+### De paso: los avisos del login que nunca se mostraban
+
+El middleware ya mandaba `?expired=true` y `?error=no-role`, y el callback `?error=auth`, pero
+la pantalla de login los ignoraba: el usuario volvía al login sin ninguna explicación. Ahora se
+muestran, incluidos los dos nuevos de recuperación. Se leen en el server component y se pasan
+como prop (en vez de `useSearchParams`), para no necesitar un `Suspense` boundary.
+
+### Verificación — 15/08/2026
+
+Ruteo (`curl`, sin sesión):
+
+| URL | Resultado |
+|---|---|
+| `/auth/recuperar` (sin code) | 307 → `/login?error=recovery` |
+| `/auth/recuperar?code=FAKE123` | 307 → `/login?error=recovery` (el canje falla) |
+| `/auth/recuperar?error=access_denied&error_code=otp_expired` | 307 → `/login?error=recovery_expired` |
+| `/nueva-contrasena` sin sesión | 307 → `/login` |
+
+Avisos server-rendered en `/login`: los tres textos salen en el HTML con
+`?error=recovery_expired`, `?error=recovery` y `?expired=true`; sin parámetro no aparece nada.
+
+Navegador (localhost:3000, admin): `/nueva-contrasena` **renderiza con sesión** (confirma que la
+excepción del gating por rol funciona), contraseña de 6 caracteres → "La contraseña debe tener al
+menos 8 caracteres", contraseñas distintas → "Las dos contraseñas no coinciden". Consola limpia.
+
+**Lo que NO se probó y por qué:** el canje de un código REAL de email. Exige dispararle un correo
+de recuperación a un usuario real y leer su bandeja. Queda para Oliver, después de cargar la
+Redirect URL en Supabase. `tsc --noEmit` limpio, suite **292/292 verde**, lint sin cambios (22
+errores preexistentes, ninguno en los archivos de este cambio).
+
+### ⚠️ Requiere acción en el dashboard de Supabase (sin esto NO funciona)
+
+Authentication → URL Configuration → **Redirect URLs**:
+
+```
+http://localhost:3000/auth/recuperar
+https://crm-integra-legal.vercel.app/auth/recuperar
+```
+
+Si la URL no está en la allowlist, Supabase **ignora el `redirectTo` y usa el Site URL**, y el
+correo vuelve a no servir. La ruta se eligió sin query string justamente para que la entrada de
+la allowlist sea exacta, que es lo que Supabase recomienda para producción.
+
+### Pendiente de esta fase (no entra acá)
+
+- Rate limiting (punto A del diagnóstico): login por endpoint propio + límite en `/api/public/*`.
+- Rotación de contraseñas (punto C): ahora es viable, porque ya existe la pantalla de cambio.
+- `updateUser` **no cierra las otras sesiones** del usuario. Si la contraseña se cambió porque se
+  sospecha de un acceso indebido, hay que revocar las sesiones aparte (`auth.admin.signOut`).
+- Sin test unitario del middleware: probar sus ramas exige mockear toda la cadena de
+  `@supabase/ssr`. Hoy la garantía son las pruebas de ruteo de arriba, más SOP-011. Si el flujo
+  se vuelve a romper, va a ser por acá.
+
+---
+
+## [Feature] - 2026-08-15 - Ficha de cliente: el DV en su propio renglón, separado del RUC
+
+Pedido de Josuar: que el dígito verificador se vea como un campo aparte, debajo del RUC.
+
+### Estado que había (revisado antes de tocar nada)
+
+- **Formulario (`client-form.tsx`): ya estaba bien.** `ruc` y `digito_verificador` son dos
+  inputs distintos desde los campos fiscales FE. El de RUC hasta avisa en su placeholder
+  ("RUC completo, sin el DV") y en el hint que "el DV va aparte, en su propio campo". El
+  input de DV aparece cuando `tipo_receptor_fe` es 01 o 03, que es donde la DGI lo exige
+  (`tipoRequiresDV`). **No hizo falta cambiar nada acá.**
+- **Ficha de detalle (`legal/clientes/[id]/page.tsx`): el DV NO se mostraba.** Había un solo
+  renglón, "RUC / Cédula", con el valor de `ruc`. Lo que se veía "junto" era otra cosa: en
+  los clientes que todavía tienen el DV embebido en el texto del RUC, el renglón mostraba
+  `25046169-3-2021  DV 40` como si fuera el número. La columna `digito_verificador` no
+  aparecía en ninguna parte de la ficha.
+
+### Qué se cambió
+
+Un renglón nuevo **"Dígito verificador (DV)"** justo debajo de "RUC / Cédula" en la tarjeta
+Información del Cliente. Los tres estados posibles:
+
+| Situación | Qué muestra |
+|---|---|
+| DV cargado | El dígito (ej. `85`) |
+| `tipo_receptor_fe` = 02 o 04 | `No aplica` — la DGI no lo pide para consumidor final ni extranjero |
+| DV vacío con tipo 01/03 **o con tipo NULL** | `—` (falta el dato) |
+
+El tercer caso es el que importa: con `tipo_receptor_fe` en NULL el DV es **desconocido, no
+inaplicable**. La primera versión de este cambio usaba `tipoRequiresDV()` y mostraba "No
+aplica" cuando el tipo era NULL — lo cual escondía justo los clientes a los que les falta el
+DV (CLI-026 aparecía como "No aplica" teniendo el 40 metido dentro del RUC). Se corrigió
+antes de commitear: "No aplica" solo con 02/04 explícito.
+
+Cero cambios en emisión eFactura, en el mapeo `ruc`/`tax_id` y en el formulario.
+
+### Verificación en navegador (localhost:3000, rol admin) — 15/08/2026
+
+| Cliente | Caso | Resultado |
+|---|---|---|
+| CLI-001 JUMBO CAPITAL (tipo 01, DV 85) | DV cargado | **OK** — "RUC / CÉDULA 2676824-1-844561" y debajo "DÍGITO VERIFICADOR (DV) 85", renglones separados |
+| CLI-026 INTEGRA LEGAL (tipo NULL, DV NULL) | DV embebido en el RUC | **OK** — RUC muestra `25046169-3-2021 DV 40` y el DV muestra `—`. Es exactamente el cliente que arregla el backfill 022 |
+| CLI-110 (tipo 02, pasaporte AW745657) | DV no aplica | **OK** — "No aplica" |
+| Formulario de editar (CLI-001) | Campos separados | **OK** — input "RUC / Cédula" con el hint del DV aparte, y más abajo input "Dígito verificador (DV) *" con 85 |
+
+Consola limpia. `tsc --noEmit` limpio, suite 292/292 verde, lint sin cambios (los mismos 22
+errores preexistentes; ninguno en la ficha de cliente).
+
+### Conteo de DV vacíos (para decidir el backfill 022) — 15/08/2026
+
+Consulta de SOLO LECTURA contra Supabase. **No se aplicó ningún cambio de datos.**
+
+| Métrica | Valor |
+|---|---|
+| Clientes en la tabla | 131 (129 sin contar 2 de prueba `0TEST`) |
+| **Sin `digito_verificador`** | **114** de 129 |
+| Con `digito_verificador` | 15 (todos `tipo_receptor_fe = 01`) |
+| De los 114 sin DV, con tipo 01/03 (donde la DGI lo exige) | **0** |
+| Desglose de los 114 por tipo | 112 con `tipo_receptor_fe` NULL · 2 con `02` |
+| Desglose de los 114 por estado | 83 activos · 30 prospectos · 1 inactivo |
+
+**Lectura:** los 114 suenan a mucho, pero **ninguno está bloqueado para facturar hoy**: el
+gate fiscal solo exige DV cuando el receptor es 01 o 03, y ahí no falta ninguno. Los 112 con
+tipo NULL van a necesitar DV recién cuando alguien los clasifique como contribuyentes.
+
+**Universo real del backfill `022`: 2 clientes, no 4.**
+
+| Cliente | `ruc` hoy | `tax_id` hoy | DV en columna |
+|---|---|---|---|
+| CLI-026 INTEGRA LEGAL | `25046169-3-2021  DV 40` | `25046169-3-2021  DV 40` | NULL |
+| CLI-081 SERVICARE, S.A | `155701991-2-2021 DV 9` | (vacío) | NULL |
+
+Los otros dos que el script esperaba (CLI-096 RED VERDE con DV 00 y CLI-107 LABORATORIOS
+HERMANI con DV 21) **ya fueron corregidos a mano**: tienen el DV en su columna y el número
+limpio, así que los `WHERE ... ~* 'DV'` del script ya no los alcanzan. Correr el `022` no los
+tocaría.
+
+**Dos observaciones para cuando Oliver lo corra:**
+
+1. CLI-026 tiene el DV embebido en **las dos** columnas (`ruc` y `tax_id`), cosa que el
+   encabezado del script no contemplaba (lo daba solo en `tax_id`; la sincronización
+   `ruc`↔`tax_id` es posterior). Funciona igual **si se corre en orden**: el UPDATE A limpia
+   `tax_id` y, como el guard del UPDATE B mira `tax_id` ya limpio, B entra después y limpia
+   `ruc` con el mismo DV 40. Si se corre B primero, el guard lo bloquea y el `ruc` queda
+   sucio. **Correr A y después B, como están escritos.**
+2. El script también pobla `tipo_receptor_fe` (con COALESCE, sin pisar) — a los dos les
+   pondría `01` por formato de RUC. Es lo correcto y además los desbloquea para FE.
+
+**No se aplicó: es data de producción y la corre Oliver.**
+
+---
+
+## [Feature] - 2026-08-15 - Filtro "solo cuentas con saldo" en los reportes contables
+
+Pedido de Josuar en la reunión: los reportes mostraban las 62 cuentas del plan, incluidas las
+que están en 0, y él quería poder ver solo las que tienen saldo — pero sin perder la vista
+completa.
+
+### Qué se agregó
+
+Un toggle de dos opciones en el **Balance General** (`/finanzas/reportes/balance`) y en el
+**Estado de Resultado** (`/finanzas/reportes/pyl`):
+
+| Opción | Qué hace |
+|---|---|
+| **Solo cuentas con saldo** (default) | Oculta las filas de cuenta cuyo saldo es 0 |
+| **Todas las cuentas** | Muestra el plan completo, como hasta ahora |
+
+Al lado del toggle se indica cuántas cuentas en 0 hay ocultas, para que quede claro que el
+reporte no está incompleto: faltan filas a propósito.
+
+### Reglas de la vista filtrada
+
+- **Los totales y subtotales NO cambian.** Una cuenta en 0 no aporta al total, así que
+  ocultarla no puede moverlo. El filtro copia los números, nunca los recalcula.
+- Si un **grupo entero** queda sin cuentas con saldo, desaparece completo: encabezado y
+  subtotal incluidos (ej. "Propiedad, planta y equipo" y "Pasivo no corriente", que hoy
+  están en 0).
+- Los **encabezados y totales de sección** se muestran siempre, aunque no quede ninguna
+  cuenta visible (es el caso de PATRIMONIO, con sus 3 cuentas en 0).
+- Los **renglones calculados** del Estado de Resultado (Ganancia Bruta, Utilidad Operativa,
+  ISR, Utilidad Neta) y la Utilidad del Ejercicio del Balance se muestran en las dos vistas:
+  no son cuentas, son la estructura del estado financiero.
+- El aviso de cuadre, el de doble conteo y el de "sin clasificar" quedan intactos: cuentan
+  sobre los datos completos, no sobre lo que se ve.
+
+### Implementación
+
+- Helper puro compartido `src/lib/finanzas/reports/report-visibility.ts` (`filterSection`,
+  `filterGroups`, `hasBalance`, `countZeroRows`). Un solo lugar decide qué es "saldo cero",
+  con la misma tolerancia de medio centavo que usa `accounting-reports.ts`.
+- Toggle `src/app/finanzas/reportes/_components/account-visibility-toggle.tsx` (client),
+  botones de 48px con icono + texto, `role="radiogroup"`.
+- Las tablas pasaron a client component (`balance/_components/balance-statement.tsx` y
+  `pyl/_components/estado-resultado-statement.tsx`) **solo por el toggle**: el reporte se
+  sigue armando en el server y llega calculado. **No hay refetch** al alternar.
+- `StatementSection` acepta `emptyLabel` para distinguir "sin cuentas registradas" de
+  "todas las cuentas de esta sección están en 0".
+- Cero cambios en `accounting-reports.ts`: la lógica contable no se tocó.
+
+### Tests
+
+`src/lib/finanzas/reports/__tests__/report-visibility.test.ts` — **11 tests**, sobre el
+fixture real de las 62 cuentas de Josuar:
+
+```
+npx tsx --test src/lib/finanzas/reports/__tests__/report-visibility.test.ts
+```
+
+Cubren: los totales de la vista filtrada son idénticos a los de la completa (sección por
+sección, y subtotal por subtotal de los grupos que sobreviven); ninguna fila visible está
+en 0; un grupo entero en 0 desaparece; una sección entera en 0 conserva su total;
+"todas las cuentas" devuelve la misma referencia sin perder filas (las 62 visibles); y el
+contador de ocultas cierra contra `totales - visibles`.
+
+**Suite completa: 292/292 verde** (283 + 9 del archivo suelto de cancel-invoice-dialog),
+`tsc --noEmit` limpio. Lint sin cambios: 22 errores + 5 warnings, **los mismos 22 antes y
+después** (verificado stasheando los cambios y volviendo a correr); ninguno en archivos de
+este cambio.
+
+### Verificación en navegador (localhost, rol admin) — 15/08/2026
+
+| Check | Resultado |
+|---|---|
+| Balance: toggle visible, default "Solo cuentas con saldo" | **OK** — "10 cuenta(s) en 0 ocultas" |
+| Balance: grupos enteros en 0 | **OK** — "Propiedad, planta y equipo" y "Pasivo no corriente" desaparecen con encabezado y subtotal |
+| Balance: PATRIMONIO sin cuentas visibles | **OK** — quedan el renglón calculado y "Total de Patrimonio" |
+| Balance: totales entre vistas | **IDÉNTICOS** — Activos corrientes 252,967.57 · Total de Activo 257,902.46 · Pasivos -13,425.55 · Patrimonio -234,476.91 · Pasivo+Patrimonio -247,902.46 |
+| P&L: default filtrado | **OK** — "30 cuenta(s) en 0 ocultas" |
+| P&L: renglones calculados en las dos vistas | **OK** — Bruta, Operativa, ISR y Neta siempre presentes |
+| P&L: totales entre vistas | **IDÉNTICOS** — Ingresos -279,137.06 · Costos 9,878.38 · Bruta -269,258.68 · Gastos 34,781.77 · Operativa -234,476.91 · ISR 58,619.23 · Neta -175,857.68 |
+| Consola | Limpia — sin errores ni warnings de hidratación |
+
+### ⚠️ Hallazgo de DATOS (no es de este cambio)
+
+Al verificar apareció una cuenta **`100006 PRUEBA` con saldo 10,000.00 y `account_type =
+income`**, que no estaba en el deploy del 14/08. Sale listada bajo INGRESOS (código de
+activo, tipo de ingreso) y es exactamente el origen del **descuadre de 10,000.00** que hoy
+muestra el Balance ("El balance NO cuadra"). Los totales del 14/08 eran Activo 257,902.46 /
+Pasivo+Patrimonio **-257,902.46**; hoy el segundo da -247,902.46.
+
+El aviso de descuadre funcionó como se esperaba: no lo escondió. **Es dato, no código** —
+hay que borrar o corregir esa cuenta de prueba en el Plan de Cuentas. Recordar que dev y
+prod comparten el mismo Supabase, así que la cuenta está también en producción.
+
+### Limpieza de paso
+
+- Borrados los scripts scratch untracked `scripts/tmp-coa.mjs`, `tmp-coa2.mjs`,
+  `tmp-testacc.mjs`, `tmp-users-check.mjs`.
+- `docs/finanzas/roadmap-contable.md`: el `023` (ledger Fase 1) figuraba como "pendiente de
+  aplicar en Supabase" en 4 lugares; se aplicó el 04/08/2026. Corregido, aclarando que el
+  schema está en la BD pero todavía sin uso en código.
+- `task_plan.md` Fase 11 (Testing & Deploy): los 4 ítems pasaron a ✅, cubiertos por el
+  deploy del 14/08/2026, con la nota de que ahora son parte del ciclo de cada release.
+- `sql/pending/022_backfill_dv_embebido.sql` se dejó como está (va con el refinamiento del DV).
+
+---
+
+## [DEPLOY] - 2026-08-14 18:03 UTC - develop → main (11 commits)
+
+**Merge:** `060fed7` · **Punto de rollback:** `f149735` · **Aprobado por:** Oliver
+
+### Qué salió
+Ledger Fase 1 (schema, sin uso en código todavía) · plan de cuentas con `saldo_inicial` +
+`subcategoria` · importador de cuentas por Excel · reportes Balance General y Estado de Resultado ·
+rol asistente (ve todos los casos + ficha de cliente en solo lectura, sin directorio) · fix del
+borrado de cliente con registros financieros.
+
+**Migraciones:** ninguna en este deploy. `sql/pending/023` y `024` ya habían sido aplicadas por
+Oliver en el Supabase de producción; código y BD ya estaban en sync.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa de tests | **281/281 verde**, 0 fail (22 archivos) |
+| `tsc --noEmit` | limpio |
+| `next build` local | **exitoso** (`✓ Compiled successfully`, exit 0) |
+| Lint | 5 errores **preexistentes**, todos en archivos que este release NO toca; `next.config` tiene `eslint.ignoreDuringBuilds` → no bloquean el build |
+| Diff review `origin/main..origin/develop` | limpio: sin secretos, sin endpoints de debug, sin scripts de scratch; `build` es `next build` a secas (ningún hook que corra migraciones) |
+| Migraciones en prod | ya aplicadas (023, 024) |
+| Changelog | actualizado |
+
+**Verificación extra antes de mergear:** `main` NO era ancestro de `develop` (9 merge commits viven
+solo en main, patrón normal del repo), así que el fast-forward era imposible y se usó merge commit
+`--no-ff` — que además es la palanca de rollback. Se comprobó con `merge-tree` que el merge no tenía
+conflictos y que **el árbol resultante es idéntico al de `develop`**, o sea que producción quedó
+exactamente con el código probado. También se verificó que main no tuviera ningún hotfix ausente en
+develop (lo único "único de main" era el 023 viejo, que develop reescribió).
+
+### Deploy
+
+- Push a `origin/main` 18:03:24 UTC → auto-deploy disparado.
+- Vercel: `crm-integra-legal-28gehse9m` · **Ready** · build **1m** · creado 18:03:25 UTC.
+- Deploy anterior (rollback en Vercel): `crm-integra-legal-qb1fnqhga`.
+
+### Post-deploy smoke (producción, `crm-integra-legal.vercel.app`)
+
+Sin sesión: `/api/health` → 401 (el gate, no un 500) y las 4 rutas nuevas → 307 al login
+(middleware corriendo, sin crash).
+
+Con sesión de admin:
+
+| Check | Resultado |
+|---|---|
+| (a) `/finanzas/reportes/balance` | **OK** — los 5 totales exactos (Activos corrientes 252,967.57 · Activo 257,902.46 · Pasivos -13,425.55 · Patrimonio -244,476.91 · Pasivo+Patrimonio -257,902.46) y "El balance cuadra" |
+| (a) `/finanzas/reportes/pyl` | **OK** — los 5 totales exactos (Ingresos -289,137.06 · Costos 9,878.38 · Bruta -279,258.68 · Gastos 34,781.77 · Utilidad Operativa -244,476.91) + ISR 61,119.23 y Neta -183,357.68 |
+| (b) `/finanzas/configuracion/cuentas` | **OK** — "62 activa(s) · 97 total", con las columnas Subcategoría y Saldo inicial y el botón Importar cuentas |
+| (c) Ficha de cliente (CLI-001) | **OK** — carga sin error, con las acciones de admin |
+| (d) Asistente ve todos los casos | **Verificado PRE-DEPLOY en localhost**, no re-verificado en producción — decisión de Oliver: es el mismo código que quedó en prod (commits `bb8bc16` y `547c312`, con el gate del middleware cubierto por los tests de la suite). No se re-probó en prod porque exige iniciar sesión con el usuario asistente y Claude no ingresa contraseñas. |
+
+Sin errores de consola en las páginas verificadas.
+
+**Nota de alcance del smoke:** (a), (b) y (c) se verificaron directamente contra la URL de
+producción. (d) descansa en la verificación previa en localhost sobre el mismo commit. Si alguna vez
+hay que auditar este deploy, esa es la distinción que importa.
+
+---
+
 ## [Feature] - 2026-08-14 - Balance General y Estado de Resultado (Paso 2 contable)
 
 Los dos reportes que pidió Josuar, reemplazando los placeholders de

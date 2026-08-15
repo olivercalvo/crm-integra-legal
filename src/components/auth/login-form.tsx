@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { LogIn, Eye, EyeOff, Mail } from "lucide-react";
 
-export function LoginForm() {
+export function LoginForm({ notice }: { notice?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,8 +72,13 @@ export function LoginForm() {
     setResetSent(false);
     try {
       const supabase = createClient();
+      // /auth/recuperar canjea el código y manda a /nueva-contrasena. NO apuntar
+      // a /auth/callback: esa ruta no existe (la real es /api/auth/callback) y
+      // el link terminaba rebotando al login sin cambiar nada.
+      // Esta URL tiene que estar en Supabase → Authentication → URL
+      // Configuration → Redirect URLs, o Supabase la ignora y usa el Site URL.
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/recuperar`,
       });
       if (resetError) {
         setError("Error al enviar el correo de recuperación. Intente de nuevo.");
@@ -91,6 +96,15 @@ export function LoginForm() {
     <Card className="border-0 bg-white/10 backdrop-blur-sm">
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Aviso que viene por query string (sesión expirada, enlace de
+              recuperación vencido, usuario sin rol). Se oculta apenas la
+              persona empieza a interactuar y aparece un error propio. */}
+          {notice && !error && !resetSent && (
+            <div className="rounded-md bg-integra-gold/15 px-4 py-2.5 text-sm text-integra-white/90">
+              {notice}
+            </div>
+          )}
+
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-integra-white/90">

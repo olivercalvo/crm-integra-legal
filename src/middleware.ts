@@ -130,6 +130,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Aterrizaje del link de recuperación de contraseña. Va ANTES del bloque de
+  // rutas públicas a propósito: ese bloque rebota al usuario CON sesión a "/",
+  // y acá eso rompería el flujo — alguien con la sesión viva que pide recuperar
+  // su contraseña nunca llegaría a canjear el código del email.
+  if (pathname === "/auth/recuperar") {
+    return response;
+  }
+
   // Rutas públicas — sin requerir auth.
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     if (user) {
@@ -188,6 +196,15 @@ export async function middleware(request: NextRequest) {
       url.searchParams.set("expired", "true");
       return NextResponse.redirect(url);
     }
+  }
+
+  // Cambiar la PROPIA contraseña no depende del rol: cualquier usuario
+  // autenticado entra. Va antes de resolver el rol a propósito — el gating por
+  // prefijo de ROLE_ROUTES rebotaría esta ruta (no cuelga de /legal ni de
+  // /finanzas, y "/" matchea exacto), y hasta un usuario sin rol en el JWT
+  // tiene que poder arreglar su contraseña.
+  if (pathname === "/nueva-contrasena") {
+    return response;
   }
 
   // Rol del JWT.

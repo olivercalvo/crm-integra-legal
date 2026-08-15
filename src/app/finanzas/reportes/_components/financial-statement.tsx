@@ -164,15 +164,26 @@ function GroupBlock({ group }: { group: ReportGroup }) {
   );
 }
 
-/** Sección completa: encabezado, grupos y total. */
-export function StatementSection({ section }: { section: ReportSection }) {
+/**
+ * Sección completa: encabezado, grupos y total.
+ *
+ * `emptyLabel` deja cambiar el texto de "no hay filas": no es lo mismo que la
+ * sección no tenga cuentas a que el filtro "solo con saldo" las haya ocultado.
+ */
+export function StatementSection({
+  section,
+  emptyLabel = "Sin cuentas registradas",
+}: {
+  section: ReportSection;
+  emptyLabel?: string;
+}) {
   return (
     <>
       <SectionHeaderRow label={section.label} />
       {section.groups.length === 0 ? (
         <tr>
           <td colSpan={3} className="px-6 py-3 text-sm italic text-gray-400">
-            Sin cuentas registradas
+            {emptyLabel}
           </td>
         </tr>
       ) : (

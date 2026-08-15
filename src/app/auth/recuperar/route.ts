@@ -1,31 +1,37 @@
 /**
  * GET /auth/recuperar — aterrizaje del link de "¿Olvidaste tu contraseña?".
  *
- * Canjea el `code` del email por una sesión y manda a /nueva-contrasena, que es
- * donde la persona ESCRIBE la contraseña nueva.
+ * Verifica el token del email, deja la sesión de recuperación en cookies y
+ * manda a /nueva-contrasena, que es donde la persona ESCRIBE la contraseña.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * POR QUÉ ES UNA RUTA PROPIA Y NO /api/auth/callback
+ * DOS FORMATOS DE LINK — el bueno y el heredado
  * ─────────────────────────────────────────────────────────────────────────────
- * 1. URL limpia, sin query string. Supabase matchea el `redirectTo` contra la
- *    allowlist de Redirect URLs con globs donde `/` es separador, así que un
- *    `?next=/algo` obligaría a registrar un patrón con comodines. Con una ruta
- *    dedicada la entrada de la allowlist es exacta, que es lo que Supabase
- *    recomienda para producción.
- * 2. /api/auth/* está en la rama del middleware que REBOTA al usuario logueado
- *    a "/" — un usuario con sesión viva que pide recuperar su contraseña nunca
- *    llegaría a canjear el código. Esta ruta se exceptúa explícitamente.
+ * 1. `?token_hash=<hash>&type=recovery` → **el camino bueno**. Se verifica con
+ *    `verifyOtp`, que NO necesita `code_verifier` ni continuidad de navegador:
+ *    la licenciada puede pedir el reset en la computadora y abrir el correo en
+ *    el celular. Requiere que la plantilla de email use `{{ .TokenHash }}` y que
+ *    el reset se pida SIN PKCE (ver /api/auth/reset-password).
  *
- * El duplicado del boilerplate de cookies respecto de /api/auth/callback es
- * deliberado: esa ruta atiende el resto de los flujos de auth y no se toca.
+ * 2. `?code=<code>` → **heredado**. Es lo que produce el flujo PKCE: GoTrue
+ *    valida el token `pkce_…` y redirige acá con un `code` que solo se puede
+ *    canjear con el `code_verifier` guardado por el navegador que PIDIÓ el
+ *    reset. Se mantiene por los correos ya enviados y porque en el mismo
+ *    navegador funciona; si el verifier no está, falla y lo decimos.
+ *
+ * Cuando ya no queden correos viejos circulando (el token de recuperación
+ * caduca; por defecto 24 h) la rama del `code` se puede borrar.
  */
 
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
 
   // Supabase manda ?error=...&error_description=... cuando el link venció o ya
@@ -35,7 +41,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=recovery_expired`);
   }
 
-  if (!code) {
+  if (!tokenHash && !code) {
     return NextResponse.redirect(`${origin}/login?error=recovery`);
   }
 
@@ -58,10 +64,30 @@ export async function GET(request: Request) {
     }
   );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  // Camino bueno: token_hash + verifyOtp (sirve en cualquier dispositivo).
+  if (tokenHash) {
+    const { error } = await supabase.auth.verifyOtp({
+      type: type ?? "recovery",
+      token_hash: tokenHash,
+    });
+    if (error) {
+      console.warn("[auth/recuperar] verifyOtp falló", {
+        message: error.message,
+        // El prefijo delata un token PKCE llegando por la ruta equivocada: la
+        // plantilla de email quedó con {{ .TokenHash }} pero el reset se pidió
+        // con un cliente PKCE. Sin este dato el diagnóstico es a ciegas.
+        pkce_prefijado: tokenHash.startsWith("pkce_"),
+      });
+      return NextResponse.redirect(`${origin}/login?error=recovery_expired`);
+    }
+    return NextResponse.redirect(`${origin}/nueva-contrasena`);
+  }
+
+  // Camino heredado: PKCE. Solo funciona en el navegador que pidió el reset.
+  const { error } = await supabase.auth.exchangeCodeForSession(code!);
   if (error) {
     console.warn("[auth/recuperar] exchangeCodeForSession falló", error.message);
-    return NextResponse.redirect(`${origin}/login?error=recovery`);
+    return NextResponse.redirect(`${origin}/login?error=recovery_otro_navegador`);
   }
 
   return NextResponse.redirect(`${origin}/nueva-contrasena`);

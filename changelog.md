@@ -1,5 +1,108 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix] - 2026-08-15 - Recuperación de contraseña: pasar de PKCE a token_hash (cross-device)
+
+El deploy de esta mañana dejó el flujo llegando a `/auth/recuperar`, pero el canje fallaba y la
+persona terminaba en `/login?error=recovery`. Enlace real del correo (token ya gastado):
+
+```
+https://<proyecto>.supabase.co/auth/v1/verify?token=pkce_8fc1f1ea…&type=recovery
+  &redirect_to=https://crm-integra-legal.vercel.app/auth/recuperar
+```
+
+### La causa, y por qué la plantilla sola NO alcanzaba
+
+El prefijo **`pkce_`** lo pone **quien PIDE el reset**, no la plantilla de email. El login llamaba
+`resetPasswordForEmail` con el **browser client**, que usa flujo PKCE: supabase-js guarda un
+`code_verifier` local y GoTrue almacena el token prefijado. Al hacer clic, `/auth/v1/verify`
+redirige con `?code=…`, y ese code **solo se puede canjear con el verifier del navegador que
+inició el reset**. Correo abierto en el celular = imposible.
+
+Confirmado con dos pruebas:
+
+1. `admin.auth.admin.generateLink({ type: "recovery" })` (server-side, sin PKCE) devuelve
+   `hashed_token = b058b1cf…` — **token plano, sin prefijo**. El del correo traía `pkce_8fc1…`.
+   La diferencia está en el cliente que lo pide.
+2. El log del servidor ante un `?code=` sin verifier lo dice con las palabras de Supabase:
+   *"PKCE code verifier not found in storage. This can happen if the auth flow was initiated in a
+   different browser or device."*
+
+**Conclusión operativa:** cambiar la plantilla a `{{ .TokenHash }}` sin sacar el PKCE del pedido
+habría renderizado `pkce_8fc1…` dentro del `token_hash`, y `verifyOtp` habría seguido fallando.
+Hacían falta las dos mitades.
+
+### Qué se cambió
+
+| Archivo | Qué |
+|---|---|
+| `src/app/api/auth/reset-password/route.ts` (nuevo) | Pide el correo desde el SERVIDOR con `flowType: "implicit"` → el token del email sale plano. Responde `{ ok: true }` exista o no el usuario (no permite enumerar cuentas) |
+| `src/app/auth/recuperar/route.ts` | Ahora acepta `?token_hash=…&type=recovery` y lo verifica con `verifyOtp` — **sin `code_verifier`, sin continuidad de navegador**. Mantiene la rama `?code=` para los correos ya enviados |
+| `src/components/auth/login-form.tsx` | El botón hace `POST /api/auth/reset-password` en vez de llamar a Supabase directo |
+| `src/app/(auth)/login/page.tsx` | Aviso nuevo `recovery_otro_navegador` para el caso PKCE heredado |
+
+**Efecto lateral bueno:** pedir el reset por un endpoint propio crea el chokepoint que faltaba para
+el rate limiting de Seguridad Fase 0 punto A. Antes la llamada iba del browser directo a Supabase y
+no había dónde contar.
+
+La rama `?code=` se puede borrar cuando no queden correos viejos circulando (el token de
+recuperación caduca a las 24 h por defecto).
+
+### ⚠️ REQUIERE cambio en el dashboard de Supabase (lo hace Oliver)
+
+**Authentication → Emails → Templates → "Reset Password"**, reemplazar el `href` del botón por:
+
+```html
+<a href="{{ .SiteURL }}/auth/recuperar?token_hash={{ .TokenHash }}&type=recovery">
+  Restablecer contraseña
+</a>
+```
+
+Lo que importa es que el enlace deje de usar `{{ .ConfirmationURL }}` y pase a
+`token_hash` + `type=recovery` apuntando a `/auth/recuperar`.
+
+Verificar además **Authentication → URL Configuration → Site URL** =
+`https://crm-integra-legal.vercel.app`. Con esta plantilla el enlace se arma con el Site URL y ya
+NO pasa por `/auth/v1/verify?redirect_to=…`, así que la allowlist de Redirect URLs deja de
+intervenir en este flujo (las entradas que ya cargó siguen sirviendo para los correos viejos que
+todavía usan la rama `?code=`).
+
+**Alternativa** si alguna vez se quiere que los correos de localhost apunten a localhost: usar
+`{{ .RedirectTo }}` en lugar de `{{ .SiteURL }}`. Funciona porque el endpoint siempre manda el
+`redirectTo`, pero un correo disparado desde el dashboard (que no manda ninguno) generaría un
+enlace roto. Para probar en local sin correos conviene `generateLink`, como se hizo acá.
+
+### Verificación — 15/08/2026
+
+Prueba de punta a punta con un `token_hash` REAL de la cuenta `contador.test@integra-panama.com`,
+generado con `generateLink` (sin enviar correo) y consumido **desde `curl`** — es decir, sin
+`code_verifier`, sin cookies previas y sin ningún estado del navegador que lo pidió: exactamente el
+escenario "otro dispositivo" que estaba roto.
+
+| Caso | Resultado |
+|---|---|
+| `?token_hash=<real>&type=recovery` | **307 → `/nueva-contrasena`** + cookie de sesión. El JWT decodifica al usuario correcto (`contador.test`, `user_role: contador`) |
+| `/nueva-contrasena` con esa sesión | **HTTP 200** — la pantalla carga y la excepción del gating por rol funciona también para `contador` |
+| Reusar el mismo token | 307 → `/login?error=recovery_expired` (un solo uso, confirmado) |
+| `?token_hash=novale` / `?token_hash=pkce_…` | 307 → `/login?error=recovery_expired` |
+| `?code=FAKE123` | 307 → `/login?error=recovery_otro_navegador` |
+| sin parámetros | 307 → `/login?error=recovery` |
+| `?error=…&error_code=otp_expired` | 307 → `/login?error=recovery_expired` |
+| `POST /api/auth/reset-password` email inválido / sin body | 400 |
+| `POST` con email inexistente | 200 `{"ok":true}` — sin filtrar si la cuenta existe |
+
+**NO se cambió ninguna contraseña** y **no se envió ningún correo**: la cuenta de prueba solo quedó
+con el `last_sign_in_at` actualizado. El clic real en el botón del login tampoco se ejecutó (habría
+mandado un correo de verdad); el endpoint que consume está verificado por separado.
+
+`tsc --noEmit` limpio · suite **292/292 verde** · `next build` exitoso (`/api/auth/reset-password` y
+`/auth/recuperar` compilan como route handlers dinámicos) · lint sin cambios (22 preexistentes, 0 en
+estos archivos).
+
+**Pendiente de Oliver:** cambiar la plantilla y después probar el round-trip real — pedir el reset
+en la computadora y abrir el correo en el celular, que es el caso que hoy falla.
+
+---
+
 ## [DEPLOY] - 2026-08-15 18:43 UTC - develop → main (4 commits)
 
 **Merge:** `9f8f243` · **Punto de rollback:** `060fed7` · **Aprobado por:** Oliver

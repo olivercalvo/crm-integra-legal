@@ -1,5 +1,111 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-15 - Filtro "solo cuentas con saldo" en los reportes contables
+
+Pedido de Josuar en la reunión: los reportes mostraban las 62 cuentas del plan, incluidas las
+que están en 0, y él quería poder ver solo las que tienen saldo — pero sin perder la vista
+completa.
+
+### Qué se agregó
+
+Un toggle de dos opciones en el **Balance General** (`/finanzas/reportes/balance`) y en el
+**Estado de Resultado** (`/finanzas/reportes/pyl`):
+
+| Opción | Qué hace |
+|---|---|
+| **Solo cuentas con saldo** (default) | Oculta las filas de cuenta cuyo saldo es 0 |
+| **Todas las cuentas** | Muestra el plan completo, como hasta ahora |
+
+Al lado del toggle se indica cuántas cuentas en 0 hay ocultas, para que quede claro que el
+reporte no está incompleto: faltan filas a propósito.
+
+### Reglas de la vista filtrada
+
+- **Los totales y subtotales NO cambian.** Una cuenta en 0 no aporta al total, así que
+  ocultarla no puede moverlo. El filtro copia los números, nunca los recalcula.
+- Si un **grupo entero** queda sin cuentas con saldo, desaparece completo: encabezado y
+  subtotal incluidos (ej. "Propiedad, planta y equipo" y "Pasivo no corriente", que hoy
+  están en 0).
+- Los **encabezados y totales de sección** se muestran siempre, aunque no quede ninguna
+  cuenta visible (es el caso de PATRIMONIO, con sus 3 cuentas en 0).
+- Los **renglones calculados** del Estado de Resultado (Ganancia Bruta, Utilidad Operativa,
+  ISR, Utilidad Neta) y la Utilidad del Ejercicio del Balance se muestran en las dos vistas:
+  no son cuentas, son la estructura del estado financiero.
+- El aviso de cuadre, el de doble conteo y el de "sin clasificar" quedan intactos: cuentan
+  sobre los datos completos, no sobre lo que se ve.
+
+### Implementación
+
+- Helper puro compartido `src/lib/finanzas/reports/report-visibility.ts` (`filterSection`,
+  `filterGroups`, `hasBalance`, `countZeroRows`). Un solo lugar decide qué es "saldo cero",
+  con la misma tolerancia de medio centavo que usa `accounting-reports.ts`.
+- Toggle `src/app/finanzas/reportes/_components/account-visibility-toggle.tsx` (client),
+  botones de 48px con icono + texto, `role="radiogroup"`.
+- Las tablas pasaron a client component (`balance/_components/balance-statement.tsx` y
+  `pyl/_components/estado-resultado-statement.tsx`) **solo por el toggle**: el reporte se
+  sigue armando en el server y llega calculado. **No hay refetch** al alternar.
+- `StatementSection` acepta `emptyLabel` para distinguir "sin cuentas registradas" de
+  "todas las cuentas de esta sección están en 0".
+- Cero cambios en `accounting-reports.ts`: la lógica contable no se tocó.
+
+### Tests
+
+`src/lib/finanzas/reports/__tests__/report-visibility.test.ts` — **11 tests**, sobre el
+fixture real de las 62 cuentas de Josuar:
+
+```
+npx tsx --test src/lib/finanzas/reports/__tests__/report-visibility.test.ts
+```
+
+Cubren: los totales de la vista filtrada son idénticos a los de la completa (sección por
+sección, y subtotal por subtotal de los grupos que sobreviven); ninguna fila visible está
+en 0; un grupo entero en 0 desaparece; una sección entera en 0 conserva su total;
+"todas las cuentas" devuelve la misma referencia sin perder filas (las 62 visibles); y el
+contador de ocultas cierra contra `totales - visibles`.
+
+**Suite completa: 292/292 verde** (283 + 9 del archivo suelto de cancel-invoice-dialog),
+`tsc --noEmit` limpio. Lint sin cambios: 22 errores + 5 warnings, **los mismos 22 antes y
+después** (verificado stasheando los cambios y volviendo a correr); ninguno en archivos de
+este cambio.
+
+### Verificación en navegador (localhost, rol admin) — 15/08/2026
+
+| Check | Resultado |
+|---|---|
+| Balance: toggle visible, default "Solo cuentas con saldo" | **OK** — "10 cuenta(s) en 0 ocultas" |
+| Balance: grupos enteros en 0 | **OK** — "Propiedad, planta y equipo" y "Pasivo no corriente" desaparecen con encabezado y subtotal |
+| Balance: PATRIMONIO sin cuentas visibles | **OK** — quedan el renglón calculado y "Total de Patrimonio" |
+| Balance: totales entre vistas | **IDÉNTICOS** — Activos corrientes 252,967.57 · Total de Activo 257,902.46 · Pasivos -13,425.55 · Patrimonio -234,476.91 · Pasivo+Patrimonio -247,902.46 |
+| P&L: default filtrado | **OK** — "30 cuenta(s) en 0 ocultas" |
+| P&L: renglones calculados en las dos vistas | **OK** — Bruta, Operativa, ISR y Neta siempre presentes |
+| P&L: totales entre vistas | **IDÉNTICOS** — Ingresos -279,137.06 · Costos 9,878.38 · Bruta -269,258.68 · Gastos 34,781.77 · Operativa -234,476.91 · ISR 58,619.23 · Neta -175,857.68 |
+| Consola | Limpia — sin errores ni warnings de hidratación |
+
+### ⚠️ Hallazgo de DATOS (no es de este cambio)
+
+Al verificar apareció una cuenta **`100006 PRUEBA` con saldo 10,000.00 y `account_type =
+income`**, que no estaba en el deploy del 14/08. Sale listada bajo INGRESOS (código de
+activo, tipo de ingreso) y es exactamente el origen del **descuadre de 10,000.00** que hoy
+muestra el Balance ("El balance NO cuadra"). Los totales del 14/08 eran Activo 257,902.46 /
+Pasivo+Patrimonio **-257,902.46**; hoy el segundo da -247,902.46.
+
+El aviso de descuadre funcionó como se esperaba: no lo escondió. **Es dato, no código** —
+hay que borrar o corregir esa cuenta de prueba en el Plan de Cuentas. Recordar que dev y
+prod comparten el mismo Supabase, así que la cuenta está también en producción.
+
+### Limpieza de paso
+
+- Borrados los scripts scratch untracked `scripts/tmp-coa.mjs`, `tmp-coa2.mjs`,
+  `tmp-testacc.mjs`, `tmp-users-check.mjs`.
+- `docs/finanzas/roadmap-contable.md`: el `023` (ledger Fase 1) figuraba como "pendiente de
+  aplicar en Supabase" en 4 lugares; se aplicó el 04/08/2026. Corregido, aclarando que el
+  schema está en la BD pero todavía sin uso en código.
+- `task_plan.md` Fase 11 (Testing & Deploy): los 4 ítems pasaron a ✅, cubiertos por el
+  deploy del 14/08/2026, con la nota de que ahora son parte del ciclo de cada release.
+- `sql/pending/022_backfill_dv_embebido.sql` se dejó como está (va con el refinamiento del DV).
+
+---
+
 ## [DEPLOY] - 2026-08-14 18:03 UTC - develop → main (11 commits)
 
 **Merge:** `060fed7` · **Punto de rollback:** `f149735` · **Aprobado por:** Oliver

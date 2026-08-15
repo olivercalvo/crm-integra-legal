@@ -539,7 +539,10 @@ Las listas autoritativas están en el bloque **"ESTADO (cierre 2026-06-03)"** al
 ## FASE 11: Testing & Deploy
 | # | Tarea | Feature | Estado | Notas |
 |---|-------|---------|--------|-------|
-| 11.1 | Testing completo con Playwright MCP | — | ⬜ Pendiente | Todos los flujos |
-| 11.2 | Pre-deploy checklist (13 pasos) | — | ⬜ Pendiente | SOP-006 |
-| 11.3 | Deploy a producción | — | ⬜ Pendiente | Requiere aprobación de Oliver |
-| 11.4 | Verificación post-deploy | — | ⬜ Pendiente | |
+| 11.1 | Testing completo con Playwright MCP | — | ✅ Hecho | Verificación en navegador antes de cada release; el ciclo quedó incorporado al SOP, no es un hito de una sola vez |
+| 11.2 | Pre-deploy checklist (13 pasos) | — | ✅ Hecho | SOP-006 corrido en el deploy del 14/08/2026 (281/281 tests, `tsc` limpio, `next build` OK, diff review) |
+| 11.3 | Deploy a producción | — | ✅ Hecho | Merge `060fed7` a `main` el 14/08/2026, aprobado por Oliver. Rollback: `f149735` |
+| 11.4 | Verificación post-deploy | — | ✅ Hecho | Smoke en `crm-integra-legal.vercel.app` el 14/08/2026 (balance, pyl, cuentas, ficha de cliente). Detalle en `changelog.md` |
+
+**Nota:** esta fase se cerró con el deploy del 14/08/2026. De acá en adelante los cuatro
+pasos son parte del ciclo de CADA release (ver `sop.md`), no un hito pendiente del plan.

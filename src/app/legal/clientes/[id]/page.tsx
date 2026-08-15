@@ -65,6 +65,16 @@ export default async function ClienteDetailPage({ params }: PageProps) {
   const typedClient = client as Client;
   const lawyerName = (client.responsible_lawyer as unknown as { full_name: string } | null)?.full_name ?? null;
 
+  // DV de la ficha: si está cargado se muestra; si no, "No aplica" SOLO cuando
+  // sabemos que la DGI no lo pide (receptor 02 consumidor final / 04
+  // extranjero). Con tipo_receptor_fe en NULL el dato es DESCONOCIDO, no
+  // inaplicable, y ahí va "—": decir "No aplica" ocultaría un DV que sí falta
+  // (es el caso de los clientes que todavía lo tienen embebido en el RUC).
+  const dvNoAplica =
+    typedClient.tipo_receptor_fe === "02" || typedClient.tipo_receptor_fe === "04";
+  const dvDisplay =
+    typedClient.digito_verificador?.trim() || (dvNoAplica ? "No aplica" : null);
+
   // Fetch linked cases with status
   const { data: cases } = await db
     .from("cases")
@@ -224,6 +234,12 @@ export default async function ClienteDetailPage({ params }: PageProps) {
         <CardContent className="divide-y">
           <InfoRow icon={<Hash size={16} />} label="N° Cliente" value={typedClient.client_number} />
           <InfoRow icon={<Building2 size={16} />} label="RUC / Cédula" value={typedClient.ruc} />
+          {/* El DV va en su propio renglón, debajo del RUC (pedido de Josuar): en
+              la ficha de la DGI son dos datos distintos y meterlo dentro del
+              número de RUC es justo lo que hay que dejar de hacer. Para
+              receptores 02/04 el DV no aplica, y decirlo evita que alguien lo
+              "complete" inventando un dígito. */}
+          <InfoRow icon={<Hash size={16} />} label="Dígito verificador (DV)" value={dvDisplay} />
           <InfoRow icon={<FileText size={16} />} label="Tipo de Cliente" value={typedClient.type} />
           <InfoRow icon={<User size={16} />} label="Abogada Responsable" value={lawyerName} />
           <InfoRow icon={<User size={16} />} label="Persona de contacto" value={typedClient.contact} />

@@ -1,5 +1,97 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Feature] - 2026-08-15 - Ficha de cliente: el DV en su propio renglón, separado del RUC
+
+Pedido de Josuar: que el dígito verificador se vea como un campo aparte, debajo del RUC.
+
+### Estado que había (revisado antes de tocar nada)
+
+- **Formulario (`client-form.tsx`): ya estaba bien.** `ruc` y `digito_verificador` son dos
+  inputs distintos desde los campos fiscales FE. El de RUC hasta avisa en su placeholder
+  ("RUC completo, sin el DV") y en el hint que "el DV va aparte, en su propio campo". El
+  input de DV aparece cuando `tipo_receptor_fe` es 01 o 03, que es donde la DGI lo exige
+  (`tipoRequiresDV`). **No hizo falta cambiar nada acá.**
+- **Ficha de detalle (`legal/clientes/[id]/page.tsx`): el DV NO se mostraba.** Había un solo
+  renglón, "RUC / Cédula", con el valor de `ruc`. Lo que se veía "junto" era otra cosa: en
+  los clientes que todavía tienen el DV embebido en el texto del RUC, el renglón mostraba
+  `25046169-3-2021  DV 40` como si fuera el número. La columna `digito_verificador` no
+  aparecía en ninguna parte de la ficha.
+
+### Qué se cambió
+
+Un renglón nuevo **"Dígito verificador (DV)"** justo debajo de "RUC / Cédula" en la tarjeta
+Información del Cliente. Los tres estados posibles:
+
+| Situación | Qué muestra |
+|---|---|
+| DV cargado | El dígito (ej. `85`) |
+| `tipo_receptor_fe` = 02 o 04 | `No aplica` — la DGI no lo pide para consumidor final ni extranjero |
+| DV vacío con tipo 01/03 **o con tipo NULL** | `—` (falta el dato) |
+
+El tercer caso es el que importa: con `tipo_receptor_fe` en NULL el DV es **desconocido, no
+inaplicable**. La primera versión de este cambio usaba `tipoRequiresDV()` y mostraba "No
+aplica" cuando el tipo era NULL — lo cual escondía justo los clientes a los que les falta el
+DV (CLI-026 aparecía como "No aplica" teniendo el 40 metido dentro del RUC). Se corrigió
+antes de commitear: "No aplica" solo con 02/04 explícito.
+
+Cero cambios en emisión eFactura, en el mapeo `ruc`/`tax_id` y en el formulario.
+
+### Verificación en navegador (localhost:3000, rol admin) — 15/08/2026
+
+| Cliente | Caso | Resultado |
+|---|---|---|
+| CLI-001 JUMBO CAPITAL (tipo 01, DV 85) | DV cargado | **OK** — "RUC / CÉDULA 2676824-1-844561" y debajo "DÍGITO VERIFICADOR (DV) 85", renglones separados |
+| CLI-026 INTEGRA LEGAL (tipo NULL, DV NULL) | DV embebido en el RUC | **OK** — RUC muestra `25046169-3-2021 DV 40` y el DV muestra `—`. Es exactamente el cliente que arregla el backfill 022 |
+| CLI-110 (tipo 02, pasaporte AW745657) | DV no aplica | **OK** — "No aplica" |
+| Formulario de editar (CLI-001) | Campos separados | **OK** — input "RUC / Cédula" con el hint del DV aparte, y más abajo input "Dígito verificador (DV) *" con 85 |
+
+Consola limpia. `tsc --noEmit` limpio, suite 292/292 verde, lint sin cambios (los mismos 22
+errores preexistentes; ninguno en la ficha de cliente).
+
+### Conteo de DV vacíos (para decidir el backfill 022) — 15/08/2026
+
+Consulta de SOLO LECTURA contra Supabase. **No se aplicó ningún cambio de datos.**
+
+| Métrica | Valor |
+|---|---|
+| Clientes en la tabla | 131 (129 sin contar 2 de prueba `0TEST`) |
+| **Sin `digito_verificador`** | **114** de 129 |
+| Con `digito_verificador` | 15 (todos `tipo_receptor_fe = 01`) |
+| De los 114 sin DV, con tipo 01/03 (donde la DGI lo exige) | **0** |
+| Desglose de los 114 por tipo | 112 con `tipo_receptor_fe` NULL · 2 con `02` |
+| Desglose de los 114 por estado | 83 activos · 30 prospectos · 1 inactivo |
+
+**Lectura:** los 114 suenan a mucho, pero **ninguno está bloqueado para facturar hoy**: el
+gate fiscal solo exige DV cuando el receptor es 01 o 03, y ahí no falta ninguno. Los 112 con
+tipo NULL van a necesitar DV recién cuando alguien los clasifique como contribuyentes.
+
+**Universo real del backfill `022`: 2 clientes, no 4.**
+
+| Cliente | `ruc` hoy | `tax_id` hoy | DV en columna |
+|---|---|---|---|
+| CLI-026 INTEGRA LEGAL | `25046169-3-2021  DV 40` | `25046169-3-2021  DV 40` | NULL |
+| CLI-081 SERVICARE, S.A | `155701991-2-2021 DV 9` | (vacío) | NULL |
+
+Los otros dos que el script esperaba (CLI-096 RED VERDE con DV 00 y CLI-107 LABORATORIOS
+HERMANI con DV 21) **ya fueron corregidos a mano**: tienen el DV en su columna y el número
+limpio, así que los `WHERE ... ~* 'DV'` del script ya no los alcanzan. Correr el `022` no los
+tocaría.
+
+**Dos observaciones para cuando Oliver lo corra:**
+
+1. CLI-026 tiene el DV embebido en **las dos** columnas (`ruc` y `tax_id`), cosa que el
+   encabezado del script no contemplaba (lo daba solo en `tax_id`; la sincronización
+   `ruc`↔`tax_id` es posterior). Funciona igual **si se corre en orden**: el UPDATE A limpia
+   `tax_id` y, como el guard del UPDATE B mira `tax_id` ya limpio, B entra después y limpia
+   `ruc` con el mismo DV 40. Si se corre B primero, el guard lo bloquea y el `ruc` queda
+   sucio. **Correr A y después B, como están escritos.**
+2. El script también pobla `tipo_receptor_fe` (con COALESCE, sin pisar) — a los dos les
+   pondría `01` por formato de RUC. Es lo correcto y además los desbloquea para FE.
+
+**No se aplicó: es data de producción y la corre Oliver.**
+
+---
+
 ## [Feature] - 2026-08-15 - Filtro "solo cuentas con saldo" en los reportes contables
 
 Pedido de Josuar en la reunión: los reportes mostraban las 62 cuentas del plan, incluidas las

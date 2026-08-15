@@ -261,3 +261,37 @@ la lista de conteos. Al agregar una tabla nueva que referencie `clients`, sumarl
 ### Nunca
 - Exponer `error.message` de Postgres al usuario final.
 - Borrar documentos o archivos de storage antes de saber que el DELETE va a proceder.
+
+---
+
+## SOP-011: Rutas nuevas de primer nivel y el gating del middleware
+
+**Regla:** toda ruta que NO cuelgue de `/legal` ni de `/finanzas` necesita una excepción
+EXPLÍCITA en `src/middleware.ts`, o el usuario termina rebotado sin ver la pantalla.
+
+El gating por rol usa `ROLE_ROUTES`, donde cada rol declara los prefijos que puede abrir:
+`"/"`, `"/legal"`, `"/finanzas"`. El prefijo `"/"` **matchea de forma EXACTA** (`pathname === "/"`),
+no como prefijo de todo. Consecuencia: una ruta nueva como `/mi-pantalla` no matchea nada,
+`hasAccess` da false y el middleware redirige a la home del rol. La pantalla nunca se ve, y
+no hay error en consola que lo delate — parece que "no funciona el link".
+
+Al crear una ruta de primer nivel, decidir en cuál de estos tres casos cae:
+
+| Caso | Dónde va la excepción | Ejemplo |
+|---|---|---|
+| Pública, sin sesión | Junto al bloque de `/login` y `/api/auth`, ANTES del chequeo de auth | `/auth/recuperar`, `/cotizacion/[token]` |
+| Con sesión, sin importar el rol | Después del timeout de sesión y ANTES de resolver el rol | `/nueva-contrasena` |
+| Con sesión y rol específico | Agregarla a `ROLE_ROUTES` de los roles que corresponda | — |
+
+### Cuidado extra con `/api/auth/*`
+Ese bloque **rebota a `/` a cualquier usuario CON sesión**. Sirve para que un usuario logueado
+no vuelva al login, pero rompe cualquier flujo que necesite procesar un token estando logueado.
+Por eso `/auth/recuperar` es una ruta aparte y se exceptúa antes: si cayera en ese bloque, un
+usuario con la sesión viva que pide recuperar su contraseña nunca llegaría a canjear el código.
+
+### Verificación mínima (sin sesión, con `curl`)
+```
+curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" http://localhost:3000/<ruta-nueva>
+```
+Un 307 al login es correcto para rutas protegidas; un 307 a `/` o a `/legal` significa que el
+gating por rol la está rebotando y falta la excepción.

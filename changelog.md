@@ -1,5 +1,101 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix/Seguridad] - 2026-08-15 - Recuperar contraseña: el flujo ahora existe (Fase 0, punto B)
+
+Diagnóstico previo: el botón "¿Olvidaste tu contraseña?" mandaba un correo real que **no
+servía para nada**. Dos fallas encadenadas:
+
+1. **El link apuntaba a una ruta inexistente.** `redirectTo` era `/auth/callback`; la ruta real
+   del proyecto es `/api/auth/callback`. Sin página ni rewrite, el middleware lo trataba como
+   ruta protegida, veía que no había sesión y lo mandaba al login. Verificado:
+   `/auth/callback?code=FAKE` → 307 a `/login?code=FAKE123`.
+2. **No existía dónde escribir la contraseña nueva.** Cero ocurrencias de `auth.updateUser()`
+   en todo `src/`, y cero de `PASSWORD_RECOVERY`. Aunque el link hubiera llegado bien,
+   `/api/auth/callback` canjea el código y redirige a `/`: **el correo de recuperación
+   simplemente logueaba a la persona sin pedirle contraseña nueva**.
+
+### Qué se construyó
+
+| Archivo | Qué hace |
+|---|---|
+| `src/app/auth/recuperar/route.ts` (nuevo) | Aterrizaje del link. Canjea el `code` por sesión y manda a `/nueva-contrasena`. Distingue el link vencido (`?error=...&error_code=otp_expired`, que es lo que manda Supabase) del código inválido |
+| `src/app/(auth)/nueva-contrasena/page.tsx` (nuevo) | Pantalla con la identidad navy/gold del login |
+| `src/components/auth/new-password-form.tsx` (nuevo) | Dos campos (nueva + repetir), `updateUser({ password })`, mínimo 8 caracteres — la misma regla que el alta de usuarios. Mensaje específico si la sesión de recuperación venció mientras completaba el form |
+| `src/middleware.ts` | Dos excepciones nuevas (ver abajo) |
+| `src/components/auth/login-form.tsx` | `redirectTo` → `/auth/recuperar`, con el comentario de por qué NO es `/auth/callback` |
+| `src/app/(auth)/login/page.tsx` | Muestra los avisos que llegan por query string |
+
+**La pantalla sirve para los dos caminos:** recuperación por email y cambio voluntario de la
+propia contraseña estando logueado. Antes no había ninguna forma de cambiarse la contraseña
+sin pedirle al admin que la resetee.
+
+### Las dos trampas del middleware (documentadas en SOP-011)
+
+1. **`/auth/recuperar` va exceptuada ANTES del bloque de rutas públicas.** Ese bloque rebota a
+   `/` a cualquier usuario **con** sesión: alguien con la sesión viva que pide recuperar su
+   contraseña nunca llegaría a canjear el código. Por eso es ruta propia y no `/api/auth/*`.
+2. **`/nueva-contrasena` va exceptuada ANTES de resolver el rol.** `ROLE_ROUTES` solo permite
+   `/`, `/legal` y `/finanzas`, y `"/"` matchea EXACTO — una ruta nueva de primer nivel no
+   matchea ningún prefijo y el usuario sale rebotado a su home sin ver nada. Además, un usuario
+   sin rol en el JWT tiene que poder arreglar su contraseña igual.
+
+Se agregó **SOP-011** en `sop.md` para que la próxima ruta de primer nivel no repita el error.
+
+### De paso: los avisos del login que nunca se mostraban
+
+El middleware ya mandaba `?expired=true` y `?error=no-role`, y el callback `?error=auth`, pero
+la pantalla de login los ignoraba: el usuario volvía al login sin ninguna explicación. Ahora se
+muestran, incluidos los dos nuevos de recuperación. Se leen en el server component y se pasan
+como prop (en vez de `useSearchParams`), para no necesitar un `Suspense` boundary.
+
+### Verificación — 15/08/2026
+
+Ruteo (`curl`, sin sesión):
+
+| URL | Resultado |
+|---|---|
+| `/auth/recuperar` (sin code) | 307 → `/login?error=recovery` |
+| `/auth/recuperar?code=FAKE123` | 307 → `/login?error=recovery` (el canje falla) |
+| `/auth/recuperar?error=access_denied&error_code=otp_expired` | 307 → `/login?error=recovery_expired` |
+| `/nueva-contrasena` sin sesión | 307 → `/login` |
+
+Avisos server-rendered en `/login`: los tres textos salen en el HTML con
+`?error=recovery_expired`, `?error=recovery` y `?expired=true`; sin parámetro no aparece nada.
+
+Navegador (localhost:3000, admin): `/nueva-contrasena` **renderiza con sesión** (confirma que la
+excepción del gating por rol funciona), contraseña de 6 caracteres → "La contraseña debe tener al
+menos 8 caracteres", contraseñas distintas → "Las dos contraseñas no coinciden". Consola limpia.
+
+**Lo que NO se probó y por qué:** el canje de un código REAL de email. Exige dispararle un correo
+de recuperación a un usuario real y leer su bandeja. Queda para Oliver, después de cargar la
+Redirect URL en Supabase. `tsc --noEmit` limpio, suite **292/292 verde**, lint sin cambios (22
+errores preexistentes, ninguno en los archivos de este cambio).
+
+### ⚠️ Requiere acción en el dashboard de Supabase (sin esto NO funciona)
+
+Authentication → URL Configuration → **Redirect URLs**:
+
+```
+http://localhost:3000/auth/recuperar
+https://crm-integra-legal.vercel.app/auth/recuperar
+```
+
+Si la URL no está en la allowlist, Supabase **ignora el `redirectTo` y usa el Site URL**, y el
+correo vuelve a no servir. La ruta se eligió sin query string justamente para que la entrada de
+la allowlist sea exacta, que es lo que Supabase recomienda para producción.
+
+### Pendiente de esta fase (no entra acá)
+
+- Rate limiting (punto A del diagnóstico): login por endpoint propio + límite en `/api/public/*`.
+- Rotación de contraseñas (punto C): ahora es viable, porque ya existe la pantalla de cambio.
+- `updateUser` **no cierra las otras sesiones** del usuario. Si la contraseña se cambió porque se
+  sospecha de un acceso indebido, hay que revocar las sesiones aparte (`auth.admin.signOut`).
+- Sin test unitario del middleware: probar sus ramas exige mockear toda la cadena de
+  `@supabase/ssr`. Hoy la garantía son las pruebas de ruteo de arriba, más SOP-011. Si el flujo
+  se vuelve a romper, va a ser por acá.
+
+---
+
 ## [Feature] - 2026-08-15 - Ficha de cliente: el DV en su propio renglón, separado del RUC
 
 Pedido de Josuar: que el dígito verificador se vea como un campo aparte, debajo del RUC.

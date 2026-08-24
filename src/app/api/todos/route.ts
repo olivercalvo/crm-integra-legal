@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
+    const { data: profile } = await admin.from("users").select("tenant_id, role").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
     const body = await request.json();
@@ -61,6 +61,20 @@ export async function POST(request: NextRequest) {
 
     if (!description?.trim()) {
       return NextResponse.json({ error: "Descripción requerida" }, { status: 400 });
+    }
+
+    // `personal_todos` es la agenda personal, con permisos por PROPIEDAD
+    // (creador o asignado), no por rol — por eso este endpoint no lleva
+    // `requireRole`. La única excepción es el mismo criterio que en /api/tasks:
+    // el asistente no le reparte trabajo a nadie. Puede crearse pendientes
+    // propios; no puede asignárselos a otra persona. El asistente ni siquiera
+    // ve esta UI (`/legal/pendientes` le renderiza <AsistentePendientes>), pero
+    // el endpoint era alcanzable a mano.
+    if (profile.role === "asistente" && assigned_to && assigned_to !== user.id) {
+      return NextResponse.json(
+        { error: "No puedes asignar pendientes a otras personas" },
+        { status: 403 }
+      );
     }
 
     const { data, error } = await admin

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
+
+// CREAR tareas es admin/abogada. El asistente las CUMPLE (PATCH /api/tasks/[id]),
+// no las reparte: el selector de responsable del formulario lista a todos los
+// usuarios activos, asi que sin este gate podia asignarle trabajo a las socias.
+// Antes del 24/08/2026 este endpoint NO validaba rol en absoluto.
+const TASK_CREATE_ROLES = ["admin", "abogada"] as const;
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,16 +21,19 @@ export async function POST(request: NextRequest) {
 
     const admin = createAdminClient();
 
-    // Get user's tenant_id
+    // Get user's tenant_id + role
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
     if (profileError || !profile) {
       return NextResponse.json({ error: "Perfil de usuario no encontrado" }, { status: 403 });
     }
+
+    const denied = requireRole(profile.role, TASK_CREATE_ROLES);
+    if (denied) return denied;
 
     const body = await request.json();
     const { case_id, description, deadline, assigned_to } = body;

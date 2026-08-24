@@ -1,5 +1,102 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [FEAT] - 2026-08-24 (2) - El asistente tampoco crea tareas + guard de propiedad al cumplirlas
+
+Branch `develop`. Cierra el pendiente que había quedado abierto en la entrada anterior de hoy.
+Decisión de Oliver: **Harry solo CUMPLE las tareas que le asignan.** Si necesita dejar un
+recordatorio en un caso, usa un comentario.
+
+**El motivo de fondo no era de coherencia sino de permisos:** el selector "Asignar a" del
+formulario de tareas lista a TODOS los usuarios activos (Contador Test, Daveiva, Legal Integra,
+Milena, Oliver). Un asistente podía repartirle trabajo a las socias.
+
+### 1. UI — se retira el formulario de crear tarea
+
+| Archivo | Cambio |
+|---|---|
+| `src/app/legal/casos/[id]/page.tsx` | `<AddTaskForm>` solo para admin/abogada (`canCreateTasks`, mismo patrón que `CaseStatusChanger`). El grid de acciones del tab Seguimiento colapsa a una columna cuando el botón no va, así que "+ Agregar Comentario/Seguimiento" ocupa el ancho completo en vez de dejar un hueco |
+
+`<AddCommentForm>` y `<CompleteTaskButton>` quedan **intactos**: comentar y cumplir tareas
+siguen siendo del asistente. No había ningún otro control de creación de tareas en el tab.
+
+### 2. Guards en la API
+
+| Endpoint | Estado previo | Ahora |
+|---|---|---|
+| `POST /api/tasks` | **NO validaba rol en absoluto** — tercera aparición del mismo patrón (hallazgo #3 de la revisión OWASP; ya cerrado en `/api/expenses` y `/api/cases/[id]`) | `requireRole(["admin","abogada"])` → 403 |
+| `PATCH /api/tasks/[id]` | Sin gate de rol y **sin gate de propiedad**: el asistente podía cerrar CUALQUIER tarea del bufete, incluidas las de las abogadas | Sigue SIN gate de rol —cumplir tareas es su flujo diario— pero ahora va por **PROPIEDAD**: si el rol es `asistente`, `assigned_to` tiene que ser él. admin/abogada cierran cualquiera |
+| `POST /api/todos` | Aceptaba `assigned_to` de cualquiera | El asistente no puede asignarle un pendiente personal a otra persona → 403 |
+
+**Sobre los campos que el PATCH puede tocar** (lo que preguntaste): resultó que ya estaba
+acotado y no hizo falta trabajo extra. El handler **solo acepta `status: "cumplida"`** y
+descarta el resto del body — `description`, `deadline` y `assigned_to` ni se leen — además de
+filtrar por `tenant_id`. Lo único que faltaba era la propiedad, que es lo que se agregó. Se
+documentó con un comentario en el código para que no se pierda.
+
+**`/api/todos/*` revisado**: es la agenda personal (`personal_todos`), con permisos por
+PROPIEDAD y no por rol — `PATCH` y `DELETE` ya exigen ser creador o asignado. El asistente ni
+siquiera ve esa UI (`/legal/pendientes` le renderiza `<AsistentePendientes>`), pero el `POST`
+era alcanzable a mano, y ese hueco es el que se tapó. No lleva `requireRole` a propósito: no
+es un recurso gobernado por rol.
+
+### 3. Test nuevo
+
+`src/app/api/tasks/__tests__/patch-task-ownership.test.ts` — **4/4 pasan**:
+asistente + tarea propia → 200; asistente + tarea ajena → 403 sin tocarla; abogada + tarea
+ajena → 200; y body con `assigned_to`/`description` → 400 sin reasignar.
+
+### Verificación
+
+| Check | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio (exit 0) |
+| Lint de los archivos tocados | 0 errores nuevos (siguen los 3 preexistentes de `casos/[id]/page.tsx`) |
+| `patch-task-ownership.test.ts` | 4/4 |
+| `patch-role-by-action.test.ts` | 4/4 (sin regresión) |
+
+### Verificación en navegador (24/08/2026, `localhost:3000`)
+
+**Flujo completo de punta a punta con una tarea real**, sobre `CORP-002` — caso CERRADO, abierto
+en 2021, sin movimiento desde abril y sin tareas previas, elegido para no meterle ruido a
+Daveiva ni a Milena en un expediente en uso.
+
+| Paso | Resultado |
+|---|---|
+| Admin crea la tarea "PRUEBA VERIFICACION PERMISOS 24/08 - IGNORAR - CEC" asignada a Harry Boyd | **`POST /api/tasks` 201** — sin regresión para admin |
+| La tarea aparece en el hilo del caso | "Pendiente · Harry Boyd" |
+| Asistente abre el caso | **Sin "+ Nueva Tarea para Asistente"**. Sigue "+ Agregar Comentario/Seguimiento", ahora a ancho completo |
+| Asistente en Mis Pendientes | Ve la tarea agrupada bajo CORP-002, "1 pendiente" |
+| Asistente marca cumplida | **`PATCH /api/tasks/{id}` 200** → "0 pendientes · 1 cumplida" |
+
+**Guards probados llamando la API directo con la sesión del asistente:**
+
+| Llamada | Resultado |
+|---|---|
+| `POST /api/tasks` (con `assigned_to` = Daveiva) | **403 `Sin permiso`** |
+| `POST /api/todos` con `assigned_to` = Daveiva | **403 "No puedes asignar pendientes a otras personas"** |
+| `POST /api/todos` para sí mismo (body vacío) | **400 "Descripción requerida"** → pasó el gate |
+
+**Lo que NO se probó contra producción y por qué.** El 403 del asistente sobre una tarea AJENA
+se cubrió con el test unitario, no en el navegador: todas las tareas ajenas del tenant están
+`pendiente`, así que si el guard fallara habría cerrado una tarea real de las licenciadas y
+**no existe endpoint `DELETE` ni forma de revertir un "cumplida"** desde la app. El riesgo no
+valía la pena teniendo cobertura equivalente con mocks.
+
+### Limpieza pendiente para Oliver
+
+La tarea de prueba quedó **cumplida** en `CORP-002`. No hay `DELETE` de tareas en la API, así
+que la baja va por SQL y **la corre Oliver**, no este proceso:
+
+```sql
+DELETE FROM tasks WHERE id = '2f0f31f8-cda6-4243-bb93-5f9ede5e5697';
+```
+
+Solo esa fila. **`audit_log` NO se toca**: es la bitácora y sus registros quedan aunque
+mencionen la tarea de prueba. Si el DELETE falla por una llave foránea, dejarla cumplida es
+inofensivo.
+
+**Migraciones: NINGUNA.**
+
 ## [FEAT] - 2026-08-24 - Alcance del rol asistente: solo lectura + documentos y comentarios
 
 Branch `develop`. **Decisión de negocio del cliente**, no un arreglo técnico. El rol asistente
@@ -123,13 +220,10 @@ dejó pasar SIN escribir nada en la base de producción (dev y prod comparten Su
 El PATCH de admin se hizo reasignando el MISMO estado que el caso ya tenía, para probar el
 camino 200 sin alterar datos reales.
 
-### Pendiente de decisión (NO se tocó)
+### Pendiente de decisión — CERRADO el mismo día
 
-En el tab Seguimiento el asistente sigue viendo **"+ Nueva Tarea para Asistente"**: puede
-CREAR tareas, no solo cumplirlas. El alcance nuevo dice "dentro de un caso solo adjunta
-documentos y comenta", lo que sugiere sacarlo, pero la lista explícita de restricciones del
-cliente no menciona tareas y quitarlo podría romper el flujo de auto-asignarse pendientes.
-Queda a la espera de confirmación.
+En el tab Seguimiento el asistente seguía viendo **"+ Nueva Tarea para Asistente"**. Oliver
+decidió retirárselo: ver la entrada `[FEAT] 2026-08-24 (2)` al inicio de este archivo.
 
 ## [FIX] - 2026-08-22 - Panel del asistente, selector de abogada por rol y retiro de `assistant_id` de la UI
 

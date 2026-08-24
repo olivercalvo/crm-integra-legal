@@ -216,6 +216,8 @@ export default async function ExpedienteDetailPage({
   // contenido. `canSeeExpenses` gatea las dos cosas — ocultar solo el tab
   // dejaría la pestaña accesible escribiendo ?tab=gastos en la URL.
   const canSeeExpenses = userRole === "admin" || userRole === "abogada";
+  // Crear tareas es admin/abogada. El asistente las CUMPLE, no las reparte.
+  const canCreateTasks = userRole === "admin" || userRole === "abogada";
 
   const tabs = [
     { key: "info", label: "Información", icon: FolderOpen },
@@ -881,9 +883,14 @@ export default async function ExpedienteDetailPage({
 
         return (
           <div className="space-y-4">
-            {/* Action buttons — two big intuitive buttons */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <AddTaskForm caseId={params.id} users={allUsers} />
+            {/* Action buttons. CREAR tareas es admin/abogada desde el
+                24/08/2026: el selector de responsable se alimenta de todos los
+                usuarios activos, así que el asistente podía asignarle trabajo a
+                las socias. Si necesita dejarse un recordatorio, usa un
+                comentario. COMENTAR y CUMPLIR tareas siguen siendo suyos —
+                <CompleteTaskButton> más abajo no está gateado. */}
+            <div className={`grid gap-3 ${canCreateTasks ? "sm:grid-cols-2" : ""}`}>
+              {canCreateTasks && <AddTaskForm caseId={params.id} users={allUsers} />}
               <AddCommentForm caseId={params.id} />
             </div>
 

@@ -116,7 +116,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 **Funcionalidad:**
 - Abogadas crean tareas dentro de un expediente y asignan a asistente
-- Asistente ve sus tareas pendientes en su dashboard
+- Asistente ve sus tareas pendientes en su dashboard (no las crea: desde el 24/08/2026 crear y asignar tareas es admin/abogada)
 - Asistente marca tareas como cumplidas
 - Abogadas ven estado de cumplimiento de todas las tareas que asignaron
 - Sin notificaciones para MVP — solo visual en dashboard
@@ -197,7 +197,14 @@ mira todo, cambia poco.
 | Ver Dashboard, Casos (todos, solo lectura) y Mis Pendientes | Ver o registrar gastos |
 | **Subir documentos** a un caso | Cambiar el estado de un caso |
 | **Comentar** en un caso | Editar, crear o borrar casos y clientes |
-| Cumplir tareas desde Mis Pendientes | Entrar a Finanzas |
+| Cumplir tareas asignadas a él | **Crear o asignar tareas** |
+| — | Entrar a Finanzas |
+
+**Por qué tampoco crea tareas** (ampliación del 24/08/2026): el selector "Asignar a" del
+formulario lista a TODOS los usuarios activos, así que un asistente podía asignarle trabajo a
+las socias. Se le retira el botón "+ Nueva Tarea para Asistente" del tab Seguimiento. Cumplir
+tareas sigue siendo suyo — es su flujo diario — pero **solo las asignadas a él**: el handler
+va por propiedad, no por rol. Para dejarse un recordatorio en un caso, usa un comentario.
 
 Lo que se retiró de su UI: el ítem "Gastos" del menú, la pantalla `/legal/gastos` completa
 (le rebota a `/legal` desde el middleware), el tab "Gastos" del detalle de caso — con

@@ -16,8 +16,11 @@ Decisión de negocio del cliente. Detalle en `changelog.md` → `[FEAT] 2026-08-
       en la próxima sesión que leyera el archivo.
 - [x] Verificado en navegador el 24/08/2026 en las dos sesiones, incluidos los 403 pedidos
       directo a la API con sesión de asistente. Test `patch-role-by-action` 4/4.
-- [ ] **Pendiente de decisión:** el asistente todavía puede CREAR tareas desde el tab
-      Seguimiento ("+ Nueva Tarea para Asistente"). No se tocó — falta confirmación de Oliver.
+- [x] **CERRADO el 24/08/2026** (decisión de Oliver): el asistente tampoco crea tareas. Se le
+      retiró `<AddTaskForm>` del tab Seguimiento, `POST /api/tasks` le responde 403 y
+      `POST /api/todos` rechaza asignarle un pendiente a otra persona. `PATCH /api/tasks/[id]`
+      NO lleva gate de rol —cumplir tareas es su flujo diario— pero ahora va por PROPIEDAD:
+      solo cierra las asignadas a él. Cubierto por `patch-task-ownership.test.ts` (4/4).
 - **Migraciones: NINGUNA.**
 
 ## === FIX 22-23/08/2026 — ROL ASISTENTE (fuera de fase) ===

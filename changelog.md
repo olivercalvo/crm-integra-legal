@@ -1,5 +1,96 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [DEPLOY] - 2026-08-24 14:49 UTC - develop → main (3 commits)
+
+**Merge:** `0de75ca` · **Punto de rollback:** `fd0bf88` · **Aprobado por:** Oliver
+
+### Contenido
+
+| SHA | Qué |
+|---|---|
+| `f1b322b` | Panel del asistente "Casos del Bufete" + selectores de responsable filtrados por rol + retiro de `assistant_id` de la UI |
+| `aab5b9d` | Alcance reducido del asistente: sin Gastos (menú, ruta y tab del caso), sin cambio de estado, con guards 403 en `/api/expenses` y `/api/cases/[id]` |
+| `3f678b4` | El asistente no crea tareas, guard de propiedad al cumplirlas y cierre del hueco equivalente en `/api/todos` |
+| `3dd9d43` | Log del deploy anterior (arrastrado) |
+
+**Migraciones: NINGUNA. Env vars nuevas: NINGUNA. Cambios de RLS: NINGUNO.**
+
+### Checklist SOP-006
+
+| # | Paso | Resultado |
+|---|---|---|
+| 1 | Tests | **287/287 verde**, 0 fail |
+| 2 | Linting | ⚠️ **EXCEPCIÓN APROBADA** — ver abajo |
+| 3 | Build local | `next build` **exit 0**, 26 rutas, middleware 80.4 kB |
+| 4 | Env vars de producción | Ninguna nueva: el diff no agrega un solo `process.env`. **No se auditó el estado de las env vars ya cargadas en Vercel** — no hay acceso a la cuenta del cliente. Como no cambian, no aplica |
+| 5 | Migraciones en prod | Ninguna. `supabase/migrations/` sin cambios |
+| 6 | RLS policies | Sin cambios de schema → cero `policy`/`rls`/`grant`/`revoke` en el diff |
+| 7 | Funcionalidad crítica (Playwright) | Las dos sesiones, en los 3 commits, incluidos los 403 llamados directo a la API |
+| 8 | Changelog | Actualizado |
+| 9 | Diff review | 26 archivos, +1.013 / −485. Sin dependencias nuevas, sin cambios en `package.json` |
+| 10 | Pausa / aprobación | Dada explícitamente por Oliver |
+| 11 | Merge a main | `--no-ff` → `0de75ca` |
+| 12 | Deploy en Vercel | Auto-deploy disparado por el push. Producción responde HTTP 200 |
+| 13 | Verificación post-deploy | Parcial — ver abajo |
+
+### Excepción del paso 2 (linting) — aprobada por Oliver
+
+El proyecto arrastra **21 errores de ESLint**, así que el paso "linting sin errores" **no pasa
+literalmente**. Se aprobó la excepción con este fundamento:
+
+- **Los 21 ya existen en `main`.** 15 están en archivos que este deploy ni toca. Los otros 6
+  están en dos archivos compartidos (`casos/[id]/page.tsx` y `casos/page.tsx`); se verificó
+  extrayendo **de `main`** esas dos versiones y linteándolas por separado: dan exactamente los
+  mismos errores (`Upload`, `Button`, `backUrl` sin usar; un `prefer-const`).
+- **Este merge no introduce ninguno nuevo.**
+- `next build` pasa igual (exit 0).
+
+Criterio de Oliver: bloquear un arreglo de permisos por lint preexistente sería priorizar mal.
+Queda registrado para que el rastro exista y no se lea como que el checklist salió limpio.
+La limpieza quedó agendada como sprint propio en `task_plan.md` → "Sprint de limpieza de lint".
+
+### Verificación post-deploy — QUÉ SE VERIFICÓ EN PRODUCCIÓN
+
+Con sesión real de Harry Boyd (asistente) en `crm-integra-legal.vercel.app`:
+
+| Check | Resultado |
+|---|---|
+| El deploy entró (código nuevo sirviéndose) | ✅ Confirmado |
+| Menú del asistente | ✅ Solo **Dashboard, Casos y Mis Pendientes** — sin Gastos |
+| Tarjeta principal del panel | ✅ **"Casos del Bufete" = 207** |
+
+### QUÉ **NO** SE VERIFICÓ EN PRODUCCIÓN
+
+Se corta acá con honestidad: lo de abajo **no se probó contra producción** y no debe leerse
+como verificado. La sesión de prod se abrió en una ventana de incógnito, a la que la
+automatización del navegador no llega, y no se repitió el login.
+
+| Sin verificar en prod | Sí verificado en localhost, con el MISMO código |
+|---|---|
+| `/legal/gastos` escrito a mano rebota a `/legal` | ✅ |
+| Detalle de caso sin tab "Gastos", sin "Cambiar Estado", sin "+ Nueva Tarea para Asistente" | ✅ |
+| `?tab=gastos` a mano cae en Información, sin montos | ✅ |
+| El asistente puede comentar | ✅ |
+| El asistente puede adjuntar documentos | ✅ |
+| El asistente puede cumplir una tarea desde Mis Pendientes | ✅ (flujo completo sobre CORP-002, `PATCH` 200) |
+| Guards 403 de la API (`/api/expenses`, `/api/cases/[id]`, `/api/tasks`, `/api/todos`) | ✅ llamados directo con sesión de asistente |
+| **Regresión con sesión de admin** | ✅ en localhost — **NO se corrió en prod** |
+
+**Riesgo asumido:** es el mismo commit que corrió en localhost, sin migraciones, sin env vars
+nuevas y sin cambios de RLS, así que la diferencia entre los dos entornos es mínima. Aun así,
+los dos checks que sí se hicieron en prod (menú y tarjeta) tocan justamente `nav-config.ts` y
+`asistente-home.tsx`, que son el corazón de dos de los tres commits. **La regresión de admin en
+producción queda pendiente** y conviene hacerla en la próxima sesión antes de tocar nada más.
+
+### Limpieza pendiente de la sesión anterior
+
+Sigue pendiente que Oliver corra el DELETE de la tarea de prueba (ver entrada
+`[FEAT] 2026-08-24 (2)`):
+
+```sql
+DELETE FROM tasks WHERE id = '2f0f31f8-cda6-4243-bb93-5f9ede5e5697';
+```
+
 ## [FEAT] - 2026-08-24 (2) - El asistente tampoco crea tareas + guard de propiedad al cumplirlas
 
 Branch `develop`. Cierra el pendiente que había quedado abierto en la entrada anterior de hoy.

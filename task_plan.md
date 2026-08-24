@@ -251,6 +251,30 @@ Desbloqueo = respuesta de Eduardo (punto de facturación + confirmación de foli
 2. Merge `develop → main` (fast-forward, disparará auto-deploy).
 3. Primera emisión real de prueba con factura pequeña a receptor conocido.
 
+### A-bis. Sprint de limpieza de lint (21 errores) — deuda visible, prioridad media
+
+Creado el 24/08/2026 a pedido de Oliver, para que no se vuelva deuda invisible. El deploy
+`0de75ca` salió con **excepción aprobada** en el paso 2 del SOP-006: el proyecto arrastra 21
+errores de ESLint que YA estaban en `main`; ese deploy no introdujo ninguno, pero tampoco los
+limpió, y el checklist va a seguir saliendo en amarillo hasta que alguien los tome.
+
+- [ ] `src/components/tasks/task-list.tsx` — `CardHeader`, `CardTitle` sin usar
+- [ ] `src/lib/clients/__tests__/numbering.test.ts` — `_cols` sin usar
+- [ ] `src/lib/finanzas/queries/business-expenses.ts` — `accountMap` debe ser `const`
+- [ ] `src/lib/utils/import-parser.ts` — `sheetName` sin usar
+- [ ] `src/app/legal/casos/[id]/page.tsx` — `Upload`, `Button`, `backUrl` sin usar
+- [ ] `src/app/legal/casos/page.tsx` — `count` debe ser `const`
+- [ ] Resto: `documents/upload/route.ts`, `legal/admin/page.tsx`, `legal/clientes/page.tsx`,
+      `legal/page.tsx`, `case-task-group.tsx`, `add-task-form.tsx`, `case-status-changer.tsx`,
+      `client-form.tsx`, `expense-list.tsx`, `connectivity-indicator.tsx`,
+      `seguimiento-view.tsx`
+- [ ] Aparte, 4 warnings `jsx-a11y/alt-text` en los PDF de finanzas (`CreditNoteDocument`,
+      `InvoiceDocument`, `QuoteDocument`)
+
+**Cómo obtener la lista fresca:** `npx next lint`. **Criterio:** son todos triviales (imports
+muertos y `prefer-const`); el riesgo está en tocar 17 archivos de una, así que conviene un
+commit propio, sin mezclar con features, y correr la suite completa después.
+
 ### B. Bug buscador de clientes en form de cotización (alta, rápido)
 El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
 

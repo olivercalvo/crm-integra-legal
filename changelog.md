@@ -82,14 +82,10 @@ los dos checks que sí se hicieron en prod (menú y tarjeta) tocan justamente `n
 `asistente-home.tsx`, que son el corazón de dos de los tres commits. **La regresión de admin en
 producción queda pendiente** y conviene hacerla en la próxima sesión antes de tocar nada más.
 
-### Limpieza pendiente de la sesión anterior
+### Limpieza de la sesión anterior — HECHA
 
-Sigue pendiente que Oliver corra el DELETE de la tarea de prueba (ver entrada
-`[FEAT] 2026-08-24 (2)`):
-
-```sql
-DELETE FROM tasks WHERE id = '2f0f31f8-cda6-4243-bb93-5f9ede5e5697';
-```
+Oliver corrió el DELETE de la tarea de prueba el 24/08/2026 y lo verificó: **no queda ninguna
+tarea de prueba en la base.** Ver entrada `[FEAT] 2026-08-24 (2)`.
 
 ## [FEAT] - 2026-08-24 (2) - El asistente tampoco crea tareas + guard de propiedad al cumplirlas
 
@@ -173,18 +169,18 @@ se cubrió con el test unitario, no en el navegador: todas las tareas ajenas del
 **no existe endpoint `DELETE` ni forma de revertir un "cumplida"** desde la app. El riesgo no
 valía la pena teniendo cobertura equivalente con mocks.
 
-### Limpieza pendiente para Oliver
+### Limpieza de la tarea de prueba — HECHA el 24/08/2026
 
-La tarea de prueba quedó **cumplida** en `CORP-002`. No hay `DELETE` de tareas en la API, así
-que la baja va por SQL y **la corre Oliver**, no este proceso:
+La tarea de prueba quedó **cumplida** en `CORP-002` y, como no hay `DELETE` de tareas en la API,
+la baja fue por SQL. **Oliver corrió la sentencia y verificó el resultado el mismo día: no queda
+ninguna tarea de prueba en la base.**
 
 ```sql
 DELETE FROM tasks WHERE id = '2f0f31f8-cda6-4243-bb93-5f9ede5e5697';
 ```
 
-Solo esa fila. **`audit_log` NO se toca**: es la bitácora y sus registros quedan aunque
-mencionen la tarea de prueba. Si el DELETE falla por una llave foránea, dejarla cumplida es
-inofensivo.
+Solo esa fila. **`audit_log` NO se tocó**: es la bitácora y sus registros quedan aunque
+mencionen la tarea de prueba.
 
 **Migraciones: NINGUNA.**
 

@@ -38,7 +38,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ### F-002: Gestión de Casos
 **Prioridad:** P0 (MVP)
-**Roles:** Admin, Abogada (CRUD completo), Asistente (ver asignados, actualizar estado)
+**Roles:** Admin, Abogada (CRUD completo), Asistente (ve TODOS los casos del bufete, actualiza estado)
 
 **Campos:**
 - N° Caso (auto-generado secuencial)
@@ -79,7 +79,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ### F-003: Control de Gastos por Expediente
 **Prioridad:** P0 (MVP)
-**Roles:** Admin, Abogada (todo), Asistente (registrar gastos ejecutados en sus casos)
+**Roles:** Admin, Abogada (todo), Asistente (registrar gastos en cualquier caso del bufete)
 
 **Campos gasto:**
 - Fecha
@@ -157,11 +157,35 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 **Prioridad:** P0 (MVP)
 **Roles:** Asistente
 
-**Contenido:**
-- Casos asignados al asistente logueado
-- Tareas pendientes con fecha límite
+**Contenido:** 3 tarjetas
+
+| Tarjeta | Qué cuenta | Enlaza a |
+|---|---|---|
+| **Casos del Bufete** | TODOS los casos del tenant, sin filtrar por asistente | `/legal/casos` |
+| **Tareas Pendientes** | Tareas con `assigned_to` = usuario y estado `pendiente` | `/legal/pendientes` |
+| **Tareas Cumplidas** | Tareas con `assigned_to` = usuario y estado `cumplida` | `/legal/pendientes` |
+
+**Por qué "Casos del Bufete" es la tarjeta principal:** el alcance de lectura del asistente
+es todo el bufete (igual que la abogada) y `/legal/casos` nunca filtró por asistente. El
+panel antiguo mostraba solo "Casos Asignados", y como ningún caso tenía asistente asignado
+el asistente veía 0 y concluía que el sistema no le mostraba nada. Era un problema de UI,
+no de permisos. Lo único personal del panel son sus TAREAS.
+
 - Acceso directo a cada caso para: actualizar estado, registrar gastos, cumplir tareas, agregar comentarios, subir documentos
 - Información completa del caso y cliente asociado visible
+
+**Selector de "Abogada Responsable" filtrado por rol** (aplica a detalle de caso, crear y
+editar): solo lista usuarios con rol `abogada`, no todos los usuarios activos. Si la lista
+queda vacía, el selector igual ofrece "Sin responsable". La asignación de **tareas** sigue
+aceptando cualquier usuario activo (no se filtra por rol).
+
+**El campo "Asistente Responsable de Seguimiento" ya no existe en la interfaz** (22/08/2026).
+Si el asistente ve todos los casos del bufete, asignar uno por caso no aporta. Se retiró de
+crear/editar caso, del editor inline, del display del detalle, de la columna "Asistente" del
+listado y de `PATCH /api/cases/[id]`. La columna `cases.assistant_id` **se conserva en la BD**
+(regla aditiva): el cambio es solo de UI y por lo tanto reversible sin migración. Como
+consecuencia, `/legal/gastos` del asistente ofrece ahora TODOS los casos del tenant en su
+selector, en vez del recorte por asistente asignado.
 
 ---
 

@@ -33,7 +33,6 @@ import {
   Upload,
 
   UserCheck,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +62,7 @@ export default async function ExpedienteDetailPage({
     .select(
       `
       id, case_code, case_number, client_id, description, classification_id,
-      institution_id, responsible_id, assistant_id, opened_at, status_id,
+      institution_id, responsible_id, opened_at, status_id,
       physical_location, observations, has_digital_file, entity, procedure_type,
       institution_procedure_number, institution_case_number, case_start_date,
       procedure_start_date, deadline, last_followup_at, created_at, updated_at,
@@ -104,19 +103,6 @@ export default async function ExpedienteDetailPage({
       .eq("id", caseData.responsible_id)
       .single();
     if (respData) responsible = { id: respData.id, name: respData.full_name };
-  }
-
-  // Fetch assistant info if exists (assistant_id references users table)
-  let assistant: { id: string; name: string } | null = null;
-  if (caseData.assistant_id) {
-    const { data: assistantData } = await db
-      .from("users")
-      .select("id, full_name")
-      .eq("id", caseData.assistant_id)
-      .single();
-    if (assistantData) {
-      assistant = { id: assistantData.id, name: assistantData.full_name };
-    }
   }
 
   // Fetch tab-specific data and catalogs for editing
@@ -197,6 +183,12 @@ export default async function ExpedienteDetailPage({
   const allTeam = (teamRes.data ?? []).map((u: { id: string; full_name: string; role: string }) => ({ id: u.id, name: u.full_name, role: u.role }));
   const documents = documentsRes.data ?? [];
   const allUsers = (usersRes.data ?? []) as { id: string; full_name: string }[];
+  // "Abogada Responsable" se alimenta solo de usuarios con rol `abogada`, no de
+  // `allUsers` (todos los roles activos, incluidos contador y admin), que se
+  // mantiene solo para asignar tareas.
+  const abogadaOptions = allTeam
+    .filter((u) => u.role === "abogada")
+    .map((u) => ({ id: u.id, full_name: u.name }));
 
   const expensesTramite = expenses.filter((e) => (e as Record<string, unknown>).expense_type !== "administrativo");
   const expensesAdmin = expenses.filter((e) => (e as Record<string, unknown>).expense_type === "administrativo");
@@ -325,13 +317,13 @@ export default async function ExpedienteDetailPage({
               case_start_date: caseData.case_start_date,
               procedure_start_date: caseData.procedure_start_date,
               deadline: caseData.deadline,
-              assistant_id: caseData.assistant_id ?? null,
             }}
             classifications={allClassifications}
             institutions={allInstitutions}
             team={allTeam}
             statuses={allStatuses}
             users={allUsers}
+            responsibleOptions={abogadaOptions}
             userRole={userRole as "admin" | "abogada" | "asistente"}
           />
           )}
@@ -366,14 +358,6 @@ export default async function ExpedienteDetailPage({
                   <div>
                     <p className="text-xs text-gray-500">Abogado Responsable</p>
                     <p className="font-medium">{responsible?.name ?? "—"}</p>
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex items-start gap-2">
-                  <Users size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-500">Asistente Responsable de Seguimiento</p>
-                    <p className="font-medium">{assistant?.name ?? "—"}</p>
                   </div>
                 </div>
                 <Separator />

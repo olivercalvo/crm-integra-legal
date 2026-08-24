@@ -126,7 +126,6 @@ export async function fallbackCaseSearchIds(
   pushByRelation("institution_id", instRes.data);
   pushByRelation("status_id", statusRes.data);
   pushByRelation("responsible_id", usersRes.data);
-  pushByRelation("assistant_id", usersRes.data);
 
   const relResults = await Promise.all(extraFilters);
   for (const res of relResults) {

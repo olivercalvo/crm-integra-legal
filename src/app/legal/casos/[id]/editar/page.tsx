@@ -37,7 +37,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
         .order("name"),
       db
         .from("users")
-        .select("id, full_name")
+        .select("id, full_name, role")
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .in("role", ["abogada", "asistente"])
@@ -74,7 +74,7 @@ export default async function EditarExpedientePage({ params }: PageProps) {
           clients={clientsRes.data ?? []}
           classifications={classificationsRes.data ?? []}
           institutions={institutionsRes.data ?? []}
-          team={(teamRes.data ?? []).map((u: { id: string; full_name: string }) => ({ id: u.id, name: u.full_name }))}
+          team={(teamRes.data ?? []).map((u: { id: string; full_name: string; role?: string }) => ({ id: u.id, name: u.full_name, role: u.role }))}
           statuses={statusesRes.data ?? []}
           initialData={{
             id: caseData.id,
@@ -96,7 +96,6 @@ export default async function EditarExpedientePage({ params }: PageProps) {
             case_start_date: caseData.case_start_date,
             procedure_start_date: caseData.procedure_start_date,
             deadline: caseData.deadline,
-            assistant_id: caseData.assistant_id,
           }}
           mode="edit"
           userRole={userRole as "admin" | "abogada" | "asistente"}

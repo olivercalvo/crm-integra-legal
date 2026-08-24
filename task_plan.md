@@ -1,5 +1,27 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === FIX 22-23/08/2026 — ROL ASISTENTE (fuera de fase) ===
+
+Trabajo de arreglo, no un hito del plan. Se deja registrado acá para que no quede solo en el
+changelog. Detalle completo en `changelog.md` → `[FIX] 2026-08-22`.
+
+- [x] **Panel del asistente decía la verdad equivocada.** `/legal` mostraba "Casos Asignados"
+      contando `cases.assistant_id` (siempre 0) mientras `/legal/casos` le listaba los 207 del
+      bufete. Pasa a **"Casos del Bufete"** y cuenta el tenant completo. Las tarjetas de tareas
+      siguen siendo personales (`tasks.assigned_to`).
+- [x] **Selector "Abogada Responsable" filtrado por rol** en detalle, crear y editar. El bug de
+      fondo estaba en `/legal/casos/[id]/editar`: la query de `users` no traía `role`, y el
+      fallback `|| !t.role` metía admin y contador en la lista de abogadas.
+- [x] **`cases.assistant_id` retirado de la UI** (decisión de negocio). Fuera de los formularios,
+      del display del detalle, de la columna del listado y del body del PATCH. **La columna sigue
+      en la BD** (regla aditiva) — reversible sin migración. Se conserva en `trackedFields` para
+      que la auditoría lo siga registrando.
+- [x] Verificado en navegador el 23/08/2026 con sesiones reales de asistente (Harry Boyd) y admin
+      (Oliver Calvo), incluido guardado con `PATCH 200` y persistencia confirmada. Tablas de
+      verificación en `changelog.md`.
+- [x] `tsc --noEmit` limpio; lint sin errores nuevos (quedan 4 preexistentes).
+- **Migraciones: NINGUNA.**
+
 ## === ESTADO 14/08/2026 — PLAN DE TRABAJO CON JOSUAR (5 PASOS) ===
 
 Josuar bajó el requerimiento contable a **5 pasos secuenciales** en la reunión del 10/08/2026.

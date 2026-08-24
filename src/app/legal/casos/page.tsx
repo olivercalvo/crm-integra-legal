@@ -100,7 +100,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     .from("cases")
     .select(
       `
-      id, case_code, description, opened_at, updated_at, assistant_id, responsible_id,
+      id, case_code, description, opened_at, updated_at, responsible_id,
       clients!inner(id, name, client_number),
       cat_statuses(id, name),
       cat_classifications(id, name, prefix, color)
@@ -146,11 +146,10 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
     cases = cases.slice(offset, offset + PAGE_SIZE);
   }
 
-  // Fetch user names for responsible + assistant columns
-  const allUserIds = (cases ?? []).flatMap((c) => {
-    const rec = c as Record<string, unknown>;
-    return [rec.responsible_id as string | null, rec.assistant_id as string | null].filter(Boolean);
-  }) as string[];
+  // Fetch user names for the responsible column
+  const allUserIds = (cases ?? [])
+    .map((c) => (c as Record<string, unknown>).responsible_id as string | null)
+    .filter(Boolean) as string[];
 
   let userMap: Record<string, string> = {};
   if (allUserIds.length > 0) {
@@ -223,7 +222,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     <SortableHeader column="responsible" label="Abogada" currentSort={currentSort} currentDir={currentDir} />
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">Asistente</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     <SortableHeader column="classification" label="Clasificación" currentSort={currentSort} currentDir={currentDir} />
                   </th>
@@ -239,9 +237,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                     const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
                     const classification = c.cat_classifications as unknown as { id: string; name: string; prefix: string; color: string | null } | null;
                     const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
-                    const assistantName = (c as Record<string, unknown>).assistant_id
-                      ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? "—"
-                      : "—";
                     const classColor = classification ? getClassificationColor(classification.name, classification.color) : "#6B7280";
 
                     return (
@@ -270,7 +265,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                           )}
                         </td>
                         <td className="px-4 py-3 text-gray-700">{responsibleName ?? "—"}</td>
-                        <td className="px-4 py-3 text-gray-700">{assistantName}</td>
                         <td className="px-4 py-3">
                           {classification ? (
                             <Badge
@@ -294,7 +288,7 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8">
+                    <td colSpan={7} className="px-4 py-8">
                       <EmptySearchResult
                         query={searchParams.q ?? ""}
                         emptyMessage="No hay casos registrados."
@@ -318,9 +312,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
             const client = c.clients as unknown as { id: string; name: string; client_number: string } | null;
             const classification = c.cat_classifications as unknown as { id: string; name: string; color: string | null } | null;
             const responsibleName = (c as Record<string, unknown>).responsible_id ? userMap[(c as Record<string, unknown>).responsible_id as string] ?? null : null;
-            const assistantName = (c as Record<string, unknown>).assistant_id
-              ? userMap[(c as Record<string, unknown>).assistant_id as string] ?? null
-              : null;
             const mobileClassColor = classification ? getClassificationColor(classification.name, classification.color) : "#6B7280";
 
             return (
@@ -336,7 +327,6 @@ export default async function ExpedientesPage({ searchParams }: PageProps) {
                         )}
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
                           {responsibleName && <span>Abogada: {responsibleName}</span>}
-                          {assistantName && <span>Asistente: {assistantName}</span>}
                           {classification && (
                             <span
                               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"

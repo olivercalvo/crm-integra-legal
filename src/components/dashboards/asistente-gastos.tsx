@@ -10,7 +10,7 @@ function formatCurrency(amount: number): string {
 }
 
 export async function AsistenteGastos() {
-  const { db, user } = await getAuthenticatedContext();
+  const { db, tenantId, user } = await getAuthenticatedContext();
 
   const { data: expensesRaw } = await db
     .from("expenses")
@@ -44,20 +44,11 @@ export async function AsistenteGastos() {
     };
   });
 
-  const { data: taskCasesData } = await db
-    .from("tasks")
-    .select("case_id")
-    .eq("assigned_to", user.id);
-
-  const taskCaseIdsRaw = (taskCasesData ?? []).map((t) => t.case_id as string);
-  const taskCaseIds = taskCaseIdsRaw.filter((id, idx) => taskCaseIdsRaw.indexOf(id) === idx);
-
+  // El asistente ve TODOS los casos del bufete (CLAUDE.md §4), así que puede
+  // registrar un gasto contra cualquiera de ellos. Antes la lista se armaba con
+  // un .or() de `assistant_id` + los casos con tareas suyas; `assistant_id` ya
+  // no se usa y ese recorte contradecía su alcance real de lectura.
   let assignedCases: { id: string; code: string; clientName: string }[] = [];
-  const orParts: string[] = [];
-  orParts.push(`assistant_id.eq.${user.id}`);
-  if (taskCaseIds.length > 0) {
-    orParts.push(`id.in.(${taskCaseIds.join(",")})`);
-  }
 
   {
     const { data: casesData } = await db
@@ -68,7 +59,7 @@ export async function AsistenteGastos() {
         clients!inner(id, name)
       `
       )
-      .or(orParts.join(","))
+      .eq("tenant_id", tenantId)
       .order("case_code", { ascending: true });
 
     assignedCases = (casesData ?? []).map((c) => {
@@ -105,7 +96,7 @@ export async function AsistenteGastos() {
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Mis Gastos</h1>
           <p className="text-sm text-gray-500">
-            Gastos que has registrado en tus casos asignados
+            Gastos que has registrado en los casos del bufete
           </p>
         </div>
       </div>

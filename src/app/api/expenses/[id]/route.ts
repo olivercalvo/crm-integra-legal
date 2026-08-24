@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/supabase/server-query";
+
+// Mismo criterio que POST /api/expenses: gastos es admin/abogada. El asistente
+// quedó fuera del alcance de gastos el 24/08/2026, el contador tiene su propio
+// módulo. Se usa el helper `requireRole` para que el gate viva en un solo lugar.
+const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
 // PATCH /api/expenses/[id] — Update an expense
 export async function PATCH(
@@ -25,10 +31,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    // Only admin and abogada can edit expenses
-    if (profile.role !== "admin" && profile.role !== "abogada") {
-      return NextResponse.json({ error: "No tienes permisos para editar gastos" }, { status: 403 });
-    }
+    const denied = requireRole(profile.role, EXPENSE_WRITE_ROLES);
+    if (denied) return denied;
 
     const expenseId = params.id;
 
@@ -138,10 +142,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
 
-    // Only admin and abogada can delete expenses
-    if (profile.role !== "admin" && profile.role !== "abogada") {
-      return NextResponse.json({ error: "No tienes permisos para eliminar gastos" }, { status: 403 });
-    }
+    const denied = requireRole(profile.role, EXPENSE_WRITE_ROLES);
+    if (denied) return denied;
 
     const expenseId = params.id;
 

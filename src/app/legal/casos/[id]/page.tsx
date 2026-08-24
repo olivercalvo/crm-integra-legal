@@ -51,7 +51,13 @@ export default async function ExpedienteDetailPage({
   searchParams,
 }: PageProps) {
   const { db, tenantId, userRole } = await getAuthenticatedContext();
-  const activeTab = searchParams.tab ?? "info";
+  // ?tab=gastos escrito a mano por un asistente cae a "info": el tab está fuera
+  // de su alcance, y sin esta normalización vería la página sin contenido.
+  const requestedTab = searchParams.tab ?? "info";
+  const activeTab =
+    requestedTab === "gastos" && userRole !== "admin" && userRole !== "abogada"
+      ? "info"
+      : requestedTab;
   const backUrl = searchParams.from === "client" && searchParams.client_id
     ? `/legal/clientes/${searchParams.client_id}`
     : "/legal/casos";
@@ -206,9 +212,14 @@ export default async function ExpedienteDetailPage({
   const balance = totalPayments - totalExpenses;
   const isInRed = totalExpenses > totalPayments && totalExpenses > 0;
 
+  // El asistente NO ve gastos (alcance del rol, 24/08/2026): ni el tab ni su
+  // contenido. `canSeeExpenses` gatea las dos cosas — ocultar solo el tab
+  // dejaría la pestaña accesible escribiendo ?tab=gastos en la URL.
+  const canSeeExpenses = userRole === "admin" || userRole === "abogada";
+
   const tabs = [
     { key: "info", label: "Información", icon: FolderOpen },
-    { key: "gastos", label: "Gastos", icon: DollarSign },
+    ...(canSeeExpenses ? [{ key: "gastos", label: "Gastos", icon: DollarSign }] : []),
     { key: "seguimiento", label: "Seguimiento", icon: MessageSquare },
     { key: "documentos", label: "Documentos", icon: FileText },
   ];
@@ -251,12 +262,18 @@ export default async function ExpedienteDetailPage({
             openedAt={caseData.opened_at}
             clientNumber={client?.client_number ?? "—"}
           />
-          <CaseStatusChanger
-            caseId={params.id}
-            currentStatusId={caseData.status_id}
-            currentStatusName={status?.name ?? ""}
-            statuses={allStatuses}
-          />
+          {/* Cambiar estado: admin/abogada. El asistente lo perdió el
+              24/08/2026 — su alcance en un caso es adjuntar documentos y
+              comentar. El PATCH con action="change-status" también le responde
+              403, así que el botón sería una promesa falsa. */}
+          {(userRole === "admin" || userRole === "abogada") && (
+            <CaseStatusChanger
+              caseId={params.id}
+              currentStatusId={caseData.status_id}
+              currentStatusName={status?.name ?? ""}
+              statuses={allStatuses}
+            />
+          )}
           {(userRole === "admin" || userRole === "abogada") && (
             <DeleteCaseButton
               caseId={params.id}

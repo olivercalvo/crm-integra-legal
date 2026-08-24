@@ -26,7 +26,13 @@
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
 | **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva |
-| **Asistente** | Ver todos los casos del bufete (mismo alcance de lectura que Abogada), actualizar estado, registrar gastos, cumplir tareas, comentar, subir documentos. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. NO crea/edita/borra casos ni clientes; NO accede a Finanzas |
+| **Asistente** | **Alcance reducido el 24/08/2026 por decisión del cliente.** Ve SOLO tres pantallas: Dashboard (`/legal`), Casos (`/legal/casos` — todos los del bufete, SOLO LECTURA) y Mis Pendientes (`/legal/pendientes`). Dentro de un caso puede hacer exactamente dos cosas: **subir documentos y comentar**. Sigue cumpliendo tareas desde Mis Pendientes. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. **NO puede:** ver ni registrar gastos (`/legal/gastos` le rebota, el tab Gastos del caso no se le renderiza y `/api/expenses` le responde 403), cambiar el estado de un caso (el `CaseStatusChanger` no se le renderiza y `PATCH /api/cases/[id]` le responde 403 incluso con `action="change-status"`), editar/crear/borrar casos ni clientes, acceder a Finanzas |
+
+> **Los permisos del asistente se hacen cumplir en el servidor, no en el menú.** Cada
+> restricción de arriba tiene su gate real: `ASISTENTE_BLOCKED_PATTERNS` en `middleware.ts`
+> para las rutas, y `requireRole()` en los handlers de `/api`. Si alguna vez se amplía o
+> recorta el rol, hay que mover **esta tabla, el middleware y los guards de la API juntos** —
+> tocar solo `nav-config.ts` esconde el botón pero deja el permiso abierto.
 
 ## 5. REGLAS DE DESARROLLO (NON-NEGOTIABLE)
 

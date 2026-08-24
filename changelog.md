@@ -1,5 +1,136 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [FEAT] - 2026-08-24 - Alcance del rol asistente: solo lectura + documentos y comentarios
+
+Branch `develop`. **Decisión de negocio del cliente**, no un arreglo técnico. El rol asistente
+pasa a ser de consulta y constancia: mira todo el bufete, cambia casi nada.
+
+| Puede | No puede |
+|---|---|
+| Ver Dashboard, Casos (todos, solo lectura) y Mis Pendientes | Ver o registrar gastos |
+| **Subir documentos** a un caso | Cambiar el estado de un caso |
+| **Comentar** en un caso | Editar, crear o borrar casos y clientes |
+| Cumplir tareas desde Mis Pendientes | Entrar a Finanzas |
+
+### 1. Gastos sale del alcance del asistente
+
+| Archivo | Cambio |
+|---|---|
+| `src/lib/nav-config.ts` | El ítem "Gastos" pasa a `["admin", "abogada"]` |
+| `src/middleware.ts` | `/legal/gastos` sumado a `ASISTENTE_BLOCKED_PATTERNS`, por PREFIJO (no hay sub-ruta de gastos que deba ver). **No estaba cubierto**: el array solo tenía patrones de `/legal/clientes`, así que escribir la URL a mano renderizaba la pantalla igual |
+| `src/components/dashboards/asistente-gastos.tsx` | **Borrado** |
+| `src/components/dashboards/asistente-gastos-form.tsx` | **Borrado** (solo lo usaba el anterior) |
+| `src/app/legal/gastos/page.tsx` | Fuera la rama `if (userRole === "asistente")` que devolvía `<AsistenteGastos />`, y su import |
+
+### 2. Detalle de caso: se va lo que ya no puede hacer
+
+| Elemento | Antes | Ahora |
+|---|---|---|
+| `<CaseStatusChanger>` | Se renderizaba a TODOS los roles | admin/abogada |
+| Tab "Gastos" | Visible para el asistente | Solo admin/abogada — **y `?tab=gastos` se normaliza a `info`**, para que escribir la URL a mano tampoco muestre montos |
+| `<SectionExpenseForm>` (botón de registrar gasto) | **Ya estaba** gateado a admin/abogada | Sin cambios — verificado |
+| Editor inline | **Ya estaba** gateado a admin/abogada | Sin cambios — verificado |
+
+El tab entero era el agujero real: el botón de *registrar* gasto ya estaba oculto, pero el
+asistente podía **ver** todos los montos, pagos y balances del caso.
+
+### 3. Guards en el backend — la parte que importa
+
+Ocultar el menú no es un permiso. Se usó el helper que ya existía (`requireRole` en
+`src/lib/supabase/server-query.ts`), sin crear uno nuevo.
+
+| Endpoint | Estado previo | Ahora |
+|---|---|---|
+| `POST /api/expenses` | **NO validaba rol en absoluto** — cualquier rol autenticado podía crear un gasto llamando la API directa | `requireRole(["admin","abogada"])` → 403 |
+| `PATCH /api/expenses/[id]` | Ya rechazaba al asistente con un `if` a mano | Mismo efecto, ahora vía `requireRole` |
+| `DELETE /api/expenses/[id]` | Ídem | Ídem |
+| `PATCH /api/cases/[id]` | Gate DEPENDIENTE DE LA ACCIÓN: `change-status` admitía `asistente` | `requireRole(["admin","abogada"])` para TODA acción |
+| `POST /api/documents/register` | admin/abogada/asistente | **Sin tocar** — el asistente sigue subiendo documentos |
+| `POST /api/comments` | admin/abogada/asistente | **Sin tocar** — el asistente sigue comentando |
+
+`POST /api/expenses` era el **hallazgo #3 de la revisión OWASP** del proyecto (autorización por
+rol inconsistente en `/api`). Queda cerrado para gastos.
+
+**Test actualizado, no borrado.** `src/app/api/cases/__tests__/patch-role-by-action.test.ts`
+cubría el gate por acción; ahora afirma lo contrario (asistente + `change-status` → 403) y
+sigue siendo la red que evita que el permiso vuelva por accidente. **4/4 pasan.**
+
+### 4. Documentación
+
+- **`CLAUDE.md` §4 reescrito.** Su tabla decía que el asistente "registra gastos" y "actualiza
+  estado" — contradecía el alcance nuevo, y el archivo se lee al inicio de cada sesión: sin
+  esto, el permiso volvía solo. Se agregó además una nota de que los permisos se hacen cumplir
+  en middleware + `requireRole`, no en `nav-config.ts`.
+- `sop.md`: alcance nuevo + tabla de en qué capa vive cada restricción (UI / ruta / API).
+- `productdesign.md`: F-002, F-003, F-007 y el perfil de usuario "Asistentes".
+
+### 5. SQL incluido como registro
+
+`sql/pending/fix-duplicate-statuses-2026-08-23.sql` entra en este commit **solo como registro
+histórico**. Documenta la limpieza de `cat_statuses` (7 filas activas donde debían ser 2)
+**que Oliver ya aplicó en producción el 23/08/2026**. NO se ejecutó nada desde acá.
+
+**Migraciones: NINGUNA.**
+
+### Verificación
+
+| Check | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio (exit 0) |
+| Lint de los 8 archivos tocados | 0 errores nuevos. Quedan 3 preexistentes en `casos/[id]/page.tsx` (`Upload`, `Button`, `backUrl` sin usar) |
+| Test `patch-role-by-action` | **4/4 pasan** |
+
+### Verificación en navegador (24/08/2026, `localhost:3000`, Chrome)
+
+**Sesión ASISTENTE (Harry Boyd)**
+
+| Check | Resultado |
+|---|---|
+| Menú lateral | Solo 3 destinos: `/legal`, `/legal/casos`, `/legal/pendientes` |
+| `/legal/gastos` a mano | Rebota a `/legal` |
+| Tabs del detalle de caso | Información · Seguimiento · Documentos (sin "Gastos") |
+| Botones del detalle | Volver, Imprimir Tarjeta, Etiqueta Simple. Sin "Cambiar Estado", sin "Editar Información", sin "Eliminar caso" |
+| `?tab=gastos` a mano | Cae en Información. Cero menciones a "Gastos" y cero montos `B/.` |
+| Comentar / subir documentos | Ambos presentes y operativos |
+| `/legal/pendientes` | Carga sin rebote |
+
+**Guards de API probados en vivo con la sesión del asistente** (no solo UI):
+
+| Llamada | Resultado |
+|---|---|
+| `POST /api/expenses` (gasto válido) | **403 `Sin permiso`** |
+| `PATCH /api/cases/{id}` con `action:"change-status"` | **403 `Sin permiso`** |
+| `PATCH /api/cases/{id}` edición normal | **403 `Sin permiso`** |
+| `PATCH /api/expenses/{id}` | **403 `Sin permiso`** |
+| `DELETE /api/expenses/{id}` | **403 `Sin permiso`** |
+| `POST /api/comments` | **400** "Faltan campos requeridos" → pasó el gate de rol |
+| `POST /api/documents/register` | **400** "Faltan campos requeridos" → pasó el gate de rol |
+
+Los dos últimos se mandaron con body vacío A PROPÓSITO: un 400 prueba que el gate de rol los
+dejó pasar SIN escribir nada en la base de producción (dev y prod comparten Supabase).
+
+**Sesión ADMIN (Oliver Calvo) — regresión**
+
+| Check | Resultado |
+|---|---|
+| Menú lateral | Los 9 destinos, `/legal/gastos` incluido |
+| `/legal/gastos` | Carga el Balance General completo (207 de 207 casos) |
+| Tabs del detalle | Información · **Gastos** · Seguimiento · Documentos |
+| Botones del detalle | "Cambiar Estado", "Eliminar caso", "Editar Información" y los 4 de gasto/pago |
+| `PATCH` con `action:"change-status"` | **200**, y el caso quedó en "En trámite" tras recargar |
+| Consola | Sin errores en ninguna de las dos sesiones |
+
+El PATCH de admin se hizo reasignando el MISMO estado que el caso ya tenía, para probar el
+camino 200 sin alterar datos reales.
+
+### Pendiente de decisión (NO se tocó)
+
+En el tab Seguimiento el asistente sigue viendo **"+ Nueva Tarea para Asistente"**: puede
+CREAR tareas, no solo cumplirlas. El alcance nuevo dice "dentro de un caso solo adjunta
+documentos y comenta", lo que sugiere sacarlo, pero la lista explícita de restricciones del
+cliente no menciona tareas y quitarlo podría romper el flujo de auto-asignarse pendientes.
+Queda a la espera de confirmación.
+
 ## [FIX] - 2026-08-22 - Panel del asistente, selector de abogada por rol y retiro de `assistant_id` de la UI
 
 Branch `develop`. Tres cambios encadenados alrededor del rol asistente. Los dos primeros son

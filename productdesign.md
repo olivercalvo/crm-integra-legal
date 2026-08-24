@@ -5,7 +5,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ## USUARIOS TARGET
 - **Abogadas/Socias:** Daveiva y Milena — gestionan clientes y expedientes desde oficina
-- **Asistentes:** trabajan en campo, consultan casos, registran gastos y avances desde celular
+- **Asistentes:** trabajan en campo, consultan casos y dejan constancia desde el celular — comentarios y documentos adjuntos. Registrar gastos dejó de ser suyo el 24/08/2026 (ver F-003 y F-007)
 - **Admin:** gestión de usuarios, catálogos y configuración del tenant
 
 ---
@@ -38,7 +38,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ### F-002: Gestión de Casos
 **Prioridad:** P0 (MVP)
-**Roles:** Admin, Abogada (CRUD completo), Asistente (ve TODOS los casos del bufete, actualiza estado)
+**Roles:** Admin, Abogada (CRUD completo), Asistente (ve TODOS los casos del bufete en SOLO LECTURA; dentro de un caso únicamente comenta y sube documentos)
 
 **Campos:**
 - N° Caso (auto-generado secuencial)
@@ -79,7 +79,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 
 ### F-003: Control de Gastos por Expediente
 **Prioridad:** P0 (MVP)
-**Roles:** Admin, Abogada (todo), Asistente (registrar gastos en cualquier caso del bufete)
+**Roles:** Admin, Abogada (todo). **El Asistente quedó fuera de Gastos el 24/08/2026** — no los ve ni los registra
 
 **Campos gasto:**
 - Fecha
@@ -97,7 +97,7 @@ CRM web multi-tenant para bufetes de abogados en Panamá. MVP para Integra Legal
 - Registrar gastos ejecutados uno a uno
 - Balance en tiempo real: pagado vs. ejecutado = saldo
 - **Visual:** saldo en contra (gastos > pagado) se muestra en ROJO en dashboard y detalle
-- Asistentes registran gastos desde campo (funciona offline)
+- ~~Asistentes registran gastos desde campo~~ — retirado el 24/08/2026 por decisión del cliente. Gastos es admin/abogada
 
 ---
 
@@ -184,8 +184,32 @@ Si el asistente ve todos los casos del bufete, asignar uno por caso no aporta. S
 crear/editar caso, del editor inline, del display del detalle, de la columna "Asistente" del
 listado y de `PATCH /api/cases/[id]`. La columna `cases.assistant_id` **se conserva en la BD**
 (regla aditiva): el cambio es solo de UI y por lo tanto reversible sin migración. Como
-consecuencia, `/legal/gastos` del asistente ofrece ahora TODOS los casos del tenant en su
-selector, en vez del recorte por asistente asignado.
+consecuencia, `/legal/gastos` del asistente ofrecía TODOS los casos del tenant en su selector
+— pantalla que dejó de existir para él dos días después (ver abajo).
+
+#### Alcance del rol asistente — recorte del 24/08/2026
+
+Decisión de negocio del cliente. El asistente pasa a ser un rol de **consulta y constancia**:
+mira todo, cambia poco.
+
+| Puede | No puede |
+|---|---|
+| Ver Dashboard, Casos (todos, solo lectura) y Mis Pendientes | Ver o registrar gastos |
+| **Subir documentos** a un caso | Cambiar el estado de un caso |
+| **Comentar** en un caso | Editar, crear o borrar casos y clientes |
+| Cumplir tareas desde Mis Pendientes | Entrar a Finanzas |
+
+Lo que se retiró de su UI: el ítem "Gastos" del menú, la pantalla `/legal/gastos` completa
+(le rebota a `/legal` desde el middleware), el tab "Gastos" del detalle de caso — con
+`?tab=gastos` normalizado a `info` para que la URL a mano tampoco sirva — y el botón de
+cambiar estado.
+
+**Esto NO es cosmético.** Cada restricción tiene un guard server-side: `/api/expenses`
+(POST, PATCH, DELETE) y `PATCH /api/cases/[id]` responden **403** al rol asistente. Antes del
+cambio, `POST /api/expenses` no validaba rol en absoluto — un asistente podía crear un gasto
+llamando la API directamente aunque el menú no se lo ofreciera. Era el hallazgo #3 de la
+revisión OWASP del proyecto (autorización por rol inconsistente en `/api`), y este sprint lo
+cierra para gastos.
 
 ---
 

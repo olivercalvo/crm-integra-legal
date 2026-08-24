@@ -29,7 +29,9 @@
        ui/          (shadcn)
        layout/                   ← Header, Sidebar, BottomNav, DashboardShell
        home/                     ← HomeHeader del selector
-       dashboards/               ← variantes asistente del dashboard / gastos / pendientes
+       dashboards/               ← variantes asistente del dashboard / pendientes
+                                   (asistente-gastos*.tsx borrados el 24/08/2026 con el
+                                    recorte de alcance del rol)
        clients/
        cases/
        expenses/
@@ -48,7 +50,18 @@
    **Notas sobre routing**:
    - El selector en `/` está abierto a todo rol autenticado. Las cards visibles dependen del rol.
    - `/legal/*` es accesible para abogada/asistente/admin (NO contador). El gating fino de botones/acciones está en los componentes.
-   - **Visibilidad de casos:** la LECTURA de casos es del tenant completo para los 3 roles legales — el asistente ve y abre TODOS los casos del bufete, igual que abogada (cambio 06/08/2026). Lo ÚNICO que sigue siendo personal del asistente son sus TAREAS: `/legal/pendientes` y las tarjetas "Tareas Pendientes"/"Tareas Cumplidas" del panel filtran por `tasks.assigned_to`. El resto se alineó con su alcance real de lectura (22/08/2026): el panel `/legal` cuenta TODOS los casos del tenant ("Casos del Bufete") y el selector de caso de `/legal/gastos` ofrece TODOS los casos del tenant. Las ACCIONES siguen gateadas por rol: crear/editar/borrar caso es admin/abogada; el asistente solo cambia estado, comenta y sube documentos.
+   - **Visibilidad de casos:** la LECTURA de casos es del tenant completo para los 3 roles legales — el asistente ve y abre TODOS los casos del bufete, igual que abogada (cambio 06/08/2026). Lo ÚNICO que sigue siendo personal del asistente son sus TAREAS: `/legal/pendientes` y las tarjetas "Tareas Pendientes"/"Tareas Cumplidas" del panel filtran por `tasks.assigned_to`. El panel `/legal` cuenta TODOS los casos del tenant ("Casos del Bufete", 22/08/2026).
+   - **ALCANCE DEL ASISTENTE (vigente desde el 24/08/2026 — decisión de negocio del cliente).** Es SOLO LECTURA sobre los casos. Ve tres pantallas: `/legal`, `/legal/casos` y `/legal/pendientes`. Dentro de un caso hace exactamente DOS cosas: **subir documentos y comentar**. Sigue cumpliendo tareas desde Mis Pendientes. Perdió: ver y registrar gastos, y cambiar el estado del caso (antes sí podía).
+     **Dónde se hace cumplir cada restricción — los tres niveles se mueven juntos:**
+
+     | Restricción | UI (ocultar) | Ruta (server) | API (403) |
+     |---|---|---|---|
+     | Gastos | `nav-config.ts` saca el ítem; el tab "Gastos" del detalle no se le renderiza y `?tab=gastos` cae a `info` | `ASISTENTE_BLOCKED_PATTERNS` bloquea `/legal/gastos` por PREFIJO | `POST /api/expenses` y `PATCH`/`DELETE /api/expenses/[id]` → `requireRole(["admin","abogada"])` |
+     | Cambio de estado | `<CaseStatusChanger>` gateado a admin/abogada en el detalle | — | `PATCH /api/cases/[id]` → `requireRole(["admin","abogada"])` para TODA acción, `change-status` incluida |
+     | Editar caso | editor inline gateado a admin/abogada | — | mismo gate del PATCH |
+
+     **Lo que el asistente SÍ conserva y NO hay que romper:** `POST /api/documents/register` y `POST /api/comments` siguen aceptando rol `asistente` explícitamente. Si alguna vez se endurece `/api`, esos dos son la excepción.
+     **Regla de oro:** ocultar el ítem del menú NO es un permiso. `nav-config.ts` es cosmético; el permiso real vive en `middleware.ts` y en `requireRole()`. Cambiar uno solo de los tres niveles deja el sistema mintiendo.
    - **`cases.assistant_id` está retirado de la UI (22/08/2026).** La columna SIGUE en la BD por la regla aditiva del proyecto, pero ninguna pantalla la lee ni la escribe: no hay selector de "Asistente Responsable" en crear/editar caso ni en el editor inline, no hay columna "Asistente" en el listado, `PATCH /api/cases/[id]` ya no acepta el campo en el body, y la búsqueda universal ya no cruza por él. Se conserva a propósito en `trackedFields` del PATCH, que es la lista de campos AUDITABLES: si el campo vuelve, o alguien lo toca por SQL, el historial lo registra igual. Si se decide reponerlo, el cambio es solo de UI — no hay migración que correr.
    - **Routing de clientes (asistente):** gate por ruta EXACTA, no por prefijo (`ASISTENTE_BLOCKED_PATTERNS` en `middleware.ts`). Bloqueados con redirect a `/legal`: `/legal/clientes` (directorio), `/legal/clientes/nuevo` y `/legal/clientes/{id}/editar`. PERMITIDA: `/legal/clientes/{id}` — la ficha individual, a la que llega desde el link del cliente en el detalle de un caso, renderizada en solo lectura (sin Crear Caso / Editar / Desactivar / Eliminar; sí conserva Adjuntar Documento). Si se agrega una sub-ruta nueva bajo `/legal/clientes/*` hay que decidir explícitamente si sumarla al array de bloqueo — por defecto quedaría accesible.
    - `/legal/admin/*` es admin-only (subset transversal).

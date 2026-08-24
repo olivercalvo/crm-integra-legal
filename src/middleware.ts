@@ -17,15 +17,23 @@ const ROLE_ROUTES: Record<string, string[]> = {
 
 const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
 
-// Clientes para el rol asistente: puede abrir la FICHA de un cliente puntual
-// (llega a ella desde el detalle de un caso), pero NO el directorio completo ni
-// las pantallas de alta/edición — esas acciones ya le responden 403 en la API.
-// Por eso el gate es por ruta EXACTA y no por prefijo: /legal/clientes/{id}
-// tiene que seguir pasando.
+// Rutas de /legal fuera del alcance del asistente.
+//
+// Clientes: puede abrir la FICHA de un cliente puntual (llega a ella desde el
+// detalle de un caso), pero NO el directorio completo ni las pantallas de
+// alta/edición — esas acciones ya le responden 403 en la API. Por eso el gate
+// es por ruta EXACTA y no por prefijo: /legal/clientes/{id} tiene que seguir
+// pasando.
+//
+// Gastos: fuera de su alcance por completo desde el 24/08/2026 (decisión de
+// negocio del cliente). Acá sí va por PREFIJO — no hay ninguna sub-ruta de
+// gastos que deba ver. Ocultarlo del menú (nav-config) no alcanza: sin este
+// patrón, escribir /legal/gastos a mano igual renderiza la pantalla.
 const ASISTENTE_BLOCKED_PATTERNS: RegExp[] = [
   /^\/legal\/clientes\/?$/,                 // directorio
   /^\/legal\/clientes\/nuevo\/?$/,          // alta
   /^\/legal\/clientes\/[^/]+\/editar\/?$/,  // edición
+  /^\/legal\/gastos(\/.*)?$/,               // gastos — módulo completo
 ];
 
 // El contador es un rol especializado en cierre contable.

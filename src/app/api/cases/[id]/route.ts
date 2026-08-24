@@ -62,16 +62,19 @@ export async function PATCH(
       deadline,
     } = body;
 
-    // Check de rol DEPENDIENTE DE LA ACCIÓN (matriz de roles vs. UI real):
-    // el asistente puede CAMBIAR EL ESTADO de los casos del bufete (CLAUDE.md),
-    // pero NO editar el resto del expediente. Restringir todo el PATCH a
-    // [admin, abogada] rompía el flujo diario del asistente (403 al cambiar
-    // estado desde <CaseStatusChanger>, que se le renderiza sin gate).
-    const allowedRoles =
-      action === "change-status"
-        ? ["admin", "abogada", "asistente"]
-        : ["admin", "abogada"];
-    const denied = requireRole(profile.role, allowedRoles);
+    // Todo el PATCH del caso es admin/abogada, incluida la acción
+    // "change-status".
+    //
+    // HISTORIA: hasta el 24/08/2026 el gate era DEPENDIENTE DE LA ACCIÓN y
+    // dejaba al asistente cambiar el estado, porque CLAUDE.md se lo permitía.
+    // El cliente redujo el alcance del rol: dentro de un caso el asistente
+    // SOLO adjunta documentos y comenta. El <CaseStatusChanger> ya no se le
+    // renderiza, y este gate es el que hace que la restricción sea real —
+    // ocultar el botón no impide un PATCH a mano.
+    //
+    // Los endpoints de documentos y comentarios NO cambian: ahí el asistente
+    // sigue teniendo permiso.
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
     if (denied) return denied;
 
     // Verify case exists and belongs to tenant

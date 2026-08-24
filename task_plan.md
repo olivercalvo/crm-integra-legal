@@ -1,5 +1,25 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === CAMBIO 24/08/2026 — ALCANCE DEL ROL ASISTENTE (fuera de fase) ===
+
+Decisión de negocio del cliente. Detalle en `changelog.md` → `[FEAT] 2026-08-24`.
+
+- [x] El asistente queda como rol de consulta y constancia: ve Dashboard, Casos (todos, solo
+      lectura) y Mis Pendientes; dentro de un caso SOLO sube documentos y comenta.
+- [x] Gastos fuera de su alcance: ítem del menú, pantalla `/legal/gastos` (bloqueada por
+      middleware) y tab "Gastos" del detalle, con `?tab=gastos` normalizado a `info`.
+- [x] Cambio de estado fuera de su alcance: `<CaseStatusChanger>` gateado a admin/abogada.
+- [x] **Guards server-side** con el helper `requireRole`: `POST /api/expenses` (que no validaba
+      rol en absoluto — hallazgo #3 de la revisión OWASP), `PATCH`/`DELETE /api/expenses/[id]`
+      y `PATCH /api/cases/[id]` para toda acción. Documentos y comentarios sin tocar.
+- [x] `CLAUDE.md` §4 reescrito: su tabla contradecía el alcance nuevo y lo habría revertido
+      en la próxima sesión que leyera el archivo.
+- [x] Verificado en navegador el 24/08/2026 en las dos sesiones, incluidos los 403 pedidos
+      directo a la API con sesión de asistente. Test `patch-role-by-action` 4/4.
+- [ ] **Pendiente de decisión:** el asistente todavía puede CREAR tareas desde el tab
+      Seguimiento ("+ Nueva Tarea para Asistente"). No se tocó — falta confirmación de Oliver.
+- **Migraciones: NINGUNA.**
+
 ## === FIX 22-23/08/2026 — ROL ASISTENTE (fuera de fase) ===
 
 Trabajo de arreglo, no un hito del plan. Se deja registrado acá para que no quede solo en el

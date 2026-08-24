@@ -2,19 +2,15 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { GastosTable } from "@/components/expenses/gastos-table";
-import { AsistenteGastos } from "@/components/dashboards/asistente-gastos";
 
 function formatCurrency(amount: number): string {
   return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default async function GastosPage() {
-  const ctx = await getAuthenticatedContext();
-  // Asistente: ve sus propios gastos registrados, no el balance global.
-  if (ctx.userRole === "asistente") {
-    return <AsistenteGastos />;
-  }
-  const { db, tenantId } = ctx;
+  // El asistente ya no llega acá: el middleware lo rebota a /legal antes de
+  // renderizar (ASISTENTE_BLOCKED_PATTERNS). Gastos es admin/abogada.
+  const { db, tenantId } = await getAuthenticatedContext();
 
   // Fetch all cases with their expenses and payments
   const { data: cases } = await db

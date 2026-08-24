@@ -1,5 +1,423 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [FEAT] - 2026-08-24 (2) - El asistente tampoco crea tareas + guard de propiedad al cumplirlas
+
+Branch `develop`. Cierra el pendiente que había quedado abierto en la entrada anterior de hoy.
+Decisión de Oliver: **Harry solo CUMPLE las tareas que le asignan.** Si necesita dejar un
+recordatorio en un caso, usa un comentario.
+
+**El motivo de fondo no era de coherencia sino de permisos:** el selector "Asignar a" del
+formulario de tareas lista a TODOS los usuarios activos (Contador Test, Daveiva, Legal Integra,
+Milena, Oliver). Un asistente podía repartirle trabajo a las socias.
+
+### 1. UI — se retira el formulario de crear tarea
+
+| Archivo | Cambio |
+|---|---|
+| `src/app/legal/casos/[id]/page.tsx` | `<AddTaskForm>` solo para admin/abogada (`canCreateTasks`, mismo patrón que `CaseStatusChanger`). El grid de acciones del tab Seguimiento colapsa a una columna cuando el botón no va, así que "+ Agregar Comentario/Seguimiento" ocupa el ancho completo en vez de dejar un hueco |
+
+`<AddCommentForm>` y `<CompleteTaskButton>` quedan **intactos**: comentar y cumplir tareas
+siguen siendo del asistente. No había ningún otro control de creación de tareas en el tab.
+
+### 2. Guards en la API
+
+| Endpoint | Estado previo | Ahora |
+|---|---|---|
+| `POST /api/tasks` | **NO validaba rol en absoluto** — tercera aparición del mismo patrón (hallazgo #3 de la revisión OWASP; ya cerrado en `/api/expenses` y `/api/cases/[id]`) | `requireRole(["admin","abogada"])` → 403 |
+| `PATCH /api/tasks/[id]` | Sin gate de rol y **sin gate de propiedad**: el asistente podía cerrar CUALQUIER tarea del bufete, incluidas las de las abogadas | Sigue SIN gate de rol —cumplir tareas es su flujo diario— pero ahora va por **PROPIEDAD**: si el rol es `asistente`, `assigned_to` tiene que ser él. admin/abogada cierran cualquiera |
+| `POST /api/todos` | Aceptaba `assigned_to` de cualquiera | El asistente no puede asignarle un pendiente personal a otra persona → 403 |
+
+**Sobre los campos que el PATCH puede tocar** (lo que preguntaste): resultó que ya estaba
+acotado y no hizo falta trabajo extra. El handler **solo acepta `status: "cumplida"`** y
+descarta el resto del body — `description`, `deadline` y `assigned_to` ni se leen — además de
+filtrar por `tenant_id`. Lo único que faltaba era la propiedad, que es lo que se agregó. Se
+documentó con un comentario en el código para que no se pierda.
+
+**`/api/todos/*` revisado**: es la agenda personal (`personal_todos`), con permisos por
+PROPIEDAD y no por rol — `PATCH` y `DELETE` ya exigen ser creador o asignado. El asistente ni
+siquiera ve esa UI (`/legal/pendientes` le renderiza `<AsistentePendientes>`), pero el `POST`
+era alcanzable a mano, y ese hueco es el que se tapó. No lleva `requireRole` a propósito: no
+es un recurso gobernado por rol.
+
+### 3. Test nuevo
+
+`src/app/api/tasks/__tests__/patch-task-ownership.test.ts` — **4/4 pasan**:
+asistente + tarea propia → 200; asistente + tarea ajena → 403 sin tocarla; abogada + tarea
+ajena → 200; y body con `assigned_to`/`description` → 400 sin reasignar.
+
+### Verificación
+
+| Check | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio (exit 0) |
+| Lint de los archivos tocados | 0 errores nuevos (siguen los 3 preexistentes de `casos/[id]/page.tsx`) |
+| `patch-task-ownership.test.ts` | 4/4 |
+| `patch-role-by-action.test.ts` | 4/4 (sin regresión) |
+
+### Verificación en navegador (24/08/2026, `localhost:3000`)
+
+**Flujo completo de punta a punta con una tarea real**, sobre `CORP-002` — caso CERRADO, abierto
+en 2021, sin movimiento desde abril y sin tareas previas, elegido para no meterle ruido a
+Daveiva ni a Milena en un expediente en uso.
+
+| Paso | Resultado |
+|---|---|
+| Admin crea la tarea "PRUEBA VERIFICACION PERMISOS 24/08 - IGNORAR - CEC" asignada a Harry Boyd | **`POST /api/tasks` 201** — sin regresión para admin |
+| La tarea aparece en el hilo del caso | "Pendiente · Harry Boyd" |
+| Asistente abre el caso | **Sin "+ Nueva Tarea para Asistente"**. Sigue "+ Agregar Comentario/Seguimiento", ahora a ancho completo |
+| Asistente en Mis Pendientes | Ve la tarea agrupada bajo CORP-002, "1 pendiente" |
+| Asistente marca cumplida | **`PATCH /api/tasks/{id}` 200** → "0 pendientes · 1 cumplida" |
+
+**Guards probados llamando la API directo con la sesión del asistente:**
+
+| Llamada | Resultado |
+|---|---|
+| `POST /api/tasks` (con `assigned_to` = Daveiva) | **403 `Sin permiso`** |
+| `POST /api/todos` con `assigned_to` = Daveiva | **403 "No puedes asignar pendientes a otras personas"** |
+| `POST /api/todos` para sí mismo (body vacío) | **400 "Descripción requerida"** → pasó el gate |
+
+**Lo que NO se probó contra producción y por qué.** El 403 del asistente sobre una tarea AJENA
+se cubrió con el test unitario, no en el navegador: todas las tareas ajenas del tenant están
+`pendiente`, así que si el guard fallara habría cerrado una tarea real de las licenciadas y
+**no existe endpoint `DELETE` ni forma de revertir un "cumplida"** desde la app. El riesgo no
+valía la pena teniendo cobertura equivalente con mocks.
+
+### Limpieza pendiente para Oliver
+
+La tarea de prueba quedó **cumplida** en `CORP-002`. No hay `DELETE` de tareas en la API, así
+que la baja va por SQL y **la corre Oliver**, no este proceso:
+
+```sql
+DELETE FROM tasks WHERE id = '2f0f31f8-cda6-4243-bb93-5f9ede5e5697';
+```
+
+Solo esa fila. **`audit_log` NO se toca**: es la bitácora y sus registros quedan aunque
+mencionen la tarea de prueba. Si el DELETE falla por una llave foránea, dejarla cumplida es
+inofensivo.
+
+**Migraciones: NINGUNA.**
+
+## [FEAT] - 2026-08-24 - Alcance del rol asistente: solo lectura + documentos y comentarios
+
+Branch `develop`. **Decisión de negocio del cliente**, no un arreglo técnico. El rol asistente
+pasa a ser de consulta y constancia: mira todo el bufete, cambia casi nada.
+
+| Puede | No puede |
+|---|---|
+| Ver Dashboard, Casos (todos, solo lectura) y Mis Pendientes | Ver o registrar gastos |
+| **Subir documentos** a un caso | Cambiar el estado de un caso |
+| **Comentar** en un caso | Editar, crear o borrar casos y clientes |
+| Cumplir tareas desde Mis Pendientes | Entrar a Finanzas |
+
+### 1. Gastos sale del alcance del asistente
+
+| Archivo | Cambio |
+|---|---|
+| `src/lib/nav-config.ts` | El ítem "Gastos" pasa a `["admin", "abogada"]` |
+| `src/middleware.ts` | `/legal/gastos` sumado a `ASISTENTE_BLOCKED_PATTERNS`, por PREFIJO (no hay sub-ruta de gastos que deba ver). **No estaba cubierto**: el array solo tenía patrones de `/legal/clientes`, así que escribir la URL a mano renderizaba la pantalla igual |
+| `src/components/dashboards/asistente-gastos.tsx` | **Borrado** |
+| `src/components/dashboards/asistente-gastos-form.tsx` | **Borrado** (solo lo usaba el anterior) |
+| `src/app/legal/gastos/page.tsx` | Fuera la rama `if (userRole === "asistente")` que devolvía `<AsistenteGastos />`, y su import |
+
+### 2. Detalle de caso: se va lo que ya no puede hacer
+
+| Elemento | Antes | Ahora |
+|---|---|---|
+| `<CaseStatusChanger>` | Se renderizaba a TODOS los roles | admin/abogada |
+| Tab "Gastos" | Visible para el asistente | Solo admin/abogada — **y `?tab=gastos` se normaliza a `info`**, para que escribir la URL a mano tampoco muestre montos |
+| `<SectionExpenseForm>` (botón de registrar gasto) | **Ya estaba** gateado a admin/abogada | Sin cambios — verificado |
+| Editor inline | **Ya estaba** gateado a admin/abogada | Sin cambios — verificado |
+
+El tab entero era el agujero real: el botón de *registrar* gasto ya estaba oculto, pero el
+asistente podía **ver** todos los montos, pagos y balances del caso.
+
+### 3. Guards en el backend — la parte que importa
+
+Ocultar el menú no es un permiso. Se usó el helper que ya existía (`requireRole` en
+`src/lib/supabase/server-query.ts`), sin crear uno nuevo.
+
+| Endpoint | Estado previo | Ahora |
+|---|---|---|
+| `POST /api/expenses` | **NO validaba rol en absoluto** — cualquier rol autenticado podía crear un gasto llamando la API directa | `requireRole(["admin","abogada"])` → 403 |
+| `PATCH /api/expenses/[id]` | Ya rechazaba al asistente con un `if` a mano | Mismo efecto, ahora vía `requireRole` |
+| `DELETE /api/expenses/[id]` | Ídem | Ídem |
+| `PATCH /api/cases/[id]` | Gate DEPENDIENTE DE LA ACCIÓN: `change-status` admitía `asistente` | `requireRole(["admin","abogada"])` para TODA acción |
+| `POST /api/documents/register` | admin/abogada/asistente | **Sin tocar** — el asistente sigue subiendo documentos |
+| `POST /api/comments` | admin/abogada/asistente | **Sin tocar** — el asistente sigue comentando |
+
+`POST /api/expenses` era el **hallazgo #3 de la revisión OWASP** del proyecto (autorización por
+rol inconsistente en `/api`). Queda cerrado para gastos.
+
+**Test actualizado, no borrado.** `src/app/api/cases/__tests__/patch-role-by-action.test.ts`
+cubría el gate por acción; ahora afirma lo contrario (asistente + `change-status` → 403) y
+sigue siendo la red que evita que el permiso vuelva por accidente. **4/4 pasan.**
+
+### 4. Documentación
+
+- **`CLAUDE.md` §4 reescrito.** Su tabla decía que el asistente "registra gastos" y "actualiza
+  estado" — contradecía el alcance nuevo, y el archivo se lee al inicio de cada sesión: sin
+  esto, el permiso volvía solo. Se agregó además una nota de que los permisos se hacen cumplir
+  en middleware + `requireRole`, no en `nav-config.ts`.
+- `sop.md`: alcance nuevo + tabla de en qué capa vive cada restricción (UI / ruta / API).
+- `productdesign.md`: F-002, F-003, F-007 y el perfil de usuario "Asistentes".
+
+### 5. SQL incluido como registro
+
+`sql/pending/fix-duplicate-statuses-2026-08-23.sql` entra en este commit **solo como registro
+histórico**. Documenta la limpieza de `cat_statuses` (7 filas activas donde debían ser 2)
+**que Oliver ya aplicó en producción el 23/08/2026**. NO se ejecutó nada desde acá.
+
+**Migraciones: NINGUNA.**
+
+### Verificación
+
+| Check | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio (exit 0) |
+| Lint de los 8 archivos tocados | 0 errores nuevos. Quedan 3 preexistentes en `casos/[id]/page.tsx` (`Upload`, `Button`, `backUrl` sin usar) |
+| Test `patch-role-by-action` | **4/4 pasan** |
+
+### Verificación en navegador (24/08/2026, `localhost:3000`, Chrome)
+
+**Sesión ASISTENTE (Harry Boyd)**
+
+| Check | Resultado |
+|---|---|
+| Menú lateral | Solo 3 destinos: `/legal`, `/legal/casos`, `/legal/pendientes` |
+| `/legal/gastos` a mano | Rebota a `/legal` |
+| Tabs del detalle de caso | Información · Seguimiento · Documentos (sin "Gastos") |
+| Botones del detalle | Volver, Imprimir Tarjeta, Etiqueta Simple. Sin "Cambiar Estado", sin "Editar Información", sin "Eliminar caso" |
+| `?tab=gastos` a mano | Cae en Información. Cero menciones a "Gastos" y cero montos `B/.` |
+| Comentar / subir documentos | Ambos presentes y operativos |
+| `/legal/pendientes` | Carga sin rebote |
+
+**Guards de API probados en vivo con la sesión del asistente** (no solo UI):
+
+| Llamada | Resultado |
+|---|---|
+| `POST /api/expenses` (gasto válido) | **403 `Sin permiso`** |
+| `PATCH /api/cases/{id}` con `action:"change-status"` | **403 `Sin permiso`** |
+| `PATCH /api/cases/{id}` edición normal | **403 `Sin permiso`** |
+| `PATCH /api/expenses/{id}` | **403 `Sin permiso`** |
+| `DELETE /api/expenses/{id}` | **403 `Sin permiso`** |
+| `POST /api/comments` | **400** "Faltan campos requeridos" → pasó el gate de rol |
+| `POST /api/documents/register` | **400** "Faltan campos requeridos" → pasó el gate de rol |
+
+Los dos últimos se mandaron con body vacío A PROPÓSITO: un 400 prueba que el gate de rol los
+dejó pasar SIN escribir nada en la base de producción (dev y prod comparten Supabase).
+
+**Sesión ADMIN (Oliver Calvo) — regresión**
+
+| Check | Resultado |
+|---|---|
+| Menú lateral | Los 9 destinos, `/legal/gastos` incluido |
+| `/legal/gastos` | Carga el Balance General completo (207 de 207 casos) |
+| Tabs del detalle | Información · **Gastos** · Seguimiento · Documentos |
+| Botones del detalle | "Cambiar Estado", "Eliminar caso", "Editar Información" y los 4 de gasto/pago |
+| `PATCH` con `action:"change-status"` | **200**, y el caso quedó en "En trámite" tras recargar |
+| Consola | Sin errores en ninguna de las dos sesiones |
+
+El PATCH de admin se hizo reasignando el MISMO estado que el caso ya tenía, para probar el
+camino 200 sin alterar datos reales.
+
+### Pendiente de decisión — CERRADO el mismo día
+
+En el tab Seguimiento el asistente seguía viendo **"+ Nueva Tarea para Asistente"**. Oliver
+decidió retirárselo: ver la entrada `[FEAT] 2026-08-24 (2)` al inicio de este archivo.
+
+## [FIX] - 2026-08-22 - Panel del asistente, selector de abogada por rol y retiro de `assistant_id` de la UI
+
+Branch `develop`. Tres cambios encadenados alrededor del rol asistente. Los dos primeros son
+arreglos; el tercero es una decisión de negocio que llegó después y que borra el campo de la
+interfaz.
+
+### 1. El panel del asistente mentía
+
+**Síntoma:** el asistente entraba a `/legal` y veía `0 / 0 / 0`, y concluía que el sistema
+no le mostraba nada.
+
+**Causa:** la tarjeta principal era "Casos Asignados" y contaba `cases.assistant_id = usuario`.
+Ninguno de los 206 casos tiene asistente asignado, así que daba 0. Pero el alcance de lectura
+del asistente es TODO el bufete (CLAUDE.md §4) y `/legal/casos` nunca filtró por `assistant_id`:
+el listado le mostraba los 206. El panel y el listado se contradecían.
+
+**Arreglo** (`src/components/dashboards/asistente-home.tsx`): la tarjeta "Casos Asignados" pasa a
+ser **"Casos del Bufete"** y cuenta todo el tenant, sin filtrar. Subtítulo "Tus casos y tareas
+asignadas" → "Casos del bufete y tus tareas". "Tareas Pendientes" y "Tareas Cumplidas" no cambian:
+siguen filtrando por `tasks.assigned_to`. De paso el componente pasó de `createClient()` +
+`auth.getUser()` a `getAuthenticatedContext()`, que es el patrón del resto de las pantallas
+(cliente admin + filtro explícito por `tenant_id`), con las consultas en un solo `Promise.all`.
+
+### 2. El selector de "Abogada Responsable" listaba roles equivocados
+
+**Síntoma:** el select ofrecía los 6 usuarios activos, incluidos el admin y el contador.
+
+| Archivo | Qué pasaba | Qué se hizo |
+|---|---|---|
+| `src/app/legal/casos/[id]/page.tsx` | El select del editor inline recibía `users={allUsers}` (todos los roles) | Se deriva `abogadaOptions` desde `allTeam` (que ya traía `role`) y se pasa como prop `responsibleOptions` |
+| `src/components/cases/inline-case-editor.tsx` | El select mapeaba `users` | Prop nueva `responsibleOptions`; con lista vacía la opción "Sin responsable" se muestra igual |
+| `src/app/legal/casos/[id]/editar/page.tsx` | La query de `users` **no traía `role`** | Se agregó `role` al `select` y al `.map()` |
+| `src/components/cases/case-form.tsx` | `abogadas = team.filter(t => t.role === "abogada" \|\| !t.role)` | Se quitó el fallback `!t.role` |
+
+**El bug de verdad estaba en editar caso.** Sin `role` en la query, el fallback `!t.role` metía a
+TODO el equipo en el selector de abogadas. En crear caso (`/legal/casos/nuevo`) la query sí traía
+`role`, así que ahí ya funcionaba bien.
+
+**NO se tocó** `users={allUsers}` de `AddTaskForm`: una tarea sí puede asignarse a cualquier usuario.
+
+### 3. `cases.assistant_id` sale de la interfaz
+
+**Decisión de negocio.** Si el asistente ve todos los casos del bufete, asignar un asistente por
+caso no aporta. Los 206 casos tenían el campo vacío, así que no había datos que perder.
+
+**La columna SIGUE en la BD.** Regla aditiva del proyecto: nada de dropear columnas. **Migraciones:
+NINGUNA.** El cambio es enteramente de UI y de consultas de lectura, y por lo tanto reversible: si
+mañana lo quieren de vuelta, no hay migración que correr.
+
+| Archivo | Qué se quitó |
+|---|---|
+| `src/components/cases/inline-case-editor.tsx` | Select "Asistente Responsable de Seguimiento", estado `assistantId`, `assistant_id` del payload, prop `assistantOptions` |
+| `src/components/cases/case-form.tsx` | Campo "Asistente Responsable" (crear y editar), estado, payload, y la derivada `asistentes` |
+| `src/app/legal/casos/[id]/page.tsx` | Bloque de display "Asistente Responsable de Seguimiento", el fetch del usuario asistente, `assistant_id` del `select`, `asistenteOptions`, y el icono `Users` que quedaba sin uso |
+| `src/app/legal/casos/[id]/editar/page.tsx` | `assistant_id` de `initialData` |
+| `src/app/legal/casos/page.tsx` | Columna "Asistente" de la tabla desktop (`<th>`, `<td>`, `colSpan` 8 → 7) y de las tarjetas móviles. `userMap` ahora solo resuelve `responsible_id` |
+| `src/components/dashboards/asistente-gastos.tsx` | El `.or()` con `assistant_id.eq.{user}` + casos con tareas suyas. Ahora ofrece **todos los casos del tenant**, coherente con su alcance de lectura |
+| `src/lib/utils/search-server.ts` | `pushByRelation("assistant_id", ...)` de la búsqueda universal |
+| `src/app/api/cases/[id]/route.ts` | `assistant_id` del destructuring del body y del `updatePayload`: el PATCH deja de aceptarlo |
+
+**Se conserva `assistant_id` en `trackedFields`** del PATCH — decisión explícita. Esa lista es de
+campos **auditables**, no de campos aceptados. Como el handler ya no lo lee del body, nunca entra
+en `updatePayload` y el filtro `!== undefined` no lo dispara: cero costo. Pero si el campo vuelve a
+la UI, o alguien lo toca por SQL o por un script, el historial lo registra sin que haya que
+acordarse de volver a agregarlo. Mismo criterio para `src/types/database.ts`, que sigue declarando
+la columna porque sigue existiendo en el schema.
+
+**NO se tocó `src/app/legal/seguimiento/page.tsx`.** Se verificó: su prop `assistants` es la lista
+de usuarios con rol `asistente` para poblar un filtro, y el filtro compara contra
+`task.assignedTo` (`tasks.assigned_to`), no contra `cases.assistant_id`. No depende del campo
+retirado.
+
+### Verificación
+
+| Check | Resultado |
+|---|---|
+| `tsc --noEmit` | limpio (exit 0) |
+| Lint de los 9 archivos tocados | **0 errores nuevos**. Quedan 4 preexistentes (`Upload`, `Button`, `backUrl` sin usar en el detalle; un `prefer-const` en el listado), idénticos antes y después del cambio — verificado con `git stash`. Sí se arregló uno preexistente en `inline-case-editor.tsx` (destructuring muerto de `team`), por estar en una línea que se estaba editando |
+| Búsqueda de huérfanos | `grep -rn "assistant_id\|assistantId\|assistantOptions\|assistantName" src/` → solo los 3 usos intencionales (comentario del PATCH + `trackedFields`, comentario en gastos, `types/database.ts`) |
+
+### Verificación en navegador (23/08/2026, `localhost:3000`, Chrome)
+
+Dos tandas con sesiones reales, no simuladas. Oliver hizo los logins.
+
+**Sesión ASISTENTE (Harry Boyd)**
+
+| Pantalla | Check | Resultado |
+|---|---|---|
+| `/legal` | Tarjeta principal | **"Casos del Bufete" = 207** (antes "Casos Asignados" = 0) |
+| `/legal` | 3 tarjetas con hints | "Todos los casos" / "Asignadas a mí" / "Asignadas a mí" |
+| `/legal` | Subtítulo | "Casos del bufete y tus tareas" |
+| `/legal/casos` | Total | "207 casos encontrados" — **panel y listado por fin coinciden**, que era el bug de fondo |
+| `/legal/casos` | Tabla desktop | 7 columnas: Código, Cliente, Descripción, Estado, Abogada, Clasificación, Apertura. Sin "Asistente" |
+| `/legal/casos` | Tarjetas móviles | Por DOM: `Abogada:` ×20, `Asistente:` ×0 |
+| `/legal/gastos` | Copy | "Gastos que has registrado en los casos del bufete" |
+| `/legal/gastos` | Selector de caso | **207 opciones** en `gasto-case-select` (`ADM-001` … `REG-010`), idéntico al total del listado |
+
+**Sesión ADMIN (Oliver Calvo)**
+
+| Pantalla | Check | Resultado |
+|---|---|---|
+| `/legal/casos/{id}` (detalle CIV-020) | Display de asistente | **0 ocurrencias** de "Asistente" en todo el HTML |
+| `/legal/casos/{id}` editor inline | "Abogada Responsable" | 4 opciones: Sin responsable + **Daveiva Chapman, Legal Integra, Milena Batista**. Sin admin ni contador |
+| `/legal/casos/{id}` editor inline | Campo de asistente | No existe. Labels: Descripción, Observaciones, Clasificación, Institución, Abogada Responsable, Tipo de trámite, 4 fechas, 2 N° institución, Ubicación, Expediente digital |
+| `/legal/casos/{id}/editar` (paso 2 de 4) | "Abogada Responsable" | Mismas 4 opciones. **Acá estaba el bug del `role` faltante — confirmado corregido** |
+| `/legal/casos/nuevo` (paso 2 de 4) | "Abogada Responsable" | Mismas 4 opciones. Pasos 1, 3 y 4 recorridos: ningún campo de asistente |
+| **Guardado (el check que importa)** | PATCH + persistencia | Editor inline de CIV-020, campo Observaciones: **`PATCH /api/cases/{id} 200 in 2787ms`**, dato persistido tras recargar. Revertido a vacío con un segundo **`PATCH 200 in 1765ms`**, confirmado que el marcador desapareció |
+| Consola del navegador | Errores | Ninguno |
+| Efectos colaterales | Casos creados/borrados | Ninguno: el listado seguía en 207 al terminar. El wizard de `/legal/casos/nuevo` se abandonó sin guardar |
+
+**Nota sobre datos:** son **207** casos, no 206 — se cargó `CIV-020` el 22/08/2026. Y como dev y
+prod comparten Supabase, el test de guardado escribió en datos reales: se usó un campo libre
+(Observaciones) de un solo caso y se dejó como estaba.
+
+**Observaciones menores, sin acción:** (1) las queries de `/legal/casos/nuevo` y
+`/legal/casos/[id]/editar` siguen trayendo usuarios con rol `asistente` en `team` aunque ahora
+solo se usan los `abogada` — no molesta, pero es peso muerto. (2) El select "Estado" muestra
+"En trámite"/"Cerrado" por triplicado: son filas duplicadas en `cat_statuses`, preexistente y
+ajeno a este cambio.
+
+**Migraciones: NINGUNA.**
+
+
+## [DEPLOY] - 2026-08-15 19:52 UTC - develop → main (2 commits)
+
+**Merge:** `fd0bf88` · **Punto de rollback:** `9f8f243` · **Aprobado por:** Oliver
+
+### Qué salió
+
+| Commit | Qué |
+|---|---|
+| `f7f978c` | Recuperación de contraseña por `token_hash` en vez de PKCE (cross-device) |
+| `d194f75` | Log del deploy de las 18:43 UTC (docs) |
+
+**Salieron 2 commits, no 1.** `d194f75` es el deploy log del release anterior, que quedó en
+`develop` después de aquel merge — el mismo patrón que `9aab6ca` en el deploy del 14/08. Es solo
+`changelog.md`, sin código.
+
+**Migraciones: NINGUNA.** Verificado con
+`git diff --name-only origin/main origin/develop | grep -iE "\.sql$|migration|supabase/"` → vacío.
+
+**Acompaña un cambio de configuración ya hecho por Oliver:** la plantilla de email "Reset Password"
+en Supabase pasó a `{{ .SiteURL }}/auth/recuperar?token_hash={{ .TokenHash }}&type=recovery`. El
+código de este deploy es la otra mitad del arreglo; sin la plantilla no sirve, y sin el código la
+plantilla tampoco.
+
+### Pre-deploy (SOP-006)
+
+| Check | Resultado |
+|---|---|
+| Suite completa | **292/292 verde** (283 + 9 del archivo suelto), 0 fail |
+| `tsc --noEmit` | limpio (exit 0) |
+| `next build` local | **exitoso**. `/api/auth/reset-password` y `/auth/recuperar` compilan como route handlers dinámicos (ƒ) |
+| Lint | 22 errores + 5 warnings, **todos preexistentes**, **0 en los archivos del release** |
+| Diff review | 5 archivos, +303/-25. Sin SQL, sin scratch, sin secretos. Los 2 `console.warn` nuevos loguean `error.message` y un booleano de diagnóstico — sin tokens ni correos |
+| Migraciones en prod | ninguna que aplicar |
+| Changelog | actualizado |
+
+**Verificación previa al merge:** `main` no era ancestro de `develop` (11 merge commits solo en
+main, todos merge commits, ningún hotfix suelto) → `--no-ff`. `merge-tree` sin conflictos, y el
+**árbol del merge idéntico al de `develop`** (`da076224…`).
+
+### Deploy
+
+- Push a `origin/main` **19:52:28 UTC**.
+- Código nuevo en vivo **19:53:42 UTC** (~1 min).
+- **Marcador usado:** `/auth/recuperar?token_hash=falso&type=recovery` daba `?error=recovery` con el
+  código viejo (que solo miraba `code`) y pasa a `?error=recovery_expired` con el nuevo (verifyOtp
+  rechaza el token). Solo lo puede producir el código nuevo.
+- El "Ready" se verificó contra la URL de producción, no en el dashboard de Vercel (cuenta del
+  cliente, sin acceso).
+
+### Post-deploy smoke (producción)
+
+| Check | Resultado |
+|---|---|
+| `/auth/recuperar` sin parámetros | **307 → `/login?error=recovery`** |
+| `/auth/recuperar?token_hash=falso&type=recovery` | **307 → `/login?error=recovery_expired`** |
+| `/nueva-contrasena` sin sesión | **307 → `/login`** |
+| `/auth/recuperar?code=FAKE` | 307 → `/login?error=recovery_otro_navegador` (rama heredada viva) |
+| `/login` | 200 |
+| `POST /api/auth/reset-password` con email inválido | 400 |
+| `/finanzas/reportes/balance` | 307 al login (el release anterior sigue sano) |
+| Avisos del login | los tres textos salen server-rendered, incluido el nuevo `recovery_otro_navegador` |
+
+Sin un solo 500.
+
+**Pendiente de Oliver (cierra el caso):** el round-trip real — pedir el reset en la computadora y
+abrir el correo en el celular. Es el escenario que estaba roto y que no se puede verificar sin una
+casilla de correo real.
+
+---
+
 ## [Fix] - 2026-08-15 - Recuperación de contraseña: pasar de PKCE a token_hash (cross-device)
 
 El deploy de esta mañana dejó el flujo llegando a `/auth/recuperar`, pero el canje fallaba y la

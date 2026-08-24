@@ -33,7 +33,6 @@ import {
   Upload,
 
   UserCheck,
-  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +51,13 @@ export default async function ExpedienteDetailPage({
   searchParams,
 }: PageProps) {
   const { db, tenantId, userRole } = await getAuthenticatedContext();
-  const activeTab = searchParams.tab ?? "info";
+  // ?tab=gastos escrito a mano por un asistente cae a "info": el tab está fuera
+  // de su alcance, y sin esta normalización vería la página sin contenido.
+  const requestedTab = searchParams.tab ?? "info";
+  const activeTab =
+    requestedTab === "gastos" && userRole !== "admin" && userRole !== "abogada"
+      ? "info"
+      : requestedTab;
   const backUrl = searchParams.from === "client" && searchParams.client_id
     ? `/legal/clientes/${searchParams.client_id}`
     : "/legal/casos";
@@ -63,7 +68,7 @@ export default async function ExpedienteDetailPage({
     .select(
       `
       id, case_code, case_number, client_id, description, classification_id,
-      institution_id, responsible_id, assistant_id, opened_at, status_id,
+      institution_id, responsible_id, opened_at, status_id,
       physical_location, observations, has_digital_file, entity, procedure_type,
       institution_procedure_number, institution_case_number, case_start_date,
       procedure_start_date, deadline, last_followup_at, created_at, updated_at,
@@ -104,19 +109,6 @@ export default async function ExpedienteDetailPage({
       .eq("id", caseData.responsible_id)
       .single();
     if (respData) responsible = { id: respData.id, name: respData.full_name };
-  }
-
-  // Fetch assistant info if exists (assistant_id references users table)
-  let assistant: { id: string; name: string } | null = null;
-  if (caseData.assistant_id) {
-    const { data: assistantData } = await db
-      .from("users")
-      .select("id, full_name")
-      .eq("id", caseData.assistant_id)
-      .single();
-    if (assistantData) {
-      assistant = { id: assistantData.id, name: assistantData.full_name };
-    }
   }
 
   // Fetch tab-specific data and catalogs for editing
@@ -197,6 +189,12 @@ export default async function ExpedienteDetailPage({
   const allTeam = (teamRes.data ?? []).map((u: { id: string; full_name: string; role: string }) => ({ id: u.id, name: u.full_name, role: u.role }));
   const documents = documentsRes.data ?? [];
   const allUsers = (usersRes.data ?? []) as { id: string; full_name: string }[];
+  // "Abogada Responsable" se alimenta solo de usuarios con rol `abogada`, no de
+  // `allUsers` (todos los roles activos, incluidos contador y admin), que se
+  // mantiene solo para asignar tareas.
+  const abogadaOptions = allTeam
+    .filter((u) => u.role === "abogada")
+    .map((u) => ({ id: u.id, full_name: u.name }));
 
   const expensesTramite = expenses.filter((e) => (e as Record<string, unknown>).expense_type !== "administrativo");
   const expensesAdmin = expenses.filter((e) => (e as Record<string, unknown>).expense_type === "administrativo");
@@ -214,9 +212,16 @@ export default async function ExpedienteDetailPage({
   const balance = totalPayments - totalExpenses;
   const isInRed = totalExpenses > totalPayments && totalExpenses > 0;
 
+  // El asistente NO ve gastos (alcance del rol, 24/08/2026): ni el tab ni su
+  // contenido. `canSeeExpenses` gatea las dos cosas — ocultar solo el tab
+  // dejaría la pestaña accesible escribiendo ?tab=gastos en la URL.
+  const canSeeExpenses = userRole === "admin" || userRole === "abogada";
+  // Crear tareas es admin/abogada. El asistente las CUMPLE, no las reparte.
+  const canCreateTasks = userRole === "admin" || userRole === "abogada";
+
   const tabs = [
     { key: "info", label: "Información", icon: FolderOpen },
-    { key: "gastos", label: "Gastos", icon: DollarSign },
+    ...(canSeeExpenses ? [{ key: "gastos", label: "Gastos", icon: DollarSign }] : []),
     { key: "seguimiento", label: "Seguimiento", icon: MessageSquare },
     { key: "documentos", label: "Documentos", icon: FileText },
   ];
@@ -259,12 +264,18 @@ export default async function ExpedienteDetailPage({
             openedAt={caseData.opened_at}
             clientNumber={client?.client_number ?? "—"}
           />
-          <CaseStatusChanger
-            caseId={params.id}
-            currentStatusId={caseData.status_id}
-            currentStatusName={status?.name ?? ""}
-            statuses={allStatuses}
-          />
+          {/* Cambiar estado: admin/abogada. El asistente lo perdió el
+              24/08/2026 — su alcance en un caso es adjuntar documentos y
+              comentar. El PATCH con action="change-status" también le responde
+              403, así que el botón sería una promesa falsa. */}
+          {(userRole === "admin" || userRole === "abogada") && (
+            <CaseStatusChanger
+              caseId={params.id}
+              currentStatusId={caseData.status_id}
+              currentStatusName={status?.name ?? ""}
+              statuses={allStatuses}
+            />
+          )}
           {(userRole === "admin" || userRole === "abogada") && (
             <DeleteCaseButton
               caseId={params.id}
@@ -325,13 +336,13 @@ export default async function ExpedienteDetailPage({
               case_start_date: caseData.case_start_date,
               procedure_start_date: caseData.procedure_start_date,
               deadline: caseData.deadline,
-              assistant_id: caseData.assistant_id ?? null,
             }}
             classifications={allClassifications}
             institutions={allInstitutions}
             team={allTeam}
             statuses={allStatuses}
             users={allUsers}
+            responsibleOptions={abogadaOptions}
             userRole={userRole as "admin" | "abogada" | "asistente"}
           />
           )}
@@ -366,14 +377,6 @@ export default async function ExpedienteDetailPage({
                   <div>
                     <p className="text-xs text-gray-500">Abogado Responsable</p>
                     <p className="font-medium">{responsible?.name ?? "—"}</p>
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex items-start gap-2">
-                  <Users size={15} className="mt-0.5 shrink-0 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-500">Asistente Responsable de Seguimiento</p>
-                    <p className="font-medium">{assistant?.name ?? "—"}</p>
                   </div>
                 </div>
                 <Separator />
@@ -880,9 +883,14 @@ export default async function ExpedienteDetailPage({
 
         return (
           <div className="space-y-4">
-            {/* Action buttons — two big intuitive buttons */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <AddTaskForm caseId={params.id} users={allUsers} />
+            {/* Action buttons. CREAR tareas es admin/abogada desde el
+                24/08/2026: el selector de responsable se alimenta de todos los
+                usuarios activos, así que el asistente podía asignarle trabajo a
+                las socias. Si necesita dejarse un recordatorio, usa un
+                comentario. COMENTAR y CUMPLIR tareas siguen siendo suyos —
+                <CompleteTaskButton> más abajo no está gateado. */}
+            <div className={`grid gap-3 ${canCreateTasks ? "sm:grid-cols-2" : ""}`}>
+              {canCreateTasks && <AddTaskForm caseId={params.id} users={allUsers} />}
               <AddCommentForm caseId={params.id} />
             </div>
 

@@ -60,19 +60,21 @@ export async function PATCH(
       case_start_date,
       procedure_start_date,
       deadline,
-      assistant_id,
     } = body;
 
-    // Check de rol DEPENDIENTE DE LA ACCIÓN (matriz de roles vs. UI real):
-    // el asistente puede CAMBIAR EL ESTADO de los casos del bufete (CLAUDE.md),
-    // pero NO editar el resto del expediente. Restringir todo el PATCH a
-    // [admin, abogada] rompía el flujo diario del asistente (403 al cambiar
-    // estado desde <CaseStatusChanger>, que se le renderiza sin gate).
-    const allowedRoles =
-      action === "change-status"
-        ? ["admin", "abogada", "asistente"]
-        : ["admin", "abogada"];
-    const denied = requireRole(profile.role, allowedRoles);
+    // Todo el PATCH del caso es admin/abogada, incluida la acción
+    // "change-status".
+    //
+    // HISTORIA: hasta el 24/08/2026 el gate era DEPENDIENTE DE LA ACCIÓN y
+    // dejaba al asistente cambiar el estado, porque CLAUDE.md se lo permitía.
+    // El cliente redujo el alcance del rol: dentro de un caso el asistente
+    // SOLO adjunta documentos y comenta. El <CaseStatusChanger> ya no se le
+    // renderiza, y este gate es el que hace que la restricción sea real —
+    // ocultar el botón no impide un PATCH a mano.
+    //
+    // Los endpoints de documentos y comentarios NO cambian: ahí el asistente
+    // sigue teniendo permiso.
+    const denied = requireRole(profile.role, ["admin", "abogada"]);
     if (denied) return denied;
 
     // Verify case exists and belongs to tenant
@@ -170,7 +172,6 @@ export async function PATCH(
     if (case_start_date !== undefined) updatePayload.case_start_date = case_start_date || null;
     if (procedure_start_date !== undefined) updatePayload.procedure_start_date = procedure_start_date || null;
     if (deadline !== undefined) updatePayload.deadline = deadline || null;
-    if (assistant_id !== undefined) updatePayload.assistant_id = assistant_id || null;
 
     // Recalculate case_code when classification changes to a different non-null value.
     // Retry up to MAX_CODE_RECALC_RETRIES times on unique-index collision (PG 23505).
@@ -295,7 +296,13 @@ export async function PATCH(
       }
     }
 
-    // Audit log for each changed field
+    // Audit log for each changed field.
+    // `assistant_id` se DEJA en esta lista a propósito. Es la lista de campos
+    // AUDITABLES, no la de campos aceptados: el PATCH ya no lo lee del body, así
+    // que nunca entra en updatePayload y el filtro de abajo (`!== undefined`)
+    // simplemente no lo dispara. La columna sigue en la BD (regla aditiva), y si
+    // el campo vuelve a la UI —o alguien lo toca por SQL o por un script— el
+    // historial lo registra sin tener que acordarse de volver a agregarlo aquí.
     const trackedFields = [
       "client_id", "description", "classification_id", "institution_id",
       "responsible_id", "opened_at", "status_id", "physical_location",

@@ -17,10 +17,10 @@ export async function PATCH(
 
     const admin = createAdminClient();
 
-    // Get user's tenant_id
+    // Get user's tenant_id + role
     const { data: profile, error: profileError } = await admin
       .from("users")
-      .select("tenant_id")
+      .select("tenant_id, role")
       .eq("id", user.id)
       .single();
 
@@ -36,7 +36,7 @@ export async function PATCH(
     // Verify the task belongs to this tenant
     const { data: existingTask, error: fetchError } = await admin
       .from("tasks")
-      .select("id, status, tenant_id")
+      .select("id, status, tenant_id, assigned_to")
       .eq("id", taskId)
       .eq("tenant_id", profile.tenant_id)
       .single();
@@ -45,10 +45,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
     }
 
+    // El asistente SI cumple tareas — es su flujo diario — pero solo las SUYAS.
+    // Sin este check podia marcar como cumplida cualquier tarea del bufete,
+    // incluidas las de las abogadas. admin/abogada si pueden cerrar cualquiera:
+    // gestionan el trabajo del equipo.
+    if (profile.role === "asistente" && existingTask.assigned_to !== user.id) {
+      return NextResponse.json(
+        { error: "Solo puedes cumplir tareas asignadas a ti" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { status } = body;
 
-    // Only allow transitioning to "cumplida"
+    // Only allow transitioning to "cumplida". Cualquier otro campo del body
+    // (description, deadline, assigned_to) se IGNORA: este handler no reasigna
+    // ni edita tareas, solo las cierra.
     if (status !== "cumplida") {
       return NextResponse.json({ error: "Solo se permite marcar como cumplida" }, { status: 400 });
     }

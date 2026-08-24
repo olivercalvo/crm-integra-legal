@@ -39,13 +39,14 @@ interface InlineCaseInfoEditorProps {
     case_start_date: string | null;
     procedure_start_date: string | null;
     deadline: string | null;
-    assistant_id: string | null;
   };
   classifications: SelectOption[];
   institutions: SelectOption[];
   team: SelectOption[];
   statuses: SelectOption[];
   users?: UserOption[];
+  /** Solo usuarios con rol `abogada` — alimenta "Abogada Responsable". */
+  responsibleOptions?: UserOption[];
   userRole: InstitutionUserRole;
 }
 
@@ -55,8 +56,8 @@ export function InlineCaseInfoEditor({
   caseData,
   classifications,
   institutions,
-  team,
   users = [],
+  responsibleOptions,
   userRole,
 }: InlineCaseInfoEditorProps) {
   const router = useRouter();
@@ -83,7 +84,6 @@ export function InlineCaseInfoEditor({
   const [classificationId, setClassificationId] = useState(caseData.classification_id ?? "");
   const [institutionId, setInstitutionId] = useState(caseData.institution_id ?? "");
   const [responsibleId, setResponsibleId] = useState(caseData.responsible_id ?? "");
-  const [assistantId, setAssistantId] = useState(caseData.assistant_id ?? "");
   const [openedAt, setOpenedAt] = useState(caseData.opened_at ?? "");
   const [physicalLocation, setPhysicalLocation] = useState(caseData.physical_location ?? "");
   const [observations, setObservations] = useState(caseData.observations ?? "");
@@ -97,7 +97,9 @@ export function InlineCaseInfoEditor({
   const [procedureStartDate, setProcedureStartDate] = useState(caseData.procedure_start_date ?? "");
   const [deadline, setDeadline] = useState(caseData.deadline ?? "");
 
-  // No team filtering needed — users prop provides all users
+  // "Abogada Responsable" se alimenta solo de usuarios con rol `abogada`. Si la
+  // página no pasa la lista filtrada se cae de vuelta a `users` (todos los activos).
+  const responsibleList = responsibleOptions ?? users;
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -107,7 +109,6 @@ export function InlineCaseInfoEditor({
     setClassificationId(caseData.classification_id ?? "");
     setInstitutionId(caseData.institution_id ?? "");
     setResponsibleId(caseData.responsible_id ?? "");
-    setAssistantId(caseData.assistant_id ?? "");
     setOpenedAt(caseData.opened_at ?? "");
     setPhysicalLocation(caseData.physical_location ?? "");
     setObservations(caseData.observations ?? "");
@@ -127,7 +128,6 @@ export function InlineCaseInfoEditor({
     classification_id: classificationId || null,
     institution_id: institutionId || null,
     responsible_id: responsibleId || null,
-    assistant_id: assistantId || null,
     opened_at: openedAt,
     physical_location: physicalLocation || null,
     observations: observations || null,
@@ -316,20 +316,7 @@ export function InlineCaseInfoEditor({
             className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Sin responsable</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.full_name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Asistente Responsable de Seguimiento</Label>
-          <select
-            value={assistantId}
-            onChange={(e) => setAssistantId(e.target.value)}
-            className="min-h-[48px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">Sin asistente</option>
-            {users.map((u) => (
+            {responsibleList.map((u) => (
               <option key={u.id} value={u.id}>{u.full_name}</option>
             ))}
           </select>

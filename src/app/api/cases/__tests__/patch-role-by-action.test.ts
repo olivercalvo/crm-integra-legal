@@ -1,12 +1,15 @@
 /**
- * Tests del gate de rol DEPENDIENTE DE LA ACCIÓN en PATCH /api/cases/[id].
+ * Tests del gate de rol en PATCH /api/cases/[id].
  *
- * Regresión (Fase 1 seguridad): restringimos todo el PATCH a [admin, abogada],
- * pero <CaseStatusChanger> se le renderiza al ASISTENTE sin gate y hace
- * PATCH con action="change-status". CLAUDE.md permite al asistente "actualizar
- * estado" de sus casos → recibía 403 y se le rompía el flujo diario. El fix
- * gatea por acción: change-status → [admin, abogada, asistente]; el resto de la
- * edición → [admin, abogada].
+ * HISTORIA. Este archivo nació cubriendo un gate DEPENDIENTE DE LA ACCIÓN:
+ * change-status → [admin, abogada, asistente]; el resto → [admin, abogada].
+ * El 24/08/2026 el cliente redujo el alcance del rol asistente — dentro de un
+ * caso solo adjunta documentos y comenta — así que el gate se unificó en
+ * [admin, abogada] para TODO el PATCH, change-status incluido.
+ *
+ * Los tests se mantienen (no se borran) porque siguen siendo la red que evita
+ * que el permiso vuelva por accidente: ahora afirman lo contrario de lo que
+ * afirmaban antes.
  *
  * Vive fuera del directorio `[id]` porque el runner de node trata los corchetes
  * como glob (el import del route con `[id]` sí funciona: es un specifier exacto).
@@ -109,15 +112,16 @@ function reset(role: string) {
   state.captured = { update: null };
 }
 
-test("asistente + change-status → NO 403 (200) y persiste status_id", { skip: skipNoMocks }, async () => {
+test("asistente + change-status → 403 y NO actualiza (alcance reducido 24/08/2026)", { skip: skipNoMocks }, async () => {
   reset("asistente");
   const res = await PATCH(
     req({ action: "change-status", status_id: "new-status" }),
     { params: { id: "case-1" } }
   );
-  assert.notEqual(res.status, 403, "el asistente NO debe ser bloqueado al cambiar estado");
-  assert.equal(res.status, 200);
-  assert.equal(state.captured.update?.status_id, "new-status");
+  const json = (await res.json()) as { error: string };
+  assert.equal(res.status, 403, "el asistente ya NO puede cambiar el estado de un caso");
+  assert.equal(json.error, "Sin permiso");
+  assert.equal(state.captured.update, null, "no debe actualizar el caso");
 });
 
 test("asistente + edición completa (sin action) → 403 y NO actualiza", { skip: skipNoMocks }, async () => {

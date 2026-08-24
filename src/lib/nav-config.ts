@@ -57,7 +57,9 @@ export const TABS: TabDef[] = [
       { label: "Dashboard",      href: "/legal",            icon: LayoutDashboard, roles: ["admin", "abogada", "asistente"] },
       { label: "Clientes",       href: "/legal/clientes",   icon: Users,           roles: ["admin", "abogada"] },
       { label: "Casos",          href: "/legal/casos",      icon: FolderOpen,      roles: ["admin", "abogada", "asistente"] },
-      { label: "Gastos",         href: "/legal/gastos",     icon: DollarSign,      roles: ["admin", "abogada", "asistente"] },
+      // Gastos: fuera del alcance del asistente desde el 24/08/2026 (decisión de
+      // negocio). El gate real está en el middleware — esto solo oculta el ítem.
+      { label: "Gastos",         href: "/legal/gastos",     icon: DollarSign,      roles: ["admin", "abogada"] },
       { label: "Seguimiento",    href: "/legal/seguimiento", icon: ListTodo,       roles: ["admin", "abogada"] },
       { label: "Mis Pendientes", href: "/legal/pendientes", icon: ClipboardList,   roles: ["admin", "abogada", "asistente"] },
       { label: "Prospectos",     href: "/legal/prospectos", icon: UserPlus,        roles: ["admin", "abogada"] },

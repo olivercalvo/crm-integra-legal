@@ -1,5 +1,50 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === CAMBIO 24/08/2026 — ALCANCE DEL ROL ASISTENTE (fuera de fase) ===
+
+Decisión de negocio del cliente. Detalle en `changelog.md` → `[FEAT] 2026-08-24`.
+
+- [x] El asistente queda como rol de consulta y constancia: ve Dashboard, Casos (todos, solo
+      lectura) y Mis Pendientes; dentro de un caso SOLO sube documentos y comenta.
+- [x] Gastos fuera de su alcance: ítem del menú, pantalla `/legal/gastos` (bloqueada por
+      middleware) y tab "Gastos" del detalle, con `?tab=gastos` normalizado a `info`.
+- [x] Cambio de estado fuera de su alcance: `<CaseStatusChanger>` gateado a admin/abogada.
+- [x] **Guards server-side** con el helper `requireRole`: `POST /api/expenses` (que no validaba
+      rol en absoluto — hallazgo #3 de la revisión OWASP), `PATCH`/`DELETE /api/expenses/[id]`
+      y `PATCH /api/cases/[id]` para toda acción. Documentos y comentarios sin tocar.
+- [x] `CLAUDE.md` §4 reescrito: su tabla contradecía el alcance nuevo y lo habría revertido
+      en la próxima sesión que leyera el archivo.
+- [x] Verificado en navegador el 24/08/2026 en las dos sesiones, incluidos los 403 pedidos
+      directo a la API con sesión de asistente. Test `patch-role-by-action` 4/4.
+- [x] **CERRADO el 24/08/2026** (decisión de Oliver): el asistente tampoco crea tareas. Se le
+      retiró `<AddTaskForm>` del tab Seguimiento, `POST /api/tasks` le responde 403 y
+      `POST /api/todos` rechaza asignarle un pendiente a otra persona. `PATCH /api/tasks/[id]`
+      NO lleva gate de rol —cumplir tareas es su flujo diario— pero ahora va por PROPIEDAD:
+      solo cierra las asignadas a él. Cubierto por `patch-task-ownership.test.ts` (4/4).
+- **Migraciones: NINGUNA.**
+
+## === FIX 22-23/08/2026 — ROL ASISTENTE (fuera de fase) ===
+
+Trabajo de arreglo, no un hito del plan. Se deja registrado acá para que no quede solo en el
+changelog. Detalle completo en `changelog.md` → `[FIX] 2026-08-22`.
+
+- [x] **Panel del asistente decía la verdad equivocada.** `/legal` mostraba "Casos Asignados"
+      contando `cases.assistant_id` (siempre 0) mientras `/legal/casos` le listaba los 207 del
+      bufete. Pasa a **"Casos del Bufete"** y cuenta el tenant completo. Las tarjetas de tareas
+      siguen siendo personales (`tasks.assigned_to`).
+- [x] **Selector "Abogada Responsable" filtrado por rol** en detalle, crear y editar. El bug de
+      fondo estaba en `/legal/casos/[id]/editar`: la query de `users` no traía `role`, y el
+      fallback `|| !t.role` metía admin y contador en la lista de abogadas.
+- [x] **`cases.assistant_id` retirado de la UI** (decisión de negocio). Fuera de los formularios,
+      del display del detalle, de la columna del listado y del body del PATCH. **La columna sigue
+      en la BD** (regla aditiva) — reversible sin migración. Se conserva en `trackedFields` para
+      que la auditoría lo siga registrando.
+- [x] Verificado en navegador el 23/08/2026 con sesiones reales de asistente (Harry Boyd) y admin
+      (Oliver Calvo), incluido guardado con `PATCH 200` y persistencia confirmada. Tablas de
+      verificación en `changelog.md`.
+- [x] `tsc --noEmit` limpio; lint sin errores nuevos (quedan 4 preexistentes).
+- **Migraciones: NINGUNA.**
+
 ## === ESTADO 14/08/2026 — PLAN DE TRABAJO CON JOSUAR (5 PASOS) ===
 
 Josuar bajó el requerimiento contable a **5 pasos secuenciales** en la reunión del 10/08/2026.

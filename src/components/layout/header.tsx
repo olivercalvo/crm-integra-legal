@@ -47,7 +47,9 @@ export function Header({ userName, userRole, onToggleSidebar }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
+    // top-[var(--env-band-h)]: se pega debajo de la banda de entorno cuando hay
+    // una (staging/local). En producción la variable vale 0 y esto es top-0.
+    <header className="sticky top-[var(--env-band-h,0px)] z-50 border-b border-gray-200 bg-white">
       <div className="flex h-16 items-center justify-between px-4 lg:px-6">
         {/* Left: hamburger + logo + tabs (desktop inline) */}
         <div className="flex items-center gap-3 lg:gap-6">

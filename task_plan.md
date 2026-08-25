@@ -1,5 +1,62 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## === FASE 0 — AMBIENTE DE PRUEBAS (25/08/2026) — BLOQUEANTE ===
+
+Nada del modulo contable arranca hasta que esto este cerrado. Los asientos del ledger son
+inmutables por diseno, asi que un error de prueba contra produccion contamina los libros que
+el contador tiene que certificar ante la DGI.
+
+Proyecto Supabase de staging: `xtyenhakplrkyifbcaow` (produccion: `uqmmkklbhzxqybljiecs`).
+
+| # | Tarea | Estado |
+|---|---|---|
+| 1 | Inventario de migraciones | **CERRADA** — `docs/staging/inventario-migraciones.md` |
+| 2 | Script de datos ficticios | **CERRADA** — `npm run seed:staging` |
+| 3 | Aplicar el esquema en staging | **BLOQUEADA** — ver abajo |
+| 4 | Configuracion de entornos | **CERRADA en local** — falta cargar las vars en Vercel (lo hace Oliver) |
+| 5 | Salvaguarda visual | **CERRADA** — banda de entorno verificada en `/login` |
+| 6 | Verificar el aislamiento | **BLOQUEADA por la 3** |
+| 7 | Documentar | **CERRADA** — SOP-012, CLAUDE.md §9 y DB Safety, changelog |
+
+### Por que esta bloqueada la 3
+
+Con la `service_role` key **no se puede ejecutar DDL**. Verificado el 25/08 contra el
+proyecto de staging:
+
+- PostgREST (`/rest/v1/`) solo expone tablas y RPCs. No corre DDL.
+- `/pg/query` → **404**. Es el endpoint que usa `scripts/run-migration.mjs`, que por lo
+  tanto **nunca funciono**. Lo reemplaza `scripts/build-staging-bundle.mjs`.
+- No existe una RPC tipo `exec_sql` (404).
+- `db.xtyenhakplrkyifbcaow.supabase.co` no resuelve por DNS directo: la conexion Postgres
+  va por el pooler, y para eso hace falta la **password de la base**, que no tengo.
+
+Dos caminos, cualquiera de los dos destraba la 3 y la 6:
+
+- **(a)** Oliver pega `sql/staging/bundle-1-schema-base.sql` y despues
+  `sql/staging/bundle-2-pending.sql` en el SQL Editor del proyecto de staging.
+- **(b)** Oliver pasa la connection string del pooler (Dashboard → Settings → Database →
+  Connection string → URI) y las corro yo con `pg`, que ya es dependencia del proyecto.
+
+### URGENTE — el respaldo de produccion quedo apuntando a staging
+
+`scripts/backup-supabase.mjs` (untracked) parsea `.env.local` para sacar la URL y la service
+key. Al reapuntar `.env.local` a staging, el respaldo pasa a copiar **staging** mientras sigue
+escribiendo `"crm-integra-legal (PRODUCCION)"` en el manifiesto, en la misma carpeta de
+OneDrive, y con la retencion de 14 dias borrando los respaldos buenos.
+
+No se toco el archivo (no esta versionado, puede ser trabajo en curso). Arreglo propuesto:
+que reciba `BACKUP_SUPABASE_URL` / `BACKUP_SUPABASE_SERVICE_KEY` propias en vez de leer
+`.env.local`, y que **aborte** si el project ref NO esta en `PROD_PROJECT_REFS`
+(`src/lib/env/app-env.ts`) — el candado del seed, al reves.
+
+Cualquier respaldo generado despues de las 16:00 del 25/08/2026 hay que darlo por invalido.
+
+### Pendiente de Oliver (no tecnico)
+
+- Cargar las 4 variables en el panel de Vercel (tabla en `sop.md` SOP-012).
+- Decidir si `sql/pending/022_backfill_dv_embebido.sql` se commitea: sigue como untracked.
+
+
 ## === CAMBIO 24/08/2026 — ALCANCE DEL ROL ASISTENTE (fuera de fase) ===
 
 Decisión de negocio del cliente. Detalle en `changelog.md` → `[FEAT] 2026-08-24`.

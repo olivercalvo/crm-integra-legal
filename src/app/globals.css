@@ -24,6 +24,15 @@
     --input: 214 20% 88%;
     --ring: 218 45% 20%;
     --radius: 0.5rem;
+
+    /* Altura de la banda de entorno (src/components/env-banner.tsx).
+       0 en producción, donde la banda no se renderiza. El header sticky y el
+       sidebar fixed suman esta variable a su offset para no quedar tapados. */
+    --env-band-h: 0px;
+  }
+
+  html[data-env-band="true"] {
+    --env-band-h: 1.75rem; /* = h-7 de la banda */
   }
 }
 

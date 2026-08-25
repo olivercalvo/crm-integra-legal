@@ -212,11 +212,10 @@ sql/pending/
   storage_rls_tenant_scoped.sql
 ```
 
-**Ojo con `20260508000003_clients_drop_active_legacy.sql`:** trae un `DO $$` que verifica
-que `clients.active` sea una columna generada antes de dropearla. En una base recién
-creada, `active` viene de `initial_schema` como BOOLEAN común, así que ese chequeo puede
-abortar. Hay que mirar la salida y, si aborta, dropear la columna a mano — el resultado
-final que se busca es que `clients.active` no exista.
+Sobre `20260508000003_clients_drop_active_legacy.sql`: trae un `DO $$` que espera encontrar
+`clients.active` como columna generada, que no es como queda en una base recién creada
+(`initial_schema` la crea como BOOLEAN común). **No aborta**: emite un `RAISE NOTICE` y la
+dropea igual, que es el resultado que se busca.
 
 ### 4.5 Después del esquema
 

@@ -67,7 +67,12 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 ### DB Safety
 - Verificar entorno antes de ejecutar migraciones
 - Backup de producción antes de migraciones
-- localhost = dev; URL de Vercel = prod
+- **Hay DOS bases de datos** (desde Fase 0, 2026-08-25). `localhost` **NO** es producción:
+  apunta a staging, igual que Preview y Development de Vercel. Solo el entorno Production
+  de Vercel toca la base real. Ver §9 y `sop.md` SOP-012
+- **Producción no se toca desde una máquina.** Ni con un script, ni con el SQL Editor "para
+  una cosita rápida", ni poniendo sus credenciales en `.env.local`. El único camino a
+  producción es un merge a `main` que dispare el auto-deploy
 
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)
@@ -104,9 +109,27 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Implicación:** las env vars de Supabase (URL, ANON_KEY, SERVICE_ROLE_KEY) y el proyecto de Vercel serán proporcionadas por el cliente. No asumir valores propios. Solicitar credenciales antes de configurar.
 
 ## 9. ENTORNO
-- **Dev:** localhost:3000
-- **Prod:** URL de Vercel del cliente (auto-deploy desde main)
-- **Supabase:** proyecto del cliente, RLS por tenant_id
+
+Desde **Fase 0 (2026-08-25)** hay dos bases de datos separadas. Antes de esa fecha
+`localhost` escribía en la base real del bufete; la frase "localhost = dev, Vercel = prod"
+que vivía acá era falsa y por eso se corrigió.
+
+| Entorno | Corre en | Supabase | Datos |
+|---|---|---|---|
+| **Local** | `localhost:3000` | staging (`xtyenhakplrkyifbcaow`) | Ficticios |
+| **Preview / Development** | deploys de Vercel por rama | staging (`xtyenhakplrkyifbcaow`) | Ficticios |
+| **Production** | URL de Vercel del cliente (auto-deploy desde `main`) | producción (`uqmmkklbhzxqybljiecs`) | **Reales** |
+
+- **Por qué importa:** los asientos del ledger son inmutables por diseño (los triggers de
+  `023_contabilidad_fase1_ledger.sql` rechazan UPDATE y DELETE). Un error de prueba contra
+  producción no se borra: queda en los libros que el contador certifica ante la DGI.
+- **Señal visual:** la app muestra una banda arriba de todo cuando NO corre contra
+  producción (ámbar = staging, violeta = local, roja = entorno sin definir). En producción
+  no hay banda. Vive en `src/components/env-banner.tsx` + `src/lib/env/app-env.ts`.
+- **Variable de control:** `NEXT_PUBLIC_APP_ENV` (`local` | `staging` | `production`).
+- **Supabase:** ambos proyectos son de la cuenta del cliente, RLS por `tenant_id`.
+- **Levantar staging, regenerar datos, y qué migración va y cuál no:** `sop.md` SOP-012 y
+  `docs/staging/inventario-migraciones.md`.
 
 ## 10. CONVENCIONES DE CÓDIGO
 - TypeScript strict mode

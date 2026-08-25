@@ -46,6 +46,7 @@ import * as dotenv from "dotenv";
 import { resolve } from "path";
 
 import { JOSUAR_ACCOUNTS } from "../src/lib/finanzas/reports/__tests__/josuar-accounts.fixture";
+import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import {
   SEED_CASES,
   SEED_CLASSIFICATIONS,
@@ -71,20 +72,9 @@ dotenv.config({ path: resolve(__dirname, "../.env.local") });
 // CANDADO ANTI-PRODUCCIÓN
 // ===========================================================================
 
-/**
- * Project refs de Supabase que son PRODUCCIÓN. El seed se niega a tocarlos.
- * El ref no es secreto: viaja en NEXT_PUBLIC_SUPABASE_URL a todo navegador
- * que abre la app. Está acá justamente para poder compararlo.
- */
-const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
-
-function projectRefOf(url: string): string {
-  try {
-    return new URL(url).hostname.split(".")[0];
-  } catch {
-    return "";
-  }
-}
+// PROD_PROJECT_REFS y projectRefOf viven en src/lib/env/app-env.ts: la misma
+// lista que usa la banda de entorno de la app para decidir si está en
+// producción. Una sola fuente, para que no se puedan desincronizar.
 
 function abort(msg: string): never {
   console.error(`\n❌ ABORTADO — ${msg}\n`);
@@ -103,7 +93,7 @@ function guard(): void {
   }
 
   const ref = projectRefOf(SUPABASE_URL);
-  if (PROD_PROJECT_REFS.includes(ref)) {
+  if ((PROD_PROJECT_REFS as readonly string[]).includes(ref)) {
     abort(
       `el proyecto Supabase "${ref}" es PRODUCCIÓN.\n` +
         `   Este script NUNCA corre contra la base real del bufete.\n` +

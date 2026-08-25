@@ -46,3 +46,8 @@ supabase/.temp/
 
 # scripts/fixture-output — PDFs/PNGs sintéticos del smoke local
 /scripts/fixture-output/
+
+# Bundles de SQL para staging: los genera scripts/build-staging-bundle.mjs
+# a partir de archivos que YA estan versionados. Commitearlos duplicaria
+# ~8.000 lineas de SQL y ensuciaria el diff de cada migracion futura.
+sql/staging/

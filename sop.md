@@ -311,3 +311,141 @@ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" http://localhost:3000/<
 ```
 Un 307 al login es correcto para rutas protegidas; un 307 a `/` o a `/legal` significa que el
 gating por rol la está rebotando y falta la excepción.
+
+---
+
+## SOP-012: Entornos — staging vs. producción
+
+**Vigente desde Fase 0 (2026-08-25).** Antes de esta fecha `localhost` escribía en la base
+real del bufete. Ya no.
+
+### Por qué existe esta separación
+
+El módulo contable escribe asientos **inmutables**: los triggers de
+`sql/pending/023_contabilidad_fase1_ledger.sql` rechazan `UPDATE` y `DELETE` sobre
+`journal_entries`, `journal_entry_lines` y `accounting_legajos`. Un asiento equivocado no se
+borra — se revierte con otro asiento, y los dos quedan en el libro. Eso significa que una
+prueba hecha por error contra producción **contamina permanentemente** los libros que el
+contador tiene que certificar ante la DGI.
+
+### Las dos bases
+
+| | Proyecto Supabase | Quién apunta acá | Datos |
+|---|---|---|---|
+| **Staging** | `xtyenhakplrkyifbcaow` | `.env.local`, y los entornos Preview y Development de Vercel | Ficticios. Se puede romper |
+| **Producción** | `uqmmkklbhzxqybljiecs` | **Solo** el entorno Production de Vercel | Reales. Se toca únicamente por deploy a `main` |
+
+**Regla:** producción no se toca desde una máquina. Ni con un script, ni con el SQL Editor
+"para una cosita rápida", ni poniendo sus credenciales en `.env.local`. El único camino a
+producción es un merge a `main` que dispare el auto-deploy.
+
+### Cómo saber contra qué base estás
+
+De un vistazo: **la banda de arriba de todo**.
+
+| Banda | Entorno |
+|---|---|
+| Ámbar con rayas, "STAGING — DATOS DE PRUEBA" | Staging |
+| Violeta con rayas, "LOCAL — DATOS DE PRUEBA" | Local |
+| Roja, "⚠ ENTORNO SIN DEFINIR" | Falta `NEXT_PUBLIC_APP_ENV` — **no confíes en la pantalla** |
+| **Sin banda** | Producción |
+
+La banda no se puede cerrar y sale en toda pantalla, incluido el login y el portal público de
+cotizaciones. Vive en `src/components/env-banner.tsx`; la lógica de resolución está en
+`src/lib/env/app-env.ts`.
+
+Si en producción llegara a aparecer la banda roja, la app **sigue funcionando** — es solo un
+aviso de que falta la variable. Se arregla cargando `NEXT_PUBLIC_APP_ENV=production` en Vercel.
+
+### Levantar el entorno de staging desde cero
+
+1. **Aplicar el esquema.** No se corre `supabase db push` (el proyecto nunca lo usó) y la
+   `service_role` key **no puede ejecutar DDL** (PostgREST solo habla de tablas, `/pg/query`
+   da 404 y no hay RPC tipo `exec_sql`). Se pega SQL en el SQL Editor:
+
+   ```bash
+   node scripts/build-staging-bundle.mjs
+   ```
+
+   Genera `sql/staging/bundle-1-schema-base.sql` y `sql/staging/bundle-2-pending.sql`. Se
+   pegan **en ese orden** en el SQL Editor del proyecto de staging. Si algo falla, el
+   separador `ARCHIVO n/N` que está arriba del error dice en qué migración se cortó.
+
+   El bundle **excluye a propósito** `20260402000003_seed_clients_cases.sql`, que contiene
+   23 clientes y 46 casos **reales** del bufete sacados del Excel. Copiar eso a staging
+   sería una violación de la Ley 81 y justamente lo que Fase 0 vino a evitar. La lista
+   completa de exclusiones, con el motivo de cada una, está en
+   `docs/staging/inventario-migraciones.md` §4.
+
+2. **Cargar los datos de prueba:**
+
+   ```bash
+   npm run seed:staging
+   ```
+
+3. **Verificar** que la banda ámbar aparece y que se puede entrar con
+   `admin@staging.test`.
+
+### Regenerar los datos de prueba
+
+`npm run seed:staging` es idempotente: correrlo de nuevo no duplica nada. Cada fila tiene un
+UUID determinístico (UUIDv5) derivado de su clave natural — el estado "En trámite" es siempre
+el mismo UUID. Eso es lo que evita que vuelva a pasar lo de `cat_statuses` con 7 filas donde
+debía haber 2.
+
+**Excepción:** cotizaciones y facturas se crean solo si no existen; si ya están, el seed las
+deja como están. Los triggers T1/T2/T4/T5b/T5c del módulo Finanzas prohíben modificar líneas
+o campos de un documento que salió de `borrador`, así que un upsert reventaría. Para
+regenerarlas hay que vaciar la base: en el dashboard de Supabase, *Settings → General →
+Reset database*, y volver a correr los dos bundles y el seed.
+
+Si hace falta que los reportes den los mismos totales que producción, el plan de cuentas se
+puede sembrar con los saldos de apertura reales:
+
+```bash
+SEED_SALDOS_REALES=1 npm run seed:staging
+```
+
+Por defecto van en 0, para que todo lo que muestre un reporte venga de los montos redondos
+del seed y se pueda validar a mano.
+
+### Usuarios de prueba
+
+| Rol | Email | Contraseña |
+|---|---|---|
+| admin | `admin@staging.test` | `Staging2026$Admin` |
+| abogada | `abogada@staging.test` | `Staging2026$Abogada` |
+| abogada | `abogada2@staging.test` | `Staging2026$Abogada2` |
+| asistente | `asistente@staging.test` | `Staging2026$Asistente` |
+| contador | `contador@staging.test` | `Staging2026$Contador` |
+
+Nombres inventados a propósito — ninguno es el de una licenciada. El dominio `.test` está
+reservado por RFC 2606: no resuelve, así que ningún correo puede salir hacia una persona real.
+
+### Cambiar de entorno
+
+**No hay que cambiar de entorno.** `.env.local` apunta a staging y se queda ahí.
+
+Si alguna vez hiciera falta leer producción desde la máquina — un diagnóstico puntual, nada
+más — se hace en el SQL Editor del dashboard de Supabase con consultas de **solo lectura**, y
+nunca reapuntando `.env.local`. El `.env.local` que apuntaba a producción quedó respaldado en
+`.env.backup-produccion-2026-08-25.local` (ignorado por git); está ahí para recuperar las
+credenciales de eFactura y Resend, no para volver a usarlo tal cual.
+
+### Variables de entorno en Vercel
+
+| Variable | Production | Preview | Development |
+|---|---|---|---|
+| `NEXT_PUBLIC_APP_ENV` | `production` | `staging` | `staging` |
+| `NEXT_PUBLIC_SUPABASE_URL` | proyecto de prod | proyecto de staging | proyecto de staging |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon de prod | anon de staging | anon de staging |
+| `SUPABASE_SERVICE_ROLE_KEY` | service de prod | service de staging | service de staging |
+
+El resto de las variables (eFactura, Resend, CRON) no cambian por entorno hoy. **Ojo con
+`RESEND_API_KEY` en Preview:** la cuenta tiene `integra-panama.com` verificado y manda correo
+real. En `.env.local` está comentada por eso mismo.
+
+### Antes de dar por bueno un cambio
+
+Correrlo contra staging con datos de prueba, no contra producción. Ese es el punto de todo
+esto.

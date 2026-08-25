@@ -73,8 +73,10 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
       onMouseEnter={() => mode === "auto" && setHovered(true)}
       onMouseLeave={() => mode === "auto" && setHovered(false)}
       className={cn(
-        "fixed top-16 left-0 z-40 hidden lg:flex flex-col bg-integra-navy",
-        "h-[calc(100vh-4rem)] transition-[width] duration-200 ease-out",
+        // 4rem = alto del header. --env-band-h suma el alto de la banda de
+        // entorno (0 en producción), para no quedar tapado por ella.
+        "fixed top-[calc(4rem+var(--env-band-h,0px))] left-0 z-40 hidden lg:flex flex-col bg-integra-navy",
+        "h-[calc(100vh-4rem-var(--env-band-h,0px))] transition-[width] duration-200 ease-out",
         expanded ? "w-60" : "w-16",
         // Sombra solo cuando está flotando por hover (no pinned)
         hovered && mode === "auto" && "shadow-2xl",

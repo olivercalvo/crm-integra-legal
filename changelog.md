@@ -1,14 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
-## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - Tareas 1 y 2 (parcial)
+## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - Tareas 1, 2, 4, 5 y 7
 
 Fase 0 es bloqueante: no arranca nada de contabilidad hasta que exista una base de staging
 separada. Los asientos del ledger son inmutables por diseño (`023_contabilidad_fase1_ledger.sql`
 crea 6 triggers que rechazan UPDATE y DELETE), así que un error de prueba contra la base real
 no se borra: queda en los libros que el contador tiene que certificar ante la DGI.
 
-**Esta entrega cubre solo las tareas 1 y 2** — las que no necesitan las credenciales de
-staging. Las tareas 3 a 7 quedan abiertas.
+Proyecto Supabase de staging: `xtyenhakplrkyifbcaow`. Producción: `uqmmkklbhzxqybljiecs`.
+
+**Cerradas: 1, 2, 4, 5 y 7. Bloqueadas: 3 y 6** — no por falta de credenciales de la app,
+sino porque la `service_role` key no puede ejecutar DDL (ver más abajo).
 
 ### Tarea 1 — Inventario de migraciones
 
@@ -62,19 +64,126 @@ y los 33 archivos de `sql/pending/`, cada uno con su estado en producción y qu�
 - 5 usuarios de prueba con nombres inventados (NO los de las licenciadas) cubriendo los 4 roles.
   El script imprime usuario y contraseña al terminar.
 
+### Tarea 3 — Aplicar el esquema en staging (BLOQUEADA)
+
+**Con la `service_role` key no se puede ejecutar DDL.** Verificado contra el proyecto de
+staging el 2026-08-25:
+
+| Vía | Resultado |
+|---|---|
+| PostgREST `/rest/v1/` | 200, pero solo expone tablas y RPCs. No corre DDL |
+| `/pg/query` | **404** |
+| RPC `exec_sql` | **404** (no existe) |
+| DNS de `db.<ref>.supabase.co` | No resuelve. La conexión Postgres va por el pooler y pide la password de la base |
+
+**Hallazgo aparte:** `scripts/run-migration.mjs` apunta justamente a `${SUPABASE_URL}/pg/query`.
+Ese endpoint es interno de pg-meta y no está expuesto, así que **ese script nunca funcionó** —
+lo cual explica por qué la convención del proyecto es "correr las migraciones a mano en el SQL
+Editor".
+
+Lo reemplaza `scripts/build-staging-bundle.mjs`, que arma dos archivos pegables:
+`sql/staging/bundle-1-schema-base.sql` (25 migraciones, 4.107 líneas) y
+`sql/staging/bundle-2-pending.sql` (23 migraciones, 4.229 líneas), en orden y con separadores
+`ARCHIVO n/N` para saber dónde se cortó si algo falla. **Excluye a propósito** los 9 archivos
+listados en `docs/staging/inventario-migraciones.md` §4, entre ellos el que trae los clientes
+reales.
+
+Se destraba de dos formas: pegando los bundles en el SQL Editor, o pasando la connection
+string del pooler para correrlas con `pg` (ya es dependencia del proyecto).
+
+### Tarea 4 — Configuración de entornos
+
+- `.env.local` **reapuntado a staging**, con un encabezado que explica por qué no vuelve a
+  producción. El anterior quedó respaldado en `.env.backup-produccion-2026-08-25.local`
+  (ignorado por git, y no es un nombre que Next.js cargue) para no perder las credenciales
+  de eFactura y Resend.
+- Variable nueva `NEXT_PUBLIC_APP_ENV` (`local` | `staging` | `production`).
+- **`RESEND_API_KEY` comentada en staging.** La cuenta tiene `integra-panama.com` verificado
+  y manda correo real: si alguien prueba "Enviar cotización" y escribe una dirección de
+  verdad, el cliente la recibe. Sin la variable el flujo corta con un error claro. Es una
+  línea descomentarla para probar el envío a propósito.
+- `.env.example` y `.env.local.example` actualizados con el bloque de entornos.
+- La tabla de qué cargar en Vercel está en `sop.md` SOP-012 (lo hace Oliver).
+
+### Tarea 5 — Salvaguarda visual
+
+- `src/lib/env/app-env.ts` (módulo puro) + `src/components/env-banner.tsx`, montado en el
+  root layout: sale en **toda** pantalla, incluidos el login y el portal público.
+- Ámbar "STAGING — DATOS DE PRUEBA", violeta "LOCAL", rojo "⚠ ENTORNO SIN DEFINIR".
+  En producción **no renderiza nada**, y esa ausencia es la señal.
+- Rayas diagonales: ningún otro elemento del CRM las tiene, se reconoce sin leer. Los tres
+  colores están lejos del navy y el dorado de la paleta Integra. Sin botón de cerrar.
+- **Fail-safe:** si falta `NEXT_PUBLIC_APP_ENV`, se cae al project ref de Supabase. Resuelve
+  "producción" solo cuando la base ES la de producción; ante la duda muestra la banda roja.
+  Así, olvidarse de cargar la variable en Vercel no le pone una alerta enfrente a las
+  licenciadas.
+- La lista de refs de producción es **una sola**: `PROD_PROJECT_REFS` en `app-env.ts`, que
+  ahora también importa el seed. No se pueden desincronizar.
+- Los offsets del header sticky y del sidebar fixed pasaron a sumar `--env-band-h` (0 en
+  producción), así que la banda no tapa nada.
+
+### Tarea 7 — Documentación
+
+- `sop.md` → **SOP-012: Entornos — staging vs. producción**. Cómo levantar el entorno,
+  regenerar los datos, por qué no hay que "cambiar de entorno", los usuarios de prueba, la
+  tabla de variables de Vercel, y la regla de que producción solo se toca por deploy.
+- `CLAUDE.md` → §9 reescrita. Decía *"localhost = dev; URL de Vercel = prod"*, que era falso
+  y es exactamente la confusión que causó el problema. Ahora hay tabla de tres entornos.
+  También se reforzó **DB Safety**.
+- `task_plan.md` → sección de Fase 0 con el estado de las 7 tareas.
+
+### ⚠️ Efecto colateral: `scripts/backup-supabase.mjs` quedó apuntando a staging
+
+Ese script (untracked en el repo, del 2026-08-25 15:30) **lee las credenciales parseando
+`.env.local` a mano**:
+
+```js
+const URL_BASE   = leer("NEXT_PUBLIC_SUPABASE_URL");
+const SERVICE_KEY = leer("SUPABASE_SERVICE_ROLE_KEY");
+```
+
+Al reapuntar `.env.local` a staging, el respaldo pasó a copiar **staging** — pero sigue
+escribiendo `"proyecto": "crm-integra-legal (PRODUCCION)"` en el `_MANIFIESTO.json` y sigue
+guardando en la misma carpeta de OneDrive. Es la peor forma de fallar: un respaldo que se
+declara de producción, con datos de prueba adentro, y con la retención de 14 días borrando
+los respaldos buenos de los días anteriores.
+
+**No se tocó el archivo** porque no está versionado y puede ser trabajo en curso. Hay que
+arreglarlo antes de la próxima corrida. La forma correcta es que el script **no** dependa de
+`.env.local`: que reciba la URL y la key del proyecto de producción por variables de entorno
+propias (`BACKUP_SUPABASE_URL` / `BACKUP_SUPABASE_SERVICE_KEY`) y **aborte** si el project
+ref no está en `PROD_PROJECT_REFS` — el mismo candado del seed, al revés.
+
+Mientras tanto, cualquier respaldo generado después de las 16:00 del 2026-08-25 hay que
+darlo por inválido.
+
 ### Verificado
 
 - `npx tsc --noEmit` limpio en todo el proyecto (exit 0).
-- `npx eslint` limpio en los dos archivos nuevos.
-- Candado 1 probado: con el `.env.local` real aborta con "el proyecto Supabase … es PRODUCCIÓN".
+- `npx eslint` limpio en todos los archivos tocados.
+- Candado 1 del seed probado: con el `.env.local` de producción aborta con "el proyecto
+  Supabase … es PRODUCCIÓN".
 - Candado 2 probado: con una URL de staging y sin `NEXT_PUBLIC_APP_ENV` aborta igual.
+- Banda de entorno verificada en el navegador sobre `/login` (`localhost:3001`, porque el
+  3000 estaba ocupado por otro proyecto): ámbar con rayas, arriba de todo, sin tapar nada.
+- Credenciales de staging verificadas: PostgREST responde 200, `auth/v1/admin/users`
+  devuelve 0 usuarios y `public.tenants` no existe — la base está vacía, como se esperaba.
 - **Nada se ejecutó contra producción** en toda la tarea.
+
+### Lo que NO se verificó todavía
+
+- La banda **por dentro de la app** (header sticky + sidebar fixed con el offset nuevo). No
+  hay con qué loguearse hasta que el esquema y el seed estén en staging.
+- Todo lo de la tarea 6 (aislamiento, y el conteo de 207 casos en producción).
 
 ### Pendiente de esta fase
 
-Tareas 3 a 7: aplicar el esquema en staging, configurar entornos (`.env.local` y Vercel),
-indicador visual de entorno, verificar el aislamiento contra los 207 casos de producción, y
-documentar en `sop.md` / `CLAUDE.md`.
+- **Tarea 3** — aplicar los dos bundles en staging.
+- **Tarea 6** — escribir en staging, confirmar que producción no se movió y que sigue en 207
+  casos. Depende de la 3.
+- **Tarea 4, mitad de Oliver** — cargar las 4 variables en el panel de Vercel.
+- `sql/pending/022_backfill_dv_embebido.sql` sigue **sin commitear** (untracked). Hay que
+  decidir si entra al repo.
 
 
 ## [DEPLOY] - 2026-08-24 14:49 UTC - develop → main (3 commits)

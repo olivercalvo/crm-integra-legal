@@ -47,7 +47,8 @@ export function HomeHeader({ userName, userRole }: HomeHeaderProps) {
     .slice(0, 2);
 
   return (
-    <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
+    // top-[var(--env-band-h)]: ver comentario en components/layout/header.tsx.
+    <header className="sticky top-[var(--env-band-h,0px)] z-50 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
       <div className="flex items-center gap-3">
         <Link href="/" className="text-xl font-bold text-integra-navy">
           Integra <span className="text-integra-gold">Legal</span>

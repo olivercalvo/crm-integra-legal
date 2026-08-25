@@ -1,5 +1,82 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - Tareas 1 y 2 (parcial)
+
+Fase 0 es bloqueante: no arranca nada de contabilidad hasta que exista una base de staging
+separada. Los asientos del ledger son inmutables por diseño (`023_contabilidad_fase1_ledger.sql`
+crea 6 triggers que rechazan UPDATE y DELETE), así que un error de prueba contra la base real
+no se borra: queda en los libros que el contador tiene que certificar ante la DGI.
+
+**Esta entrega cubre solo las tareas 1 y 2** — las que no necesitan las credenciales de
+staging. Las tareas 3 a 7 quedan abiertas.
+
+### Tarea 1 — Inventario de migraciones
+
+Nuevo `docs/staging/inventario-migraciones.md`: las 32 migraciones de `supabase/migrations/`
+y los 33 archivos de `sql/pending/`, cada uno con su estado en producción y qué hace.
+
+- `sql/pending/` **no es una cola**: conviven migraciones aplicadas hace meses (018, 019, 020,
+  023, 024) con una que nunca se corrió (022). El nombre del directorio engaña.
+- **Solo 3 archivos quedan en "incierto"**, y los tres son cambios de dato, no de esquema,
+  así que el repo no puede resolverlos: `backfill_client_type_null.sql`,
+  `hotfix_cli116_client_type.sql`, `cleanup-test-users-2026-05-02.sql`. El documento trae la
+  consulta exacta para verificar cada uno contra la base.
+- **Hallazgo con impacto en la Tarea 3**: `supabase/migrations/20260402000003_seed_clients_cases.sql`
+  contiene **23 clientes y 46 casos REALES** del bufete, sacados del Excel, con los nombres de
+  las licenciadas. Aplicar las migraciones "todas de corrido" en staging habría copiado datos
+  personales protegidos por la Ley 81 — exactamente lo que Fase 0 viene a evitar. El documento
+  lista el orden de aplicación con ese archivo y otros ocho explícitamente excluidos.
+- Faltan los números 003 y 017 en `sql/pending/`. No existen ni aparecen en el historial de git.
+
+### Tarea 2 — Script de seed de staging
+
+- `scripts/seed-staging.ts` + `scripts/seed-data/staging-fixtures.ts`, corriendo con
+  `npm run seed:staging`.
+- **Dos candados anti-producción independientes**, ambos verificados: el project ref de la URL
+  de Supabase contra una lista negra, y `NEXT_PUBLIC_APP_ENV ∈ {staging, local}`. Con el
+  `.env.local` actual (que apunta a prod) el script aborta antes de crear el cliente Supabase.
+- **Idempotencia por UUID determinístico (UUIDv5)** sobre la clave natural de cada fila. El
+  estado "En trámite" siempre es el mismo UUID, corras el seed una vez o veinte. Ataca de raíz
+  el bug de `cat_statuses` con 7 filas donde debía haber 2
+  (`fix-duplicate-statuses-2026-08-23.sql`), que salió de correr un script de carga tres veces.
+- Excepción documentada: **cotizaciones y facturas se crean solo si no existen**. Los triggers
+  T1/T2/T4/T5b/T5c prohíben tocar líneas y campos de un documento que salió de `borrador`, así
+  que un upsert ciego reventaría en la segunda corrida. El seed las crea en `borrador`, inserta
+  las líneas (los triggers de recálculo llenan los totales) y recién ahí avanza el estado por
+  transiciones whitelisteadas.
+- **Cero datos de producción.** 15 clientes ficticios con nombres panameños, RUC/cédula bien
+  formados y DV determinístico de 2 dígitos; 30 casos en las 9 clasificaciones; 20 gastos de
+  trámite; 7 cotizaciones y 8 facturas cubriendo todos los estados alcanzables; 6 tareas y
+  4 pendientes personales. Emails en dominios `.test` (RFC 2606) para que nada salga por Resend.
+- **Montos redondos a propósito** (500 / 1.000 / 1.500 / 2.500) para que el ITBMS 7% dé
+  35 / 70 / 105 / 175 y un Estado de Resultado se pueda validar a mano.
+- **El plan de cuentas sí se replica idéntico**: las 62 cuentas de Josuar, importadas del
+  fixture que ya vive en el repo (`josuar-accounts.fixture.ts`) en vez de transcribirlas. No es
+  dato personal y se necesita igual para que los reportes se comporten como en prod. El seed
+  además desactiva las 34 cuentas legacy de QuickBooks, que es el estado real de producción
+  (62 activas + 34 inactivas = 96).
+- **Los saldos de apertura reales NO se cargan por defecto** (`saldo_inicial = 0`). Con los
+  saldos reales, cada total de reporte arrastra números como 191.947,55 y se pierde el objetivo
+  de validar a mano. Se cargan con `SEED_SALDOS_REALES=1` cuando haga falta reproducir los
+  totales de producción.
+- 5 usuarios de prueba con nombres inventados (NO los de las licenciadas) cubriendo los 4 roles.
+  El script imprime usuario y contraseña al terminar.
+
+### Verificado
+
+- `npx tsc --noEmit` limpio en todo el proyecto (exit 0).
+- `npx eslint` limpio en los dos archivos nuevos.
+- Candado 1 probado: con el `.env.local` real aborta con "el proyecto Supabase … es PRODUCCIÓN".
+- Candado 2 probado: con una URL de staging y sin `NEXT_PUBLIC_APP_ENV` aborta igual.
+- **Nada se ejecutó contra producción** en toda la tarea.
+
+### Pendiente de esta fase
+
+Tareas 3 a 7: aplicar el esquema en staging, configurar entornos (`.env.local` y Vercel),
+indicador visual de entorno, verificar el aislamiento contra los 207 casos de producción, y
+documentar en `sop.md` / `CLAUDE.md`.
+
+
 ## [DEPLOY] - 2026-08-24 14:49 UTC - develop → main (3 commits)
 
 **Merge:** `0de75ca` · **Punto de rollback:** `fd0bf88` · **Aprobado por:** Oliver

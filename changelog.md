@@ -148,14 +148,18 @@ guardando en la misma carpeta de OneDrive. Es la peor forma de fallar: un respal
 declara de producción, con datos de prueba adentro, y con la retención de 14 días borrando
 los respaldos buenos de los días anteriores.
 
-**No se tocó el archivo** porque no está versionado y puede ser trabajo en curso. Hay que
-arreglarlo antes de la próxima corrida. La forma correcta es que el script **no** dependa de
-`.env.local`: que reciba la URL y la key del proyecto de producción por variables de entorno
-propias (`BACKUP_SUPABASE_URL` / `BACKUP_SUPABASE_SERVICE_KEY`) y **aborte** si el project
-ref no está en `PROD_PROJECT_REFS` — el mismo candado del seed, al revés.
+**ARREGLADO por Oliver el mismo día**, antes de que corriera el respaldo automático de las
+20:30. El script ya no lee `.env.local`: lee `.env.produccion.local` (o lo que indique
+`BACKUP_ENV_FILE`), **aborta si el project ref no está en `PROD_PROJECT_REFS`** —el candado
+del seed, al revés— y el `_MANIFIESTO.json` ahora graba `project_ref`, así que deja de
+depender de una etiqueta escrita a mano. Probado en los dos sentidos.
 
-Mientras tanto, cualquier respaldo generado después de las 16:00 del 2026-08-25 hay que
-darlo por inválido.
+Nota menor: `PROD_PROJECT_REFS` queda ahora en dos lugares (`src/lib/env/app-env.ts` y
+`scripts/backup-supabase.mjs`, que corre con `node` y no puede importar el módulo TS). Si
+alguna vez cambia el proyecto de producción, hay que tocar los dos.
+
+`scripts/backup-supabase.mjs` sigue **untracked**. Vale la pena versionarlo: es la única
+defensa ante un borrado en producción y hoy vive solo en la máquina de Oliver.
 
 ### Verificado
 

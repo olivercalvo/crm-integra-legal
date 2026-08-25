@@ -37,19 +37,16 @@ Dos caminos, cualquiera de los dos destraba la 3 y la 6:
 - **(b)** Oliver pasa la connection string del pooler (Dashboard → Settings → Database →
   Connection string → URI) y las corro yo con `pg`, que ya es dependencia del proyecto.
 
-### URGENTE — el respaldo de produccion quedo apuntando a staging
+### Respaldo de produccion — CERRADO el 25/08
 
-`scripts/backup-supabase.mjs` (untracked) parsea `.env.local` para sacar la URL y la service
-key. Al reapuntar `.env.local` a staging, el respaldo pasa a copiar **staging** mientras sigue
-escribiendo `"crm-integra-legal (PRODUCCION)"` en el manifiesto, en la misma carpeta de
-OneDrive, y con la retencion de 14 dias borrando los respaldos buenos.
+`scripts/backup-supabase.mjs` parseaba `.env.local`, asi que al reapuntarlo a staging el
+respaldo iba a copiar staging rotulandolo "PRODUCCION" y a borrar los respaldos buenos por
+retencion. Oliver lo arreglo el mismo dia, antes de la corrida automatica de las 20:30: ahora
+lee `.env.produccion.local`, ABORTA si el project ref no esta en `PROD_PROJECT_REFS`, y el
+manifiesto graba `project_ref` en vez de confiar en una etiqueta.
 
-No se toco el archivo (no esta versionado, puede ser trabajo en curso). Arreglo propuesto:
-que reciba `BACKUP_SUPABASE_URL` / `BACKUP_SUPABASE_SERVICE_KEY` propias en vez de leer
-`.env.local`, y que **aborte** si el project ref NO esta en `PROD_PROJECT_REFS`
-(`src/lib/env/app-env.ts`) — el candado del seed, al reves.
-
-Cualquier respaldo generado despues de las 16:00 del 25/08/2026 hay que darlo por invalido.
+Queda pendiente: el archivo sigue **untracked**. Vale versionarlo — es la unica defensa ante
+un borrado en produccion y hoy vive solo en la maquina de Oliver.
 
 ### Pendiente de Oliver (no tecnico)
 

@@ -36,6 +36,12 @@ const RETENCION_DIAS = Number(process.env.BACKUP_RETENTION_DAYS || 14);
 
 // ---------------------------------------------------------------- credenciales
 // Los refs de los proyectos de PRODUCCIÓN. Si el ref no está acá, el script aborta.
+//
+// ⚠️ ESTA LISTA ESTÁ REPETIDA EN TRES ARCHIVOS (este corre con `node` y no puede
+// importar el módulo TypeScript):
+//   - `src/lib/env/app-env.ts`        (la banda de entorno + el seed)
+//   - `scripts/apply-staging-sql.mjs` (aborta si el ref SÍ es de producción)
+// Si alguna vez cambia el proyecto de producción, hay que tocar los tres.
 const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
 
 const envPath = process.env.BACKUP_ENV_FILE || path.join(REPO, ".env.produccion.local");

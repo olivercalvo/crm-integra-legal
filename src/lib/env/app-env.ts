@@ -21,6 +21,12 @@
  * abre la app. Está acá justamente para poder compararlo — es la fuente única
  * que usan tanto el fallback de `resolveAppEnv()` como el candado de
  * `scripts/seed-staging.ts`.
+ *
+ * ⚠️ ESTA LISTA ESTÁ REPETIDA EN TRES ARCHIVOS. Los otros dos corren con `node`
+ * y no pueden importar este módulo TypeScript:
+ *   - `scripts/backup-supabase.mjs`   (aborta si el ref NO es de producción)
+ *   - `scripts/apply-staging-sql.mjs` (aborta si el ref SÍ es de producción)
+ * Si alguna vez cambia el proyecto de producción, hay que tocar los tres.
  */
 export const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"] as const;
 

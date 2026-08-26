@@ -17,29 +17,40 @@ Staging: `xtyenhakplrkyifbcaow`. Produccion: `uqmmkklbhzxqybljiecs`.
 ### Pendiente de Oliver (no tecnico)
 
 - Cargar las 4 variables en el panel de Vercel (tabla en `sop.md` SOP-012).
-- Pasar la definicion del trigger de totales de cotizacion, exportada de produccion, para
-  versionarla en el repo.
 - Recrear en PRODUCCION el indice de `client_payments(tenant_id)`, que no existe.
+- Corregir el encabezado de `20260508000002`: dice "YA APLICADO" y su seccion 5 no lo esta.
+- Revisar las demas migraciones marcadas como "retro-documentacion": ninguna se ejecuto
+  nunca, asi que pueden tener el mismo tipo de bug latente.
 
 ### Deuda descubierta al aplicar las migraciones — CADA UNA NECESITA MIRAR PRODUCCION
 
 Las tres salieron de aplicar el repo de corrido sobre una base limpia, que **nunca se habia
 hecho**. Ninguna es urgente; las tres son silenciosas.
 
-1. **El trigger de totales de cotizacion no esta en el repo.** CONFIRMADO por Oliver el
-   25/08: en produccion el trigger existe y funciona (cero cotizaciones con total 0). El
-   problema no es produccion, es que **solo vive ahi**. Oliver va a pasar la definicion para
-   versionarla.
-   `20260508000002` dropea las columnas generadas `quote_lines.subtotal/tax_amount/line_total`
-   y dice que las mantiene "el trigger T8b-quote (aplicado fuera de esta migration)". Ese
-   trigger no existe en el repo. Consecuencia: si alguna vez hubiera que reconstruir
-   produccion desde el repo, **toda cotizacion quedaria con total 0**, sin ningun error.
-   Accion: exportar la definicion real de produccion y versionarla.
-   ```sql
-   SELECT p.proname, pg_get_functiondef(p.oid) FROM pg_proc p
-   JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname ILIKE '%quote%total%';
+1. **La seccion 5 de `20260508000002` NUNCA se aplico en produccion, y el archivo no lo
+   dice.** RESUELTO el 25/08. El encabezado afirma "YA APLICADO EN PRODUCCION 2026-05-08" y
+   es cierto para 7 de sus 8 secciones. La 5 —la que dropea las columnas generadas de
+   `quote_lines`— nunca corrio, porque tiene un bug de sintaxis adentro (una variable
+   PL/pgSQL `is_generated` que choca con la columna homonima de `information_schema`).
+   Quien lo aplico a mano se comio ese error y siguio de largo.
+
+   Verificado en produccion por Oliver:
    ```
+   subtotal   -> ALWAYS  (quantity * unit_price)
+   tax_amount -> ALWAYS  ((quantity * unit_price) * tax_rate)
+   line_total -> ALWAYS  ((quantity * unit_price) * (1 + tax_rate))
+   ```
+   El "trigger T8b-quote" que la seccion promete **no existe en ningun lado**, y nunca hizo
+   falta: las columnas nunca dejaron de ser GENERATED.
+
+   Accion tomada: staging saltea la seccion 5 (`scripts/staging-fixups.mjs`, FIXUP 2). Las
+   dos bases calculan igual. **Pendiente en el REPO:** corregir el encabezado del archivo
+   para que diga que la seccion 5 no esta aplicada, o partirla en dos migraciones. Hoy el
+   archivo miente por omision y la proxima persona va a tropezar con lo mismo.
+
+   Y la leccion mas general: **hay que revisar las otras migraciones marcadas como
+   "retro-documentacion"**, porque ninguna se ejecuto nunca y pueden arrastrar el mismo tipo
+   de bug sin que nadie lo sepa.
 
 2. **`idx_payments_tenant` esta definido dos veces**, sobre `client_payments` y sobre
    `payments`. Los nombres de indice son globales por esquema, asi que el segundo no pudo

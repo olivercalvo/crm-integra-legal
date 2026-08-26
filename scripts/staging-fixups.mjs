@@ -65,34 +65,59 @@ const FIXUPS = [
   },
 
   /**
-   * FIXUP 2 — el archivo declara una variable PL/pgSQL llamada `is_generated`
-   * y en el mismo bloque hace `SELECT is_generated FROM information_schema.columns`.
-   * La columna del catálogo se llama igual, así que PostgreSQL corta con:
+   * FIXUP 2 — se saca la SECCIÓN 5 de `20260508000002`, que dropea las columnas
+   * generadas `quote_lines.subtotal / tax_amount / line_total` y las recrea como
+   * NUMERIC NULL comunes.
    *
-   *   column reference "is_generated" is ambiguous
-   *   It could refer to either a PL/pgSQL variable or a table column.
+   * ────────────────────────────────────────────────────────────────────────
+   * POR QUÉ: esa sección NUNCA se aplicó en producción.
+   * ────────────────────────────────────────────────────────────────────────
+   * El encabezado del archivo dice "YA APLICADO EN PRODUCCION 2026-05-08", y es
+   * cierto para 7 de sus 8 secciones. La 5 no. Verificado contra producción por
+   * Oliver el 2026-08-25:
    *
-   * El archivo **nunca se ejecutó**: su encabezado dice "YA APLICADO EN
-   * PRODUCCION 2026-05-08 · retro-documentación del cambio aplicado
-   * manualmente". El cambio se hizo a mano en producción y el .sql se escribió
-   * después, sin correrlo. Por eso el bug siguió ahí sin que nadie lo viera.
+   *   information_schema.columns sobre quote_lines →
+   *     subtotal    ALWAYS   (quantity * unit_price)
+   *     tax_amount  ALWAYS   ((quantity * unit_price) * tax_rate)
+   *     line_total  ALWAYS   ((quantity * unit_price) * (1 + tax_rate))
    *
-   * El fixup renombra la variable a `v_is_generated` y califica la referencia a
-   * la columna como `columns.is_generated`. No cambia la lógica.
+   *   Y las otras secciones sí están: quotes.public_token / subtotal_hon /
+   *   subtotal_rei / converted_at (sección 1), quote_lines.invoice_kind con
+   *   datos 'HON'/'REI' (sección 4), quote_terms_template (sección 6).
    *
-   * ⚠️ APARTE, Y MÁS IMPORTANTE: ese bloque dropea las columnas generadas
-   * `quote_lines.subtotal / tax_amount / line_total` y las recrea como NUMERIC
-   * NULL comunes. El comentario dice que las mantiene "el trigger T8b-quote
-   * (aplicado fuera de esta migration)" — y **ese trigger no está en el repo**.
+   * La causa es el bug de sintaxis que vive DENTRO de la sección 5: declara una
+   * variable PL/pgSQL `is_generated` que choca con la columna homónima de
+   * `information_schema.columns`, y PostgreSQL corta con
+   * `column reference "is_generated" is ambiguous`. Quien aplicó el archivo a
+   * mano se comió ese error y siguió de largo con el resto.
+   *
+   * Consecuencia: la sección 5 promete que las columnas las mantendrá "el
+   * trigger T8b-quote (aplicado fuera de esta migration)". **Ese trigger no
+   * existe** — ni en el repo ni en producción. Los tres triggers reales de
+   * `quote_lines` en producción son `finanzas_quote_lines_immutability`,
+   * `update_updated_at` y `finanzas_trg_recalc_quote_totals`, y el último solo
+   * recalcula la CABECERA sumando las líneas. Nunca hizo falta un trigger
+   * porque las columnas nunca dejaron de ser GENERATED.
+   *
+   * Sacando la sección, staging queda **idéntico a producción**: las tres
+   * columnas las calcula la base. El bug de sintaxis deja de importar, porque el
+   * bloque no se ejecuta.
+   *
+   * OJO, no confundir: `quotes.subtotal_hon` y `quotes.subtotal_rei` (sección 1,
+   * que SÍ está aplicada) los calcula y escribe **la aplicación**
+   * (src/lib/finanzas/api/quotes.ts:601, 796, 928), no la base ni un trigger.
+   * El seed también los escribe, y eso es correcto: replica lo que hace la app.
    */
   {
     archivo: "supabase/migrations/20260508000002_quotes_extension_and_terms_template.sql",
-    motivo: 'variable PL/pgSQL "is_generated" ambigua con information_schema.columns',
+    motivo: "sección 5 (dropear columnas GENERATED) — nunca se aplicó en producción, se omite",
     reemplazos: [
-      // El orden importa: primero el SELECT, después la declaración y el IF.
-      [/SELECT is_generated INTO is_generated/g, "SELECT columns.is_generated INTO v_is_generated"],
-      [/^(\s*)is_generated TEXT;$/m, "$1v_is_generated TEXT;"],
-      [/IF is_generated = 'ALWAYS' THEN/g, "IF v_is_generated = 'ALWAYS' THEN"],
+      [
+        /DO \$\$\s*\nDECLARE\s*\n\s*is_generated TEXT;[\s\S]*?\nEND \$\$;/,
+        "-- [SECCIÓN 5 OMITIDA EN STAGING: nunca se aplicó en producción.\n" +
+          "--  quote_lines.subtotal/tax_amount/line_total siguen GENERATED ALWAYS.\n" +
+          "--  Ver scripts/staging-fixups.mjs, FIXUP 2.]",
+      ],
     ],
   },
 ];

@@ -571,10 +571,7 @@ async function seedLines(
   serviceIds: Map<string, string>,
   taxCodeIds: Map<string, string>
 ): Promise<void> {
-  const rows = lines.map((l, i) => {
-    const sub = money(l.quantity * l.unit_price);
-    const imp = money(sub * TAX_RATE[l.tax_code]);
-    return {
+  const rows = lines.map((l, i) => ({
     id: id(`${table}:${parentId}:${i}`),
     tenant_id: TENANT_ID,
     [parentKey]: parentId,
@@ -587,20 +584,16 @@ async function seedLines(
     tax_rate: TAX_RATE[l.tax_code],
     tax_code_id: taxCodeIds.get(l.tax_code) ?? null,
     created_by: userIds.get("abogada"),
-    // En invoice_lines estas tres columnas siguen siendo GENERATED ALWAYS y no
-    // se pueden escribir. En quote_lines NO: la migración
-    // 20260508000002_quotes_extension_and_terms_template.sql las dropeó y las
-    // recreó como NUMERIC NULL comunes, para que las mantuviera "el trigger
-    // T8b-quote (aplicado fuera de esta migration)".
+    // `subtotal`, `tax_amount` y `line_total` NO se escriben: en las dos tablas
+    // son GENERATED ALWAYS y las calcula la base. La sección 5 de
+    // 20260508000002 las convertía en columnas comunes, pero esa sección nunca
+    // se aplicó en producción y por eso tampoco se aplica en staging (ver
+    // scripts/staging-fixups.mjs, FIXUP 2). Escribirlas daría error.
     //
-    // ⚠️ ESE TRIGGER NO ESTÁ EN EL REPO. El que sí está
-    // (finanzas_recalc_one_quote_totals, de b3e) suma estas tres columnas para
-    // llenar la cabecera, así que si nadie las escribe, TODA cotización queda
-    // con grand_total = 0. Acá las escribe el seed. Ver changelog: hay que
-    // exportar el trigger real de producción y versionarlo.
-    ...(table === "quote_lines"
-      ? { subtotal: sub, tax_amount: imp, line_total: money(sub + imp) }
-      : {}),
+    // Lo que sí escribe el seed es `quotes.subtotal_hon` / `subtotal_rei`, más
+    // arriba: esas las calcula la APLICACIÓN, no la base
+    // (src/lib/finanzas/api/quotes.ts:601, 796, 928).
+    //
     // OJO: las dos tablas usan vocabularios distintos para lo mismo.
     //   quote_lines.invoice_kind → CHECK IN ('HON','REI')
     //     (20260508000002_quotes_extension_and_terms_template.sql:129)
@@ -610,8 +603,7 @@ async function seedLines(
     ...(table === "quote_lines"
       ? { invoice_kind: l.invoice_kind === "HONORARIOS" ? "HON" : "REI" }
       : {}),
-    };
-  });
+  }));
 
   const { error } = await db.from(table).insert(rows);
   if (error) throw new Error(`insert ${table}: ${error.message}`);

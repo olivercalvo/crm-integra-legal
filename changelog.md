@@ -109,18 +109,41 @@ implica recrear las 51 políticas de RLS.
 #### Deuda que apareció al aplicar el repo de corrido por primera vez
 
 Nunca se había hecho — las migraciones se venían aplicando a mano, de a una. Las tres son
-silenciosas y **cada una necesita que alguien mire producción**. Detalle y consultas de
-verificación en `task_plan.md`.
+silenciosas y ninguna se podía resolver sin mirar producción. Detalle en `task_plan.md`.
 
-1. **El trigger de totales de cotización no está en el repo.** `20260508000002` dropea las
-   columnas generadas `quote_lines.subtotal/tax_amount/line_total` y dice que las mantiene
-   "el trigger T8b-quote (aplicado fuera de esta migration)". Ese trigger no existe en el
-   repo. Confirmado por Oliver: **en producción existe y funciona** (cero cotizaciones con
-   total 0), así que el problema no es producción — es que el trigger vive solo ahí. **Si
-   alguna vez hubiera que reconstruir producción desde el repo, toda cotización quedaría
-   con total 0, sin un solo error.** Oliver va a exportar la definición para versionarla.
-   En staging lo cubre el seed, que escribe esas columnas y el split
-   `subtotal_hon`/`subtotal_rei` explícitamente.
+1. **La sección 5 de `20260508000002` nunca se aplicó en producción, y el archivo dice que
+   sí.** Su encabezado afirma "YA APLICADO EN PRODUCCION 2026-05-08" — cierto para 7 de sus
+   8 secciones. La 5, la que dropea las columnas generadas de `quote_lines`, no corrió:
+   tiene un bug de sintaxis adentro (una variable PL/pgSQL `is_generated` que choca con la
+   columna homónima de `information_schema.columns`). Quien la aplicó a mano se comió ese
+   error y siguió de largo con el resto.
+
+   Verificado contra producción:
+   ```
+   subtotal   → ALWAYS  (quantity * unit_price)
+   tax_amount → ALWAYS  ((quantity * unit_price) * tax_rate)
+   line_total → ALWAYS  ((quantity * unit_price) * (1 + tax_rate))
+   ```
+   Y las otras secciones sí están: `quotes.public_token / subtotal_hon / subtotal_rei /
+   converted_at`, `quote_lines.invoice_kind` con datos, y `quote_terms_template`.
+
+   El "trigger T8b-quote" que esa sección promete **no existe en ningún lado**, y nunca hizo
+   falta: las columnas nunca dejaron de ser GENERATED. Los tres triggers reales de
+   `quote_lines` en producción son `finanzas_quote_lines_immutability`, `update_updated_at`
+   y `finanzas_trg_recalc_quote_totals`, y el último solo recalcula la cabecera.
+
+   **Staging ahora saltea la sección 5** (`scripts/staging-fixups.mjs`, FIXUP 2) y el seed
+   dejó de escribir esas tres columnas. Las dos bases calculan igual. Queda pendiente
+   corregir el encabezado del archivo en el repo: hoy miente por omisión.
+
+   Cómo se llegó acá vale la pena registrarlo. La primera lectura fue "falta un trigger en
+   el repo" y la conclusión estaba al revés: el repo tenía de más, no de menos. Lo destrabó
+   Oliver al mirar los triggers reales de producción y notar que ninguno llenaba esas
+   columnas, con los totales igual perfectos. La única explicación posible era que las
+   columnas siguieran siendo generadas. Y sobre esa lectura hubo una segunda corrección:
+   excluir el archivo entero —la propuesta inicial— habría quitado 19 columnas que
+   producción sí tiene. La solución correcta era quirúrgica, una sección de ocho.
+
 2. **`idx_payments_tenant` está definido dos veces**, sobre `client_payments` y sobre
    `payments`. Los nombres de índice son globales por esquema, así que el segundo no pudo
    correr limpio. Verificado en producción por Oliver, **y salió al revés de lo que se
@@ -129,14 +152,12 @@ verificación en `task_plan.md`.
    viejo para que el nuevo pasara, y nadie recreó el de `client_payments`. Queda como
    arreglo pendiente **del lado de producción**; impacto bajo hoy (25 filas). En staging
    las dos tablas quedan indexadas, porque acá las migraciones corrieron de corrido.
-3. **`20260508000002` tiene un bug de sintaxis y nunca se ejecutó**: declara una variable
-   PL/pgSQL `is_generated` que choca con la columna homónima de `information_schema.columns`.
-   Su encabezado dice "retro-documentación del cambio aplicado manualmente" — se hizo a mano
-   y el `.sql` se escribió después, sin correrlo. Vale revisar si otras migraciones marcadas
-   igual arrastran lo mismo.
+3. **Las migraciones marcadas como "retro-documentación" nunca se ejecutaron.** El caso 1 es
+   la prueba: se escribieron después de aplicar el cambio a mano, así que nadie las corrió
+   nunca y pueden arrastrar bugs latentes. Vale revisar las demás con esa etiqueta.
 
-Los dos últimos se sortean con `scripts/staging-fixups.mjs`, una lista explícita de parches
-donde cada entrada dice qué rompe y qué verificar en producción.
+Los casos 1 y 2 se sortean con `scripts/staging-fixups.mjs`, una lista explícita de parches
+donde cada entrada dice qué rompe, qué se verificó en producción y qué queda pendiente.
 
 ### Tarea 6 — Verificación del aislamiento
 
@@ -250,6 +271,14 @@ Login como `admin@staging.test`, sobre el esquema y los datos recién cargados:
 `app_metadata.user_role` / `app_metadata.tenant_id`. El middleware autoriza leyendo de ahí,
 así que el login entraba y rebotaba al instante a `/login?error=no-role`. Ahora el seed usa
 el mismo shape que `/api/admin/users` al crear un usuario real.
+
+**Totales de cotización, verificados después de saltear la sección 5:** las seis columnas de
+`quote_lines` e `invoice_lines` quedaron `GENERATED ALWAYS` con la misma expresión que
+producción, y los totales de cabecera los llena el trigger de recálculo. Una línea de
+staging (`HON / 2500 / 175 / 2675`) tiene la misma mecánica que la de producción que pasó
+Oliver (`HON / 900 / 63 / 963`). `quotes.subtotal_hon` y `subtotal_rei` los sigue escribiendo
+el seed, porque en la app real los calcula el código
+(`src/lib/finanzas/api/quotes.ts:601, 796, 928`), no la base.
 
 ### Pendiente de esta fase
 

@@ -394,14 +394,14 @@ Al terminar, verificar que la banda ámbar aparece y que se puede entrar con
 
 ### Divergencias conocidas entre staging y producción
 
-Son tres, todas de nombre y ninguna de lógica. **Quien escriba una migración nueva tiene
-que conocerlas.**
+Son **dos** de nombre, más una migración que se saltea a propósito. Ninguna es de lógica.
+**Quien escriba una migración nueva tiene que conocerlas.**
 
 | # | Producción | Staging | Por qué |
 |---|---|---|---|
 | 1 | `auth.tenant_id()` y `auth.user_role()` | `public.tenant_id()` y `public.user_role()` | En los proyectos Supabase **nuevos** el esquema `auth` está reservado: no puede escribir ahí ni el rol de la conexión (`postgres`) ni el del SQL Editor (`dashboard_user`). Producción se creó en abril de 2026, cuando todavía se podía |
 | 2 | `idx_payments_tenant` sobre **`payments`**. `client_payments` quedó **sin** índice sobre `tenant_id` | `idx_payments_tenant` sobre `client_payments` + `idx_payments_tenant_fin` sobre `payments`: las **dos** indexadas | Dos migraciones definen el mismo nombre de índice sobre tablas distintas, y los nombres son globales por esquema. En prod se resolvió a mano quitando el viejo; acá corrieron de corrido |
-| 3 | Existe un trigger que llena `quote_lines.subtotal/tax_amount/line_total` y `quotes.subtotal_hon/subtotal_rei` | No existe: los valores los escribe el seed | Ese trigger ("T8b-quote") se aplicó a mano en producción y **nunca se versionó** |
+| 3 | La **sección 5** de `20260508000002` no está aplicada: `quote_lines.subtotal/tax_amount/line_total` siguen `GENERATED ALWAYS` | Igual — la sección 5 se omite a propósito | El archivo dice "YA APLICADO" pero esa sección nunca corrió (tiene un bug de sintaxis). Staging la saltea para no divergir. **No es divergencia: es lo que evita una** |
 
 Sobre la divergencia 2, verificado en producción el 2026-08-25: **es staging el que está
 mejor**. En producción `client_payments` no tiene índice sobre `tenant_id` — impacto bajo hoy

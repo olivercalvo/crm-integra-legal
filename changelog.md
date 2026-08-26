@@ -115,12 +115,20 @@ verificación en `task_plan.md`.
 1. **El trigger de totales de cotización no está en el repo.** `20260508000002` dropea las
    columnas generadas `quote_lines.subtotal/tax_amount/line_total` y dice que las mantiene
    "el trigger T8b-quote (aplicado fuera de esta migration)". Ese trigger no existe en el
-   repo. **Si alguna vez hubiera que reconstruir producción desde el repo, toda cotización
-   quedaría con total 0, sin un solo error.** En staging lo cubre el seed, que escribe esas
-   columnas y el split `subtotal_hon`/`subtotal_rei` explícitamente.
+   repo. Confirmado por Oliver: **en producción existe y funciona** (cero cotizaciones con
+   total 0), así que el problema no es producción — es que el trigger vive solo ahí. **Si
+   alguna vez hubiera que reconstruir producción desde el repo, toda cotización quedaría
+   con total 0, sin un solo error.** Oliver va a exportar la definición para versionarla.
+   En staging lo cubre el seed, que escribe esas columnas y el split
+   `subtotal_hon`/`subtotal_rei` explícitamente.
 2. **`idx_payments_tenant` está definido dos veces**, sobre `client_payments` y sobre
-   `payments`. Los nombres de índice son globales por esquema: el segundo no puede haber
-   corrido limpio, así que `payments` en producción probablemente no tiene ese índice.
+   `payments`. Los nombres de índice son globales por esquema, así que el segundo no pudo
+   correr limpio. Verificado en producción por Oliver, **y salió al revés de lo que se
+   había supuesto acá**: `payments` sí tiene el índice y **`client_payments` se quedó sin
+   ninguno sobre `tenant_id`**. Al aplicar `b3d_payments` a mano se borró o renombró el
+   viejo para que el nuevo pasara, y nadie recreó el de `client_payments`. Queda como
+   arreglo pendiente **del lado de producción**; impacto bajo hoy (25 filas). En staging
+   las dos tablas quedan indexadas, porque acá las migraciones corrieron de corrido.
 3. **`20260508000002` tiene un bug de sintaxis y nunca se ejecutó**: declara una variable
    PL/pgSQL `is_generated` que choca con la columna homónima de `information_schema.columns`.
    Su encabezado dice "retro-documentación del cambio aplicado manualmente" — se hizo a mano
@@ -134,8 +142,9 @@ donde cada entrada dice qué rompe y qué verificar en producción.
 
 - Se escribió un caso `ZZZ-999` ("PRUEBA DE AISLAMIENTO FASE 0") **en staging**. Los casos
   de staging pasaron de 30 a 31.
-- **Producción: 207 casos, 134 clientes** — número que corrió Oliver en el SQL Editor. Nada
-  de esta sesión tocó producción, ni para leer: la regla es que las credenciales de
+- **Producción: 207 casos, 134 clientes, ref `uqmmkklbhzxqybljiecs`.** Oliver corrió el
+  conteo en el SQL Editor **antes y después** de toda la sesión: idéntico las dos veces.
+  Nada de esta sesión tocó producción, ni para leer — la regla es que las credenciales de
   producción no se comparten con ninguna herramienta.
 - Staging quedó en **31 casos y 15 clientes**. Si `.env.local` estuviera apuntando a
   producción, el listado de Casos mostraría 207 y los nombres reales del bufete. Muestra 31
@@ -248,7 +257,11 @@ el mismo shape que `/api/admin/users` al crear un usuario real.
 - Re-correr el conteo de casos en producción para confirmar que sigue en 207 después de esta
   sesión.
 - Los tres puntos de deuda de la tarea 3, cada uno con su consulta de verificación.
-- `sql/pending/022_backfill_dv_embebido.sql` sigue **sin commitear** (untracked).
+- Oliver va a pasar la definición del trigger de totales de cotización, exportada de
+  producción, para versionarla.
+- Recrear en **producción** el índice de `client_payments(tenant_id)`.
+- `sql/pending/022_backfill_dv_embebido.sql` **ya quedó versionado** (sigue sin aplicar en
+  producción, que es lo correcto: es un backfill que va con el refinamiento del DV).
 
 
 ## [DEPLOY] - 2026-08-24 14:49 UTC - develop → main (3 commits)

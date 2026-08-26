@@ -26,17 +26,32 @@ const FIXUPS = [
    * Ninguno de los dos usa `IF NOT EXISTS`, así que no hay forma de que los dos
    * archivos hayan corrido limpios sobre la misma base.
    *
-   * ⚠️ VERIFICAR EN PRODUCCIÓN: lo más probable es que, al aplicar
-   * `b3d_payments` a mano en el SQL Editor, esa sentencia haya fallado y se
-   * haya seguido de largo — o sea que la tabla `payments` de producción
-   * probablemente NO tiene índice sobre `tenant_id`:
+   * ✅ VERIFICADO EN PRODUCCIÓN (Oliver, 2026-08-25) — y salió al revés de lo
+   * que se había supuesto acá:
+   *
+   *     payments        → SÍ tiene idx_payments_tenant
+   *     client_payments → NO tiene índice sobre tenant_id (solo idx_payments_case)
+   *
+   * O sea que el que se quedó sin índice es `client_payments`, el de
+   * `initial_schema`, no `payments`. Lo más probable: al aplicar `b3d_payments`
+   * a mano se borró o renombró el índice viejo para que el nuevo pasara, y
+   * nadie recreó el de `client_payments`.
+   *
+   * ⚠️ Eso es un hallazgo aparte, en producción: a `client_payments` le falta un
+   * índice sobre `tenant_id`. Impacto bajo hoy (25 filas), pero queda anotado en
+   * task_plan.md.
+   *
+   * En STAGING la situación es la contraria, porque acá las migraciones sí
+   * corrieron de corrido: `client_payments` conserva `idx_payments_tenant` y
+   * `payments` recibe `idx_payments_tenant_fin`. Las dos tablas quedan indexadas
+   * — staging está mejor que producción en este punto. Divergencia anotada en
+   * sop.md SOP-012.
+   *
+   * La consulta que lo compara, para volver a correrla cuando haga falta:
    *
    *   SELECT tablename, indexname FROM pg_indexes
    *   WHERE schemaname = 'public' AND indexname LIKE 'idx_payments%'
    *   ORDER BY tablename, indexname;
-   *
-   * En staging se renombra a `idx_payments_tenant_fin` para no perder el
-   * índice. Divergencia de NOMBRE, anotada en sop.md SOP-012.
    */
   {
     archivo: "supabase/migrations/20260505000006_finanzas_b3d_payments.sql",

@@ -11,22 +11,25 @@ Staging: `xtyenhakplrkyifbcaow`. Produccion: `uqmmkklbhzxqybljiecs`.
 | 3 | Aplicar el esquema en staging | CERRADA — 48 archivos, 45 tablas, 51 politicas RLS, 6/6 triggers del ledger |
 | 4 | Configuracion de entornos | CERRADA en local — falta cargar las 4 vars en Vercel (lo hace Oliver) |
 | 5 | Salvaguarda visual | CERRADA — banda verificada en login y dentro de la app |
-| 6 | Verificar el aislamiento | CERRADA — se escribio ZZZ-999 en staging; staging 31 casos vs prod 207 |
+| 6 | Verificar el aislamiento | CERRADA — ZZZ-999 en staging; prod re-verificada DESPUES de la sesion: 207 casos, 134 clientes, intacta |
 | 7 | Documentar | CERRADA — SOP-012, CLAUDE.md §9 y DB Safety, changelog |
 
 ### Pendiente de Oliver (no tecnico)
 
 - Cargar las 4 variables en el panel de Vercel (tabla en `sop.md` SOP-012).
-- Re-correr el conteo de casos en produccion para confirmar que sigue en 207 despues de
-  toda esta sesion. Lo de arriba usa el numero que paso al principio.
-- Decidir si `sql/pending/022_backfill_dv_embebido.sql` se commitea: sigue untracked.
+- Pasar la definicion del trigger de totales de cotizacion, exportada de produccion, para
+  versionarla en el repo.
+- Recrear en PRODUCCION el indice de `client_payments(tenant_id)`, que no existe.
 
 ### Deuda descubierta al aplicar las migraciones — CADA UNA NECESITA MIRAR PRODUCCION
 
 Las tres salieron de aplicar el repo de corrido sobre una base limpia, que **nunca se habia
 hecho**. Ninguna es urgente; las tres son silenciosas.
 
-1. **El trigger de totales de cotizacion no esta en el repo.**
+1. **El trigger de totales de cotizacion no esta en el repo.** CONFIRMADO por Oliver el
+   25/08: en produccion el trigger existe y funciona (cero cotizaciones con total 0). El
+   problema no es produccion, es que **solo vive ahi**. Oliver va a pasar la definicion para
+   versionarla.
    `20260508000002` dropea las columnas generadas `quote_lines.subtotal/tax_amount/line_total`
    y dice que las mantiene "el trigger T8b-quote (aplicado fuera de esta migration)". Ese
    trigger no existe en el repo. Consecuencia: si alguna vez hubiera que reconstruir
@@ -39,13 +42,16 @@ hecho**. Ninguna es urgente; las tres son silenciosas.
    ```
 
 2. **`idx_payments_tenant` esta definido dos veces**, sobre `client_payments` y sobre
-   `payments`. Los nombres de indice son globales por esquema, asi que el segundo no puede
-   haber corrido limpio. Probable: la tabla `payments` de produccion **no tiene indice sobre
-   tenant_id**.
-   ```sql
-   SELECT tablename, indexname FROM pg_indexes
-   WHERE schemaname='public' AND indexname LIKE 'idx_payments%' ORDER BY 1,2;
+   `payments`. Los nombres de indice son globales por esquema, asi que el segundo no pudo
+   correr limpio. **VERIFICADO en produccion (Oliver, 25/08) y salio al reves de lo supuesto:**
    ```
+   payments        -> SI tiene idx_payments_tenant
+   client_payments -> NO tiene indice sobre tenant_id (solo idx_payments_case)
+   ```
+   Al aplicar b3d_payments a mano se borro o renombro el indice viejo para que el nuevo
+   pasara, y nadie recreo el de `client_payments`. **Pendiente en PRODUCCION:** recrear ese
+   indice. Impacto bajo hoy (25 filas). En staging las dos tablas quedan indexadas, o sea
+   que aca esta mejor que en produccion.
 
 3. **`20260508000002` tiene un bug de sintaxis y nunca se ejecuto.** Declara una variable
    PL/pgSQL `is_generated` que choca con la columna homonima de `information_schema.columns`.

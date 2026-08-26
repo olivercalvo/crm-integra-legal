@@ -74,7 +74,7 @@ migraciones en la base, y por eso el estado hay que reconstruirlo así.
 | `019_efactura_fase_1a_modelo_datos.sql` | **sí** | 8 columnas en `clients`, 9 en `invoices`, tablas `fe_emisiones` y `fe_secuencias`. *El archivo dice "EJECUTADO 2026-05-30"* |
 | `020_efactura_allocator.sql` | **sí** | RPC `allocate_fe_numero`. *El archivo dice "EJECUTADO 2026-06-02"* |
 | `021_client_numbering_sequence.sql` | **sí** (inferido) | Agrega `'client'` a `numbering_sequences` + siembra la fila. El código que la exige está vivo en prod y crea clientes sin romperse — sin esta migración, `get_next_sequence_number(tenant,'client')` tiraría `no_data_found` en TODO alta de cliente |
-| `022_backfill_dv_embebido.sql` | **NO** | Extrae el DV escrito como texto (" DV NN") a `digito_verificador`, limpia el número y puebla `tipo_receptor_fe`. **Confirmado sin aplicar por Oliver.** Además es el único archivo del directorio que ni siquiera está commiteado (`git status` lo lista como untracked) |
+| `022_backfill_dv_embebido.sql` | **NO** | Extrae el DV escrito como texto (" DV NN") a `digito_verificador`, limpia el número y puebla `tipo_receptor_fe`. **Confirmado sin aplicar por Oliver**, y así se queda: es un backfill que va junto con el refinamiento del DV. Estuvo sin commitear hasta el 2026-08-25; ahora está versionado |
 | `023_contabilidad_fase1_ledger.sql` | **sí** | Motor del ledger: `accounting_periods`, `accounting_sequences`, `journal_entries`, `journal_entry_lines`, `accounting_legajos` + 6 triggers de inmutabilidad + RLS. **Confirmado por Oliver** |
 | `024_chart_of_accounts_saldo_subcategoria.sql` | **sí** | `chart_of_accounts.saldo_inicial` y `.subcategoria`. **Confirmado por Oliver** |
 

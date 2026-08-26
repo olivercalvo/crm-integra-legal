@@ -400,8 +400,12 @@ que conocerlas.**
 | # | Producción | Staging | Por qué |
 |---|---|---|---|
 | 1 | `auth.tenant_id()` y `auth.user_role()` | `public.tenant_id()` y `public.user_role()` | En los proyectos Supabase **nuevos** el esquema `auth` está reservado: no puede escribir ahí ni el rol de la conexión (`postgres`) ni el del SQL Editor (`dashboard_user`). Producción se creó en abril de 2026, cuando todavía se podía |
-| 2 | `idx_payments_tenant` sobre `client_payments` (y probablemente **ningún** índice sobre `payments.tenant_id`) | `idx_payments_tenant` sobre `client_payments` + `idx_payments_tenant_fin` sobre `payments` | Dos migraciones definen el mismo nombre de índice sobre tablas distintas, y los nombres son globales por esquema |
+| 2 | `idx_payments_tenant` sobre **`payments`**. `client_payments` quedó **sin** índice sobre `tenant_id` | `idx_payments_tenant` sobre `client_payments` + `idx_payments_tenant_fin` sobre `payments`: las **dos** indexadas | Dos migraciones definen el mismo nombre de índice sobre tablas distintas, y los nombres son globales por esquema. En prod se resolvió a mano quitando el viejo; acá corrieron de corrido |
 | 3 | Existe un trigger que llena `quote_lines.subtotal/tax_amount/line_total` y `quotes.subtotal_hon/subtotal_rei` | No existe: los valores los escribe el seed | Ese trigger ("T8b-quote") se aplicó a mano en producción y **nunca se versionó** |
+
+Sobre la divergencia 2, verificado en producción el 2026-08-25: **es staging el que está
+mejor**. En producción `client_payments` no tiene índice sobre `tenant_id` — impacto bajo hoy
+(25 filas), pero es un arreglo pendiente del lado de producción, no de staging.
 
 **Si una migración nueva referencia `auth.tenant_id()`**, va a funcionar en producción y no
 en staging. `scripts/apply-staging-sql.mjs` reescribe las referencias al vuelo, así que

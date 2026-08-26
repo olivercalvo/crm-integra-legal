@@ -1,5 +1,68 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> RETOMAR ACA — cierre del 25/08/2026 <<<
+
+**Fase 0 (ambiente de pruebas) CERRADA.** Staging (`xtyenhakplrkyifbcaow`) tiene el esquema
+completo, datos ficticios y aislamiento verificado; `.env.local` apunta ahi, la app muestra
+banda de entorno cuando no corre contra produccion, y produccion se toca solo por merge a
+main. Detalle abajo y en `sop.md` SOP-012.
+
+### Levantar staging desde cero — dos comandos
+
+```bash
+node scripts/apply-staging-sql.mjs --reset    # esquema (48 archivos, en orden)
+npm run seed:staging                           # datos ficticios (idempotente)
+```
+
+Necesita `.env.staging-db.local` con la connection string del **session pooler** (puerto
+5432, no 6543). Ya esta en la maquina de Oliver, ignorado por git. Sin ese archivo el script
+dice exactamente que falta.
+
+Usuarios de prueba: `admin@staging.test` / `Staging2026$Admin`. Los otros cuatro roles y sus
+claves, en `sop.md` SOP-012.
+
+### PENDIENTES DE OLIVER — los tres, ninguno bloquea
+
+1. **Cargar las 4 variables en el panel de Vercel.** Tabla exacta en `sop.md` SOP-012:
+   `NEXT_PUBLIC_APP_ENV` (`production` / `staging` / `staging`) + las tres de Supabase.
+   Mientras no esten, Preview y Development siguen apuntando a donde apunten hoy.
+2. **Recrear en PRODUCCION el indice de `client_payments(tenant_id)`.** No existe: al
+   aplicar `b3d_payments` a mano se borro o renombro el viejo para que el nuevo pasara.
+   Impacto bajo (25 filas). En staging las dos tablas quedan indexadas.
+3. **Corregir el encabezado de `20260508000002`.** Dice "YA APLICADO EN PRODUCCION
+   2026-05-08" y su **seccion 5 no lo esta**. O se corrige el encabezado, o se parte el
+   archivo en dos migraciones. Hoy miente por omision.
+
+### LA REVISION QUE PUEDE DESTAPAR MAS SORPRESAS
+
+**Las migraciones marcadas como "retro-documentacion" nunca se ejecutaron.** Se escribieron
+DESPUES de aplicar el cambio a mano en produccion, asi que nadie las corrio nunca y el .sql
+puede no reflejar lo que realmente quedo en la base.
+
+`20260508000002` es la prueba: arrastro un bug de sintaxis dos meses y media seccion sin
+aplicar, y nadie lo supo hasta que se aplico el repo de corrido sobre una base limpia por
+primera vez. Las candidatas conocidas son las tres que llevan el aviso en el encabezado:
+
+- `20260508000001_clients_add_status_and_type.sql`
+- `20260508000002_quotes_extension_and_terms_template.sql`  ← ya sabemos que tiene el problema
+- `20260508000003_clients_drop_active_legacy.sql`
+
+Como revisarlas, sin tocar produccion: correr `node scripts/apply-staging-sql.mjs --reset`
+sobre staging y comparar el esquema resultante contra produccion columna por columna
+(`information_schema.columns`). Lo que difiera es una seccion que no se aplico, o que se
+aplico distinto de como dice el archivo.
+
+### LO QUE SIGUE — modulo contable, Fase 1
+
+Plan de cuentas con **subcategorias NIIF 18** y el **sexto tipo de cuenta (costo)**.
+
+**BLOQUEADO esperando respuestas del contador (Josuar). NO arrancar.** Queda anotado solo
+para saber cual es el proximo bloque. Ahora que existe staging, se puede desarrollar y
+probar sin escribir asientos en los libros del bufete — que era justamente el motivo de que
+Fase 0 fuera bloqueante.
+
+---
+
 ## === FASE 0 — AMBIENTE DE PRUEBAS (25/08/2026) — CERRADA ===
 
 Staging: `xtyenhakplrkyifbcaow`. Produccion: `uqmmkklbhzxqybljiecs`.

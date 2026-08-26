@@ -359,32 +359,60 @@ aviso de que falta la variable. Se arregla cargando `NEXT_PUBLIC_APP_ENV=product
 
 ### Levantar el entorno de staging desde cero
 
-1. **Aplicar el esquema.** No se corre `supabase db push` (el proyecto nunca lo usó) y la
-   `service_role` key **no puede ejecutar DDL** (PostgREST solo habla de tablas, `/pg/query`
-   da 404 y no hay RPC tipo `exec_sql`). Se pega SQL en el SQL Editor:
+Hace falta `.env.staging-db.local` con la connection string del **session pooler**
+(puerto 5432; el de transacción, 6543, no sirve para DDL). Está ignorado por git:
 
-   ```bash
-   node scripts/build-staging-bundle.mjs
-   ```
+```
+STAGING_DATABASE_URL=postgresql://postgres.<ref>:<password>@<host>:5432/postgres
+```
 
-   Genera `sql/staging/bundle-1-schema-base.sql` y `sql/staging/bundle-2-pending.sql`. Se
-   pegan **en ese orden** en el SQL Editor del proyecto de staging. Si algo falla, el
-   separador `ARCHIVO n/N` que está arriba del error dice en qué migración se cortó.
+```bash
+node scripts/apply-staging-sql.mjs --reset   # esquema, de cero
+npm run seed:staging                          # datos ficticios
+```
 
-   El bundle **excluye a propósito** `20260402000003_seed_clients_cases.sql`, que contiene
-   23 clientes y 46 casos **reales** del bufete sacados del Excel. Copiar eso a staging
-   sería una violación de la Ley 81 y justamente lo que Fase 0 vino a evitar. La lista
-   completa de exclusiones, con el motivo de cada una, está en
-   `docs/staging/inventario-migraciones.md` §4.
+El script aplica los 48 archivos en orden, uno por uno, y corta en el primero que falle
+diciendo cuál fue. Tiene el mismo candado anti-producción que el seed. `--check` solo
+reporta el estado sin escribir.
 
-2. **Cargar los datos de prueba:**
+**Por qué no se usa la `service_role` key:** no puede ejecutar DDL. PostgREST solo habla de
+tablas, `/pg/query` responde 404 y no hay RPC tipo `exec_sql`. (Ese 404 es también la razón
+por la que `scripts/run-migration.mjs` nunca funcionó: apunta justo a ese endpoint.)
 
-   ```bash
-   npm run seed:staging
-   ```
+**Alternativa sin connection string:** `node scripts/build-staging-bundle.mjs` arma
+`sql/staging/bundle-1-schema-base.sql` y `bundle-2-pending.sql` con exactamente el mismo
+SQL, para pegar a mano en el SQL Editor. El separador `ARCHIVO n/N` marca dónde se corta si
+algo falla.
 
-3. **Verificar** que la banda ámbar aparece y que se puede entrar con
-   `admin@staging.test`.
+Los bundles **excluyen a propósito** `20260402000003_seed_clients_cases.sql`, que contiene
+23 clientes y 46 casos **reales** del bufete sacados del Excel. Copiar eso a staging sería
+una violación de la Ley 81 y justamente lo que Fase 0 vino a evitar. La lista completa de
+exclusiones está en `docs/staging/inventario-migraciones.md` §4.
+
+Al terminar, verificar que la banda ámbar aparece y que se puede entrar con
+`admin@staging.test`.
+
+### Divergencias conocidas entre staging y producción
+
+Son tres, todas de nombre y ninguna de lógica. **Quien escriba una migración nueva tiene
+que conocerlas.**
+
+| # | Producción | Staging | Por qué |
+|---|---|---|---|
+| 1 | `auth.tenant_id()` y `auth.user_role()` | `public.tenant_id()` y `public.user_role()` | En los proyectos Supabase **nuevos** el esquema `auth` está reservado: no puede escribir ahí ni el rol de la conexión (`postgres`) ni el del SQL Editor (`dashboard_user`). Producción se creó en abril de 2026, cuando todavía se podía |
+| 2 | `idx_payments_tenant` sobre `client_payments` (y probablemente **ningún** índice sobre `payments.tenant_id`) | `idx_payments_tenant` sobre `client_payments` + `idx_payments_tenant_fin` sobre `payments` | Dos migraciones definen el mismo nombre de índice sobre tablas distintas, y los nombres son globales por esquema |
+| 3 | Existe un trigger que llena `quote_lines.subtotal/tax_amount/line_total` y `quotes.subtotal_hon/subtotal_rei` | No existe: los valores los escribe el seed | Ese trigger ("T8b-quote") se aplicó a mano en producción y **nunca se versionó** |
+
+**Si una migración nueva referencia `auth.tenant_id()`**, va a funcionar en producción y no
+en staging. `scripts/apply-staging-sql.mjs` reescribe las referencias al vuelo, así que
+alcanza con que la migración pase por ese script. Escribirla directo en el SQL Editor de
+staging, no.
+
+Convergir producción a `public.*` está anotado en `task_plan.md` como pendiente con sprint
+propio: implica recrear todas las políticas de RLS.
+
+Los detalles de cada divergencia están en `scripts/staging-public-helpers.mjs` y
+`scripts/staging-fixups.mjs`, con la consulta para verificar qué tiene producción.
 
 ### Regenerar los datos de prueba
 
@@ -395,9 +423,14 @@ debía haber 2.
 
 **Excepción:** cotizaciones y facturas se crean solo si no existen; si ya están, el seed las
 deja como están. Los triggers T1/T2/T4/T5b/T5c del módulo Finanzas prohíben modificar líneas
-o campos de un documento que salió de `borrador`, así que un upsert reventaría. Para
-regenerarlas hay que vaciar la base: en el dashboard de Supabase, *Settings → General →
-Reset database*, y volver a correr los dos bundles y el seed.
+o campos de un documento que salió de `borrador`, así que un upsert reventaría. Lo que el
+seed sí repara es un documento que quedó **sin líneas** porque una corrida anterior se cortó
+entre la cabecera y el detalle: le agrega las líneas que faltan, siempre que siga en
+`borrador`.
+
+Para regenerar todo de cero: `node scripts/apply-staging-sql.mjs --reset` y de nuevo el seed.
+El `--reset` dropea el esquema `public` y lo recrea con los grants de Supabase; **no toca
+`auth`**, así que los usuarios de prueba sobreviven y no hay que volver a repartir claves.
 
 Si hace falta que los reportes den los mismos totales que producción, el plan de cuentas se
 puede sembrar con los saldos de apertura reales:

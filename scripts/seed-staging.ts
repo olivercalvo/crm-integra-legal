@@ -175,12 +175,6 @@ async function upsert(
   }
 }
 
-async function exists(table: string, rowId: string): Promise<boolean> {
-  const { data, error } = await db.from(table).select("id").eq("id", rowId).maybeSingle();
-  if (error) throw new Error(`select ${table}: ${error.message}`);
-  return data !== null;
-}
-
 function money(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -221,11 +215,22 @@ async function seedUsers(): Promise<void> {
 
   for (const u of SEED_USERS) {
     const existingId = byEmail.get(u.email.toLowerCase());
+    // CRÍTICO: `app_metadata.user_role` y `app_metadata.tenant_id`.
+    // El middleware (src/middleware.ts:229) autoriza leyendo de ahí, y los
+    // helpers de RLS (public.tenant_id / public.user_role) leen el claim
+    // `app_metadata` del JWT. Sin esto el login entra y rebota al instante a
+    // /login?error=no-role: pasó tal cual la primera vez que se probó esto en
+    // staging. Mismo shape que usa /api/admin/users al crear un usuario real.
+    const metadata = {
+      app_metadata: { user_role: u.role, tenant_id: TENANT_ID },
+      user_metadata: { full_name: u.full_name, role: u.role, tenant_id: TENANT_ID },
+    };
+
     if (existingId) {
       const { error } = await db.auth.admin.updateUserById(existingId, {
         password: u.password,
         email_confirm: true,
-        user_metadata: { full_name: u.full_name },
+        ...metadata,
       });
       if (error) throw new Error(`updateUser ${u.email}: ${error.message}`);
       userIds.set(u.key, existingId);
@@ -234,7 +239,7 @@ async function seedUsers(): Promise<void> {
         email: u.email,
         password: u.password,
         email_confirm: true,
-        user_metadata: { full_name: u.full_name },
+        ...metadata,
       });
       if (error || !data.user) {
         throw new Error(`createUser ${u.email}: ${error?.message ?? "sin user"}`);
@@ -255,6 +260,63 @@ async function seedUsers(): Promise<void> {
     }))
   );
   console.log(`✅ Usuarios (${SEED_USERS.length}) — 4 roles cubiertos`);
+}
+
+/**
+ * Deja en un catálogo SOLO las filas que siembra este script.
+ *
+ * Hace falta porque las migraciones **también** siembran catálogos:
+ * `20260402000002_seed_data.sql` mete estados, clasificaciones e instituciones;
+ * `005_add_familia_classification.sql` y `add_extrajudicial_classification.sql`
+ * agregan dos más. Ninguno de esos INSERT tiene una clave natural única, así
+ * que quedan al lado de los del seed en vez de pisarlos: 5 estados donde debía
+ * haber 2 ("Cerrado" y "En trámite" duplicados), 18 clasificaciones donde
+ * debía haber 9 ("Civil" y "CIVIL"), 10 instituciones donde debía haber 5.
+ *
+ * Es el MISMO mecanismo que produjo el incidente de producción que arregló
+ * `sql/pending/fix-duplicate-statuses-2026-08-23.sql`. Los UUID determinísticos
+ * evitan que el seed se duplique a sí mismo, pero no lo protegen de lo que
+ * sembró otro. Por eso hay que reconciliar de verdad.
+ *
+ * Las filas ajenas se borran si nadie las referencia. Si algún caso apunta a
+ * una, se desactiva en vez de borrarla y se avisa: perder el dato de un caso
+ * para dejar el catálogo prolijo sería el trueque equivocado.
+ */
+async function reconciliarCatalogo(
+  tabla: "cat_statuses" | "cat_classifications" | "cat_institutions",
+  columnaEnCases: "status_id" | "classification_id" | "institution_id",
+  idsPropios: string[]
+): Promise<void> {
+  const { data: ajenas, error } = await db
+    .from(tabla)
+    .select("id, name")
+    .eq("tenant_id", TENANT_ID)
+    .not("id", "in", `(${idsPropios.join(",")})`);
+  if (error) throw new Error(`select ${tabla}: ${error.message}`);
+  if (!ajenas?.length) return;
+
+  let borradas = 0;
+  for (const fila of ajenas) {
+    const { count, error: e2 } = await db
+      .from("cases")
+      .select("*", { count: "exact", head: true })
+      .eq(columnaEnCases, fila.id);
+    if (e2) throw new Error(`count cases.${columnaEnCases}: ${e2.message}`);
+
+    if ((count ?? 0) > 0) {
+      await db.from(tabla).update({ active: false }).eq("id", fila.id);
+      console.warn(
+        `   ⚠️  ${tabla}: "${fila.name}" tiene ${count} caso(s) apuntando. Se desactiva, no se borra.`
+      );
+      continue;
+    }
+    const { error: e3 } = await db.from(tabla).delete().eq("id", fila.id);
+    if (e3) throw new Error(`delete ${tabla}: ${e3.message}`);
+    borradas++;
+  }
+  if (borradas) {
+    console.log(`   🧹 ${tabla}: ${borradas} fila(s) duplicada(s) por las migraciones, eliminadas`);
+  }
 }
 
 async function seedCatalogs(): Promise<void> {
@@ -301,6 +363,12 @@ async function seedCatalogs(): Promise<void> {
       active: true,
     }))
   );
+
+  // Recién ahora, con las filas propias ya escritas, se limpia lo que sembraron
+  // las migraciones. El orden importa: primero crear, después reconciliar.
+  await reconciliarCatalogo("cat_statuses", "status_id", SEED_STATUSES.map((n) => id(`status:${n}`)));
+  await reconciliarCatalogo("cat_classifications", "classification_id", SEED_CLASSIFICATIONS.map((c) => id(`classification:${c.prefix}`)));
+  await reconciliarCatalogo("cat_institutions", "institution_id", SEED_INSTITUTIONS.map((n) => id(`institution:${n}`)));
 
   console.log(
     `✅ Catálogos — ${SEED_STATUSES.length} estados, ${SEED_CLASSIFICATIONS.length} clasificaciones, ${SEED_INSTITUTIONS.length} instituciones`
@@ -503,7 +571,10 @@ async function seedLines(
   serviceIds: Map<string, string>,
   taxCodeIds: Map<string, string>
 ): Promise<void> {
-  const rows = lines.map((l, i) => ({
+  const rows = lines.map((l, i) => {
+    const sub = money(l.quantity * l.unit_price);
+    const imp = money(sub * TAX_RATE[l.tax_code]);
+    return {
     id: id(`${table}:${parentId}:${i}`),
     tenant_id: TENANT_ID,
     [parentKey]: parentId,
@@ -516,11 +587,85 @@ async function seedLines(
     tax_rate: TAX_RATE[l.tax_code],
     tax_code_id: taxCodeIds.get(l.tax_code) ?? null,
     created_by: userIds.get("abogada"),
-    ...(table === "quote_lines" ? { invoice_kind: l.invoice_kind } : {}),
-  }));
+    // En invoice_lines estas tres columnas siguen siendo GENERATED ALWAYS y no
+    // se pueden escribir. En quote_lines NO: la migración
+    // 20260508000002_quotes_extension_and_terms_template.sql las dropeó y las
+    // recreó como NUMERIC NULL comunes, para que las mantuviera "el trigger
+    // T8b-quote (aplicado fuera de esta migration)".
+    //
+    // ⚠️ ESE TRIGGER NO ESTÁ EN EL REPO. El que sí está
+    // (finanzas_recalc_one_quote_totals, de b3e) suma estas tres columnas para
+    // llenar la cabecera, así que si nadie las escribe, TODA cotización queda
+    // con grand_total = 0. Acá las escribe el seed. Ver changelog: hay que
+    // exportar el trigger real de producción y versionarlo.
+    ...(table === "quote_lines"
+      ? { subtotal: sub, tax_amount: imp, line_total: money(sub + imp) }
+      : {}),
+    // OJO: las dos tablas usan vocabularios distintos para lo mismo.
+    //   quote_lines.invoice_kind → CHECK IN ('HON','REI')
+    //     (20260508000002_quotes_extension_and_terms_template.sql:129)
+    //   invoices.invoice_kind    → CHECK IN ('HONORARIOS','REEMBOLSO')
+    //     (20260505000004_finanzas_b3b_invoices.sql)
+    // El fixture usa el nombre largo y acá se abrevia para la línea.
+    ...(table === "quote_lines"
+      ? { invoice_kind: l.invoice_kind === "HONORARIOS" ? "HON" : "REI" }
+      : {}),
+    };
+  });
 
   const { error } = await db.from(table).insert(rows);
   if (error) throw new Error(`insert ${table}: ${error.message}`);
+}
+
+type EstadoDoc = "completo" | "sin-lineas" | "no-existe";
+
+/**
+ * En qué estado está el documento antes de tocarlo.
+ *
+ * La cabecera y las líneas se insertan en dos llamadas distintas: si la primera
+ * pasa y la segunda falla, queda un documento sin líneas y con totales en 0. Y
+ * como el seed saltea lo que ya existe, ese documento roto quedaría así para
+ * siempre. Pasó de verdad la primera corrida contra staging, por el CHECK de
+ * `quote_lines.invoice_kind`.
+ *
+ * La reparación es AGREGAR las líneas que faltan, no borrar y rehacer. Borrar
+ * no siempre se puede, y con razón: al intentar borrar COT-000001 el trigger T4
+ * lo frenó porque dos facturas PAGADAS la referencian por `quote_id`, y borrarla
+ * les habría cambiado ese campo (ON DELETE SET NULL) a documentos inmutables.
+ * Los triggers hicieron exactamente lo que tienen que hacer.
+ */
+async function estadoDocumento(
+  tabla: "quotes" | "invoices",
+  tablaLineas: "quote_lines" | "invoice_lines",
+  claveLinea: "quote_id" | "invoice_id",
+  rowId: string,
+  numero: string
+): Promise<EstadoDoc> {
+  const { data, error } = await db.from(tabla).select("id, status").eq("id", rowId).maybeSingle();
+  if (error) throw new Error(`select ${tabla}: ${error.message}`);
+  if (!data) return "no-existe";
+
+  const { count, error: e2 } = await db
+    .from(tablaLineas)
+    .select("*", { count: "exact", head: true })
+    .eq(claveLinea, rowId);
+  if (e2) throw new Error(`count ${tablaLineas}: ${e2.message}`);
+  if ((count ?? 0) > 0) return "completo";
+
+  // Sin líneas. Solo se pueden insertar mientras el documento esté en
+  // 'borrador' (triggers T5b/T5c).
+  const editable =
+    data.status === "borrador" ||
+    (tabla === "invoices" && data.status === "cancelada_pre_emision");
+  if (!editable) {
+    console.warn(
+      `   ⚠️  ${numero} existe SIN líneas y está en "${data.status}": las líneas ya no se pueden insertar (T5b/T5c). Revisar a mano.`
+    );
+    return "completo";
+  }
+
+  console.log(`   ♻️  ${numero} estaba sin líneas (corrida anterior cortada): se completan`);
+  return "sin-lineas";
 }
 
 const quoteIds = new Map<number, string>();
@@ -555,12 +700,14 @@ async function seedFinanzas(): Promise<void> {
     const number = `COT-${String(q.n).padStart(6, "0")}`;
     const rowId = id(`quote:${number}`);
     quoteIds.set(q.n, rowId);
-    if (await exists("quotes", rowId)) continue;
+    const estado = await estadoDocumento("quotes", "quote_lines", "quote_id", rowId, number);
+    if (estado === "completo") continue;
 
     const t = totals(q.lines);
     const enviada = ["enviada", "aceptada", "rechazada", "expirada"].includes(q.status);
     const cliente = SEED_CLIENTS.find((c) => c.n === q.client)!;
 
+    if (estado === "no-existe") {
     const { error } = await db.from("quotes").insert({
       id: rowId,
       tenant_id: TENANT_ID,
@@ -583,8 +730,33 @@ async function seedFinanzas(): Promise<void> {
         q.status === "cancelada_pre_envio" ? "Se cotizó al cliente equivocado." : null,
     });
     if (error) throw new Error(`insert quote ${number}: ${error.message}`);
+    }
 
-    await seedLines("quote_lines", "quote_id", rowId, q.lines, serviceIds, taxCodeIds);
+    try {
+      await seedLines("quote_lines", "quote_id", rowId, q.lines, serviceIds, taxCodeIds);
+    } catch (err) {
+      // Si la cabecera es de esta corrida se intenta limpiar; si no se puede
+      // (hay facturas que la referencian), se deja y la próxima corrida la
+      // completa. El error original se propaga igual.
+      if (estado === "no-existe") await db.from("quotes").delete().eq("id", rowId);
+      throw err;
+    }
+    // El split HON/REI de la cabecera lo llenaba el trigger T8b-quote, que NO
+    // está en el repo (finanzas_recalc_one_quote_totals, el que sí está, solo
+    // llena subtotal_total / tax_total / grand_total). Se escribe acá, mientras
+    // la cotización todavía está en 'borrador'.
+    const hon = money(
+      q.lines.filter((l) => l.invoice_kind === "HONORARIOS").reduce((s, l) => s + l.quantity * l.unit_price, 0)
+    );
+    const rei = money(
+      q.lines.filter((l) => l.invoice_kind === "REEMBOLSO").reduce((s, l) => s + l.quantity * l.unit_price, 0)
+    );
+    const { error: eSplit } = await db
+      .from("quotes")
+      .update({ subtotal_hon: hon, subtotal_rei: rei })
+      .eq("id", rowId);
+    if (eSplit) throw new Error(`split HON/REI ${number}: ${eSplit.message}`);
+
     await advance("quotes", rowId, QUOTE_PATH[q.status]);
 
     // Chequeo de que los triggers de recálculo dieron lo que esperábamos.
@@ -610,8 +782,10 @@ async function seedFinanzas(): Promise<void> {
     const prefix = inv.kind === "HONORARIOS" ? "FAC-HON" : "FAC-REI";
     const number = `${prefix}-${String(inv.n).padStart(6, "0")}`;
     const rowId = id(`invoice:${number}`);
-    if (await exists("invoices", rowId)) continue;
+    const estadoInv = await estadoDocumento("invoices", "invoice_lines", "invoice_id", rowId, number);
+    if (estadoInv === "completo") continue;
 
+    if (estadoInv === "no-existe") {
     const { error } = await db.from("invoices").insert({
       id: rowId,
       tenant_id: TENANT_ID,
@@ -630,8 +804,14 @@ async function seedFinanzas(): Promise<void> {
       cancelled_at: inv.status === "anulada" ? `${inv.due_date}T16:00:00Z` : null,
     });
     if (error) throw new Error(`insert invoice ${number}: ${error.message}`);
+    }
 
-    await seedLines("invoice_lines", "invoice_id", rowId, inv.lines, serviceIds, taxCodeIds);
+    try {
+      await seedLines("invoice_lines", "invoice_id", rowId, inv.lines, serviceIds, taxCodeIds);
+    } catch (err) {
+      if (estadoInv === "no-existe") await db.from("invoices").delete().eq("id", rowId);
+      throw err;
+    }
     await advance("invoices", rowId, INVOICE_PATH[inv.status]);
 
     const t = totals(inv.lines);

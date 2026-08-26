@@ -27,7 +27,8 @@ import { fileURLToPath } from "url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 import { BUNDLE_1, BUNDLE_2 } from "./staging-migration-order.mjs";
-import { AUTH_HELPERS_SQL, AUTH_FUNC_RE } from "./staging-auth-helpers.mjs";
+import { PRELUDE_SQL, reescribirHelpers } from "./staging-public-helpers.mjs";
+import { aplicarFixups } from "./staging-fixups.mjs";
 
 const HEADER = (titulo, archivos) => `-- ${"=".repeat(75)}
 -- ${titulo}
@@ -47,17 +48,14 @@ const HEADER = (titulo, archivos) => `-- ${"=".repeat(75)}
 
 `;
 
-function build(nombre, titulo, archivos) {
-  let out = HEADER(titulo, archivos);
+function build(nombre, titulo, archivos, prelude = "") {
+  let out = HEADER(titulo, archivos) + prelude;
   let lineas = 0;
 
   archivos.forEach((rel, i) => {
-    // Los CREATE FUNCTION del esquema auth salen de acá: van en bundle-0,
-    // porque necesitan dashboard_user y el resto no.
-    const sql = readFileSync(resolve(ROOT, rel), "utf8").replace(
-      AUTH_FUNC_RE,
-      "-- [movido a bundle-0-auth-helpers.sql: requiere dashboard_user]"
-    );
+    // auth.tenant_id / auth.user_role → public.*: el esquema auth está cerrado
+    // en los proyectos Supabase nuevos. Ver scripts/staging-public-helpers.mjs.
+    const sql = aplicarFixups(rel, reescribirHelpers(readFileSync(resolve(ROOT, rel), "utf8"))).sql;
     lineas += sql.split("\n").length;
     out += `\n\n-- ${"█".repeat(73)}\n`;
     out += `-- ARCHIVO ${i + 1}/${archivos.length}: ${rel}\n`;
@@ -71,13 +69,10 @@ function build(nombre, titulo, archivos) {
   console.log(`✅ sql/staging/${nombre} — ${archivos.length} archivos, ${lineas} líneas de SQL`);
 }
 
-writeFileSync(resolve(ROOT, "sql/staging", "bundle-0-auth-helpers.sql"), AUTH_HELPERS_SQL, "utf8");
-console.log("✅ sql/staging/bundle-0-auth-helpers.sql — 2 funciones (va en el SQL Editor)");
-
-build("bundle-1-schema-base.sql", "STAGING — BUNDLE 1: esquema base (supabase/migrations)", BUNDLE_1);
+build("bundle-1-schema-base.sql", "STAGING — BUNDLE 1: esquema base (supabase/migrations)", BUNDLE_1, PRELUDE_SQL);
 build("bundle-2-pending.sql", "STAGING — BUNDLE 2: migraciones de sql/pending", BUNDLE_2);
 
 console.log(
-  "\nOrden: pegar bundle-0 en el SQL Editor → node scripts/apply-staging-sql.mjs → npm run seed:staging.\n" +
-    "(bundle-1 y bundle-2 son el respaldo pegable a mano de lo que aplica el script.)"
+  "\nOrden: node scripts/apply-staging-sql.mjs → npm run seed:staging.\n" +
+    "(los bundles son el respaldo pegable a mano de exactamente lo que aplica el script.)"
 );

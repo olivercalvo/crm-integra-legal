@@ -1,8 +1,13 @@
 /**
  * Aplica las migraciones en la base de STAGING por conexión directa a Postgres.
  *
- *   node scripts/apply-staging-sql.mjs           → los dos bundles, en orden
+ *   node scripts/apply-staging-sql.mjs           → aplica todo, en orden
+ *   node scripts/apply-staging-sql.mjs --reset   → borra el esquema public y aplica de cero
  *   node scripts/apply-staging-sql.mjs --check   → solo verifica y no escribe nada
+ *
+ *   Las migraciones del repo NO son idempotentes entre sí (`CREATE TABLE` y
+ *   `CREATE INDEX` pelados, sin IF NOT EXISTS). Si una corrida se corta a la
+ *   mitad, reintentar sin `--reset` falla con "already exists" en el archivo 1.
  *
  * CREDENCIAL
  *   Lee `STAGING_DATABASE_URL` de `.env.staging-db.local` (ignorado por git vía
@@ -21,6 +26,12 @@
  *   PostgREST no ejecuta DDL, `/pg/query` da 404 y no hay RPC `exec_sql`.
  *   (Ese 404 es también la razón por la que `scripts/run-migration.mjs` nunca
  *   funcionó: apunta justo a ese endpoint.)
+ *
+ * DIVERGENCIA CON PRODUCCIÓN
+ *   En staging los helpers de RLS viven en `public`, no en `auth`: el esquema
+ *   `auth` está cerrado en los proyectos Supabase nuevos, para el rol de la
+ *   conexión Y para el del SQL Editor. Este script reescribe las referencias
+ *   al vuelo. Detalle completo en `scripts/staging-public-helpers.mjs`.
  */
 
 import { readFileSync, existsSync } from "fs";
@@ -29,11 +40,37 @@ import { fileURLToPath } from "url";
 import pg from "pg";
 
 import { BUNDLE_1, BUNDLE_2 } from "./staging-migration-order.mjs";
-import { AUTH_FUNC_RE } from "./staging-auth-helpers.mjs";
+import { PRELUDE_SQL, reescribirHelpers } from "./staging-public-helpers.mjs";
+import { aplicarFixups } from "./staging-fixups.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
 const SOLO_CHECK = process.argv.includes("--check");
+const RESET = process.argv.includes("--reset");
+
+/**
+ * Deja la base como recién creada. Las migraciones NO son idempotentes entre
+ * sí (`CREATE TABLE` pelado, `CREATE INDEX` pelado), así que si una corrida se
+ * corta a la mitad la única forma limpia de reintentar es arrancar de cero.
+ *
+ * Toca `public` y las políticas propias de `storage.objects`. NO toca el
+ * esquema `auth`: los usuarios de prueba sobreviven, y el seed los reutiliza
+ * por email.
+ */
+const RESET_SQL = `
+DROP POLICY IF EXISTS "tenant_scoped_read_documents"   ON storage.objects;
+DROP POLICY IF EXISTS "tenant_scoped_insert_documents" ON storage.objects;
+DROP POLICY IF EXISTS "tenant_scoped_update_documents" ON storage.objects;
+DROP POLICY IF EXISTS "tenant_scoped_delete_documents" ON storage.objects;
+
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+
+GRANT USAGE, CREATE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES    TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres, anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, anon, authenticated, service_role;
+`;
 
 // --------------------------------------------------------------- credencial
 const envPath = resolve(ROOT, ".env.staging-db.local");
@@ -73,26 +110,24 @@ const { Client } = pg;
 const client = new Client({ connectionString: CONN, ssl: { rejectUnauthorized: false } });
 
 async function correrArchivo(rel, i, total) {
+  // Se reescriben auth.tenant_id / auth.user_role → public.*: el esquema `auth`
+  // está cerrado en los proyectos Supabase nuevos. Es cambio de nombre, no de
+  // lógica. Ver scripts/staging-public-helpers.mjs.
   const crudo = readFileSync(resolve(ROOT, rel), "utf8");
-
-  // Se quitan los CREATE FUNCTION del esquema auth: el rol `postgres` no tiene
-  // CREATE ahí. Van en bundle-0, que se pega en el SQL Editor. Ver
-  // scripts/staging-auth-helpers.mjs para el detalle de por qué.
-  const quitados = (crudo.match(AUTH_FUNC_RE) || []).length;
-  const sql = crudo.replace(AUTH_FUNC_RE, "");
+  const reescrito = reescribirHelpers(crudo);
+  const { sql, aplicados } = aplicarFixups(rel, reescrito);
+  const notas = [];
+  if (reescrito !== crudo) notas.push("helpers auth.* → public.*");
+  notas.push(...aplicados);
   const etiqueta = `[${String(i + 1).padStart(2, " ")}/${total}] ${rel}`;
-
-  if (sql.replace(/--[^\n]*/g, "").trim() === "") {
-    console.log(`  ⏭️  ${etiqueta} — solo funciones de auth, ya aplicadas vía bundle-0`);
-    return true;
-  }
 
   try {
     await client.query(sql);
-    console.log(`  ✅ ${etiqueta}${quitados ? `  (${quitados} función(es) de auth omitidas → bundle-0)` : ""}`);
+    console.log(`  ✅ ${etiqueta}${notas.length ? `\n       ↳ ${notas.join("\n       ↳ ")}` : ""}`);
     return true;
   } catch (err) {
-    console.error(`\n  ❌ ${etiqueta}`);
+    console.error(`
+  ❌ ${etiqueta}`);
     console.error(`     ${err.message}`);
     if (err.position) console.error(`     posición ${err.position}`);
     if (err.detail) console.error(`     detalle: ${err.detail}`);
@@ -162,39 +197,28 @@ async function verificar() {
   const [{ v }] = (await client.query("SELECT version() AS v")).rows;
   console.log(`   ${v.split(",")[0]}\n`);
 
-  // Las políticas de RLS de todo el esquema llaman a auth.tenant_id(). Si no
-  // está, el primer CREATE POLICY revienta y deja la base a medio aplicar.
+  if (RESET) {
+    await client.query(RESET_SQL);
+    console.log("   🧹 Esquema public recreado desde cero (auth intacto)\n");
+  }
+
+  // Prelude: los helpers en `public`. Van antes de todo porque las tablas de
+  // Finanzas usan public.get_tenant_id() como DEFAULT de la columna tenant_id,
+  // y las políticas de RLS llaman a public.tenant_id().
+  if (!SOLO_CHECK) {
+    await client.query(PRELUDE_SQL);
+    console.log("   Prelude aplicado: helpers en el esquema public\n");
+  }
+
   const [{ n: helpers }] = (
     await client.query(
       `SELECT COUNT(*)::int AS n FROM pg_proc p
        JOIN pg_namespace ns ON ns.oid = p.pronamespace
-       WHERE ns.nspname = 'auth' AND p.proname IN ('tenant_id', 'user_role')`
+       WHERE ns.nspname = 'public'
+         AND p.proname IN ('tenant_id', 'user_role', 'get_tenant_id', 'get_user_role')`
     )
   ).rows;
-
-  if (helpers < 2 && !SOLO_CHECK) {
-    console.error(
-      `
-❌ FALTAN LOS HELPERS DE RLS (auth.tenant_id / auth.user_role): ${helpers}/2
-
-` +
-        `   No se pueden crear desde acá: el rol \`postgres\` no tiene CREATE sobre el
-` +
-        `   esquema \`auth\` en los proyectos Supabase nuevos, y no se puede escalar.
-
-` +
-        `   Pegá sql/staging/bundle-0-auth-helpers.sql en el SQL Editor del dashboard
-` +
-        `   de staging (corre como dashboard_user, que sí tiene el permiso) y volvé
-` +
-        `   a correr este script.
-`
-    );
-    await client.end();
-    process.exit(1);
-  }
-  console.log(`   Helpers de RLS en auth: ${helpers}/2
-`);
+  console.log(`   Helpers en public: ${helpers}/4\n`);
 
   if (SOLO_CHECK) {
     await verificar();

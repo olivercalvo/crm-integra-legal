@@ -1,41 +1,65 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## === FASE 0 — AMBIENTE DE PRUEBAS (25/08/2026) — BLOQUEANTE ===
+## === FASE 0 — AMBIENTE DE PRUEBAS (25/08/2026) — CERRADA ===
 
-Nada del modulo contable arranca hasta que esto este cerrado. Los asientos del ledger son
-inmutables por diseno, asi que un error de prueba contra produccion contamina los libros que
-el contador tiene que certificar ante la DGI.
-
-Proyecto Supabase de staging: `xtyenhakplrkyifbcaow` (produccion: `uqmmkklbhzxqybljiecs`).
+Staging: `xtyenhakplrkyifbcaow`. Produccion: `uqmmkklbhzxqybljiecs`.
 
 | # | Tarea | Estado |
 |---|---|---|
-| 1 | Inventario de migraciones | **CERRADA** — `docs/staging/inventario-migraciones.md` |
-| 2 | Script de datos ficticios | **CERRADA** — `npm run seed:staging` |
-| 3 | Aplicar el esquema en staging | **BLOQUEADA** — ver abajo |
-| 4 | Configuracion de entornos | **CERRADA en local** — falta cargar las vars en Vercel (lo hace Oliver) |
-| 5 | Salvaguarda visual | **CERRADA** — banda de entorno verificada en `/login` |
-| 6 | Verificar el aislamiento | **BLOQUEADA por la 3** |
-| 7 | Documentar | **CERRADA** — SOP-012, CLAUDE.md §9 y DB Safety, changelog |
+| 1 | Inventario de migraciones | CERRADA — `docs/staging/inventario-migraciones.md` |
+| 2 | Script de datos ficticios | CERRADA — `npm run seed:staging`, idempotente verificado en 3 corridas |
+| 3 | Aplicar el esquema en staging | CERRADA — 48 archivos, 45 tablas, 51 politicas RLS, 6/6 triggers del ledger |
+| 4 | Configuracion de entornos | CERRADA en local — falta cargar las 4 vars en Vercel (lo hace Oliver) |
+| 5 | Salvaguarda visual | CERRADA — banda verificada en login y dentro de la app |
+| 6 | Verificar el aislamiento | CERRADA — se escribio ZZZ-999 en staging; staging 31 casos vs prod 207 |
+| 7 | Documentar | CERRADA — SOP-012, CLAUDE.md §9 y DB Safety, changelog |
 
-### Por que esta bloqueada la 3
+### Pendiente de Oliver (no tecnico)
 
-Con la `service_role` key **no se puede ejecutar DDL**. Verificado el 25/08 contra el
-proyecto de staging:
+- Cargar las 4 variables en el panel de Vercel (tabla en `sop.md` SOP-012).
+- Re-correr el conteo de casos en produccion para confirmar que sigue en 207 despues de
+  toda esta sesion. Lo de arriba usa el numero que paso al principio.
+- Decidir si `sql/pending/022_backfill_dv_embebido.sql` se commitea: sigue untracked.
 
-- PostgREST (`/rest/v1/`) solo expone tablas y RPCs. No corre DDL.
-- `/pg/query` → **404**. Es el endpoint que usa `scripts/run-migration.mjs`, que por lo
-  tanto **nunca funciono**. Lo reemplaza `scripts/build-staging-bundle.mjs`.
-- No existe una RPC tipo `exec_sql` (404).
-- `db.xtyenhakplrkyifbcaow.supabase.co` no resuelve por DNS directo: la conexion Postgres
-  va por el pooler, y para eso hace falta la **password de la base**, que no tengo.
+### Deuda descubierta al aplicar las migraciones — CADA UNA NECESITA MIRAR PRODUCCION
 
-Dos caminos, cualquiera de los dos destraba la 3 y la 6:
+Las tres salieron de aplicar el repo de corrido sobre una base limpia, que **nunca se habia
+hecho**. Ninguna es urgente; las tres son silenciosas.
 
-- **(a)** Oliver pega `sql/staging/bundle-1-schema-base.sql` y despues
-  `sql/staging/bundle-2-pending.sql` en el SQL Editor del proyecto de staging.
-- **(b)** Oliver pasa la connection string del pooler (Dashboard → Settings → Database →
-  Connection string → URI) y las corro yo con `pg`, que ya es dependencia del proyecto.
+1. **El trigger de totales de cotizacion no esta en el repo.**
+   `20260508000002` dropea las columnas generadas `quote_lines.subtotal/tax_amount/line_total`
+   y dice que las mantiene "el trigger T8b-quote (aplicado fuera de esta migration)". Ese
+   trigger no existe en el repo. Consecuencia: si alguna vez hubiera que reconstruir
+   produccion desde el repo, **toda cotizacion quedaria con total 0**, sin ningun error.
+   Accion: exportar la definicion real de produccion y versionarla.
+   ```sql
+   SELECT p.proname, pg_get_functiondef(p.oid) FROM pg_proc p
+   JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname ILIKE '%quote%total%';
+   ```
+
+2. **`idx_payments_tenant` esta definido dos veces**, sobre `client_payments` y sobre
+   `payments`. Los nombres de indice son globales por esquema, asi que el segundo no puede
+   haber corrido limpio. Probable: la tabla `payments` de produccion **no tiene indice sobre
+   tenant_id**.
+   ```sql
+   SELECT tablename, indexname FROM pg_indexes
+   WHERE schemaname='public' AND indexname LIKE 'idx_payments%' ORDER BY 1,2;
+   ```
+
+3. **`20260508000002` tiene un bug de sintaxis y nunca se ejecuto.** Declara una variable
+   PL/pgSQL `is_generated` que choca con la columna homonima de `information_schema.columns`.
+   Su encabezado dice "retro-documentacion del cambio aplicado manualmente": el cambio se
+   hizo a mano y el .sql se escribio despues, sin correrlo. Vale revisar si otras migraciones
+   marcadas como retro-documentacion tienen el mismo problema.
+
+### Convergir produccion a public.* — SPRINT PROPIO, NO AHORA
+
+Staging usa `public.tenant_id()` / `public.user_role()`; produccion usa `auth.*`. Supabase
+desaconseja poner objetos propios en `auth`, y los proyectos nuevos directamente lo prohiben,
+asi que a futuro conviene que produccion tambien use `public`. Implica **recrear todas las
+politicas de RLS** (51) y merece su propia migracion, su propio deploy y su propia
+verificacion. No es un cambio al pasar.
 
 ### Respaldo de produccion — CERRADO el 25/08
 
@@ -43,16 +67,7 @@ Dos caminos, cualquiera de los dos destraba la 3 y la 6:
 respaldo iba a copiar staging rotulandolo "PRODUCCION" y a borrar los respaldos buenos por
 retencion. Oliver lo arreglo el mismo dia, antes de la corrida automatica de las 20:30: ahora
 lee `.env.produccion.local`, ABORTA si el project ref no esta en `PROD_PROJECT_REFS`, y el
-manifiesto graba `project_ref` en vez de confiar en una etiqueta.
-
-Queda pendiente: el archivo sigue **untracked**. Vale versionarlo — es la unica defensa ante
-un borrado en produccion y hoy vive solo en la maquina de Oliver.
-
-### Pendiente de Oliver (no tecnico)
-
-- Cargar las 4 variables en el panel de Vercel (tabla en `sop.md` SOP-012).
-- Decidir si `sql/pending/022_backfill_dv_embebido.sql` se commitea: sigue como untracked.
-
+manifiesto graba `project_ref`. Ya esta versionado.
 
 ## === CAMBIO 24/08/2026 — ALCANCE DEL ROL ASISTENTE (fuera de fase) ===
 

@@ -1,6 +1,6 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
-## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - Tareas 1, 2, 4, 5 y 7
+## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - CERRADA (tareas 1 a 7)
 
 Fase 0 es bloqueante: no arranca nada de contabilidad hasta que exista una base de staging
 separada. Los asientos del ledger son inmutables por diseño (`023_contabilidad_fase1_ledger.sql`
@@ -9,8 +9,8 @@ no se borra: queda en los libros que el contador tiene que certificar ante la DG
 
 Proyecto Supabase de staging: `xtyenhakplrkyifbcaow`. Producción: `uqmmkklbhzxqybljiecs`.
 
-**Cerradas: 1, 2, 4, 5 y 7. Bloqueadas: 3 y 6** — no por falta de credenciales de la app,
-sino porque la `service_role` key no puede ejecutar DDL (ver más abajo).
+**Las 7 tareas cerradas.** Staging tiene el esquema completo, datos ficticios y aislamiento
+verificado.
 
 ### Tarea 1 — Inventario de migraciones
 
@@ -64,32 +64,83 @@ y los 33 archivos de `sql/pending/`, cada uno con su estado en producción y qu�
 - 5 usuarios de prueba con nombres inventados (NO los de las licenciadas) cubriendo los 4 roles.
   El script imprime usuario y contraseña al terminar.
 
-### Tarea 3 — Aplicar el esquema en staging (BLOQUEADA)
+### Tarea 3 — Aplicar el esquema en staging
 
-**Con la `service_role` key no se puede ejecutar DDL.** Verificado contra el proyecto de
-staging el 2026-08-25:
+**48 archivos aplicados**, en orden, sobre una base limpia. Resultado verificado:
 
-| Vía | Resultado |
+| | Staging |
 |---|---|
-| PostgREST `/rest/v1/` | 200, pero solo expone tablas y RPCs. No corre DDL |
-| `/pg/query` | **404** |
-| RPC `exec_sql` | **404** (no existe) |
-| DNS de `db.<ref>.supabase.co` | No resuelve. La conexión Postgres va por el pooler y pide la password de la base |
+| Tablas en `public` | 45 |
+| Políticas RLS | 51 |
+| Triggers (no internos) | 44 |
+| Triggers de inmutabilidad del ledger | **6/6** |
+| Plan de cuentas | 62 activas + 34 legacy inactivas = 96 |
+| Secuencias | `client`, `quote`, `invoice_hon`, `invoice_reim`, `credit_note` |
 
-**Hallazgo aparte:** `scripts/run-migration.mjs` apunta justamente a `${SUPABASE_URL}/pg/query`.
-Ese endpoint es interno de pg-meta y no está expuesto, así que **ese script nunca funcionó** —
-lo cual explica por qué la convención del proyecto es "correr las migraciones a mano en el SQL
-Editor".
+`scripts/apply-staging-sql.mjs` los aplica por conexión directa (`pg`, session pooler puerto
+5432) con el mismo candado anti-producción del seed. `--reset` dropea `public` y recrea todo
+de cero sin tocar `auth`, así que los usuarios de prueba sobreviven. `--check` solo reporta.
 
-Lo reemplaza `scripts/build-staging-bundle.mjs`, que arma dos archivos pegables:
-`sql/staging/bundle-1-schema-base.sql` (25 migraciones, 4.107 líneas) y
-`sql/staging/bundle-2-pending.sql` (23 migraciones, 4.229 líneas), en orden y con separadores
-`ARCHIVO n/N` para saber dónde se cortó si algo falla. **Excluye a propósito** los 9 archivos
-listados en `docs/staging/inventario-migraciones.md` §4, entre ellos el que trae los clientes
-reales.
+**Con la `service_role` key no alcanza:** PostgREST no ejecuta DDL, `/pg/query` da 404 y no
+hay RPC `exec_sql`. Eso significa además que **`scripts/run-migration.mjs` nunca funcionó**,
+porque apunta justo a ese endpoint. Lo reemplazan el runner y
+`scripts/build-staging-bundle.mjs`, que genera el mismo SQL pegable a mano.
 
-Se destraba de dos formas: pegando los bundles en el SQL Editor, o pasando la connection
-string del pooler para correrlas con `pg` (ya es dependencia del proyecto).
+#### El esquema `auth` está cerrado en los proyectos Supabase nuevos
+
+Las funciones de RLS del proyecto viven en `auth.tenant_id()` / `auth.user_role()`. En
+staging **no se pueden crear ahí**, ni por conexión directa ni desde el SQL Editor:
+
+```
+has_schema_privilege('postgres','auth','CREATE')  → false
+set role supabase_admin / supabase_auth_admin     → permission denied
+roles con CREATE en auth: supabase_admin, supabase_auth_admin, dashboard_user
+```
+
+Producción no tiene el problema porque se creó en abril de 2026, cuando `postgres` todavía
+tenía ese permiso. Por decisión de Oliver, en staging las dos funciones viven en `public` y
+el runner reescribe las referencias al vuelo (`auth.tenant_id` → `public.tenant_id`). Es
+cambio de nombre, no de lógica: el cuerpo lee `request.jwt.claims`, que es un setting de
+sesión y no depende del esquema. `auth.users` (la FK) queda intacta.
+
+Convergir producción a `public.*` queda anotado en `task_plan.md` como sprint propio:
+implica recrear las 51 políticas de RLS.
+
+#### Deuda que apareció al aplicar el repo de corrido por primera vez
+
+Nunca se había hecho — las migraciones se venían aplicando a mano, de a una. Las tres son
+silenciosas y **cada una necesita que alguien mire producción**. Detalle y consultas de
+verificación en `task_plan.md`.
+
+1. **El trigger de totales de cotización no está en el repo.** `20260508000002` dropea las
+   columnas generadas `quote_lines.subtotal/tax_amount/line_total` y dice que las mantiene
+   "el trigger T8b-quote (aplicado fuera de esta migration)". Ese trigger no existe en el
+   repo. **Si alguna vez hubiera que reconstruir producción desde el repo, toda cotización
+   quedaría con total 0, sin un solo error.** En staging lo cubre el seed, que escribe esas
+   columnas y el split `subtotal_hon`/`subtotal_rei` explícitamente.
+2. **`idx_payments_tenant` está definido dos veces**, sobre `client_payments` y sobre
+   `payments`. Los nombres de índice son globales por esquema: el segundo no puede haber
+   corrido limpio, así que `payments` en producción probablemente no tiene ese índice.
+3. **`20260508000002` tiene un bug de sintaxis y nunca se ejecutó**: declara una variable
+   PL/pgSQL `is_generated` que choca con la columna homónima de `information_schema.columns`.
+   Su encabezado dice "retro-documentación del cambio aplicado manualmente" — se hizo a mano
+   y el `.sql` se escribió después, sin correrlo. Vale revisar si otras migraciones marcadas
+   igual arrastran lo mismo.
+
+Los dos últimos se sortean con `scripts/staging-fixups.mjs`, una lista explícita de parches
+donde cada entrada dice qué rompe y qué verificar en producción.
+
+### Tarea 6 — Verificación del aislamiento
+
+- Se escribió un caso `ZZZ-999` ("PRUEBA DE AISLAMIENTO FASE 0") **en staging**. Los casos
+  de staging pasaron de 30 a 31.
+- **Producción: 207 casos, 134 clientes** — número que corrió Oliver en el SQL Editor. Nada
+  de esta sesión tocó producción, ni para leer: la regla es que las credenciales de
+  producción no se comparten con ninguna herramienta.
+- Staging quedó en **31 casos y 15 clientes**. Si `.env.local` estuviera apuntando a
+  producción, el listado de Casos mostraría 207 y los nombres reales del bufete. Muestra 31
+  y clientes inventados.
+- El caso `ZZZ-999` queda como rastro. Se borra con un `DELETE` cuando estorbe.
 
 ### Tarea 4 — Configuración de entornos
 
@@ -174,20 +225,30 @@ defensa ante un borrado en producción y hoy vive solo en la máquina de Oliver.
   devuelve 0 usuarios y `public.tenants` no existe — la base está vacía, como se esperaba.
 - **Nada se ejecutó contra producción** en toda la tarea.
 
-### Lo que NO se verificó todavía
+### Verificado en el navegador, con sesión real en staging
 
-- La banda **por dentro de la app** (header sticky + sidebar fixed con el offset nuevo). No
-  hay con qué loguearse hasta que el esquema y el seed estén en staging.
-- Todo lo de la tarea 6 (aislamiento, y el conteo de 207 casos en producción).
+Login como `admin@staging.test`, sobre el esquema y los datos recién cargados:
+
+| Check | Resultado |
+|---|---|
+| Login completo (no rebota a `?error=no-role`) | ✅ "Buenas noches, Rodrigo" |
+| Banda de entorno en el login | ✅ ámbar con rayas |
+| Banda **dentro** de la app, sin tapar el header ni el sidebar | ✅ los tres offsets correctos |
+| Listado de Casos | ✅ 31 casos, clientes ficticios, abogadas "(STAGING)" |
+| Listado de Cotizaciones | ✅ 7, con totales correctos ($1.605 / $3.340 / $2.140) y los 7 estados |
+
+**Bug encontrado y corregido en el camino:** el seed creaba los usuarios sin
+`app_metadata.user_role` / `app_metadata.tenant_id`. El middleware autoriza leyendo de ahí,
+así que el login entraba y rebotaba al instante a `/login?error=no-role`. Ahora el seed usa
+el mismo shape que `/api/admin/users` al crear un usuario real.
 
 ### Pendiente de esta fase
 
-- **Tarea 3** — aplicar los dos bundles en staging.
-- **Tarea 6** — escribir en staging, confirmar que producción no se movió y que sigue en 207
-  casos. Depende de la 3.
 - **Tarea 4, mitad de Oliver** — cargar las 4 variables en el panel de Vercel.
-- `sql/pending/022_backfill_dv_embebido.sql` sigue **sin commitear** (untracked). Hay que
-  decidir si entra al repo.
+- Re-correr el conteo de casos en producción para confirmar que sigue en 207 después de esta
+  sesión.
+- Los tres puntos de deuda de la tarea 3, cada uno con su consulta de verificación.
+- `sql/pending/022_backfill_dv_embebido.sql` sigue **sin commitear** (untracked).
 
 
 ## [DEPLOY] - 2026-08-24 14:49 UTC - develop → main (3 commits)

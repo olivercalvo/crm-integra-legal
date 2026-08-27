@@ -636,3 +636,35 @@ pasa la tasa y `distribucionASocias: false`, sin tocar la lógica del reporte.
 El código de la cuenta de distribución (`300004`) es un **parámetro**, no un literal
 regado por el código: `CUENTA_DISTRIBUCION_SOCIAS` en `estado-resultado-niif18.ts`. Es
 provisional hasta que Josuar lo confirme.
+
+### Fecha del saldo inicial — la regla y su trampa
+
+`saldo_inicial_fecha` es DATE y es **obligatoria en cuanto `saldo_inicial <> 0`** (CHECK
+`coa_saldo_inicial_requiere_fecha` + validador). Con saldo 0 se guarda null.
+
+La regla NO depende de cuál sea la fecha de corte correcta —que es una consulta abierta con el
+contador—: dice solamente que un saldo cargado tiene que declarar a qué día corresponde. Eso
+es cierto en cualquier escenario.
+
+**Trampa al cargar cuentas desde el Excel:** la plantilla no tiene columna de fecha. El import
+usa `inicioPeriodoFiscal(añoActual)` y, en los UPDATE, preserva la fecha que ya tenga la
+cuenta. Si alguna vez se agrega la columna al Excel, hay que sacar ese default o va a pisar lo
+que traiga el archivo.
+
+### Lo que hay cargado NO es una apertura al 1 de enero
+
+Verificable en un comando:
+
+```sql
+SELECT CASE WHEN account_type IN ('income','cost','expense') THEN 'resultado' ELSE 'balance' END,
+       ROUND(SUM(saldo_inicial), 2)
+FROM chart_of_accounts WHERE active GROUP BY 1;
+```
+
+Da `balance 244,476.91` y `resultado -244,476.91`. En una apertura de verdad al 1 de enero las
+de resultado darían 0 y las de balance cuadrarían solas contra el patrimonio.
+
+**Consecuencia para la Fase 2:** el asiento de apertura no se puede armar solo con las cuentas
+de balance —no cuadraría, le faltaría exactamente el resultado acumulado— y armarlo con TODAS
+metería movimiento del ejercicio dentro de un asiento que dice ser de apertura. Está pendiente
+de confirmación del contador antes de escribir el motor de posteo.

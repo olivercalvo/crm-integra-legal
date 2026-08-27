@@ -1,5 +1,83 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 1 contable — fecha del saldo inicial] - 2026-08-27
+
+Tarea 5, con el alcance recortado que acordamos: **SOLO el campo fecha. Nada de ledger.**
+Con esto la Fase 1 queda COMPLETA.
+
+### El campo
+
+- Columna `chart_of_accounts.saldo_inicial_fecha` (**DATE**, no timestamptz: un saldo de
+  apertura es de un DIA, no de un instante — con timestamptz "2026-01-01" en Panama se
+  guardaria como 2026-01-01T05:00:00Z y en otro huso podria mostrar el 31/12).
+- **Obligatoria en cuanto el saldo no es 0**, con CHECK `coa_saldo_inicial_requiere_fecha`.
+  Un saldo sin fecha no dice nada: "191,947.55 por cobrar" es un dato distinto al 1 de enero
+  que al 14 de agosto.
+- Con el saldo en 0 la fecha se descarta (null), para no dejar una fecha colgada de un saldo
+  que ya no existe.
+- En el form el campo se habilita solo cuando hay saldo, y la etiqueta pasa de "(opcional)" a
+  "*". En el listado la fecha va DEBAJO del monto, no en columna propia: sin fecha el saldo no
+  se puede interpretar, asi que se leen juntos.
+
+### Modulo nuevo: reglas del periodo fiscal
+
+`src/lib/finanzas/contabilidad/periodo-fiscal.ts`, con la regla textual de Rose: el periodo va
+del **1 de enero al 31 de diciembre**, y el 1 de enero solo arrancan con saldo las cuentas del
+estado de situacion financiera. **La Fase 2 lo reusa** para sembrar `accounting_periods`, por
+eso vive en un modulo propio y no suelto en un componente.
+
+El cierre se DERIVA del inicio en vez de hardcodear "12-31": si el periodo fiscal se desfasara,
+cambiar dos constantes alcanza.
+
+### Disenado para el asiento de apertura de la Fase 2
+
+Cuando llegue el motor de posteo, las filas con `saldo_inicial <> 0` se agrupan por
+`saldo_inicial_fecha` y **cada grupo se convierte en UN asiento de apertura** con esa fecha.
+Por eso la fecha es por cuenta y no una sola global: soporta tanto la carga inicial completa
+como una cuenta que se abra despues con saldo a otra fecha.
+
+### ⚠️ HALLAZGO — lo cargado NO es una apertura al 1 de enero
+
+Los saldos suman cero EN TOTAL, pero repartidos asi:
+
+| | suma |
+|---|---|
+| cuentas de BALANCE | 244,476.91 |
+| cuentas de RESULTADO | -244,476.91 |
+| patrimonio | 0.00 |
+
+Un asiento de apertura al 1 de enero necesita que el resultado del año anterior YA este
+cerrado contra el patrimonio: las cuentas de resultado arrancarian en 0 y las de balance
+cuadrarian solas. Aca pasa lo contrario — las de resultado traen el movimiento de enero a
+agosto de 2026 y el patrimonio esta en cero.
+
+O sea: es una **FOTO DE MITAD DE AÑO**, no una apertura. **Bloquea el asiento de apertura de
+la Fase 2** y va al correo del contador.
+
+Por eso la migracion NO prohibe que una cuenta de resultado tenga saldo, aunque la regla de
+Rose lo sugiera: hoy es exactamente lo que hay, y prohibirlo vaciaria el Estado de Resultado
+que RM tiene que validar.
+
+### Backfill y carga masiva
+
+- Las 22 cuentas con saldo quedaron con `2026-01-01`, el inicio del periodo fiscal que indico
+  Rose. Es la UNICA fecha que el cliente especifico — se carga como tal, no como una fecha de
+  corte verificada.
+- El Excel de Josuar no trae columna de fecha, asi que el import usa el inicio del periodo
+  fiscal en curso y en los UPDATE **preserva** la fecha que ya tenga la cuenta, para no pisar
+  una correccion hecha a mano.
+
+### Tests
+
+**345 tests, 0 fallos** (72 skips preexistentes). 7 nuevos del periodo fiscal (incluidos año
+bisiesto y fechas que no existen, como el 30 de febrero) y 6 nuevos de la regla saldo/fecha.
+
+### Corregido de paso
+
+El encabezado de `chart-of-accounts-mapping.ts` seguia diciendo que "Costo y Gasto colapsan al
+MISMO account_type porque el CHECK de BD solo admite 5 valores". Es falso desde la migracion
+025. Quedo actualizado.
+
 ## [Fase 1 contable — Estado de Resultado NIIF 18 y sociedad civil] - 2026-08-27
 
 Tareas 3 y 4. Se adelantaron ANTES de la revision de RM a pedido de Oliver: con la

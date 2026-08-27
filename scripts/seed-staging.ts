@@ -47,6 +47,7 @@ import { resolve } from "path";
 
 import { JOSUAR_ACCOUNTS } from "../src/lib/finanzas/reports/__tests__/josuar-accounts.fixture";
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
+import { inicioPeriodoFiscal } from "../src/lib/finanzas/contabilidad/periodo-fiscal";
 import {
   SEED_CASES,
   SEED_CLASSIFICATIONS,
@@ -410,6 +411,16 @@ const CUENTAS_FASE1 = [
  * Cuentas CONTROL: su saldo tiene que cuadrar contra el detalle de un auxiliar.
  * Va acá y no solo en la migración por el mismo motivo de orden que arriba.
  */
+/**
+ * Fecha de los saldos de apertura sembrados: el inicio del período fiscal en
+ * curso (Rose: el período va del 1 de enero al 31 de diciembre).
+ *
+ * ⚠️ Es la fecha que el cliente ESPECIFICÓ, no una fecha de corte verificada.
+ * Los saldos cargados son en realidad una foto de mitad de año — ver el
+ * encabezado de `sql/pending/027_saldo_inicial_fecha.sql`.
+ */
+const FECHA_SALDO_INICIAL = inicioPeriodoFiscal(2026);
+
 const CUENTAS_CONTROL_POR_CODIGO: Record<string, "clientes" | "proveedores"> = {
   "100004": "clientes", // Cuentas por Cobrar Clientes
   "200001": "proveedores", // Cuentas por pagar
@@ -454,6 +465,13 @@ async function seedChartOfAccounts(): Promise<void> {
       subcategoria: a.subcategoria,
       cuenta_control: CUENTAS_CONTROL_POR_CODIGO[a.code] ?? null,
       saldo_inicial: enCero ? 0 : a.saldo,
+      // Un saldo sin fecha no dice nada, y desde la Tarea 5 el CHECK
+      // `coa_saldo_inicial_requiere_fecha` lo exige. Se usa el inicio del
+      // período fiscal, que es la regla que dio Rose (1 de enero a 31 de
+      // diciembre). Ver la consulta pendiente sobre la fecha de corte real en
+      // sql/pending/027.
+      saldo_inicial_fecha:
+        enCero || a.saldo === 0 ? null : FECHA_SALDO_INICIAL,
       active: true,
     })),
     "tenant_id,code"

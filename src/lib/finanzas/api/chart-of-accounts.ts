@@ -38,7 +38,7 @@ type DB = SupabaseClient;
 
 const ENTITY = "chart_of_accounts";
 const SELECT_COLS =
-  "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
+  "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, saldo_inicial_fecha, account_name_qb, description, is_trust_pass_through, is_system, active";
 
 /**
  * Roles que pueden cambiar la CLASIFICACIÓN CONTABLE de una cuenta
@@ -134,6 +134,7 @@ export async function createChartAccount(
       subcategoria: input.subcategoria,
       cuenta_control: input.cuenta_control,
       saldo_inicial: input.saldo_inicial,
+      saldo_inicial_fecha: input.saldo_inicial_fecha,
       description: input.description,
       active: input.active,
       // La pantalla mantiene la tabla PLANA y no gestiona trust/QB/is_system:
@@ -171,6 +172,7 @@ export async function createChartAccount(
       subcategoria: input.subcategoria,
       cuenta_control: input.cuenta_control,
       saldo_inicial: input.saldo_inicial,
+      saldo_inicial_fecha: input.saldo_inicial_fecha,
       description: input.description,
       active: input.active,
     }),
@@ -195,7 +197,7 @@ export async function updateChartAccount(
   const { data: existing, error: errExisting } = await db
     .from("chart_of_accounts")
     .select(
-      "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, description, active, is_system"
+      "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, saldo_inicial_fecha, description, active, is_system"
     )
     .eq("tenant_id", tenantId)
     .eq("id", id)
@@ -305,6 +307,7 @@ export async function updateChartAccount(
     subcategoria: input.subcategoria,
     cuenta_control: input.cuenta_control,
     saldo_inicial: input.saldo_inicial,
+    saldo_inicial_fecha: input.saldo_inicial_fecha,
     description: input.description,
     active: input.active,
   };
@@ -330,6 +333,7 @@ export async function updateChartAccount(
     "subcategoria",
     "cuenta_control",
     "saldo_inicial",
+    "saldo_inicial_fecha",
     "description",
     "active",
   ];

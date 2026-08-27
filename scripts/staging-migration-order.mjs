@@ -69,5 +69,6 @@ export const BUNDLE_2 = [
   "sql/pending/024_chart_of_accounts_saldo_subcategoria.sql",
   "sql/pending/025_niif18_tipo_costo_y_subcategorias.sql",
   "sql/pending/026_cuenta_distribucion_socias.sql",
+  "sql/pending/027_saldo_inicial_fecha.sql",
   "sql/pending/storage_rls_tenant_scoped.sql",
 ];

@@ -99,12 +99,107 @@ test("validateCreateChartAccount: saldo_inicial + subcategoria válidos → ok",
     account_type: "asset",
     subcategoria: "activo_corriente",
     saldo_inicial: 1500.5,
+    saldo_inicial_fecha: "2026-01-01",
     active: true,
   });
   assert.equal(r.ok, true);
   if (r.ok) {
     assert.equal(r.data.subcategoria, "activo_corriente");
     assert.equal(r.data.saldo_inicial, 1500.5);
+    assert.equal(r.data.saldo_inicial_fecha, "2026-01-01");
+  }
+});
+
+// ---- Fecha del saldo inicial (Fase 1, Tarea 5) ----
+
+test("saldo <> 0 SIN fecha → error", () => {
+  // Un saldo sin fecha no dice nada: "191,947.55 por cobrar" es un dato
+  // distinto al 1 de enero que al 14 de agosto.
+  const r = validateCreateChartAccount({
+    code: "100009",
+    name: "Banco",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    saldo_inicial: 1000,
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.saldo_inicial_fecha);
+});
+
+test("saldo en 0 SIN fecha → ok, y la fecha queda en null", () => {
+  const r = validateCreateChartAccount({
+    code: "100010",
+    name: "Banco nuevo",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    saldo_inicial: 0,
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.saldo_inicial_fecha, null);
+});
+
+test("saldo en 0 CON fecha → la fecha se descarta", () => {
+  // No se deja una fecha colgada de un saldo que ya no existe.
+  const r = validateCreateChartAccount({
+    code: "100011",
+    name: "Banco",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    saldo_inicial: 0,
+    saldo_inicial_fecha: "2026-01-01",
+    active: true,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.saldo_inicial_fecha, null);
+});
+
+test("fecha con formato o día inexistente → error", () => {
+  for (const fecha of ["14/08/2026", "2026-02-30", "2026-13-01", "ayer"]) {
+    const r = validateCreateChartAccount({
+      code: "100012",
+      name: "Banco",
+      account_type: "asset",
+      subcategoria: "activo_corriente",
+      saldo_inicial: 500,
+      saldo_inicial_fecha: fecha,
+      active: true,
+    });
+    assert.equal(r.ok, false, `"${fecha}" debería ser rechazada`);
+    if (!r.ok) assert.ok(r.errors.saldo_inicial_fecha, `sin error para "${fecha}"`);
+  }
+});
+
+test("fecha con año fuera de rango → error (dedazo, no intención)", () => {
+  for (const fecha of ["1899-01-01", "2999-01-01"]) {
+    const r = validateCreateChartAccount({
+      code: "100013",
+      name: "Banco",
+      account_type: "asset",
+      subcategoria: "activo_corriente",
+      saldo_inicial: 500,
+      saldo_inicial_fecha: fecha,
+      active: true,
+    });
+    assert.equal(r.ok, false, `"${fecha}" debería ser rechazada`);
+  }
+});
+
+test("si el SALDO ya es inválido, no se pide además la fecha", () => {
+  // Dos errores encadenados por la misma causa confunden más de lo que ayudan.
+  const r = validateCreateChartAccount({
+    code: "100014",
+    name: "Banco",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    saldo_inicial: "no es un numero",
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) {
+    assert.ok(r.errors.saldo_inicial, "el error debe ser del saldo");
+    assert.equal(r.errors.saldo_inicial_fecha, undefined, "y no encadenar el de fecha");
   }
 });
 
@@ -264,6 +359,7 @@ test("validateCreateChartAccount: saldo_inicial NEGATIVO → permitido (contra-c
     account_type: "asset",
     subcategoria: "propiedad_planta_equipo",
     saldo_inicial: -8400.25,
+    saldo_inicial_fecha: "2026-01-01",
     active: true,
   });
   assert.equal(r.ok, true);
@@ -276,6 +372,7 @@ test("validateCreateChartAccount: saldo_inicial redondea a 2 decimales", () => {
     name: "Caja",
     account_type: "asset",
     saldo_inicial: "1234.567",
+    saldo_inicial_fecha: "2026-01-01",
     active: true,
   });
   assert.equal(r.ok, true);
@@ -312,12 +409,14 @@ test("validateUpdateChartAccount: saldo_inicial + subcategoria llegan al payload
     account_type: "asset",
     subcategoria: "activo_no_corriente",
     saldo_inicial: 999.99,
+    saldo_inicial_fecha: "2026-01-01",
     active: true,
   });
   assert.equal(r.ok, true);
   if (r.ok) {
     assert.equal(r.data.subcategoria, "activo_no_corriente");
     assert.equal(r.data.saldo_inicial, 999.99);
+    assert.equal(r.data.saldo_inicial_fecha, "2026-01-01");
   }
 });
 

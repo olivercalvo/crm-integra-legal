@@ -442,6 +442,10 @@ pensados para poder vender el sistema a sociedades anonimas, que si lo pagan.
 Cuenta de destino: **`300004 Distribucion a Socias`** (patrimonio), PROVISIONAL hasta que
 la confirme el contador.
 
+**Fecha del saldo inicial.** Cada cuenta guarda a que DIA corresponde su saldo de apertura.
+Es obligatoria en cuanto el saldo no es 0 y se descarta cuando la cuenta abre en cero. Periodo
+fiscal: 1 de enero a 31 de diciembre.
+
 ---
 
 ## REQUERIMIENTOS NO FUNCIONALES

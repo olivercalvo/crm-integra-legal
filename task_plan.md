@@ -1,6 +1,83 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — cierre del 27/08/2026 (tarde) <<<
+## >>> RETOMAR ACA — FASE 1 CONTABLE COMPLETA — 27/08/2026 <<<
+
+**Las seis tareas cerradas (0, 1, 2, 3, 4, 5).** 345 tests, 0 fallos.
+
+Detalle en `changelog.md`; el como-tocarlo, en `sop.md` SOP-013.
+
+### LO QUE SIGUE — el plan hasta el proximo alto
+
+1. ~~Tarea 5~~ **HECHA.**
+2. **FASE 2 — motor de posteo del ledger.**
+3. **Libro Mayor.**
+
+Ahi paramos, se manda el correo con TODAS las consultas acumuladas y se pide la llamada de
+validacion. **NO se arranca el modulo de compras antes de esa validacion**: es donde ya seria
+caro corregir.
+
+### ⚠️ CONSULTAS ACUMULADAS PARA EL CORREO A JOSUAR — son SIETE
+
+**Bloqueante de la Fase 2:**
+
+1. **¿Cual es la fecha de corte real de los saldos cargados?** Lo que hay NO es una apertura
+   al 1 de enero: las cuentas de balance suman 244,476.91, las de resultado -244,476.91 y el
+   patrimonio esta en cero. En una apertura de verdad las de resultado darian 0 y el resultado
+   del año anterior ya estaria cerrado contra el patrimonio. **Sin esto no se puede escribir el
+   asiento de apertura.** Si la respuesta es "1 de enero de 2026", hacen falta ademas los
+   saldos de apertura reales de las cuentas de balance y las utilidades retenidas.
+
+**Del Libro Mayor (del modelo `Temas Contables/image001.png`):**
+
+2. **La columna "cuenta de contrapartida" trae una CATEGORIA, no una cuenta** ("Proveedores",
+   "cobrar clientes"). ¿Que va ahi cuando un asiento tiene mas de dos lineas y no hay una
+   contrapartida unica? ¿"Varios", la de mayor importe, o una lista?
+3. **El total del pie NO es el saldo final: es la suma de los MOVIMIENTOS.** En su ejemplo,
+   Banco Pichincha cierra en `$6,740.01` mientras el saldo corrido va en `21,121.28`
+   (12,412.00 − 1,712.00 − 351.25 − 3,608.74 = 6,740.01). ¿Confirmamos que quiere el movimiento
+   neto del periodo, o quiere ademas el saldo final?
+4. **La columna "Importe" viene con signo, no en columnas Debe/Haber.** Nuestro ledger guarda
+   debito y credito separados. Para una cuenta de pasivo o de ingreso, ¿el mayor muestra el
+   signo natural de la cuenta o el de la balanza?
+
+**De presentacion, no bloqueantes:**
+
+5. **Codigo y naturaleza de la cuenta de distribucion a socias.** Hoy `300004` (patrimonio),
+   provisional. ¿Va ademas un pasivo "Por pagar a socias" para cuando el reparto no se paga de
+   inmediato?
+6. **¿Que muestra el patrimonio del Balance cuando el resultado se reparte?** Hoy el Estado de
+   Resultado cierra en 0 pero el Balance sigue mostrando "Utilidad del Ejercicio -244,476.91".
+7. **Numeracion de asientos y cierre de periodo.** ¿Que formato quiere para el numero de
+   asiento (`accounting_sequences`), y quien cierra un periodo y que bloquea el cierre?
+
+### PIEZAS QUE FALTAN PARA LA FASE 2 (ya identificadas)
+
+- Sembrar `accounting_periods` (hoy 0 filas). `journal_entries.period_id` es NOT NULL.
+- Sembrar `accounting_sequences` (hoy 0 filas) — ver consulta 7.
+- Agregar `'apertura'` al CHECK de `source_type`, para poder EXCLUIR el asiento de apertura de
+  los reportes de movimiento del periodo.
+- El saldo inicial de la Tarea 5 es el que genera ese asiento: las filas con `saldo_inicial <> 0`
+  se agrupan por `saldo_inicial_fecha` y cada grupo es UN asiento.
+- **Los asientos son INMUTABLES** (6 triggers en `023`). Una vez posteado el saldo inicial, no
+  se corrige editando: hay que revertir. Por eso creacion de cuenta y carga de saldo van
+  separadas.
+
+### EL REQUISITO QUE JOSUAR REPITIO TRES VECES
+
+**Dos niveles de profundidad, y los dos hacen falta:**
+1. Desde un saldo del Balance o del Estado de Resultado → abrir el mayor de esa cuenta.
+2. Desde una linea del mayor → llegar al documento que la origino.
+
+Es lo que convierte el reporte en algo auditable.
+
+### PENDIENTES DE OLIVER
+
+1. **`NEXT_PUBLIC_APP_URL` vacia en el entorno Preview de Vercel.** Previo a Fase 0.
+2. **Recrear en PRODUCCION el indice de `client_payments(tenant_id)`.** Impacto bajo.
+
+---
+
+## >>> Cierre anterior — 27/08/2026 (tarde) <<<
 
 **FASE 1 CONTABLE (NIIF 18) — Tareas 0, 6, 1, 2, 3 y 4 CERRADAS. Falta solo la 5.**
 

@@ -23,6 +23,11 @@ import {
   type CreateChartAccountInput,
   type UpdateChartAccountInput,
 } from "@/lib/finanzas/types/chart-of-account";
+import {
+  ANIO_MINIMO_SALDO_INICIAL,
+  anioMaximoSaldoInicial,
+  esFechaISOValida,
+} from "@/lib/finanzas/contabilidad/periodo-fiscal";
 
 export type ValidationErrors = Record<string, string>;
 
@@ -61,6 +66,7 @@ function validateFields(
     subcategoria?: unknown;
     cuenta_control?: unknown;
     saldo_inicial?: unknown;
+    saldo_inicial_fecha?: unknown;
     description?: unknown;
     active?: unknown;
   },
@@ -73,6 +79,7 @@ function validateFields(
   subcategoria: Subcategoria | null;
   cuentaControl: CuentaControl | null;
   saldoInicial: number;
+  saldoInicialFecha: string | null;
   description: string | null;
   active: boolean;
 } {
@@ -177,6 +184,42 @@ function validateFields(
     }
   }
 
+  // saldo_inicial_fecha — un saldo sin fecha no dice nada.
+  //
+  // "191,947.55 por cobrar" es un dato distinto al 1 de enero que al 14 de
+  // agosto. Por eso es OBLIGATORIA en cuanto el saldo no es 0, y se guarda como
+  // null cuando la cuenta abre en cero. Espeja el CHECK
+  // `coa_saldo_inicial_requiere_fecha`.
+  //
+  // Se valida DESPUÉS de saldo_inicial porque la obligatoriedad depende de él.
+  let saldoInicialFecha: string | null = null;
+  const fechaRaw =
+    raw.saldo_inicial_fecha == null ? "" : String(raw.saldo_inicial_fecha).trim();
+  const haySaldo = saldoInicial !== 0;
+
+  if (fechaRaw === "") {
+    // Si el saldo YA falló su propia validación no se pide la fecha además: dos
+    // errores encadenados por la misma causa confunden más de lo que ayudan.
+    if (haySaldo && !errors.saldo_inicial) {
+      errors.saldo_inicial_fecha = "Indicá a qué fecha corresponde el saldo inicial";
+    }
+  } else if (!esFechaISOValida(fechaRaw)) {
+    errors.saldo_inicial_fecha = "Fecha inválida (formato AAAA-MM-DD)";
+  } else {
+    const anio = Number(fechaRaw.slice(0, 4));
+    const anioMax = anioMaximoSaldoInicial(new Date());
+    if (anio < ANIO_MINIMO_SALDO_INICIAL || anio > anioMax) {
+      // Un año fuera de rango casi siempre es un dedazo, no una intención.
+      errors.saldo_inicial_fecha = `El año debe estar entre ${ANIO_MINIMO_SALDO_INICIAL} y ${anioMax}`;
+    } else {
+      saldoInicialFecha = fechaRaw;
+    }
+  }
+
+  // Con el saldo en 0 la fecha no aporta y se descarta, para no dejar una fecha
+  // colgada de un saldo que ya no existe.
+  if (!haySaldo) saldoInicialFecha = null;
+
   // description (opcional)
   let description: string | null = null;
   if (raw.description != null && String(raw.description).trim() !== "") {
@@ -196,6 +239,7 @@ function validateFields(
     subcategoria,
     cuentaControl,
     saldoInicial,
+    saldoInicialFecha,
     description,
     active,
   };
@@ -213,6 +257,7 @@ export function validateCreateChartAccount(
     subcategoria,
     cuentaControl,
     saldoInicial,
+    saldoInicialFecha,
     description,
     active,
   } = validateFields(raw, { requireCode: true });
@@ -231,6 +276,7 @@ export function validateCreateChartAccount(
       subcategoria,
       cuenta_control: cuentaControl,
       saldo_inicial: saldoInicial,
+      saldo_inicial_fecha: saldoInicialFecha,
       description,
       active,
     },
@@ -253,6 +299,7 @@ export function validateUpdateChartAccount(
     subcategoria,
     cuentaControl,
     saldoInicial,
+    saldoInicialFecha,
     description,
     active,
   } = validateFields(raw, { requireCode: false });
@@ -267,6 +314,7 @@ export function validateUpdateChartAccount(
     subcategoria,
     cuenta_control: cuentaControl,
     saldo_inicial: saldoInicial,
+    saldo_inicial_fecha: saldoInicialFecha,
     description,
     active,
   };

@@ -347,6 +347,12 @@ export interface ChartAccountRow {
   subcategoria: Subcategoria | null;
   cuenta_control: CuentaControl | null;
   saldo_inicial: number;
+  /**
+   * Fecha (ISO, YYYY-MM-DD) a la que corresponde `saldo_inicial`. OBLIGATORIA
+   * cuando el saldo no es 0: "191,947.55 por cobrar" es un dato distinto al 1 de
+   * enero que al 14 de agosto.
+   */
+  saldo_inicial_fecha: string | null;
   account_name_qb: string | null;
   description: string | null;
   is_trust_pass_through: boolean;
@@ -362,6 +368,12 @@ export interface CreateChartAccountInput {
   subcategoria: Subcategoria | null;
   cuenta_control: CuentaControl | null;
   saldo_inicial: number;
+  /**
+   * Fecha (ISO, YYYY-MM-DD) a la que corresponde `saldo_inicial`. OBLIGATORIA
+   * cuando el saldo no es 0: "191,947.55 por cobrar" es un dato distinto al 1 de
+   * enero que al 14 de agosto.
+   */
+  saldo_inicial_fecha: string | null;
   description: string | null;
   active: boolean;
 }
@@ -377,6 +389,12 @@ export interface UpdateChartAccountInput {
   subcategoria: Subcategoria | null;
   cuenta_control: CuentaControl | null;
   saldo_inicial: number;
+  /**
+   * Fecha (ISO, YYYY-MM-DD) a la que corresponde `saldo_inicial`. OBLIGATORIA
+   * cuando el saldo no es 0: "191,947.55 por cobrar" es un dato distinto al 1 de
+   * enero que al 14 de agosto.
+   */
+  saldo_inicial_fecha: string | null;
   description: string | null;
   active: boolean;
 }

@@ -61,6 +61,8 @@ type FormState = {
   subcategoria: Subcategoria | "";
   /** "" = cuenta normal, sin auxiliar que cuadrar (se manda como null). */
   cuenta_control: CuentaControl | "";
+  /** ISO (AAAA-MM-DD). "" = sin fecha; obligatoria si el saldo no es 0. */
+  saldo_inicial_fecha: string;
   /** Se mantiene como STRING para no pelear con el input mientras se tipea
    *  ("-", "1500.", "" al borrar todo). Se convierte a número al guardar. */
   saldo_inicial: string;
@@ -79,6 +81,7 @@ function emptyCreateForm(): FormState {
     subcategoria: "",
     cuenta_control: "",
     saldo_inicial: "0",
+    saldo_inicial_fecha: "",
     description: "",
     active: true,
   };
@@ -172,6 +175,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       account_type: a.account_type,
       subcategoria: a.subcategoria ?? "",
       cuenta_control: a.cuenta_control ?? "",
+      saldo_inicial_fecha: a.saldo_inicial_fecha ?? "",
       saldo_inicial: String(a.saldo_inicial ?? 0),
       description: a.description ?? "",
       active: a.active,
@@ -199,6 +203,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       // Campo vacío = 0 (el validador también defaultea a 0). Un "-" o "abc"
       // suelto llega tal cual y el validador lo rechaza con mensaje inline.
       saldo_inicial: form.saldo_inicial.trim() === "" ? 0 : form.saldo_inicial.trim(),
+      saldo_inicial_fecha: form.saldo_inicial_fecha || null,
       description: form.description.trim() || null,
       active: form.active,
     };
@@ -264,6 +269,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           account_type: a.account_type,
           subcategoria: a.subcategoria,
           cuenta_control: a.cuenta_control,
+          saldo_inicial_fecha: a.saldo_inicial_fecha,
           saldo_inicial: a.saldo_inicial,
           description: a.description,
           active: !a.active,
@@ -284,6 +290,18 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   }
 
   const activeCount = accounts.filter((a) => a.active).length;
+
+  /**
+   * ¿La cuenta abre con saldo? De esto dependen la obligatoriedad de la fecha y
+   * si el campo está habilitado. Se lee del texto crudo del input porque el
+   * usuario puede estar tipeando ("-", "1500." o "" al borrar todo); cualquier
+   * cosa que no parsee cuenta como 0, igual que hace el validador.
+   */
+  const saldoNoEsCero = (() => {
+    if (!form) return false;
+    const n = Number(form.saldo_inicial.trim());
+    return Number.isFinite(n) && n !== 0;
+  })();
 
   return (
     <div className="space-y-5">
@@ -505,6 +523,32 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               )}
             </div>
 
+            {/* Fecha del saldo — obligatoria en cuanto hay monto */}
+            <div>
+              <Label className="mb-1 block text-xs">
+                Fecha del saldo inicial {saldoNoEsCero ? "*" : "(opcional)"}
+              </Label>
+              <Input
+                type="date"
+                value={form.saldo_inicial_fecha}
+                onChange={(e) =>
+                  setForm({ ...form, saldo_inicial_fecha: e.target.value })
+                }
+                disabled={saving || !saldoNoEsCero}
+                className={fieldErrors.saldo_inicial_fecha ? "border-red-300" : ""}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                {saldoNoEsCero
+                  ? "A qué día corresponde el monto. El período fiscal va del 1 de enero al 31 de diciembre."
+                  : "Se habilita cuando cargás un saldo distinto de 0."}
+              </p>
+              {fieldErrors.saldo_inicial_fecha && (
+                <p className="mt-1 text-xs text-red-600">
+                  {fieldErrors.saldo_inicial_fecha}
+                </p>
+              )}
+            </div>
+
             {/* Nombre */}
             <div className="sm:col-span-2">
               <Label className="mb-1 block text-xs">Nombre *</Label>
@@ -682,6 +726,14 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                             }
                           >
                             {formatSaldo(a.saldo_inicial)}
+                            {/* La fecha va debajo del monto y no en columna
+                                propia: sin fecha el saldo no se puede
+                                interpretar, así que se leen juntos. */}
+                            {a.saldo_inicial_fecha && (
+                              <span className="mt-0.5 block text-[11px] font-normal text-gray-400">
+                                al {a.saldo_inicial_fecha}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-3 text-gray-500">
                             {a.account_name_qb || "—"}

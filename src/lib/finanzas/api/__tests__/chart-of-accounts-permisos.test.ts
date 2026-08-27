@@ -36,6 +36,7 @@ const CUENTA_ACTUAL = {
   subcategoria: "gastos_operativos",
   cuenta_control: null,
   saldo_inicial: 11472.78,
+  saldo_inicial_fecha: "2026-01-01",
   description: null,
   active: true,
   is_system: false,
@@ -49,6 +50,7 @@ function soloRenombrar(): UpdateChartAccountInput {
     subcategoria: "gastos_operativos",
     cuenta_control: null,
     saldo_inicial: 11472.78,
+    saldo_inicial_fecha: "2026-01-01",
     description: null,
     active: true,
   };

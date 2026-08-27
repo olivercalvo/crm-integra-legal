@@ -376,6 +376,7 @@ function existingMap(
       description: info.description ?? null,
       active: info.active ?? true,
       cuenta_control: info.cuenta_control ?? null,
+      saldo_inicial_fecha: info.saldo_inicial_fecha ?? null,
       is_system: info.is_system ?? false,
     });
   }

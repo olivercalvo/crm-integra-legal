@@ -177,10 +177,13 @@ export function findHeaderRow(
  * Resultado del mapeo de tipo. `subcategoriaDefault` es la subcategoría que se
  * asume cuando la fila NO trae una columna Subcategoría explícita.
  *
- * El caso importante: "Costo" y "Gasto" colapsan al MISMO account_type
- * ('expense') porque el CHECK de BD solo admite 5 valores en inglés. Lo que los
- * distingue en el Estado de Resultado es la subcategoría — de ahí que el mapeo
- * la complete solo (costo vs gasto_operativo). Ver Paso 1a.
+ * DESDE NIIF 18 (Fase 1, 2026-08-27) "Costo" y "Gasto" YA NO colapsan: `cost` es
+ * un account_type propio y son SEIS tipos. Antes compartían 'expense' y solo los
+ * distinguía la subcategoría; el comentario viejo decía lo contrario y quedó
+ * desactualizado con la migración 025.
+ *
+ * Lo que sí completa el mapeo es la subcategoría por defecto de las cuentas de
+ * RESULTADO, donde ahora es obligatoria: sin ella la fila se rechazaría.
  */
 export interface AccountTypeMapping {
   account_type: AccountType;
@@ -493,6 +496,12 @@ export interface ExistingAccountInfo {
   active: boolean;
   /** Ídem: la marca de cuenta control se pone a mano y el Excel no la trae. */
   cuenta_control: CuentaControl | null;
+  /**
+   * Ídem: el Excel no trae la fecha del saldo. Se preserva la que ya tenga la
+   * cuenta para no pisar una corrección hecha a mano; si no tiene ninguna, el
+   * import cae al inicio del período fiscal.
+   */
+  saldo_inicial_fecha: string | null;
   is_system: boolean;
 }
 

@@ -14,6 +14,7 @@ import {
   WorkbookParseError,
 } from "@/lib/finanzas/import/chart-of-accounts-workbook";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { inicioPeriodoFiscal } from "@/lib/finanzas/contabilidad/periodo-fiscal";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 /**
@@ -147,6 +148,19 @@ export async function POST(request: NextRequest) {
   // ordenado hace que el audit_log quede legible y el resumen determinista.
   // Una fila que falla NO aborta el resto: se reporta y se sigue, porque
   // rehacer una carga de 62 cuentas por un typo en la fila 40 es peor.
+  /**
+   * Fecha del saldo para las filas que traigan monto.
+   *
+   * El Excel de Josuar NO tiene columna de fecha, y desde la Tarea 5 un saldo
+   * distinto de 0 la exige (CHECK `coa_saldo_inicial_requiere_fecha`). Se usa el
+   * inicio del período fiscal en curso, que es la regla que dio Rose: el período
+   * va del 1 de enero al 31 de diciembre.
+   *
+   * En los UPDATE se PRESERVA la fecha que ya tenga la cuenta y esta solo actúa
+   * de respaldo, para no pisar una corrección hecha a mano en la pantalla.
+   */
+  const fechaSaldoPorDefecto = inicioPeriodoFiscal(new Date().getFullYear());
+
   const outcomes: RowOutcome[] = [];
   let created = 0;
   let updated = 0;
@@ -174,6 +188,8 @@ export async function POST(request: NextRequest) {
           // El Excel no trae cuenta control: se marca a mano en la pantalla.
           cuenta_control: null,
           saldo_inicial: row.saldo_inicial,
+          saldo_inicial_fecha:
+            row.saldo_inicial === 0 ? null : fechaSaldoPorDefecto,
           description: null,
           active: true,
         });
@@ -190,6 +206,10 @@ export async function POST(request: NextRequest) {
           account_type: row.account_type as AccountType,
           subcategoria: row.subcategoria,
           saldo_inicial: row.saldo_inicial,
+          saldo_inicial_fecha:
+            row.saldo_inicial === 0
+              ? null
+              : match.saldo_inicial_fecha ?? fechaSaldoPorDefecto,
           // PRESERVAR: el PATCH es reemplazo total. Ni la descripción ni la
           // cuenta control vienen en el Excel, y el import no debe activar ni
           // desactivar cuentas.

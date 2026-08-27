@@ -393,6 +393,17 @@ const CUENTAS_FASE1 = [
     subcategoria: "pasivo_corriente" as const,
     saldo: 0,
   },
+  {
+    // Sociedad civil: destino del reparto del resultado. Nace y se queda en 0
+    // porque el renglón de distribución del Estado de Resultado es CALCULADO
+    // (= la utilidad neta con signo opuesto). Cargarle un saldo a mano lo
+    // contaría dos veces. Código PROVISIONAL — ver sql/pending/026.
+    code: "300004",
+    name: "Distribución a Socias",
+    account_type: "equity" as const,
+    subcategoria: "patrimonio" as const,
+    saldo: 0,
+  },
 ];
 
 /**

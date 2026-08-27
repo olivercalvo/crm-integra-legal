@@ -240,6 +240,71 @@ export function subcategoriaLabel(v: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
+// ACTIVIDAD — el eje que introduce NIIF 18
+// ---------------------------------------------------------------------------
+
+/**
+ * Las tres actividades por las que NIIF 18 clasifica el resultado. Son los
+ * BLOQUES del Estado de Resultado.
+ */
+export type Actividad = "operacion" | "inversion" | "financiamiento";
+
+/** En el orden en que se leen en el reporte. */
+export const ACTIVIDADES: Actividad[] = ["operacion", "inversion", "financiamiento"];
+
+/** Encabezado del bloque, tal como lo escribe Josuar en su modelo. */
+export const ACTIVIDAD_LABEL_ES: Record<Actividad, string> = {
+  operacion: "ACTIVIDAD DE OPERACIÓN",
+  inversion: "ACTIVIDAD DE INVERSIÓN",
+  financiamiento: "ACTIVIDAD DE FINANCIAMIENTO",
+};
+
+/**
+ * A qué actividad pertenece cada subcategoría.
+ *
+ * Se escribe EXPLÍCITO en vez de deducirlo del sufijo del nombre: un mapa se
+ * puede grepear y el compilador avisa si falta un caso; parsear
+ * `"..._inversion"` con un endsWith se rompe en silencio el día que alguien
+ * agregue un valor con otro nombre.
+ *
+ * Las subcategorías de BALANCE devuelven null: no van al Estado de Resultado.
+ */
+const ACTIVIDAD_POR_SUBCATEGORIA: Record<Subcategoria, Actividad | null> = {
+  activo_corriente: null,
+  activo_no_corriente: null,
+  propiedad_planta_equipo: null,
+  pasivo_corriente: null,
+  pasivo_no_corriente: null,
+  patrimonio: null,
+  otro: null,
+  ingresos_operativos: "operacion",
+  costos_operativos: "operacion",
+  gastos_operativos: "operacion",
+  ingresos_inversion: "inversion",
+  costos_inversion: "inversion",
+  gastos_inversion: "inversion",
+  ingresos_financiamiento: "financiamiento",
+  costos_financiamiento: "financiamiento",
+  gastos_financiamiento: "financiamiento",
+};
+
+/** La actividad de una subcategoría, o null si es de balance / desconocida. */
+export function actividadDe(s: Subcategoria | null | undefined): Actividad | null {
+  if (!isSubcategoria(s)) return null;
+  return ACTIVIDAD_POR_SUBCATEGORIA[s];
+}
+
+/** La subcategoría que corresponde a un tipo de resultado en una actividad. */
+export function subcategoriaDe(
+  tipo: AccountType,
+  actividad: Actividad
+): Subcategoria | null {
+  return (
+    subcategoriasParaTipo(tipo).find((s) => actividadDe(s) === actividad) ?? null
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CUENTA CONTROL
 // ---------------------------------------------------------------------------
 

@@ -585,3 +585,54 @@ reclasificado una cuenta con movimientos.
 
 Si `contarMovimientos()` falla, **bloquea**: ante la duda no se asume que la cuenta esta
 libre.
+
+### Las DOS convenciones de signo — la trampa más cara de este módulo
+
+Conviven dos, a propósito, y confundirlas rompe reportes en silencio:
+
+| | Convención | Dónde |
+|---|---|---|
+| **Balanza** | saldos tal cual: débito +, crédito − | `accounting-reports.ts`, Balance General, el fixture, TODOS los tests |
+| **Reporte** | ingresos +, costos y gastos entre paréntesis | SOLO `estado-resultado-niif18.ts` |
+
+**El vuelco vive únicamente en la capa de presentación del Estado de Resultado.** No se
+invierte el motor. Si alguien "arregla" los signos en `accounting-reports.ts` porque le
+parecen al revés:
+
+- el Balance General deja de cuadrar (su cuadre es `Activo + (Pasivo + Patrimonio) = 0`, que
+  solo se cumple en balanza), y
+- se pierden los tests contra el Excel de Josuar, que son la única red que hay.
+
+La regla de presentación completa, sin casos especiales:
+
+```
+monto = |balanza|        va entre paréntesis  ⟺  balanza > 0
+```
+
+Sirve para todo renglón porque en balanza un débito siempre reduce el resultado y un crédito
+siempre lo aumenta. El caso que lo prueba es `430001 Descuentos otorgados`: es un DÉBITO
+dentro de INGRESOS y tiene que leerse restando — sale `(663.25)`.
+
+### El oráculo: cómo se evita que las dos vistas diverjan
+
+`buildEstadoResultado()` (balanza) y `buildEstadoResultadoNiif18()` (reporte) calculan lo
+mismo por caminos distintos. El test **"EL ORÁCULO"** de
+`estado-resultado-niif18.test.ts` compara la Utilidad Operativa de los dos. Si alguien toca
+uno y la plata deja de coincidir, salta ahí.
+
+No borrar `buildEstadoResultado()` aunque la UI ya no lo use: es la referencia contra el
+Excel del contador.
+
+### Sociedad civil: por qué el ISR es 0 y el ejercicio cierra en cero
+
+Integra es sociedad civil y no paga ISR a nivel de empresa: reparte a las socias y cada una
+paga su renta personal. Por eso `DEFAULT_ISR_RATE = 0` y hay una sección de distribución que
+deja el resultado del ejercicio en 0 **por construcción** (la distribución es el opuesto
+exacto de la utilidad neta).
+
+`isrRate` y `distribucionASocias` siguen siendo parámetros: para una sociedad anónima se
+pasa la tasa y `distribucionASocias: false`, sin tocar la lógica del reporte.
+
+El código de la cuenta de distribución (`300004`) es un **parámetro**, no un literal
+regado por el código: `CUENTA_DISTRIBUCION_SOCIAS` en `estado-resultado-niif18.ts`. Es
+provisional hasta que Josuar lo confirme.

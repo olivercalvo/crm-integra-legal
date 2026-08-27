@@ -207,12 +207,24 @@ test("balance que NO cuadra se reporta como descuadre, no se esconde", () => {
 // 3) Impuesto sobre la Renta (parámetro, no regla fiscal)
 // ===========================================================================
 
-test("ISR: con ganancia se aplica la tasa y reduce la utilidad", () => {
-  // Ganancia de 1000 → en convención de balanza, utilidad operativa = -1000.
+test("ISR: la tasa por defecto es CERO (Integra es sociedad civil)", () => {
+  // No paga a nivel de empresa: reparte a las socias y cada una paga su renta
+  // personal. El reparto lo muestra el Estado de Resultado NIIF 18.
+  assert.equal(DEFAULT_ISR_RATE, 0);
   const er = buildEstadoResultado([acc("400001", "income", "ingresos_operativos", -1000)]);
+  assertMoney(er.isr.amount, 0, "ISR con la tasa por defecto");
+  assertMoney(er.utilidadNeta, -1000, "Utilidad Neta = operativa cuando no hay impuesto");
+});
+
+test("ISR: con una tasa explícita se aplica y reduce la utilidad", () => {
+  // Ganancia de 1000 → en convención de balanza, utilidad operativa = -1000.
+  // El parámetro se conserva para vender el sistema a sociedades anónimas.
+  const er = buildEstadoResultado([acc("400001", "income", "ingresos_operativos", -1000)], {
+    isrRate: 0.25,
+  });
   assertMoney(er.utilidadOperativa, -1000, "Utilidad Operativa");
   assert.equal(er.isr.applied, true);
-  assert.equal(er.isr.rate, DEFAULT_ISR_RATE);
+  assert.equal(er.isr.rate, 0.25);
   assertMoney(er.isr.amount, 250, "ISR 25% de 1000");
   assertMoney(er.utilidadNeta, -750, "Utilidad Neta");
 });
@@ -248,10 +260,16 @@ test("ISR: la tasa es un parámetro (no está hardcodeada en el cálculo)", () =
   assertMoney(er.utilidadNeta, -900, "Utilidad Neta");
 });
 
-test("ISR: con los datos reales de Josuar, al 25% sobre la utilidad operativa", () => {
-  const er = buildEstadoResultado(JOSUAR_ACCOUNTS);
+test("ISR: con los datos reales de Josuar, al 25% explícito", () => {
+  const er = buildEstadoResultado(JOSUAR_ACCOUNTS, { isrRate: 0.25 });
   assertMoney(er.isr.amount, 61119.23, "ISR 25% de 244,476.91");
   assertMoney(er.utilidadNeta, -183357.68, "Utilidad Neta");
+});
+
+test("ISR: con los datos reales de Josuar y la tasa real de Integra (0%)", () => {
+  const er = buildEstadoResultado(JOSUAR_ACCOUNTS);
+  assertMoney(er.isr.amount, 0, "ISR");
+  assertMoney(er.utilidadNeta, -244476.91, "Utilidad Neta = Utilidad Operativa");
 });
 
 // ===========================================================================

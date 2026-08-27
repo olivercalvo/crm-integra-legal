@@ -1,5 +1,92 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 1 contable — Estado de Resultado NIIF 18 y sociedad civil] - 2026-08-27
+
+Tareas 3 y 4. Se adelantaron ANTES de la revision de RM a pedido de Oliver: con la
+estructura vieja, Josuar habria comentado sobre la FORMA del reporte en vez del contenido.
+Ahora ve SU modelo con SUS numeros y puede aprobar de verdad — una vuelta de revision en vez
+de dos.
+
+### Tarea 3 — Estado de Resultado con la estructura de Josuar
+
+Modulo nuevo `src/lib/finanzas/reports/estado-resultado-niif18.ts`. El reporte queda:
+
+```
+ACTIVIDAD DE OPERACION
+  Ingresos operativos ............ 289,137.06
+  Costos operativos .............. (9,878.38)
+  ► Utilidad Bruta operativa ..... 279,258.68
+  Gastos operativos .............. (34,781.77)
+  ► Utilidad Operativa ........... 244,476.91
+► Utilidad antes de impuesto ..... 244,476.91
+  Impuesto sobre la renta .............. 0.00
+► Utilidad Neta .................. 244,476.91
+DISTRIBUCION A SOCIAS
+  300004 Distribucion a Socias .. (244,476.91)
+► Resultado del ejercicio ............. 0.00
+```
+
+- **Bloques por actividad**: OPERACION, INVERSION y FINANCIAMIENTO. Los bloques sin cuentas
+  NO se muestran, y un grupo vacio dentro de un bloque tampoco imprime su subtotal. Hoy
+  Integra solo tiene cuentas operativas, asi que se ve un unico bloque.
+- **El vuelco de signos va SOLO en presentacion.** El motor (`accounting-reports.ts`) se
+  queda en convencion de balanza, y por eso los tests contra el Excel de Josuar siguen
+  sirviendo de red. Si se invirtiera el motor, el Balance General dejaria de cuadrar: su
+  cuadre es `Activo + (Pasivo + Patrimonio) = 0`, que solo se cumple en balanza.
+- **La regla de presentacion es una sola linea**, sin casos especiales:
+  `monto = |balanza|` y va entre parentesis `⟺ balanza > 0`. Funciona para ingresos, costos,
+  gastos, utilidades e impuesto porque en balanza un debito siempre reduce el resultado y un
+  credito siempre lo aumenta. Se ve bien en `430001 Descuentos otorgados`, que es un DEBITO
+  dentro de INGRESOS y sale `(663.25)` — restando, que es lo correcto.
+- El reporte se expone como una **lista plana de filas** ya ordenadas, no como un arbol: el
+  Estado de Resultado se lee de arriba abajo, y asi "los bloques vacios no se muestran" es
+  simplemente no emitir filas.
+- El Estado de Resultado dejo de usar los componentes compartidos de
+  `financial-statement.tsx`, que imprimen en balanza. **El Balance General se quedo con
+  ellos, sin tocar**: son dos reportes con dos convenciones y esa diferencia es real.
+
+### Tarea 4 — Sociedad civil
+
+- **`DEFAULT_ISR_RATE` pasa de 0.25 a 0.** Integra no paga ISR a nivel de empresa: reparte a
+  las socias y cada una paga su renta personal. **El parametro se queda**, como pidio Rose,
+  para vender el sistema despues a sociedades anonimas: se pasa `isrRate` y el renglon
+  aparece solo.
+- **Seccion de distribucion a socias** al final, y el ejercicio **cierra en cero por
+  construccion**: la distribucion es exactamente el opuesto de la utilidad neta.
+- Cuenta **`300004 Distribucion a Socias`** (patrimonio) creada — migracion `026`.
+  **PROVISIONAL**: el codigo y el nombre son parametros de `buildEstadoResultadoNiif18()`,
+  asi que si Josuar pide otro (o un pasivo "Por pagar a socias") se cambia en un lugar.
+- `distribucionASocias: false` desactiva la seccion entera para una S.A.
+
+### Verificado
+
+- **333 tests, 0 fallos** (72 skips preexistentes). 20 nuevos en
+  `estado-resultado-niif18.test.ts`, incluido **EL ORACULO**: un test que ata la Utilidad
+  Operativa del reporte nuevo a la del motor viejo, para que las dos vistas no puedan
+  divergir sin que salte.
+- Los cinco totales siguen dando lo mismo que el Excel de Josuar. **La estructura cambio, la
+  plata no.**
+- En pantalla con `admin@staging.test`: reporte completo con la estructura nueva, y el
+  **Balance General intacto y cuadrando** (Activo 257,902.46 vs Pasivo+Patrimonio
+  -257,902.46). Consola sin errores.
+
+### ⚠️ Inconsistencia conocida, pendiente de decision
+
+El Estado de Resultado ahora dice **"Resultado del ejercicio 0.00"** (todo repartido) pero el
+Balance General sigue mostrando **"Utilidad del Ejercicio -244,476.91"** en el patrimonio.
+
+Los dos son defendibles por separado y juntos se contradicen. La Tarea 4 pedia la seccion
+solo en el Estado de Resultado, asi que el Balance NO se toco. Resolverlo es una decision
+contable de Josuar: si el resultado se reparte, el patrimonio deberia mostrar la contraparte
+(una cuenta de distribucion, o un pasivo "Por pagar a socias" si no se paga de inmediato).
+
+### `.env.local` — banda violeta recuperada
+
+`NEXT_PUBLIC_APP_ENV` paso de `staging` a `local` en la maquina de Oliver. Ahora localhost
+muestra la banda **VIOLETA "LOCAL — DATOS DE PRUEBA · Desarrollo en tu maquina, contra la
+base de staging"** en vez de la ambar de staging, que es lo que describe el CLAUDE.md §9.
+El archivo no se commitea (esta en .gitignore).
+
 ## [Fase 1 contable — NIIF 18: tipo costo, nueve subcategorias, cuenta control] - 2026-08-27
 
 Tareas 0, 6, 1 y 2 de la Fase 1. Se entrega para que RM Consultores lo pruebe en STAGING

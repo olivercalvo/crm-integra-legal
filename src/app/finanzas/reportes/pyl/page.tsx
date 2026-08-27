@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
-import { buildEstadoResultado } from "@/lib/finanzas/reports/accounting-reports";
+import { buildEstadoResultadoNiif18 } from "@/lib/finanzas/reports/estado-resultado-niif18";
 import {
   StatementHeader,
   OpeningBalancesNotice,
-  UnclassifiedWarning,
-  SignConventionNote,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
 import { EstadoResultadoStatement } from "./_components/estado-resultado-statement";
@@ -25,32 +24,61 @@ export default async function EstadoResultadoPage() {
   }
 
   const accounts = await loadReportAccounts(ctx.db, ctx.tenantId);
-  const er = buildEstadoResultado(accounts);
-  const isrPct = (er.isr.rate * 100).toLocaleString("es-PA", { maximumFractionDigits: 2 });
+
+  // Integra es sociedad civil: sin ISR a nivel de empresa y con distribución a
+  // socias. Los dos son los defaults del builder; se escriben acá igual para que
+  // se vea de dónde sale, y para que cambiarlo a una S.A. sea una línea.
+  const er = buildEstadoResultadoNiif18(accounts);
 
   return (
     <div className="space-y-4">
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title="Estado de Resultado"
-        subtitle="Saldos de apertura · Ganancias y pérdidas"
+        subtitle="Saldos de apertura · Clasificado por actividad (NIIF 18)"
         generatedAt={formatGeneratedAt()}
       />
 
       <OpeningBalancesNotice />
-      <UnclassifiedWarning sections={[er.ingresos, er.costos, er.gastos]} />
+
+      {er.sinClasificar.length > 0 && (
+        <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Hay <strong>{er.sinClasificar.length} cuenta(s) de resultado sin subcategoría</strong>.
+            Están incluidas en los totales bajo &ldquo;Sin clasificar&rdquo;, pero hay que
+            clasificarlas en el Plan de Cuentas para que caigan en su bloque de actividad.
+          </span>
+        </p>
+      )}
 
       {/* La tabla es client component por el toggle de cuentas con saldo; el
           reporte se arma acá en el server y llega ya calculado. */}
-      <EstadoResultadoStatement er={er} isrPct={isrPct} />
+      <EstadoResultadoStatement er={er} />
 
       <div className="space-y-2">
-        <SignConventionNote />
         <p className="text-xs text-gray-500">
-          <strong>Impuesto sobre la Renta:</strong> el renglón usa una tasa plana del {isrPct}% sobre
-          la utilidad operativa y solo se aplica si hubo ganancia. La tasa y el método (base gravable,
-          ajustes, tarifa alternativa) están <strong>pendientes de confirmación del contador</strong>;
-          es un parámetro del reporte, no una regla fiscal implementada.
+          <strong>Convención de signos:</strong> este reporte se lee como el modelo del
+          contador — los ingresos en positivo y los costos y gastos{" "}
+          <strong>entre paréntesis</strong>, porque restan. Es la convención inversa a la de la
+          balanza de comprobación y a la del Balance General, donde los saldos van tal cual y
+          los créditos salen negativos.
+        </p>
+        <p className="text-xs text-gray-500">
+          <strong>NIIF 18:</strong> obligatoria desde el 1 de enero de 2027, reemplaza a la NIC 1
+          y clasifica ingresos y gastos por <strong>actividad</strong> (operación, inversión y
+          financiamiento). Los bloques sin cuentas no se muestran.
+        </p>
+        <p className="text-xs text-gray-500">
+          <strong>Impuesto sobre la Renta y distribución:</strong> Integra es una{" "}
+          <strong>sociedad civil</strong>, así que no paga impuesto sobre la renta a nivel de
+          empresa: el resultado se reparte a las socias y cada una paga su renta personal. Por
+          eso el impuesto va en 0 y el <strong>resultado del ejercicio cierra en cero</strong>. La
+          tasa quedó como parámetro del reporte para cuando se use en sociedades anónimas.
+        </p>
+        <p className="text-xs text-gray-500">
+          La cuenta <strong>300004 Distribución a Socias</strong> es{" "}
+          <strong>provisional</strong>, pendiente de confirmación del contador.
         </p>
       </div>
     </div>

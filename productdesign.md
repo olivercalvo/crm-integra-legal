@@ -404,6 +404,46 @@ asientos reescribe retroactivamente reportes de periodos que el contador ya cert
 
 ---
 
+### ESTADO DE RESULTADO — estructura NIIF 18
+
+Reemplaza al formato viejo (INGRESOS / COSTOS / GASTOS planos). Es el modelo textual que
+mando Josuar:
+
+```
+ACTIVIDAD DE OPERACION
+  Ingresos operativos ............ (subtotal)
+  Costos operativos .............. (subtotal)
+  ► Utilidad Bruta operativa
+  Gastos operativos .............. (subtotal)
+  ► Utilidad Operativa
+ACTIVIDAD DE INVERSION           (bloque, solo si hay cuentas)
+ACTIVIDAD DE FINANCIAMIENTO      (bloque, solo si hay cuentas)
+► Utilidad antes de impuesto sobre la renta
+  Impuesto sobre la renta
+► Utilidad Neta
+DISTRIBUCION A SOCIAS            (sociedad civil)
+► Resultado del ejercicio = 0
+```
+
+- **Los bloques sin cuentas no se muestran.** Un grupo vacio dentro de un bloque tampoco
+  imprime su subtotal.
+- **Convencion de signos del reporte**: ingresos en positivo, costos y gastos entre
+  parentesis. Es la INVERSA de la balanza de comprobacion y del Balance General, donde los
+  saldos van tal cual y los creditos salen negativos. Los dos reportes lo aclaran al pie.
+- El toggle "solo cuentas con saldo" esconde unicamente renglones de cuenta en 0; los
+  encabezados, subtotales y resultados se quedan siempre y los totales son identicos en las
+  dos vistas.
+
+**Sociedad civil.** Integra no paga impuesto sobre la renta a nivel de empresa: reparte el
+resultado a las socias y cada una paga su renta personal (15%). Por eso el impuesto va en 0
+y el ejercicio cierra en cero. La tasa de ISR y la distribucion son PARAMETROS del reporte,
+pensados para poder vender el sistema a sociedades anonimas, que si lo pagan.
+
+Cuenta de destino: **`300004 Distribucion a Socias`** (patrimonio), PROVISIONAL hasta que
+la confirme el contador.
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

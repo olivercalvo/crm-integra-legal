@@ -136,8 +136,22 @@ export interface BalanceGeneral {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Tasa de ISR por defecto. PROVISIONAL — a confirmar con Josuar. */
-export const DEFAULT_ISR_RATE = 0.25;
+/**
+ * Tasa de ISR por defecto: CERO.
+ *
+ * Integra es una **sociedad civil** y NO paga impuesto sobre la renta a nivel de
+ * empresa: reparte el resultado a las socias y cada una paga su renta personal
+ * (15%). Ese reparto es lo que muestra la sección de distribución del Estado de
+ * Resultado (`estado-resultado-niif18.ts`), y por eso el ejercicio cierra en 0.
+ *
+ * **El parámetro se queda a propósito.** Rose lo pidió explícitamente pensando
+ * en vender el sistema después a sociedades anónimas, que sí lo pagan: ahí se
+ * pasa `isrRate` y el renglón aparece solo, sin tocar la lógica del reporte.
+ *
+ * Hasta el 27/08/2026 este default era 0.25, una tasa provisional que se puso
+ * cuando todavía no estaba confirmado el tipo societario.
+ */
+export const DEFAULT_ISR_RATE = 0;
 
 /** Tolerancia al comparar montos en B/. (medio centavo). */
 const EPSILON = 0.005;

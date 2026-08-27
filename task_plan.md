@@ -1,6 +1,63 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — cierre del 27/08/2026 <<<
+## >>> RETOMAR ACA — cierre del 27/08/2026 (tarde) <<<
+
+**FASE 1 CONTABLE (NIIF 18) — Tareas 0, 6, 1, 2, 3 y 4 CERRADAS. Falta solo la 5.**
+
+Listo para que RM Consultores lo pruebe en STAGING. Detalle en `changelog.md`; el
+como-tocarlo, en `sop.md` SOP-013.
+
+### Por que se adelantaron la 3 y la 4
+
+Decision de Oliver: con la estructura vieja, Josuar habria comentado sobre la FORMA del
+reporte en vez del contenido. Con la 3 hecha ve SU modelo con SUS numeros y puede aprobar de
+verdad. Una vuelta de revision en vez de dos.
+
+### Lo que quedo funcionando
+
+- **Estado de Resultado con la estructura de Josuar**: bloques por actividad, ► Utilidad
+  Bruta operativa, ► Utilidad Operativa, ► Utilidad antes de impuesto, ► Utilidad Neta.
+  Bloques sin cuentas no se muestran.
+- **Vuelco de signos SOLO en presentacion.** El motor sigue en balanza y los tests contra el
+  Excel siguen siendo la red. Regla unica: `monto = |balanza|`, parentesis si `balanza > 0`.
+- **Sociedad civil**: ISR en 0 (parametro conservado), seccion de distribucion a socias y el
+  ejercicio cierra en cero por construccion.
+- Cuenta `300004 Distribucion a Socias` (migracion 026). Codigo PARAMETRIZABLE.
+- **333 tests, 0 fallos.** Los 5 totales siguen dando lo mismo que el Excel.
+- `.env.local` ahora dice `NEXT_PUBLIC_APP_ENV=local` → banda VIOLETA en localhost.
+
+### ⚠️ DECISION PENDIENTE DE JOSUAR — la mas importante
+
+**El Estado de Resultado dice "Resultado del ejercicio 0.00" pero el Balance General sigue
+mostrando "Utilidad del Ejercicio -244,476.91" en el patrimonio.** Se contradicen.
+
+La Tarea 4 pedia la seccion solo en el Estado de Resultado, asi que el Balance no se toco.
+Si el resultado se reparte, el patrimonio deberia mostrar la contraparte: una cuenta de
+distribucion, o un pasivo "Por pagar a socias" si el reparto no se paga de inmediato. Es la
+misma pregunta que la del codigo de la 300004 — conviene mandarlas juntas en el correo.
+
+### LO QUE SIGUE
+
+**Tarea 5 — saldos iniciales: SOLO el campo `fecha`.** Nada de ledger. El asiento de
+apertura, los periodos, la secuencia, el `source_type='apertura'` y el Libro Mayor se van
+completos a la FASE 2 con el motor de posteo.
+
+Regla de Rose que hay que respetar: el periodo fiscal va del 1 de enero al 31 de diciembre y
+"el 1 de enero de cada año las unicas cuentas que inician con saldos son las que pertenecen
+al estado de situacion financiera". Las de resultado arrancan en cero cada año.
+
+### PENDIENTES DE OLIVER
+
+1. **Correo a Josuar** con las dos preguntas juntas: (a) codigo y naturaleza de la cuenta de
+   distribucion (`300004` patrimonio, o ademas un pasivo "Por pagar a socias"), y (b) que
+   debe mostrar el patrimonio del Balance cuando el resultado se reparte.
+2. **`NEXT_PUBLIC_APP_URL` vacia en el entorno Preview de Vercel.** Es la que arma el link
+   publico de cotizaciones. Previo a Fase 0.
+3. **Recrear en PRODUCCION el indice de `client_payments(tenant_id)`.** Impacto bajo.
+
+---
+
+## >>> Cierre del 27/08/2026 (mañana) <<<
 
 **FASE 1 CONTABLE (NIIF 18) — EN CURSO. Tareas 0, 6, 1 y 2 CERRADAS.**
 

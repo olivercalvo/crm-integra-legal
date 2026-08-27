@@ -668,3 +668,79 @@ de resultado darían 0 y las de balance cuadrarían solas contra el patrimonio.
 de balance —no cuadraría, le faltaría exactamente el resultado acumulado— y armarlo con TODAS
 metería movimiento del ejercicio dentro de un asiento que dice ser de apertura. Está pendiente
 de confirmación del contador antes de escribir el motor de posteo.
+
+---
+
+## SOP-014: El ledger — cómo se escribe y cómo NO
+
+### Regla única: al ledger se escribe SOLO por `post_journal_entry`
+
+Nunca con un INSERT directo a `journal_entries` / `journal_entry_lines`, ni desde la app ni
+desde el SQL Editor. El RPC es lo que garantiza partida doble, correlativo sin huecos,
+período válido y cadena de hash. Un INSERT a mano se saltea las cuatro cosas **y no se puede
+deshacer**: los triggers de 023 rechazan UPDATE y DELETE.
+
+Del lado de TypeScript se llama con `postJournalEntry()`
+(`src/lib/finanzas/contabilidad/posting.ts`), que es un envoltorio y **no repite ninguna
+validación del RPC** — a propósito. Dos copias que se desincronizan dan la ilusión de que algo
+está validado cuando ya no lo está.
+
+### Por qué el motor vive en la base y no en la app
+
+Un asiento son dos escrituras y supabase-js no tiene transacciones multi-statement. Si la
+segunda falla, la cabecera queda escrita y **no se puede borrar**. El resultado sería un
+asiento sin líneas, descuadrado, permanente, en los libros que se certifican ante la DGI.
+
+Es la misma razón por la que cualquier operación futura que escriba más de una fila del ledger
+(el asiento de apertura, el cierre de ejercicio) tiene que ser también una función.
+
+### Antes de postear hace falta que exista el período
+
+`post_journal_entry` **no crea períodos**. Si la fecha cae en un año sin provisionar, falla:
+
+```sql
+SELECT ensure_accounting_periods('a0000000-0000-0000-0000-000000000001', 2028);
+```
+
+Es deliberado. Un 2029 por un 2026 es un dedazo, y provisionar doce períodos en silencio lo
+escondería.
+
+### Verificar la integridad de la cadena
+
+```sql
+SELECT * FROM verify_accounting_chain('a0000000-0000-0000-0000-000000000001');
+```
+
+Sin filas = cadena íntegra. Conviene correrla antes de sellar el legajo anual y ante cualquier
+sospecha. Desde TS: `verifyAccountingChain()`.
+
+### Cómo se prueba el motor sin ensuciar la base
+
+Los asientos son INMUTABLES: unos de prueba no se podrían borrar después. La prueba de punta a
+punta corre **dentro de una transacción que termina en ROLLBACK**. Los triggers solo se
+disparan con UPDATE y DELETE reales, así que un rollback no los toca y no deja nada.
+
+### ⚠️ Al tocar un CHECK anónimo, filtrar por su CONTENIDO, no solo por la columna
+
+Los CHECK inline de 023 no tienen nombre propio, así que hay que descubrirlos por su
+definición. La primera versión de la 028 usó `ILIKE '%source_type%'` y **dropeó dos**: el enum
+que quería ampliar y `je_reversion_requires_ref`, que también menciona la columna y hace
+cumplir el Art. 5.7.
+
+Antes de dropear algo descubierto dinámicamente, **listar primero qué matchea**:
+
+```sql
+SELECT con.conname, pg_get_constraintdef(con.oid)
+FROM pg_constraint con JOIN pg_class rel ON rel.oid = con.conrelid
+WHERE rel.relname = 'journal_entries' AND con.contype = 'c';
+```
+
+Y que la migración avise por `RAISE NOTICE` de cada uno que elimina: así fue como se cazó.
+
+### La CONTRAPARTIDA se decide en UN solo archivo
+
+`src/lib/finanzas/contabilidad/contrapartida.ts`. Está aislada porque la respuesta del contador
+sobre qué mostrar cuando el asiento tiene más de dos líneas cae exactamente ahí.
+
+Para saber si una contrapartida es ambigua, usar `contrapartidaEsAmbigua()` y **nunca comparar
+el texto contra "Varios"**: esa etiqueta es lo primero que va a cambiar.

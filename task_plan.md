@@ -1,6 +1,53 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — FASE 1 CONTABLE COMPLETA — 27/08/2026 <<<
+## >>> RETOMAR ACA — FASE 2: MOTOR DE POSTEO LISTO — 27/08/2026 <<<
+
+**ACA PARAMOS.** Se manda el correo con las NUEVE consultas (abajo) y se pide la llamada de
+validacion con RM. **NO se arranca el modulo de compras ni el Libro Mayor** hasta esa
+validacion: es donde ya seria caro corregir.
+
+### Lo que quedo funcionando
+
+**Fase 1 completa** (tipo costo, nueve subcategorias NIIF 18, cuenta control, Estado de
+Resultado con la estructura de Josuar, sociedad civil, fecha del saldo inicial).
+
+**Fase 2 — motor de posteo**, el bloque que no depende de ninguna respuesta:
+
+- `post_journal_entry(...)` — partida doble, periodo por fecha, correlativo sin huecos,
+  cadena de hash. Es una FUNCION DE POSTGRES porque los triggers de inmutabilidad hacen que un
+  posteo a medias desde la app deje una cabecera sin lineas imposible de limpiar.
+- `ensure_accounting_periods()` + los 24 periodos de 2026 y 2027.
+- La secuencia del correlativo.
+- `apertura` en el CHECK de `source_type`.
+- `verify_accounting_chain()` — verificador de la cadena.
+- `contrapartida.ts` — el punto UNICO de esa decision, esperando la consulta 3.
+
+352 tests, 0 fallos, mas 9 rechazos verificados de punta a punta contra staging.
+
+### LO QUE NO SE HIZO Y POR QUE
+
+- **El ASIENTO DE APERTURA.** Espera la consulta 1 (fecha de corte). Lo cargado es una foto de
+  mitad de año, no una apertura al 1 de enero, asi que un asiento de apertura hoy seria
+  incorrecto se lo arme como se lo arme.
+- **El LIBRO MAYOR.** Espera las consultas 3, 4 y 5, y la validacion de RM.
+- **COMPRAS.** Despues de la validacion.
+
+### PARA CUANDO SE RETOME EL LIBRO MAYOR
+
+Columnas del modelo (`Temas Contables/image001.png`): cuenta de distribucion, fecha de la
+transaccion, tipo de transaccion, numero, nombre del tercero, descripcion, cuenta de
+contrapartida, importe y saldo corrido. Cada cuenta arranca con una fila "Saldo inicial" y
+cierra con su total — que **es la suma de los movimientos, no el saldo final** (ver consulta 4).
+
+**El requisito que Josuar repitio tres veces, dos niveles de profundidad:**
+1. Desde un saldo del Balance o del Estado de Resultado → abrir el mayor de esa cuenta.
+2. Desde una linea del mayor → llegar al documento que la origino.
+
+Es lo que convierte el reporte en algo auditable.
+
+---
+
+## >>> Cierre anterior — FASE 1 COMPLETA — 27/08/2026 <<<
 
 **Las seis tareas cerradas (0, 1, 2, 3, 4, 5).** 345 tests, 0 fallos.
 
@@ -16,39 +63,63 @@ Ahi paramos, se manda el correo con TODAS las consultas acumuladas y se pide la 
 validacion. **NO se arranca el modulo de compras antes de esa validacion**: es donde ya seria
 caro corregir.
 
-### ⚠️ CONSULTAS ACUMULADAS PARA EL CORREO A JOSUAR — son SIETE
+### ⚠️ CONSULTAS ACUMULADAS PARA EL CORREO A JOSUAR — son NUEVE
 
-**Bloqueante de la Fase 2:**
+Van TODAS juntas en un solo correo, con la llamada de validacion despues.
 
-1. **¿Cual es la fecha de corte real de los saldos cargados?** Lo que hay NO es una apertura
+**BLOQUEANTES de la Fase 2 (sin respuesta no se puede escribir el asiento de apertura):**
+
+1. **¿Cual es la fecha de corte de los saldos cargados, y que debe mostrar el patrimonio?**
+
+   Es UNA sola pregunta, aunque se manifieste en dos pantallas. Lo cargado no es una apertura
    al 1 de enero: las cuentas de balance suman 244,476.91, las de resultado -244,476.91 y el
    patrimonio esta en cero. En una apertura de verdad las de resultado darian 0 y el resultado
-   del año anterior ya estaria cerrado contra el patrimonio. **Sin esto no se puede escribir el
-   asiento de apertura.** Si la respuesta es "1 de enero de 2026", hacen falta ademas los
-   saldos de apertura reales de las cuentas de balance y las utilidades retenidas.
+   del año anterior ya estaria cerrado contra el patrimonio.
 
-**Del Libro Mayor (del modelo `Temas Contables/image001.png`):**
+   El Balance muestra "Utilidad del Ejercicio -244,476.91" **porque el activo excede al pasivo
+   mas patrimonio exactamente en ese monto**: sin esa linea no cuadraria. No es un problema de
+   presentacion — es que los datos son un corte de mitad de año y el patrimonio no tiene nada
+   que absorba el resultado.
 
-2. **La columna "cuenta de contrapartida" trae una CATEGORIA, no una cuenta** ("Proveedores",
+   Si la respuesta es "1 de enero de 2026", hacen falta ademas los saldos de apertura reales de
+   las cuentas de balance y las utilidades retenidas.
+
+2. **¿Por que el Capital Social esta en 0.00?**
+
+   Que las utilidades retenidas esten en cero se entiende si la sociedad distribuye todo cada
+   año. Que el CAPITAL SOCIAL tambien lo este, no: las socias aportaron algo al constituir la
+   firma. ¿Falta cargarlo, o esta en otra cuenta?
+
+**Del LIBRO MAYOR (del modelo `Temas Contables/image001.png`):**
+
+3. **La columna "cuenta de contrapartida" trae una CATEGORIA, no una cuenta** ("Proveedores",
    "cobrar clientes"). ¿Que va ahi cuando un asiento tiene mas de dos lineas y no hay una
    contrapartida unica? ¿"Varios", la de mayor importe, o una lista?
-3. **El total del pie NO es el saldo final: es la suma de los MOVIMIENTOS.** En su ejemplo,
+
+4. **El total del pie NO es el saldo final: es la suma de los MOVIMIENTOS.** En su ejemplo,
    Banco Pichincha cierra en `$6,740.01` mientras el saldo corrido va en `21,121.28`
-   (12,412.00 − 1,712.00 − 351.25 − 3,608.74 = 6,740.01). ¿Confirmamos que quiere el movimiento
-   neto del periodo, o quiere ademas el saldo final?
-4. **La columna "Importe" viene con signo, no en columnas Debe/Haber.** Nuestro ledger guarda
+   (12,412.00 − 1,712.00 − 351.25 − 3,608.74 = 6,740.01). ¿Quiere el movimiento neto del
+   periodo, o ademas el saldo final?
+
+5. **La columna "Importe" viene con signo, no en columnas Debe/Haber.** Nuestro ledger guarda
    debito y credito separados. Para una cuenta de pasivo o de ingreso, ¿el mayor muestra el
    signo natural de la cuenta o el de la balanza?
 
-**De presentacion, no bloqueantes:**
+**De la DISTRIBUCION A SOCIAS:**
 
-5. **Codigo y naturaleza de la cuenta de distribucion a socias.** Hoy `300004` (patrimonio),
-   provisional. ¿Va ademas un pasivo "Por pagar a socias" para cuando el reparto no se paga de
-   inmediato?
-6. **¿Que muestra el patrimonio del Balance cuando el resultado se reparte?** Hoy el Estado de
-   Resultado cierra en 0 pero el Balance sigue mostrando "Utilidad del Ejercicio -244,476.91".
-7. **Numeracion de asientos y cierre de periodo.** ¿Que formato quiere para el numero de
-   asiento (`accounting_sequences`), y quien cierra un periodo y que bloquea el cierre?
+6. **¿Confirmamos el codigo `300004` y que sea de patrimonio** para la cuenta de distribucion?
+   Hoy esta creada como provisional.
+
+7. **¿Hace falta ademas un PASIVO "Por pagar a socias"** para cuando el reparto se declara pero
+   no se paga de inmediato? Una cosa es asignar el resultado y otra es deberlo.
+
+**Del MOTOR DE ASIENTOS:**
+
+8. **¿Que formato quiere para el numero de asiento?** ¿Correlativo unico, o uno por tipo de
+   transaccion? ¿Se reinicia cada periodo fiscal?
+
+9. **¿Quien cierra un periodo contable y que bloquea el cierre?** La tabla `accounting_periods`
+   ya tiene estado abierto/cerrado; falta la regla de negocio.
 
 ### PIEZAS QUE FALTAN PARA LA FASE 2 (ya identificadas)
 

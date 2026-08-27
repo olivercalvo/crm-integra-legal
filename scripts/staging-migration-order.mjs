@@ -70,5 +70,7 @@ export const BUNDLE_2 = [
   "sql/pending/025_niif18_tipo_costo_y_subcategorias.sql",
   "sql/pending/026_cuenta_distribucion_socias.sql",
   "sql/pending/027_saldo_inicial_fecha.sql",
+  "sql/pending/028_fase2_motor_posteo.sql",
+  "sql/pending/029_restaurar_check_reversion.sql",
   "sql/pending/storage_rls_tenant_scoped.sql",
 ];

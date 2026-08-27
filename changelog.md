@@ -1,5 +1,96 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 2 contable — motor de posteo del ledger] - 2026-08-27
+
+El bloque que NO depende de ninguna respuesta del contador. **No incluye el asiento de
+apertura**, que espera la fecha de corte, ni el Libro Mayor ni compras.
+
+### El motor es una FUNCION DE POSTGRES, y no es una preferencia de estilo
+
+Postear un asiento son DOS escrituras (cabecera + lineas) y supabase-js no tiene
+transacciones multi-statement. Si la segunda fallara, la cabecera ya estaria escrita **y no se
+podria borrar**: los triggers de la migracion 023 rechazan el DELETE. Quedaria un asiento sin
+lineas, descuadrado y permanente, en los libros que el contador certifica ante la DGI.
+
+Dentro de una funcion todo corre en una transaccion: si algo falla, no queda nada. Es lo que
+ya anticipaba el encabezado de 023 ("la regla de partida doble se valida en el RPC de posteo").
+
+### Desvio deliberado de 023: el hash se calcula en la BD, no en la app
+
+023 decia "hash-chain SHA-256; se computa en la app". Se hace al reves: `prev_hash` es el hash
+del asiento anterior, y calcularlo en la app obliga a un read-then-write. **Dos posteos
+concurrentes leerian el mismo `prev_hash` y bifurcarian la cadena en silencio** — justo lo que
+una cadena de hash existe para impedir. El `SELECT ... FOR UPDATE` de la secuencia serializa
+las dos cosas con un solo candado: correlativo sin huecos y cadena. `sha256()` es nativo desde
+PG11 y la base corre 17.6, asi que no hace falta pgcrypto.
+
+### Lo que entra
+
+- **`apertura` en el CHECK de `source_type`**, para poder EXCLUIR el asiento de apertura de los
+  reportes de movimiento del periodo.
+- **`ensure_accounting_periods(tenant, año)`** — los 12 periodos mensuales, idempotente. Se
+  provisionaron 2026 y 2027 (24 filas).
+- **La fila de `accounting_sequences`.** El formato del numero de asiento esta pendiente
+  (consulta 8); mientras tanto, correlativo unico por tenant, que es lo que exige la ley y el
+  caso mas restrictivo: de un correlativo unico se deriva cualquier presentacion, al reves no.
+- **`post_journal_entry(...)`** — valida partida doble, resuelve el periodo por la fecha, toma
+  el correlativo y encadena el hash.
+- **`verify_accounting_chain(tenant)`** — una cadena de hash que nadie verifica es decoracion.
+- **`src/lib/finanzas/contabilidad/posting.ts`** — envoltorio tipado. NO replica ninguna
+  validacion del RPC: dos copias que se desincronizan dan la ilusion de que algo esta validado
+  cuando ya no lo esta.
+
+### El periodo NO se crea solo
+
+Si la fecha cae en un año sin provisionar, el motor **falla**. Es deliberado: un 2029 por un
+2026 es un dedazo, y crear doce periodos en silencio lo esconderia.
+
+### La CONTRAPARTIDA, aislada a proposito
+
+`src/lib/finanzas/contabilidad/contrapartida.ts` es el punto UNICO donde se decide que va en
+esa columna del Libro Mayor. La respuesta de Josuar (consulta 3) cae ahi y es un cambio de una
+funcion, no una caceria.
+
+Del modelo salieron dos cosas: lo que escribe es una **categoria corta** ("Proveedores",
+"cobrar clientes"), no un codigo ni el nombre exacto de una cuenta; y **todos sus ejemplos son
+asientos simples**, asi que el caso ambiguo no esta resuelto por el modelo.
+
+Se resuelven ya los casos SIN ambiguedad, que no van a cambiar con ninguna respuesta posible:
+dos lineas, y varias lineas contra una sola cuenta del otro lado. Para el ambiguo se usa
+"Varios", que es la que no miente. `contrapartidaEsAmbigua()` se expone aparte para que la UI
+no tenga que comparar contra el texto de la etiqueta — comparar contra una etiqueta es
+exactamente lo que se rompe cuando pidan cambiarla.
+
+### 🔴 BUG PROPIO, DETECTADO Y REPARADO EN EL MISMO BLOQUE
+
+La primera version de la 028 tenia que ampliar el CHECK de `source_type`. Como en 023 se
+declaro inline y sin nombre, lo buscaba con `pg_get_constraintdef(...) ILIKE '%source_type%'`.
+
+**Ese filtro dropeo DOS constraints.** La otra era `je_reversion_requires_ref`, que obliga a
+que una reversion apunte al asiento que corrige y traiga un motivo (Art. 5.7). Sin ella se
+podia escribir una reversion huerfana y sin explicacion — y como los asientos son inmutables,
+quedaria asi para siempre.
+
+Se detecto leyendo los NOTICE de la aplicacion: la migracion aviso que habia eliminado dos
+constraints donde debia eliminar una.
+
+- **028 corregida**: el filtro pide ademas `'%factura%'`, que solo matchea el CHECK del enum.
+- **029 nueva**: restaura el constraint donde la 028 vieja ya corrio (solo staging; produccion
+  nunca la vio).
+- Hay un test de punta a punta que postea una reversion sin motivo y verifica que la rechaza.
+
+### Verificacion
+
+**352 tests, 0 fallos** (72 skips preexistentes), mas una prueba de punta a punta del motor
+contra staging, **dentro de una transaccion que se revierte** — los asientos son inmutables y
+unos de prueba no se podrian borrar despues. Cubre: posteo valido, correlativo, encadenado del
+hash desde el genesis, verificador, y **nueve rechazos** (descuadre, una linea, debito y
+credito juntos, cuenta inexistente, cuenta inactiva, sin descripcion, año sin periodos,
+periodo cerrado, reversion sin motivo).
+
+Se verifico ademas que **los nueve rechazos NO consumen numero de asiento**: el correlativo
+quedo en 2 despues de los dos posteos validos.
+
 ## [Fase 1 contable — fecha del saldo inicial] - 2026-08-27
 
 Tarea 5, con el alcance recortado que acordamos: **SOLO el campo fecha. Nada de ledger.**

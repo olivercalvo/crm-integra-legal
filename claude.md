@@ -79,6 +79,16 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   función de Postgres, no código de app, porque los triggers de inmutabilidad de `023`
   rechazan DELETE: un posteo a medias desde `supabase-js` dejaría una cabecera sin líneas
   imposible de limpiar.
+- 🔴 **EL `tenant_id` DEL POSTEO LO VALIDA LA RUTA, YA NO LA BASE.** Desde la migración `030`
+  el RPC tiene `EXECUTE` solo para `service_role` y es `SECURITY DEFINER`, así que **deja de
+  correr bajo RLS y confía en el `p_tenant_id` que recibe**. Consecuencias, todas obligatorias:
+  - Todo el posteo va por **rutas de API server-side con el cliente de servicio**. El RPC ya
+    no es llamable desde la sesión del usuario.
+  - La ruta saca el `tenant_id` **del perfil del usuario autenticado, NUNCA del cuerpo del
+    request**. Un `tenant_id` que venga en el body es un intento de escribir en el ledger de
+    otro bufete.
+  - Es la única garantía que se mudó de la base al código. Queda escrita acá antes de que
+    exista la primera línea que postea, justamente para que no se descubra después.
 - ⚠️ **El hash-chain se calcula en la BASE, no en la app.** El encabezado de
   `sql/pending/023_contabilidad_fase1_ledger.sql` dice lo contrario ("se computa en la app"),
   y ese archivo **ya está aplicado**, así que su comentario quedó desactualizado y no se puede

@@ -1,5 +1,68 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 2 — cierre de la escritura directa al ledger] - 2026-08-27
+
+Aplica el hallazgo de seguridad del bloque anterior, mas la auto-creacion acotada de periodos.
+Migracion `030`, en **BUNDLE_2** — fuera del bundle no serviria de nada: el
+`ALTER DEFAULT PRIVILEGES` del RESET_SQL volveria a abrir los permisos en cada `--reset`.
+
+### Permisos
+
+| | anon | authenticated | service_role |
+|---|---|---|---|
+| INSERT / UPDATE / DELETE / TRUNCATE | ✗ | ✗ | ✗ |
+| SELECT | ✓ | ✓ | ✓ |
+| EXECUTE del RPC | ✗ | ✗ | ✓ |
+
+**TRUNCATE incluido**: era el unico camino que vaciaba una tabla diseñada para ser imborrable
+sin disparar un solo trigger de fila y sin pasar por RLS.
+
+`accounting_periods` conserva UPDATE para `service_role` (cerrar y reabrir un periodo es
+administracion legitima). `SELECT` se queda en todos lados: los reportes leen.
+
+### El orden de los tres pasos, escrito en el encabezado de la migracion
+
+Revoke de escritura → EXECUTE solo a `service_role` → **recien ahi** SECURITY DEFINER.
+
+Invertirlo abriria algo peor que lo que cierra: con SECURITY DEFINER la funcion deja de correr
+bajo RLS y confia en el `p_tenant_id` que recibe, asi que con EXECUTE en PUBLIC se pasaria de
+*"puede falsificar la cadena de su propio tenant"* a *"puede escribir en el de cualquiera"*.
+
+Solo las dos funciones que ESCRIBEN son DEFINER. `verify_accounting_chain` sigue INVOKER
+porque solo lee — menos privilegio por defecto.
+
+### 🔴 Consecuencia para la Fase 3, escrita ANTES de la primera linea que postea
+
+El RPC deja de ser llamable desde la sesion del usuario. Todo el posteo va por rutas de API
+server-side, y **el `tenant_id` lo valida la ruta, no la base**: lo saca del perfil del usuario
+autenticado y NUNCA del cuerpo del request. Es la unica garantia de aislamiento que se mudo de
+la base al codigo. Queda en `CLAUDE.md` §5, en `task_plan.md` y en el encabezado de
+`posting.ts`.
+
+### Periodos: el precipicio de enero, resuelto
+
+El motor auto-crea los periodos del **año en curso y del siguiente**, y nada mas. Los años
+pasados no se abren solos: crearlos dejaria postear dentro de un ejercicio ya certificado. Un
+2029 por error sigue fallando fuerte.
+
+### La prueba del motor ahora vive en el repo
+
+Estaba solo en un scratchpad temporal y se habria perdido. Ahora:
+
+```bash
+node scripts/run-sql.mjs sql/tests/motor-posteo.test.sql
+```
+
+14 comprobaciones, dentro de una transaccion que revierte — se puede correr contra una staging
+con datos sin miedo. `scripts/run-sql.mjs` sirve ademas para aplicar una migracion suelta sin
+`--reset` y lleva el mismo candado anti-produccion que el aplicador.
+
+### Backlog anotado
+
+Enganchar `verify_accounting_chain()` al respaldo nocturno. Es lo unico que ya corre todos los
+dias contra produccion, asi que una ruptura se detectaria en menos de 24 horas en vez de cuando
+a alguien se le ocurra mirar. Va despues de la validacion de RM.
+
 ## [Fase 2 — verificaciones de cierre] - 2026-08-27
 
 Tres verificaciones antes de dar la Fase 2 por cerrada. No hay features nuevas.

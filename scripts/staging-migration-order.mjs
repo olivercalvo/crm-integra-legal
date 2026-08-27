@@ -72,5 +72,6 @@ export const BUNDLE_2 = [
   "sql/pending/027_saldo_inicial_fecha.sql",
   "sql/pending/028_fase2_motor_posteo.sql",
   "sql/pending/029_restaurar_check_reversion.sql",
+  "sql/pending/030_ledger_permisos_y_periodos.sql",
   "sql/pending/storage_rls_tenant_scoped.sql",
 ];

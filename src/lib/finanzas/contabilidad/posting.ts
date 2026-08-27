@@ -19,6 +19,23 @@
  * armar el payload, tipar la respuesta y traducir los errores de Postgres a
  * mensajes accionables.
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 🔴 SOLO SERVER-SIDE, Y EL TENANT LO PONE LA RUTA
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Desde la migración `030`, el RPC tiene EXECUTE solo para `service_role` y es
+ * SECURITY DEFINER. Dos consecuencias que NO son opcionales:
+ *
+ *   1. Llamar a `postJournalEntry()` desde un client component da 403. Todo el
+ *      posteo va por rutas de API con el cliente de servicio.
+ *
+ *   2. La función **ya no corre bajo RLS**: confía en el `tenantId` que recibe.
+ *      Quien la llame tiene que sacarlo del PERFIL DEL USUARIO AUTENTICADO
+ *      (`getAuthenticatedContext().tenantId`) y **nunca del cuerpo del
+ *      request**. Un `tenant_id` que llegue en el body es un intento de escribir
+ *      en el ledger de otro bufete.
+ *
+ * Es la única garantía de aislamiento que se mudó de la base al código.
+ *
  * ⚠️ NO EXISTE TODAVÍA EL ASIENTO DE APERTURA. `source_type: 'apertura'` ya se
  * acepta, pero generarlo desde los saldos iniciales espera la fecha de corte que
  * está pendiente de confirmación del contador (consulta 1 del task_plan): lo
@@ -176,9 +193,14 @@ export async function verifyAccountingChain(
 /**
  * Provisiona los 12 períodos mensuales de un año. Idempotente.
  *
- * El posteo NO crea períodos solo, a propósito: si la fecha cae en un año sin
- * provisionar es casi seguro un error de tipeo, y crear doce períodos en
- * silencio lo escondería. Se llama a esto explícitamente.
+ * Desde la migración `030` el posteo AUTO-CREA los períodos, pero solo del año
+ * en curso y del siguiente: eso saca el precipicio del 1 de enero sin perder el
+ * freno contra un dedazo de fecha (un 2029 sigue fallando fuerte). Los años
+ * pasados tampoco se abren solos — que un período viejo no exista significa que
+ * ese ejercicio nunca se abrió, y crearlo dejaría postear dentro de un año que
+ * el contador ya certificó.
+ *
+ * Esta función queda para provisionar CUALQUIER año a mano, fuera de esa cota.
  */
 export async function ensureAccountingPeriods(
   db: DB,

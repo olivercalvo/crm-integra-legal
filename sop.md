@@ -694,16 +694,58 @@ asiento sin líneas, descuadrado, permanente, en los libros que se certifican an
 Es la misma razón por la que cualquier operación futura que escriba más de una fila del ledger
 (el asiento de apertura, el cierre de ejercicio) tiene que ser también una función.
 
-### Antes de postear hace falta que exista el período
+### Al ledger no se puede escribir directo — ni siquiera con la service key
 
-`post_journal_entry` **no crea períodos**. Si la fecha cae en un año sin provisionar, falla:
+Desde la migración `030`:
 
-```sql
-SELECT ensure_accounting_periods('a0000000-0000-0000-0000-000000000001', 2028);
+| | anon | authenticated | service_role |
+|---|---|---|---|
+| INSERT / UPDATE / DELETE / TRUNCATE en el ledger | ✗ | ✗ | ✗ |
+| SELECT | ✓ | ✓ | ✓ |
+| EXECUTE del RPC | ✗ | ✗ | ✓ |
+
+`post_journal_entry` y `ensure_accounting_periods` son **SECURITY DEFINER**;
+`verify_accounting_chain` sigue INVOKER porque solo lee.
+
+**El orden de esos tres cambios importa y está explicado en el encabezado de la 030.** En
+resumen: con SECURITY DEFINER y EXECUTE en PUBLIC se pasaría de "puede falsificar la cadena de
+su propio tenant" a "puede escribir en el de cualquiera".
+
+🔴 **Y ojo con lo que se mudó de la base al código:** SECURITY DEFINER significa que el RPC
+**ya no corre bajo RLS** y confía en el `p_tenant_id` que recibe. La ruta de API que lo llame
+tiene que sacar el tenant del usuario autenticado y **nunca del cuerpo del request**.
+
+### Cómo correr las pruebas del motor
+
+```bash
+node scripts/run-sql.mjs sql/tests/motor-posteo.test.sql
 ```
 
-Es deliberado. Un 2029 por un 2026 es un dedazo, y provisionar doce períodos en silencio lo
-escondería.
+Corre dentro de una transacción que termina en ROLLBACK, así que se puede lanzar contra una
+staging con datos sin miedo. Cubre 14 comprobaciones: posteo válido, correlativo, encadenado
+del hash, verificador, nueve rechazos, y la auto-creación acotada de períodos.
+
+`scripts/run-sql.mjs` sirve además para aplicar una migración suelta sin `--reset`, y lleva el
+mismo candado anti-producción que el aplicador.
+
+### Antes de postear hace falta que exista el período
+
+El motor **auto-crea los períodos del año en curso y del siguiente**, y nada más.
+
+La cota resuelve el problema real —el 1 de enero el primer asiento del año fallaba hasta que
+alguien se acordara, y enero es justo cuando el contador cierra un ejercicio y abre el otro—
+sin perder el freno que importa: un 2029 escrito por error sigue fallando fuerte en vez de
+abrir doce períodos en silencio.
+
+Los años PASADOS tampoco se abren solos: que un período viejo no exista significa que ese
+ejercicio nunca se abrió, y crearlo ahora dejaría postear dentro de un año fiscal que el
+contador ya certificó.
+
+Para cualquier año fuera de esa cota, a mano:
+
+```sql
+SELECT ensure_accounting_periods('a0000000-0000-0000-0000-000000000001', 2030);
+```
 
 ### ⚠️ El hash se calcula en la BASE — la 023 dice lo contrario y está desactualizada
 

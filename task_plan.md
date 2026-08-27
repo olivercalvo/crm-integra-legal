@@ -24,6 +24,77 @@ Resultado con la estructura de Josuar, sociedad civil, fecha del saldo inicial).
 
 352 tests, 0 fallos, mas 9 rechazos verificados de punta a punta contra staging.
 
+### ⚠️ HALLAZGO DE SEGURIDAD — PROPUESTO, NO APLICADO
+
+**Hoy cualquier usuario logueado puede escribir un asiento forjado sin pasar por el motor.**
+
+Verificado contra staging:
+
+| | anon | authenticated | service_role |
+|---|---|---|---|
+| INSERT en `journal_entries` | concedido | **concedido** | concedido |
+| UPDATE / DELETE | concedido (muerto por trigger) | concedido (muerto por trigger) | concedido (muerto por trigger) |
+| TRUNCATE | concedido | concedido | concedido |
+| EXECUTE de `post_journal_entry` | **sí** | **sí** | sí |
+
+Las tres funciones son SECURITY INVOKER con EXECUTE a PUBLIC (default de `CREATE FUNCTION`).
+La política RLS `tenant_isolation` es `FOR ALL` con `WITH CHECK` sobre el claim del JWT.
+
+Consecuencias reales:
+- **`anon` NO puede insertar**: sin claim de tenant, el WITH CHECK da NULL y RLS lo frena.
+- **`authenticated` SÍ puede**: con un JWT válido, `POST /rest/v1/journal_entries` pasa el
+  WITH CHECK de su propio tenant. Puede escribir una cabecera con el `prev_hash` que quiera.
+- **`service_role` bypasea RLS**: cualquier código de servidor puede escribir directo. Este es
+  el riesgo más probable en la práctica — no un atacante, un colega que hace
+  `db.from('journal_entries').insert(...)` sin saber que existe el RPC.
+- **TRUNCATE no lo frena nada**: los triggers de inmutabilidad son `FOR EACH ROW` sobre UPDATE
+  y DELETE, y TRUNCATE no dispara triggers de fila ni pasa por RLS. Hoy no es explotable por
+  HTTP (PostgREST no expone TRUNCATE), pero el permiso no aporta nada y sí puede doler.
+
+El verificador detecta la ruptura DESPUÉS. Esto la impediría.
+
+**Propuesta (3 pasos, van juntos o abren un agujero peor):**
+1. `REVOKE INSERT, UPDATE, DELETE, TRUNCATE` sobre `journal_entries`, `journal_entry_lines` y
+   `accounting_legajos` a `anon`, `authenticated` y `service_role`. **SELECT se queda.**
+2. `REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated` en las tres funciones y
+   `GRANT EXECUTE TO service_role`.
+3. Recién entonces, las funciones a `SECURITY DEFINER` con `SET search_path = public, pg_temp`.
+
+**El orden importa y el paso 2 no es opcional.** Con SECURITY DEFINER la función deja de correr
+bajo RLS y pasa a confiar en el `p_tenant_id` que recibe. Si el EXECUTE sigue siendo PUBLIC,
+un usuario logueado podría llamarla con el tenant de OTRO bufete y escribir en su ledger — un
+agujero multi-tenant, peor que el que se está cerrando.
+
+**Qué se rompe hoy: nada.** Verificado — la app no tiene ningún camino que escriba directo en
+tablas del ledger (`contarMovimientos` solo lee `journal_entry_lines`), los reportes usan
+SELECT, y el seed no toca estas tablas.
+
+**Qué hay que vigilar:**
+- `postJournalEntry()` debe llamarse SIEMPRE del lado servidor. Desde un client component con
+  la key anon daría 403 después del revoke.
+- Un seed futuro que quiera crear asientos de ejemplo tiene que llamar al RPC, no insertar.
+- El `ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES TO anon, authenticated` del RESET_SQL de
+  `apply-staging-sql.mjs` es la causa raíz de estos permisos. El revoke tiene que vivir en una
+  migración de BUNDLE_2 para que sobreviva a cada `--reset`.
+
+### PERÍODOS CONTABLES — hay que acordarse, no se extienden solos
+
+Sembrados: **2026 y 2027**, 12 meses cada uno, los 24 abiertos.
+
+En **enero de 2028** el primer posteo falla con:
+
+> `No existe el período contable 2028-01 para este tenant. Provisionalo con ensure_accounting_periods().`
+
+Falla fuerte y claro, no corrompe nada — pero **nadie lo extiende automáticamente**. Hoy
+alguien tiene que acordarse. Tres formas de resolverlo, para decidir cuando retomemos:
+
+1. **Auto-crear acotado** (mi recomendación): que el motor provisione solo si el año está entre
+   el actual y el siguiente. Conserva la protección contra el dedazo —un 2029 sigue fallando—
+   y elimina el precipicio de enero. Sin dependencias.
+2. **Un cron en diciembre** que llame a `ensure_accounting_periods(tenant, año+1)`. El repo ya
+   tiene `CRON_SECRET` e infraestructura de cron.
+3. Dejarlo manual y ponerlo en el checklist de cierre de ejercicio.
+
 ### LO QUE NO SE HIZO Y POR QUE
 
 - **El ASIENTO DE APERTURA.** Espera la consulta 1 (fecha de corte). Lo cargado es una foto de

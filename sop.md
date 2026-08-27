@@ -705,6 +705,24 @@ SELECT ensure_accounting_periods('a0000000-0000-0000-0000-000000000001', 2028);
 Es deliberado. Un 2029 por un 2026 es un dedazo, y provisionar doce períodos en silencio lo
 escondería.
 
+### ⚠️ El hash se calcula en la BASE — la 023 dice lo contrario y está desactualizada
+
+`sql/pending/023_contabilidad_fase1_ledger.sql`, línea 23, dice:
+
+> "Hash-chain SHA-256; se computa en la app, se verifica en la BD (Fase 2)."
+
+**Eso ya no es cierto, y el archivo no se puede corregir en su lugar porque está aplicado.**
+Queda anotado acá y en el CLAUDE.md.
+
+Se hace al revés por un motivo concreto: `prev_hash` es el hash del asiento anterior, así que
+calcularlo en la app obliga a leer el último asiento y después escribir. Dos posteos
+concurrentes leerían el MISMO `prev_hash` y bifurcarían la cadena en silencio — exactamente lo
+que una cadena de hash existe para impedir.
+
+Dentro del RPC, el `SELECT ... FOR UPDATE` sobre la fila de `accounting_sequences` serializa
+las dos cosas con un solo candado: el correlativo sin huecos y la cadena. `sha256()` es nativo
+desde PostgreSQL 11 (la base corre 17.6), así que no hace falta pgcrypto.
+
 ### Verificar la integridad de la cadena
 
 ```sql

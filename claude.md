@@ -74,6 +74,18 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   una cosita rápida", ni poniendo sus credenciales en `.env.local`. El único camino a
   producción es un merge a `main` que dispare el auto-deploy
 
+### Ledger contable (desde Fase 2, 2026-08-27)
+- **Al ledger se escribe SOLO por `post_journal_entry`**, nunca con INSERT directo. Es una
+  función de Postgres, no código de app, porque los triggers de inmutabilidad de `023`
+  rechazan DELETE: un posteo a medias desde `supabase-js` dejaría una cabecera sin líneas
+  imposible de limpiar.
+- ⚠️ **El hash-chain se calcula en la BASE, no en la app.** El encabezado de
+  `sql/pending/023_contabilidad_fase1_ledger.sql` dice lo contrario ("se computa en la app"),
+  y ese archivo **ya está aplicado**, así que su comentario quedó desactualizado y no se puede
+  corregir en su lugar. Manda esto: `prev_hash` obliga a un read-then-write y dos posteos
+  concurrentes bifurcarían la cadena en silencio. El `SELECT ... FOR UPDATE` de la secuencia
+  serializa correlativo y cadena con un solo candado. Detalle en `sop.md` SOP-014.
+
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)
 - Verificación post-deploy obligatoria

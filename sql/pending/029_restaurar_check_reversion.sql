@@ -37,21 +37,46 @@
 --   ya lo sufrieron.
 --
 -- IDEMPOTENCIA:
---   DROP ... IF EXISTS + ADD. Re-ejecutable, y no molesta en una base sana.
+--   Comprueba si el constraint existe y SOLO lo crea si falta. Sobre una base
+--   sana —producción incluida— no toca nada y lo dice por NOTICE. Verificado
+--   corriéndola dos veces contra staging.
 -- =============================================================================
 
 BEGIN;
 
-ALTER TABLE public.journal_entries
-  DROP CONSTRAINT IF EXISTS je_reversion_requires_ref;
-
-ALTER TABLE public.journal_entries
-  ADD CONSTRAINT je_reversion_requires_ref CHECK (
-    source_type <> 'reversion'
-    OR (reverses_entry_id IS NOT NULL
-        AND reversal_reason IS NOT NULL
-        AND length(reversal_reason) >= 3)
-  );
+-- ⚠️ SOLO CREA SI FALTA. No hace DROP + ADD.
+--
+-- Esta migración repara un daño que sufrió UNA base (staging). Cuando corra
+-- contra producción —o contra cualquier base sana— la constraint va a estar ahí
+-- y correcta, y no hay que tocarla: un DROP + ADD la reescribiría sin motivo, y
+-- el ADD sobre una tabla con asientos dispara una revalidación completa que toma
+-- lock. Sobre un ledger grande eso es una pausa de escritura por nada.
+--
+-- Además avisa qué hizo, para que quede en el log de la corrida.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+      FROM pg_constraint con
+      JOIN pg_class     rel ON rel.oid = con.conrelid
+      JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+     WHERE nsp.nspname = 'public'
+       AND rel.relname = 'journal_entries'
+       AND con.contype = 'c'
+       AND con.conname = 'je_reversion_requires_ref'
+  ) THEN
+    RAISE NOTICE 'je_reversion_requires_ref ya existe: base sana, no se toca.';
+  ELSE
+    ALTER TABLE public.journal_entries
+      ADD CONSTRAINT je_reversion_requires_ref CHECK (
+        source_type <> 'reversion'
+        OR (reverses_entry_id IS NOT NULL
+            AND reversal_reason IS NOT NULL
+            AND length(reversal_reason) >= 3)
+      );
+    RAISE NOTICE 'je_reversion_requires_ref RESTAURADO (faltaba).';
+  END IF;
+END $$;
 
 COMMIT;
 

@@ -63,9 +63,19 @@ BEGIN;
 -- -----------------------------------------------------------------------------
 -- El CHECK original se declaró INLINE y sin nombre en
 -- 20260505000002_finanzas_catalogos.sql, así que Postgres lo autobautizó. En vez
--- de asumir el nombre generado, lo buscamos: cualquier CHECK de la tabla cuya
--- definición mencione account_type. Así la migración no se rompe si la base
--- quedó con otro nombre (staging recreada, restore, etc.).
+-- de asumir el nombre generado, lo buscamos por su definición. Así la migración
+-- no se rompe si la base quedó con otro nombre (staging recreada, restore, etc.).
+--
+-- ⚠️ EL FILTRO PIDE '%asset%' ADEMÁS DE '%account_type%', Y NO ES DECORATIVO.
+-- La tabla tiene OTRO check que también menciona account_type: el
+-- `coa_resultado_subcategoria_niif18` que agrega el PASO G de esta misma
+-- migración. Con el filtro ancho, una SEGUNDA corrida de este archivo dropearía
+-- los dos. Hoy se salvaba de casualidad —el paso G lo vuelve a crear— pero es
+-- exactamente el bug que la primera versión de la 028 sí produjo con
+-- `je_reversion_requires_ref`, y ahí no había nada que lo recreara.
+--
+-- Solo el CHECK del enum lista los tipos, y solo él menciona 'asset': el otro
+-- nombra únicamente income/cost/expense. Eso los distingue sin ambigüedad.
 DO $$
 DECLARE
   v_nombre text;
@@ -79,6 +89,7 @@ BEGIN
        AND rel.relname = 'chart_of_accounts'
        AND con.contype = 'c'
        AND pg_get_constraintdef(con.oid) ILIKE '%account_type%'
+       AND pg_get_constraintdef(con.oid) ILIKE '%asset%'
   LOOP
     EXECUTE format('ALTER TABLE public.chart_of_accounts DROP CONSTRAINT %I', v_nombre);
     RAISE NOTICE 'CHECK viejo de account_type eliminado: %', v_nombre;

@@ -1,5 +1,71 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 2 — verificaciones de cierre] - 2026-08-27
+
+Tres verificaciones antes de dar la Fase 2 por cerrada. No hay features nuevas.
+
+### 1. La 029 ahora comprueba antes de crear
+
+Hacia `DROP CONSTRAINT IF EXISTS` + `ADD`. No fallaba, pero contra produccion —donde la
+constraint esta sana— habria dropeado y recreado algo correcto sin motivo, y un ADD sobre una
+tabla con asientos dispara revalidacion completa con lock.
+
+Ahora comprueba y **solo crea si falta**, y dice por NOTICE cual de los dos casos fue.
+Verificado corriendola contra staging ya reparada: *"je_reversion_requires_ref ya existe: base
+sana, no se toca."*
+
+### 2. 🔴 EL MISMO BUG ESTABA REPETIDO EN LA 025 — corregido
+
+La 025 descubre el CHECK anonimo de `account_type` con `ILIKE '%account_type%'`. Ese filtro
+matchea **dos** constraints: el enum que quiere ampliar y `coa_resultado_subcategoria_niif18`,
+que la propia 025 agrega en su paso G.
+
+Se salvaba **de casualidad**: como el paso G lo vuelve a crear, una segunda corrida lo dropea y
+lo restaura. Pero es la misma tecnica que en la 028 si causo daño real, y ahi no habia nada que
+lo recreara. Si mañana alguien agrega otro CHECK que mencione `account_type` y no lo recree la
+propia 025, se pierde en silencio.
+
+Corregido igual que la 028: el filtro pide ademas `'%asset%'`, que solo aparece en el CHECK del
+enum. Verificado re-corriendo la 025 contra staging — ahora elimina **una sola** constraint, y
+las 4 de `chart_of_accounts` siguen presentes.
+
+Revisadas TODAS las migraciones: las unicas que descubren objetos dinamicamente para dropearlos
+son la 025 y la 028, las dos mias, las dos ya corregidas. La 023 tambien usa `EXECUTE format`,
+pero para dropear una policy por nombre FIJO sobre una lista de tablas — no hay descubrimiento
+y no tiene el problema.
+
+### 3. ⚠️ HALLAZGO DE SEGURIDAD — propuesto, NO aplicado
+
+**Hoy un usuario logueado puede escribir un asiento forjado sin pasar por el motor.**
+`authenticated` tiene INSERT sobre `journal_entries` y la politica RLS `tenant_isolation` deja
+pasar cualquier fila de su propio tenant. `service_role` bypasea RLS del todo. Y las tres
+funciones son SECURITY INVOKER con EXECUTE a PUBLIC.
+
+Ademas: **TRUNCATE no lo frena nada.** Los triggers de inmutabilidad son `FOR EACH ROW` sobre
+UPDATE y DELETE, y TRUNCATE no dispara triggers de fila ni pasa por RLS.
+
+`anon` si esta cubierto: sin claim de tenant, el WITH CHECK da NULL y RLS lo frena.
+
+La propuesta completa (revoke + EXECUTE solo a service_role + SECURITY DEFINER, **en ese
+orden**) esta en `task_plan.md`, con el detalle de por que el orden importa: con SECURITY
+DEFINER y EXECUTE en PUBLIC se abriria un agujero MULTI-TENANT, peor que el que se cierra.
+
+**No se aplico nada.** Qué se rompe hoy: nada — verificado que la app no escribe directo en
+ninguna tabla del ledger.
+
+### 4. Periodos contables — no se extienden solos
+
+Sembrados 2026 y 2027 (24 meses, todos abiertos). En **enero de 2028** el primer posteo falla
+con un mensaje claro y no corrompe nada, pero **alguien tiene que acordarse**. Tres opciones
+anotadas en `task_plan.md`; la recomendada es auto-crear acotado al año actual y el siguiente,
+que elimina el precipicio sin perder la proteccion contra el dedazo de fecha.
+
+### Documentado
+
+La desviacion del hash-chain quedo en **`CLAUDE.md` y en `sop.md` SOP-014**, no solo en el
+commit: la 023 sigue diciendo "se computa en la app" y ese archivo ya esta aplicado, asi que su
+comentario no se puede corregir en su lugar.
+
 ## [Fase 2 contable — motor de posteo del ledger] - 2026-08-27
 
 El bloque que NO depende de ninguna respuesta del contador. **No incluye el asiento de

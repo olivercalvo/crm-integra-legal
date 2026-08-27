@@ -1,5 +1,24 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 0 — Variables de entorno en Vercel] - 2026-08-27
+
+Cierre del pendiente 1 de Fase 0: las 4 variables cargadas en el panel de Vercel, con las
+tres de Supabase **duplicadas a proposito** — una acotada a Production apuntando a la base
+real, otra en "All Pre-Production Environments" (Preview + Development) apuntando a staging.
+Con esto, ningun deploy que no sea el de `main` puede tocar la base del bufete.
+
+- `sop.md` SOP-012, subseccion nueva **"Como se cargan en el panel (el orden importa)"**:
+  Vercel rechaza dos variables con la misma clave si sus entornos se solapan, asi que hay que
+  **acotar primero** la existente de "All Environments" a solo Production (sin tocarle el
+  valor) y **despues** crear la de staging. Al reves no deja. El selector de entornos solo es
+  editable en `/settings/environment-variables`; en la vista por entorno aparece bloqueado.
+- Queda anotado que **cargar las variables no alcanza**: Vercel no las aplica a deploys ya
+  construidos, hace falta disparar uno nuevo.
+- Verificacion del alcance sin esperar un build, con `vercel env pull --environment=preview`:
+  devuelve `NEXT_PUBLIC_APP_ENV="staging"` y el ref de staging (`xtyenhakplrkyifbcaow`). El
+  pull equivalente de `production` queda explicitamente prohibido en el SOP — baja las
+  credenciales reales a la maquina.
+
 ## [Fase 0 — Ambiente de pruebas] - 2026-08-25 - CERRADA (tareas 1 a 7)
 
 Fase 0 es bloqueante: no arranca nada de contabilidad hasta que exista una base de staging

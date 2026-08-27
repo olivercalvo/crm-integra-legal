@@ -23,9 +23,12 @@ claves, en `sop.md` SOP-012.
 
 ### PENDIENTES DE OLIVER — los tres, ninguno bloquea
 
-1. **Cargar las 4 variables en el panel de Vercel.** Tabla exacta en `sop.md` SOP-012:
-   `NEXT_PUBLIC_APP_ENV` (`production` / `staging` / `staging`) + las tres de Supabase.
-   Mientras no esten, Preview y Development siguen apuntando a donde apunten hoy.
+1. ~~**Cargar las 4 variables en el panel de Vercel.**~~ **HECHO el 27/08/2026 por Oliver.**
+   `vercel env pull --environment=preview` devuelve `NEXT_PUBLIC_APP_ENV="staging"` y el ref
+   de staging, asi que el alcance quedo bien. El procedimiento (Vercel rechaza claves
+   duplicadas si los entornos se solapan; hay que acotar la vieja a Production ANTES de crear
+   la de staging) quedo documentado en `sop.md` SOP-012. Falta la verificacion en el preview
+   ya construido — Vercel no aplica variables a deploys viejos.
 2. **Recrear en PRODUCCION el indice de `client_payments(tenant_id)`.** No existe: al
    aplicar `b3d_payments` a mano se borro o renombro el viejo para que el nuevo pasara.
    Impacto bajo (25 filas). En staging las dos tablas quedan indexadas.

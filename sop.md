@@ -482,6 +482,36 @@ El resto de las variables (eFactura, Resend, CRON) no cambian por entorno hoy. *
 `RESEND_API_KEY` en Preview:** la cuenta tiene `integra-panama.com` verificado y manda correo
 real. En `.env.local` está comentada por eso mismo.
 
+#### Cómo se cargan en el panel (el orden importa)
+
+Vercel **no acepta dos variables con la misma clave si sus entornos se solapan.** Las tres de
+Supabase ya existían con alcance "All Environments" apuntando a producción, así que la de
+staging no se puede crear encima: hay que ir en este orden.
+
+1. Entrar a **`/settings/environment-variables`**. El selector de entornos **solo es editable
+   ahí**; desde la vista por entorno aparece bloqueado.
+2. **Acotar la que ya existe, sin tocarle el valor**: de "All Environments" a solo
+   **Production**. Es la que apunta a la base real — se le reduce el alcance y nada más.
+3. **Recién entonces crear la de staging**, con alcance "All Pre-Production Environments"
+   (Preview + Development).
+
+Al revés no funciona: Vercel rechaza la segunda por clave duplicada.
+
+**Cargarlas no alcanza.** Vercel no aplica variables a deploys ya construidos: hasta que no se
+dispare un deploy nuevo, el preview sigue corriendo con las de antes. Cualquier commit a
+`develop` sirve para forzarlo.
+
+Para verificar el alcance sin esperar un build:
+
+```bash
+vercel env pull ./tmp.env --environment=preview
+```
+
+Tiene que devolver `NEXT_PUBLIC_APP_ENV="staging"` y un `NEXT_PUBLIC_SUPABASE_URL` con el ref
+de staging. **Nunca correr el equivalente con `--environment=production`**: eso baja las
+credenciales reales de la base del bufete a la máquina, que es exactamente lo que esta
+separación existe para evitar. Y borrar el archivo después.
+
 ### Antes de dar por bueno un cambio
 
 Correrlo contra staging con datos de prueba, no contra producción. Ese es el punto de todo

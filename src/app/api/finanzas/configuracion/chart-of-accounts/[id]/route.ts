@@ -39,6 +39,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       ctx.tenantId,
       params.id,
       ctx.userId,
+      // El rol viaja al helper porque la restricción es POR CAMPO, no por ruta:
+      // la abogada entra al PATCH (puede renombrar) pero no puede reclasificar.
+      ctx.userRole,
       validation.data
     );
     return NextResponse.json({ account }, { status: 200 });

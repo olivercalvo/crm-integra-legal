@@ -249,14 +249,24 @@ export interface EstadoResultadoOptions {
  *   IMPUESTO SOBRE LA RENTA      (parámetro, solo si hay utilidad)
  *   UTILIDAD NETA                = Operativa + ISR
  *
- * INGRESOS toma TODAS las cuentas `income` (sin filtrar por subcategoría), para
- * que un ingreso sin clasificar no se caiga del reporte.
+ * Las tres secciones se derivan del ACCOUNT_TYPE, una cada una: `income`,
+ * `cost` y `expense`. Ninguna filtra por subcategoría.
  *
- * COSTOS y GASTOS parten `expense` en dos por subcategoría (`costo` vs
- * `gasto_operativo`), que es justamente lo que el Paso 1a agregó: en BD ambos
- * son `account_type='expense'` y sin la subcategoría no se pueden separar.
- * Un `expense` con subcategoría NULL u otra cae en un grupo "Sin clasificar"
- * DENTRO de Gastos y suma al Total de Gastos — nunca desaparece.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CAMBIÓ EN NIIF 18 (Fase 1, 2026-08-27) — leer si venís del código viejo
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Antes, COSTOS y GASTOS partían `account_type='expense'` en dos POR
+ * SUBCATEGORÍA (`costo` vs `gasto_operativo`), porque en BD ambos compartían el
+ * mismo tipo. Desde que `cost` es un tipo propio, esa gimnasia sobra: el tipo ya
+ * dice a qué sección va cada cuenta.
+ *
+ * Con eso desapareció también el grupo "Sin clasificar" que vivía dentro de
+ * Gastos. Existía porque un `expense` con subcategoría NULL u otra no caía ni en
+ * costos ni en gastos y se habría evaporado del reporte. Ahora que el criterio
+ * es el tipo, NINGUNA cuenta puede evaporarse: cada cuenta de resultado tiene
+ * exactamente un tipo y por lo tanto exactamente una sección. La subcategoría
+ * pasa a ser un problema de AGRUPAMIENTO INTERNO, no de pertenencia — y eso es
+ * lo que resuelve la Tarea 3 al abrir los bloques por actividad.
  */
 export function buildEstadoResultado(
   accounts: ReportAccount[],
@@ -265,12 +275,8 @@ export function buildEstadoResultado(
   const isrRate = options.isrRate ?? DEFAULT_ISR_RATE;
 
   const incomeAccounts = accounts.filter((a) => a.account_type === "income");
-  const expenseAccounts = accounts.filter((a) => a.account_type === "expense");
-  const costoAccounts = expenseAccounts.filter((a) => a.subcategoria === "costo");
-  const gastoAccounts = expenseAccounts.filter((a) => a.subcategoria === "gasto_operativo");
-  const otherExpense = expenseAccounts.filter(
-    (a) => a.subcategoria !== "costo" && a.subcategoria !== "gasto_operativo"
-  );
+  const costoAccounts = accounts.filter((a) => a.account_type === "cost");
+  const gastoAccounts = accounts.filter((a) => a.account_type === "expense");
 
   const ingresos: ReportSection = {
     label: "INGRESOS",
@@ -288,24 +294,11 @@ export function buildEstadoResultado(
 
   const gananciaBruta = round2(ingresos.total + costos.total);
 
-  // Gastos: el grupo plano de gasto_operativo + el de huérfanos si hay.
-  const gastoGroups = flatGroup(gastoAccounts);
-  if (otherExpense.length > 0) {
-    const leftovers = sorted(otherExpense);
-    gastoGroups.push({
-      label: "Sin clasificar",
-      subtotalLabel: "Total sin clasificar",
-      rows: toRows(leftovers),
-      subtotal: sumSaldos(leftovers),
-      isUnclassified: true,
-    });
-  }
-
   const gastos: ReportSection = {
     label: "GASTOS OPERATIVOS",
     totalLabel: "Total de Gastos",
-    groups: gastoGroups,
-    total: round2(sumSaldos(gastoAccounts) + sumSaldos(otherExpense)),
+    groups: flatGroup(gastoAccounts),
+    total: sumSaldos(gastoAccounts),
   };
 
   const utilidadOperativa = round2(gananciaBruta + gastos.total);

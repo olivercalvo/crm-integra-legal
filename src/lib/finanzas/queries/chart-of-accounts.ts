@@ -14,13 +14,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AccountType,
   ChartAccountRow,
+  CuentaControl,
 } from "@/lib/finanzas/types/chart-of-account";
 import type { ExistingAccountInfo } from "@/lib/finanzas/import/chart-of-accounts-mapping";
 
 type DB = SupabaseClient;
 
 const SELECT_COLS =
-  "id, code, name, account_type, subcategoria, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
+  "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
 
 /**
  * Normaliza una fila cruda a ChartAccountRow. `saldo_inicial` es numeric en BD:
@@ -99,7 +100,7 @@ export async function findChartAccountsByCodes(
     const slice = codes.slice(i, i + CHUNK);
     const { data, error } = await db
       .from("chart_of_accounts")
-      .select("id, code, description, active, is_system")
+      .select("id, code, description, active, is_system, cuenta_control")
       .eq("tenant_id", tenantId)
       .in("code", slice);
 
@@ -114,12 +115,14 @@ export async function findChartAccountsByCodes(
         code: string;
         description: string | null;
         active: boolean;
+        cuenta_control: CuentaControl | null;
         is_system: boolean;
       };
       result.set(r.code, {
         id: r.id,
         description: r.description ?? null,
         active: r.active === true,
+        cuenta_control: r.cuenta_control ?? null,
         is_system: r.is_system === true,
       });
     }

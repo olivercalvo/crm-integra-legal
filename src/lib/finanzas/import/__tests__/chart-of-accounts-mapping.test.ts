@@ -89,7 +89,8 @@ test("findHeaderRow: sin encabezados reconocibles → null", () => {
 // mapAccountType
 // ---------------------------------------------------------------------------
 
-test("mapAccountType: los 4 tipos de balance/resultado sin subcategoría default", () => {
+test("mapAccountType: los tipos de BALANCE no traen subcategoría default", () => {
+  // En balance la subcategoría sigue siendo opcional, así que no se inventa.
   assert.deepEqual(mapAccountType("Activo"), {
     account_type: "asset",
     subcategoriaDefault: null,
@@ -102,29 +103,44 @@ test("mapAccountType: los 4 tipos de balance/resultado sin subcategoría default
     account_type: "equity",
     subcategoriaDefault: null,
   });
-  assert.deepEqual(mapAccountType("Ingresos"), {
-    account_type: "income",
-    subcategoriaDefault: null,
-  });
 });
 
-test("mapAccountType: Costo y Gasto colapsan a expense pero con subcategoría distinta", () => {
-  assert.deepEqual(mapAccountType("Costo"), {
-    account_type: "expense",
-    subcategoriaDefault: "costo",
+test("mapAccountType: los tipos de RESULTADO defaultean a la actividad de operación", () => {
+  // Desde NIIF 18 la subcategoría es obligatoria en cuentas de resultado: si el
+  // Excel no la trae, el import tiene que poner una o la fila se rechaza.
+  assert.deepEqual(mapAccountType("Ingresos"), {
+    account_type: "income",
+    subcategoriaDefault: "ingresos_operativos",
   });
-  assert.deepEqual(mapAccountType("costos"), {
-    account_type: "expense",
-    subcategoriaDefault: "costo",
+  assert.deepEqual(mapAccountType("Costo"), {
+    account_type: "cost",
+    subcategoriaDefault: "costos_operativos",
   });
   assert.deepEqual(mapAccountType("Gasto"), {
     account_type: "expense",
-    subcategoriaDefault: "gasto_operativo",
+    subcategoriaDefault: "gastos_operativos",
+  });
+});
+
+test("mapAccountType: Costo ya NO colapsa a expense — es su propio tipo", () => {
+  // Antes de NIIF 18 los dos eran expense y solo los separaba la subcategoría.
+  assert.deepEqual(mapAccountType("costos"), {
+    account_type: "cost",
+    subcategoriaDefault: "costos_operativos",
+  });
+  assert.deepEqual(mapAccountType("Costos de venta"), {
+    account_type: "cost",
+    subcategoriaDefault: "costos_operativos",
   });
   assert.deepEqual(mapAccountType("GASTOS"), {
     account_type: "expense",
-    subcategoriaDefault: "gasto_operativo",
+    subcategoriaDefault: "gastos_operativos",
   });
+  assert.notEqual(
+    mapAccountType("Costo")?.account_type,
+    mapAccountType("Gasto")?.account_type,
+    "Costo y Gasto tienen que ser tipos distintos"
+  );
 });
 
 test("mapAccountType: acepta los valores crudos en inglés", () => {
@@ -236,14 +252,18 @@ test("parseSheetRows: plantilla completa con costo y gasto", () => {
   assert.equal(result.rows[0].subcategoria, "activo_corriente");
   assert.equal(result.rows[0].saldo_inicial, 2500);
 
-  assert.equal(result.rows[1].account_type, "expense");
-  assert.equal(result.rows[1].subcategoria, "costo", "Costo sin subcategoría → default costo");
+  assert.equal(result.rows[1].account_type, "cost");
+  assert.equal(
+    result.rows[1].subcategoria,
+    "costos_operativos",
+    "Costo sin subcategoría → default costos_operativos"
+  );
 
   assert.equal(result.rows[2].account_type, "expense");
   assert.equal(
     result.rows[2].subcategoria,
-    "gasto_operativo",
-    "Gasto sin subcategoría → default gasto_operativo"
+    "gastos_operativos",
+    "Gasto sin subcategoría → default gastos_operativos"
   );
   assert.equal(result.rows[2].saldo_inicial, 0, "saldo vacío → 0");
 
@@ -253,12 +273,12 @@ test("parseSheetRows: plantilla completa con costo y gasto", () => {
 test("parseSheetRows: la subcategoría EXPLÍCITA gana sobre el default del tipo", () => {
   const result = parseSheetRows([
     TEMPLATE_HEADER,
-    // Tipo Gasto (default gasto_operativo) pero el archivo dice Costo.
-    ["500002", "Servicios subcontratados", "Gasto", "Costo", 0],
+    // Tipo Gasto (default gastos_operativos) pero el archivo pide inversión.
+    ["620002", "Intereses de préstamo", "Gasto", "Gastos por Inversión", 0],
   ]);
   assert.ok(result);
   assert.equal(result.rows[0].account_type, "expense");
-  assert.equal(result.rows[0].subcategoria, "costo");
+  assert.equal(result.rows[0].subcategoria, "gastos_inversion");
 });
 
 test("parseSheetRows: acepta la subcategoría en snake_case o como label español", () => {
@@ -355,6 +375,7 @@ function existingMap(
       id: info.id ?? `id-${code}`,
       description: info.description ?? null,
       active: info.active ?? true,
+      cuenta_control: info.cuenta_control ?? null,
       is_system: info.is_system ?? false,
     });
   }

@@ -11,6 +11,10 @@
  *   - is_system=true (1201,1202,2301,4101,4102): NO se puede desactivar ni
  *     cambiar el código. El nombre/tipo/descripción sí se pueden editar.
  *   - Sin hard delete: "borrar" = active=false.
+ *   - RECLASIFICAR (account_type / subcategoria) es solo admin+contador. La
+ *     abogada conserva crear, renombrar, describir y cargar saldo.
+ *   - Una cuenta CON MOVIMIENTOS no cambia de naturaleza ni se desactiva, la
+ *     toque quien la toque. Protege los reportes históricos.
  *
  * CONTRATO DEL PATCH — reemplazo total, no parche parcial:
  *   updateChartAccount escribe TODOS los campos editables (incluidos
@@ -34,7 +38,54 @@ type DB = SupabaseClient;
 
 const ENTITY = "chart_of_accounts";
 const SELECT_COLS =
-  "id, code, name, account_type, subcategoria, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
+  "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, account_name_qb, description, is_trust_pass_through, is_system, active";
+
+/**
+ * Roles que pueden cambiar la CLASIFICACIÓN CONTABLE de una cuenta
+ * (`account_type` y `subcategoria`).
+ *
+ * Criterio de aceptación del documento de RM Consultores. La abogada conserva
+ * crear y renombrar cuentas: lo que pierde es reclasificarlas, porque de esa
+ * clasificación dependen el Balance General y el Estado de Resultado que firma
+ * el contador.
+ */
+const ROLES_CLASIFICACION = ["admin", "contador"] as const;
+
+/** Campos que constituyen la "clasificación contable" a efectos del permiso. */
+const CAMPOS_CLASIFICACION = ["account_type", "subcategoria"] as const;
+
+/**
+ * Cuántos asientos tocan esta cuenta.
+ *
+ * Hoy siempre devuelve 0: el ledger existe (023) pero el motor de posteo llega
+ * en la Fase 2, así que `journal_entry_lines` está vacía. La regla se
+ * implementa igual desde ahora — cuando empiecen a entrar asientos ya está
+ * puesta, en vez de acordarse después de haber reclasificado una cuenta con
+ * movimientos.
+ */
+async function contarMovimientos(
+  db: DB,
+  tenantId: string,
+  accountId: string
+): Promise<number> {
+  const { count, error } = await db
+    .from("journal_entry_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("account_id", accountId);
+
+  if (error) {
+    // Si no se puede saber, NO se asume que está libre: bloquear es lo
+    // conservador cuando lo que está en juego son los reportes históricos.
+    console.error("[finanzas/api] contarMovimientos failed", error);
+    throw new MutationError(
+      "No se pudo verificar si la cuenta tiene movimientos. Intentá de nuevo.",
+      500,
+      error
+    );
+  }
+  return count ?? 0;
+}
 
 /** true si el error de Postgres es una violación de UNIQUE (código 23505). */
 function isUniqueViolation(err: unknown): boolean {
@@ -81,6 +132,7 @@ export async function createChartAccount(
       name: input.name,
       account_type: input.account_type,
       subcategoria: input.subcategoria,
+      cuenta_control: input.cuenta_control,
       saldo_inicial: input.saldo_inicial,
       description: input.description,
       active: input.active,
@@ -117,6 +169,7 @@ export async function createChartAccount(
       name: input.name,
       account_type: input.account_type,
       subcategoria: input.subcategoria,
+      cuenta_control: input.cuenta_control,
       saldo_inicial: input.saldo_inicial,
       description: input.description,
       active: input.active,
@@ -135,13 +188,14 @@ export async function updateChartAccount(
   tenantId: string,
   id: string,
   userId: string,
+  userRole: string,
   input: UpdateChartAccountInput
 ): Promise<ChartAccountRow> {
   // Existencia + tenant ownership (defensa en profundidad sobre RLS).
   const { data: existing, error: errExisting } = await db
     .from("chart_of_accounts")
     .select(
-      "id, code, name, account_type, subcategoria, saldo_inicial, description, active, is_system"
+      "id, code, name, account_type, subcategoria, cuenta_control, saldo_inicial, description, active, is_system"
     )
     .eq("tenant_id", tenantId)
     .eq("id", id)
@@ -155,6 +209,72 @@ export async function updateChartAccount(
   }
 
   const isSystem = existing.is_system === true;
+
+  // ---------------------------------------------------------------------------
+  // Movimientos: se consulta como mucho UNA vez, y solo si hace falta.
+  // ---------------------------------------------------------------------------
+  let movimientosCache: number | null = null;
+  const movimientos = async (): Promise<number> => {
+    if (movimientosCache === null) {
+      movimientosCache = await contarMovimientos(db, tenantId, id);
+    }
+    return movimientosCache;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Regla 1 — reclasificar contablemente es de admin/contador
+  // ---------------------------------------------------------------------------
+  // La abogada conserva renombrar, describir y cargar saldo; lo que no puede es
+  // mover una cuenta de tipo o de subcategoría, porque eso reescribe el Balance
+  // General y el Estado de Resultado.
+  const camposReclasificados = CAMPOS_CLASIFICACION.filter(
+    (f) =>
+      (existing as unknown as Record<string, unknown>)[f] !==
+      (input as unknown as Record<string, unknown>)[f]
+  );
+
+  if (camposReclasificados.length > 0) {
+    if (!(ROLES_CLASIFICACION as readonly string[]).includes(userRole)) {
+      throw new MutationError(
+        "Solo el contador o un administrador pueden cambiar la clasificación contable (tipo y subcategoría) de una cuenta.",
+        403
+      );
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regla 2 — una cuenta CON MOVIMIENTOS no cambia de naturaleza. Nadie.
+    // ---------------------------------------------------------------------------
+    // Ni el contador, ni el admin. Reclasificar una cuenta que ya tiene asientos
+    // reescribe retroactivamente reportes de períodos cerrados: el mismo asiento
+    // pasaría a sumar en otra línea del Estado de Resultado y los estados que el
+    // contador ya certificó dejarían de reproducirse. Si la clasificación está
+    // mal, se desactiva la cuenta y se crea una nueva.
+    const movs = await movimientos();
+    if (movs > 0) {
+      throw new MutationError(
+        `La cuenta "${existing.code}" tiene ${movs} movimiento(s) contables y no se le puede cambiar la naturaleza. ` +
+          `Desactivala y creá una cuenta nueva con la clasificación correcta.`,
+        409
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Regla 3 — tampoco se DESACTIVA una cuenta con movimientos
+  // ---------------------------------------------------------------------------
+  // "Borrar" en este sistema es `active=false`, y los reportes filtran por
+  // `active=true`: desactivar una cuenta con asientos la haría desaparecer de
+  // los reportes y su saldo dejaría de sumar. Mismo daño que reclasificarla.
+  if (existing.active === true && input.active === false) {
+    const movs = await movimientos();
+    if (movs > 0) {
+      throw new MutationError(
+        `La cuenta "${existing.code}" tiene ${movs} movimiento(s) contables y no se puede desactivar: ` +
+          `desaparecería de los reportes y su saldo dejaría de sumar.`,
+        409
+      );
+    }
+  }
 
   // Regla: no se puede DESACTIVAR una cuenta del sistema (la usan los reportes).
   // Reactivar (false→true) sí se permite; editar nombre/tipo/desc también.
@@ -183,6 +303,7 @@ export async function updateChartAccount(
     name: input.name,
     account_type: input.account_type,
     subcategoria: input.subcategoria,
+    cuenta_control: input.cuenta_control,
     saldo_inicial: input.saldo_inicial,
     description: input.description,
     active: input.active,
@@ -207,6 +328,7 @@ export async function updateChartAccount(
     "name",
     "account_type",
     "subcategoria",
+    "cuenta_control",
     "saldo_inicial",
     "description",
     "active",

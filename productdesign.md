@@ -362,6 +362,48 @@ cierra para gastos.
 
 ---
 
+### PLAN DE CUENTAS — NIIF 18 (Fase 1 contable)
+
+NIIF 18 es obligatoria desde el **1 de enero de 2027** y reemplaza a NIC 1. Clasifica
+ingresos **y** gastos por ACTIVIDAD. Como el modulo contable se esta construyendo ahora, se
+construye ya con la norma nueva en vez de rehacerlo en diciembre.
+
+**Seis tipos de cuenta** (antes cinco): Activo, Pasivo, Patrimonio, Ingreso, **Costo**,
+Gasto. `costo` era una subcategoria dentro de gasto y paso a ser un tipo propio.
+
+**Nueve subcategorias de resultado** = 3 naturalezas x 3 actividades:
+
+| | Operacion | Inversion | Financiamiento |
+|---|---|---|---|
+| **Ingresos** | Ingresos Operativos | Ingresos de Inversion | Ingresos por financiamiento |
+| **Costos** | Costos Operativos | Costos de Inversion | Costos por financiamiento |
+| **Gastos** | Gastos Operativos | Gastos por Inversion | Gastos por financiamiento |
+
+- **El selector se filtra por tipo.** Las nueve aparecen solo cuando la cuenta es Ingreso,
+  Costo o Gasto. En cuentas de balance siguen las de siempre (activo corriente, no
+  corriente, propiedad planta y equipo, pasivo corriente, no corriente, patrimonio, otro).
+- **Obligatoria en cuentas de resultado activas.** Sin subcategoria el Estado de Resultado
+  no puede ubicar la cuenta en su bloque de actividad.
+- Las cuentas inactivas quedan exentas (las 34 viejas de QuickBooks la tienen en NULL).
+
+**Cuenta control:** marca opcional (`clientes` / `proveedores`) que indica que el saldo de la
+cuenta debe cuadrar contra el detalle del auxiliar correspondiente.
+
+**Permisos del plan de cuentas:**
+
+| Accion | Admin | Contador | Abogada |
+|---|---|---|---|
+| Crear cuenta | SI | SI | SI |
+| Renombrar / describir / cargar saldo | SI | SI | SI |
+| Cambiar tipo o subcategoria | SI | SI | **NO (403)** |
+| Cambiar tipo/subcategoria de cuenta CON movimientos | **NO (409)** | **NO (409)** | NO |
+| Desactivar cuenta CON movimientos | **NO (409)** | **NO (409)** | NO |
+
+La ultima regla no distingue rol a proposito: reclasificar o apagar una cuenta que ya tiene
+asientos reescribe retroactivamente reportes de periodos que el contador ya certifico.
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

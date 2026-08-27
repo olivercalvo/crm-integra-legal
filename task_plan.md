@@ -1,6 +1,59 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — cierre del 25/08/2026 <<<
+## >>> RETOMAR ACA — cierre del 27/08/2026 <<<
+
+**FASE 1 CONTABLE (NIIF 18) — EN CURSO. Tareas 0, 6, 1 y 2 CERRADAS.**
+
+Entregado para que RM Consultores lo pruebe en STAGING antes de seguir. Detalle completo en
+`changelog.md`; el como-tocarlo, en `sop.md` SOP-013.
+
+### Lo que quedo funcionando
+
+- **Seis tipos de cuenta**: `cost` es tipo propio. Las 6 cuentas 500001-500006 migradas.
+- **Nueve subcategorias NIIF 18**, obligatorias en cuentas de resultado activas, con selector
+  filtrado por tipo y CHECK en BD *por tipo*.
+- **`cuenta_control`** + cuenta `200004 Anticipo de Clientes`. Staging: 63 cuentas activas.
+- **Permisos**: reclasificar es admin+contador; cuentas con movimientos no se reclasifican ni
+  se desactivan (409, para todos).
+- **Staging con saldos contables REALES** (`npm run seed:staging`, sin flags). Operacion
+  ficticia, saldos reales. Clientes y casos siguen inventados.
+- **Los reportes cuadran**: los 5 totales del Estado de Resultado y el Balance dan igual que
+  antes de reclasificar. Utilidad Operativa -244,476.91, descuadre 0.00.
+
+### LO QUE SIGUE — el resto de la Fase 1, en este orden
+
+3. **Tarea 3 — Estado de Resultado con la estructura de Josuar.** Bloques por ACTIVIDAD
+   (operacion / inversion / financiamiento), bloques vacios no se muestran, y **vuelco de
+   signos SOLO en la capa de presentacion** (ingresos positivos, costos y gastos entre
+   parentesis). El motor se queda en convencion de balanza: si se invierte ahi, el Balance
+   General deja de cuadrar y se pierden los 22 tests que sirven de red.
+4. **Tarea 4 — Sociedad civil.** Seccion de distribucion a socias, el ejercicio cierra en
+   cero. `DEFAULT_ISR_RATE` pasa a 0 (hoy 0.25) pero el parametro se queda, pensando en
+   vender el sistema a sociedades anonimas. Cuenta provisional `300004 Distribucion a Socias`
+   (patrimonio) **con el codigo parametrizable** — Oliver se lo confirma a Josuar por correo,
+   puede que quiera ademas un pasivo "Por pagar a socias".
+5. **Tarea 5 — Saldos iniciales: SOLO el campo `fecha`.** El asiento de apertura, los
+   periodos, la secuencia, el `source_type='apertura'` y el Libro Mayor se fueron completos a
+   la **FASE 2** con el motor de posteo. La Fase 1 existe para que RM valide el plan de
+   cuentas y los reportes; meterle el ledger la vuelve un proyecto de semanas.
+
+### PENDIENTES DE OLIVER
+
+1. **Confirmarle a Josuar por correo** la cuenta `300004 Distribucion a Socias` y si ademas
+   quiere un pasivo "Por pagar a socias" para cuando la distribucion no se paga de inmediato.
+2. **`NEXT_PUBLIC_APP_URL` esta VACIA en el entorno Preview de Vercel** (figura scopeada a
+   Preview+Production, 115d). Es la que arma el link publico de cotizaciones, asi que en
+   preview el boton "copiar link" probablemente genere una URL rota. Previo a Fase 0.
+3. **`.env.local` dice `NEXT_PUBLIC_APP_ENV=staging`**, no `local`. Por eso en localhost sale
+   la banda AMBAR "STAGING" y nunca la VIOLETA "LOCAL" que describe el CLAUDE.md §9. No es
+   peligroso (las dos dicen "no es produccion") pero la distincion local-vs-staging que el
+   banner fue disenado para hacer hoy no existe. Decidir: cambiar el .env o corregir el §9.
+4. **Recrear en PRODUCCION el indice de `client_payments(tenant_id)`.** Sigue pendiente de
+   Fase 0. Impacto bajo (25 filas).
+
+---
+
+## >>> Cierre anterior — 25/08/2026 <<<
 
 **Fase 0 (ambiente de pruebas) CERRADA.** Staging (`xtyenhakplrkyifbcaow`) tiene el esquema
 completo, datos ficticios y aislamiento verificado; `.env.local` apunta ahi, la app muestra

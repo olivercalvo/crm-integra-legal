@@ -37,6 +37,7 @@ test("validateCreateChartAccount: válida → ok con datos normalizados", () => 
     code: "  5210 ",
     name: "  Gastos de capacitación ",
     account_type: "expense",
+    subcategoria: "gastos_operativos",
     description: "  nota  ",
     active: true,
   });
@@ -112,37 +113,136 @@ test("validateCreateChartAccount: sin saldo_inicial → default 0", () => {
     code: "600001",
     name: "Alquiler de oficina",
     account_type: "expense",
-    subcategoria: "gasto_operativo",
+    subcategoria: "gastos_operativos",
     active: true,
   });
   assert.equal(r.ok, true);
   if (r.ok) {
     assert.equal(r.data.saldo_inicial, 0);
-    assert.equal(r.data.subcategoria, "gasto_operativo");
+    assert.equal(r.data.subcategoria, "gastos_operativos");
   }
 });
 
-test("validateCreateChartAccount: sin subcategoria → null (sin clasificar)", () => {
+test("validateCreateChartAccount: sin subcategoria → null en cuentas de BALANCE", () => {
+  // Desde NIIF 18 esto solo vale para balance. En cuentas de resultado la
+  // subcategoría es obligatoria — ver el test de más abajo.
   const r = validateCreateChartAccount({
-    code: "600002",
-    name: "Otros gastos",
-    account_type: "expense",
+    code: "190002",
+    name: "Otros activos",
+    account_type: "asset",
     active: true,
   });
   assert.equal(r.ok, true);
   if (r.ok) assert.equal(r.data.subcategoria, null);
 });
 
-test("validateCreateChartAccount: subcategoria vacía ('') → null, no error", () => {
+test("validateCreateChartAccount: subcategoria vacía ('') → null en cuentas de BALANCE", () => {
   const r = validateCreateChartAccount({
-    code: "600003",
+    code: "190003",
     name: "Sin clasificar",
-    account_type: "expense",
+    account_type: "asset",
     subcategoria: "",
     active: true,
   });
   assert.equal(r.ok, true);
   if (r.ok) assert.equal(r.data.subcategoria, null);
+});
+
+// ---- NIIF 18: subcategoría obligatoria y acotada por tipo (Fase 1) ----
+
+test("NIIF 18: cuenta de resultado ACTIVA sin subcategoría → error", () => {
+  for (const tipo of ["income", "cost", "expense"] as const) {
+    const r = validateCreateChartAccount({
+      code: "990001",
+      name: "Cuenta de resultado",
+      account_type: tipo,
+      active: true,
+    });
+    assert.equal(r.ok, false, `${tipo} sin subcategoría debería fallar`);
+    if (!r.ok) assert.ok(r.errors.subcategoria, `falta el error en ${tipo}`);
+  }
+});
+
+test("NIIF 18: cuenta de resultado INACTIVA sin subcategoría → ok", () => {
+  // Las 34 cuentas viejas de QuickBooks están así: desactivadas y sin
+  // clasificar. El CHECK de BD también las exime.
+  const r = validateCreateChartAccount({
+    code: "990002",
+    name: "Cuenta legacy",
+    account_type: "expense",
+    active: false,
+  });
+  assert.equal(r.ok, true);
+  if (r.ok) assert.equal(r.data.subcategoria, null);
+});
+
+test("NIIF 18: la subcategoría tiene que corresponder AL TIPO", () => {
+  // Existe en el vocabulario, pero es de gasto: en una cuenta de ingreso
+  // rompería el Estado de Resultado igual que un NULL.
+  const r = validateCreateChartAccount({
+    code: "990003",
+    name: "Ingreso mal clasificado",
+    account_type: "income",
+    subcategoria: "gastos_operativos",
+    active: true,
+  });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.errors.subcategoria);
+});
+
+test("NIIF 18: las nueve de resultado se aceptan en su tipo", () => {
+  const porTipo = {
+    income: ["ingresos_operativos", "ingresos_inversion", "ingresos_financiamiento"],
+    cost: ["costos_operativos", "costos_inversion", "costos_financiamiento"],
+    expense: ["gastos_operativos", "gastos_inversion", "gastos_financiamiento"],
+  } as const;
+
+  for (const [tipo, subs] of Object.entries(porTipo)) {
+    for (const sub of subs) {
+      const r = validateCreateChartAccount({
+        code: "990004",
+        name: "Cuenta",
+        account_type: tipo,
+        subcategoria: sub,
+        active: true,
+      });
+      assert.equal(r.ok, true, `${tipo} + ${sub} debería ser válido`);
+      if (r.ok) assert.equal(r.data.subcategoria, sub);
+    }
+  }
+});
+
+test("cuenta_control: solo clientes/proveedores, y NULL si viene vacía", () => {
+  const ok = validateCreateChartAccount({
+    code: "100004",
+    name: "Cuentas por Cobrar Clientes",
+    account_type: "asset",
+    subcategoria: "activo_corriente",
+    cuenta_control: "clientes",
+    active: true,
+  });
+  assert.equal(ok.ok, true);
+  if (ok.ok) assert.equal(ok.data.cuenta_control, "clientes");
+
+  const vacia = validateCreateChartAccount({
+    code: "100005",
+    name: "Otra",
+    account_type: "asset",
+    cuenta_control: "",
+    active: true,
+  });
+  assert.equal(vacia.ok, true);
+  if (vacia.ok) assert.equal(vacia.data.cuenta_control, null);
+
+  const mala = validateCreateChartAccount({
+    code: "100006",
+    name: "Otra",
+    account_type: "asset",
+    cuenta_control: "empleados",
+    active: true,
+  });
+  assert.equal(mala.ok, false);
+  if (!mala.ok) assert.ok(mala.errors.cuenta_control);
 });
 
 test("validateCreateChartAccount: subcategoria inválida (label en español) → error", () => {

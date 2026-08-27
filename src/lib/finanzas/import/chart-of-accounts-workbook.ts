@@ -28,17 +28,27 @@ export const TEMPLATE_HEADERS = [
 ] as const;
 
 /**
- * Filas de ejemplo de la plantilla. Cubren a propósito los tres casos que más
- * confunden: una cuenta de balance sin subcategoría inferible, un COSTO y un
- * GASTO (que comparten account_type='expense' y solo se distinguen por la
- * subcategoría), y un saldo negativo.
+ * Filas de ejemplo de la plantilla. Cubren a propósito los casos que más
+ * confunden: un saldo negativo, y las tres cuentas de RESULTADO —ingreso, costo
+ * y gasto— que desde NIIF 18 son tres account_type DISTINTOS y llevan
+ * subcategoría OBLIGATORIA.
+ *
+ * Las tres de resultado van con la subcategoría escrita, no en blanco: dejarla
+ * vacía ahora es un error de validación, así que la plantilla tiene que enseñar
+ * el formato correcto en vez de modelar la fila que va a ser rechazada.
  */
 const TEMPLATE_EXAMPLES: Array<[string, string, string, string, number]> = [
   ["100001", "Caja general", "Activo", SUBCATEGORIA_LABEL_ES.activo_corriente, 2500],
   ["300001", "Capital pagado", "Patrimonio", SUBCATEGORIA_LABEL_ES.patrimonio, -15000],
-  ["400001", "Derecho Corporativo", "Ingreso", SUBCATEGORIA_LABEL_ES.ingreso, 0],
-  ["500001", "Honorarios de abogados externos", "Costo", "", 0],
-  ["600001", "Alquiler de oficina", "Gasto", "", 0],
+  ["400001", "Derecho Corporativo", "Ingreso", SUBCATEGORIA_LABEL_ES.ingresos_operativos, 0],
+  [
+    "500001",
+    "Honorarios de abogados externos",
+    "Costo",
+    SUBCATEGORIA_LABEL_ES.costos_operativos,
+    0,
+  ],
+  ["600001", "Alquiler de oficina", "Gasto", SUBCATEGORIA_LABEL_ES.gastos_operativos, 0],
 ];
 
 /**

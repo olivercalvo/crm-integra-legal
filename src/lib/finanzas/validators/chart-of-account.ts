@@ -10,8 +10,15 @@
 
 import {
   isAccountType,
+  isCuentaControl,
   isSubcategoria,
+  isSubcategoriaValidaParaTipo,
+  requiereSubcategoria,
+  subcategoriasParaTipo,
+  ACCOUNT_TYPE_LABEL_ES,
+  SUBCATEGORIA_LABEL_ES,
   type AccountType,
+  type CuentaControl,
   type Subcategoria,
   type CreateChartAccountInput,
   type UpdateChartAccountInput,
@@ -52,6 +59,7 @@ function validateFields(
     name?: unknown;
     account_type?: unknown;
     subcategoria?: unknown;
+    cuenta_control?: unknown;
     saldo_inicial?: unknown;
     description?: unknown;
     active?: unknown;
@@ -63,6 +71,7 @@ function validateFields(
   name: string;
   accountType: AccountType | null;
   subcategoria: Subcategoria | null;
+  cuentaControl: CuentaControl | null;
   saldoInicial: number;
   description: string | null;
   active: boolean;
@@ -102,18 +111,50 @@ function validateFields(
     accountType = raw.account_type;
   }
 
-  // subcategoria (OPCIONAL: null / "" / ausente = sin clasificar).
-  // Si llega un valor, tiene que ser uno de SUBCATEGORIAS en snake_case: la
-  // columna en BD no tiene CHECK, así que este validador es la única barrera
-  // contra vocabulario inventado.
+  // active (acepta boolean o strings "true"/"false").
+  // Se resuelve ANTES que la subcategoría porque la obligatoriedad depende de
+  // si la cuenta queda activa.
+  const active =
+    raw.active === true ||
+    raw.active === "true" ||
+    raw.active === undefined || // default activa
+    raw.active === null;
+
+  // subcategoria — desde NIIF 18 depende del TIPO:
+  //   · En cuentas de RESULTADO (ingreso/costo/gasto) ACTIVAS es OBLIGATORIA:
+  //     sin ella el Estado de Resultado no puede ubicar la cuenta en su bloque
+  //     de actividad. Espeja el CHECK `coa_resultado_subcategoria_niif18`.
+  //   · Tiene que pertenecer AL TIPO, no solo existir: un ingreso con
+  //     'gastos_operativos' es tan inválido como uno sin nada.
+  //   · En cuentas de BALANCE sigue siendo opcional.
   let subcategoria: Subcategoria | null = null;
   const subRaw =
     raw.subcategoria == null ? "" : String(raw.subcategoria).trim();
-  if (subRaw !== "") {
-    if (!isSubcategoria(subRaw)) {
-      errors.subcategoria = "Subcategoría inválida";
+
+  if (subRaw === "") {
+    if (accountType && active && requiereSubcategoria(accountType)) {
+      errors.subcategoria = `Subcategoría requerida en cuentas de tipo ${ACCOUNT_TYPE_LABEL_ES[accountType]}`;
+    }
+  } else if (!isSubcategoria(subRaw)) {
+    errors.subcategoria = "Subcategoría inválida";
+  } else if (accountType && !isSubcategoriaValidaParaTipo(accountType, subRaw)) {
+    const validas = subcategoriasParaTipo(accountType)
+      .map((s) => SUBCATEGORIA_LABEL_ES[s])
+      .join(", ");
+    errors.subcategoria = `"${SUBCATEGORIA_LABEL_ES[subRaw]}" no corresponde a una cuenta de tipo ${ACCOUNT_TYPE_LABEL_ES[accountType]}. Opciones: ${validas}`;
+  } else {
+    subcategoria = subRaw;
+  }
+
+  // cuenta_control (OPCIONAL: null / "" / ausente = cuenta normal).
+  let cuentaControl: CuentaControl | null = null;
+  const ccRaw =
+    raw.cuenta_control == null ? "" : String(raw.cuenta_control).trim();
+  if (ccRaw !== "") {
+    if (!isCuentaControl(ccRaw)) {
+      errors.cuenta_control = "Cuenta control inválida";
     } else {
-      subcategoria = subRaw;
+      cuentaControl = ccRaw;
     }
   }
 
@@ -147,19 +188,13 @@ function validateFields(
     }
   }
 
-  // active (acepta boolean o strings "true"/"false")
-  const active =
-    raw.active === true ||
-    raw.active === "true" ||
-    raw.active === undefined || // default activa
-    raw.active === null;
-
   return {
     errors,
     code,
     name,
     accountType,
     subcategoria,
+    cuentaControl,
     saldoInicial,
     description,
     active,
@@ -176,6 +211,7 @@ export function validateCreateChartAccount(
     name,
     accountType,
     subcategoria,
+    cuentaControl,
     saldoInicial,
     description,
     active,
@@ -193,6 +229,7 @@ export function validateCreateChartAccount(
       name,
       account_type: accountType as AccountType,
       subcategoria,
+      cuenta_control: cuentaControl,
       saldo_inicial: saldoInicial,
       description,
       active,
@@ -214,6 +251,7 @@ export function validateUpdateChartAccount(
     name,
     accountType,
     subcategoria,
+    cuentaControl,
     saldoInicial,
     description,
     active,
@@ -227,6 +265,7 @@ export function validateUpdateChartAccount(
     name,
     account_type: accountType as AccountType,
     subcategoria,
+    cuenta_control: cuentaControl,
     saldo_inicial: saldoInicial,
     description,
     active,

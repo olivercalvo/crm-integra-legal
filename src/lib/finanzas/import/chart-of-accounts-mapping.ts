@@ -24,6 +24,7 @@ import {
   SUBCATEGORIA_LABEL_ES,
   SUBCATEGORIAS,
   type AccountType,
+  type CuentaControl,
   type Subcategoria,
 } from "@/lib/finanzas/types/chart-of-account";
 
@@ -208,20 +209,28 @@ const TYPE_MAP: Record<string, AccountTypeMapping> = {
   patrimonio: { account_type: "equity", subcategoriaDefault: null },
   equity: { account_type: "equity", subcategoriaDefault: null },
 
-  ingreso: { account_type: "income", subcategoriaDefault: null },
-  ingresos: { account_type: "income", subcategoriaDefault: null },
-  income: { account_type: "income", subcategoriaDefault: null },
+  // Las cuentas de RESULTADO defaultean a la actividad de OPERACIÓN. Desde
+  // NIIF 18 la subcategoría es obligatoria en estas cuentas, así que dejarla en
+  // null haría fallar la importación de toda fila que no la traiga explícita.
+  // Inversión y financiamiento se eligen a mano en la columna Subcategoría.
+  ingreso: { account_type: "income", subcategoriaDefault: "ingresos_operativos" },
+  ingresos: { account_type: "income", subcategoriaDefault: "ingresos_operativos" },
+  income: { account_type: "income", subcategoriaDefault: "ingresos_operativos" },
 
-  costo: { account_type: "expense", subcategoriaDefault: "costo" },
-  costos: { account_type: "expense", subcategoriaDefault: "costo" },
-  "costo de venta": { account_type: "expense", subcategoriaDefault: "costo" },
-  "costos de venta": { account_type: "expense", subcategoriaDefault: "costo" },
+  // COSTO es su propio account_type desde NIIF 18 (antes era expense + costo).
+  costo: { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  costos: { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  "costo de venta": { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  "costos de venta": { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  "costo operativo": { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  "costos operativos": { account_type: "cost", subcategoriaDefault: "costos_operativos" },
+  cost: { account_type: "cost", subcategoriaDefault: "costos_operativos" },
 
-  gasto: { account_type: "expense", subcategoriaDefault: "gasto_operativo" },
-  gastos: { account_type: "expense", subcategoriaDefault: "gasto_operativo" },
-  "gasto operativo": { account_type: "expense", subcategoriaDefault: "gasto_operativo" },
-  "gastos operativos": { account_type: "expense", subcategoriaDefault: "gasto_operativo" },
-  expense: { account_type: "expense", subcategoriaDefault: "gasto_operativo" },
+  gasto: { account_type: "expense", subcategoriaDefault: "gastos_operativos" },
+  gastos: { account_type: "expense", subcategoriaDefault: "gastos_operativos" },
+  "gasto operativo": { account_type: "expense", subcategoriaDefault: "gastos_operativos" },
+  "gastos operativos": { account_type: "expense", subcategoriaDefault: "gastos_operativos" },
+  expense: { account_type: "expense", subcategoriaDefault: "gastos_operativos" },
 };
 
 /** Mapea el Tipo en español a account_type + subcategoría default. null si no se reconoce. */
@@ -482,6 +491,8 @@ export interface ExistingAccountInfo {
   description: string | null;
   /** Ídem: un import NO debe reactivar ni desactivar cuentas. */
   active: boolean;
+  /** Ídem: la marca de cuenta control se pone a mano y el Excel no la trae. */
+  cuenta_control: CuentaControl | null;
   is_system: boolean;
 }
 

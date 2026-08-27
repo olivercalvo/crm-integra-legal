@@ -29,10 +29,16 @@ import {
   ACCOUNT_TYPES,
   ACCOUNT_TYPE_ORDER,
   ACCOUNT_TYPE_LABEL_ES,
-  SUBCATEGORIAS,
+  CUENTAS_CONTROL,
+  CUENTA_CONTROL_LABEL_ES,
   SUBCATEGORIA_LABEL_ES,
+  cuentaControlLabel,
+  isSubcategoriaValidaParaTipo,
+  requiereSubcategoria,
   subcategoriaLabel,
+  subcategoriasParaTipo,
   type AccountType,
+  type CuentaControl,
   type Subcategoria,
   type ChartAccountRow,
 } from "@/lib/finanzas/types/chart-of-account";
@@ -53,6 +59,8 @@ type FormState = {
   account_type: AccountType;
   /** "" = sin clasificar (se manda como null). */
   subcategoria: Subcategoria | "";
+  /** "" = cuenta normal, sin auxiliar que cuadrar (se manda como null). */
+  cuenta_control: CuentaControl | "";
   /** Se mantiene como STRING para no pelear con el input mientras se tipea
    *  ("-", "1500.", "" al borrar todo). Se convierte a número al guardar. */
   saldo_inicial: string;
@@ -69,6 +77,7 @@ function emptyCreateForm(): FormState {
     name: "",
     account_type: "asset",
     subcategoria: "",
+    cuenta_control: "",
     saldo_inicial: "0",
     description: "",
     active: true,
@@ -127,6 +136,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           a.account_name_qb,
           ACCOUNT_TYPE_LABEL_ES[a.account_type],
           subcategoriaLabel(a.subcategoria),
+          cuentaControlLabel(a.cuenta_control),
           a.active ? "activa" : "inactiva"
         )
       ),
@@ -161,6 +171,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       name: a.name,
       account_type: a.account_type,
       subcategoria: a.subcategoria ?? "",
+      cuenta_control: a.cuenta_control ?? "",
       saldo_inicial: String(a.saldo_inicial ?? 0),
       description: a.description ?? "",
       active: a.active,
@@ -184,6 +195,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       name: form.name.trim(),
       account_type: form.account_type,
       subcategoria: form.subcategoria || null,
+      cuenta_control: form.cuenta_control || null,
       // Campo vacío = 0 (el validador también defaultea a 0). Un "-" o "abc"
       // suelto llega tal cual y el validador lo rechaza con mensaje inline.
       saldo_inicial: form.saldo_inicial.trim() === "" ? 0 : form.saldo_inicial.trim(),
@@ -251,6 +263,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
           name: a.name,
           account_type: a.account_type,
           subcategoria: a.subcategoria,
+          cuenta_control: a.cuenta_control,
           saldo_inicial: a.saldo_inicial,
           description: a.description,
           active: !a.active,
@@ -364,9 +377,21 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               <Label className="mb-1 block text-xs">Tipo *</Label>
               <select
                 value={form.account_type}
-                onChange={(e) =>
-                  setForm({ ...form, account_type: e.target.value as AccountType })
-                }
+                onChange={(e) => {
+                  // Al cambiar el tipo hay que LIMPIAR la subcategoría si dejó
+                  // de corresponderle: las nueve de resultado y las de balance
+                  // no se mezclan, y el servidor rechaza la combinación. Sin
+                  // esto el usuario ve un valor viejo en el selector filtrado y
+                  // el guardado falla con un error que no se explica solo.
+                  const tipo = e.target.value as AccountType;
+                  setForm({
+                    ...form,
+                    account_type: tipo,
+                    subcategoria: isSubcategoriaValidaParaTipo(tipo, form.subcategoria)
+                      ? form.subcategoria
+                      : "",
+                  });
+                }}
                 disabled={saving}
                 className={
                   selectClass + (fieldErrors.account_type ? " border-red-300" : "")
@@ -383,9 +408,11 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               )}
             </div>
 
-            {/* Subcategoría (opcional) — agrupa los reportes */}
+            {/* Subcategoría — filtrada por tipo; obligatoria en resultado */}
             <div>
-              <Label className="mb-1 block text-xs">Subcategoría (opcional)</Label>
+              <Label className="mb-1 block text-xs">
+                Subcategoría {requiereSubcategoria(form.account_type) ? "*" : "(opcional)"}
+              </Label>
               <select
                 value={form.subcategoria}
                 onChange={(e) =>
@@ -399,18 +426,58 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                   selectClass + (fieldErrors.subcategoria ? " border-red-300" : "")
                 }
               >
-                <option value="">— Sin clasificar —</option>
-                {SUBCATEGORIAS.map((s) => (
+                {/* En cuentas de resultado NO se ofrece "sin clasificar": desde
+                    NIIF 18 la subcategoría es obligatoria ahí. */}
+                {requiereSubcategoria(form.account_type) ? (
+                  <option value="">— Elegí una —</option>
+                ) : (
+                  <option value="">— Sin clasificar —</option>
+                )}
+                {subcategoriasParaTipo(form.account_type).map((s) => (
                   <option key={s} value={s}>
                     {SUBCATEGORIA_LABEL_ES[s]}
                   </option>
                 ))}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                Agrupa los reportes (Balance General y Estado de Resultado).
+                {requiereSubcategoria(form.account_type)
+                  ? "NIIF 18: clasifica la cuenta por actividad (operación, inversión o financiamiento)."
+                  : "Agrupa el Balance General (corriente, no corriente, propiedad planta y equipo)."}
               </p>
               {fieldErrors.subcategoria && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.subcategoria}</p>
+              )}
+            </div>
+
+            {/* Cuenta control — marca que la cuenta cuadra contra un auxiliar */}
+            <div>
+              <Label className="mb-1 block text-xs">Cuenta control (opcional)</Label>
+              <select
+                value={form.cuenta_control}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    cuenta_control: e.target.value as CuentaControl | "",
+                  })
+                }
+                disabled={saving}
+                className={
+                  selectClass + (fieldErrors.cuenta_control ? " border-red-300" : "")
+                }
+              >
+                <option value="">— No es cuenta control —</option>
+                {CUENTAS_CONTROL.map((c) => (
+                  <option key={c} value={c}>
+                    {CUENTA_CONTROL_LABEL_ES[c]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Su saldo debe cuadrar contra el detalle del auxiliar (antigüedad de
+                cuentas por cobrar o por pagar).
+              </p>
+              {fieldErrors.cuenta_control && (
+                <p className="mt-1 text-xs text-red-600">{fieldErrors.cuenta_control}</p>
               )}
             </div>
 
@@ -584,6 +651,15 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                             </span>
                           </td>
                           <td className="px-3 py-3 text-gray-500">
+                            {a.cuenta_control && (
+                              <Badge
+                                variant="secondary"
+                                className="mr-1 bg-integra-gold/15 font-normal text-integra-navy hover:bg-integra-gold/15"
+                                title={`Su saldo cuadra contra el auxiliar de ${a.cuenta_control}`}
+                              >
+                                {cuentaControlLabel(a.cuenta_control)}
+                              </Badge>
+                            )}
                             {a.subcategoria ? (
                               <Badge
                                 variant="secondary"

@@ -516,3 +516,72 @@ separación existe para evitar. Y borrar el archivo después.
 
 Correrlo contra staging con datos de prueba, no contra producción. Ese es el punto de todo
 esto.
+
+---
+
+## SOP-013: Plan de cuentas — vocabulario NIIF 18 y como tocarlo
+
+### Las tres fuentes que se mueven JUNTAS
+
+El vocabulario contable vive en tres lugares y los tres tienen que decir lo mismo:
+
+1. `src/lib/finanzas/types/chart-of-account.ts` — **la fuente de verdad**.
+   `ACCOUNT_TYPES`, `SUBCATEGORIAS_POR_TIPO`, labels en español.
+2. El CHECK `coa_resultado_subcategoria_niif18` en BD (migracion `025`), que espeja
+   `SUBCATEGORIAS_POR_TIPO`.
+3. `src/lib/finanzas/import/chart-of-accounts-mapping.ts`, que traduce los encabezados del
+   Excel de Josuar a ese vocabulario.
+
+Si se agrega o saca un valor, van los tres o el sistema queda inconsistente: la UI ofrece
+algo que la BD rechaza, o el import carga algo que el reporte no sabe agrupar.
+
+### Regla de oro: el tipo decide la seccion, la subcategoria decide el grupo
+
+`buildEstadoResultado()` deriva sus tres secciones del `account_type`
+(`income` / `cost` / `expense`), NO de la subcategoria. Es lo que garantiza que ninguna
+cuenta pueda evaporarse del reporte: cada cuenta tiene exactamente un tipo.
+
+**Antes de NIIF 18 no era asi** y por eso hay que tener cuidado al leer codigo viejo: costos
+y gastos compartian `account_type='expense'` y se separaban por `subcategoria`. Si alguien
+reintroduce ese patron, mover una cuenta de subcategoria la puede tirar fuera del reporte.
+
+### Cambiar el tipo de una cuenta rompe el reporte si no se mueve el codigo
+
+Es la leccion del Sprint 2E.1 aplicada de nuevo: **schema y codigo en lock-step.** La
+migracion `025` y el cambio de `accounting-reports.ts` van en el MISMO commit. Si se aplica
+solo la migracion, las 6 cuentas de costo dejan de estar en `expense`, no estan en `income`,
+y el Total de Costos queda en 0 sin que nada falle a gritos.
+
+### Como verificar que los reportes siguen cuadrando
+
+El criterio de aceptacion NO es que compile: es que los totales sigan dando lo mismo que el
+Excel del contador.
+
+```bash
+npx tsx --test src/lib/finanzas/reports/__tests__/accounting-reports.test.ts
+```
+
+Compara contra `josuar-accounts.fixture.ts`, que son las 62 cuentas reales con sus saldos.
+Los cinco totales del Estado de Resultado y los cinco del Balance estan clavados ahi. Una
+reclasificacion NO debe moverlos: la plata es la misma, solo cambia donde se agrupa.
+
+Contra la base, la misma verificacion sale de la app: `/finanzas/reportes/pyl` y
+`/finanzas/reportes/balance` con la sesion de `admin@staging.test`.
+
+### Permisos — donde se hacen cumplir
+
+En `updateChartAccount()` (`src/lib/finanzas/api/chart-of-accounts.ts`), **no en la ruta**:
+la restriccion es POR CAMPO, no por endpoint. La abogada entra al PATCH porque puede
+renombrar; lo que no puede es tocar `account_type` ni `subcategoria`.
+
+Cubierto por `src/lib/finanzas/api/__tests__/chart-of-accounts-permisos.test.ts`.
+
+### La regla de "cuentas con movimientos" ya esta puesta aunque no aplique todavia
+
+`contarMovimientos()` consulta `journal_entry_lines`, que hoy esta VACIA: el motor de posteo
+llega en la Fase 2. O sea que hoy la regla nunca dispara. Esta implementada igual, a
+proposito — cuando empiecen a entrar asientos ya esta, en vez de acordarse despues de haber
+reclasificado una cuenta con movimientos.
+
+Si `contarMovimientos()` falla, **bloquea**: ante la duda no se asume que la cuenta esta
+libre.

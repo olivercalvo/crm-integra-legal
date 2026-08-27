@@ -120,10 +120,12 @@ function acc(
   return { code, name: `Cuenta ${code}`, account_type, subcategoria, saldo };
 }
 
-test("Costo y Gasto se separan por subcategoría aunque compartan account_type", () => {
+test("Costo y Gasto se separan por account_type, no por subcategoría (NIIF 18)", () => {
+  // Antes de NIIF 18 las dos eran account_type='expense' y la única forma de
+  // separarlas era la subcategoría. Ahora `cost` es un tipo propio.
   const er = buildEstadoResultado([
-    acc("500001", "expense", "costo", 1000),
-    acc("600001", "expense", "gasto_operativo", 250),
+    acc("500001", "cost", "costos_operativos", 1000),
+    acc("600001", "expense", "gastos_operativos", 250),
   ]);
   assertMoney(er.costos.total, 1000, "Total de Costos");
   assertMoney(er.gastos.total, 250, "Total de Gastos");
@@ -131,22 +133,38 @@ test("Costo y Gasto se separan por subcategoría aunque compartan account_type",
 
 test("INGRESOS toma todas las cuentas income, incluso sin subcategoría", () => {
   const er = buildEstadoResultado([
-    acc("400001", "income", "ingreso", -500),
+    acc("400001", "income", "ingresos_operativos", -500),
     acc("400002", "income", null, -300),
   ]);
   assertMoney(er.ingresos.total, -800, "Total de Ingresos");
   assert.equal(er.ingresos.groups.length, 1, "income va plano, sin subgrupos");
 });
 
-test("un expense sin costo/gasto_operativo NO desaparece: entra en Sin clasificar", () => {
+test("ninguna cuenta de resultado se evapora: la sección la decide el tipo", () => {
+  // Reemplaza al test viejo del grupo "Sin clasificar" dentro de Gastos. Ese
+  // grupo existía porque un `expense` que no fuera ni `costo` ni
+  // `gasto_operativo` no caía en ninguna sección y se habría perdido del
+  // reporte. Con la sección decidida por account_type el problema no puede
+  // ocurrir, así que lo que hay que proteger ahora es esa garantía.
+  //
+  // Las subcategorías van en NULL a propósito: es el peor caso posible, y el
+  // CHECK de BD lo impide en cuentas activas, pero el armado puro no debe
+  // depender de eso.
   const er = buildEstadoResultado([
-    acc("600001", "expense", "gasto_operativo", 100),
+    acc("600001", "expense", "gastos_operativos", 100),
     acc("690001", "expense", null, 40),
+    acc("500001", "cost", null, 7),
+    acc("400001", "income", null, -20),
   ]);
-  assertMoney(er.gastos.total, 140, "Total de Gastos incluye los sin clasificar");
-  const unclassified = er.gastos.groups.find((g) => g.isUnclassified);
-  assert.ok(unclassified, "debe haber un grupo Sin clasificar");
-  assert.equal(unclassified.rows[0].code, "690001");
+  assertMoney(er.gastos.total, 140, "el gasto sin subcategoría igual suma");
+  assertMoney(er.costos.total, 7, "el costo sin subcategoría igual suma");
+  assertMoney(er.ingresos.total, -20, "el ingreso sin subcategoría igual suma");
+
+  const grupos = [...er.ingresos.groups, ...er.costos.groups, ...er.gastos.groups];
+  assert.ok(
+    grupos.every((g) => !g.isUnclassified),
+    "el Estado de Resultado ya no necesita grupo Sin clasificar"
+  );
 });
 
 test("un activo sin subcategoría entra en Sin clasificar al final de su tipo", () => {
@@ -191,7 +209,7 @@ test("balance que NO cuadra se reporta como descuadre, no se esconde", () => {
 
 test("ISR: con ganancia se aplica la tasa y reduce la utilidad", () => {
   // Ganancia de 1000 → en convención de balanza, utilidad operativa = -1000.
-  const er = buildEstadoResultado([acc("400001", "income", "ingreso", -1000)]);
+  const er = buildEstadoResultado([acc("400001", "income", "ingresos_operativos", -1000)]);
   assertMoney(er.utilidadOperativa, -1000, "Utilidad Operativa");
   assert.equal(er.isr.applied, true);
   assert.equal(er.isr.rate, DEFAULT_ISR_RATE);
@@ -202,8 +220,8 @@ test("ISR: con ganancia se aplica la tasa y reduce la utilidad", () => {
 test("ISR: con PÉRDIDA no se aplica (queda en 0)", () => {
   // Pérdida: gastos mayores que ingresos → utilidad operativa POSITIVA.
   const er = buildEstadoResultado([
-    acc("400001", "income", "ingreso", -100),
-    acc("600001", "expense", "gasto_operativo", 500),
+    acc("400001", "income", "ingresos_operativos", -100),
+    acc("600001", "expense", "gastos_operativos", 500),
   ]);
   assertMoney(er.utilidadOperativa, 400, "Utilidad Operativa (pérdida)");
   assert.equal(er.isr.applied, false);
@@ -213,8 +231,8 @@ test("ISR: con PÉRDIDA no se aplica (queda en 0)", () => {
 
 test("ISR: resultado en cero no se grava", () => {
   const er = buildEstadoResultado([
-    acc("400001", "income", "ingreso", -100),
-    acc("600001", "expense", "gasto_operativo", 100),
+    acc("400001", "income", "ingresos_operativos", -100),
+    acc("600001", "expense", "gastos_operativos", 100),
   ]);
   assertMoney(er.utilidadOperativa, 0, "Utilidad Operativa");
   assert.equal(er.isr.applied, false);
@@ -222,7 +240,7 @@ test("ISR: resultado en cero no se grava", () => {
 });
 
 test("ISR: la tasa es un parámetro (no está hardcodeada en el cálculo)", () => {
-  const er = buildEstadoResultado([acc("400001", "income", "ingreso", -1000)], {
+  const er = buildEstadoResultado([acc("400001", "income", "ingresos_operativos", -1000)], {
     isrRate: 0.1,
   });
   assert.equal(er.isr.rate, 0.1);
@@ -251,8 +269,8 @@ test("sin cuentas: todo en cero y el balance cuadra", () => {
 
 test("los centavos no se arrastran: suma de decimales exacta a 2 dígitos", () => {
   const er = buildEstadoResultado([
-    acc("600001", "expense", "gasto_operativo", 0.1),
-    acc("600002", "expense", "gasto_operativo", 0.2),
+    acc("600001", "expense", "gastos_operativos", 0.1),
+    acc("600002", "expense", "gastos_operativos", 0.2),
   ]);
   assert.equal(er.gastos.total, 0.3, "0.1 + 0.2 debe dar 0.3, no 0.30000000000000004");
 });

@@ -375,32 +375,83 @@ async function seedCatalogs(): Promise<void> {
   );
 }
 
+/**
+ * Cuentas del plan que NO están en el export del 14/08 porque se crearon
+ * después. Se siembran junto a las 62 de Josuar para que staging refleje el
+ * plan VIGENTE, no la foto de agosto.
+ *
+ * `sql/pending/025` también las inserta, pero la migración no alcanza: en un
+ * `--reset` las migraciones corren ANTES que el seed, cuando la tabla todavía
+ * no tiene el plan de Josuar. Sin esta lista, el barrido de "desactivar todo lo
+ * que no sea de Josuar" de más abajo apagaría la cuenta recién creada.
+ */
+const CUENTAS_FASE1 = [
+  {
+    code: "200004",
+    name: "Anticipo de Clientes",
+    account_type: "liability" as const,
+    subcategoria: "pasivo_corriente" as const,
+    saldo: 0,
+  },
+];
+
+/**
+ * Cuentas CONTROL: su saldo tiene que cuadrar contra el detalle de un auxiliar.
+ * Va acá y no solo en la migración por el mismo motivo de orden que arriba.
+ */
+const CUENTAS_CONTROL_POR_CODIGO: Record<string, "clientes" | "proveedores"> = {
+  "100004": "clientes", // Cuentas por Cobrar Clientes
+  "200001": "proveedores", // Cuentas por pagar
+};
+
 async function seedChartOfAccounts(): Promise<void> {
-  // Los saldos de apertura REALES del bufete solo se cargan si se pide
-  // explícitamente. Por defecto van en 0, para que todo lo que muestren los
-  // reportes en staging venga de los montos redondos del seed y se pueda
-  // validar a mano. La ESTRUCTURA (código, nombre, tipo, subcategoría) es
-  // idéntica a producción en los dos modos.
-  const conSaldos = process.env.SEED_SALDOS_REALES === "1";
+  // ---------------------------------------------------------------------------
+  // SALDOS DE APERTURA REALES — decisión deliberada de Oliver (27/08/2026)
+  // ---------------------------------------------------------------------------
+  // Staging es un HÍBRIDO a propósito: operación inventada, saldos contables
+  // reales. Clientes, casos, tareas y gastos son ficticios porque ahí SÍ hay
+  // datos personales protegidos por la Ley 81. Los saldos del plan de cuentas
+  // no: son cifras agregadas (bancos, por cobrar, totales de ingreso) sin
+  // nombres, cédulas ni expedientes.
+  //
+  // Y son lo único que hace posible la metodología que pidió Rose ("avances por
+  // módulo, lo probemos, corrijas o apruebes"): si el contador abre el Estado de
+  // Resultado y ve números que no reconoce, no puede aprobar nada. Si ve los
+  // suyos, dice "está bien" o "está mal" en dos minutos.
+  //
+  // SEED_SALDOS_CERO=1 para volver al comportamiento viejo (todo en 0).
+  const enCero = process.env.SEED_SALDOS_CERO === "1";
+
+  const plan = [
+    ...JOSUAR_ACCOUNTS.map((a) => ({
+      code: a.code,
+      name: a.name,
+      account_type: a.account_type,
+      subcategoria: a.subcategoria,
+      saldo: a.saldo,
+    })),
+    ...CUENTAS_FASE1,
+  ];
 
   await upsert(
     "chart_of_accounts",
-    JOSUAR_ACCOUNTS.map((a) => ({
+    plan.map((a) => ({
       tenant_id: TENANT_ID,
       code: a.code,
       name: a.name,
       account_type: a.account_type,
       subcategoria: a.subcategoria,
-      saldo_inicial: conSaldos ? a.saldo : 0,
+      cuenta_control: CUENTAS_CONTROL_POR_CODIGO[a.code] ?? null,
+      saldo_inicial: enCero ? 0 : a.saldo,
       active: true,
     })),
     "tenant_id,code"
   );
 
   // Producción tiene las cuentas viejas de QuickBooks desactivadas: los
-  // reportes filtran active=true y ven exactamente 62. Replicamos ese estado
-  // sin borrar nada (services_catalog todavía referencia 4101 y 2201 por FK).
-  const codigos = JOSUAR_ACCOUNTS.map((a) => a.code);
+  // reportes filtran active=true y no las ven. Replicamos ese estado sin borrar
+  // nada (services_catalog todavía referencia 4101 y 2201 por FK).
+  const codigos = plan.map((a) => a.code);
   const { error } = await db
     .from("chart_of_accounts")
     .update({ active: false })
@@ -409,8 +460,9 @@ async function seedChartOfAccounts(): Promise<void> {
   if (error) throw new Error(`desactivar cuentas legacy: ${error.message}`);
 
   console.log(
-    `✅ Plan de cuentas — ${JOSUAR_ACCOUNTS.length} cuentas activas` +
-      (conSaldos ? " CON saldos de apertura reales" : " con saldo inicial en 0")
+    `✅ Plan de cuentas — ${plan.length} cuentas activas ` +
+      `(${JOSUAR_ACCOUNTS.length} de Josuar + ${CUENTAS_FASE1.length} de Fase 1), ` +
+      (enCero ? "saldo inicial en 0" : "CON saldos de apertura reales")
   );
 }
 

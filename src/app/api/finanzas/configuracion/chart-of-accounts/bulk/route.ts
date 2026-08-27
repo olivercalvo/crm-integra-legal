@@ -171,6 +171,8 @@ export async function POST(request: NextRequest) {
           name: row.name,
           account_type: row.account_type as AccountType,
           subcategoria: row.subcategoria,
+          // El Excel no trae cuenta control: se marca a mano en la pantalla.
+          cuenta_control: null,
           saldo_inicial: row.saldo_inicial,
           description: null,
           active: true,
@@ -183,14 +185,16 @@ export async function POST(request: NextRequest) {
           // No debería pasar (classifyRows lo marcó como update porque estaba).
           throw new MutationError("La cuenta dejó de existir durante la carga", 409);
         }
-        await updateChartAccount(ctx.db, ctx.tenantId, match.id, ctx.userId, {
+        await updateChartAccount(ctx.db, ctx.tenantId, match.id, ctx.userId, ctx.userRole, {
           name: row.name,
           account_type: row.account_type as AccountType,
           subcategoria: row.subcategoria,
           saldo_inicial: row.saldo_inicial,
-          // PRESERVAR: el PATCH es reemplazo total. La descripción no viene en
-          // el Excel, y el import no debe activar ni desactivar cuentas.
+          // PRESERVAR: el PATCH es reemplazo total. Ni la descripción ni la
+          // cuenta control vienen en el Excel, y el import no debe activar ni
+          // desactivar cuentas.
           description: match.description,
+          cuenta_control: match.cuenta_control,
           active: match.active,
         });
         updated++;

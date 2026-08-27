@@ -1,5 +1,112 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fase 1 contable — NIIF 18: tipo costo, nueve subcategorias, cuenta control] - 2026-08-27
+
+Tareas 0, 6, 1 y 2 de la Fase 1. Se entrega para que RM Consultores lo pruebe en STAGING
+antes de seguir (metodologia acordada con Rose: "avances por modulo, lo probemos, corrijas o
+apruebes y sigas al siguiente paso").
+
+**El criterio de aceptacion se cumplio: los reportes siguen cuadrando.** Los cinco totales
+del Estado de Resultado y los del Balance dan EXACTAMENTE lo mismo que antes de reclasificar,
+verificado contra el Excel de Josuar y tambien contra la base:
+
+| Concepto | Valor | Excel Josuar |
+|---|---|---|
+| Total de Ingresos | -289,137.06 | -289,137.06 |
+| Total de Costos | 9,878.38 | 9,878.38 |
+| Ganancia Bruta | -279,258.68 | -279,258.68 |
+| Total de Gastos | 34,781.77 | 34,781.77 |
+| Utilidad Operativa | -244,476.91 | -244,476.91 |
+| Descuadre del Balance | 0.00 | 0.00 |
+
+### Paso 0 — Staging con saldos contables REALES
+
+`npm run seed:staging` ahora carga los saldos de apertura reales del bufete por defecto
+(antes hacia falta `SEED_SALDOS_REALES=1`; el escape hatch pasa a ser `SEED_SALDOS_CERO=1`).
+
+Staging queda **hibrido a proposito**: operacion inventada, saldos contables reales.
+
+- **Por que se puede:** los saldos del plan de cuentas son cifras agregadas (bancos, por
+  cobrar, totales de ingreso). No hay nombres, cedulas ni expedientes, asi que no son datos
+  personales de la Ley 81. Ademas ya estaban commiteados desde el 14/08 como fixture de tests.
+- **Por que hace falta:** si el contador abre staging y ve numeros que no reconoce, no puede
+  aprobar nada. Con los suyos, dice "esta bien" o "esta mal" en dos minutos.
+- **Clientes, casos, tareas y gastos SIGUEN siendo ficticios**: ahi si hay datos personales.
+
+### Tarea 1 — Sexto tipo de cuenta: COSTO
+
+- `account_type` acepta seis valores: `asset, liability, equity, income, cost, expense`.
+  En **ingles**, como los otros cinco; label "Costo" en la UI.
+- Las 6 cuentas 500001-500006 migradas de `expense`+`costo` a `account_type='cost'`.
+- **`buildEstadoResultado()` ahora deriva las tres secciones del TIPO, no de la
+  subcategoria.** Con eso desaparecio el grupo "Sin clasificar" del Estado de Resultado:
+  existia porque un `expense` que no fuera ni costo ni gasto se caia del reporte, y con la
+  seccion decidida por tipo eso ya no puede pasar.
+- **Nada se movio en los totales**, como muestra la tabla de arriba.
+
+### Tarea 2 — Las nueve subcategorias NIIF 18
+
+- Guardadas en snake_case, mostradas con los labels textuales que mando Josuar
+  ("Ingresos Operativos", "Ingresos por financiamiento", ...).
+- Migradas: 9 `ingreso`->`ingresos_operativos`, 30 `gasto_operativo`->`gastos_operativos`,
+  6 `costo`->`costos_operativos`. Vocabulario viejo: 0 filas restantes.
+- `costo` **eliminada de SUBCATEGORIAS**: paso a ser un tipo y no podian coexistir.
+- **Selector filtrado por tipo** (requisito textual de Rose). Cambiar el tipo LIMPIA la
+  subcategoria si dejo de corresponder, si no el guardado falla con un error inexplicable.
+- **Obligatoria en cuentas de resultado ACTIVAS**, con CHECK en BD *por tipo*: una cuenta de
+  ingreso con `gastos_operativos` rompe el reporte igual que un NULL, asi que una lista plana
+  de los nueve valores no alcanzaba.
+
+### Tarea 6 — Campos, cuentas y permisos
+
+- Columna **`cuenta_control`** (`clientes` | `proveedores` | NULL), con badge dorado en el
+  listado y buscable.
+- Marcadas `100004 Cuentas por Cobrar Clientes` y `200001 Cuentas por pagar`.
+- Cuenta **`200004 Anticipo de Clientes`** (pasivo corriente) creada — pedida por correo en
+  agosto y nunca hecha. Staging pasa de 62 a **63 cuentas activas**.
+- **Depreciacion: NO hizo falta crear nada.** Ya existian `112001 Depr. de Mobiliario y
+  equipo` (activo, contra-cuenta) y `620001 Depreciacion` (gasto), ambas activas.
+- **Permisos**: reclasificar (`account_type`/`subcategoria`) es solo admin+contador (403 para
+  la abogada, que conserva crear y renombrar). Y una cuenta **con movimientos** no cambia de
+  naturaleza ni se desactiva (409), la toque quien la toque — protege los reportes historicos.
+  La regla no dispara todavia porque `journal_entry_lines` esta vacia hasta la Fase 2; se
+  implemento igual para que ya este cuando entren los asientos.
+
+### Migracion `sql/pending/025_niif18_tipo_costo_y_subcategorias.sql`
+
+Aplicada a staging. Los 8 post-checks dieron exacto. **Produccion NO se toco.**
+
+Revierte una decision de `024`: aquella dejo `subcategoria` sin CHECK porque la carga masiva
+del Excel podia necesitar valores nuevos en plena ventana de deadline. Esa ventana paso y
+NIIF 18 fija el vocabulario, asi que ahora el CHECK protege mas de lo que estorba.
+
+**Trampa que casi rompe `--reset`:** en una base recreada las migraciones corren ANTES del
+seed, cuando las ~34 cuentas de las migraciones base estan ACTIVAS y sin subcategoria — el
+CHECK las habria rechazado. Se agrego un backfill (paso F-bis) que clasifica cualquier cuenta
+de resultado activa sin subcategoria valida en la actividad de operacion de su tipo. Contra
+la staging ya sembrada afecta 0 filas.
+
+### Tests
+
+- **311 tests, 0 fallos** (72 skips preexistentes, sin cambios).
+- 9 tests nuevos de permisos en `chart-of-accounts-permisos.test.ts`.
+- 5 tests nuevos de vocabulario NIIF 18 en el validador.
+- Reescritos los tests que codificaban el comportamiento VIEJO: "Costo y Gasto se separan por
+  subcategoria" paso a "se separan por account_type", y el del grupo "Sin clasificar" paso a
+  garantizar que ninguna cuenta de resultado se evapore.
+
+### Verificado en el navegador (admin@staging.test, localhost)
+
+Plan de Cuentas con seccion COSTO propia (6), badges de cuenta control, selector filtrado por
+tipo con las 3 subcategorias correctas y label que pasa a "Subcategoria *" en cuentas de
+resultado. Estado de Resultado y Balance General renderizando los saldos reales y cuadrando.
+Consola sin errores.
+
+### Pendiente de esta fase
+
+Tareas 3 (estructura NIIF 18 del Estado de Resultado + vuelco de signos en presentacion),
+4 (sociedad civil / distribucion a socias) y 5 (campo fecha en el saldo inicial).
+
 ## [Fase 0 — Variables de entorno en Vercel] - 2026-08-27
 
 Cierre del pendiente 1 de Fase 0: las 4 variables cargadas en el panel de Vercel, con las

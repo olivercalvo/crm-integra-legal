@@ -40,12 +40,13 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
 
   // URL firmada para previsualizar el receipt (válida por 1 hora)
-  let receiptPublicUrl: string | null = null;
+  // URL FIRMADA con vencimiento (1 h). El bucket `documents` es privado.
+  let receiptSignedUrl: string | null = null;
   if (expense.receipt_url) {
     const { data } = await ctx.db.storage
       .from("documents")
       .createSignedUrl(expense.receipt_url, 3600);
-    receiptPublicUrl = data?.signedUrl ?? null;
+    receiptSignedUrl = data?.signedUrl ?? null;
   }
 
   const savedFlag = searchParams.saved === "1";
@@ -222,7 +223,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               receiptUrl={expense.receipt_url}
               receiptFilename={expense.receipt_filename}
               canMutate={canMutate}
-              publicUrl={receiptPublicUrl}
+              signedUrl={receiptSignedUrl}
             />
           </section>
 

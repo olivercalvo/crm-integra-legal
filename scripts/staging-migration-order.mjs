@@ -74,4 +74,5 @@ export const BUNDLE_2 = [
   "sql/pending/029_restaurar_check_reversion.sql",
   "sql/pending/030_ledger_permisos_y_periodos.sql",
   "sql/pending/storage_rls_tenant_scoped.sql",
+  "sql/pending/031_bucket_documents_privado.sql",
 ];

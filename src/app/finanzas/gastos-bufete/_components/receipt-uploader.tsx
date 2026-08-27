@@ -14,7 +14,11 @@ interface Props {
   /** Si el usuario puede mutar (admin/abogada/contador). */
   canMutate: boolean;
   /** URL pública/firmada para previsualizar el comprobante existente, si aplica. */
-  publicUrl: string | null;
+  /**
+   * URL FIRMADA con vencimiento, NO una URL pública. El bucket `documents` es
+   * privado: no existe URL anónima para estos archivos.
+   */
+  signedUrl: string | null;
 }
 
 const ALLOWED_EXTS = ["jpg", "jpeg", "png", "pdf"];
@@ -31,7 +35,7 @@ export function ReceiptUploader({
   receiptUrl,
   receiptFilename,
   canMutate,
-  publicUrl,
+  signedUrl,
 }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -160,9 +164,9 @@ export function ReceiptUploader({
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {publicUrl && (
+          {signedUrl && (
             <a
-              href={publicUrl}
+              href={signedUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-integra-navy hover:bg-white"

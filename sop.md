@@ -804,3 +804,66 @@ sobre qué mostrar cuando el asiento tiene más de dos líneas cae exactamente a
 
 Para saber si una contrapartida es ambigua, usar `contrapartidaEsAmbigua()` y **nunca comparar
 el texto contra "Varios"**: esa etiqueta es lo primero que va a cambiar.
+
+---
+
+## SOP-015: El bucket `documents` es PRIVADO
+
+### Qué significa privado, y qué NO significa
+
+Privado quita **la URL anónima**: `/storage/v1/object/public/documents/...` deja de servir
+nada. No dice nada sobre quién puede leer qué — **eso lo deciden las políticas de
+`storage.objects`**, que son cosa aparte.
+
+Las dos piezas tienen que estar. Un bucket privado sin políticas por tenant seguiría dejando
+que un usuario del bufete A leyera los archivos del B.
+
+### Cómo se lee un archivo
+
+Siempre por **URL firmada con vencimiento** (`createSignedUrl`) generada del lado servidor, o
+por `download()` con el cliente de servicio.
+
+🔴 **NUNCA `getPublicUrl()`.** No hay ni un uso en el repo y no debe haberlo: con el bucket
+privado devuelve una URL que da 400, y el error no se ve hasta que un usuario hace clic.
+
+Si aparece una variable llamada `publicUrl` o `receiptPublicUrl`, es un nombre viejo que
+miente — todas llevan URLs firmadas. Se renombraron a `signedUrl` justamente para que nadie
+deduzca del nombre que puede usar `getPublicUrl`.
+
+### Qué NO se rompe con el bucket privado (verificado)
+
+- `scripts/backup-supabase.mjs` baja los archivos con la **service key**
+  (`Authorization: Bearer`), no como anónimo.
+- `src/lib/storage/direct-upload.ts` sube con el **JWT del usuario**. Las subidas siempre
+  fueron autenticadas.
+- El correo de cotización adjunta un **buffer** que sale de `db.storage.download()`, no de una
+  URL. El portal público tampoco sirve el PDF por URL.
+
+### Verificación de la propiedad de seguridad
+
+No se prueba con clics: se prueba contra la API, que aísla exactamente lo que importa.
+
+| Prueba | Esperado |
+|---|---|
+| Subir con el JWT del usuario a su propia carpeta | 200 |
+| Leer su propio archivo con su JWT | 200 |
+| URL firmada con service key | 200 |
+| `/object/public/...` anónimo | **400** |
+| `/object/...` sin token | **400** |
+| Leer la carpeta de OTRO tenant con el mismo JWT | **400** |
+| Subir a la carpeta de OTRO tenant | **400** |
+
+Las políticas comparan `(storage.foldername(name))[1]` contra
+`jwt -> app_metadata ->> 'tenant_id'`, y eso calza con la ruta que arma `direct-upload.ts`:
+`${tenantId}/${prefijo}/${archivo}`. **Si alguna vez se cambia esa ruta, hay que mover las
+políticas con ella** o el aislamiento se rompe en silencio.
+
+### Producción
+
+El cambio es de configuración y va con la **pausa obligatoria** del CLAUDE.md: lo hace Oliver.
+
+Dashboard de Supabase → **Storage** → bucket `documents` → menú **···** → **Edit bucket** →
+apagar **Public bucket** → **Save**.
+
+**Reversible al instante** volviendo a encender el switch. No migra ni reescribe archivos: es
+un flag en `storage.buckets.public`.

@@ -74,6 +74,16 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   una cosita rápida", ni poniendo sus credenciales en `.env.local`. El único camino a
   producción es un merge a `main` que dispare el auto-deploy
 
+### Storage
+- El bucket `documents` es **PRIVADO**. Se lee SIEMPRE por URL firmada con vencimiento
+  (`createSignedUrl`) o por `download()` con el cliente de servicio.
+- 🔴 **NUNCA `getPublicUrl()`.** Con el bucket privado devuelve una URL que da 400 y el error
+  no aparece hasta que un usuario hace clic. Cero usos en el repo: que siga así.
+- Privado NO es lo mismo que aislado. El aislamiento por bufete lo dan las políticas de
+  `storage.objects`, que comparan la PRIMERA CARPETA de la ruta contra el `tenant_id` del JWT.
+  Si se cambia el formato de ruta de `direct-upload.ts`, hay que mover las políticas con él.
+  Ver `sop.md` SOP-015.
+
 ### Ledger contable (desde Fase 2, 2026-08-27)
 - **Al ledger se escribe SOLO por `post_journal_entry`**, nunca con INSERT directo. Es una
   función de Postgres, no código de app, porque los triggers de inmutabilidad de `023`

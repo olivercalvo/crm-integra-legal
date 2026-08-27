@@ -1,5 +1,84 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Seguridad — bucket `documents` privado] - 2026-08-27
+
+En produccion el bucket esta marcado como PUBLICO: cualquiera con la URL exacta descarga un
+expediente sin autenticarse. Confidencialidad de cliente y Ley 81.
+
+**Produccion NO se toco.** Staging verificado; el cambio en produccion es un toggle que hace
+Oliver (ver `sop.md` SOP-015).
+
+### Verificacion del codigo — la lectura de Oliver se confirmo
+
+- **CERO** usos de `getPublicUrl()` en todo el repo.
+- **CERO** URLs de storage armadas a mano con `/object/public/`.
+- Los 11 puntos que leen del bucket usan `createSignedUrl` con vencimiento.
+- Aparecieron 3 usos de URLs de storage armadas a mano, y los 3 estan bien:
+  `backup-supabase.mjs` (dos) usa la **service key**, y `direct-upload.ts` el **JWT del
+  usuario**. Ninguno depende de que el bucket sea publico. El respaldo nocturno sigue
+  funcionando.
+- El correo de cotizacion adjunta un **buffer** que sale de `db.storage.download()`, no de una
+  URL: **no puede romperse con este cambio**.
+- `pdf_download_link` en la plantilla de correo esta documentado como "URL publica" pero
+  **nadie lo setea**: es una prop muerta con un comentario que engaña.
+
+### Las politicas de storage SI aislan por tenant
+
+Cuatro politicas (SELECT/INSERT/UPDATE/DELETE), todas para `authenticated`, comparando
+`(storage.foldername(name))[1]` contra `jwt -> app_metadata ->> 'tenant_id'`. Calza con la ruta
+que arma `direct-upload.ts`. Sin politica para `anon`, y con RLS activo, el anonimo no ve nada.
+
+**No era el mismo agujero que el del ledger**: aca la base ya estaba bien cerrada.
+
+### ⚠️ HALLAZGO: en staging el bucket NO EXISTIA
+
+`storage.buckets` y `storage.objects` en CERO. Las politicas de la Fase 0 si se habian
+aplicado, pero el bucket nunca se creo — o sea que ninguna subida podia funcionar y ese camino
+jamas se probo en staging.
+
+Migracion `031`: crea el bucket si falta y lo deja privado. Va en BUNDLE_2 despues de las
+politicas.
+
+### Verificacion contra la API (8 pruebas, staging)
+
+| Prueba | Resultado |
+|---|---|
+| Subir con el JWT del usuario a su propia carpeta | 200 ✓ |
+| Leer su propio archivo con su JWT | 200 ✓ |
+| URL firmada con service key (lo que hace la app) | 200, 193 bytes ✓ |
+| `/object/public/...` anonimo | **400** ✓ |
+| `/object/...` sin token | **400** ✓ |
+| Leer carpeta de OTRO tenant con el mismo JWT | **400** ✓ |
+| Subir a carpeta de OTRO tenant | **400** ✓ |
+| `app_metadata.tenant_id` presente en el JWT | ✓ |
+
+Se verifico contra la API y no por la UI a proposito: aisla exactamente la propiedad de
+seguridad, sin depender de que un clic funcione.
+
+### ❌ Lo que NO se pudo verificar por la UI
+
+El ciclo por pantalla quedo **sin completar**. Ni la subida de documento ni la descarga de PDF
+llegaron a disparar una peticion — confirmado en el log del server de desarrollo, que no
+registra ni el POST ni el GET. Fallaron en la capa de automatizacion del navegador, no en la
+app.
+
+De paso aparecio un **bug de hidratacion preexistente** en el detalle de caso: un `Badge`
+(`<div>`) dentro de un `<p>` en `ExpedienteDetailPage`. React reemplaza el arbol entero
+("The server HTML was replaced with client content"), lo que probablemente se come los
+clics. **No tiene relacion con storage** y no se toco.
+
+### Higiene
+
+`publicUrl` y `receiptPublicUrl` renombradas a `signedUrl` / `receiptSignedUrl`. El nombre
+mentia —siempre llevaron URLs firmadas— y es justo lo que hace que alguien piense "esto es
+publico, puedo usar getPublicUrl".
+
+### Para produccion
+
+`docs/runbooks/consulta-produccion-storage-keys.sql`: consulta de SOLO LECTURA para el SQL
+Editor. Staging tiene las 20 columnas candidatas VACIAS, asi que **staging no puede responder
+si produccion guarda URLs completas** — solo produccion puede.
+
 ## [Fase 2 — cierre de la escritura directa al ledger] - 2026-08-27
 
 Aplica el hallazgo de seguridad del bloque anterior, mas la auto-creacion acotada de periodos.

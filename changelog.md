@@ -1,5 +1,68 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fix — hidratacion en el detalle de caso + limpieza del correo] - 2026-08-27
+
+### El bug de hidratacion, arreglado
+
+`Badge` renderiza un `<div>` y estaba metido dentro de un `<p>` en cuatro puntos del detalle
+de caso (fechas de inicio, tope y ultimo seguimiento). HTML invalido: React lo detecta y
+reemplaza el arbol entero ("The server HTML was replaced with client content").
+
+Los cuatro `<p className="font-medium">` que contienen un Badge pasaron a `<div>`, con las
+mismas clases. El resto de los `<p>` del archivo se dejo intacto: llevan solo texto y ahi
+`<p>` es correcto.
+
+**Se reviso TODO el repo** buscando el patron copiado — no solo Badge, sino los 9 componentes
+de `ui/` que renderizan un `<div>` (Badge, Card, CardContent, CardHeader, CardTitle,
+CardDescription, CardFooter, SheetHeader, SheetFooter), en bloques multilinea y de una sola
+linea, mas `<div>` literal. **Las cuatro ocurrencias estaban todas en el mismo archivo**: no se
+habia copiado a otras pantallas.
+
+Verificado con la consola limpia: **cero errores**, y el badge rojo "1 error" del overlay de
+Next desaparecio.
+
+### ⚠️ CORRECCION: la hipotesis sobre los clics era MIA Y ERA ERRONEA
+
+Se habia reportado que el error de hidratacion probablemente se comia los clics. **No era
+eso.** Con el bug arreglado y la consola en cero, el clic sintetico de la extension SIGUE sin
+disparar peticion.
+
+Un `btn.click()` programatico en la misma pagina funciona perfecto y completa el ciclo. O sea
+que el problema es de la automatizacion del navegador, no de la app, y **el asistente nunca
+estuvo afectado**. El bug de hidratacion era real y valia arreglarlo; la consecuencia que se
+le atribuyo, no.
+
+### El ciclo de storage, ahora SI verificado por la app
+
+Lo que la vez pasada quedo pendiente:
+
+| Paso | Resultado |
+|---|---|
+| `GET /api/storage/prepare` | 200 |
+| Subida directa con el JWT del usuario | ok |
+| `POST /api/documents/register` | 201 |
+| Objeto fisico en el bucket privado | 81 bytes, `application/pdf` |
+| Key guardada | `{tenant}/case/{caseId}/{ts}_archivo.pdf` — el primer nivel es el tenant, como exigen las politicas |
+| `GET /api/documents/[id]/url` | 200, devuelve URL **firmada** (`token=`, NO `/object/public/`) |
+| Descarga de esa URL | 200, 81 bytes |
+
+Todo con el bucket PRIVADO. Los artefactos de prueba se borraron: bucket y tabla `documents`
+quedaron en cero.
+
+### `pdf_download_link` eliminado
+
+Estaba documentado como "URL publica para descargar el PDF directamente", **nadie lo seteaba**,
+y era justo el comentario que podia hacer que alguien concluyera que el bucket tiene que ser
+publico. Se saco la prop, su variable derivada y las dos ramas condicionales (HTML y texto
+plano), que ahora dicen siempre "El PDF tambien va adjunto a este correo".
+
+### Higiene detectada, no tocada
+
+El navegador de Oliver tiene TRES cookies de sesion de Supabase, una de ellas del proyecto de
+**produccion** (`sb-uqmmkklbhzxqybljiecs-auth-token`) — resto de cuando localhost apuntaba a
+la base real, antes de la Fase 0. No molesta, pero es una credencial de produccion viva en el
+navegador. Conviene borrarla.
+
 ## [Seguridad — bucket `documents` privado] - 2026-08-27
 
 En produccion el bucket esta marcado como PUBLICO: cualquiera con la URL exacta descarga un

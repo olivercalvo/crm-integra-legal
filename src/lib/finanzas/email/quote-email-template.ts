@@ -39,8 +39,6 @@ export interface QuoteEmailProps {
   line_summary?: QuoteEmailLineSummary[];
   /** Si line_summary fue truncada, indica cuántas líneas adicionales hay. */
   extra_lines_count?: number;
-  /** URL pública para descargar el PDF directamente (sin abrir el portal). */
-  pdf_download_link?: string;
   /**
    * @deprecated Antes (Sprint 2E.3) un único string. Mantenido por
    * compatibilidad con callers existentes — si llega, se muestra abajo
@@ -90,7 +88,6 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
     sent_by_name,
     line_summary,
     extra_lines_count,
-    pdf_download_link,
     summary_line,
   } = props;
 
@@ -121,8 +118,6 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
     extra_lines_count && extra_lines_count > 0
       ? `<tr><td colspan="2" style="padding:6px 0 0;font-size:12px;color:${GRAY_500};font-style:italic;border-top:1px solid ${GRAY_200};">y ${extra_lines_count} línea${extra_lines_count === 1 ? "" : "s"} más en el PDF adjunto</td></tr>`
       : "";
-
-  const safePdfLink = pdf_download_link ? escapeHtml(pdf_download_link) : "";
 
   return `<!doctype html>
 <html lang="es">
@@ -190,11 +185,9 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                   </tr>
                 </table>
 
-                ${safePdfLink ? `<p style="margin:6px 0 18px;font-size:13px;color:${GRAY_500};">
-                  O <a href="${safePdfLink}" style="color:${NAVY};text-decoration:underline;">descargar el PDF directamente</a>.
-                </p>` : `<p style="margin:6px 0 18px;font-size:13px;color:${GRAY_500};">
+                <p style="margin:6px 0 18px;font-size:13px;color:${GRAY_500};">
                   El PDF también va adjunto a este correo.
-                </p>`}
+                </p>
 
                 <p style="margin:14px 0;font-size:14px;line-height:1.6;color:${GRAY_700};">
                   Desde el portal online puedes aceptar o rechazar la cotización
@@ -239,7 +232,6 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
     sent_by_name,
     line_summary,
     extra_lines_count,
-    pdf_download_link,
     summary_line,
   } = props;
 
@@ -271,9 +263,7 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
   lines.push(
     "",
     `Ver cotización online: ${public_link}`,
-    pdf_download_link
-      ? `Descargar PDF: ${pdf_download_link}`
-      : "El PDF también va adjunto a este correo.",
+    "El PDF también va adjunto a este correo.",
     "",
     "Desde el portal puedes aceptar o rechazar la cotización con tu firma",
     "electrónica. Si prefieres discutir algún detalle primero, basta con",

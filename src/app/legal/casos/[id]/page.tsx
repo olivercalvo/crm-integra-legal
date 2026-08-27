@@ -450,10 +450,10 @@ export default async function ExpedienteDetailPage({
                         <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
                         <div>
                           <p className="text-xs text-gray-500">Fecha inicio caso</p>
-                          <p className="font-medium">
+                          <div className="font-medium">
                             {formatDate(caseData.case_start_date)}
                             {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -468,10 +468,10 @@ export default async function ExpedienteDetailPage({
                         <Calendar size={15} className="mt-0.5 shrink-0 text-gray-400" />
                         <div>
                           <p className="text-xs text-gray-500">Fecha inicio trámite</p>
-                          <p className="font-medium">
+                          <div className="font-medium">
                             {formatDate(caseData.procedure_start_date)}
                             {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">{d} días</Badge>}
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -487,14 +487,14 @@ export default async function ExpedienteDetailPage({
                         <Clock size={15} className={`mt-0.5 shrink-0 ${isPastDue ? "text-red-500" : "text-gray-400"}`} />
                         <div>
                           <p className="text-xs text-gray-500">Fecha tope</p>
-                          <p className="font-medium">
+                          <div className="font-medium">
                             {formatDate(caseData.deadline)}
                             {isPastDue
                               ? <Badge className="ml-2 border-transparent bg-red-100 text-red-700 text-xs">Vencido hace {d} días</Badge>
                               : d !== null
                                 ? <Badge className="ml-2 border-transparent bg-green-100 text-green-700 text-xs">Faltan {Math.abs(d)} días</Badge>
                                 : null}
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </>
@@ -509,10 +509,10 @@ export default async function ExpedienteDetailPage({
                         <MessageSquare size={15} className="mt-0.5 shrink-0 text-gray-400" />
                         <div>
                           <p className="text-xs text-gray-500">Último seguimiento</p>
-                          <p className="font-medium">
+                          <div className="font-medium">
                             {formatDate(caseData.last_followup_at)}
                             {d !== null && <Badge className="ml-2 border-transparent bg-gray-100 text-gray-600 text-xs">hace {d} días</Badge>}
-                          </p>
+                          </div>
                         </div>
                       </div>
                     </>

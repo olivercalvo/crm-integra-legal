@@ -1,5 +1,131 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Libro Mayor + siembra con documentos reales] - 2026-08-28
+
+### Contexto: diagnóstico tras el reinicio del 27/08
+
+La laptop se reinició mientras se construía el bloque del Libro Mayor. El diagnóstico dio
+**el motor sano**: 8 asientos, 23 líneas, cero cabeceras sin líneas, cadena de hash íntegra,
+cero huecos en el correlativo, los 8 cuadrados. El posteo atómico del RPC aguantó su primera
+corrida real fuera de un test con ROLLBACK. Migraciones 023→031 completas en staging, ninguna
+a medias; la 022 sigue sin aplicar, como corresponde.
+
+### 🔴 EL HALLAZGO: el script se editó DESPUÉS de correr
+
+Los asientos se postearon 16:54:07; `seed-asientos.ts` quedó con mtime 17:06:27. En esos doce
+minutos se le agregó la trazabilidad nivel 2 — el `source_id` pasó de un UUIDv5 sintético al
+id de la factura real. **La clave de idempotencia cambió bajo los pies.**
+
+Consecuencias, las tres verificadas contra la base:
+
+1. Los 3 asientos de factura apuntaban a la nada (`LEFT JOIN invoices` → NULL en los tres).
+   Confirmado recalculando los UUIDv5: los 8 `source_id` eran `id('asiento:<clave>')`.
+2. Las descripciones citaban `FE-0001`, numeración que no existe: staging factura `FAC-HON-*`.
+3. **Re-correr el seed habría duplicado los 3 asientos de factura** — doble ingreso, doble
+   ITBMS, doble CxC, imborrable (los triggers de 023 rechazan DELETE) y sin un error.
+
+Se reseteó staging y se volvió a sembrar. El motivo del reset no fue "siembra incompleta"
+—estaba completa— sino que apuntaba al vacío justo donde se iba a desarrollar el enlace.
+
+### Regla nueva del seed: ningún asiento sin documento que exista
+
+Se extendió la siembra para que **todo `source_type` tenga su documento real**:
+
+| tipo | documento | quién lo crea |
+|---|---|---|
+| `factura` | `invoices` | `seed:staging` (ya existían) |
+| `gasto` | `business_expenses` | `seed:asientos` — 3 filas nuevas |
+| `pago` | `payments` + `payment_applications` | `seed:asientos` — 2 pagos |
+| `manual` | ninguno, y `source_id` va **NULL** | — |
+
+El asiento de diario es el único sin documento porque un asiento manual no tiene documento de
+origen: su origen es él mismo. Ponerle un id sintético sería repetir el error del 27/08.
+
+**Y los montos salen del documento, no al revés.** Las facturas ya existen, así que el asiento
+se arma desde `subtotal_total` / `tax_total` / `grand_total`. Antes el fixture hardcodeaba
+4815 contra una factura de 1070: un descuadre que después nadie sabe si es bug o dato de
+prueba. Los gastos y cobros los crea el script, así que ahí el documento se deriva del
+asiento. En los dos casos hay **una sola fuente de verdad por operación**, y la contrapartida
+de los gastos se genera por la suma del desglose para que no pueda descuadrar.
+
+Idempotencia: por `source_id` cuando hay documento; por (tipo, descripción, fecha) para el
+asiento de diario. Verificado — segunda corrida: 0 nuevos, 10 ya existían, ledger intacto.
+
+### 🛡️ Blindaje contra lo que pasó: `verificarOrigenesHuerfanos()`
+
+Antes de escribir nada, el seed revisa si hay asientos de un tipo con documento cuyo
+`source_id` no resuelve. Si aparece alguno, **aborta** y pide un reset en vez de sembrar
+encima. No se puede evitar que la clave cambie; sí detectarlo antes de duplicar.
+
+**Probado de verdad, no solo escrito:** se borró un `business_expense`, el seed abortó
+nombrando el asiento huérfano, y no escribió nada (10 asientos / 27 líneas intactos). La fila
+se restauró con su id determinístico.
+
+### Libro Mayor — el bloque
+
+- `libro-mayor.ts` — armado puro. Fila de saldo inicial siempre, saldo corrido, pie con neto
+  del período **y** saldo final rotulados. Las tres decisiones pendientes de Josuar
+  (contrapartida ambigua, qué va en el pie, signo del importe) aisladas a una función cada una.
+- `libro-mayor-source.ts` — la lectura. Dos consultas y no un join: filtrar por cuenta se
+  llevaría puestas las líneas hermanas que hacen falta para resolver la contrapartida.
+- `/finanzas/reportes/mayor` — página con selector de cuenta y filtro de fechas.
+- **Trazabilidad nivel 1:** código y nombre de cada cuenta del Balance y del Estado de
+  Resultado enlazan a su mayor. Los renglones `estructural` del ER (distribución a socias) no
+  llevan enlace: no vienen del plan de cuentas.
+- **Trazabilidad nivel 2:** cada renglón del mayor enlaza al documento que lo originó.
+
+`loadOrigenesExistentes()` (devolvía un Set de "existe") pasó a `loadDestinosDeOrigen()`, que
+devuelve `Map<source_id, ruta>`. El motivo es concreto: **el destino de un pago no se deduce de
+su `source_id`** — los pagos no tienen pantalla propia, viven en el detalle de la factura, así
+que hay que preguntar a qué factura se aplicaron. Eso es una consulta y va en la capa de datos.
+Un pago aplicado a varias facturas no tiene destino único y se queda sin enlace.
+
+### Verificado en el navegador (staging, `localhost:3001`)
+
+Mayor de `100004 Cuentas por Cobrar Clientes`: saldo inicial 191,947.55 → seis movimientos de
+los dos lados → saldo final 194,842.55. Débitos 4,965.00, créditos 2,070.00, neto 2,895.00.
+Coincide dígito por dígito con el mismo mayor calculado en SQL con una window function.
+
+- Balance General → clic en la cuenta → su mayor. ✅ (14 enlaces, código y nombre)
+- Mayor → clic en el renglón → factura / gasto. ✅
+- **Pago → la factura que canceló.** ✅ El asiento 7 lleva a FAC-HON-000001, y ahí se ve el
+  pago sembrado (20/04/2026, B/. 1,070.00, transferencia) en una sección que nunca había
+  tenido datos.
+- Asiento de diario → **sin enlace**, correcto. En el mayor de `610008` se ven juntos: el
+  gasto con enlace y contrapartida inequívoca, y el manual sin enlace y con "Varios*".
+- La factura de REEMBOLSO deja el asiento de dos líneas, así que muestra contrapartida
+  inequívoca donde las de tres muestran "Varios*". Las dos ramas de `contrapartidaDe()`
+  visibles sobre datos reales.
+
+El Balance muestra la CxC en 191,947.55, exactamente la fila "Saldo inicial" del mayor — que
+es lo que el aviso azul de la pantalla promete, porque los reportes todavía se arman solo con
+saldos de apertura.
+
+### Chequeos
+
+typecheck 0 errores · 369 tests, 297 pass, 0 fail, 72 skipped (los skipped son `skipNoMocks`
+preexistentes) · lint sin hallazgos nuevos.
+
+### Anotado, no tocado
+
+- `lint` tiene 2 errores preexistentes en archivos ajenos a este bloque:
+  `queries/business-expenses.ts:111` (`prefer-const`) y `utils/import-parser.ts:259`
+  (`no-unused-vars`).
+- Las facturas del fixture de staging traen `amount_paid` puesto a mano sin `payment` detrás.
+  En FAC-REI-000001 se ve "PAGADO $150.00" junto a "Aún no hay pagos registrados". Preexistente
+  del `seed-staging`; solo quedó más visible al lado de las dos que ahora sí tienen pago real.
+- El dev server de Next se colgó una vez a mitad de la verificación (dejó de responder incluso
+  `/api/health`). Se mató y se levantó de nuevo; no era del código, la ruta responde en 19 ms.
+- El puerto 3000 lo ocupa otro proyecto (`node scripts/servir.mjs`), así que el dev server
+  quedó en **3001**.
+
+### El tratamiento del reembolso es una elección del fixture
+
+El crédito de una factura de REEMBOLSO va contra `500005 Costos tramites legales`, para que
+staging tenga el caso "factura sin ITBMS". **No es una regla contable confirmada**: cuando se
+cablee factura→asiento de verdad, el criterio lo define el contador.
+
+
 ## [Fix — hidratacion en el detalle de caso + limpieza del correo] - 2026-08-27
 
 ### El bug de hidratacion, arreglado

@@ -446,6 +446,53 @@ la confirme el contador.
 Es obligatoria en cuanto el saldo no es 0 y se descarta cuando la cuenta abre en cero. Periodo
 fiscal: 1 de enero a 31 de diciembre.
 
+### LIBRO MAYOR — trazabilidad del saldo al documento
+
+El requisito que Josuar repitió tres veces: desde un saldo de un reporte hay que poder llegar
+al documento que lo originó. Se resolvió en dos saltos, cada uno un clic.
+
+**Nivel 1 — del reporte al mayor.** El código y el nombre de cada cuenta del Balance General y
+del Estado de Resultado enlazan al mayor de esa cuenta. El enlace va en el código y el nombre,
+**no en el monto**: el monto se lee y se compara, y volverlo clickeable invita a seleccionarlo
+sin querer. Los renglones estructurales del ER (la distribución a socias) no llevan enlace
+porque no vienen del plan de cuentas.
+
+**Nivel 2 — del mayor al documento.** Cada renglón enlaza a lo que lo originó:
+
+| Origen del asiento | Lleva a |
+|---|---|
+| Factura / nota de crédito | el detalle de la factura |
+| Gasto del bufete | el detalle del gasto |
+| Pago | **la factura que canceló** (los pagos no tienen pantalla propia: viven en el detalle) |
+| Asiento de diario, apertura, reversión | nada — no tienen documento de origen |
+
+Un pago aplicado a varias facturas no tiene destino único, así que se queda sin enlace. Y
+antes de ofrecer un enlace se verifica que el documento **exista**: el asiento es inmutable y
+su `source_id` puede haber quedado apuntando a algo que se borró. **Un enlace que lleva a una
+pantalla vacía es peor que no tener enlace: hace dudar del reporte entero.** Lo que no se
+puede resolver se muestra como número de asiento sin enlace.
+
+**La pantalla.** Columnas y orden del modelo de Josuar: fecha · tipo de transacción · número ·
+nombre · descripción · cuenta de contrapartida · importe · saldo. Cada cuenta abre con una fila
+**Saldo inicial** —siempre, aunque sea 0, porque su ausencia haría parecer que la cuenta abrió
+en cero cuando quizá abrió sin cargar— y cierra con el neto del período **y** el saldo final,
+rotulados por separado.
+
+**Tres decisiones abiertas del contador**, cada una aislada a una sola función para que
+contestarlas sea cambiar un lugar y no rastrear el criterio por media pantalla:
+
+1. **Contrapartida ambigua.** Cuando el asiento tiene más de una cuenta del lado opuesto hoy
+   se muestra "Varios" con un asterisco y su explicación al pie.
+2. **Qué va en el recuadro del pie.** En el modelo de Josuar es el NETO de movimientos, no el
+   saldo final; el requisito escrito decía solo "cierra con su total". Se muestran los dos.
+3. **Signo del importe.** Hoy es convención de balanza (débito positivo, crédito negativo),
+   igual que el Balance General. La alternativa es mostrarlo según la naturaleza de la cuenta.
+
+**Advertencia visible en la pantalla:** el mayor lee del libro de asientos, mientras el Balance
+y el Estado de Resultado todavía se arman solo con los saldos de apertura. O sea que **no
+coinciden**, y un contador que compare los números tiene que saber por qué. La fila "Saldo
+inicial" de cada cuenta es exactamente el número que muestran esos reportes.
+
 ---
 
 ## REQUERIMIENTOS NO FUNCIONALES

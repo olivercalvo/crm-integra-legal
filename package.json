@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed:staging": "tsx scripts/seed-staging.ts"
+    "seed:staging": "tsx scripts/seed-staging.ts",
+    "seed:asientos": "tsx scripts/seed-asientos.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.11",

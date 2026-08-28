@@ -1,6 +1,41 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — FASE 2: MOTOR DE POSTEO LISTO — 27/08/2026 <<<
+## >>> RETOMAR ACA — LIBRO MAYOR ENTREGADO — 28/08/2026 <<<
+
+**Lo que sigue:** el correo con las NUEVE consultas y la llamada de validacion con RM. **El
+modulo de compras sigue sin arrancar** hasta esa validacion.
+
+### El Libro Mayor SÍ se construyó, por decisión explícita del 28/08
+
+El gate de abajo decía "no se arranca el Libro Mayor hasta la validacion". Se levantó a
+propósito, y con una razón: las tres decisiones pendientes de Josuar que lo afectan están
+**aisladas a una función cada una** (`contrapartidaDe`, `totalesDePie`, `importeDeLinea`), con
+las dos alternativas escritas en el comentario y tests que marcan qué asserts cambian según la
+respuesta. Cuando conteste, se toca eso y nada más. Lo que sigue congelado es el cableado
+factura→asiento, que es lo que de verdad seria caro corregir.
+
+### Estado del Libro Mayor
+
+Entregado y verificado contra staging: mayor por cuenta con saldo inicial, movimientos de los
+dos lados y saldo corrido; trazabilidad nivel 1 (reporte → mayor) y nivel 2 (mayor →
+factura / gasto / la factura que cancelo un pago). Detalle en `changelog.md` del 28/08 y en
+`sop.md` SOP-016.
+
+**Lo que el mayor NO hace todavía, y está dicho en pantalla:** el Balance General y el Estado
+de Resultado siguen armandose solo con saldos de apertura, así que no incluyen estos
+movimientos. La fila "Saldo inicial" de cada cuenta es exactamente el número que muestran esos
+reportes. Cambiar `accounting-source.ts` haría que staging deje de coincidir con el Excel de
+Josuar, que es el baseline contra el que RM va a validar — va en el mismo bloque que el
+cableado, después de la validacion.
+
+### Lección del reinicio del 27/08 — ya incorporada al código
+
+El seed se editó DESPUÉS de haber corrido y la clave de idempotencia cambió bajo los pies:
+re-correrlo habría duplicado contabilidad imborrable en silencio. Hoy `seed-asientos.ts`
+verifica antes de escribir si hay asientos cuyo `source_id` no resuelve y aborta pidiendo un
+reset. **Tocar cómo se calcula el `source_id` obliga a resetear staging, no a re-correr.**
+
+### El gate original, para que quede el registro
 
 **ACA PARAMOS.** Se manda el correo con las NUEVE consultas (abajo) y se pide la llamada de
 validacion con RM. **NO se arranca el modulo de compras ni el Libro Mayor** hasta esa

@@ -867,3 +867,83 @@ apagar **Public bucket** → **Save**.
 
 **Reversible al instante** volviendo a encender el switch. No migra ni reescribe archivos: es
 un flag en `storage.buckets.public`.
+
+---
+
+## SOP-016: Sembrar el ledger en staging (`seed:asientos`)
+
+**Cuándo:** cuando staging necesita asientos con qué probar el Libro Mayor, o después de un
+reset. **Nunca en producción**: el script tiene dos candados (project ref y
+`NEXT_PUBLIC_APP_ENV`) y aborta antes de tocar nada.
+
+### La secuencia, en orden
+
+```
+node scripts/apply-staging-sql.mjs --reset   # solo si hay que arrancar de cero
+npm run seed:staging                          # clientes, casos, plan de cuentas, FACTURAS
+npm run seed:asientos                         # gastos, pagos y los asientos
+```
+
+`seed:asientos` **depende** de `seed:staging`: las facturas tienen que existir antes, porque el
+asiento se arma desde la factura real. Si faltan, aborta diciendo cuál.
+
+### La regla: ningún asiento sin documento que exista
+
+Todo `source_type` que aparezca en el fixture tiene su documento real. Los gastos
+(`business_expenses`) y los cobros (`payments` + `payment_applications`) los crea el propio
+script con id UUIDv5 determinístico. El asiento de diario (`manual`) es el único sin
+documento, y por eso su `source_id` va en **NULL** — no un id sintético.
+
+**Los montos salen del documento, no al revés.** Un asiento que dice "factura X" por un
+importe que no es el de X es un descuadre que después nadie sabe si es bug o dato de prueba.
+
+### 🛡️ Si el seed aborta con "asientos que apuntan a un documento que NO existe"
+
+**No lo forces y no borres nada.** Es el blindaje haciendo su trabajo, y el diagnóstico es
+casi siempre el mismo: la clave de idempotencia del seed cambió después de que el seed corrió.
+
+Pasó el **27/08/2026**. El script se editó doce minutos después de haber posteado, cambiando el
+`source_id` de los asientos de factura de un UUIDv5 sintético al id de la factura real. Los
+asientos ya escritos dejaron de reconocerse como propios, y una segunda corrida los habría
+duplicado: doble ingreso, doble ITBMS, doble cuenta por cobrar. **Imborrable** — los triggers
+de `023` rechazan DELETE — y sin un solo mensaje de error.
+
+La salida es resetear y volver a sembrar, que es exactamente lo que el mensaje del abort dice.
+
+### Por qué no alcanza con "correrlo de nuevo"
+
+Un ledger es append-only: no hay upsert de un asiento. La idempotencia se apoya en una clave
+externa (`source_id`, o (tipo, descripción, fecha) para el diario). Si esa clave se toca, la
+idempotencia se rompe hacia atrás y no hay forma de repararla desde la app. De ahí la regla
+práctica: **tocar cómo se calcula el `source_id` obliga a resetear staging**, no a re-correr.
+
+### Qué deja sembrado (10 asientos, 27 líneas)
+
+| # | tipo | documento | para qué caso del mayor |
+|---|---|---|---|
+| 1-3 | gasto | 3 `business_expenses` | uno de 4 líneas: varias cuentas contra UNA cuenta por pagar |
+| 4 | manual | ninguno | 2 cuentas de cada lado → contrapartida **ambigua** |
+| 5,8,9 | factura | FAC-HON-000001/2/3 | 3 líneas con ITBMS |
+| 6 | factura | FAC-REI-000001 | REEMBOLSO exento → 2 líneas, contrapartida inequívoca |
+| 7,10 | pago | 2 `payments` | uno total y uno **parcial** |
+
+La cuenta para verlo todo junto es `100004 Cuentas por Cobrar Clientes`: saldo inicial,
+movimientos de los dos lados y saldo corrido. Y `610008 Utiles de Oficina` muestra en la misma
+pantalla un renglón con enlace al documento y otro (el manual) sin enlace.
+
+### Verificación después de sembrar
+
+El script ya corre `verify_accounting_chain` y el blindaje al cerrar. Si querés confirmarlo
+aparte, lo que tiene que dar:
+
+```sql
+SELECT (SELECT count(*) FROM journal_entries)                       AS asientos,      -- 10
+       (SELECT count(*) FROM journal_entry_lines)                   AS lineas,        -- 27
+       (SELECT count(*) FROM journal_entries je WHERE NOT EXISTS
+         (SELECT 1 FROM journal_entry_lines l WHERE l.entry_id=je.id)) AS sin_lineas, -- 0
+       (SELECT count(*) FROM verify_accounting_chain('<tenant>'))   AS cadena_rota;   -- 0
+```
+
+`sin_lineas` distinto de 0 **no es un problema del seed, es un agujero en el motor de posteo**:
+el RPC es atómico y una cabecera sin líneas no debería poder existir. Eso pasa a ser prioridad
+por encima de cualquier reporte.

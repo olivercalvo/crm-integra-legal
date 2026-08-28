@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type {
   EstadoResultadoNiif18,
   FilaER,
@@ -81,10 +82,37 @@ function Fila({ fila }: { fila: FilaER }) {
       );
 
     case "cuenta":
+      // TRAZABILIDAD NIVEL 1 — clic en la cuenta abre su Libro Mayor. Los
+      // renglones ESTRUCTURALES (la distribución a socias) no llevan enlace:
+      // no vienen del plan de cuentas y no tienen mayor que mostrar.
       return (
-        <tr className="border-b border-gray-100 last:border-0">
-          <td className="w-24 py-1.5 pl-6 pr-2 font-mono text-xs text-gray-500">{fila.code}</td>
-          <td className="py-1.5 pr-4 text-sm text-gray-700">{fila.name}</td>
+        <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+          <td className="w-24 py-1.5 pl-6 pr-2 font-mono text-xs text-gray-500">
+            {fila.estructural ? (
+              fila.code
+            ) : (
+              <Link
+                href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`}
+                className="underline decoration-dotted underline-offset-2 hover:text-integra-navy"
+                title={`Ver el Libro Mayor de ${fila.code} ${fila.name}`}
+              >
+                {fila.code}
+              </Link>
+            )}
+          </td>
+          <td className="py-1.5 pr-4 text-sm text-gray-700">
+            {fila.estructural ? (
+              fila.name
+            ) : (
+              <Link
+                href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`}
+                className="hover:text-integra-navy hover:underline"
+                title={`Ver el Libro Mayor de ${fila.code} ${fila.name}`}
+              >
+                {fila.name}
+              </Link>
+            )}
+          </td>
           <td className="w-40 py-1.5 pr-4 text-right">
             <Monto valor={fila.valor} />
           </td>

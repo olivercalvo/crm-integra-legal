@@ -123,12 +123,36 @@ export function SectionTotalRow({ label, value }: { label: string; value: number
   );
 }
 
-/** Fila de cuenta: código, nombre y monto. */
+/**
+ * Fila de cuenta: código, nombre y monto.
+ *
+ * TRAZABILIDAD NIVEL 1 — el requisito que Josuar repitió tres veces en la
+ * reunión: desde un saldo del Balance o del Estado de Resultado, un clic tiene
+ * que abrir el mayor de esa cuenta. El enlace va en el CÓDIGO y el NOMBRE, no
+ * en el monto: el monto se lee y se compara, y volverlo clickeable invita a
+ * seleccionarlo sin querer.
+ */
 export function AccountRow({ code, name, amount }: { code: string; name: string; amount: number }) {
   return (
-    <tr className="border-b border-gray-100 last:border-0">
-      <td className="w-24 py-1.5 pl-6 pr-2 font-mono text-xs text-gray-500">{code}</td>
-      <td className="py-1.5 pr-4 text-sm text-gray-700">{name}</td>
+    <tr className="group border-b border-gray-100 last:border-0 hover:bg-gray-50">
+      <td className="w-24 py-1.5 pl-6 pr-2 font-mono text-xs text-gray-500">
+        <Link
+          href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(code)}`}
+          className="underline decoration-dotted underline-offset-2 hover:text-integra-navy"
+          title={`Ver el Libro Mayor de ${code} ${name}`}
+        >
+          {code}
+        </Link>
+      </td>
+      <td className="py-1.5 pr-4 text-sm text-gray-700">
+        <Link
+          href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(code)}`}
+          className="hover:text-integra-navy hover:underline"
+          title={`Ver el Libro Mayor de ${code} ${name}`}
+        >
+          {name}
+        </Link>
+      </td>
       <td className="w-40 py-1.5 pr-4 text-right">
         <Amount value={amount} />
       </td>

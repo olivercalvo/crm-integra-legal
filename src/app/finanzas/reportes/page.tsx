@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BookOpen,
   Receipt,
   TrendingUp,
   Scale,
@@ -42,6 +43,13 @@ const REPORTS: ReportItem[] = [
     description: "Activos, pasivos y patrimonio agrupados por subcategoría.",
     icon: <Scale size={22} />,
     badge: "Saldos de apertura",
+  },
+  {
+    slug: "mayor",
+    title: "Libro Mayor",
+    description: "Movimientos y saldo corrido de cada cuenta, con su contrapartida.",
+    icon: <BookOpen size={22} />,
+    badge: "Por cuenta",
   },
   {
     slug: "ventas-mensuales",

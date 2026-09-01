@@ -1,5 +1,93 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [HOTFIX — las descargas pasan por el dominio de la app] - 2026-09-01 (incidente)
+
+### El incidente
+
+Una de las licenciadas no podía descargar una factura desde producción: el navegador le daba
+`DNS_PROBE_FINISHED_NXDOMAIN` sobre `uqmmkklbhzxqybljiecs.supabase.co`. El dominio existe y el
+proyecto estaba sano — lo que fallaba era la resolución DNS **en su red**.
+
+El resto del sistema le funcionaba porque esas peticiones las hace el servidor. La descarga no,
+porque le entregábamos al navegador un enlace firmado que apuntaba **directo** al almacenamiento
+de Supabase: el navegador tenía que resolver un dominio que en su red no resolvía.
+
+El mismo día falló la resolución de `supabase.co` desde Node en la máquina de desarrollo, con la
+conexión a la base funcionando. **Dos máquinas distintas en Panamá con el mismo síntoma**, así
+que no es la anécdota de una red.
+
+### El arreglo
+
+`serveStorageFile()` firma la URL, hace `fetch` **desde el servidor** y pasa el `body` —un
+ReadableStream— a la respuesta. El navegador solo habla con el dominio del CRM.
+
+**Se transmite, no se carga en memoria.** Por acá van a pasar también los adjuntos de casos;
+`storage.download()` habría materializado un Blob entero por cada descarga concurrente. La URL
+firmada vive 60 segundos y nunca sale del servidor.
+
+### Seis lugares, no solo la factura
+
+| Ruta | |
+|---|---|
+| `/api/documents/[id]/download` | nueva — documentos de casos, clientes, tareas, comentarios |
+| `/api/expenses/[id]/receipt/download` | nueva — comprobante de gasto de trámite |
+| `/api/payments/[id]/receipt/download` | nueva — comprobante de cobro |
+| `/api/finanzas/business-expenses/[id]/receipt/download` | nueva — comprobante de gasto del bufete |
+| `/api/finanzas/invoices/[id]/pdf` | devolvía `{url}`, ahora el archivo |
+| `/api/finanzas/quotes/[id]/pdf` | ídem |
+
+El de gastos del bufete era distinto de los otros: la URL firmada no se generaba en una ruta de
+API sino en el **server component** de la pantalla, y viajaba al navegador como prop.
+
+**Las tres rutas viejas `/url` se ELIMINARON.** Nadie las llamaba ya, y dejarlas era dejar
+abierta la puerta por la que el bug vuelve.
+
+Como el cuerpo ahora es el archivo, el dato `regenerated` que la UI usa para avisar "se
+regeneró el PDF" viaja en la cabecera `X-Pdf-Regenerated`.
+
+### Permisos: se verifican en el endpoint
+
+Sesión, tenant y rol. Se agregó lo que **no estaba**: el contador no baja documentos del módulo
+legal (caso, cliente, tarea, comentario), ni comprobantes de gastos de trámite, ni de cobros. Sí
+los del bufete, que son suyos.
+
+Verificado en staging con un documento de tipo `case`: **200 a la abogada, 403 al contador**.
+
+### Verificado en staging
+
+| | |
+|---|---|
+| PDF de factura | 200 · `application/pdf` · 57.226 bytes · empieza en `%PDF-` |
+| Nombre del archivo | `FAC-HON-000004.pdf`, en las dos formas de `Content-Disposition` |
+| **`supabase.co` en la respuesta** | **cero apariciones** |
+| PDF de cotización | 200 · `COT-000007.pdf` · 56.590 bytes |
+| Sin sesión | 401 |
+| Documento inexistente | 404 |
+| `Cache-Control` | `private, no-store` |
+
+`next build` limpio en la rama de hotfix, con las cinco rutas nuevas presentes. `tsc` 0 errores.
+Lint sin hallazgos nuevos (21 preexistentes). Suite en `develop`: 409/409.
+
+### ⚠️ Queda UN punto donde el navegador habla con supabase.co: el login
+
+`src/lib/supabase/client.ts` (`createBrowserClient`) lo usan **solo** `login-form.tsx` y
+`new-password-form.tsx`. Una vez iniciada la sesión, todo pasa por el servidor.
+
+O sea: **si a la licenciada le falla el DNS en el momento de iniciar sesión, no puede entrar**, y
+este hotfix no lo cubre. Mover la autenticación al servidor es un cambio de otro tamaño y no
+entra en un hotfix. Queda anotado: si mañana reporta que no puede *entrar* —no descargar— es
+esto.
+
+### Cómo llega a producción
+
+Rama `hotfix/descarga-por-dominio-app`, desde `main`, solo este cambio. **No se mergeó**: espera
+la aprobación de Oliver. El mismo commit ya está en `develop` (cherry-pick `2771411`) para que no
+se pierda en el próximo merge; los dos conflictos fueron con el renombrado `publicUrl → signedUrl`
+de `fb6735c`, sobre la misma prop que este cambio elimina.
+
+**No necesita las tres variables de Vercel pendientes:** todas las `EFACTURA_*` se leen dentro de
+funciones, ninguna en build.
+
 ## [El enlace roto del Libro Mayor — enlaces de contenido auditados] - 2026-09-01 (cierre)
 
 ### El enlace que prometía un documento y no lo abría

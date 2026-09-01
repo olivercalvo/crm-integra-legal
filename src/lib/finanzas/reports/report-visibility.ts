@@ -79,3 +79,107 @@ export function countZeroRows(sections: ReportSection[]): number {
     .flatMap((g) => g.rows)
     .filter((r) => !hasBalance(r.amount)).length;
 }
+
+// ---------------------------------------------------------------------------
+// Estado de Resultado NIIF 18 — la misma regla, sobre una lista plana
+// ---------------------------------------------------------------------------
+
+/**
+ * El ER NIIF 18 no devuelve secciones: devuelve una LISTA PLANA de filas ya
+ * ordenadas. El criterio de visibilidad es el mismo —una cuenta en 0 no se
+ * presenta— pero el recorrido es distinto, así que va aparte.
+ *
+ * Por qué importa acá más que en el Balance: el plan de Integra tiene 45 cuentas
+ * de resultado y **22 están en cero**. Sin filtro, el reporte que abre el
+ * contador son treinta y pico de renglones en 0.00 con los números reales
+ * perdidos en el medio, y el modelo que él mandó no se parece en nada a eso. Un
+ * renglón sin saldo en un estado financiero se lee como error.
+ *
+ * QUÉ SE CONSERVA SIEMPRE, aunque dé cero:
+ *   · `bloque`, `resultado` e `impuesto` — son la ESTRUCTURA del estado, no un
+ *     detalle de cuenta. Los cuatro subtotales obligatorios salen de ahí.
+ *   · Las cuentas marcadas `estructural` (la distribución a socias): sin ese
+ *     renglón la sección queda con encabezado y nada debajo.
+ *
+ * QUÉ SE OCULTA:
+ *   · Cuentas en 0.
+ *   · Un grupo que se queda sin ninguna cuenta con saldo, junto con su subtotal.
+ *
+ * Los subtotales NO se recalculan, igual que en el resto del archivo: una cuenta
+ * en 0 no aporta al total, así que ocultarla no puede moverlo. Es la garantía
+ * que cubren los tests.
+ */
+export function filterFilasER<
+  T extends
+    | { kind: "bloque" }
+    | { kind: "grupo" }
+    | { kind: "cuenta"; valor: { balanza: number }; estructural?: boolean }
+    | { kind: "subtotal" }
+    | { kind: "resultado" }
+    | { kind: "impuesto" }
+>(filas: T[], visibility: AccountVisibility): T[] {
+  if (visibility === "all") return filas;
+
+  const salida: T[] = [];
+  // Buffer del grupo en curso: se vuelca solo si alguna de sus cuentas tiene
+  // saldo. Un grupo sin cuentas visibles desaparece entero, con su subtotal.
+  let grupoPendiente: T | null = null;
+  let cuentasDelGrupo: T[] = [];
+  let algunaConSaldo = false;
+
+  const volcar = (subtotal: T | null) => {
+    if (grupoPendiente && algunaConSaldo) {
+      salida.push(grupoPendiente, ...cuentasDelGrupo);
+      if (subtotal) salida.push(subtotal);
+    }
+    grupoPendiente = null;
+    cuentasDelGrupo = [];
+    algunaConSaldo = false;
+  };
+
+  for (const fila of filas) {
+    if (fila.kind === "grupo") {
+      volcar(null); // un grupo nuevo cierra el anterior (no debería pasar, pero no se pierde)
+      grupoPendiente = fila;
+      continue;
+    }
+
+    if (fila.kind === "cuenta") {
+      const visible =
+        fila.estructural === true || hasBalance(fila.valor.balanza);
+      if (!visible) continue;
+      if (grupoPendiente) {
+        cuentasDelGrupo.push(fila);
+        algunaConSaldo = true;
+      } else {
+        salida.push(fila);
+      }
+      continue;
+    }
+
+    if (fila.kind === "subtotal") {
+      volcar(fila);
+      continue;
+    }
+
+    // bloque / resultado / impuesto: estructura, siempre se conservan.
+    volcar(null);
+    salida.push(fila);
+  }
+
+  volcar(null);
+  return salida;
+}
+
+/** Cuántas cuentas en 0 esconde la vista "solo con saldo" en el ER. */
+export function countZeroFilasER(
+  filas: Array<{ kind: string; valor?: { balanza: number }; estructural?: boolean }>
+): number {
+  return filas.filter(
+    (f) =>
+      f.kind === "cuenta" &&
+      f.estructural !== true &&
+      f.valor !== undefined &&
+      !hasBalance(f.valor.balanza)
+  ).length;
+}

@@ -57,7 +57,7 @@
 import {
   ACTIVIDADES,
   ACTIVIDAD_LABEL_ES,
-  actividadDe,
+  categoriaNiif18De,
   subcategoriaDe,
   type Actividad,
   type Subcategoria,
@@ -236,7 +236,7 @@ export function buildEstadoResultadoNiif18(
 
   // Cuentas que no se pueden ubicar en una actividad. No deberían existir (el
   // CHECK las bloquea en cuentas activas), pero si aparecen NO se pierden.
-  const sinClasificar = resultado.filter((a) => actividadDe(a.subcategoria) === null);
+  const sinClasificar = resultado.filter((a) => categoriaNiif18De(a) === null);
 
   const totalesPorActividad: Record<Actividad, number> = {
     operacion: 0,
@@ -279,7 +279,7 @@ export function buildEstadoResultadoNiif18(
   const [GRUPO_INGRESOS, GRUPO_COSTOS, GRUPO_GASTOS] = GRUPOS_POR_BLOQUE;
 
   for (const actividad of ACTIVIDADES) {
-    const delBloque = resultado.filter((a) => actividadDe(a.subcategoria) === actividad);
+    const delBloque = resultado.filter((a) => categoriaNiif18De(a) === actividad);
 
     // "Los bloques vacíos no se muestran."
     if (delBloque.length === 0) continue;

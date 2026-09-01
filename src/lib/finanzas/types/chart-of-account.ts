@@ -118,6 +118,7 @@ export type Subcategoria =
   | "activo_corriente"
   | "activo_no_corriente"
   | "propiedad_planta_equipo"
+  | "depreciacion_acumulada"
   | "pasivo_corriente"
   | "pasivo_no_corriente"
   | "patrimonio"
@@ -142,6 +143,7 @@ export const SUBCATEGORIAS: Subcategoria[] = [
   "activo_corriente",
   "activo_no_corriente",
   "propiedad_planta_equipo",
+  "depreciacion_acumulada",
   "pasivo_corriente",
   "pasivo_no_corriente",
   "patrimonio",
@@ -169,6 +171,7 @@ export const SUBCATEGORIA_LABEL_ES: Record<Subcategoria, string> = {
   activo_corriente: "Activo corriente",
   activo_no_corriente: "Activo no corriente",
   propiedad_planta_equipo: "Propiedad, planta y equipo",
+  depreciacion_acumulada: "Depreciación acumulada",
   pasivo_corriente: "Pasivo corriente",
   pasivo_no_corriente: "Pasivo no corriente",
   patrimonio: "Patrimonio",
@@ -195,7 +198,16 @@ export const SUBCATEGORIA_LABEL_ES: Record<Subcategoria, string> = {
  * esconder opciones en el dropdown no es un permiso.
  */
 export const SUBCATEGORIAS_POR_TIPO: Record<AccountType, Subcategoria[]> = {
-  asset: ["activo_corriente", "activo_no_corriente", "propiedad_planta_equipo", "otro"],
+  asset: [
+    "activo_corriente",
+    "activo_no_corriente",
+    "propiedad_planta_equipo",
+    // Contracuenta de PPE: saldo ACREEDOR dentro del activo. Rose la señaló
+    // como faltante el 25/08/2026. No es NIIF 18 — es un agrupador de balance,
+    // y por eso vive acá y no en la categoría de actividad.
+    "depreciacion_acumulada",
+    "otro",
+  ],
   liability: ["pasivo_corriente", "pasivo_no_corriente", "otro"],
   equity: ["patrimonio", "otro"],
   income: ["ingresos_operativos", "ingresos_inversion", "ingresos_financiamiento"],
@@ -273,6 +285,7 @@ const ACTIVIDAD_POR_SUBCATEGORIA: Record<Subcategoria, Actividad | null> = {
   activo_corriente: null,
   activo_no_corriente: null,
   propiedad_planta_equipo: null,
+  depreciacion_acumulada: null,
   pasivo_corriente: null,
   pasivo_no_corriente: null,
   patrimonio: null,
@@ -292,6 +305,34 @@ const ACTIVIDAD_POR_SUBCATEGORIA: Record<Subcategoria, Actividad | null> = {
 export function actividadDe(s: Subcategoria | null | undefined): Actividad | null {
   if (!isSubcategoria(s)) return null;
   return ACTIVIDAD_POR_SUBCATEGORIA[s];
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * LA CATEGORÍA NIIF 18 DE UNA CUENTA — el único lugar que sabe de dónde sale
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * HOY la deriva de `subcategoria`, donde conviven dos cosas distintas: los
+ * agrupadores de BALANCE (`activo_corriente`, `patrimonio`…) y la categoría
+ * NIIF 18 de las cuentas de RESULTADO (`ingresos_operativos`…).
+ *
+ * MAÑANA va a leer la columna `categoria_niif18`, que separa las dos y admite
+ * las cinco categorías de la norma —incluidas *impuestos a las ganancias* y
+ * *operaciones discontinuadas*, que NO se cruzan con el tipo de cuenta y por
+ * eso no caben como subcategorías literales.
+ *
+ * 🔑 EL PUNTO DE ESTA FUNCIÓN: el Estado de Resultado agrupa por lo que ella
+ * devuelve y no sabe de dónde salió. Cuando entre la columna nueva se cambia
+ * ESTE cuerpo y nada más — el builder del reporte no se reescribe. Por eso
+ * recibe la CUENTA y no la subcategoría: el día que la fuente cambie, la firma
+ * no tiene que cambiar con ella.
+ *
+ * No usar `actividadDe(cuenta.subcategoria)` directamente en reportes nuevos.
+ */
+export function categoriaNiif18De(
+  cuenta: { subcategoria: Subcategoria | null | undefined }
+): Actividad | null {
+  return actividadDe(cuenta.subcategoria);
 }
 
 /** La subcategoría que corresponde a un tipo de resultado en una actividad. */

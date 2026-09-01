@@ -1,5 +1,157 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [NIIF 18 — Estado de Resultado al modelo de Josuarth] - 2026-09-01 (tarde)
+
+### Lo que ya estaba hecho, y no se rehízo
+
+Antes de migrar nada se verificó el estado real, y dos de los tres puntos de schema ya estaban:
+
+- **El sexto tipo `cost` YA EXISTE** en el CHECK de `account_type`, y las seis cuentas
+  `500001`–`500006` ya están clasificadas como `cost` + `costos_operativos`. Lo hizo
+  `sql/pending/025_niif18_tipo_costo_y_subcategorias.sql`. **Cero cuentas por reclasificar**, y
+  por lo tanto cero riesgo de mover la utilidad bruta.
+- **Las nueve subcategorías de Josuarth** ya están, con sus nombres textuales, en un CHECK que
+  además valida la combinación tipo×subcategoría.
+- **El renombrado de Rose ya estaba**: `ACCOUNT_TYPE_LABEL_ES.expense` dice "Gasto", no "Gasto
+  operativo".
+
+### 🔴 Los 12 tests que el skip escondía: eran DOS migraciones, no un renombrado
+
+La sospecha anotada era que se trataba del renombrado "gasto operativo"→"gasto" a medias. No
+era eso. Eran tests que quedaron atrás de dos migraciones y **nunca corrieron para avisarlo**:
+
+| Migración | Qué cambió | Qué esperaba el test |
+|---|---|---|
+| 025 | subcategoría OBLIGATORIA en cuentas de resultado | crear `expense` sin subcategoría |
+| 025 | `gasto_operativo` → `gastos_operativos` | el valor viejo |
+| 025 | el costo tiene TIPO propio (`cost`) | `Costo` → `expense` + subcategoría `"costo"` |
+| 027 | `saldo_inicial_fecha` obligatoria junto al saldo | mandar el saldo sin fecha |
+
+Uno más era del propio fixture: al estado existente del test de "cambio fantasma" le faltaba
+`cuenta_control`, así que el diff comparaba `undefined` contra el `null` que normaliza el
+validador y registraba justo el cambio que ese test vigila.
+
+**El skip no era deliberado:** `skipNoMocks` se activa cuando `mock.module` no existe, y sin el
+flag experimental no existe. Pero el efecto fue idéntico a esconderlos. Por eso el arreglo de
+fondo es **`npm test`**, que corre siempre con el flag: hasta hoy no había comando canónico y
+cada corrida decidía por su cuenta si 72 tests existían.
+
+### La categoría NIIF 18, aislada detrás de una función
+
+`categoriaNiif18De(cuenta)` es ahora el único lugar que sabe de dónde sale la categoría. Hoy la
+deriva de `subcategoria`; cuando entre la columna `categoria_niif18` se cambia **ese cuerpo y
+nada más**. Recibe la CUENTA y no la subcategoría justamente para que el día que la fuente
+cambie, la firma no cambie con ella. El Estado de Resultado agrupa por lo que ella devuelve y no
+sabe de dónde salió.
+
+Es lo que permite invertir el orden: primero el reporte que Josuarth va a mirar, después la
+migración que no ve.
+
+### El Estado de Resultado, al modelo
+
+Los cuatro subtotales obligatorios **ya los emitía el builder** y los bloques sin cuentas ya se
+omitían. Lo que faltaba era lo que hacía que la pantalla no se pareciera al modelo:
+
+**Las 30 cuentas en cero.** De las 45 cuentas de resultado del plan de Integra, 30 están en
+0.00. Sin filtro, lo que abre el contador son treinta y pico de renglones vacíos con los números
+reales perdidos en el medio. El toggle "solo cuentas con saldo" existía y ya estaba conectado
+con el default correcto, pero el criterio estaba **escrito dos veces**: una en
+`report-visibility.ts` (para el Balance, sobre secciones) y otra a mano dentro del componente
+del ER (sobre la lista plana). Se unificó en `filterFilasER`, en el módulo compartido.
+
+Y **un grupo sin ninguna cuenta con saldo ahora desaparece entero**, con su subtotal, en vez de
+mostrarse con el aviso "Todas las cuentas de esta sección están en 0". Es la regla contable: un
+renglón sin saldo no se presenta.
+
+La garantía está en tests: **ocultar filas no puede mover un subtotal**. Los cuatro son
+idénticos en las dos vistas.
+
+### El reporte, renglón por renglón contra `image005.png`
+
+| Modelo de Josuarth | Lo que muestra el sistema |
+|---|---|
+| Actividad de operación | ACTIVIDAD DE OPERACIÓN |
+| ingresos operativos | Ingresos operativos |
+| Ingresos por servicios legales · 182,160 | Derecho Corporativo · 289,800.31 · Descuentos otorgados · (663.25) |
+| — | *(Total ingresos operativos · 289,137.06)* ← agregado, ver abajo |
+| Costos Operativos | Costos operativos |
+| Honorarios de abogados y prof. externos · (42,000) | Mensajeria Especializada · (3,697.98) · Costos tramites legales · (6,180.40) |
+| — | *(Total costos operativos · (9,878.38))* |
+| **Utilidad Bruta operativa · 140,160** | **► Utilidad Bruta operativa · 279,258.68** |
+| Gastos operativos | Gastos operativos |
+| Salarios · (8,640) · Mantenimiento de oficina · (533) | 11 cuentas, de Alquiler (11,472.78) a Gastos Bancarios (1,110.24) |
+| — | *(Total gastos operativos · (34,781.77))* |
+| **Utilidad Operativa · 130,987** | **► Utilidad Operativa · 244,476.91** |
+| Actividad de Financiamiento | *(no se muestra: Integra no tiene cuentas de financiamiento)* |
+| **Utilidad antes de impuesto · 128,664** | **► Utilidad antes de impuesto sobre la renta · 244,476.91** |
+| Impuesto sobre la renta · (4,459) | Impuesto sobre la renta · 0.00 *(sociedad civil)* |
+| **Utilidad Neta · 124,205** | **► Utilidad Neta · 244,476.91** |
+| — | DISTRIBUCIÓN A SOCIAS · (244,476.91) |
+| — | **► Resultado del ejercicio · 0.00** |
+
+**Dos diferencias deliberadas, las dos anotadas para consultarle:**
+
+1. **Los subtotales por rubro** ("Total ingresos operativos", etc.) **no están en su modelo** —
+   ahí cada rubro tiene una o dos cuentas y el salto al subtotal se sigue a ojo. Integra tiene
+   11 cuentas de gastos visibles: sin el total del rubro, pasar de 279,258.68 a 244,476.91 es
+   imposible de verificar. Se mantuvieron. **Si él los quiere fuera, es una línea.**
+2. **El bloque de Financiamiento no aparece** porque Integra no tiene ninguna cuenta ahí. Es lo
+   correcto —un bloque vacío se lee como error— y se decidió NO reclasificar ninguna cuenta para
+   llenarlo: mover una cuenta a financiamiento cambiaría la utilidad operativa, que es el número
+   que él va a comparar.
+
+### Depreciación acumulada
+
+Nueva subcategoría `depreciacion_acumulada`, solo para cuentas de activo, ubicada
+inmediatamente debajo de "Propiedad, planta y equipo" porque es su contracuenta y el activo fijo
+neto es la resta de las dos. **No necesitó migración**: las subcategorías de balance no tienen
+CHECK de lista en la base, se validan en la app.
+
+Tocó **una línea del Balance General** —agregar el grupo a `ACTIVO_GROUPS`— y no mueve ningún
+número: hoy no hay ninguna cuenta con esa subcategoría. Sin esa línea, el campo nuevo nacería
+roto: se podría asignar en el Plan de Cuentas y la cuenta caería en "sin clasificar". No toca la
+divergencia Balance vs `/pyl`, que sigue esperando respuesta de Josuarth.
+
+El **gasto de depreciación** se dejó afuera a propósito: no es una categoría NIIF 18 sino un
+rubro dentro de gastos operativos, y eso depende del nivel de agrupación por rubro que Rose
+mencionó y que todavía no está definido. Queda como consulta, no se inventó.
+
+### Verificado
+
+Números de control, con el ledger vacío:
+
+| | real | esperado | |
+|---|---|---|---|
+| Total de Ingresos | −289,137.06 | −289,137.06 | ✅ |
+| Utilidad Operativa | −244,476.91 | −244,476.91 | ✅ |
+| Utilidad antes de impuesto | −244,476.91 | −244,476.91 | ✅ |
+| Utilidad Neta | −244,476.91 | −244,476.91 | ✅ |
+| Resultado del ejercicio | 0.00 | 0.00 | ✅ |
+
+La estructura nueva **no movió ningún número**. Verificado además en la pantalla real, con
+sesión de contador: 15 cuentas visibles de 45, los cuatro subtotales presentes, bloques de
+inversión y financiamiento ausentes.
+
+Reset + doble siembra: ledger 10/27 con cadena íntegra, 64 cuentas activas (6 de tipo `cost`),
+mayor de CxC en 194,842.55 sin cambios.
+
+### Chequeos
+
+`tsc --noEmit` 0 errores · **`npm test`: 406 tests, 406 pass, 0 fail, 0 skipped** · sin el flag:
+406 tests, 334 pass, 72 skipped, 0 fail · lint sin hallazgos nuevos (21 preexistentes).
+
+### Anotado, no tocado
+
+- **La migración a `categoria_niif18` NO se hizo.** El aislamiento que la habilita sí
+  (`categoriaNiif18De`), así que mañana toca esa función y no el builder. Se dejó afuera por el
+  criterio acordado: es invisible para Josuarth y a medias sería peor que mañana.
+- 🔴 **Supabase staging devolvió 530 de forma intermitente** durante la verificación: 8 de 10
+  sondeos a `/auth/v1/health` respondieron OK, dos dieron 530. La base por conexión directa
+  responde perfecto. **Si a Josuarth le toca un 530 no puede iniciar sesión.** Conviene sondearlo
+  otra vez antes de mandar el correo.
+- El bloque "Actividad de Financiamiento" del modelo no tiene equivalente en los datos de
+  Integra. No es un bug del reporte: es que no hay cuentas de esa actividad.
+
 ## [Bloque 0 — lo que pidieron cara a cara + staging listo para RM] - 2026-09-01
 
 Cambio de estrategia del cliente. Rose lo escribió en el correo que acompaña su guía: *"lo que

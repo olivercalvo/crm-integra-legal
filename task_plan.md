@@ -23,6 +23,34 @@ SOP-019 y en el `changelog.md` del 01/09.
    conviene saber que está en *All Environments* y que ahora es inofensiva.
 3. **`ALLOW_REAL_EMAILS` NO debe existir en Vercel.** Si alguien la carga, el candado se abre.
 
+### Bloque NIIF 18 — 01/09/2026 (tarde)
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| N18.1 | Sexto tipo `cost` | ✅ **ya existía** (migración 025). Cero cuentas por reclasificar |
+| N18.2 | Renombrar "gasto operativo" → "gasto" | ✅ **ya existía** (`ACCOUNT_TYPE_LABEL_ES`) |
+| N18.3 | Los 12 tests ocultos tras el skip | ✅ arreglados + `npm test` canónico (406/406, 0 skipped) |
+| N18.4 | `categoriaNiif18De()` — la categoría aislada en UNA función | ✅ habilita la migración sin reescribir el ER |
+| N18.5 | ER con los cuatro subtotales, al modelo `image005.png` | ✅ verificado en pantalla |
+| N18.6 | Cuentas en 0 fuera del reporte (30 de 45) — criterio unificado | ✅ 7 tests |
+| N18.7 | Subcategoría `depreciacion_acumulada` | ✅ sin migración: las de balance se validan en la app |
+| N18.8 | Migración a `categoria_niif18` | ⬜ **NO se hizo** — ver abajo |
+
+**Por qué N18.8 quedó afuera:** criterio acordado con Oliver. Es invisible para Josuarth, no
+bloquea su revisión, y a medias sería peor que mañana. El aislamiento (N18.4) ya está, así que
+la migración toca `categoriaNiif18De()` y el mapper, no el builder del reporte.
+
+### Consultas nuevas para RM (no inventar, preguntar)
+
+1. **¿Van los subtotales por rubro?** Su modelo no los tiene (ahí cada rubro tiene 1-2 cuentas).
+   Integra tiene 11 cuentas de gastos visibles y sin el total del rubro el salto al subtotal no
+   se puede verificar. Hoy están; sacarlos es una línea.
+2. **El "gasto de depreciación"** no es una categoría NIIF 18 sino un rubro dentro de gastos
+   operativos, y depende del nivel de agrupación por rubro que mencionó Rose ("los gastos del
+   mismo rubro van juntos") y que no está definido. No se inventó.
+3. **El versionado por fecha de la parametrización** que pide la guía: se decide con la columna
+   `categoria_niif18` ya definida, no antes.
+
 ### Lo que quedó entregado en este bloque
 
 | # | Tarea | Estado |

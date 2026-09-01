@@ -9,6 +9,8 @@ import type {
 } from "@/lib/finanzas/reports/estado-resultado-niif18";
 import {
   DEFAULT_ACCOUNT_VISIBILITY,
+  countZeroFilasER,
+  filterFilasER,
   hasBalance,
   type AccountVisibility,
 } from "@/lib/finanzas/reports/report-visibility";
@@ -33,8 +35,6 @@ import { AccountVisibilityToggle } from "../../_components/account-visibility-to
  * `estado-resultado-niif18.ts`, que entrega cada monto ya con su `monto` y su
  * `entreParentesis`. Este componente solo dibuja.
  */
-
-const EMPTY_FILTERED = "Todas las cuentas de esta sección están en 0";
 
 /** Formatea con separador de miles es-PA y 2 decimales. */
 function formatAmount(n: number): string {
@@ -160,39 +160,23 @@ function Fila({ fila }: { fila: FilaER }) {
 export function EstadoResultadoStatement({ er }: { er: EstadoResultadoNiif18 }) {
   const [visibility, setVisibility] = useState<AccountVisibility>(DEFAULT_ACCOUNT_VISIBILITY);
 
-  const zeroCount = useMemo(
-    () =>
-      er.filas.filter(
-        (f) => f.kind === "cuenta" && !f.estructural && !hasBalance(f.valor.balanza)
-      ).length,
-    [er.filas]
-  );
+  const zeroCount = useMemo(() => countZeroFilasER(er.filas), [er.filas]);
 
   /**
-   * El filtro esconde SOLO renglones de cuenta en 0. Encabezados, subtotales y
-   * resultados se quedan siempre: son la estructura del estado financiero, y los
-   * totales tienen que ser identicos en las dos vistas.
+   * El criterio de visibilidad NO se escribe acá: vive en `report-visibility.ts`,
+   * que es el mismo módulo que usa el Balance General. Estaba duplicado —dos
+   * versiones de la misma regla, en dos formas distintas— y una de las dos iba a
+   * quedarse atrás.
    *
-   * Los renglones `estructural` (la distribución a socias) tampoco se esconden
-   * aunque den 0, o la sección quedaría con encabezado y nada debajo.
+   * Lo que hace: esconde las cuentas en 0 y los grupos que se quedan sin ninguna
+   * cuenta con saldo. Encabezados de bloque, subtotales y resultados se
+   * conservan siempre — son la estructura del estado, y los totales tienen que
+   * ser idénticos en las dos vistas.
    */
-  const filas = useMemo(() => {
-    if (visibility === "all") return er.filas;
-    return er.filas.filter(
-      (f) => f.kind !== "cuenta" || f.estructural || hasBalance(f.valor.balanza)
-    );
-  }, [er.filas, visibility]);
-
-  /** Un grupo que se quedó sin cuentas visibles: se avisa en vez de dejar el hueco. */
-  const gruposVacios = useMemo(() => {
-    const vacios = new Set<number>();
-    filas.forEach((f, i) => {
-      if (f.kind !== "grupo") return;
-      const siguiente = filas[i + 1];
-      if (!siguiente || siguiente.kind !== "cuenta") vacios.add(i);
-    });
-    return vacios;
-  }, [filas]);
+  const filas = useMemo(
+    () => filterFilasER(er.filas, visibility),
+    [er.filas, visibility]
+  );
 
   return (
     <div className="space-y-3">
@@ -204,28 +188,10 @@ export function EstadoResultadoStatement({ er }: { er: EstadoResultadoNiif18 }) 
 
       <StatementTable>
         {filas.map((f, i) => (
-          <FilaConAviso
-            key={`${f.kind}-${i}`}
-            fila={f}
-            vacio={gruposVacios.has(i)}
-          />
+          <Fila key={`${f.kind}-${i}`} fila={f} />
         ))}
       </StatementTable>
     </div>
   );
 }
 
-function FilaConAviso({ fila, vacio }: { fila: FilaER; vacio: boolean }) {
-  return (
-    <>
-      <Fila fila={fila} />
-      {vacio && (
-        <tr>
-          <td colSpan={3} className="px-6 py-2 text-sm italic text-gray-400">
-            {EMPTY_FILTERED}
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}

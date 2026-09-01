@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+
+import { abrirArchivo } from "@/lib/storage/abrir-archivo";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Paperclip, X, Save, Loader2, FileText, Image as ImageIcon } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
@@ -159,10 +161,11 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
   const handleViewReceipt = async () => {
     if (!payment.receipt_url) return;
     try {
-      const res = await fetch(`/api/payments/${payment.id}/receipt/url`);
-      const json = await res.json();
-      if (json.url) {
-        window.open(json.url, "_blank");
+      // Por el dominio de la app, no por un enlace firmado a *.supabase.co
+      // (ver src/lib/storage/serve-file.ts).
+      const r = await abrirArchivo(`/api/payments/${payment.id}/receipt/download`);
+      if (!r.ok) {
+        alert(r.error ?? "No se pudo abrir el recibo");
       }
     } catch {
       setError("No se pudo abrir el recibo");

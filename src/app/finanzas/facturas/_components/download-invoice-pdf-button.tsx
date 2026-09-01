@@ -19,6 +19,7 @@
 import { useState } from "react";
 import { Download, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { abrirArchivo } from "@/lib/storage/abrir-archivo";
 
 interface Props {
   invoiceId: string;
@@ -46,37 +47,16 @@ export function DownloadInvoicePdfButton({
     if (status.kind === "loading") return;
     setStatus({ kind: "loading" });
     try {
-      const res = await fetch(`/api/finanzas/invoices/${invoiceId}/pdf`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setStatus({
-          kind: "error",
-          message: data?.error ?? "No se pudo generar el PDF",
-        });
+      // La ruta devuelve el ARCHIVO, no un enlace firmado: el navegador solo
+      // habla con el dominio del CRM. Ver src/lib/storage/serve-file.ts.
+      const r = await abrirArchivo(`/api/finanzas/invoices/${invoiceId}/pdf`);
+      if (!r.ok) {
+        setStatus({ kind: "error", message: r.error ?? "No se pudo generar el PDF" });
         setTimeout(() => setStatus({ kind: "idle" }), 4000);
         return;
       }
 
-      const url = data?.url as string | undefined;
-      if (!url) {
-        setStatus({
-          kind: "error",
-          message: "El servidor no devolvió un URL del PDF",
-        });
-        setTimeout(() => setStatus({ kind: "idle" }), 4000);
-        return;
-      }
-
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.target = "_blank";
-      anchor.rel = "noopener noreferrer";
-      anchor.click();
-
-      if (data?.regenerated) {
+      if (r.headers?.get("X-Pdf-Regenerated") === "1") {
         setStatus({ kind: "regenerated" });
         setTimeout(() => setStatus({ kind: "idle" }), 2500);
       } else {

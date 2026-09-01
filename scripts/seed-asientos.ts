@@ -86,6 +86,7 @@ import { resolve } from "path";
 
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import { TENANT_ID } from "./seed-data/staging-fixtures";
+import { verificarAmountPaidDerivado } from "../src/lib/finanzas/integridad/verificar-amount-paid";
 import type { SourceType } from "../src/lib/finanzas/contabilidad/posting";
 
 dotenv.config({ path: resolve(__dirname, "../.env.local") });
@@ -230,39 +231,47 @@ const GASTOS: GastoOp[] = [
 ];
 
 // ===========================================================================
-// 3) COBROS — el asiento se declara, el pago se DERIVA
+// 3) COBROS — el pago YA EXISTE, el asiento se arma desde él
 // ===========================================================================
+//
+// ⚠️ ESTO SE DIO VUELTA EL 2026-09-01. LEER ANTES DE TOCAR.
+//
+// Hasta esa fecha este bloque CREABA el pago, y el comentario de más abajo
+// decía que el monto tenía que calzar con lo que la factura ya declaraba
+// cobrado — porque si no, T7a le cambiaba el estado a una factura que el
+// fixture de staging había dejado en otro. Esa dependencia estaba al revés:
+// el número escrito a mano mandaba, y el pago real se acomodaba a él.
+//
+// Hoy manda el pago. `seed:staging` siembra los pagos (SEED_PAYMENTS), T7a
+// deriva de ahí `invoices.amount_paid` y el status, y el guard T4b (migración
+// 032) impide escribir esa columna a mano. Este script CONSUME el pago igual
+// que ya consume la factura: lo busca por su referencia, y de él saca la fecha
+// y el monto del asiento.
+//
+// LA TRAMPA, dicha explícitamente: si hace falta un cobro nuevo, NO se agrega
+// acá. Se agrega a SEED_PAYMENTS en `scripts/seed-data/staging-fixtures.ts` y
+// después, si además tiene que ir al ledger, se lo nombra acá. Al revés no
+// funciona: este script ya no crea pagos, y aborta si el que nombra no existe.
+//
+// Y no todo pago necesita entrada acá. La regla es "todo asiento tiene
+// documento", NO "todo documento tiene asiento" — ver el cobro de
+// FAC-REI-000001 en SEED_PAYMENTS, que a propósito no está en esta lista.
 
 interface CobroOp {
   clave: string;
-  fecha: string;
-  /** Factura que se cobra. De ahí salen el cliente y el destino del enlace. */
-  facturaNumero: string;
-  monto: number;
-  metodo: "efectivo" | "transferencia" | "cheque" | "tarjeta" | "ach" | "otro";
+  /**
+   * Referencia del pago en staging — su clave natural, igual que
+   * `invoice_number` lo es para la factura. Lo siembra `seed:staging`.
+   */
   referencia: string;
 }
 
 const COBROS: CobroOp[] = [
-  {
-    clave: "cobro:hon-1-total",
-    fecha: "2026-04-20",
-    facturaNumero: "FAC-HON-000001",
-    monto: 1070,
-    metodo: "transferencia",
-    referencia: "Transferencia Banco General 4471902",
-  },
+  { clave: "cobro:hon-1-total", referencia: "Transferencia Banco General 4471902" },
   // Cobro PARCIAL: la factura queda en 'parcialmente_pagada' y la CxC no baja
   // a cero. Da el caso de una cuenta con movimientos de los dos lados que no
   // se cancelan entre sí.
-  {
-    clave: "cobro:hon-2-parcial",
-    fecha: "2026-06-15",
-    facturaNumero: "FAC-HON-000002",
-    monto: 1000,
-    metodo: "transferencia",
-    referencia: "Transferencia Banco General 4488115",
-  },
+  { clave: "cobro:hon-2-parcial", referencia: "Transferencia Banco General 4488115" },
 ];
 
 // ===========================================================================
@@ -460,10 +469,41 @@ async function main() {
   const facturaPorNumero = new Map<string, Factura>(
     ((facturas ?? []) as Factura[]).map((f) => [f.invoice_number, f])
   );
+  const facturaPorId = new Map<string, Factura>(
+    ((facturas ?? []) as Factura[]).map((f) => [f.id, f])
+  );
 
   if (facturaPorNumero.size === 0) {
     abort("no hay facturas en staging. Corré primero `npm run seed:staging`.");
   }
+
+  // -- Pagos de staging ------------------------------------------------------
+  // Los siembra `seed:staging` (SEED_PAYMENTS). Este script NO los crea: los
+  // consume, igual que a las facturas. Ver el encabezado del bloque COBROS.
+  const { data: pagos, error: errPag } = await db
+    .from("payments")
+    .select("id, payment_date, amount, reference")
+    .eq("tenant_id", TENANT_ID);
+  if (errPag) throw new Error(`leer pagos: ${errPag.message}`);
+
+  type Pago = { id: string; payment_date: string; amount: number | string; reference: string | null };
+  const pagoPorReferencia = new Map<string, Pago>(
+    ((pagos ?? []) as Pago[]).filter((p) => p.reference).map((p) => [p.reference as string, p])
+  );
+
+  // A qué factura se aplicó cada pago. Hace falta para la glosa y para saber a
+  // qué cliente se le acredita la Cuenta por Cobrar.
+  const { data: aplicaciones, error: errApl } = await db
+    .from("payment_applications")
+    .select("payment_id, invoice_id")
+    .eq("tenant_id", TENANT_ID);
+  if (errApl) throw new Error(`leer aplicaciones de pago: ${errApl.message}`);
+  const facturaDelPago = new Map<string, string>(
+    ((aplicaciones ?? []) as { payment_id: string; invoice_id: string }[]).map((a) => [
+      a.payment_id,
+      a.invoice_id,
+    ])
+  );
 
   // -- Nombre de los clientes, para la glosa de la línea de CxC --------------
   const { data: clientes, error: errCli } = await db
@@ -564,55 +604,46 @@ async function main() {
   }
 
   // =========================================================================
-  // COBROS — se crea el payment (+ su aplicación) y el asiento se deriva
+  // COBROS — el pago ya existe; el asiento se arma DESDE él
   // =========================================================================
   for (const op of COBROS) {
-    const f = facturaPorNumero.get(op.facturaNumero);
-    if (!f) {
+    const pago = pagoPorReferencia.get(op.referencia);
+    if (!pago) {
       abort(
-        `el cobro "${op.clave}" apunta a la factura ${op.facturaNumero}, que no existe en staging.\n` +
-          `   Corré primero \`npm run seed:staging\`, o saca esta entrada de COBROS.`
+        `el cobro "${op.clave}" apunta al pago "${op.referencia}", que no existe en staging.\n` +
+          `   Los pagos los siembra \`npm run seed:staging\` desde SEED_PAYMENTS\n` +
+          `   (scripts/seed-data/staging-fixtures.ts). Corrélo primero, agregá el pago\n` +
+          `   a ese fixture, o saca esta entrada de COBROS.`
       );
     }
+
+    const facturaId = facturaDelPago.get(pago.id);
+    if (!facturaId) {
+      abort(
+        `el pago "${op.referencia}" existe pero no está aplicado a ninguna factura.\n` +
+          `   Sin aplicación no hay Cuentas por Cobrar que acreditar.`
+      );
+    }
+    const f = facturaPorId.get(facturaId);
+    if (!f) {
+      abort(`el pago "${op.referencia}" está aplicado a una factura que no existe (${facturaId}).`);
+    }
+
+    // Fecha y monto salen del DOCUMENTO, no de este fixture. Misma regla que
+    // las facturas: una sola fuente de verdad por operación.
+    const monto = round2(Number(pago.amount));
     const cliente = nombrePorCliente.get(f.client_id) ?? "";
-    const pagoId = id(`payment:${op.clave}`);
-
-    const r = await upsertPorId(
-      "payments",
-      pagoId,
-      {
-        client_id: f.client_id,
-        payment_date: op.fecha,
-        amount: op.monto,
-        method: op.metodo,
-        reference: op.referencia,
-        status: "registrado",
-        notes: "Sembrado por seed:asientos para el Libro Mayor de staging.",
-      },
-      op.clave
-    );
-    r.creado ? docsCreados++ : docsExistentes++;
-
-    // La aplicación a la factura. El trigger T7a recalcula amount_paid y el
-    // status de la factura a partir de esto, así que el monto tiene que ser el
-    // que la factura ya declara como cobrado — si no, T7a le cambiaría el
-    // estado a una factura que el fixture de staging dejó en otro.
-    await upsertPorId(
-      "payment_applications",
-      id(`payment_application:${op.clave}`),
-      { payment_id: pagoId, invoice_id: f.id, amount_applied: op.monto },
-      `${op.clave} → ${op.facturaNumero}`
-    );
+    docsExistentes++;
 
     asientos.push({
       clave: op.clave,
-      fecha: op.fecha,
-      descripcion: `Cobro de la factura ${op.facturaNumero} — ${cliente}`,
+      fecha: String(pago.payment_date).slice(0, 10),
+      descripcion: `Cobro de la factura ${f.invoice_number} — ${cliente}`,
       source_type: "pago",
-      source_id: r.id,
+      source_id: pago.id,
       lineas: [
-        { code: CTA_BANCO, debit: op.monto, credit: 0, description: op.referencia },
-        { code: CTA_CXC, debit: 0, credit: op.monto, description: cliente },
+        { code: CTA_BANCO, debit: monto, credit: 0, description: pago.reference },
+        { code: CTA_CXC, debit: 0, credit: monto, description: cliente },
       ],
     });
   }
@@ -715,6 +746,12 @@ async function main() {
   console.log(`│ asientos            ${totalAsientos}`);
   console.log(`│ líneas              ${totalLineas}`);
   console.log(`└──────────────────────────────────`);
+
+  // CIERRE — este script ya no crea pagos, pero sí los consume, y una
+  // aplicación mal armada acá se vería como un asiento correcto sobre una
+  // factura incoherente. Se verifica igual. Ver `sop.md` SOP-017.
+  await verificarAmountPaidDerivado(db, TENANT_ID);
+
   console.log("\nCorrerlo de nuevo no duplica nada. Para empezar de cero: --reset.\n");
 }
 

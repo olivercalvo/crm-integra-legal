@@ -353,6 +353,20 @@ export interface SeedInvoice {
   quote: number | null; // n de SeedQuote de origen
   issue_date: string;
   due_date: string;
+  /**
+   * Estado FINAL ESPERADO de la factura, no una instrucción de qué escribir.
+   *
+   * El seed empuja la factura solo hasta su estado BASE (ver `ESTADO_BASE` en
+   * `seed-staging.ts`); los tres estados de cobro —`parcialmente_pagada` y
+   * `pagada`— los produce el trigger T7a al aplicarse los pagos de
+   * `SEED_PAYMENTS`. Al final el seed VERIFICA que el estado real coincida con
+   * este. Si no coincide, falta o sobra un pago.
+   *
+   * ⚠️ Acá NO hay `amount_paid`, y es a propósito. Esa columna se deriva de
+   * `payment_applications` y desde la migración 032 el trigger T4b rechaza
+   * escribirla a mano. Para que una factura quede cobrada, se le agrega su pago
+   * en `SEED_PAYMENTS`. Una factura sin pago queda en `amount_paid = 0`.
+   */
   status:
     | "borrador"
     | "emitida"
@@ -360,8 +374,6 @@ export interface SeedInvoice {
     | "pagada"
     | "anulada"
     | "cancelada_pre_emision";
-  /** Monto cobrado. Debe ser redondo y ≤ grand_total. */
-  amount_paid: number;
   cancellation_reason?: string;
   lines: SeedLine[];
 }
@@ -370,44 +382,121 @@ export const SEED_INVOICES: SeedInvoice[] = [
   // De la cotización 1 (aceptada): sale una HON y una REI.
   {
     n: 1, kind: "HONORARIOS", client: 1, case: "CORP-002", quote: 1,
-    issue_date: "2026-04-05", due_date: "2026-05-05", status: "pagada", amount_paid: 1070,
+    issue_date: "2026-04-05", due_date: "2026-05-05", status: "pagada",
     lines: [{ service: "HON-COR", description: "Honorarios — cambio de junta directiva", quantity: 1, unit_price: 1000, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
   },
   {
     n: 1, kind: "REEMBOLSO", client: 1, case: "CORP-002", quote: 1,
-    issue_date: "2026-04-05", due_date: "2026-05-05", status: "pagada", amount_paid: 150,
+    issue_date: "2026-04-05", due_date: "2026-05-05", status: "pagada",
     lines: [{ service: "REIM-GOB", description: "Reembolso — tasa de Registro Público", quantity: 1, unit_price: 150, tax_code: "EXENTO", invoice_kind: "REEMBOLSO" }],
   },
   {
     n: 2, kind: "HONORARIOS", client: 4, case: "CORP-003", quote: null,
-    issue_date: "2026-05-20", due_date: "2026-06-19", status: "parcialmente_pagada", amount_paid: 1000,
+    issue_date: "2026-05-20", due_date: "2026-06-19", status: "parcialmente_pagada",
     lines: [{ service: "HON-COR", description: "Honorarios — aumento de capital", quantity: 1, unit_price: 1500, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
   },
   {
     n: 3, kind: "HONORARIOS", client: 2, case: "ADM-002", quote: null,
-    issue_date: "2026-06-01", due_date: "2026-07-01", status: "emitida", amount_paid: 0,
+    issue_date: "2026-06-01", due_date: "2026-07-01", status: "emitida",
     lines: [{ service: "HON-OTROS", description: "Honorarios — recurso de reconsideración", quantity: 1, unit_price: 2000, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
   },
   {
     n: 2, kind: "REEMBOLSO", client: 5, case: "ADM-001", quote: null,
-    issue_date: "2026-06-10", due_date: "2026-07-10", status: "emitida", amount_paid: 0,
+    issue_date: "2026-06-10", due_date: "2026-07-10", status: "emitida",
     lines: [{ service: "REIM-GOB", description: "Reembolso — tasa municipal de construcción", quantity: 1, unit_price: 400, tax_code: "EXENTO", invoice_kind: "REEMBOLSO" }],
   },
   {
     n: 4, kind: "HONORARIOS", client: 7, case: "LAB-004", quote: null,
-    issue_date: "2026-03-12", due_date: "2026-04-11", status: "anulada", amount_paid: 0,
+    issue_date: "2026-03-12", due_date: "2026-04-11", status: "anulada",
     cancellation_reason: "Emitida con el caso equivocado. Se reemplaza por una factura nueva.",
     lines: [{ service: "HON-LAB", description: "Honorarios — cálculo de prestaciones", quantity: 1, unit_price: 1000, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
   },
   {
     n: 5, kind: "HONORARIOS", client: 11, case: "PEN-001", quote: null,
-    issue_date: "2026-07-05", due_date: "2026-08-04", status: "borrador", amount_paid: 0,
+    issue_date: "2026-07-05", due_date: "2026-08-04", status: "borrador",
     lines: [{ service: "HON-PEN", description: "Honorarios — querella patrimonial", quantity: 1, unit_price: 2500, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
   },
   {
     n: 6, kind: "HONORARIOS", client: 12, case: "FAM-001", quote: null,
-    issue_date: "2026-07-28", due_date: "2026-08-27", status: "cancelada_pre_emision", amount_paid: 0,
+    issue_date: "2026-07-28", due_date: "2026-08-27", status: "cancelada_pre_emision",
     lines: [{ service: "HON-FAM", description: "Honorarios — divorcio de mutuo consentimiento", quantity: 1, unit_price: 1500, tax_code: "ITBMS_7", invoice_kind: "HONORARIOS" }],
+  },
+];
+
+// ---------------------------------------------------------------------------
+// PAGOS — la ÚNICA fuente de `invoices.amount_paid` y de los estados de cobro
+// ---------------------------------------------------------------------------
+// Vivían en `seed-asientos.ts` (constante COBROS), donde se creaban para que el
+// asiento de cobro tuviera su documento. Se mudaron acá el 2026-09-01, con el
+// guard T4b, por dos razones:
+//
+//   1. `seed:staging` tiene que producir por sí solo un estado final coherente.
+//      Mientras los pagos vivieron en el otro script, `seed:staging` dejaba
+//      facturas marcadas "pagada" sin un pago detrás — el desfase del 28/08.
+//   2. `seed-asientos` ya CONSUME las facturas en vez de crearlas. Consumir
+//      también los pagos es la misma regla aplicada dos veces.
+//
+// `reference` es la clave natural del pago: por ahí lo resuelve `seed-asientos`,
+// igual que resuelve las facturas por `invoice_number`. Tiene que ser única.
+export interface SeedPayment {
+  /** Clave de idempotencia. El id del pago es `id("payment:" + clave)`. */
+  clave: string;
+  /** Número de la factura que cancela, tal como lo arma `seed-staging`. */
+  invoice: string;
+  date: string;
+  amount: number;
+  method: "efectivo" | "transferencia" | "cheque" | "tarjeta" | "ach" | "otro";
+  /** Clave natural — única. Por acá lo resuelve `seed-asientos`. */
+  reference: string;
+}
+
+export const SEED_PAYMENTS: SeedPayment[] = [
+  // Cobro TOTAL: la factura llega a 'pagada' y su CxC se cancela.
+  {
+    clave: "cobro:hon-1-total",
+    invoice: "FAC-HON-000001",
+    date: "2026-04-20",
+    amount: 1070,
+    method: "transferencia",
+    reference: "Transferencia Banco General 4471902",
+  },
+  // ---- EL PAGO QUE FALTABA, Y QUE NO LLEVA ASIENTO ------------------------
+  // Este es el cobro cuya ausencia produjo el desfase del 28/08: la factura
+  // declaraba `amount_paid = 150` a mano y no existía el pago.
+  //
+  // ⚠️ A PROPÓSITO no tiene entrada en `COBROS` de `seed-asientos.ts`, así que
+  // NO genera asiento. No es un olvido:
+  //
+  //   · La regla del fixture es "todo asiento tiene documento", NO "todo
+  //     documento tiene asiento". Lo segundo todavía no aplica porque
+  //     factura→asiento no está cableado: solo 4 de las 8 facturas tienen
+  //     asiento. Un pago sin asiento es consistente con eso, no una asimetría.
+  //   · Y hay un motivo de medición: el mayor de Cuentas por Cobrar cierra hoy
+  //     en 194,842.55 contra 191,947.55 del Balance General, y esa diferencia
+  //     de 2,895.00 es el baseline con el que se va a validar el bloque de
+  //     convergencia de reportes. Agregarle el asiento lo movería a 194,692.55
+  //     y se perdería el número contra el cual comparar.
+  //
+  // Cuando se cablee factura→asiento, este cobro entra al ledger con todos los
+  // demás y el baseline deja de hacer falta.
+  {
+    clave: "cobro:rei-1-total",
+    invoice: "FAC-REI-000001",
+    date: "2026-04-20",
+    amount: 150,
+    method: "transferencia",
+    reference: "Transferencia Banco General 4471915",
+  },
+  // Cobro PARCIAL: la factura queda en 'parcialmente_pagada' y la CxC no baja a
+  // cero. Da el caso de una cuenta con movimientos de los dos lados que no se
+  // cancelan entre sí.
+  {
+    clave: "cobro:hon-2-parcial",
+    invoice: "FAC-HON-000002",
+    date: "2026-06-15",
+    amount: 1000,
+    method: "transferencia",
+    reference: "Transferencia Banco General 4488115",
   },
 ];
 

@@ -884,15 +884,34 @@ npm run seed:staging                          # clientes, casos, plan de cuentas
 npm run seed:asientos                         # gastos, pagos y los asientos
 ```
 
-`seed:asientos` **depende** de `seed:staging`: las facturas tienen que existir antes, porque el
-asiento se arma desde la factura real. Si faltan, aborta diciendo cuál.
+`seed:asientos` **depende** de `seed:staging`: las facturas y los pagos tienen que existir
+antes, porque el asiento se arma desde el documento real. Si falta alguno, aborta diciendo cuál.
+
+### Quién crea qué (cambió el 2026-09-01)
+
+| documento | quién lo crea | dónde se declara |
+|---|---|---|
+| `invoices` + líneas | `seed:staging` | `SEED_INVOICES` |
+| **`payments` + `payment_applications`** | **`seed:staging`** | **`SEED_PAYMENTS`** |
+| `business_expenses` | `seed:asientos` | `GASTOS` |
+| — (asiento de diario) | nadie: `source_id` va NULL | `DIARIO` |
+
+**Los pagos vivían en `seed:asientos` y se mudaron a `seed:staging`.** El motivo está en
+SOP-017: mientras los pagos vivieron en el segundo script, el primero dejaba facturas marcadas
+"pagada" con `amount_paid` escrito a mano y sin un pago detrás. Hoy `seed:staging` produce por
+sí solo un estado final coherente, y `seed:asientos` **consume** los pagos igual que ya consumía
+las facturas — los busca por su `reference`.
+
+Si hace falta un cobro nuevo: se agrega a `SEED_PAYMENTS`, **no** a `COBROS`. Al revés no
+funciona; `seed:asientos` ya no crea pagos y aborta si el que nombra no existe. Y un pago no
+necesita entrada en `COBROS`: la regla es *todo asiento tiene documento*, no *todo documento
+tiene asiento* (ver el cobro de FAC-REI-000001, que a propósito no genera asiento).
 
 ### La regla: ningún asiento sin documento que exista
 
-Todo `source_type` que aparezca en el fixture tiene su documento real. Los gastos
-(`business_expenses`) y los cobros (`payments` + `payment_applications`) los crea el propio
-script con id UUIDv5 determinístico. El asiento de diario (`manual`) es el único sin
-documento, y por eso su `source_id` va en **NULL** — no un id sintético.
+Todo `source_type` que aparezca en el fixture tiene su documento real. El asiento de diario
+(`manual`) es el único sin documento, y por eso su `source_id` va en **NULL** — no un id
+sintético.
 
 **Los montos salen del documento, no al revés.** Un asiento que dice "factura X" por un
 importe que no es el de X es un descuadre que después nadie sabe si es bug o dato de prueba.
@@ -925,7 +944,13 @@ práctica: **tocar cómo se calcula el `source_id` obliga a resetear staging**, 
 | 4 | manual | ninguno | 2 cuentas de cada lado → contrapartida **ambigua** |
 | 5,8,9 | factura | FAC-HON-000001/2/3 | 3 líneas con ITBMS |
 | 6 | factura | FAC-REI-000001 | REEMBOLSO exento → 2 líneas, contrapartida inequívoca |
-| 7,10 | pago | 2 `payments` | uno total y uno **parcial** |
+| 7,10 | pago | 2 de los 3 `payments` | uno total y uno **parcial** |
+
+El tercer pago (el de FAC-REI-000001, B/. 150.00) **no tiene asiento a propósito** — ver
+`SEED_PAYMENTS` en `scripts/seed-data/staging-fixtures.ts`, donde está escrito el porqué:
+sostiene el baseline de 2,895.00 entre el mayor de Cuentas por Cobrar (194,842.55) y el Balance
+General (191,947.55), que es el número contra el que se va a validar la convergencia de
+reportes.
 
 La cuenta para verlo todo junto es `100004 Cuentas por Cobrar Clientes`: saldo inicial,
 movimientos de los dos lados y saldo corrido. Y `610008 Utiles de Oficina` muestra en la misma
@@ -947,3 +972,115 @@ SELECT (SELECT count(*) FROM journal_entries)                       AS asientos,
 `sin_lineas` distinto de 0 **no es un problema del seed, es un agujero en el motor de posteo**:
 el RPC es atómico y una cabecera sin líneas no debería poder existir. Eso pasa a ser prioridad
 por encima de cualquier reporte.
+
+---
+
+## SOP-017: `invoices.amount_paid` es derivado — y desde ahora, garantizado
+
+**Desde:** 2026-09-01 · migración `sql/pending/032_amount_paid_derivado.sql`
+
+### La regla, en una línea
+
+`invoices.amount_paid` NO se escribe. Se escribe el **pago**, y el trigger T7a deriva la
+columna. Lo mismo vale para los estados de cobro (`parcialmente_pagada`, `pagada`), que también
+los pone T7a.
+
+```sql
+-- ❌ NUNCA
+UPDATE invoices SET amount_paid = 150 WHERE id = ...;
+
+-- ✅ SIEMPRE
+INSERT INTO payments (...) VALUES (...);
+INSERT INTO payment_applications (payment_id, invoice_id, amount_applied) VALUES (..., 150);
+-- T7a actualiza amount_paid Y el status. No hay paso 3.
+```
+
+Desde el 2026-09-01 el guard **T4b** (`finanzas_guard_amount_paid`) rechaza lo primero, en
+UPDATE y en INSERT.
+
+### Por qué existe el guard, si T7a ya hacía el trabajo
+
+Porque *derivado* y *garantizado* no son lo mismo. T7a recalculaba la columna desde el día uno,
+pero T4 (`finanzas_invoice_immutability`) autorizaba explícitamente escribirla a mano en una
+factura emitida, y ningún grant lo impedía. La derivación estaba **acostumbrada**, no
+garantizada — y un número derivado que además se puede escribir a mano se vuelve a desalinear
+tarde o temprano.
+
+Se cobró el **28/08/2026**: `seed-staging.ts` creaba FAC-REI-000001 con `amount_paid = 150.00`
+y cero pagos. La pantalla mostraba "PAGADO $150.00" al lado de "Aún no hay pagos registrados".
+Y como `balance_due` es `GENERATED ALWAYS AS (grand_total - amount_paid)`, el saldo falso en
+0.00 además **escondía el botón "Registrar pago"**: un dato falso que encima desactivaba la
+función que lo habría corregido.
+
+### Qué NO cubre el guard
+
+- **`status` sigue siendo escribible, y está bien.** No es una columna derivada: T7a solo opina
+  sobre tres de sus seis estados. `borrador`, `cancelada_pre_emision` y `anulada` son estados de
+  máquina que no salen de los pagos. Cerrarle la escritura rompería `emitInvoice()` y
+  `cancelInvoice()`.
+- **No corrige desfases anteriores a él.** Impide nuevos, no repara viejos. Antes de aplicar la
+  032 en una base con datos reales hay que correr la consulta de diagnóstico (al pie de la
+  migración) y resolver lo que aparezca **aparte**: en producción un desfase no es un bug de
+  fixture, es un problema contable.
+
+### 🔑 La válvula de escape
+
+Va a existir el caso legítimo: restaurar un respaldo, una migración de datos, una corrección
+puntual autorizada. Se abre con un flag de transacción **distinto** del que usa T7a, para que en
+el log de Postgres una corrección humana se distinga de la operación normal del sistema:
+
+```sql
+BEGIN;
+  SELECT set_config('finanzas.amount_paid_override', 'on', true);  -- true = local a la TX
+  UPDATE invoices SET amount_paid = ... WHERE id = ...;
+COMMIT;
+```
+
+El flag es **local a la transacción**: se apaga solo en el COMMIT o el ROLLBACK, así que no
+puede quedar abierto por olvido. Cada escritura que pasa por acá deja un `WARNING` en el log de
+Postgres con el número de la factura.
+
+**Después de usarla, correr la consulta de diagnóstico.** Si la corrección dejó la columna
+desalineada de los pagos, la dejaste peor que antes.
+
+### 🚫 Cuándo NO usarla
+
+- **Para que un seed o un test pase.** Si el seed falla, es porque falta un pago. Se agrega a
+  `SEED_PAYMENTS`; no se fuerza el número.
+- **Para "arreglar" un número que se ve mal en pantalla.** Un `amount_paid` que no cuadra no es
+  el problema: es el síntoma. El problema es el pago que falta, sobra o está mal aplicado.
+  Escribir la columna borra la evidencia y deja el pago mal igual.
+- **Con un `DROP TRIGGER`.** Si alguna vez el guard estorba de verdad, la conversación es sobre
+  el guard, no un `DROP` a las once de la noche. Esta válvula existe justamente para que esa
+  noche no haga falta.
+
+### El chequeo permanente, en dos lugares y por razones distintas
+
+| Dónde | Qué corre | Por qué ahí |
+|---|---|---|
+| Cierre de `seed:staging` y `seed:asientos` | `verificarAmountPaidDerivado()` | Una siembra incoherente falla en el momento, no seis días después en una pantalla |
+| Suite de tests | `src/lib/finanzas/integridad/__tests__/amount-paid-derivado.test.ts` | La lógica rompe aunque nadie siembre |
+
+El núcleo es puro y está en `src/lib/finanzas/integridad/amount-paid-derivado.ts`; la parte que
+habla con Supabase está al lado, en `verificar-amount-paid.ts`.
+
+**No está dentro de `verify_accounting_chain()`, a propósito.** Esa función verifica el
+LEDGER; esto es facturación. Mezclarlas haría que un problema de facturación se reporte como
+cadena de asientos rota, que es el diagnóstico equivocado y el más caro de perseguir.
+
+### La consulta de diagnóstico
+
+Cero filas = la derivación está sana. Vale para staging y para producción (es solo lectura).
+
+```sql
+SELECT i.invoice_number, i.status, i.grand_total, i.amount_paid,
+       COALESCE(pa.aplicado, 0) AS suma_aplicada,
+       i.amount_paid - COALESCE(pa.aplicado, 0) AS diferencia,
+       i.balance_due
+  FROM invoices i
+  LEFT JOIN (SELECT invoice_id, SUM(amount_applied) AS aplicado
+               FROM payment_applications GROUP BY invoice_id) pa
+    ON pa.invoice_id = i.id
+ WHERE i.amount_paid IS DISTINCT FROM COALESCE(pa.aplicado, 0)
+ ORDER BY i.invoice_number;
+```

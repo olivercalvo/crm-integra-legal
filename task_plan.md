@@ -1,6 +1,59 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — LIBRO MAYOR ENTREGADO — 28/08/2026 <<<
+## >>> RETOMAR ACA — `amount_paid` DERIVADO Y GARANTIZADO — 01/09/2026 <<<
+
+**Lo que sigue NO cambió:** el correo con las NUEVE consultas y la llamada de validación con
+RM. El módulo de compras y el cableado factura→asiento siguen congelados detrás de ese gate.
+Este bloque no lo tocó.
+
+### Por qué existe este bloque, si no figuraba en el plan
+
+Nació del hallazgo del 28/08, anotado ese día en `changelog.md` bajo "Anotado, no tocado":
+las facturas del fixture traían `amount_paid` escrito a mano sin un `payment` detrás. El
+diagnóstico del 01/09 mostró que el agujero no era del seed sino de la base — T4
+(`finanzas_invoice_immutability`) autorizaba explícitamente escribir esa columna en una factura
+emitida — así que arreglar solo el fixture lo habría escondido hasta la Fase 4.
+
+### Estado: CERRADO
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| aP.1 | Migración `032_amount_paid_derivado.sql` — guard T4b + T7a anunciándose | ✅ aplicada en staging |
+| aP.2 | Válvula de escape documentada (`finanzas.amount_paid_override`) | ✅ SOP-017 |
+| aP.3 | `SEED_PAYMENTS` movido a `seed:staging`; `seed:asientos` los consume | ✅ |
+| aP.4 | `SeedInvoice.amount_paid` eliminado; el status lo produce T7a | ✅ |
+| aP.5 | Verificación al cierre de los dos seeds + 10 tests en la suite | ✅ |
+| aP.6 | Guard probado disparando (rechazo, T7a, reversión, válvula) | ✅ |
+| aP.7 | Reset + doble siembra; baseline de CxC intacto en 194,842.55 | ✅ |
+| aP.8 | Docs: `changelog.md`, `sop.md` (SOP-016 y SOP-017 nuevo), este archivo | ✅ |
+
+Detalle completo en `changelog.md` del 01/09 y en `sop.md` SOP-017.
+
+### ⚠️ PENDIENTE DE OLIVER — bloquea el merge a `main`
+
+**Correr la consulta de diagnóstico contra PRODUCCIÓN** (solo lectura, está al pie de
+`sql/pending/032_amount_paid_derivado.sql` y en SOP-017). El guard impide desfases nuevos pero
+**no corrige los viejos**, y en producción un desfase no es un bug de fixture: es una factura
+que dice estar cobrada por un monto que ningún pago respalda.
+
+- **0 filas** → la 032 se puede mergear tal cual.
+- **≥ 1 fila** → hay que resolver esas facturas con el contador ANTES de aplicar la migración.
+  El guard no las toca, pero congela el número mal en su lugar.
+
+### Lo que este bloque deliberadamente NO hizo
+
+- **No tocó `status`.** No es una columna derivada: T7a solo opina sobre tres de sus seis
+  estados. Cerrarle la escritura habría roto `emitInvoice()` y `cancelInvoice()`.
+- **No le puso asiento al pago de FAC-REI-000001.** Decisión del 01/09: sostiene el baseline de
+  2,895.00 entre el mayor de CxC (194,842.55) y el Balance (191,947.55), que es el número con el
+  que se va a validar la convergencia de reportes. Entra al ledger cuando se cablee
+  factura→asiento.
+- **No tocó los otros pendientes abiertos**: índice de `client_payments` en producción, las 3
+  variables de Vercel, las cuentas de prueba `999001`, ni los fixes de eFactura sin desplegar.
+
+---
+
+## Bloque anterior — LIBRO MAYOR ENTREGADO — 28/08/2026
 
 **Lo que sigue:** el correo con las NUEVE consultas y la llamada de validacion con RM. **El
 modulo de compras sigue sin arrancar** hasta esa validacion.

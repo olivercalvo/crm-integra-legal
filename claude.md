@@ -106,6 +106,22 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   concurrentes bifurcarían la cadena en silencio. El `SELECT ... FOR UPDATE` de la secuencia
   serializa correlativo y cadena con un solo candado. Detalle en `sop.md` SOP-014.
 
+### Facturación — `invoices.amount_paid` (desde 2026-09-01)
+- 🔴 **`amount_paid` NO se escribe. Se escribe el PAGO.** La columna la deriva el trigger T7a
+  como `SUM(payment_applications)`, y desde la migración `032` el guard T4b rechaza cualquier
+  otra escritura, en UPDATE **y en INSERT**. Para dejar una factura cobrada: `INSERT` en
+  `payments` + `INSERT` en `payment_applications`. No hay paso 3 — T7a actualiza `amount_paid`
+  y también el `status`.
+- ⚠️ **`status` SÍ se escribe, y no es lo mismo.** No es una columna derivada: T7a solo opina
+  sobre `emitida` / `parcialmente_pagada` / `pagada`. `borrador`, `cancelada_pre_emision` y
+  `anulada` son estados de máquina que no salen de los pagos. Cerrarle la escritura rompería
+  `emitInvoice()` y `cancelInvoice()`.
+- El comentario de T4 (`finanzas_invoice_immutability`) dice que "se permiten cambios a
+  amount_paid". Es cierto **solo para T7a**: T4 lo deja pasar justamente para que T7a pueda
+  trabajar, y T4b filtra al resto.
+- Hay una válvula de escape para restauraciones y correcciones autorizadas
+  (`finanzas.amount_paid_override`). Cuándo sí y cuándo NO: `sop.md` SOP-017.
+
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)
 - Verificación post-deploy obligatoria

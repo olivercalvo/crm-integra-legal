@@ -1,5 +1,149 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [`amount_paid` derivado y garantizado] - 2026-09-01
+
+### El problema: un número derivado que además se podía escribir a mano
+
+`invoices.amount_paid` lo mantiene el trigger T7a como `SUM(payment_applications)` desde el día
+uno. O sea: es un número **derivado**. Pero T4 (`finanzas_invoice_immutability`) autorizaba
+EXPLÍCITAMENTE escribirlo a mano en una factura emitida, y ningún grant lo restringía. La
+derivación estaba acostumbrada, no garantizada.
+
+Se cobró el 28/08: `seed-staging.ts` creaba FAC-REI-000001 con `amount_paid = 150.00` y cero
+pagos. Quedó anotado ese día y se resolvió hoy.
+
+**Lo que hacía peor al bug:** `balance_due` es `GENERATED ALWAYS AS (grand_total - amount_paid)`,
+así que el saldo falso en 0.00 **escondía el botón "Registrar pago"** — un dato falso que encima
+desactivaba la función que lo habría corregido.
+
+### Lo que se decidió, y lo que se descartó
+
+- ❌ **Columna generada:** imposible. Postgres exige que la expresión de un `GENERATED` sea
+  inmutable y referencie solo columnas de la misma fila; no admite un `SUM` sobre otra tabla.
+  Y `balance_due` ya depende de `amount_paid`, así que sacarla de la tabla se la lleva puesta.
+- ❌ **Vista / cálculo en la capa de consulta:** obligaba a reescribir los dos SELECT de
+  `queries/invoices.ts`, el cap de `createPayment`, el listado y el detalle — para resolver la
+  mitad del problema, porque `status` seguiría siendo columna real igual.
+- ❌ **Permisos por columna:** revocar `UPDATE(amount_paid)` obliga a enumerar todas las demás
+  columnas en el `GRANT`. Cada columna nueva de `invoices` nacería sin permiso y rompería algo
+  lejos del sitio del cambio. Trampa de mantenimiento.
+- ✅ **Guard por trigger (A2):** T7a marca su paso con un flag local a la transacción; el guard
+  rechaza todo lo demás. Veinte líneas, sin tocar grants.
+
+**`status` se dejó como estaba, a propósito.** No es derivado: T7a solo opina sobre tres de sus
+seis estados. `borrador`, `cancelada_pre_emision` y `anulada` son estados de máquina que no
+salen de los pagos. Perseguir la simetría con `amount_paid` habría roto `emitInvoice()` y
+`cancelInvoice()`.
+
+### Migración `032_amount_paid_derivado.sql`
+
+- **T7a** ahora hace `set_config('finanzas.recalc','on',true)` antes de escribir y lo apaga
+  apenas termina. Lo segundo importa: sin eso el flag quedaría encendido el resto de la
+  transacción y cualquier escritura posterior pasaría por la puerta que T7a dejó abierta detrás.
+- **T4b `finanzas_guard_amount_paid`** — rechaza toda escritura de `amount_paid` que no venga de
+  T7a, en UPDATE **y en INSERT** (por el INSERT entraba el seed). El mensaje dice qué hacer
+  —crear el pago—, no solo que está prohibido.
+- **Válvula de escape** con un flag DISTINTO (`finanzas.amount_paid_override`), para que en el
+  log de Postgres una corrección humana se distinga de la operación normal. Documentada en
+  SOP-017 con la lista de cuándo NO usarla. Un candado sin llave documentada se abre con un
+  `DROP TRIGGER` a las once de la noche.
+- **El comentario de T4 se corrigió.** Decía "solo se permiten cambios a status, amount_paid o
+  updated_at", cierto para cualquiera hasta ayer y desde hoy cierto solo para T7a.
+
+### Los pagos se mudaron de script
+
+`seed:staging` sembraba facturas ya "cobradas"; `seed:asientos` creaba después los pagos y los
+hacía calzar con ese número. La dependencia estaba **al revés**: el número escrito a mano
+mandaba y el pago real se acomodaba.
+
+- `SEED_PAYMENTS` (3 pagos) vive ahora en `staging-fixtures.ts`. `seed:staging` los siembra y
+  T7a deriva `amount_paid` y el status.
+- `seed:asientos` los **consume**, buscándolos por `reference` igual que ya buscaba las facturas
+  por `invoice_number`. Si nombra un pago que no existe, aborta pidiendo correr `seed:staging`.
+  Fecha y monto del asiento salen del pago, no del fixture.
+- `SeedInvoice.amount_paid` **dejó de existir**. `SeedInvoice.status` pasó a ser el estado
+  ESPERADO: `ESTADO_BASE` empuja solo hasta `emitida` y T7a completa el resto.
+- El comentario de `seed-asientos.ts` que documentaba el acoplamiento invertido se dio vuelta y
+  ahora dice explícitamente dónde se agrega un cobro nuevo (`SEED_PAYMENTS`, no `COBROS`).
+
+**El pago de FAC-REI-000001 (B/. 150) se sembró SIN asiento, a propósito.** La regla es "todo
+asiento tiene documento", no "todo documento tiene asiento" — lo segundo no aplica todavía
+porque factura→asiento no está cableado y solo 4 de las 8 facturas tienen asiento. Además
+sostiene el baseline de 2,895.00 entre el mayor de CxC y el Balance, que es el número con el que
+se va a validar la convergencia de reportes. El porqué quedó escrito al lado del pago.
+
+### Chequeo permanente, en dos lugares
+
+- Al cierre de **los dos seeds**: `verificarAmountPaidDerivado()` aborta si alguna factura no
+  cuadra. `seed:staging` además verifica que las 8 facturas hayan alcanzado el estado que el
+  fixture declara — el hueco que deja el otro chequeo, porque borrar una aplicación baja
+  `amount_paid` y el status juntos y el resultado quedaría "coherente".
+- En **la suite**: 10 tests del núcleo puro, incluido el caso literal del 28/08.
+- **NO se metió en `verify_accounting_chain()`**: esa función verifica el ledger, y esto es
+  facturación. Mezclarlas haría que un problema de facturación se reporte como cadena rota.
+
+### Verificado de verdad, no solo escrito
+
+Contra staging, dentro de una transacción con ROLLBACK:
+
+| Prueba | Resultado |
+|---|---|
+| `UPDATE invoices SET amount_paid = 999` | ✅ rechazado (23514) con el mensaje accionable |
+| `INSERT` de factura con `amount_paid = 150` | ✅ rechazado |
+| Aplicar un pago parcial (500 de 2140) | ✅ T7a → `amount_paid` 500, status `parcialmente_pagada` |
+| Completar el saldo | ✅ T7a → 2140, `pagada`, `balance_due` 0.00 |
+| Borrar la aplicación | ✅ T7a revierte a 500 / `parcialmente_pagada` |
+| Válvula con la llave puesta | ✅ pasa, y deja el WARNING en el log |
+| …y con la llave apagada | ✅ vuelve a rechazar |
+
+Y el chequeo del seed se probó plantando un desfase real (con la válvula, `amount_paid` a 100
+contra 150 aplicados): `seed:staging` **abortó con exit 1** nombrando la factura. Se restauró
+sin usar la válvula —tocando la aplicación, que es el camino que el guard obliga a tomar— y T7a
+reparó la columna solo.
+
+### Reset + siembra completa: el estado final se produce solo
+
+Ninguna de las 8 facturas tiene un número escrito a mano.
+
+| | |
+|---|---|
+| Desfases de `amount_paid` | **0 filas** |
+| Estados alcanzados | 8/8 coinciden con el fixture |
+| Ledger | 10 asientos, 27 líneas, correlativo 10, cadena íntegra |
+| Pagos / aplicaciones | 3 / 3 |
+| **Mayor de Cuentas por Cobrar** | **194,842.55** (191,947.55 + 4,965.00 − 2,070.00) ✅ sin cambios |
+| Segunda corrida de los dos seeds | 0 nuevos, todo "ya existía" |
+
+FAC-REI-000001 pasó de "PAGADO $150.00 / Aún no hay pagos registrados" a tener su pago real
+detrás.
+
+### Chequeos
+
+`tsc --noEmit` 0 errores · suite **379 tests, 307 pass, 0 fail, 72 skipped** (eran 369 el 28/08;
+los 10 nuevos son los de este bloque) · lint sin hallazgos nuevos.
+
+### Anotado, no tocado
+
+- **Lint: 21 errores preexistentes, ninguno en archivos de este bloque.** El changelog del
+  28/08 anotó "2 errores preexistentes"; ese número salía de mirar el final de la salida, no la
+  salida entera — y acá se repitió el mismo error antes de contarlos bien. Son 21: casi todos
+  imports y variables sin usar en pantallas de `/legal` y componentes, más tres `prefer-const`.
+  Los dos que sí estaban anotados (`queries/business-expenses.ts:111`,
+  `utils/import-parser.ts:259`) son los dos últimos de la lista, que es exactamente por qué se
+  vieron solo ellos. Listado completo con archivo:
+  `npx next lint 2>&1 | awk '/^\.\//{f=$0} /Error:/{print f" :: "$0}'`.
+  No se tocó ninguno: son ajenos a este bloque.
+- **12 tests fallan con `--experimental-test-module-mocks`**, y son los que la corrida normal
+  reporta como *skipped*. Todos en `chart-of-accounts` (POST/PATCH y bulk import); ninguno toca
+  este bloque. Uno es un desalineamiento visible de nomenclatura: el código dice
+  `gastos_operativos` y el test espera `gasto_operativo`. Con la suite como se corre en el
+  proyecto (sin esa flag) el resultado es 0 fail, así que estaban ocultos detrás del skip.
+- **Producción sin verificar todavía.** La consulta de diagnóstico contra la base real no se
+  pudo correr desde acá (sin acceso a credenciales de producción, por política del proyecto).
+  Queda pendiente de Oliver antes de decidir el merge: el guard impide desfases nuevos pero no
+  corrige viejos.
+
+
 ## [Libro Mayor + siembra con documentos reales] - 2026-08-28
 
 ### Contexto: diagnóstico tras el reinicio del 27/08

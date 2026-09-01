@@ -48,6 +48,7 @@ import { resolve } from "path";
 import { JOSUAR_ACCOUNTS } from "../src/lib/finanzas/reports/__tests__/josuar-accounts.fixture";
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import { inicioPeriodoFiscal } from "../src/lib/finanzas/contabilidad/periodo-fiscal";
+import { verificarAmountPaidDerivado } from "../src/lib/finanzas/integridad/verificar-amount-paid";
 import {
   SEED_CASES,
   SEED_CLASSIFICATIONS,
@@ -55,6 +56,7 @@ import {
   SEED_EXPENSES,
   SEED_INSTITUTIONS,
   SEED_INVOICES,
+  SEED_PAYMENTS,
   SEED_QUOTES,
   SEED_STATUSES,
   SEED_TASKS,
@@ -628,11 +630,30 @@ const QUOTE_PATH: Record<string, string[]> = {
   cancelada_pre_envio: ["cancelada_pre_envio"],
 };
 
-const INVOICE_PATH: Record<string, string[]> = {
+/**
+ * Hasta dónde empuja el seed cada factura A MANO.
+ *
+ * Ojo con `parcialmente_pagada` y `pagada`: el camino termina en `emitida`, y NO
+ * es un descuido. Esos dos estados los produce el trigger T7a cuando se aplica
+ * el pago correspondiente de `SEED_PAYMENTS`. Empujarlos a mano acá dejaría una
+ * factura marcada "pagada" sin un pago detrás — exactamente el desfase del
+ * 28/08/2026 que motivó la migración 032.
+ *
+ * `anulada` sí se empuja a mano: no sale de los pagos, es una decisión.
+ *
+ * `SeedInvoice.status` queda como el estado ESPERADO al final de todo, y
+ * `verificarEstadosDeFactura()` comprueba que se haya alcanzado.
+ */
+/** El número que le toca a una factura del fixture. Una sola definición. */
+function numeroDeFactura(inv: { kind: string; n: number }): string {
+  return `${inv.kind === "HONORARIOS" ? "FAC-HON" : "FAC-REI"}-${String(inv.n).padStart(6, "0")}`;
+}
+
+const ESTADO_BASE: Record<string, string[]> = {
   borrador: [],
   emitida: ["emitida"],
-  parcialmente_pagada: ["emitida", "parcialmente_pagada"],
-  pagada: ["emitida", "pagada"],
+  parcialmente_pagada: ["emitida"], // T7a la completa al aplicarse el pago
+  pagada: ["emitida"], //              ídem
   anulada: ["emitida", "anulada"],
   cancelada_pre_emision: ["cancelada_pre_emision"],
 };
@@ -852,8 +873,7 @@ async function seedFinanzas(): Promise<void> {
   // --- Facturas ---
   let facturasNuevas = 0;
   for (const inv of SEED_INVOICES) {
-    const prefix = inv.kind === "HONORARIOS" ? "FAC-HON" : "FAC-REI";
-    const number = `${prefix}-${String(inv.n).padStart(6, "0")}`;
+    const number = numeroDeFactura(inv);
     const rowId = id(`invoice:${number}`);
     const estadoInv = await estadoDocumento("invoices", "invoice_lines", "invoice_id", rowId, number);
     if (estadoInv === "completo") continue;
@@ -871,7 +891,9 @@ async function seedFinanzas(): Promise<void> {
       due_date: inv.due_date,
       status: "borrador",
       currency: "USD",
-      amount_paid: inv.amount_paid,
+      // `amount_paid` NO se escribe: nace en 0 (DEFAULT de la columna) y sube
+      // solo cuando se le aplica un pago. Desde la migración 032 el guard T4b
+      // rechaza el INSERT que traiga otra cosa. Ver `seedPayments()`.
       created_by: userIds.get("abogada"),
       cancellation_reason: inv.cancellation_reason ?? null,
       cancelled_at: inv.status === "anulada" ? `${inv.due_date}T16:00:00Z` : null,
@@ -885,19 +907,14 @@ async function seedFinanzas(): Promise<void> {
       if (estadoInv === "no-existe") await db.from("invoices").delete().eq("id", rowId);
       throw err;
     }
-    await advance("invoices", rowId, INVOICE_PATH[inv.status]);
-
-    const t = totals(inv.lines);
-    if (inv.amount_paid > t.grand) {
-      console.warn(
-        `   ⚠️  ${number}: amount_paid ${inv.amount_paid} > grand_total ${t.grand}`
-      );
-    }
+    await advance("invoices", rowId, ESTADO_BASE[inv.status]);
     facturasNuevas++;
   }
   console.log(
     `✅ Facturas — ${facturasNuevas} nuevas, ${SEED_INVOICES.length - facturasNuevas} ya existían`
   );
+
+  await seedPayments();
 
   // --- Secuencias ---
   // Se dejan justo por encima del último número usado, para que el próximo
@@ -914,6 +931,149 @@ async function seedFinanzas(): Promise<void> {
     "tenant_id,sequence_type"
   );
   console.log("✅ Secuencias de numeración alineadas con los datos sembrados");
+}
+
+// ===========================================================================
+// PAGOS — y con ellos, `amount_paid` y los estados de cobro
+// ===========================================================================
+
+/**
+ * Siembra los pagos de `SEED_PAYMENTS` y deja que T7a haga el resto.
+ *
+ * Ninguna línea de acá escribe `invoices.amount_paid` ni lleva una factura a
+ * `pagada` / `parcialmente_pagada`: eso lo hace el trigger T7a al insertarse la
+ * `payment_application`. Es el punto entero del cambio del 2026-09-01 — mientras
+ * el seed escribía el número a mano, podía (y llegó a) contradecir a los pagos.
+ *
+ * Idempotente por id determinístico, como todo el resto del seed.
+ */
+async function seedPayments(): Promise<void> {
+  let nuevos = 0;
+  const facturaPorNumero = new Map(SEED_INVOICES.map((i) => [numeroDeFactura(i), i]));
+
+  for (const p of SEED_PAYMENTS) {
+    const declarada = facturaPorNumero.get(p.invoice);
+    if (!declarada) {
+      throw new Error(
+        `el pago "${p.clave}" apunta a la factura ${p.invoice}, que no está en SEED_INVOICES.`
+      );
+    }
+    const invoiceId = id(`invoice:${p.invoice}`);
+
+    const { data: factura, error: errInv } = await db
+      .from("invoices")
+      .select("id, invoice_number, status, grand_total")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    if (errInv) throw new Error(`pago ${p.clave} — leer ${p.invoice}: ${errInv.message}`);
+    if (!factura) {
+      throw new Error(
+        `el pago "${p.clave}" apunta a la factura ${p.invoice}, que no existe. ` +
+          `Revisar que esté en SEED_INVOICES.`
+      );
+    }
+    if (p.amount > Number(factura.grand_total)) {
+      throw new Error(
+        `el pago "${p.clave}" es de ${p.amount} pero ${p.invoice} totaliza ${factura.grand_total}. ` +
+          `T7a no lo rechaza, pero dejaría la factura sobre-cobrada.`
+      );
+    }
+
+    const pagoId = id(`payment:${p.clave}`);
+    const { data: existe, error: errSel } = await db
+      .from("payments")
+      .select("id")
+      .eq("id", pagoId)
+      .maybeSingle();
+    if (errSel) throw new Error(`pago ${p.clave} — select: ${errSel.message}`);
+
+    if (!existe) {
+      const { error } = await db.from("payments").insert({
+        id: pagoId,
+        tenant_id: TENANT_ID,
+        client_id: clientIds.get(declarada.client),
+        payment_date: p.date,
+        amount: p.amount,
+        method: p.method,
+        reference: p.reference,
+        status: "registrado",
+        created_by: userIds.get("abogada"),
+      });
+      if (error) throw new Error(`insert payment ${p.clave}: ${error.message}`);
+      nuevos++;
+    }
+
+    // La aplicación. ACÁ es donde T7a recalcula `amount_paid` y transiciona el
+    // status de la factura.
+    const aplicacionId = id(`payment_application:${p.clave}`);
+    const { data: existeApp, error: errApp } = await db
+      .from("payment_applications")
+      .select("id")
+      .eq("id", aplicacionId)
+      .maybeSingle();
+    if (errApp) throw new Error(`aplicación ${p.clave} — select: ${errApp.message}`);
+
+    if (!existeApp) {
+      const { error } = await db.from("payment_applications").insert({
+        id: aplicacionId,
+        tenant_id: TENANT_ID,
+        payment_id: pagoId,
+        invoice_id: invoiceId,
+        amount_applied: p.amount,
+        created_by: userIds.get("abogada"),
+      });
+      if (error) throw new Error(`insert payment_application ${p.clave}: ${error.message}`);
+    }
+  }
+
+  console.log(
+    `✅ Pagos — ${nuevos} nuevos, ${SEED_PAYMENTS.length - nuevos} ya existían` +
+      ` (T7a derivó \`amount_paid\` y el status de cada factura cobrada)`
+  );
+}
+
+// ===========================================================================
+// VERIFICACIONES DE CIERRE
+// ===========================================================================
+
+/**
+ * El estado real de cada factura contra el que el fixture DECLARA esperar.
+ *
+ * Existe porque el seed dejó de empujar `pagada` / `parcialmente_pagada` a mano:
+ * ahora los produce T7a. Si un pago falta, sobra o quedó por el monto
+ * equivocado, la factura termina en otro estado y esto lo dice acá, con nombre y
+ * apellido, en vez de dejarlo para que alguien lo note en una pantalla.
+ */
+async function verificarEstadosDeFactura(): Promise<void> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("invoice_number, status")
+    .eq("tenant_id", TENANT_ID);
+  if (error) throw new Error(`verificar estados: ${error.message}`);
+
+  const real = new Map(((data ?? []) as { invoice_number: string; status: string }[]).map((f) => [f.invoice_number, f.status]));
+  const malos: string[] = [];
+
+  for (const inv of SEED_INVOICES) {
+    const numero = numeroDeFactura(inv);
+    const actual = real.get(numero);
+    if (actual !== inv.status) {
+      malos.push(`   · ${numero.padEnd(16)} esperado "${inv.status}" · real "${actual ?? "(no existe)"}"`);
+    }
+  }
+
+  if (malos.length > 0) {
+    console.error(
+      `\n❌ ABORTADO — ${malos.length} factura(s) no quedaron en el estado que declara el fixture:\n` +
+        `${malos.join("\n")}\n\n` +
+        `   Los estados de cobro los produce T7a a partir de SEED_PAYMENTS. Si una\n` +
+        `   factura esperaba "pagada" y quedó "emitida", le falta su pago; si esperaba\n` +
+        `   "parcialmente_pagada" y quedó "pagada", el monto del pago es de más.\n`
+    );
+    process.exit(1);
+  }
+
+  console.log("🔎 Verificación: las 8 facturas quedaron en el estado que declara el fixture.");
 }
 
 // ===========================================================================
@@ -973,6 +1133,12 @@ async function main(): Promise<void> {
   await seedExpenses();
   await seedTasks();
   await seedFinanzas();
+
+  // CIERRE — que una siembra incoherente falle acá y no en una pantalla dentro
+  // de seis días. Ver `sop.md` SOP-017.
+  await verificarEstadosDeFactura();
+  await verificarAmountPaidDerivado(db, TENANT_ID);
+
   await resumen();
 
   console.log("\n✅ Seed completo. Correrlo de nuevo no duplica nada.\n");

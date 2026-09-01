@@ -75,4 +75,7 @@ export const BUNDLE_2 = [
   "sql/pending/030_ledger_permisos_y_periodos.sql",
   "sql/pending/storage_rls_tenant_scoped.sql",
   "sql/pending/031_bucket_documents_privado.sql",
+  // Va DESPUÉS de 20260505000007 (define T7a) porque lo reemplaza para que
+  // anuncie su paso, y después de nada más: solo toca invoices y su trigger.
+  "sql/pending/032_amount_paid_derivado.sql",
 ];

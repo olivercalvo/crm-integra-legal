@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Upload, FileText, Trash2, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { abrirArchivo } from "@/lib/storage/abrir-archivo";
 
 interface Props {
   expenseId: string;
@@ -13,8 +14,14 @@ interface Props {
   receiptFilename: string | null;
   /** Si el usuario puede mutar (admin/abogada/contador). */
   canMutate: boolean;
-  /** URL pública/firmada para previsualizar el comprobante existente, si aplica. */
-  publicUrl: string | null;
+  /**
+   * Si hay comprobante subido.
+   *
+   * Antes acá llegaba `publicUrl`: la URL firmada a *.supabase.co que el server
+   * component ya había generado y que el navegador abría directo. Se cambió por
+   * un booleano porque el archivo ahora se pide a una ruta de la app.
+   */
+  tieneComprobante: boolean;
 }
 
 const ALLOWED_EXTS = ["jpg", "jpeg", "png", "pdf"];
@@ -31,13 +38,22 @@ export function ReceiptUploader({
   receiptUrl,
   receiptFilename,
   canMutate,
-  publicUrl,
+  tieneComprobante,
 }: Props) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showDelete, setShowDelete] = useState(false);
+
+  /** Pide el comprobante a la app, no al storage. Ver serve-file.ts. */
+  async function verComprobante() {
+    setError(null);
+    const r = await abrirArchivo(
+      `/api/finanzas/business-expenses/${expenseId}/receipt/download`
+    );
+    if (!r.ok) setError(r.error ?? "No se pudo abrir el comprobante");
+  }
 
   function pickFile() {
     fileRef.current?.click();
@@ -160,17 +176,16 @@ export function ReceiptUploader({
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {publicUrl && (
-            <a
-              href={publicUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+          {tieneComprobante && (
+            <button
+              type="button"
+              onClick={verComprobante}
               className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-integra-navy hover:bg-white"
               title="Abrir en pestaña nueva"
             >
               <ExternalLink size={14} />
               Ver
-            </a>
+            </button>
           )}
           {canMutate && (
             <>

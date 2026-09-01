@@ -39,14 +39,14 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
 
-  // URL firmada para previsualizar el receipt (válida por 1 hora)
-  let receiptPublicUrl: string | null = null;
-  if (expense.receipt_url) {
-    const { data } = await ctx.db.storage
-      .from("documents")
-      .createSignedUrl(expense.receipt_url, 3600);
-    receiptPublicUrl = data?.signedUrl ?? null;
-  }
+  // El comprobante YA NO se firma acá.
+  //
+  // Hasta el 01/09/2026 este server component generaba una URL firmada a
+  // *.supabase.co y se la pasaba al cliente como prop; el navegador la abría
+  // directo. En una red donde ese dominio no resuelve, el enlace muere — que es
+  // exactamente lo que le pasó a una de las licenciadas con una factura.
+  // Ahora se pasa un flag y el archivo se pide a una ruta de la app.
+  const tieneComprobante = Boolean(expense.receipt_url);
 
   const savedFlag = searchParams.saved === "1";
 
@@ -222,7 +222,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               receiptUrl={expense.receipt_url}
               receiptFilename={expense.receipt_filename}
               canMutate={canMutate}
-              publicUrl={receiptPublicUrl}
+              tieneComprobante={tieneComprobante}
             />
           </section>
 

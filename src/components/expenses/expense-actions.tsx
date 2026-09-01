@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+
+import { abrirArchivo } from "@/lib/storage/abrir-archivo";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Paperclip, X, Save, Loader2, FileText, Image as ImageIcon } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
@@ -157,10 +159,11 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600" }: Ex
   const handleViewReceipt = async () => {
     if (!expense.receipt_url) return;
     try {
-      const res = await fetch(`/api/expenses/${expense.id}/receipt/url`);
-      const json = await res.json();
-      if (json.url) {
-        window.open(json.url, "_blank");
+      // Por el dominio de la app, no por un enlace firmado a *.supabase.co
+      // (ver src/lib/storage/serve-file.ts).
+      const r = await abrirArchivo(`/api/expenses/${expense.id}/receipt/download`);
+      if (!r.ok) {
+        alert(r.error ?? "No se pudo abrir el recibo");
       }
     } catch {
       // Fallback: construct a URL directly (won't work without signed URL but at least tries)

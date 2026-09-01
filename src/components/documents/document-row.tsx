@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+
+import { abrirArchivo } from "@/lib/storage/abrir-archivo";
 import { Paperclip, Download, Loader2, FileText } from "lucide-react";
 import { DeleteDocumentButton } from "./delete-document-button";
 
@@ -17,12 +19,7 @@ interface DocumentRowProps {
   badge?: string | null;
 }
 
-async function getSignedUrl(documentId: string): Promise<string | null> {
-  const res = await fetch(`/api/documents/${documentId}/url`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.url ?? null;
-}
+
 
 export function DocumentRow({
   documentId,
@@ -37,11 +34,14 @@ export function DocumentRow({
     if (loading) return;
     setLoading(true);
     try {
-      const url = await getSignedUrl(documentId);
-      if (url) {
-        window.open(url, "_blank");
-      } else {
-        alert("No se pudo abrir el documento");
+      // El archivo llega POR EL DOMINIO DE LA APP. Antes se pedía un enlace
+      // firmado y se hacía window.open() a *.supabase.co, que rompía en redes
+      // donde ese dominio no resuelve. Ver src/lib/storage/serve-file.ts.
+      const r = await abrirArchivo(`/api/documents/${documentId}/download`, {
+        nombre: fileName,
+      });
+      if (!r.ok) {
+        alert(r.error ?? "No se pudo abrir el documento");
       }
     } finally {
       setLoading(false);
@@ -50,17 +50,14 @@ export function DocumentRow({
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = await getSignedUrl(documentId);
-    if (url) {
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      alert("No se pudo descargar el documento");
+    // `descargar: true` fuerza el diálogo de guardado con el nombre real del
+    // archivo, en vez de abrirlo en una pestaña.
+    const r = await abrirArchivo(`/api/documents/${documentId}/download`, {
+      descargar: true,
+      nombre: fileName,
+    });
+    if (!r.ok) {
+      alert(r.error ?? "No se pudo descargar el documento");
     }
   };
 

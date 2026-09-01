@@ -17,6 +17,7 @@ import {
   Scale,
   Wallet,
   BookOpenCheck,
+  Percent,
 } from "lucide-react";
 
 export type Role = "admin" | "abogada" | "asistente" | "contador";
@@ -80,6 +81,7 @@ export const TABS: TabDef[] = [
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
       { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },
       { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
+      { label: "Impuestos",         href: "/finanzas/configuracion/impuestos",   icon: Percent,        roles: ["admin", "abogada", "contador"] },
     ],
   },
   {

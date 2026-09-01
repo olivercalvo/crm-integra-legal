@@ -57,11 +57,11 @@ const CAMPOS_CLASIFICACION = ["account_type", "subcategoria"] as const;
 /**
  * Cuántos asientos tocan esta cuenta.
  *
- * Hoy siempre devuelve 0: el ledger existe (023) pero el motor de posteo llega
- * en la Fase 2, así que `journal_entry_lines` está vacía. La regla se
- * implementa igual desde ahora — cuando empiecen a entrar asientos ya está
- * puesta, en vez de acordarse después de haber reclasificado una cuenta con
- * movimientos.
+ * Ya NO siempre devuelve 0. El motor de posteo entró con la Fase 2 (migración
+ * 028) y en staging hay asientos sembrados por `npm run seed:asientos`, así que
+ * la regla que impide reclasificar una cuenta con movimientos empezó a poder
+ * dispararse de verdad. En producción el ledger sigue vacío: nada postea todavía
+ * — no hay ninguna ruta de API que llame a `post_journal_entry`.
  */
 async function contarMovimientos(
   db: DB,

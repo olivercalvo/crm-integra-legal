@@ -33,9 +33,10 @@ export function ReportPlaceholder({
       </div>
 
       <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
-        <p className="text-base font-medium text-integra-navy">Próximamente</p>
+        <p className="text-base font-medium text-integra-navy">Todavía no está construido</p>
         <p className="mt-1 text-sm text-gray-500">
-          Este reporte se implementa en las próximas fases del Sprint 2F.
+          Esta pantalla es un marcador de lugar: el reporte está planificado y se
+          construye en una entrega próxima. No hay datos que revisar acá.
         </p>
       </div>
     </div>

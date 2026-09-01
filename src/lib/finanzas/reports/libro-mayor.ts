@@ -12,18 +12,20 @@
  * Módulo PURO: sin I/O, sin React. La lectura vive en `libro-mayor-source.ts`.
  *
  * ═════════════════════════════════════════════════════════════════════════════
- * ⚠️ TRES DECISIONES PENDIENTES DE JOSUAR, AISLADAS A PROPÓSITO
+ * DE LAS TRES CONSULTAS ABIERTAS, DOS QUEDARON RESUELTAS (01/09/2026)
  * ═════════════════════════════════════════════════════════════════════════════
- * Su modelo no alcanza a definir tres cosas. Cada una vive en UNA función, para
- * que cuando conteste haya que cambiar tres funciones y no rastrear el criterio
- * por media pantalla:
+ * Josuarth mandó su formato el 26/08 (`Temas Contables/image001.png`), y ese
+ * modelo contesta dos de las tres preguntas que este módulo tenía aisladas:
  *
- *   consulta 3 → `contrapartidaDe()`   (en `contabilidad/contrapartida.ts`)
- *   consulta 4 → `totalesDePie()`      (acá abajo)
- *   consulta 5 → `importeDeLinea()`    (acá abajo)
+ *   consulta 4 → `totalesDePie()`      ✅ el pie es el NETO de movimientos
+ *   consulta 5 → `importeDeLinea()`    ✅ UNA columna Importe, con signo
+ *   consulta 3 → `contrapartidaDe()`   ⏳ sigue abierta (contrapartida ambigua)
  *
- * Ninguna es un placeholder: las tres tienen una versión defendible y
- * funcionando. Lo que está pendiente es cuál de las alternativas quiere él.
+ * Las dos resueltas ya estaban implementadas así, porque era lo que su modelo
+ * dejaba entrever. Lo que cambió es que dejaron de ser una apuesta: hay un
+ * documento que las respalda. Se mantienen en funciones propias igual — no por
+ * indecisión, sino porque son criterios de presentación y el próximo cliente
+ * puede querer otro.
  */
 
 import {
@@ -82,10 +84,29 @@ export interface CuentaDelMayor {
   account_type: AccountType;
   saldo_inicial: number;
   saldo_inicial_fecha: string | null;
+  /**
+   * Saldo con el que ARRANCA la fila "Saldo inicial" del mayor.
+   *
+   * Sin filtro de fechas es igual a `saldo_inicial`. CON filtro desde una fecha,
+   * es `saldo_inicial + Σ movimientos anteriores a esa fecha`: si el contador
+   * pide el mayor desde junio, la cuenta no arranca en su saldo de apertura de
+   * enero — arranca donde la dejó mayo.
+   *
+   * Hasta el 01/09/2026 el mayor mostraba siempre el de apertura, así que
+   * cualquier rango que no empezara en el inicio del ejercicio daba un saldo
+   * corrido corrido de lugar. Opcional para no romper a quien construya la
+   * cuenta a mano (los tests): si falta, se usa `saldo_inicial`.
+   */
+  saldo_arranque?: number;
+  /** Fecha efectiva del arranque: el `desde` del filtro, o la de apertura. */
+  arranque_fecha?: string | null;
+  /** true si hubo movimientos previos sumados — la UI lo rotula distinto. */
+  arranque_ajustado?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// PENDIENTE — CONSULTA 5: ¿el importe va con signo, o en Debe/Haber?
+// CONSULTA 5 — RESUELTA (formato de Josuarth, 26/08/2026)
+// Una sola columna "Importe" con signo. Negativo = crédito.
 // ---------------------------------------------------------------------------
 
 /**
@@ -99,21 +120,15 @@ export interface CuentaDelMayor {
  *
  * O sea: para un ACTIVO, importe = débito − crédito.
  *
- * ⚠️ LO QUE NO SE SABE: qué pasa con un PASIVO o un INGRESO. Todos los ejemplos
- * visibles de su modelo son cuentas de activo. Hay dos criterios posibles:
+ * SE IMPLEMENTA `débito − crédito` SIEMPRE, en convención de balanza. Un pasivo
+ * que crece se ve negativo, igual que en el Balance General de este sistema.
  *
- *   a) SIEMPRE `débito − crédito` (convención de balanza). Un pasivo que crece
- *      se ve negativo, igual que en el Balance General de este sistema.
- *   b) Según la NATURALEZA de la cuenta: `crédito − débito` en pasivo,
- *      patrimonio e ingreso, para que "la cuenta crece" siempre se lea en
- *      positivo.
- *
- * Se implementa (a), y por dos razones concretas: es lo único que su modelo
- * muestra, y es la convención que YA usan el Balance General y la balanza de
- * este sistema — mezclar dos convenciones en reportes que se leen juntos es
- * peor que elegir la que no se puede confirmar del todo.
- *
- * Si Josuar pide (b), se cambia SOLO esta función.
+ * Queda un matiz que su modelo no muestra, porque todos sus ejemplos son cuentas
+ * de activo: si prefiere que en pasivo, patrimonio e ingreso el importe se
+ * presente `crédito − débito` —para que "la cuenta crece" se lea siempre en
+ * positivo— se cambia SOLO esta función. No se pregunta como consulta bloqueante
+ * porque mezclar dos convenciones entre reportes que se leen juntos sería peor
+ * que sostener la que ya usa el resto del sistema.
  */
 export function importeDeLinea(m: {
   debit: number;
@@ -137,13 +152,17 @@ export function efectoEnSaldo(m: { debit: number; credit: number }): number {
 }
 
 // ---------------------------------------------------------------------------
-// PENDIENTE — CONSULTA 4: ¿el pie es el neto, el saldo final, o los dos?
+// CONSULTA 4 — RESUELTA (formato de Josuarth, 26/08/2026)
+// El pie es el NETO de movimientos del período. El saldo final NO va ahí: se
+// lee en la última fila de la columna Saldo, como en su modelo.
 // ---------------------------------------------------------------------------
 
 export interface TotalesPie {
-  /** Suma de los movimientos del período. NO incluye el saldo inicial. */
+  /** Suma de los movimientos del período. NO incluye el saldo inicial.
+   *  Es EL número del recuadro del pie en el modelo de Josuarth. */
   netoDelPeriodo: number;
-  /** Saldo inicial + movimientos. Es con lo que la cuenta queda. */
+  /** Arranque + movimientos. NO se muestra en el pie: se lee en la última fila
+   *  de la columna Saldo. Se calcula para poder verificar que cierren. */
   saldoFinal: number;
   /** Suma de los débitos del período (informativo). */
   totalDebitos: number;
@@ -166,9 +185,10 @@ export interface TotalesPie {
  *
  *     12,412.00 − 1,712.00 − 351.25 − 3,608.74 = 6,740.01 ✓
  *
- * Como la descripción del requisito decía solo "cierra con su total" —que es
- * ambiguo— se muestran **LOS DOS, rotulados**. Es más información, no menos, y
- * la respuesta de Josuar va a ser quedarse con uno.
+ * La tabla muestra en el recuadro del pie SOLO el neto, como él. `saldoFinal`
+ * se sigue calculando y se sigue exportando: es la comprobación aritmética de la
+ * última fila de la columna Saldo (arranque + neto tiene que dar esa fila), y
+ * los tests lo usan como tal. Que se calcule no significa que se muestre.
  */
 export function totalesDePie(
   saldoInicial: number,
@@ -287,13 +307,17 @@ export function buildMayorDeCuenta(
 
   const filas: FilaMayor[] = [];
 
+  // De dónde arranca el saldo corrido. Con filtro de fechas NO es el saldo de
+  // apertura: es el saldo al día anterior al `desde`. Ver `CuentaDelMayor`.
+  const saldoArranque = cuenta.saldo_arranque ?? cuenta.saldo_inicial;
+
   // Fila de saldo inicial. Se muestra SIEMPRE, aunque sea 0: es la que explica
   // de dónde arranca el saldo corrido, y su ausencia haría parecer que la
   // cuenta abrió en cero cuando quizá abrió sin cargar.
   filas.push({
     kind: "saldo-inicial",
     cuentaDistribucion: `${cuenta.code} ${cuenta.name}`,
-    fecha: cuenta.saldo_inicial_fecha,
+    fecha: cuenta.arranque_fecha ?? cuenta.saldo_inicial_fecha,
     tipoTransaccion: "",
     numero: "",
     nombre: "",
@@ -301,13 +325,13 @@ export function buildMayorDeCuenta(
     contrapartida: "",
     contrapartidaAmbigua: false,
     importe: 0,
-    saldo: round2(cuenta.saldo_inicial),
+    saldo: round2(saldoArranque),
     entryId: null,
     sourceType: null,
     sourceId: null,
   });
 
-  let saldo = round2(cuenta.saldo_inicial);
+  let saldo = round2(saldoArranque);
 
   for (const m of ordenados) {
     saldo = round2(saldo + efectoEnSaldo(m));
@@ -350,7 +374,7 @@ export function buildMayorDeCuenta(
   return {
     cuenta,
     filas,
-    totales: totalesDePie(cuenta.saldo_inicial, ordenados),
+    totales: totalesDePie(saldoArranque, ordenados),
     cantidadMovimientos: ordenados.length,
   };
 }

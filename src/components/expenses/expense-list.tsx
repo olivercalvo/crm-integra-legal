@@ -132,7 +132,7 @@ export function ExpenseList({ caseId, expenses, payments }: ExpenseListProps) {
       {/* Payments Section */}
       <Card className="border border-gray-100">
         <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base font-semibold text-integra-navy">Pagos del Cliente</CardTitle>
+          <CardTitle className="text-base font-semibold text-integra-navy">Cobros del Cliente</CardTitle>
           <Button
             type="button"
             size="sm"
@@ -143,7 +143,7 @@ export function ExpenseList({ caseId, expenses, payments }: ExpenseListProps) {
             {showPaymentForm ? (
               <span className="flex items-center gap-1"><X size={14} /> Cancelar</span>
             ) : (
-              <span className="flex items-center gap-1"><Plus size={14} /> Registrar Pago</span>
+              <span className="flex items-center gap-1"><Plus size={14} /> Registrar Cobro</span>
             )}
           </Button>
         </CardHeader>
@@ -155,13 +155,13 @@ export function ExpenseList({ caseId, expenses, payments }: ExpenseListProps) {
           )}
 
           {payments.length === 0 ? (
-            <p className="py-4 text-center text-sm text-gray-400">Sin pagos registrados.</p>
+            <p className="py-4 text-center text-sm text-gray-400">Sin cobros registrados.</p>
           ) : (
             <ul className="divide-y divide-gray-100">
               {payments.map((payment) => (
                 <li key={payment.id} className="flex items-center justify-between py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">Pago recibido</p>
+                    <p className="text-sm font-medium text-gray-800">Cobro recibido</p>
                     <p className="text-xs text-gray-400">{formatDate(payment.payment_date)}</p>
                   </div>
                   <span className="text-sm font-semibold text-green-600">

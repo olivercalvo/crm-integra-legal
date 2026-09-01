@@ -659,9 +659,9 @@ export default async function ExpedienteDetailPage({
                   )}
                 </div>
 
-                {/* Pagos de Trámite */}
+                {/* Cobros de Trámite — dinero que ENTRA del cliente (ver Rose, 25/08) */}
                 <div>
-                  <h4 className="text-sm font-semibold text-green-700 mb-2">Pagos</h4>
+                  <h4 className="text-sm font-semibold text-green-700 mb-2">Cobros</h4>
                   {paymentsTramite.length > 0 ? (
                     <div className="divide-y rounded-lg border bg-white p-2">
                       {paymentsTramite.map((p) => (
@@ -682,7 +682,7 @@ export default async function ExpedienteDetailPage({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin pagos de trámite</p>
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin cobros de trámite</p>
                   )}
                 </div>
               </div>
@@ -695,7 +695,7 @@ export default async function ExpedienteDetailPage({
                     <p className="font-bold text-red-600">{formatCurrency(totalTramite)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Pagos</p>
+                    <p className="text-xs text-gray-500">Cobros</p>
                     <p className="font-bold text-green-600">{formatCurrency(totalPayTramite)}</p>
                   </div>
                   <div>
@@ -751,9 +751,9 @@ export default async function ExpedienteDetailPage({
                   )}
                 </div>
 
-                {/* Pagos Administrativos */}
+                {/* Cobros Administrativos */}
                 <div>
-                  <h4 className="text-sm font-semibold text-green-700 mb-2">Pagos</h4>
+                  <h4 className="text-sm font-semibold text-green-700 mb-2">Cobros</h4>
                   {paymentsAdmin.length > 0 ? (
                     <div className="divide-y rounded-lg border bg-white p-2">
                       {paymentsAdmin.map((p) => (
@@ -774,7 +774,7 @@ export default async function ExpedienteDetailPage({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin pagos administrativos</p>
+                    <p className="text-sm text-gray-400 py-4 text-center rounded-lg border bg-gray-50">Sin cobros administrativos</p>
                   )}
                 </div>
               </div>
@@ -787,7 +787,7 @@ export default async function ExpedienteDetailPage({
                     <p className="font-bold text-red-600">{formatCurrency(totalAdmin)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Pagos</p>
+                    <p className="text-xs text-gray-500">Cobros</p>
                     <p className="font-bold text-green-600">{formatCurrency(totalPayAdmin)}</p>
                   </div>
                   <div>
@@ -820,7 +820,7 @@ export default async function ExpedienteDetailPage({
                     <tr className="border-b bg-gray-50">
                       <th className="px-4 py-2 text-left font-semibold text-gray-600">Concepto</th>
                       <th className="px-4 py-2 text-right font-semibold text-red-600">Gastos</th>
-                      <th className="px-4 py-2 text-right font-semibold text-green-600">Pagos</th>
+                      <th className="px-4 py-2 text-right font-semibold text-green-600">Cobros</th>
                       <th className="px-4 py-2 text-right font-semibold text-gray-600">Balance</th>
                     </tr>
                   </thead>

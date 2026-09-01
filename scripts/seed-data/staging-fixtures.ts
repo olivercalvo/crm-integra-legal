@@ -260,10 +260,32 @@ export interface SeedLine {
   invoice_kind: "HONORARIOS" | "REEMBOLSO";
 }
 
+/**
+ * Tasas de impuesto del ambiente de staging. FUENTE ÚNICA.
+ *
+ * `seed:staging` hace dos cosas con esto: reconcilia el catálogo `tax_codes` de
+ * la base para que tenga estas tasas, y calcula con ellas los totales de las
+ * líneas que siembra. Antes el catálogo venía de la migración
+ * `20260505000002_finanzas_catalogos.sql` y esta constante era una COPIA — dos
+ * lugares que podían decir cosas distintas sin que nada avisara.
+ *
+ * ⚠️ El 7% NO es una constante del sistema. Rose pidió el 25/08/2026 que la tasa
+ * sea configurable, porque el producto se puede vender a rubros con 10% o 5%.
+ * La tasa de verdad vive en `tax_codes.rate` y se edita desde
+ * `/finanzas/configuracion/impuestos`. Acá está el valor con el que se SIEMBRA
+ * staging, que es otra cosa: es el estado inicial del ambiente de pruebas.
+ */
 export const TAX_RATE: Record<SeedLine["tax_code"], number> = {
   ITBMS_7: 0.07,
   EXENTO: 0,
 };
+
+/** Los códigos que el seed garantiza en `tax_codes`, con su nombre visible. */
+export const SEED_TAX_CODES: { code: string; name: string; rate: number }[] = [
+  { code: "ITBMS_7", name: "ITBMS 7%", rate: TAX_RATE.ITBMS_7 },
+  { code: "ITBMS_0", name: "ITBMS 0%", rate: 0 },
+  { code: "EXENTO", name: "Exento", rate: TAX_RATE.EXENTO },
+];
 
 // ---------------------------------------------------------------------------
 // COTIZACIONES — una por estado alcanzable

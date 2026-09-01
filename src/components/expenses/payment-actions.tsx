@@ -51,7 +51,7 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
     setTimeout(() => setToast(null), 3000);
   };
 
-  const displayName = payment.description || (payment.payment_type === "administrativo" ? "Pago Administrativo" : "Pago Trámite");
+  const displayName = payment.description || (payment.payment_type === "administrativo" ? "Cobro Administrativo" : "Cobro Trámite");
 
   const startEdit = () => {
     setEditAmount(String(payment.amount));
@@ -85,7 +85,7 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
         }
         setMode("view");
         setError(null);
-        showToast("Pago actualizado correctamente");
+        showToast("Cobro actualizado correctamente");
         router.refresh();
       } catch {
         setError("Error de conexión");
@@ -102,7 +102,7 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
           setError(json.error ?? "Error al eliminar");
           return;
         }
-        showToast("Pago eliminado correctamente");
+        showToast("Cobro eliminado correctamente");
         router.refresh();
       } catch {
         setError("Error de conexión");
@@ -226,14 +226,14 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
                 <button
                   onClick={startEdit}
                   className="rounded p-1.5 text-gray-400 hover:text-integra-navy hover:bg-gray-100 transition-colors"
-                  title="Editar pago"
+                  title="Editar cobro"
                 >
                   <Pencil size={14} />
                 </button>
                 <button
                   onClick={() => { setMode("delete"); setError(null); }}
                   className="rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                  title="Eliminar pago"
+                  title="Eliminar cobro"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -271,7 +271,7 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
             <Input
               value={editDescription}
               onChange={(e) => setEditDescription(e.target.value)}
-              placeholder="Descripción del pago"
+              placeholder="Descripción del cobro"
               className="h-10"
             />
           </div>
@@ -337,7 +337,7 @@ export function PaymentRow({ payment, canEdit, colorClass = "text-green-600" }: 
         <p><strong>Monto:</strong> {formatCurrency(payment.amount)}</p>
         <p><strong>Fecha:</strong> {formatDate(payment.payment_date)}</p>
         {payment.receipt_url && (
-          <p className="text-amber-700">Este pago tiene un recibo adjunto que también se eliminará.</p>
+          <p className="text-amber-700">Este cobro tiene un recibo adjunto que también se eliminará.</p>
         )}
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}

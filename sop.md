@@ -1084,3 +1084,134 @@ SELECT i.invoice_number, i.status, i.grand_total, i.amount_paid,
  WHERE i.amount_paid IS DISTINCT FROM COALESCE(pa.aplicado, 0)
  ORDER BY i.invoice_number;
 ```
+
+---
+
+## SOP-018: Fuera de producción NO sale un solo correo
+
+**Desde:** 2026-09-01, antes de abrir staging a alguien de afuera del equipo.
+
+### La regla
+
+`getResend()` corta el envío si `NEXT_PUBLIC_APP_ENV` no es `production`. Cubre los cuatro
+puntos de envío de una sola vez, porque todos pasan por ahí: envío y reenvío de cotización,
+notificaciones del portal público, y el resumen diario del cron.
+
+### Por qué el candado vive en el código y no en la configuración
+
+`EMAIL_FROM` es `Integra Legal <notificaciones@integra-panama.com>` — un dominio REAL y
+verificado en Resend. Un correo mandado desde staging llega al destinatario **a nombre del
+bufete**, indistinguible de uno auténtico. Eso no es un bug: es un problema con el cliente.
+
+El riesgo es concreto, no hipotético: **el diálogo "Enviar cotización" deja escribir CUALQUIER
+dirección**. Alcanza con que alguien probando el ambiente escriba su propio correo — o el de
+una licenciada — para que salga.
+
+Hasta el 01/09 la única defensa era que `RESEND_API_KEY` estuviera ausente, y es una defensa
+que depende de un panel: en Vercel la variable está en *All Environments*, así que los deploys
+de Preview/Staging SÍ la tienen. `.env.local` la tiene comentada a propósito, pero eso solo
+protege a `localhost`, no al deploy que se le pasa a alguien por link.
+
+### Por qué falla fuerte en vez de simular el envío
+
+Un "modo sandbox" que dice "enviado" sin enviar es exactamente el bug del banner verde
+mentiroso que ya se pagó en el Sprint 2E.3: la cotización figuraba enviada y nunca llegaba.
+Acá se lanza una excepción con el motivo, la ruta devuelve `email_sent: false` + `email_error`,
+y la UI lo muestra. El mensaje aclara que **el documento quedó registrado y el enlace público
+sirve igual** — para que no se lea como una falla del sistema.
+
+### 🔑 La válvula
+
+```bash
+ALLOW_REAL_EMAILS=1
+```
+
+Server-only (sin prefijo `NEXT_PUBLIC_`), así que no viaja al navegador. Cada envío que pasa por
+ahí deja un `WARNING` en el log nombrando el remitente.
+
+**Cuándo sí:** probar el envío a propósito contra **una dirección propia**, en local, y volver a
+sacarla al terminar.
+
+**Cuándo NO:**
+- En un deploy compartido. Si está puesta en Vercel, cualquiera que entre puede mandar correo
+  real a nombre del bufete.
+- "Para ver si funciona" con la dirección de un cliente o de una licenciada.
+- Para destrabar un test. Un test que necesita mandar correo de verdad está mal escrito.
+
+### eFactura: el mismo criterio
+
+`loadEmisorConfig()` rechaza `EFACTURA_I_AMB=1` (producción DGI) cuando el entorno no es
+producción. `iAmb = 1` emite un documento fiscal **REAL**: se le asigna CUFE y queda en los
+registros del contribuyente. Una emisión de prueba con esa variable mal puesta no se deshace con
+un DELETE — se anula ante la DGI, con ventana de 182 horas, o se arrastra hasta una nota de
+crédito.
+
+El sandbox (`iAmb = 2`) **no** se bloquea: probar contra el PAC de pruebas desde staging es para
+lo que existe.
+
+### Otras salidas al mundo — revisadas el 01/09/2026
+
+| Salida | Estado |
+|---|---|
+| Resend (4 puntos de envío) | 🔒 cerrado por `assertRealEmailAllowed()` |
+| eFactura / PAC ideati | 🔒 `iAmb=1` imposible fuera de producción; el sandbox sigue abierto |
+| Cron `daily-summary` | Corre solo en Production (Vercel no ejecuta crons en Preview) y además pasa por el mismo candado |
+| Emails del fixture de staging | Todos `.test` — dominio reservado por RFC 2606, no resuelve en ningún proveedor |
+| `connectivity.ts`, `offline/sync.ts`, `direct-upload.ts` | Rutas internas de la propia app. No salen a Internet |
+
+Hay tests que lo fijan: `src/lib/email/__tests__/candado-ambiente.test.ts`.
+
+---
+
+## SOP-019: Congelar staging mientras alguien de afuera lo revisa
+
+**Desde:** 2026-09-01, primera revisión de Josuarth (contador de RM).
+
+### El problema
+
+Si mientras alguien revisa se sigue reseteando la base o mergeando a `develop`, el ambiente le
+cambia bajo los pies: los números que anotó ayer no son los de hoy, y el feedback deja de servir
+— peor, empieza a reportar como bugs cosas que ya arreglamos y a no reportar las que rompimos.
+
+### La regla: VENTANA DE REVISIÓN
+
+Mientras haya una revisión abierta con alguien de afuera del equipo:
+
+| | |
+|---|---|
+| 🔴 **Prohibido** | `node scripts/apply-staging-sql.mjs --reset`. Borra la base entera. Es lo único que de verdad no se puede hacer |
+| 🔴 **Prohibido** | Aplicar migraciones a staging (`run-sql.mjs`) |
+| 🔴 **Prohibido** | Correr los seeds. Son idempotentes, pero `seed:staging` alinea el catálogo de impuestos y puede pisar algo que el revisor cambió a propósito |
+| 🟡 **Con aviso** | Deploys de Preview desde `develop`. El código cambia bajo sus pies. Si es necesario, se le avisa y se anota qué cambió |
+| ✅ **Libre** | Commitear en `develop` sin desplegar. Trabajar en local contra… (ver abajo) |
+
+**El trabajo NO se detiene.** Lo que se detiene es tocar *ese* ambiente. Durante una ventana de
+revisión se sigue commiteando en `develop`, y las pruebas locales que necesiten resetear la base
+esperan a que cierre la ventana. Si hay que probar algo destructivo antes, se pide explícitamente
+la interrupción de la ventana — no se hace y se avisa después.
+
+### Cómo se abre y se cierra
+
+1. **Antes de abrir:** dejar staging en un estado reproducible desde cero
+   (`--reset` + `seed:staging` + `seed:asientos`) y anotar en `changelog.md` los números de
+   control con los que queda. Sin eso no hay a qué volver.
+2. **Se abre** cuando se manda el correo con el acceso.
+3. **Se cierra** cuando el revisor confirma que terminó, o cuando su feedback ya está recibido
+   por escrito.
+4. **Al cerrar:** se aplica el feedback, se resetea, se vuelve a sembrar, y recién ahí se abre la
+   siguiente ventana.
+
+### El estado de referencia (revisión de Josuarth, 01/09/2026)
+
+Números con los que quedó staging. Si alguno no coincide, el ambiente se tocó:
+
+| | |
+|---|---|
+| Clientes / casos / facturas | 15 / 30 / 8 |
+| Pagos y aplicaciones | 3 / 3 |
+| Asientos y líneas del ledger | 10 / 27 · cadena íntegra · correlativo 10 |
+| Mayor de Cuentas por Cobrar (100004) | inicial 191,947.55 · neto 2,895.00 · **final 194,842.55** |
+| Balance — Total de Activo | 257,902.46 |
+| Estado de Resultado — utilidad operativa | −244,476.91 |
+| Plan de cuentas | 64 activas |
+| Desfases de `amount_paid` | 0 |

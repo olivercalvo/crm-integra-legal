@@ -42,7 +42,7 @@ export function PaymentForm({ caseId, onSuccess }: PaymentFormProps) {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Error al registrar el pago.");
+        setError(data.error ?? "Error al registrar el cobro.");
         setLoading(false);
         return;
       }

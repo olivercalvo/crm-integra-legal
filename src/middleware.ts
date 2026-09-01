@@ -1,60 +1,23 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Prefijos que cada rol puede acceder.
-//   "/"          — selector de módulos, abierto a todo rol autenticado.
-//   "/legal/*"   — módulo Legal: abogada, asistente y admin (NO contador).
-//   "/finanzas/*" — módulo Finanzas: abogada, admin y contador (NO asistente).
-// Los subárboles /legal/admin/* y /finanzas/admin/* son admin-only y se gatean
-// aparte (ADMIN_ONLY_PREFIXES). El contador queda confinado a un sub-subset
-// de /finanzas via CONTADOR_FINANZAS_ALLOWED_PREFIXES (ver más abajo).
-const ROLE_ROUTES: Record<string, string[]> = {
-  admin:     ["/", "/legal", "/finanzas"],
-  abogada:   ["/", "/legal", "/finanzas"],
-  asistente: ["/", "/legal"],
-  contador:  ["/", "/finanzas"],
-};
+import {
+  ADMIN_ONLY_PREFIXES,
+  ADMIN_ONLY_ROUTES,
+  ASISTENTE_BLOCKED_PATTERNS,
+  CONTADOR_FINANZAS_ALLOWED_PREFIXES,
+  ROLE_HOME,
+  ROLE_ROUTES,
+  esRol,
+} from "@/lib/auth/route-access";
 
-const ADMIN_ONLY_PREFIXES = ["/legal/admin", "/finanzas/admin"];
-
-// Rutas de /legal fuera del alcance del asistente.
+// Las reglas de acceso por rol NO viven acá: están en
+// `src/lib/auth/route-access.ts`, que es la fuente única que además consume
+// `nav-guard.test.ts` para verificar que el sidebar no ofrezca rutas que este
+// middleware rebota. Ver el encabezado de ese archivo para el porqué.
 //
-// Clientes: puede abrir la FICHA de un cliente puntual (llega a ella desde el
-// detalle de un caso), pero NO el directorio completo ni las pantallas de
-// alta/edición — esas acciones ya le responden 403 en la API. Por eso el gate
-// es por ruta EXACTA y no por prefijo: /legal/clientes/{id} tiene que seguir
-// pasando.
-//
-// Gastos: fuera de su alcance por completo desde el 24/08/2026 (decisión de
-// negocio del cliente). Acá sí va por PREFIJO — no hay ninguna sub-ruta de
-// gastos que deba ver. Ocultarlo del menú (nav-config) no alcanza: sin este
-// patrón, escribir /legal/gastos a mano igual renderiza la pantalla.
-const ASISTENTE_BLOCKED_PATTERNS: RegExp[] = [
-  /^\/legal\/clientes\/?$/,                 // directorio
-  /^\/legal\/clientes\/nuevo\/?$/,          // alta
-  /^\/legal\/clientes\/[^/]+\/editar\/?$/,  // edición
-  /^\/legal\/gastos(\/.*)?$/,               // gastos — módulo completo
-];
-
-// El contador es un rol especializado en cierre contable.
-// Dentro de /finanzas puede ver /finanzas/reportes/* (hub + sub-páginas) y
-// /finanzas/gastos-bufete/* (carga de compras del bufete con ITBMS recuperable;
-// Sprint 2F Parte 3a). El root /finanzas se permite porque tiene un redirect
-// interno por rol (page.tsx lo manda a /finanzas/reportes cuando rol=contador).
-const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
-  "/finanzas/reportes",
-  "/finanzas/gastos-bufete",
-];
-
-// Home primaria por rol — destino fallback cuando el rol no tiene acceso a la
-// ruta solicitada. Admin/abogada caen al selector general; asistente cae a
-// Legal; contador cae directo al hub de reportes (su única vista útil).
-const ROLE_HOME: Record<string, string> = {
-  admin:     "/",
-  abogada:   "/",
-  asistente: "/legal",
-  contador:  "/finanzas/reportes",
-};
+// Este archivo se queda con lo que solo puede pasar acá: leer la sesión,
+// resolver el rol del JWT y ejecutar los redirects.
 
 // Redirects 301 desde rutas pre-Fase 1A (vigentes ~4 semanas para preservar
 // bookmarks y los emails diarios ya enviados con URLs antiguas).
@@ -228,6 +191,27 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("error", "no-role");
     return NextResponse.redirect(url);
+  }
+
+  // Un rol que este código no conoce no tiene permisos definidos, y eso no puede
+  // resolverse por defecto: se trata como sesión inválida.
+  if (!esRol(userRole)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", "no-role");
+    return NextResponse.redirect(url);
+  }
+
+  // Rutas admin-only sueltas (no cuelgan de un subárbol /admin). Se evalúan
+  // primero porque su destino de rebote es distinto: el módulo al que pertenecen.
+  if (ADMIN_ONLY_ROUTES.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    if (userRole !== "admin") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/finanzas/cotizaciones";
+      url.searchParams.set("denied", "terms_template");
+      return NextResponse.redirect(url);
+    }
+    return response;
   }
 
   // /legal/admin/* y /finanzas/admin/* son admin-only.

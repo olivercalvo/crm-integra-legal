@@ -158,14 +158,19 @@ interface FacturaOp {
   /**
    * Cuenta que recibe el crédito por el neto facturado.
    *
-   * En HONORARIOS es la cuenta de ingreso del área del caso. En REEMBOLSO no
-   * hay ingreso: el bufete recupera un costo que pagó por el cliente, así que
-   * el crédito va contra la cuenta de costo que se está recuperando.
+   * En HONORARIOS es la cuenta de ingreso del área del caso.
    *
-   * ⚠️ El tratamiento del reembolso es una elección de ESTE FIXTURE para que
-   * staging tenga el caso "factura sin ITBMS", no una regla contable
-   * confirmada. Cuando se cablee factura→asiento de verdad, el criterio lo
-   * define el contador.
+   * En REEMBOLSO va contra `130003 Fondos Legales de Clientes`, NUNCA contra
+   * una cuenta de ingreso ni de costo. Facturar un reembolso no genera ingreso:
+   * el bufete recupera plata que adelantó por el cliente, así que lo que hace es
+   * bajar el fondo que tenía a su favor.
+   *
+   * ✅ Esto NO es una elección del fixture ni una consulta pendiente: lo
+   * responde textual el acta de la reunión del 25/08/2026 con RM, y está en la
+   * lista de decisiones tomadas de `Temas Contables/REQUISITOS-REUNION-25-AGOSTO.md`
+   * ("Reembolso al facturar: HABER 130003, nunca ingreso"). Hasta el 01/09 el
+   * fixture usaba `500005 Costos trámites legales`, que era la interpretación
+   * vieja.
    */
   cuentaNeto: string;
   glosaNeto: string;
@@ -174,8 +179,9 @@ interface FacturaOp {
 const FACTURAS: FacturaOp[] = [
   { numero: "FAC-HON-000001", cuentaNeto: "400001", glosaNeto: "Honorarios — cambio de junta directiva" },
   // Sin ITBMS (REEMBOLSO exento): deja el asiento de DOS líneas, que es un
-  // caso que ningún otro asiento del fixture cubre.
-  { numero: "FAC-REI-000001", cuentaNeto: "500005", glosaNeto: "Reembolso — tasa de Registro Público" },
+  // caso que ningún otro asiento del fixture cubre. La contrapartida es
+  // `130003`, no una cuenta de costo — ver el comentario de `cuentaNeto`.
+  { numero: "FAC-REI-000001", cuentaNeto: "130003", glosaNeto: "Reembolso — tasa de Registro Público" },
   { numero: "FAC-HON-000002", cuentaNeto: "400001", glosaNeto: "Honorarios — aumento de capital" },
   { numero: "FAC-HON-000003", cuentaNeto: "400006", glosaNeto: "Honorarios — recurso de reconsideración" },
 ];

@@ -278,3 +278,70 @@ test("sin descripción de línea, se usa la del asiento", () => {
   ]);
   assert.equal(m.filas[1].descripcion, "Cobro de factura FE-0001");
 });
+
+// ---------------------------------------------------------------------------
+// SALDO DE ARRANQUE CON FILTRO DE FECHAS  (Bloque 0, 01/09/2026)
+// ---------------------------------------------------------------------------
+// Hasta el 01/09 la fila "Saldo inicial" mostraba SIEMPRE el saldo de apertura,
+// aunque el usuario filtrara desde junio. El saldo corrido quedaba desplazado de
+// punta a punta: es el error más visible que puede tener un mayor, y el primero
+// que un contador nota al abrirlo.
+//
+// Quién calcula el ajuste es `loadCuentaDelMayor` (capa de datos, suma los
+// movimientos anteriores al `desde`). Lo que se prueba acá es que el armado lo
+// USE: que arranque de `saldo_arranque` y no de `saldo_inicial`.
+
+test("sin filtro de fechas, el arranque sigue siendo el saldo de apertura", () => {
+  const m = buildMayorDeCuenta(BANCO, [
+    mov(1, "2026-03-02", 1000, 0, [herm("100001", "Banco", 1000, 0, 1)]),
+  ]);
+  assertMoney(m.filas[0].saldo, 14381.27, "fila de arranque");
+  assertMoney(m.totales.saldoFinal, 15381.27, "saldo final");
+});
+
+test("con `saldo_arranque`, la fila de arranque y el saldo corrido salen de ahí", () => {
+  // La cuenta abre en 14,381.27 pero antes del rango se movió +2,000.00.
+  const cuenta: CuentaDelMayor = {
+    ...BANCO,
+    saldo_arranque: 16381.27,
+    arranque_fecha: "2026-06-01",
+    arranque_ajustado: true,
+  };
+  const m = buildMayorDeCuenta(cuenta, [
+    mov(9, "2026-06-15", 500, 0, [herm("100001", "Banco", 500, 0, 1)]),
+  ]);
+
+  assertMoney(m.filas[0].saldo, 16381.27, "la fila de arranque usa el ajustado");
+  assertMoney(m.filas[1].saldo, 16881.27, "el saldo corrido sigue desde el ajustado");
+  assertMoney(m.totales.saldoFinal, 16881.27, "saldo final = arranque + neto");
+  assert.equal(m.filas[0].fecha, "2026-06-01", "la fila de arranque lleva la fecha del rango");
+});
+
+test("el NETO del pie NO cambia con el ajuste: son los movimientos del rango", () => {
+  // Es la trampa del reporte: si el ajuste se colara en el neto, el pie
+  // contaría dos veces los movimientos anteriores al rango.
+  const conAjuste = buildMayorDeCuenta(
+    { ...BANCO, saldo_arranque: 99999, arranque_fecha: "2026-06-01", arranque_ajustado: true },
+    [mov(9, "2026-06-15", 500, 0, [herm("100001", "Banco", 500, 0, 1)])]
+  );
+  const sinAjuste = buildMayorDeCuenta(BANCO, [
+    mov(9, "2026-06-15", 500, 0, [herm("100001", "Banco", 500, 0, 1)]),
+  ]);
+  assertMoney(conAjuste.totales.netoDelPeriodo, 500, "neto con ajuste");
+  assertMoney(sinAjuste.totales.netoDelPeriodo, 500, "neto sin ajuste");
+});
+
+test("el ejemplo del modelo de Josuarth cierra: 14,381.27 + 6,740.01 = 21,121.28", () => {
+  // Banco Pichincha, tal como está en `Temas Contables/image001.png`. Es el
+  // caso que fija que el pie es el NETO y no el saldo final.
+  const m = buildMayorDeCuenta(BANCO, [
+    mov(1, "2026-07-07", 12412, 0, [herm("100001", "Banco", 12412, 0, 1)]),
+    mov(2, "2026-07-09", 0, 1712, [herm("100001", "Banco", 0, 1712, 1)]),
+    mov(3, "2026-07-09", 0, 351.25, [herm("100001", "Banco", 0, 351.25, 1)]),
+    mov(4, "2026-07-09", 0, 3608.74, [herm("100001", "Banco", 0, 3608.74, 1)]),
+  ]);
+
+  assertMoney(m.totales.netoDelPeriodo, 6740.01, "el pie: NETO de movimientos");
+  assertMoney(m.filas[m.filas.length - 1].saldo, 21121.28, "última fila de Saldo");
+  assertMoney(m.totales.saldoFinal, 21121.28, "arranque + neto");
+});

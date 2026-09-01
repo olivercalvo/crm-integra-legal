@@ -7,6 +7,14 @@ interface ReportCardProps {
   icon: React.ReactNode;
   badge: string;
   href: string;
+  /**
+   * true = la pantalla existe pero todavía no tiene el reporte construido.
+   *
+   * La tarjeta sigue siendo navegable a propósito: sirve para que se vea qué
+   * está planificado. Lo que cambia es que lo dice ANTES del clic, en vez de
+   * después.
+   */
+  pendiente?: boolean;
 }
 
 export function ReportCard({
@@ -15,13 +23,17 @@ export function ReportCard({
   icon,
   badge,
   href,
+  pendiente = false,
 }: ReportCardProps) {
   return (
     <Link
       href={href}
       className={cn(
-        "group block rounded-xl border border-gray-200 bg-white p-5 shadow-sm",
+        "group block rounded-xl border p-5 shadow-sm",
         "transition-all duration-200",
+        pendiente
+          ? "border-dashed border-gray-300 bg-gray-50/60"
+          : "border-gray-200 bg-white",
         "hover:border-integra-gold hover:shadow-md",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-integra-gold focus-visible:ring-offset-2"
       )}
@@ -35,13 +47,25 @@ export function ReportCard({
             <h2 className="text-base font-semibold text-integra-navy leading-tight">
               {title}
             </h2>
-            <span className="shrink-0 rounded-full bg-integra-navy/5 px-2 py-0.5 text-[11px] font-medium text-integra-navy/70 ring-1 ring-integra-navy/10">
-              {badge}
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
+                pendiente
+                  ? "bg-amber-50 text-amber-800 ring-amber-200"
+                  : "bg-integra-navy/5 text-integra-navy/70 ring-integra-navy/10"
+              )}
+            >
+              {pendiente ? "No construido" : badge}
             </span>
           </div>
           <p className="mt-1.5 text-sm text-gray-600 leading-snug">
             {description}
           </p>
+          {pendiente && (
+            <p className="mt-1 text-xs text-amber-700">
+              Planificado — todavía no hay datos que revisar.
+            </p>
+          )}
         </div>
       </div>
     </Link>

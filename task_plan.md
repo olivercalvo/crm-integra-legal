@@ -1,6 +1,72 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACA — `amount_paid` DERIVADO Y GARANTIZADO — 01/09/2026 <<<
+## >>> RETOMAR ACA — STAGING LISTO PARA JOSUARTH — 01/09/2026 <<<
+
+**Lo que sigue:** mandarle el correo a Josuarth con el acceso, y **esperar su feedback antes de
+tocar nada más**. Cambió la forma de trabajar: Rose pidió entregas por módulo con validación
+entre una y otra, no un sistema terminado para revisar de una vez.
+
+### ⚠️ VENTANA DE REVISIÓN ABIERTA — leer `sop.md` SOP-019 antes de tocar staging
+
+Mientras Josuarth revisa: **no resetear, no migrar, no sembrar**. El trabajo sigue en `develop`;
+lo que se detiene es tocar ese ambiente. Los números de referencia con los que quedó están en
+SOP-019 y en el `changelog.md` del 01/09.
+
+### 🔴 PENDIENTE DE OLIVER — bloquea el correo
+
+1. **La URL de staging.** No existe documentada: `crm-integra-legal.vercel.app` es PRODUCCIÓN.
+   Los deploys de Preview de Vercel tienen URL autogenerada por rama y por defecto **piden login
+   de Vercel** (Deployment Protection). Josuarth no tiene cuenta. Hay que resolver las dos cosas
+   —qué URL y cómo entra sin cuenta de Vercel— antes de mandar nada. No se puede sacar del repo.
+2. **Confirmar que `RESEND_API_KEY` puede quedarse donde está.** Ya no hace falta moverla: el
+   candado de SOP-018 corta el envío por código en cualquier entorno que no sea producción. Pero
+   conviene saber que está en *All Environments* y que ahora es inofensiva.
+3. **`ALLOW_REAL_EMAILS` NO debe existir en Vercel.** Si alguien la carga, el candado se abre.
+
+### Lo que quedó entregado en este bloque
+
+| # | Tarea | Estado |
+|---|-------|--------|
+| B0.1 | Candado de correo fuera de producción + eFactura `iAmb` | ✅ SOP-018, 8 tests |
+| B0.2 | "Pagos" → "Cobros" en gastos del caso | ✅ |
+| B0.3 | ITBMS configurable: pantalla nueva + seed reconciliando el catálogo | ✅ |
+| B0.4 | Tipo de documento a lista desplegable | ✅ |
+| B0.5 | Reembolso al facturar → HABER `130003` | ✅ verificado en el asiento 6 |
+| B0.6 | Libro Mayor al formato de Josuarth (9 columnas, pie = neto, importe con signo) | ✅ |
+| B0.7 | Saldo inicial del mayor ajustado al rango de fechas | ✅ 4 tests |
+| B0.8 | Auditoría sidebar vs middleware + `nav-guard.test.ts` | ✅ 4 desajustes cerrados |
+| B0.9 | Contador entra a `/finanzas/configuracion` con permiso de edición | ✅ |
+| B0.10 | Hub de reportes distingue lo construido de los marcadores | ✅ |
+| B0.11 | Reset + doble siembra, verificado con sesión real de contador | ✅ 13 rutas 200, 6 rebotan |
+
+### Consultas a RM que este bloque CERRÓ
+
+- **Consulta 4** (qué va en el pie del mayor) → el NETO de movimientos. Su modelo lo contesta.
+- **Consulta 5** (signo del importe) → una sola columna con signo, negativo = crédito.
+- **Reembolso al facturar** → `130003`, nunca ingreso. Estaba en el acta desde el 25/08.
+
+### Lo que sigue abierto de RM
+
+1. **Consulta 3** — contrapartida ambigua (más de una cuenta del otro lado). Sigue aislada en
+   `contrapartidaDe()`.
+2. **La fecha exacta de los saldos cargados.** Rose dio la regla contable, falta el dato. Se
+   resuelve mirando a qué fecha se generó el reporte de QuickBooks del que salieron — lo tenemos
+   nosotros, no RM. Hoy 42 de 64 cuentas tienen `saldo_inicial_fecha` en NULL.
+3. **La captura del reporte de antigüedad detallado.** Es el único de sus tres entregables que
+   falta.
+4. **A las licenciadas:** confirmar que la firma paga TODOS los gastos de trámite, y si usan
+   tarjeta de crédito.
+
+### Fuera del alcance de este bloque, por decisión
+
+Van después de que Josuarth valide: módulo de compras, gastos de trámite, cobros y pagos,
+cableado factura→asiento, antigüedades, balance de comprobación, diario general y la convergencia
+de reportes (analizada el 01/09, no implementada — ver el análisis en la conversación y el gate en
+el bloque de más abajo).
+
+---
+
+## Bloque anterior — `amount_paid` DERIVADO Y GARANTIZADO — 01/09/2026
 
 **Lo que sigue NO cambió:** el correo con las NUEVE consultas y la llamada de validación con
 RM. El módulo de compras y el cableado factura→asiento siguen congelados detrás de ese gate.

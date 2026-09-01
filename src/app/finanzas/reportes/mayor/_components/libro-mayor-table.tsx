@@ -42,15 +42,27 @@ function destinoDelOrigen(fila: FilaMayor, destinos: Map<string, string>): strin
   return destinos.get(fila.sourceId) ?? null;
 }
 
-function Fila({ fila, destinos }: { fila: FilaMayor; destinos: Map<string, string> }) {
+function Fila({
+  fila,
+  destinos,
+  rotuloArranque,
+}: {
+  fila: FilaMayor;
+  destinos: Map<string, string>;
+  /** "Saldo inicial", o "Saldo al DD/MM/AAAA" si el filtro lo ajustó. */
+  rotuloArranque: string;
+}) {
   if (fila.kind === "saldo-inicial") {
     return (
       <tr className="border-b border-gray-200 bg-integra-navy/5">
+        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
+          {fila.cuentaDistribucion}
+        </td>
         <td className="px-3 py-2 font-mono text-xs text-gray-500">
           {fila.fecha ?? "—"}
         </td>
         <td className="px-3 py-2 text-sm" colSpan={5}>
-          <span className="font-semibold text-integra-navy">Saldo inicial</span>
+          <span className="font-semibold text-integra-navy">{rotuloArranque}</span>
         </td>
         <td className="px-3 py-2 text-right text-gray-400">—</td>
         <td className="px-3 py-2 text-right">
@@ -64,6 +76,9 @@ function Fila({ fila, destinos }: { fila: FilaMayor; destinos: Map<string, strin
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50">
+      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
+        {fila.cuentaDistribucion}
+      </td>
       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-600">
         {fila.fecha}
       </td>
@@ -116,6 +131,13 @@ export function LibroMayorTable({
   const { cuenta, filas, totales, cantidadMovimientos } = mayor;
   const hayAmbiguas = filas.some((f) => f.contrapartidaAmbigua);
 
+  // Con filtro de fechas, la primera fila NO es el saldo de apertura: es el
+  // saldo al día en que arranca el rango. Decirle "Saldo inicial" a las dos
+  // cosas es lo que haría dudar del reporte entero.
+  const rotuloArranque = cuenta.arranque_ajustado
+    ? `Saldo al ${cuenta.arranque_fecha ?? ""}`.trim()
+    : "Saldo inicial";
+
   return (
     <div className="space-y-3">
       <div className="rounded-xl border bg-white">
@@ -129,48 +151,55 @@ export function LibroMayorTable({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px]">
+          <table className="w-full min-w-[1120px]">
             <thead>
+              {/* Orden y nombres EXACTOS del modelo que mandó Josuarth el
+                  26/08/2026 (`Temas Contables/image001.png`). No reordenar sin
+                  mirar esa captura: la revisa contra su propio reporte. */}
               <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-3 py-2 font-semibold">Fecha</th>
+                <th className="px-3 py-2 font-semibold">Cuenta de distribución</th>
+                <th className="px-3 py-2 font-semibold">Fecha de la transacción</th>
                 <th className="px-3 py-2 font-semibold">Tipo de transacción</th>
                 <th className="px-3 py-2 font-semibold">Número</th>
                 <th className="px-3 py-2 font-semibold">Nombre</th>
                 <th className="px-3 py-2 font-semibold">Descripción</th>
-                <th className="px-3 py-2 font-semibold">Contrapartida</th>
+                <th className="px-3 py-2 font-semibold">Cuenta de contrapartida</th>
                 <th className="px-3 py-2 text-right font-semibold">Importe</th>
                 <th className="px-3 py-2 text-right font-semibold">Saldo</th>
               </tr>
             </thead>
             <tbody>
               {filas.map((f, i) => (
-                <Fila key={`${f.kind}-${i}`} fila={f} destinos={destinos} />
+                <Fila
+                  key={`${f.kind}-${i}`}
+                  fila={f}
+                  destinos={destinos}
+                  rotuloArranque={rotuloArranque}
+                />
               ))}
             </tbody>
             <tfoot>
               {/*
-                PENDIENTE — consulta 4. En el modelo de Josuar el recuadro del
-                pie es el NETO de movimientos, no el saldo final. Como el
-                requisito decía solo "cierra con su total", se muestran los dos
-                rotulados: es más información, no menos.
+                El recuadro del pie es el NETO de movimientos del período, no el
+                saldo final — así lo tiene el modelo de Josuarth, y se verifica
+                con su propio ejemplo: Banco Pichincha abre en 14,381.27, cierra
+                en 21,121.28 y el pie dice 6,740.01, que es la suma de los
+                movimientos.
+
+                El saldo final NO se repite acá: se lee en la última fila de la
+                columna Saldo, que es donde él lo lee.
               */}
               <tr className="border-t-2 border-integra-navy/20 bg-gray-50/60">
-                <td colSpan={6} className="px-3 py-2 text-right text-sm text-gray-600">
+                <td colSpan={7} className="px-3 py-2 text-right text-sm text-gray-600">
                   Débitos {money(totales.totalDebitos)} · Créditos{" "}
                   {money(totales.totalCreditos)}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <span className="block text-[10px] uppercase tracking-wide text-gray-500">
-                    Neto del período
+                  <span className="inline-block rounded border-2 border-integra-navy/40 px-2 py-1">
+                    <Monto value={totales.netoDelPeriodo} bold />
                   </span>
-                  <Monto value={totales.netoDelPeriodo} bold />
                 </td>
-                <td className="px-3 py-2 text-right">
-                  <span className="block text-[10px] uppercase tracking-wide text-gray-500">
-                    Saldo final
-                  </span>
-                  <Monto value={totales.saldoFinal} bold />
-                </td>
+                <td className="px-3 py-2" />
               </tr>
             </tfoot>
           </table>

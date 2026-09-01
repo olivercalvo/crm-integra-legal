@@ -10,6 +10,7 @@
  */
 
 import type { TipoContribuyente } from "@/lib/finanzas/efactura/types";
+import { currentAppEnv } from "@/lib/env/app-env";
 
 export interface EmisorUbicacion {
   codigoUbicacion: string;
@@ -129,6 +130,29 @@ export function loadEmisorConfig(
   if (iAmbRaw !== 1 && iAmbRaw !== 2) {
     throw new Error(
       `[efactura/emisor-config] EFACTURA_I_AMB debe ser 1 (producción) o 2 (pruebas), recibido: ${iAmbRaw}`
+    );
+  }
+
+  // 🔴 CANDADO DE AMBIENTE (2026-09-01, antes de abrir staging a RM)
+  //
+  // `iAmb = 1` emite un documento fiscal REAL ante la DGI: se le asigna CUFE y
+  // queda en los registros del contribuyente. Una emisión de prueba con esa
+  // variable mal puesta no se deshace con un DELETE — se anula ante la DGI, con
+  // ventana de 182 horas, o se arrastra hasta una nota de crédito.
+  //
+  // El ambiente del PAC lo decide una env var, y hasta hoy el propio comentario
+  // de `iAmb` decía que casarla con el ambiente correcto era "responsabilidad
+  // operativa". Fuera de producción eso deja de ser una responsabilidad y pasa a
+  // ser imposible: acá se rechaza.
+  //
+  // NO bloquea el sandbox (`iAmb = 2`): probar contra el PAC de pruebas desde
+  // staging es justamente para lo que existe.
+  const appEnv = currentAppEnv();
+  if (iAmbRaw === 1 && appEnv !== "production") {
+    throw new Error(
+      `[efactura/emisor-config] EFACTURA_I_AMB=1 (producción DGI) en el entorno "${appEnv}". ` +
+        `Emitir así generaría un documento fiscal REAL desde un ambiente de pruebas. ` +
+        `Fuera de producción solo se permite EFACTURA_I_AMB=2 (sandbox del PAC).`
     );
   }
 

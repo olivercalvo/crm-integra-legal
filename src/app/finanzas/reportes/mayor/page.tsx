@@ -42,7 +42,11 @@ export default async function LibroMayorPage({
   const desde = searchParams.desde?.trim() || "";
   const hasta = searchParams.hasta?.trim() || "";
 
-  const cuenta = code ? await loadCuentaDelMayor(ctx.db, ctx.tenantId, code) : null;
+  // El rango va también acá, no solo a los movimientos: con `desde`, la fila
+  // "Saldo inicial" tiene que traer el saldo al día anterior, no el de apertura.
+  const cuenta = code
+    ? await loadCuentaDelMayor(ctx.db, ctx.tenantId, code, { desde, hasta })
+    : null;
 
   let mayor = null;
   let destinos = new Map<string, string>();

@@ -26,13 +26,22 @@
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
 | **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva |
+| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas` y dentro de él a tres subárboles: **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos). **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
 | **Asistente** | **Alcance reducido el 24/08/2026 por decisión del cliente.** Ve SOLO tres pantallas: Dashboard (`/legal`), Casos (`/legal/casos` — todos los del bufete, SOLO LECTURA) y Mis Pendientes (`/legal/pendientes`). Dentro de un caso puede hacer exactamente dos cosas: **subir documentos y comentar**. **Sigue cumpliendo tareas** desde Mis Pendientes — pero solo las asignadas a él, y no las crea: crear/asignar tareas es admin/abogada (`POST /api/tasks` le responde 403). Si necesita dejarse un recordatorio en un caso, usa un comentario. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. **NO puede:** ver ni registrar gastos (`/legal/gastos` le rebota, el tab Gastos del caso no se le renderiza y `/api/expenses` le responde 403), cambiar el estado de un caso (el `CaseStatusChanger` no se le renderiza y `PATCH /api/cases/[id]` le responde 403 incluso con `action="change-status"`), editar/crear/borrar casos ni clientes, **crear ni asignar tareas** (ni de caso ni pendientes personales de otra persona), acceder a Finanzas |
 
-> **Los permisos del asistente se hacen cumplir en el servidor, no en el menú.** Cada
-> restricción de arriba tiene su gate real: `ASISTENTE_BLOCKED_PATTERNS` en `middleware.ts`
-> para las rutas, y `requireRole()` en los handlers de `/api`. Si alguna vez se amplía o
-> recorta el rol, hay que mover **esta tabla, el middleware y los guards de la API juntos** —
-> tocar solo `nav-config.ts` esconde el botón pero deja el permiso abierto.
+> **Los permisos se hacen cumplir en el servidor, no en el menú.** Cada restricción de
+> arriba tiene su gate real: las reglas de ruta viven en **`src/lib/auth/route-access.ts`**
+> (fuente única que consume `middleware.ts`), y los permisos por operación en `requireRole()`
+> dentro de los handlers de `/api`. Si alguna vez se amplía o recorta un rol, hay que mover
+> **esta tabla, `route-access.ts` y los guards de la API juntos** — tocar solo `nav-config.ts`
+> esconde el botón pero deja el permiso abierto.
+>
+> 🔒 **Hay un test que lo verifica:** `src/lib/auth/__tests__/nav-guard.test.ts` cruza el
+> sidebar contra las reglas de ruta y falla si se separan, en los dos sentidos — un ítem de
+> menú que rebota, o una pantalla accesible que el menú no muestra. Existe porque el
+> 01/09/2026 se encontraron cuatro desajustes a la vez, incluido `/legal/importar`
+> (importación masiva) abierto al asistente sin ningún gate. Antes, detectarlos dependía de
+> que una persona recorriera el menú con cada rol.
 
 ## 5. REGLAS DE DESARROLLO (NON-NEGOTIABLE)
 

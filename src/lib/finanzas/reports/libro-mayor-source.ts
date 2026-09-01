@@ -36,15 +36,24 @@ export interface RangoFechas {
   hasta?: string | null;
 }
 
-/** La cuenta cuyo mayor se va a mostrar. null si no existe o no es del tenant. */
+/**
+ * La cuenta cuyo mayor se va a mostrar. null si no existe o no es del tenant.
+ *
+ * Si viene `rango.desde`, además calcula el SALDO DE ARRANQUE: el saldo de
+ * apertura más todos los movimientos anteriores a esa fecha. Sin eso, pedir el
+ * mayor desde junio mostraba el saldo de enero en la primera fila y el saldo
+ * corrido quedaba desplazado de punta a punta — el error más visible que se
+ * puede cometer en un mayor, y el primero que un contador nota.
+ */
 export async function loadCuentaDelMayor(
   db: DB,
   tenantId: string,
-  code: string
+  code: string,
+  rango: RangoFechas = {}
 ): Promise<CuentaDelMayor | null> {
   const { data, error } = await db
     .from("chart_of_accounts")
-    .select("code, name, account_type, saldo_inicial, saldo_inicial_fecha")
+    .select("id, code, name, account_type, saldo_inicial, saldo_inicial_fecha")
     .eq("tenant_id", tenantId)
     .eq("code", code)
     .maybeSingle();
@@ -56,13 +65,61 @@ export async function loadCuentaDelMayor(
   if (!data) return null;
 
   const r = data as Record<string, unknown>;
+  const saldoInicial = Number(r.saldo_inicial ?? 0);
+  const saldoInicialFecha = (r.saldo_inicial_fecha as string | null) ?? null;
+
+  const previos = rango.desde
+    ? await sumaMovimientosAnteriores(db, tenantId, r.id as string, rango.desde)
+    : 0;
+
   return {
     code: r.code as string,
     name: r.name as string,
     account_type: r.account_type as AccountType,
-    saldo_inicial: Number(r.saldo_inicial ?? 0),
-    saldo_inicial_fecha: (r.saldo_inicial_fecha as string | null) ?? null,
+    saldo_inicial: saldoInicial,
+    saldo_inicial_fecha: saldoInicialFecha,
+    saldo_arranque: round2(saldoInicial + previos),
+    arranque_fecha: rango.desde ?? saldoInicialFecha,
+    arranque_ajustado: previos !== 0,
   };
+}
+
+/**
+ * Neto (débitos − créditos) de los movimientos ANTERIORES a `desde`.
+ *
+ * Se trae solo `debit`/`credit` y se suma acá: PostgREST no agrega, y montar un
+ * RPC para esto sería una función de base más para mantener. Son las líneas de
+ * una cuenta antes de una fecha — decenas, no millones.
+ */
+async function sumaMovimientosAnteriores(
+  db: DB,
+  tenantId: string,
+  accountId: string,
+  desde: string
+): Promise<number> {
+  const { data, error } = await db
+    .from("journal_entry_lines")
+    .select("debit, credit, journal_entries!inner(transaction_date)")
+    .eq("tenant_id", tenantId)
+    .eq("account_id", accountId)
+    .lt("journal_entries.transaction_date", desde);
+
+  if (error) {
+    console.error("[finanzas/mayor] sumaMovimientosAnteriores failed", error);
+    // Devolver 0 en silencio mostraría el saldo de apertura como si fuera el del
+    // rango, que es justo el error que esta función existe para evitar.
+    throw new Error("No se pudo calcular el saldo anterior al rango de fechas");
+  }
+
+  let neto = 0;
+  for (const fila of (data ?? []) as { debit: number | string; credit: number | string }[]) {
+    neto += Number(fila.debit) - Number(fila.credit);
+  }
+  return round2(neto);
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
 /** Mapa code → cuenta_control, para deducir el nombre del tercero. */

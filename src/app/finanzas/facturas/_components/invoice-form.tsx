@@ -237,26 +237,34 @@ export function InvoiceForm(props: Props) {
           <h2 className="text-base font-semibold text-integra-navy">Datos de la factura</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Tipo */}
+            {/* Tipo de documento
+                Reunión 25/08 (RM): lista desplegable, no control segmentado.
+                Motivo: vienen nota de crédito, nota de débito, factura local y
+                de exportación, y cuatro o más opciones no entran en botones. El
+                desplegable crece sin rediseñar la pantalla. Hoy la lista sigue
+                siendo HONORARIOS / REEMBOLSO; los tipos nuevos son otro sprint. */}
             <div data-error={!!errors.invoice_kind}>
-              <Label className="mb-1 block">Tipo de factura *</Label>
-              <div className="flex rounded-md border border-gray-300 bg-white overflow-hidden">
+              <Label htmlFor="invoice_kind" className="mb-1 block">
+                Tipo de documento *
+              </Label>
+              <select
+                id="invoice_kind"
+                name="invoice_kind"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as InvoiceKind)}
+                disabled={isPending}
+                className={
+                  "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white " +
+                  "hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                  (errors.invoice_kind ? "border-red-300" : "border-gray-300")
+                }
+              >
                 {KINDS.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => setKind(k)}
-                    disabled={isPending || (props.mode === "edit" && false)}
-                    className={`flex-1 min-h-[44px] text-sm font-medium transition-colors ${
-                      kind === k
-                        ? "bg-integra-navy text-white"
-                        : "text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
+                  <option key={k} value={k}>
                     {INVOICE_KIND_LABEL[k]}
-                  </button>
+                  </option>
                 ))}
-              </div>
+              </select>
               {errors.invoice_kind && (
                 <p className="mt-1 text-xs text-red-600">{errors.invoice_kind}</p>
               )}

@@ -1,5 +1,157 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 0 — lo que pidieron cara a cara + staging listo para RM] - 2026-09-01
+
+Cambio de estrategia del cliente. Rose lo escribió en el correo que acompaña su guía: *"lo que
+esperamos es que avances por módulo, lo probemos, corrijas o apruebes y sigas al siguiente
+paso."* Así que esto no es un sprint más: es una entrega corta que termina con Josuarth (el
+contador de RM) entrando a staging a revisar.
+
+### 🔴 Antes de abrir la puerta: un correo real podía salir desde staging
+
+`EMAIL_FROM` es `notificaciones@integra-panama.com` — dominio REAL y verificado en Resend. Un
+correo mandado desde staging llega **a nombre del bufete**, indistinguible de uno auténtico. Y
+el diálogo "Enviar cotización" deja escribir **cualquier** dirección: alcanzaba con que alguien
+probando escribiera su propio correo, o el de una licenciada.
+
+La única defensa era que `RESEND_API_KEY` estuviera ausente — y en Vercel está en *All
+Environments*, así que los deploys de Preview SÍ la tienen. `.env.local` la tiene comentada,
+pero eso solo protege a `localhost`, no al link que se le pasa a alguien.
+
+**Se cerró en el código, no en un panel:** `getResend()` corta si el entorno no es producción, y
+cubre los cuatro puntos de envío de una vez porque todos pasan por ahí. Falla **fuerte** en vez
+de simular el envío — un "modo sandbox" que dice "enviado" sin enviar es el bug del banner verde
+mentiroso que ya se pagó en 2E.3. El mensaje aclara que el documento quedó registrado y el
+enlace público sirve igual. Válvula documentada: `ALLOW_REAL_EMAILS=1` (SOP-018).
+
+**eFactura, mismo criterio:** `loadEmisorConfig()` rechaza `EFACTURA_I_AMB=1` fuera de
+producción. `iAmb=1` emite un documento fiscal REAL ante la DGI y no se deshace con un DELETE.
+El sandbox (`iAmb=2`) sigue abierto, que es para lo que existe.
+
+Revisadas las demás salidas: el cron `daily-summary` solo corre en Production y pasa por el
+mismo candado; los emails del fixture son todos `.test` (RFC 2606, no resuelven); el resto de
+los `fetch` son rutas internas.
+
+### 🔴 El hallazgo que no buscábamos: el menú y el middleware no coincidían
+
+Empezó como un caso puntual —el sidebar le ofrecía "Plan de Cuentas" al contador y el middleware
+lo rebotaba— y resultó ser una clase de error: **dos listas de permisos, en dos archivos, sin
+nada que las obligara a coincidir.** La auditoría con los cuatro roles encontró cuatro
+desajustes:
+
+| Rol | Ruta | Qué pasaba |
+|---|---|---|
+| contador | `/finanzas/configuracion/cuentas` | El menú lo ofrecía, el middleware lo rebotaba |
+| asistente | `/legal/seguimiento` | Fuera del menú y **sin ningún gate**: entraba escribiendo la URL |
+| asistente | `/legal/prospectos` | ídem |
+| asistente | **`/legal/importar`** | ídem — y es la **importación masiva**, que CLAUDE.md reserva a admin y abogada |
+| abogada | `/finanzas/cotizaciones/configuracion` | Gateada dentro de la página, no en el middleware: desde afuera no se distingue de "sin gate" |
+
+Los tres del asistente **no** eran una decisión que hubiera que tomar: CLAUDE.md ya dice que ve
+solo Dashboard, Casos y Mis Pendientes. El código no cumplía su propia política escrita, y
+esconder el ítem del menú nunca cerró nada.
+
+**Qué se hizo:**
+- Las reglas de ruta salieron del middleware a **`src/lib/auth/route-access.ts`**, fuente única.
+- El contador entra a `/finanzas/configuracion/*` (Plan de Cuentas e Impuestos), **con permiso de
+  edición**. No fue una ampliación caprichosa: `ROLES_CLASIFICACION` en la API ya era
+  `["admin","contador"]`, siguiendo la guía de RM ("quien modifica la clasificación contable debe
+  ser el contador"). El permiso existía y era correcto; estaba **inalcanzable**.
+- Se cerraron las tres rutas del asistente.
+- Plantilla T&C subió al middleware (`ADMIN_ONLY_ROUTES`); el redirect de la página se queda como
+  defensa en profundidad.
+- Un rol desconocido en el JWT ahora se trata como sesión inválida, en vez de caer a un `?? "/"`.
+
+**Y una máquina lo vigila:** `nav-guard.test.ts` cruza el sidebar contra las reglas y falla en
+los dos sentidos — un ítem que rebota, o una pantalla accesible que el menú no muestra. El
+segundo es el peligroso: no se ve nunca. Mismo criterio que el guard de `amount_paid`.
+
+### Bloque 0 — lo que pidieron en la reunión del 25/08
+
+1. **"Pagos" → "Cobros"** en gastos del caso (Rose: desde Integra, pago es dinero que sale). 14
+   cadenas visibles en cuatro archivos. La tabla sigue siendo `client_payments`.
+2. **ITBMS configurable.** Pantalla nueva `/finanzas/configuracion/impuestos` (ver: los tres
+   roles de finanzas; editar: admin y contador). El seed dejó de tener su copia del 7%: ahora
+   **reconcilia** `tax_codes` contra el fixture, así el catálogo y el cálculo de las líneas no
+   pueden divergir. La pantalla avisa que cambiar la tasa **no reescribe documentos ya emitidos**
+   — cada línea guarda la suya, y así debe ser.
+3. **Tipo de documento a lista desplegable**, no control segmentado. Vienen nota de crédito, de
+   débito, factura local y de exportación, y cuatro opciones no entran en botones.
+4. **Reembolso al facturar → HABER `130003 Fondos Legales de Clientes`**, no `500005`. No era
+   consulta pendiente: el acta lo responde textual. Se corrigió el fixture y se sacó el comentario
+   que lo daba por decisión nuestra.
+
+### El Libro Mayor, al formato de Josuarth
+
+Su captura (`Temas Contables/image001.png`, correo del 26/08) **resolvió dos de las tres
+consultas** que el módulo tenía aisladas esperando respuesta:
+
+- **Consulta 5 → una sola columna "Importe" con signo**, negativo para créditos. Ya estaba
+  implementado así; lo que cambió es que dejó de ser una apuesta.
+- **Consulta 4 → el pie es el NETO de movimientos, no el saldo final.** Se verifica con su propio
+  ejemplo: Banco Pichincha abre en 14,381.27, cierra en 21,121.28 y el pie dice 6,740.01. Ahora la
+  tabla muestra solo el neto, en recuadro; el saldo final se lee en la última fila de Saldo, como
+  él lo lee. Hay un test con ese ejemplo exacto.
+- La **consulta 3** (contrapartida ambigua) sigue abierta.
+
+Además: se agregó la columna **"Cuenta de distribución"**, que faltaba, y los encabezados quedaron
+con el nombre y el orden exactos de su modelo.
+
+**Y el saldo inicial ahora se ajusta al rango de fechas.** Antes mostraba siempre el de apertura:
+filtrando desde junio, la cuenta arrancaba en su saldo de enero y el saldo corrido quedaba
+desplazado de punta a punta. Es el error más visible que puede tener un mayor y el primero que un
+contador nota. Cuando el filtro lo ajusta, la fila se rotula "Saldo al DD/MM/AAAA" en vez de
+"Saldo inicial" — decirle lo mismo a dos cosas distintas es lo que haría dudar del reporte entero.
+
+### El hub de Reportes distingue lo construido de lo que no
+
+Las nueve tarjetas se veían iguales y tres no tienen nada detrás. Ahora los marcadores de lugar
+llevan borde punteado, chip ámbar "No construido" y una línea que lo dice **antes** del clic. Se
+sacó la jerga interna del placeholder ("Sprint 2F" no significa nada para el contador) y
+"Aging por Cliente" pasó a **"Antigüedad de Saldos"**, que es como lo nombra él.
+
+### Verificado con sesión real de contador
+
+No con el navegador —la extensión de Chrome no conectaba y Playwright MCP no está expuesto en
+esta sesión— sino armando la cookie de sesión de Supabase y recorriendo las rutas por HTTP. Cubre
+lo que importaba: el gating real y que ninguna pantalla reviente.
+
+**13 rutas dan 200** (las que debe ver, incluidas las tres nuevas) y **6 rebotan limpio** a
+`/finanzas/reportes`. Cero 500. Banner de entorno presente en las seis pantallas revisadas. El
+mayor muestra las nueve columnas del modelo, el saldo inicial 191,947.55, el final 194,842.55 y el
+pie en 2,895.00.
+
+### Reset + doble siembra: estado de referencia
+
+| | |
+|---|---|
+| Clientes / casos / facturas | 15 / 30 / 8 |
+| Pagos y aplicaciones | 3 / 3 |
+| Ledger | 10 asientos, 27 líneas, cadena íntegra, correlativo 10 |
+| **Mayor de CxC (100004)** | inicial 191,947.55 · neto 2,895.00 · **final 194,842.55** ✅ sin cambios |
+| Asiento 6 (FAC-REI-000001) | DEBE 100004 150.00 · **HABER 130003 150.00** ✅ |
+| `130003` tras el cambio | 2,519.11 − 150.00 = 2,369.11 |
+| Desfases de `amount_paid` | 0 |
+
+El baseline de CxC no se movió, que era la condición: el cambio del reembolso toca `130003` y
+`500005`, no la cuenta por cobrar.
+
+### Chequeos
+
+`tsc --noEmit` 0 errores · suite **399 tests, 327 pass, 0 fail, 72 skipped** (eran 379; los 20
+nuevos son de este bloque) · lint sin hallazgos nuevos sobre los 21 preexistentes.
+
+### Anotado, no tocado
+
+- **No hay URL de staging documentada.** `crm-integra-legal.vercel.app` es PRODUCCIÓN. Los deploys
+  de Preview de Vercel tienen URL autogenerada por rama y, por defecto, **piden login de Vercel**
+  (Deployment Protection) — Josuarth no tiene cuenta. Hay que resolverlo antes de mandar el correo;
+  no se puede sacar desde el repo.
+- **`/finanzas/cotizaciones/configuracion` rebota en dos saltos** para el contador (→ cotizaciones
+  → reportes). Termina bien; se podría mandar directo a su home. No es de este bloque.
+- El comentario de `contarMovimientos()` decía que `journal_entry_lines` estaba siempre vacía. Dejó
+  de ser cierto en staging con la Fase 2. Corregido.
+
 ## [`amount_paid` derivado y garantizado] - 2026-09-01
 
 ### El problema: un número derivado que además se podía escribir a mano

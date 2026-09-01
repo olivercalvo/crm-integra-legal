@@ -4,8 +4,8 @@ import { ReportPlaceholder } from "../_components/report-placeholder";
 export default function AgingPage() {
   return (
     <ReportPlaceholder
-      title="Aging por Cliente"
-      badge="Cobranza"
+      title="Antigüedad de Saldos"
+      badge="Cobranza — CxC y CxP"
       icon={<Clock size={24} />}
     />
   );

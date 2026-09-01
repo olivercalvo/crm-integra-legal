@@ -58,6 +58,7 @@ import {
   SEED_INVOICES,
   SEED_PAYMENTS,
   SEED_QUOTES,
+  SEED_TAX_CODES,
   SEED_STATUSES,
   SEED_TASKS,
   SEED_TODOS,
@@ -774,12 +775,24 @@ async function seedFinanzas(): Promise<void> {
   if (sErr) throw new Error(`services_catalog: ${sErr.message}`);
   const serviceIds = new Map((services ?? []).map((s) => [s.code as string, s.id as string]));
 
+  // --- Impuestos: el catálogo se RECONCILIA contra el fixture ---------------
+  //
+  // Antes el seed solo LEÍA `tax_codes` (sembrado por la migración
+  // 20260505000002) y tenía su propia copia de las tasas en `TAX_RATE`. Dos
+  // fuentes que podían decir cosas distintas sin que nada avisara: si alguien
+  // cambiaba la tasa desde `/finanzas/configuracion/impuestos`, el seed seguía
+  // calculando los totales de sus líneas con el 7% viejo.
+  //
+  // Desde el 01/09/2026 manda el fixture: acá se alinea el catálogo con él, así
+  // una siembra deja el ambiente en un estado conocido y consistente.
   const { data: taxes, error: tErr } = await db
     .from("tax_codes")
-    .select("id, code")
+    .select("id, code, name, rate")
     .eq("tenant_id", TENANT_ID);
   if (tErr) throw new Error(`tax_codes: ${tErr.message}`);
-  const taxCodeIds = new Map((taxes ?? []).map((t) => [t.code as string, t.id as string]));
+
+  const taxRows = (taxes ?? []) as { id: string; code: string; name: string; rate: number | string }[];
+  const taxCodeIds = new Map(taxRows.map((t) => [t.code, t.id]));
 
   if (serviceIds.size === 0 || taxCodeIds.size === 0) {
     abort(
@@ -787,6 +800,32 @@ async function seedFinanzas(): Promise<void> {
         "   20260505000002_finanzas_catalogos.sql en esta base antes de sembrar."
     );
   }
+
+  let tasasCorregidas = 0;
+  for (const esperado of SEED_TAX_CODES) {
+    const actual = taxRows.find((t) => t.code === esperado.code);
+    if (!actual) {
+      console.warn(
+        `   ⚠️  tax_codes: falta el código "${esperado.code}". Lo siembra la migración de catálogos, no este script.`
+      );
+      continue;
+    }
+    if (Number(actual.rate) === esperado.rate && actual.name === esperado.name) continue;
+
+    const { error } = await db
+      .from("tax_codes")
+      .update({ rate: esperado.rate, name: esperado.name })
+      .eq("id", actual.id);
+    if (error) throw new Error(`alinear tax_code ${esperado.code}: ${error.message}`);
+    console.log(
+      `   ♻️  ${esperado.code}: tasa ${(Number(actual.rate) * 100).toFixed(2)}% → ${(esperado.rate * 100).toFixed(2)}%`
+    );
+    tasasCorregidas++;
+  }
+  console.log(
+    `✅ Impuestos — ${SEED_TAX_CODES.length} códigos alineados con el fixture` +
+      (tasasCorregidas > 0 ? ` (${tasasCorregidas} corregido/s)` : "")
+  );
 
   // --- Cotizaciones ---
   let quotesNuevas = 0;

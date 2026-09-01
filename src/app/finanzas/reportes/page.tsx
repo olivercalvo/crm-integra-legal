@@ -17,6 +17,8 @@ interface ReportItem {
   description: string;
   icon: React.ReactNode;
   badge: string;
+  /** true = la pantalla es un marcador de lugar, sin reporte detrás. */
+  pendiente?: boolean;
 }
 
 const REPORTS: ReportItem[] = [
@@ -53,6 +55,7 @@ const REPORTS: ReportItem[] = [
   },
   {
     slug: "ventas-mensuales",
+    pendiente: true,
     title: "Ventas Mensuales",
     description: "Detalle factura por factura del mes.",
     icon: <FileText size={22} />,
@@ -60,13 +63,15 @@ const REPORTS: ReportItem[] = [
   },
   {
     slug: "aging",
-    title: "Aging por Cliente",
-    description: "Antigüedad de cuentas por cobrar.",
+    pendiente: true,
+    title: "Antigüedad de Saldos",
+    description: "Antigüedad de cuentas por cobrar y por pagar, por documento.",
     icon: <Clock size={22} />,
     badge: "Cobranza",
   },
   {
     slug: "estado-cuenta",
+    pendiente: true,
     title: "Estado de Cuenta Cliente",
     description: "Saldo y movimientos por cliente individual.",
     icon: <User size={22} />,
@@ -106,6 +111,7 @@ export default async function ReportesHubPage() {
             description={report.description}
             icon={report.icon}
             badge={report.badge}
+            pendiente={report.pendiente}
             href={`/finanzas/reportes/${report.slug}`}
           />
         ))}

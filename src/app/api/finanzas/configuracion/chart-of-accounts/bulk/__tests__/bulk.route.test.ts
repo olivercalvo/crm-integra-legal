@@ -195,7 +195,9 @@ const FIVE_ROWS: unknown[][] = [
   HEADER,
   ["100001", "Caja general", "Activo", "Activo corriente", 2500],
   ["300001", "Capital pagado", "Patrimonio", "Patrimonio", -15000],
-  ["400001", "Derecho Corporativo", "Ingreso", "Ingreso", 0],
+  // La subcategoria va con el vocabulario NIIF 18 (migracion 025). "Ingreso" a
+  // secas era el nombre viejo y hoy no clasifica.
+  ["400001", "Derecho Corporativo", "Ingreso", "Ingresos Operativos", 0],
   ["500001", "Honorarios de abogados externos", "Costo", "", 0],
   ["600001", "Alquiler de oficina", "Gasto", "", 1200.5],
 ];
@@ -217,13 +219,16 @@ test("preview: clasifica 5 cuentas nuevas y NO escribe nada", { skip: skipNoMock
   assert.equal(res.status, 200);
   assert.deepEqual(json.preview.counts, { create: 5, update: 0, error: 0 });
 
-  // El mapeo Costo/Gasto → expense + subcategoría distinta.
+  // El mapeo Costo/Gasto → tipos DISTINTOS (cost / expense), cada uno con su
+  // subcategoria operativa por defecto.
   const costo = json.preview.rows.find((r) => r.code === "500001");
   const gasto = json.preview.rows.find((r) => r.code === "600001");
-  assert.equal(costo?.account_type, "expense");
-  assert.equal(costo?.subcategoria, "costo");
+  // Desde la migracion 025 el costo tiene TIPO propio, no es un expense con
+  // subcategoria distinta. Es el sexto tipo de cuenta que pidio RM.
+  assert.equal(costo?.account_type, "cost");
+  assert.equal(costo?.subcategoria, "costos_operativos");
   assert.equal(gasto?.account_type, "expense");
-  assert.equal(gasto?.subcategoria, "gasto_operativo");
+  assert.equal(gasto?.subcategoria, "gastos_operativos");
   assert.equal(gasto?.saldo_inicial, 1200.5);
 
   // Negativo preservado.
@@ -288,7 +293,7 @@ test("commit: crea las 5 cuentas con is_system=false y audita cada una", { skip:
   }
 
   const gasto = state.captured.inserts.find((i) => i.code === "600001");
-  assert.equal(gasto?.subcategoria, "gasto_operativo");
+  assert.equal(gasto?.subcategoria, "gastos_operativos");
   assert.equal(gasto?.saldo_inicial, 1200.5);
 
   // Una entrada de audit_log por cuenta creada.
@@ -432,8 +437,8 @@ test(
     assert.equal(json.preview.rows.find((r) => r.code === "100001")?.saldo_inicial, 2500);
     assert.equal(
       json.preview.rows.find((r) => r.code === "600001")?.subcategoria,
-      "gasto_operativo",
-      "Gastos → expense + gasto_operativo aunque no haya columna Subcategoría"
+      "gastos_operativos",
+      "Gastos → expense + gastos_operativos aunque no haya columna Subcategoría"
     );
   }
 );

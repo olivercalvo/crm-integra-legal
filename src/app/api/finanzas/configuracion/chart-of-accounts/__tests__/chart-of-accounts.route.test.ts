@@ -574,7 +574,15 @@ test("POST crear VÁLIDA → 201, inserta con is_system=false", { skip: skipNoMo
   reset();
   state.dupByCode = null;
   const res = await POST(
-    req({ code: "5210", name: "Gastos de capacitación", account_type: "expense", description: "cursos", active: true })
+    req({
+      code: "5210",
+      name: "Gastos de capacitación",
+      account_type: "expense",
+      // Obligatoria en cuentas de resultado desde la migracion 025 (NIIF 18).
+      subcategoria: "gastos_operativos",
+      description: "cursos",
+      active: true,
+    })
   );
   const json = (await res.json()) as { account: { code: string; is_system: boolean } };
   assert.equal(res.status, 201);
@@ -598,6 +606,8 @@ test(
         account_type: "asset",
         subcategoria: "activo_corriente",
         saldo_inicial: 12500.75,
+        // Obligatoria junto al saldo desde la migracion 027 (fecha del saldo inicial).
+        saldo_inicial_fecha: "2026-01-01",
         active: true,
       })
     );
@@ -636,7 +646,7 @@ test(
         code: "600001",
         name: "Alquiler de oficina",
         account_type: "expense",
-        subcategoria: "gasto_operativo",
+        subcategoria: "gastos_operativos",
         active: true,
       })
     );
@@ -698,7 +708,13 @@ test("PATCH editar nombre/tipo/desc → 200, actualiza", { skip: skipNoMocks }, 
     is_system: false,
   };
   const res = await PATCH(
-    req({ name: "Gastos de formación", account_type: "expense", description: "renombrada", active: true }),
+    req({
+      name: "Gastos de formación",
+      account_type: "expense",
+      subcategoria: "gastos_operativos",
+      description: "renombrada",
+      active: true,
+    }),
     { params: { id: "acc1" } }
   );
   const json = (await res.json()) as { account: { name: string } };
@@ -729,6 +745,7 @@ test(
         account_type: "asset",
         subcategoria: "activo_corriente",
         saldo_inicial: 8300.4,
+      saldo_inicial_fecha: "2026-01-01",
         description: null,
         active: true,
       }),
@@ -769,8 +786,13 @@ test(
       name: "Fondo Legales de Clientes",
       account_type: "asset",
       subcategoria: "activo_corriente",
+      // El SELECT real trae `cuenta_control`; si el fixture no la incluye, el
+      // diff compara undefined contra el null que normaliza el validador y
+      // registra un cambio fantasma — que es justo lo que este test vigila.
+      cuenta_control: null,
       // Postgres/PostgREST puede devolver numeric como string "8300.40".
       saldo_inicial: "8300.40",
+      saldo_inicial_fecha: "2026-01-01",
       description: null,
       active: true,
       is_system: false,
@@ -781,6 +803,7 @@ test(
         account_type: "asset",
         subcategoria: "activo_corriente",
         saldo_inicial: 8300.4,
+        saldo_inicial_fecha: "2026-01-01",
         description: null,
         active: true,
       }),
@@ -828,7 +851,14 @@ test("PATCH cambiar el CÓDIGO de una cuenta NORMAL → 400 (código inmutable),
     is_system: false, // cuenta normal: el código igual es inmutable
   };
   const res = await PATCH(
-    req({ code: "5299", name: "Gastos de capacitación", account_type: "expense", description: null, active: true }),
+    req({
+      code: "5299",
+      name: "Gastos de capacitación",
+      account_type: "expense",
+      subcategoria: "gastos_operativos",
+      description: null,
+      active: true,
+    }),
     { params: { id: "acc-normal" } }
   );
   const json = (await res.json()) as { error: string };

@@ -120,6 +120,39 @@ export const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
 ];
 
 /**
+ * Rutas SUELTAS de /finanzas que el contador puede abrir, fuera de sus prefijos.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * POR QUÉ EL DETALLE DE FACTURA, PERO NO EL MÓDULO DE FACTURAS
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Auditar el Libro Mayor ES llegar al documento que originó cada movimiento: la
+ * guía de RM lo pide en su lista de validación ("cada reporte permite llegar al
+ * documento origen"). Sin esto, el ícono del mayor prometía abrir la factura y
+ * depositaba al contador en /finanzas/reportes sin explicación — y afectaba a
+ * SEIS de los diez asientos sembrados: los cuatro de factura y los dos de pago,
+ * que enlazan a la factura que cancelaron.
+ *
+ * Lo que se abre es EXACTAMENTE el detalle y nada más:
+ *   ✅ /finanzas/facturas/{id}
+ *   ❌ /finanzas/facturas          (el listado sigue siendo del módulo de ventas)
+ *   ❌ /finanzas/facturas/nuevo
+ *   ❌ /finanzas/facturas/{id}/editar
+ *
+ * El `(?!nuevo$)` no es adorno: sin él, "nuevo" entra como si fuera un id.
+ *
+ * Y el detalle se abre en SOLO LECTURA: los botones de editar, emitir, eliminar,
+ * anular y registrar pago se ocultan por rol en la propia pantalla, y las rutas
+ * de API ya respondían 403. Se ocultan además de responder 403 porque un botón
+ * que falla al apretarlo es la misma clase de error que este arreglo resuelve.
+ *
+ * Es el mismo patrón que el asistente con `/legal/clientes/{id}`: la ficha
+ * puntual sí, el directorio no.
+ */
+export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
+  /^\/finanzas\/facturas\/(?!nuevo$)[^/]+$/,
+];
+
+/**
  * Home primaria por rol — destino cuando el rol no tiene acceso a la ruta.
  * El contador cae al hub de reportes, no al selector: es donde empieza a
  * trabajar.
@@ -159,7 +192,8 @@ export function puedeAccederA(role: Role, pathname: string): boolean {
   if (
     role === "contador" &&
     pathname.startsWith("/finanzas/") &&
-    !CONTADOR_FINANZAS_ALLOWED_PREFIXES.some((p) => cubre(p, pathname))
+    !CONTADOR_FINANZAS_ALLOWED_PREFIXES.some((p) => cubre(p, pathname)) &&
+    !CONTADOR_FINANZAS_ALLOWED_PATTERNS.some((re) => re.test(pathname))
   ) {
     return false;
   }

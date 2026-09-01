@@ -273,6 +273,8 @@ export default async function LegalDashboard() {
           <p className="text-sm text-gray-500">Resumen de actividad</p>
         </div>
         <div className="flex gap-2">
+          {/* nav-guard-ok: el asistente no llega a este JSX — arriba hay un
+              early return que le devuelve <AsistenteHome />. */}
           <Button asChild size="sm" className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px] px-4">
             <Link href="/legal/clientes/nuevo">
               <Plus size={18} className="mr-1" />
@@ -377,6 +379,7 @@ export default async function LegalDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* nav-guard-ok: idem — el asistente ve <AsistenteHome />. */}
               <Link href="/legal/seguimiento" className="block">
                 <div className="flex items-center gap-3 rounded-md bg-amber-50 px-4 py-3 hover:bg-amber-100">
                   <span className="text-3xl font-bold text-amber-700">{overdueTaskCount}</span>
@@ -588,6 +591,7 @@ export default async function LegalDashboard() {
               <Activity size={18} className="text-integra-gold" />
               Seguimientos Recientes
             </CardTitle>
+            {/* nav-guard-ok: idem — el asistente ve <AsistenteHome />. */}
             <Link href="/legal/seguimiento" className="text-xs font-medium text-integra-navy hover:underline">
               Ver todos →
             </Link>

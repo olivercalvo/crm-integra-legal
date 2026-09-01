@@ -187,3 +187,177 @@ test("un prefijo no cubre a otro que solo comparte el comienzo del texto", () =>
   assert.equal(puedeAccederA("contador", "/finanzas/reportes-internos"), false);
   assert.equal(puedeAccederA("asistente", "/legalotro"), false);
 });
+
+// ===========================================================================
+// LOS ENLACES DENTRO DE LAS PANTALLAS  (01/09/2026)
+// ===========================================================================
+// Los tests de arriba comparan el SIDEBAR contra el middleware, y por eso no
+// agarraron esto: el ícono "Abrir el documento que originó este movimiento" del
+// Libro Mayor apuntaba a /finanzas/facturas/{id}, que el middleware le rebota al
+// contador. El reporte al que sí entra prometía llevarlo a un documento y lo
+// depositaba en otra pantalla, sin explicación — en SEIS de los diez asientos
+// sembrados (los cuatro de factura y los dos de pago).
+//
+// Es la misma clase de error una capa más adentro: no en el menú, sino en los
+// enlaces de CONTENIDO. Estos tests la cubren en sus dos formas.
+
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, sep } from "node:path";
+
+import { rutasDeEjemplo } from "@/lib/finanzas/reports/destino-documento";
+
+/** Reportes que llevan a documentos, con la ruta desde la que se enlaza. */
+const REPORTES_CON_ENLACE_A_DOCUMENTO = ["/finanzas/reportes/mayor"];
+
+test("todo documento enlazado desde un reporte lo puede abrir quien ve el reporte", () => {
+  const rotos: string[] = [];
+
+  for (const reporte of REPORTES_CON_ENLACE_A_DOCUMENTO) {
+    for (const role of ROLES) {
+      if (!puedeAccederA(role, reporte)) continue; // no ve el reporte: nada que enlazar
+      for (const { sourceType, ruta } of rutasDeEjemplo()) {
+        if (puedeAccederA(role, ruta)) continue;
+        rotos.push(
+          `   · [${role}] ${reporte} enlaza un asiento de tipo "${sourceType}" a ${ruta},` +
+            ` y el middleware se lo rebota`
+        );
+      }
+    }
+  }
+
+  assert.deepEqual(
+    rotos,
+    [],
+    `\n${rotos.length} enlace(s) de documento que no abren:\n${rotos.join("\n")}\n\n` +
+      `   CÓMO SE ARREGLA\n` +
+      `     O el rol debe poder abrir el documento —y se amplía el permiso en\n` +
+      `     route-access.ts— o no debe verlo enlazado, y entonces hay que dejar\n` +
+      `     el renglón sin enlace en vez de prometerlo.\n`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Enlaces literales escritos en el JSX de las pantallas
+// ---------------------------------------------------------------------------
+
+/** Todos los archivos .tsx bajo un directorio. */
+function archivosTsx(dir: string): string[] {
+  const salida: string[] = [];
+  for (const entrada of readdirSync(dir)) {
+    const ruta = join(dir, entrada);
+    if (statSync(ruta).isDirectory()) salida.push(...archivosTsx(ruta));
+    else if (ruta.endsWith(".tsx") && !ruta.includes(".test.")) salida.push(ruta);
+  }
+  return salida;
+}
+
+/**
+ * La ruta de la app que corresponde a un archivo del App Router.
+ * `src/app/finanzas/reportes/mayor/page.tsx` → `/finanzas/reportes/mayor`.
+ * Los `_components` cuelgan de su pantalla, así que se les corta ese tramo.
+ */
+function rutaDeArchivo(archivo: string): string | null {
+  const partes = archivo.split(sep);
+  const i = partes.indexOf("app");
+  if (i === -1) return null;
+  const tramos: string[] = [];
+  for (const t of partes.slice(i + 1)) {
+    if (t.startsWith("_")) break; // _components y similares: la ruta es la del padre
+    if (t.endsWith(".tsx")) break;
+    if (t.startsWith("(") || t.startsWith("@")) continue; // grupos y slots del router
+    tramos.push(t.startsWith("[") ? "id-de-ejemplo" : t);
+  }
+  return "/" + tramos.join("/");
+}
+
+/**
+ * `href="/algo"` literales. Se ignoran los dinámicos, los externos y los de API.
+ *
+ * ---------------------------------------------------------------------------
+ * LA VÁLVULA: `nav-guard-ok`
+ * ---------------------------------------------------------------------------
+ * Este test lee TEXTO, no entiende JSX: no distingue un enlace que se renderiza
+ * siempre de uno dentro de un `{canManageClient && ...}`, ni ve que el archivo
+ * empiece con `if (rol === "asistente") return <OtraCosa />`. En su primera
+ * corrida marcó cuatro enlaces que YA estaban correctamente gateados.
+ *
+ * Un test que grita cuando no hay nada roto se termina desactivando, y entonces
+ * deja de proteger. Así que hay una salida — pero DECLARADA EN EL LUGAR, no en
+ * una lista central que se pudre lejos del código:
+ *
+ *     {/* nav-guard-ok: el asistente no llega acá, ve AsistenteHome *\/}
+ *     <Link href="/legal/clientes/nuevo">
+ *
+ * Vale en la misma línea o en las tres anteriores. Obliga a escribir el motivo,
+ * se encuentra con un grep, y un enlace nuevo sin gate lo sigue cazando.
+ */
+function hrefsLiterales(contenido: string): string[] {
+  const lineas = contenido.split("\n");
+  const encontrados: string[] = [];
+
+  lineas.forEach((linea, i) => {
+    const matches = Array.from(linea.matchAll(/href="(\/[^"${}]*)"/g));
+    if (matches.length === 0) return;
+
+    const contexto = lineas.slice(Math.max(0, i - 3), i + 1).join("\n");
+    if (contexto.includes("nav-guard-ok")) return;
+
+    for (const m of matches) {
+      const href = m[1];
+      if (href !== "/" && !href.startsWith("/api/")) encontrados.push(href);
+    }
+  });
+
+  return encontrados;
+}
+
+test("ninguna pantalla enlaza a una ruta que el middleware le rebota a quien la ve", () => {
+  const rotos: string[] = [];
+  const raiz = join(process.cwd(), "src", "app");
+
+  for (const archivo of archivosTsx(raiz)) {
+    const rutaPantalla = rutaDeArchivo(archivo);
+    if (!rutaPantalla) continue;
+
+    const hrefs = hrefsLiterales(readFileSync(archivo, "utf8"));
+    if (hrefs.length === 0) continue;
+
+    for (const role of ROLES) {
+      // Solo interesa quien PUEDE ver la pantalla: los enlaces de una pantalla
+      // que el rol no abre nunca los va a ver.
+      if (!puedeAccederA(role, rutaPantalla)) continue;
+      for (const href of hrefs) {
+        if (puedeAccederA(role, href)) continue;
+        rotos.push(
+          `   · [${role}] ${rutaPantalla} → ${href}` +
+            `\n     (${archivo.slice(archivo.indexOf("src"))})`
+        );
+      }
+    }
+  }
+
+  assert.deepEqual(
+    rotos,
+    [],
+    `\n${rotos.length} enlace(s) que llevan a una pantalla que ese rol no puede abrir:\n` +
+      `${rotos.join("\n")}\n\n` +
+      `   POR QUÉ IMPORTA\n` +
+      `     Un enlace que rebota es peor que no tener el enlace: promete algo y\n` +
+      `     deposita al usuario en otra pantalla sin decirle por qué.\n\n` +
+      `   SI EL ENLACE YA ESTÁ GATEADO y este test no puede verlo —está dentro de\n` +
+      `   un condicional, o el archivo hace un early return por rol— poné encima\n` +
+      `   un comentario "nav-guard-ok: <motivo>". Ver hrefsLiterales().\n`
+  );
+});
+
+test("el contador puede abrir el detalle de una factura, pero no el módulo de ventas", () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  assert.equal(puedeAccederA("contador", `/finanzas/facturas/${id}`), true, "el detalle sí");
+  assert.equal(puedeAccederA("contador", "/finanzas/facturas"), false, "el listado no");
+  assert.equal(puedeAccederA("contador", "/finanzas/facturas/nuevo"), false, "crear no");
+  assert.equal(
+    puedeAccederA("contador", `/finanzas/facturas/${id}/editar`),
+    false,
+    "editar no"
+  );
+});

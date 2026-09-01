@@ -26,7 +26,7 @@
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
 | **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva |
-| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas` y dentro de él a tres subárboles: **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos). **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
+| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas` y dentro de él a tres subárboles + el DETALLE de factura (`/finanzas/facturas/{id}`, solo lectura — auditar el mayor es llegar al documento; el listado, crear y editar siguen cerrados): **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos). **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
 | **Asistente** | **Alcance reducido el 24/08/2026 por decisión del cliente.** Ve SOLO tres pantallas: Dashboard (`/legal`), Casos (`/legal/casos` — todos los del bufete, SOLO LECTURA) y Mis Pendientes (`/legal/pendientes`). Dentro de un caso puede hacer exactamente dos cosas: **subir documentos y comentar**. **Sigue cumpliendo tareas** desde Mis Pendientes — pero solo las asignadas a él, y no las crea: crear/asignar tareas es admin/abogada (`POST /api/tasks` le responde 403). Si necesita dejarse un recordatorio en un caso, usa un comentario. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. **NO puede:** ver ni registrar gastos (`/legal/gastos` le rebota, el tab Gastos del caso no se le renderiza y `/api/expenses` le responde 403), cambiar el estado de un caso (el `CaseStatusChanger` no se le renderiza y `PATCH /api/cases/[id]` le responde 403 incluso con `action="change-status"`), editar/crear/borrar casos ni clientes, **crear ni asignar tareas** (ni de caso ni pendientes personales de otra persona), acceder a Finanzas |
 
 > **Los permisos se hacen cumplir en el servidor, no en el menú.** Cada restricción de
@@ -42,6 +42,16 @@
 > 01/09/2026 se encontraron cuatro desajustes a la vez, incluido `/legal/importar`
 > (importación masiva) abierto al asistente sin ningún gate. Antes, detectarlos dependía de
 > que una persona recorriera el menú con cada rol.
+>
+> 🔗 **Y también los enlaces DENTRO de las pantallas**, que es donde se coló el siguiente: el
+> ícono del Libro Mayor abría `/finanzas/facturas/{id}`, que el contador no podía ver. El test
+> cubre los enlaces a documentos (`destino-documento.ts`) y los `href` literales del JSX. Si un
+> enlace ya está gateado y el test no puede verlo —está en un condicional, o el archivo hace un
+> early return por rol— se declara en el lugar con un comentario `nav-guard-ok: <motivo>`.
+>
+> ⚠️ **Ocultar el botón NO reemplaza al 403 de la API, y el 403 no reemplaza a ocultar el
+> botón.** Los dos hacen falta: el guard del servidor es el permiso, y esconder la acción que
+> el rol no puede ejecutar es lo que evita que apriete algo que le va a fallar.
 
 ## 5. REGLAS DE DESARROLLO (NON-NEGOTIABLE)
 

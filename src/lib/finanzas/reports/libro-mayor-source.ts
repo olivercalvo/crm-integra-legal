@@ -20,6 +20,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import type {
   CuentaDelMayor,
   LineaHermana,
@@ -314,12 +316,18 @@ export async function loadDestinosDeOrigen(
 ): Promise<Map<string, string>> {
   const destinos = new Map<string, string>();
 
-  /** Tipos que se resuelven mirando UNA tabla y llevan a UNA ruta directa. */
+  /**
+   * Tipos que se resuelven mirando UNA tabla y llevan a UNA ruta directa.
+   *
+   * Las RUTAS no se escriben acá: vienen de `destino-documento.ts`, que las
+   * exporta para que `nav-guard.test.ts` pueda verificar que cada rol que ve el
+   * reporte pueda abrirlas. Acá se dice en qué tabla se comprueba que el
+   * documento exista; a dónde lleva lo dice el otro módulo.
+   */
   const DIRECTOS: Record<string, { tabla: string; ruta: (id: string) => string }> = {
-    factura: { tabla: "invoices", ruta: (id) => `/finanzas/facturas/${id}` },
-    // La nota de crédito se muestra dentro del detalle de su factura.
-    nota_credito: { tabla: "invoices", ruta: (id) => `/finanzas/facturas/${id}` },
-    gasto: { tabla: "business_expenses", ruta: (id) => `/finanzas/gastos-bufete/${id}` },
+    factura: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.factura },
+    nota_credito: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.nota_credito },
+    gasto: { tabla: "business_expenses", ruta: RUTA_DEL_DOCUMENTO.gasto },
   };
 
   const idsPorTipo = new Map<string, Set<string>>();
@@ -371,7 +379,7 @@ export async function loadDestinosDeOrigen(
       }
       for (const [pagoId, facturas] of Array.from(facturasPorPago.entries())) {
         if (facturas.size !== 1) continue;
-        destinos.set(pagoId, `/finanzas/facturas/${Array.from(facturas)[0]}`);
+        destinos.set(pagoId, RUTA_DEL_DOCUMENTO.pago(Array.from(facturas)[0]));
       }
     }
   }

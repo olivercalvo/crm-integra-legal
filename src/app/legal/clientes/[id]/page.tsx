@@ -156,6 +156,8 @@ export default async function ClienteDetailPage({ params }: PageProps) {
           middleware, así que se muestra como texto y no como link muerto. */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
         {canManageClient ? (
+          /* nav-guard-ok: el asistente cae en la rama de abajo, que es texto
+             plano y no un link — justamente porque el directorio le rebota. */
           <Link href="/legal/clientes" className="flex items-center gap-1 hover:text-integra-navy">
             <ChevronLeft size={16} />
             Clientes

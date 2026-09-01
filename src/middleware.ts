@@ -4,11 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   ADMIN_ONLY_PREFIXES,
   ADMIN_ONLY_ROUTES,
-  ASISTENTE_BLOCKED_PATTERNS,
-  CONTADOR_FINANZAS_ALLOWED_PREFIXES,
   ROLE_HOME,
   ROLE_ROUTES,
   esRol,
+  puedeAccederA,
 } from "@/lib/auth/route-access";
 
 // Las reglas de acceso por rol NO viven acá: están en
@@ -231,40 +230,17 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Gating extra para el contador dentro de /finanzas: solo /finanzas/reportes/*.
-  // /finanzas raíz pasa para que page.tsx haga el redirect dinámico.
-  if (
-    userRole === "contador" &&
-    pathname.startsWith("/finanzas/") &&
-    !CONTADOR_FINANZAS_ALLOWED_PREFIXES.some(
-      (p) => pathname === p || pathname.startsWith(p + "/")
-    )
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/finanzas/reportes";
-    return NextResponse.redirect(url);
-  }
-
-  // Gating extra para el asistente dentro de /legal: el directorio de clientes y
-  // las pantallas de alta/edición quedan fuera; la ficha por id sí pasa.
-  if (
-    userRole === "asistente" &&
-    ASISTENTE_BLOCKED_PATTERNS.some((p) => p.test(pathname))
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = ROLE_HOME[userRole] ?? "/legal";
-    return NextResponse.redirect(url);
-  }
-
-  // Gating por rol: el path debe matchear alguno de los prefijos permitidos.
-  const allowedPrefixes = ROLE_ROUTES[userRole] ?? [];
-  const hasAccess = allowedPrefixes.some((prefix) =>
-    prefix === "/"
-      ? pathname === "/"
-      : pathname === prefix || pathname.startsWith(prefix + "/")
-  );
-
-  if (!hasAccess) {
+  // ---------------------------------------------------------------------------
+  // LA decisión de acceso. UNA sola implementación, en `route-access.ts`.
+  // ---------------------------------------------------------------------------
+  // Antes esto eran tres bloques `if` acá que repetían lo que ya decía
+  // `puedeAccederA()`. Dos copias de la misma regla se separan, y se separaron:
+  // al abrirle al contador el detalle de factura hubo que tocar las dos.
+  //
+  // Lo que SÍ se queda acá es a dónde se rebota, porque es de esta capa: quién
+  // decide "no podés entrar" es la regla; quién decide "entonces vas acá" es el
+  // middleware.
+  if (!puedeAccederA(userRole, pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = ROLE_HOME[userRole] ?? "/";
     return NextResponse.redirect(url);

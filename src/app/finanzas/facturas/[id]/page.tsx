@@ -44,9 +44,16 @@ export default async function FacturaDetallePage({ params }: PageProps) {
 
   if (!invoice) notFound();
 
-  const editable = isEditable(invoice.status);
-  const emittable = isEmittable(invoice.status);
-  const deletable = isDeletable(invoice.status);
+  // ⚠️ `canMutate` se define más abajo, pero estas tres banderas lo NECESITAN:
+  // hasta el 01/09/2026 dependían solo del status, y mientras el contador no
+  // podía entrar a esta pantalla eso no se notaba. Al abrirle el detalle para
+  // que audite el Libro Mayor, habría visto "Editar", "Emitir" y "Eliminar".
+  // Las rutas de API le responden 403 igual, pero un botón que falla al
+  // apretarlo es exactamente el problema que este cambio vino a resolver.
+  const puedeAccionar = userRole === "admin" || userRole === "abogada";
+  const editable = puedeAccionar && isEditable(invoice.status);
+  const emittable = puedeAccionar && isEmittable(invoice.status);
+  const deletable = puedeAccionar && isDeletable(invoice.status);
   const isEmitida = invoice.status === "emitida";
   const isAnulada = invoice.status === "anulada";
   // Anulable desde UI: emitida, parcialmente_pagada, pagada. La pre-check
@@ -60,7 +67,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     invoice.status === "pagada";
   // Sprint 2C, D4: solo admin + abogada pueden registrar/eliminar pagos
   // y anular facturas. Asistente y contador → READ-only.
-  const canMutate = userRole === "admin" || userRole === "abogada";
+  const canMutate = puedeAccionar;
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -79,7 +86,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     isEmitida || (isAnulada && invoice.fe_estado !== "no_emitida");
   // Permiso para disparar envío al PAC (D7 del sprint 2E.2 / consistente
   // con route handler que devuelve 403 a roles no permitidos).
-  const canEmitToPac = userRole === "admin" || userRole === "abogada";
+  const canEmitToPac = puedeAccionar;
   // Card DGI manual — legacy MVP pre-integración PAC. Queda visible SOLO
   // si la abogada efectivamente cargó datos manuales (hay al menos un
   // campo DGI manual presente) y la factura nunca entró al flujo
@@ -117,7 +124,16 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
-          <BackButton fallbackHref="/finanzas/facturas" label="Volver a facturas" showLabel />
+          <BackButton
+            /* El contador llega acá desde el Libro Mayor y NO entra al listado
+               de facturas. `BackButton` usa el historial cuando lo hay, así que
+               en la navegación normal vuelve al mayor; el fallback importa
+               cuando abre el enlace en una pestaña nueva, que es justo lo que
+               hace alguien auditando. */
+            fallbackHref={puedeAccionar ? "/finanzas/facturas" : "/finanzas/reportes/mayor"}
+            label={puedeAccionar ? "Volver a facturas" : "Volver a reportes"}
+            showLabel
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Receipt size={20} className="text-integra-gold shrink-0" />

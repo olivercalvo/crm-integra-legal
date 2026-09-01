@@ -1,5 +1,116 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El enlace roto del Libro Mayor — enlaces de contenido auditados] - 2026-09-01 (cierre)
+
+### El enlace que prometía un documento y no lo abría
+
+En el Libro Mayor, el ícono "Abrir el documento que originó este movimiento" de una Factura
+apunta a `/finanzas/facturas/{id}`, y el middleware le rebota esa ruta al contador. Josuarth
+habría hecho clic esperando la factura y habría aterrizado en `/finanzas/reportes`, sin
+explicación.
+
+**Afectaba a SEIS de los diez asientos sembrados:** los cuatro de factura y los dos de pago, que
+enlazan a la factura que cancelaron. De los cuatro tipos de documento del mayor, solo los gastos
+funcionaban.
+
+La auditoría del menú contra el middleware ya existía y no lo agarró: **miraba el sidebar**.
+Este era el mismo error una capa más adentro, en los enlaces de CONTENIDO.
+
+### El contador ahora abre el detalle de factura, en solo lectura
+
+Auditar el mayor ES llegar al documento — la guía de RM lo pide en su lista de validación
+("cada reporte permite llegar al documento origen").
+
+Se abre exactamente el detalle y nada más:
+
+| | |
+|---|---|
+| ✅ | `/finanzas/facturas/{id}` |
+| ❌ | `/finanzas/facturas` (el listado sigue siendo del módulo de ventas) |
+| ❌ | `/finanzas/facturas/nuevo` |
+| ❌ | `/finanzas/facturas/{id}/editar` |
+
+El `(?!nuevo$)` del patrón no es adorno: sin él, "nuevo" entra como si fuera un id.
+
+**Y apareció un segundo problema al abrirla:** `editable`, `emittable` y `deletable` dependían
+SOLO del status, sin gate de rol. Mientras el contador no podía entrar, no se notaba; al darle
+acceso habría visto "Editar", "Emitir" y "Eliminar". Las rutas de API le responden 403 igual,
+pero un botón que falla al apretarlo es la misma clase de error que este cambio vino a resolver.
+Las tres pasan por `puedeAccionar`, igual que "Anular" y "Registrar pago", que ya lo tenían.
+
+También el "Volver": `BackButton` usa el historial cuando lo hay, así que en la navegación
+normal devuelve al mayor. El fallback importa cuando se abre el enlace en una pestaña nueva —
+que es justo lo que hace alguien auditando— y llevaba al listado que le rebota. Ahora dice
+"Volver a reportes" para quien no entra a facturas.
+
+### La auditoría completa de enlaces, con el rol contador
+
+| Reporte | Enlaces que salen | Estado |
+|---|---|---|
+| Libro Mayor | documento origen: factura, nota de crédito, pago → `/finanzas/facturas/{id}` | 🔴 **rebotaban** → arreglado |
+| Libro Mayor | documento origen: gasto → `/finanzas/gastos-bufete/{id}` | ✅ |
+| Balance General | cada cuenta → `/finanzas/reportes/mayor?cuenta=X` | ✅ |
+| Estado de Resultado | cada cuenta → `/finanzas/reportes/mayor?cuenta=X` | ✅ |
+| ITBMS (VAT) | "Volver a Reportes" + export por API | ✅ (la API ya permitía contador) |
+| Gastos del bufete | listado, detalle, nuevo, editar | ✅ (tiene CRUD completo) |
+| Plan de cuentas / Impuestos | sin enlaces salientes | ✅ |
+
+Y el test encontró **cuatro más** que la auditoría del menú no veía, todos del asistente:
+`/legal/clientes/{id}` → `/legal/clientes`, y tres del dashboard → `/legal/clientes/nuevo` y
+`/legal/seguimiento`. **Los cuatro resultaron ser falsos positivos**: el primero ya vive dentro
+de `{canManageClient ? <Link> : <texto>}` y los otros tres están en un JSX al que el asistente
+no llega, porque el dashboard hace `if (rol === "asistente") return <AsistenteHome />`.
+
+### El test, extendido — y con una válvula declarada
+
+`nav-guard.test.ts` pasó de 8 a 11 tests. Los tres nuevos:
+
+1. **Enlaces a documentos:** las rutas salieron de una constante local de `libro-mayor-source.ts`
+   a `destino-documento.ts`, exportadas. Por eso nadie las podía verificar. Ahora el test cruza
+   cada `source_type` contra `puedeAccederA()` para cada rol que ve el reporte.
+2. **Enlaces literales en el JSX:** escanea los `.tsx` de `src/app`, deriva la ruta de cada
+   pantalla del App Router y verifica que todo `href` literal lo pueda abrir quien ve esa
+   pantalla.
+3. El caso concreto del contador: detalle sí, listado / nuevo / editar no.
+
+El segundo lee TEXTO y no entiende JSX, así que marcó los cuatro falsos positivos. **Un test que
+grita cuando no hay nada roto se termina desactivando**, así que tiene una salida — pero
+declarada EN EL LUGAR, no en una lista central que se pudre lejos del código:
+
+```tsx
+{/* nav-guard-ok: el asistente no llega acá, ve <AsistenteHome /> */}
+<Link href="/legal/clientes/nuevo">
+```
+
+Obliga a escribir el motivo, se encuentra con un grep, y un enlace nuevo sin gate lo sigue
+cazando.
+
+### Y el middleware dejó de tener su propia copia de las reglas
+
+Había DOS implementaciones de la misma decisión: los tres `if` encadenados del middleware y
+`puedeAccederA()`, que es la que consume el test. Podían separarse, y se separaron: al abrirle
+el detalle de factura al contador hubo que tocar las dos. Ahora el middleware llama a
+`puedeAccederA()` y se queda solo con los DESTINOS de rebote, que sí son de esa capa.
+
+### Chequeos
+
+`tsc --noEmit` 0 errores · **`npm test`: 409 tests, 409 pass, 0 fail, 0 skipped** · lint sin
+hallazgos nuevos (21 preexistentes).
+
+### ⚠️ Lo que NO se pudo verificar, y una corrección
+
+**La verificación en pantalla quedó pendiente.** Se cayó la conexión a internet de la máquina en
+medio de la corrida: `EAI_AGAIN` / `ENOTFOUND` resolviendo `supabase.co`, y tampoco resolvió
+forzando DNS público (1.1.1.1 / 8.8.8.8). La conexión `pg` a la base sigue funcionando porque ya
+tenía la IP resuelta. El gating está cubierto por los 11 tests, que son determinísticos, pero
+**no se llegó a abrir el detalle de factura con sesión de contador para ver los botones**.
+
+**Corrección al changelog de esta misma mañana:** ahí se anotó que "Supabase staging devolvió 530
+de forma intermitente" y se recomendó sondearlo antes del correo. Con la evidencia de ahora —
+fallo de DNS local, la base respondiendo bien por otra ruta— **lo más probable es que aquellos
+530 fueran la misma red local, no Supabase**. No hay motivo para postergar el correo por el
+estado de staging; sí conviene reconfirmar el acceso desde otra red antes de mandarlo.
+
 ## [NIIF 18 — Estado de Resultado al modelo de Josuarth] - 2026-09-01 (tarde)
 
 ### Lo que ya estaba hecho, y no se rehízo

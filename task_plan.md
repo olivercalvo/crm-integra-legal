@@ -6,6 +6,21 @@
 tocar nada más**. Cambió la forma de trabajar: Rose pidió entregas por módulo con validación
 entre una y otra, no un sistema terminado para revisar de una vez.
 
+### Último arreglo antes del correo (01/09, cierre)
+
+El enlace del Libro Mayor a la factura le rebotaba al contador — seis de los diez asientos. Se
+le abrió el DETALLE de factura en solo lectura, se gatearon por rol los botones de Editar,
+Emitir y Eliminar (dependían solo del status), y `nav-guard.test.ts` pasó a cubrir los enlaces
+de CONTENIDO además del menú. 409 tests, 409 pass.
+
+**⚠️ Sin verificar en pantalla:** se cayó internet en la máquina en medio de la corrida
+(`EAI_AGAIN` resolviendo supabase.co, también con DNS público). El gating está cubierto por
+tests determinísticos, pero falta abrir el detalle con sesión de contador y ver los botones.
+**Hacerlo antes de mandar el correo.**
+
+**Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
+red local. No hay motivo para postergar el correo por el estado de staging.
+
 ### ⚠️ VENTANA DE REVISIÓN ABIERTA — leer `sop.md` SOP-019 antes de tocar staging
 
 Mientras Josuarth revisa: **no resetear, no migrar, no sembrar**. El trabajo sigue en `develop`;

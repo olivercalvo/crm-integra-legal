@@ -33,9 +33,13 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * USO
  * ─────────────────────────────────────────────────────────────────────────────
+ *   # contra el dev server local
  *   npm run dev                    (en otra terminal)
  *   npx tsx scripts/render-pantalla.mts /finanzas/reportes/aging?tipo=cobrar
  *   npx tsx scripts/render-pantalla.mts /finanzas/reportes/balance --html
+ *
+ *   # contra un deploy de Vercel (necesita el bypass de Deployment Protection)
+ *   RENDER_BASE_URL=https://...vercel.app npx tsx scripts/render-pantalla.mts /finanzas/reportes
  *
  *   --html   imprime el HTML crudo en vez del texto visible
  */
@@ -143,10 +147,19 @@ if (valor.length <= TROZO) {
 // ---------------------------------------------------------------------------
 // 3) La pantalla
 // ---------------------------------------------------------------------------
+// Los deploys de preview de Vercel están detrás de Deployment Protection (SSO),
+// que redirige a vercel.com/sso-api antes de llegar a la app. El bypass para
+// automatización se pasa por header; el secreto sale de
+// VERCEL_AUTOMATION_BYPASS_SECRET (Vercel → Settings → Deployment Protection →
+// Protection Bypass for Automation). Contra localhost no hace falta.
+const cabeceras: Record<string, string> = { cookie: cookies.join("; ") };
+const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? env.VERCEL_AUTOMATION_BYPASS_SECRET;
+if (bypass) cabeceras["x-vercel-protection-bypass"] = bypass;
+
 let res: Response;
 try {
   res = await fetch(`${BASE}${ruta}`, {
-    headers: { cookie: cookies.join("; ") },
+    headers: cabeceras,
     redirect: "manual",
   });
 } catch {

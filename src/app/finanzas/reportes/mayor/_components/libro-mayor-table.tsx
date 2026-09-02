@@ -1,6 +1,6 @@
-import Link from "next/link";
-import { AlertTriangle, FileText } from "lucide-react";
-import type { FilaMayor, MayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
+import { AlertTriangle } from "lucide-react";
+import type { MayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
+import { CuerpoMayor } from "./cuerpo-mayor";
 
 /**
  * Tabla del Libro Mayor, con las columnas del modelo de Josuar y en su orden.
@@ -23,11 +23,16 @@ function Monto({ value, bold }: { value: number; bold?: boolean }) {
 }
 
 /**
- * TRAZABILIDAD NIVEL 2 — del renglón del mayor al documento que lo originó.
+ * TRAZABILIDAD NIVEL 2 y 3 — del renglón del mayor al asiento y al documento.
  *
- * A dónde lleva cada tipo, y si el documento existe, lo resuelve
- * `loadDestinosDeOrigen()` en la capa de datos: el destino de un pago depende de
- * a qué factura se aplicó, y eso es una consulta. Acá solo se busca en el mapa.
+ * NIVEL 3 (02/09/2026): al hacer clic en una fila se despliega el ASIENTO
+ * COMPLETO con todas sus líneas. Lo pidió el contador para ver "las fracciones"
+ * de dónde sale el monto sin salir de la pantalla. Vive en `fila-expandible.tsx`
+ * y no cuesta una consulta: las líneas ya viajaban en la fila.
+ *
+ * NIVEL 2 — el documento de origen — sigue existiendo, pero pasó a ser una
+ * acción SECUNDARIA dentro del bloque desplegado. A dónde lleva cada tipo lo
+ * resuelve `loadDestinosDeOrigen()` en la capa de datos:
  *
  *   · factura      → `/finanzas/facturas/{id}`
  *   · nota_credito → `/finanzas/facturas/{id}`      (la NC vive en el detalle)
@@ -37,88 +42,6 @@ function Monto({ value, bold }: { value: number; bold?: boolean }) {
  *
  * Lo que no está en el mapa se muestra sin enlace, nunca como link roto.
  */
-function destinoDelOrigen(fila: FilaMayor, destinos: Map<string, string>): string | null {
-  if (!fila.sourceId) return null;
-  return destinos.get(fila.sourceId) ?? null;
-}
-
-function Fila({
-  fila,
-  destinos,
-  rotuloArranque,
-}: {
-  fila: FilaMayor;
-  destinos: Map<string, string>;
-  /** "Saldo inicial", o "Saldo al DD/MM/AAAA" si el filtro lo ajustó. */
-  rotuloArranque: string;
-}) {
-  if (fila.kind === "saldo-inicial") {
-    return (
-      <tr className="border-b border-gray-200 bg-integra-navy/5">
-        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
-          {fila.cuentaDistribucion}
-        </td>
-        <td className="px-3 py-2 font-mono text-xs text-gray-500">
-          {fila.fecha ?? "—"}
-        </td>
-        <td className="px-3 py-2 text-sm" colSpan={5}>
-          <span className="font-semibold text-integra-navy">{rotuloArranque}</span>
-        </td>
-        <td className="px-3 py-2 text-right text-gray-400">—</td>
-        <td className="px-3 py-2 text-right">
-          <Monto value={fila.saldo} bold />
-        </td>
-      </tr>
-    );
-  }
-
-  const destino = destinoDelOrigen(fila, destinos);
-
-  return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50">
-      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
-        {fila.cuentaDistribucion}
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-600">
-        {fila.fecha}
-      </td>
-      <td className="px-3 py-2 text-sm text-gray-700">{fila.tipoTransaccion}</td>
-      <td className="px-3 py-2 font-mono text-xs text-gray-500">
-        {destino ? (
-          <Link
-            href={destino}
-            className="inline-flex items-center gap-1 text-integra-navy underline decoration-dotted underline-offset-2 hover:text-integra-gold"
-            title="Abrir el documento que originó este movimiento"
-          >
-            <FileText size={12} />
-            {fila.numero}
-          </Link>
-        ) : (
-          fila.numero
-        )}
-      </td>
-      <td className="px-3 py-2 text-sm text-gray-700">{fila.nombre || "—"}</td>
-      <td className="px-3 py-2 text-sm text-gray-600">{fila.descripcion}</td>
-      <td className="px-3 py-2 text-sm text-gray-600">
-        {fila.contrapartida}
-        {fila.contrapartidaAmbigua && (
-          <span
-            className="ml-1 cursor-help text-amber-600"
-            title="El asiento tiene más de una cuenta del lado opuesto. Cómo se muestra este caso está pendiente de confirmación del contador."
-          >
-            *
-          </span>
-        )}
-      </td>
-      <td className="px-3 py-2 text-right">
-        <Monto value={fila.importe} />
-      </td>
-      <td className="px-3 py-2 text-right">
-        <Monto value={fila.saldo} />
-      </td>
-    </tr>
-  );
-}
 
 export function LibroMayorTable({
   mayor,
@@ -168,16 +91,11 @@ export function LibroMayorTable({
                 <th className="px-3 py-2 text-right font-semibold">Saldo</th>
               </tr>
             </thead>
-            <tbody>
-              {filas.map((f, i) => (
-                <Fila
-                  key={`${f.kind}-${i}`}
-                  fila={f}
-                  destinos={destinos}
-                  rotuloArranque={rotuloArranque}
-                />
-              ))}
-            </tbody>
+            <CuerpoMayor
+              filas={filas}
+              destinos={Object.fromEntries(destinos)}
+              rotuloArranque={rotuloArranque}
+            />
             <tfoot>
               {/*
                 El recuadro del pie es el NETO de movimientos del período, no el

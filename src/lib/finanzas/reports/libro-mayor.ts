@@ -231,6 +231,31 @@ export interface FilaMayor {
   entryId: string | null;
   sourceType: string | null;
   sourceId: string | null;
+
+  // --- trazabilidad nivel 3: el asiento completo (02/09/2026) ---
+  /**
+   * TODAS las líneas del asiento al que pertenece este movimiento, incluida la
+   * propia. Es lo que la pantalla despliega al abrir la fila: el contador pidió
+   * ver "las fracciones" de dónde sale el monto sin salir del mayor.
+   *
+   * No cuesta una consulta: `loadMovimientosDeCuenta` YA las trae —en su
+   * segunda query, la de las hermanas— para poder resolver la contrapartida.
+   * Hasta ahora se calculaba con ellas y después se descartaban. Acá se
+   * propagan, y así lo que se despliega es exactamente lo mismo que produjo la
+   * contrapartida que la fila ya muestra: no pueden contradecirse.
+   *
+   * Vacío en la fila de saldo inicial, que no pertenece a ningún asiento.
+   */
+  lineas: LineaHermana[];
+  /**
+   * `line_order` de la línea que ES este movimiento, para resaltarla dentro del
+   * asiento.
+   *
+   * Se identifica por POSICIÓN y no por cuenta a propósito: un asiento puede
+   * tocar la misma cuenta dos veces y entonces genera dos renglones distintos en
+   * el mayor. Resaltar "la línea de esta cuenta" resaltaría las dos.
+   */
+  lineOrderPropia: number | null;
 }
 
 export interface MayorDeCuenta {
@@ -329,6 +354,8 @@ export function buildMayorDeCuenta(
     entryId: null,
     sourceType: null,
     sourceId: null,
+    lineas: [],
+    lineOrderPropia: null,
   });
 
   let saldo = round2(saldoArranque);
@@ -368,6 +395,10 @@ export function buildMayorDeCuenta(
       entryId: m.entry_id,
       sourceType: m.source_type,
       sourceId: m.source_id,
+      // Ordenadas por `line_order`: es el orden en que se postearon y el que el
+      // contador espera ver, no el que devuelva la consulta.
+      lineas: [...m.hermanas].sort((a, b) => a.line_order - b.line_order),
+      lineOrderPropia: m.line_order,
     });
   }
 

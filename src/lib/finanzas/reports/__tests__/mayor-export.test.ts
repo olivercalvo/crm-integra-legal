@@ -33,6 +33,10 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     entryId: "e1",
     sourceType: "gasto",
     sourceId: "g1",
+    // El asiento completo viaja en la fila desde el 02/09/2026. La exportación
+    // no lo usa —es de la pantalla— pero el tipo lo exige.
+    lineas: [],
+    lineOrderPropia: 0,
     ...over,
   };
 }

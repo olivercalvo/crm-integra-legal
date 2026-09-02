@@ -119,8 +119,9 @@ export default async function LibroMayorPage({
               Excel debe venir con DV, nombre, cantidad de gastos". */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-gray-500">
-              El archivo trae el <strong>RUC y el DV en columnas separadas</strong>, como los pide
-              el formulario de la DGI para los anexos de la declaración de renta.
+              Tocá una fila para ver el <strong>asiento completo con todas sus líneas</strong>. El
+              archivo trae el <strong>RUC y el DV en columnas separadas</strong>, como los pide el
+              formulario de la DGI para los anexos de la declaración de renta.
             </p>
             <BotonExportar
               href={`/api/finanzas/reportes/mayor/export?cuenta=${encodeURIComponent(cuenta.code)}${

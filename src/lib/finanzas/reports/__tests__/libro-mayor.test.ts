@@ -345,3 +345,127 @@ test("el ejemplo del modelo de Josuarth cierra: 14,381.27 + 6,740.01 = 21,121.28
   assertMoney(m.filas[m.filas.length - 1].saldo, 21121.28, "última fila de Saldo");
   assertMoney(m.totales.saldoFinal, 21121.28, "arranque + neto");
 });
+
+// ===========================================================================
+// EL ASIENTO COMPLETO EN LA FILA  (02/09/2026)
+// ===========================================================================
+// El contador pidió desplegar el asiento entero desde el mayor, para ver "las
+// fracciones" sin salir de la pantalla. Las líneas ya viajaban en el
+// movimiento —`hermanas`, que se usaba solo para la contrapartida— y ahora se
+// propagan a la fila.
+
+test("la fila lleva TODAS las líneas del asiento, incluida la propia", () => {
+  const hermanas = [
+    herm("100001", "Banco General Operativa", 1070, 0, 1),
+    herm("100004", "Cuentas por Cobrar Clientes", 0, 1000, 2),
+    herm("200003", "ITBMS por Pagar", 0, 70, 3),
+  ];
+  const mayor = buildMayorDeCuenta(BANCO, [mov(5, "2026-04-05", 1070, 0, hermanas)]);
+  const fila = mayor.filas[1];
+
+  assert.equal(fila.lineas.length, 3, "el asiento tiene 3 líneas y la fila tiene que traerlas");
+  assert.deepEqual(
+    fila.lineas.map((l) => l.code),
+    ["100001", "100004", "200003"]
+  );
+  // La propia ESTÁ adentro: si se excluyera, el pie del despliegue mostraría un
+  // descuadre falso en todos los asientos.
+  assert.ok(
+    fila.lineas.some((l) => l.line_order === fila.lineOrderPropia),
+    "la línea propia no está entre las del asiento"
+  );
+});
+
+test("las líneas del asiento cuadran en cero — que es lo que el pie muestra", () => {
+  const hermanas = [
+    herm("100001", "Banco General Operativa", 1070, 0, 1),
+    herm("100004", "Cuentas por Cobrar Clientes", 0, 1000, 2),
+    herm("200003", "ITBMS por Pagar", 0, 70, 3),
+  ];
+  const fila = buildMayorDeCuenta(BANCO, [mov(5, "2026-04-05", 1070, 0, hermanas)]).filas[1];
+
+  const debitos = fila.lineas.reduce((s, l) => s + l.debit, 0);
+  const creditos = fila.lineas.reduce((s, l) => s + l.credit, 0);
+  assertMoney(debitos, 1070, "débitos del asiento");
+  assertMoney(creditos, 1070, "créditos del asiento");
+  assertMoney(debitos - creditos, 0, "el asiento tiene que cuadrar");
+});
+
+test("las líneas salen ordenadas por line_order, no como venga la consulta", () => {
+  const desordenadas = [
+    herm("200003", "ITBMS por Pagar", 0, 70, 3),
+    herm("100001", "Banco General Operativa", 1070, 0, 1),
+    herm("100004", "Cuentas por Cobrar Clientes", 0, 1000, 2),
+  ];
+  const fila = buildMayorDeCuenta(BANCO, [mov(5, "2026-04-05", 1070, 0, desordenadas)]).filas[1];
+  assert.deepEqual(
+    fila.lineas.map((l) => l.line_order),
+    [1, 2, 3]
+  );
+});
+
+test("🔴 un asiento que toca la MISMA cuenta dos veces resalta la línea correcta", () => {
+  // Es el caso que los datos de staging NO pueden probar: hoy ningún asiento
+  // repite cuenta. Por eso vive acá.
+  //
+  // Un asiento que toca Banco dos veces genera DOS renglones en el mayor, y
+  // cada uno tiene que resaltar SU propia línea. Resaltar "la línea de esta
+  // cuenta" resaltaría las dos, y el contador vería dos filas idénticas.
+  const hermanas = [
+    herm("100001", "Banco General Operativa", 500, 0, 1, "Depósito sucursal A"),
+    herm("100001", "Banco General Operativa", 300, 0, 2, "Depósito sucursal B"),
+    herm("400001", "Ingresos por Honorarios", 0, 800, 3),
+  ];
+
+  const mayor = buildMayorDeCuenta(BANCO, [
+    mov(7, "2026-05-01", 500, 0, hermanas, { line_order: 1 }),
+    mov(7, "2026-05-01", 300, 0, hermanas, { line_order: 2, entry_id: "e-7" }),
+  ]);
+
+  const [, primera, segunda] = mayor.filas;
+
+  assert.equal(primera.lineOrderPropia, 1);
+  assert.equal(segunda.lineOrderPropia, 2);
+
+  // Cada fila resalta una línea distinta, y las dos son de la MISMA cuenta.
+  const resaltadaEn = (f: typeof primera) =>
+    f.lineas.find((l) => l.line_order === f.lineOrderPropia);
+  assert.equal(resaltadaEn(primera)?.descripcion, "Depósito sucursal A");
+  assert.equal(resaltadaEn(segunda)?.descripcion, "Depósito sucursal B");
+
+  // Y las dos ven el asiento COMPLETO, no media parte.
+  assert.equal(primera.lineas.length, 3);
+  assert.equal(segunda.lineas.length, 3);
+});
+
+test("la fila de saldo inicial no trae asiento: no pertenece a ninguno", () => {
+  const mayor = buildMayorDeCuenta(BANCO, [
+    mov(5, "2026-04-05", 100, 0, [herm("100001", "Banco", 100, 0, 1)]),
+  ]);
+  const inicial = mayor.filas[0];
+
+  assert.equal(inicial.kind, "saldo-inicial");
+  assert.deepEqual(inicial.lineas, []);
+  assert.equal(inicial.lineOrderPropia, null);
+  assert.equal(inicial.entryId, null);
+});
+
+test("propagar las líneas NO movió ningún saldo", () => {
+  // La red contra el riesgo de este cambio: se toca el armado de la fila, y lo
+  // único que NO puede cambiar son los números que ya cuadran.
+  const hermanas = [
+    herm("100001", "Banco General Operativa", 1070, 0, 1),
+    herm("100004", "Cuentas por Cobrar Clientes", 0, 1070, 2),
+  ];
+  const mayor = buildMayorDeCuenta(BANCO, [
+    mov(5, "2026-04-05", 1070, 0, hermanas),
+    mov(6, "2026-04-20", 0, 351.25, hermanas),
+  ]);
+
+  assertMoney(mayor.filas[0].saldo, 14381.27, "saldo inicial");
+  assertMoney(mayor.filas[1].saldo, 15451.27, "saldo tras el primer movimiento");
+  assertMoney(mayor.filas[2].saldo, 15100.02, "saldo tras el segundo");
+  assertMoney(mayor.totales.netoDelPeriodo, 718.75, "neto del período");
+  assertMoney(mayor.totales.saldoFinal, 15100.02, "saldo final");
+  assert.equal(mayor.cantidadMovimientos, 2);
+});

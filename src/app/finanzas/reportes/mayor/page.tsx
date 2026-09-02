@@ -151,10 +151,9 @@ export default async function LibroMayorPage({
           es corrido: arranca en el saldo inicial y acumula los movimientos.
         </p>
         <p className="text-xs text-gray-500">
-          <strong>Pie de la cuenta:</strong> se muestran el{" "}
-          <strong>neto del período</strong> (la suma de los movimientos) y el{" "}
-          <strong>saldo final</strong> (saldo inicial + neto), por separado. Cuál de los dos
-          quiere el contador en el recuadro está pendiente de confirmación.
+          <strong>Pie de la cuenta:</strong> en el recuadro se muestran los dos números por
+          separado: el <strong>neto de los movimientos del período</strong> y el{" "}
+          <strong>saldo final</strong> (saldo inicial + neto).
         </p>
         <p className="text-xs text-gray-500">
           <Link href="/finanzas/reportes" className="text-integra-navy underline">

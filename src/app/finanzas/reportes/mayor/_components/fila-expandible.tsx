@@ -105,7 +105,7 @@ export function FilaExpandible({
           {fila.contrapartidaAmbigua && (
             <span
               className="ml-1 cursor-help text-amber-600"
-              title="El asiento tiene más de una cuenta del lado opuesto. Cómo se muestra este caso está pendiente de confirmación del contador."
+              title="Este movimiento tiene más de una cuenta del lado opuesto, así que no hay una única contrapartida. Abrí la fila para ver el asiento completo."
             >
               *
             </span>

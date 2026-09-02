@@ -77,8 +77,8 @@ export default async function EstadoResultadoPage() {
           tasa quedó como parámetro del reporte para cuando se use en sociedades anónimas.
         </p>
         <p className="text-xs text-gray-500">
-          La cuenta <strong>300004 Distribución a Socias</strong> es{" "}
-          <strong>provisional</strong>, pendiente de confirmación del contador.
+          La cuenta <strong>300004 Distribución a Socias</strong> está creada en el catálogo y{" "}
+          <strong>todavía no registra movimientos</strong>.
         </p>
       </div>
     </div>

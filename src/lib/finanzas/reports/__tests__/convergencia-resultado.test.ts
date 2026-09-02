@@ -79,7 +79,13 @@ function losTres(accounts: ReportAccount[]) {
   return {
     balance: balanceGeneral.utilidadDelEjercicio,
     clasico: estadoResultado.utilidadOperativa,
-    niif18: niif18.totales.utilidadOperativa,
+    // ⚠️ `utilidadAntesImpuesto`, NO `utilidadOperativa`. En el NIIF 18
+    // `utilidadOperativa` es el resultado del BLOQUE DE OPERACIÓN; el
+    // equivalente al resultado del ER clásico suma las tres actividades MÁS las
+    // cuentas sin categoría. Comparar el campo equivocado fue lo que hizo
+    // reportar un defecto inexistente el 02/09/2026.
+    niif18: niif18.totales.utilidadAntesImpuesto,
+    niif18SoloOperacion: niif18.totales.utilidadOperativa,
     sinClasificar: niif18.sinClasificar,
     balanceGeneral,
   };
@@ -143,26 +149,19 @@ test("el Balance cuadra cuando el resultado se suma al patrimonio", () => {
 // 🔴 EL MODO DE FALLA REAL: una cuenta de resultado SIN categoría NIIF 18
 // ---------------------------------------------------------------------------
 
-test("🔴 DEFECTO CONOCIDO: un ingreso sin subcategoría hace divergir al NIIF 18", () => {
+test("los tres coinciden TAMBIÉN con cuentas sin categoría NIIF 18", () => {
   // ─────────────────────────────────────────────────────────────────────────
-  // ESTE TEST DOCUMENTA UN DEFECTO, NO LO BENDICE.
+  // ESTE TEST ESTUVO INVERTIDO, Y VALE LA PENA QUE QUEDE ESCRITO.
   //
-  // El ER NIIF 18 arma sus totales recorriendo las tres ACTIVIDADES (operación,
-  // inversión, financiamiento). Una cuenta de resultado sin `subcategoria` no
-  // pertenece a ninguna, así que cae en `sinClasificar` y **queda fuera del
-  // total**. El ER clásico y el Balance, en cambio, suman por TIPO de cuenta y
-  // sí la incluyen.
+  // El 02/09/2026 se reportó como DEFECTO que el NIIF 18 dejaba las cuentas sin
+  // categoría afuera de su total. **Era falso.** El reporte ya las sumaba —en
+  // `utilidadAntesImpuesto`— y ya las mostraba en un bloque propio. Lo que
+  // estaba mal era el test: comparaba `utilidadOperativa` del NIIF 18, que es el
+  // resultado del BLOQUE DE OPERACIÓN, contra `utilidadOperativa` del ER
+  // clásico, que es el resultado TOTAL. Dos conceptos con el mismo nombre.
   //
-  // Resultado: el contador ve un número en /pyl y otro distinto en el
-  // patrimonio del Balance, y la diferencia es exactamente el saldo de esa
-  // cuenta.
-  //
-  // Hoy NO ocurre en staging (`sinClasificar` está vacío), pero puede ocurrir en
-  // cuanto alguien cree una cuenta desde el Plan de Cuentas sin subcategoría —
-  // que es posible, y por eso existe el aviso `UnclassifiedWarning`.
-  //
-  // ⚠️ CUANDO ESTO SE ARREGLE, ESTE TEST FALLA. Es a propósito: obliga a venir
-  // acá, borrar esta aserción y dejar la de arriba, que es la correcta.
+  // Ahora exige lo correcto: con una cuenta huérfana, los tres tienen que dar
+  // igual igual.
   // ─────────────────────────────────────────────────────────────────────────
   const plan = [
     ...planClasificado(),
@@ -173,19 +172,20 @@ test("🔴 DEFECTO CONOCIDO: un ingreso sin subcategoría hace divergir al NIIF 
   assert.equal(r.sinClasificar.length, 1, "la cuenta tiene que caer en sinClasificar");
   assert.equal(r.sinClasificar[0].code, "400099");
 
-  // El Balance y el ER clásico SÍ la cuentan.
+  // Los TRES incluyen el ingreso huérfano: −4800 del bloque de operación −1500.
   assert.ok(Math.abs(r.balance - -6300) < EPSILON, `Balance: esperaba −6300, dio ${r.balance}`);
   assert.ok(Math.abs(r.clasico - -6300) < EPSILON, `ER clásico: esperaba −6300, dio ${r.clasico}`);
+  assert.ok(
+    Math.abs(r.niif18 - -6300) < EPSILON,
+    `ER NIIF 18: esperaba −6300, dio ${r.niif18} — una cuenta quedó fuera del total`
+  );
 
-  // El NIIF 18 la deja afuera: se queda en el resultado sin ese ingreso.
-  assert.ok(Math.abs(r.niif18 - -4800) < EPSILON, `ER NIIF 18: esperaba −4800, dio ${r.niif18}`);
-
-  // Y la divergencia es EXACTAMENTE el saldo de la cuenta que quedó afuera.
-  const divergencia = Math.round((r.balance - r.niif18) * 100) / 100;
-  assert.equal(divergencia, -1500, "la divergencia tiene que ser el saldo de la cuenta huérfana");
+  // Y la cuenta huérfana NO entra al bloque de operación, que es lo correcto:
+  // no pertenece a ninguna actividad.
+  assert.ok(Math.abs(r.niif18SoloOperacion - -4800) < EPSILON);
 });
 
-test("un gasto sin subcategoría diverge igual — no es solo cosa de los ingresos", () => {
+test("un gasto sin categoría tampoco se pierde", () => {
   const plan = [
     ...planClasificado(),
     cuenta("610099", "Gasto sin clasificar", "expense", null, 900),
@@ -193,14 +193,29 @@ test("un gasto sin subcategoría diverge igual — no es solo cosa de los ingres
   const r = losTres(plan);
 
   assert.equal(r.sinClasificar.length, 1);
-  const divergencia = Math.round((r.balance - r.niif18) * 100) / 100;
-  assert.equal(divergencia, 900);
+  assert.ok(Math.abs(r.balance - r.niif18) < EPSILON, "el gasto huérfano se perdió en el NIIF 18");
+  assert.ok(Math.abs(r.balance - -3900) < EPSILON, `esperaba −3900, dio ${r.balance}`);
 });
 
-test("el ER NIIF 18 EXPONE las cuentas sin clasificar, para que la pantalla avise", () => {
-  // Es lo que hoy contiene el daño: `/pyl` muestra un aviso cuando esta lista no
-  // está vacía. El aviso no arregla la divergencia, pero evita que el número
-  // pase por bueno sin que nadie mire.
+test("varias cuentas sin categoría, de tipos distintos, siguen cuadrando", () => {
+  const plan = [
+    ...planClasificado(),
+    cuenta("400099", "Ingreso sin clasificar", "income", null, -1500),
+    cuenta("500099", "Costo sin clasificar", "cost", null, 400),
+    cuenta("610099", "Gasto sin clasificar", "expense", null, 900),
+  ];
+  const r = losTres(plan);
+
+  assert.equal(r.sinClasificar.length, 3);
+  assert.ok(Math.abs(r.balance - r.clasico) < EPSILON);
+  assert.ok(Math.abs(r.balance - r.niif18) < EPSILON);
+  assert.ok(Math.abs(r.balance - -5000) < EPSILON, `esperaba −5000, dio ${r.balance}`);
+});
+
+test("las cuentas sin categoría se VEN: bloque propio con su subtotal", () => {
+  // Que se vean es la señal de que hay que clasificarlas. Esconderlas —o peor,
+  // dejarlas afuera del total en silencio— es lo que hace desconfiar del
+  // reporte entero.
   const plan = [
     ...planClasificado(),
     cuenta("400099", "Ingreso sin clasificar", "income", null, -1500),
@@ -212,6 +227,18 @@ test("el ER NIIF 18 EXPONE las cuentas sin clasificar, para que la pantalla avis
     r.sinClasificar.map((a) => a.code).sort(),
     ["400099", "610099"]
   );
+
+  // Y el reporte emite un bloque visible que dice POR QUÉ están ahí.
+  const er = buildEstadoResultadoNiif18(plan);
+  const bloque = er.filas.find(
+    (f) => f.kind === "bloque" && f.label.includes("SIN CATEGORÍA NIIF 18")
+  );
+  assert.ok(bloque, "falta el bloque visible de cuentas sin categoría");
+
+  const subtotal = er.filas.find(
+    (f) => f.kind === "subtotal" && f.label.includes("sin categoría asignada")
+  );
+  assert.ok(subtotal, "falta el subtotal del bloque");
 });
 
 // ---------------------------------------------------------------------------

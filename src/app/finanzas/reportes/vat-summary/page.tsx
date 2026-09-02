@@ -125,9 +125,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
         <Info size={14} className="mt-0.5 shrink-0 text-gray-400" />
         <p>
           <span className="font-medium">Línea 8 (ITBMS adeudado de períodos anteriores)</span>
-          {" "}aparece en 0 en este MVP. El cálculo de saldo acumulado contra la cuenta
-          VAT Control requiere todos los reportes históricos cerrados — se habilitará
-          en un sprint futuro cuando la abogada cierre el primer período manualmente.
+          {" "}aparece en 0 porque todavía no se ha cerrado ningún período.
         </p>
       </div>
 

@@ -312,7 +312,12 @@ test("una cuenta de resultado SIN clasificar no se evapora", () => {
     acc("690001", "expense", null, 250),
   ]);
   assert.equal(er.sinClasificar.length, 1);
-  assert.ok(labels(er.filas).includes("SIN CLASIFICAR"));
+  // La etiqueta cambió el 02/09/2026: "SIN CLASIFICAR" no decía POR QUÉ esas
+  // cuentas estaban ahí ni que SÍ entran al resultado.
+  assert.ok(
+    labels(er.filas).includes("CUENTAS SIN CATEGORÍA NIIF 18 ASIGNADA"),
+    "falta el bloque visible de cuentas sin categoría"
+  );
   assertMoney(er.totales.utilidadAntesImpuesto, -750, "la cuenta huérfana suma igual");
 });
 

@@ -131,6 +131,19 @@ export type FilaER =
   /** El impuesto, que lleva nota aclaratoria. */
   | { kind: "impuesto"; label: string; nota: string; valor: MontoPresentado };
 
+/**
+ * ⚠️ OJO CON `utilidadOperativa`: acá significa **el resultado del BLOQUE DE
+ * OPERACIÓN**, no el resultado del ejercicio.
+ *
+ * En `accounting-reports.ts` (el ER clásico) el campo del MISMO nombre significa
+ * el resultado TOTAL antes de impuesto. Comparar uno contra otro da distinto en
+ * cuanto hay cuentas de inversión, de financiamiento o sin categoría — y eso
+ * pasó de verdad el 02/09/2026: se reportó un defecto del reporte que no
+ * existía, porque el test comparó esos dos campos.
+ *
+ * El equivalente al resultado del ER clásico es **`utilidadAntesImpuesto`**, que
+ * suma las tres actividades MÁS las cuentas sin categoría.
+ */
 export interface TotalesER {
   ingresosOperativos: number;
   costosOperativos: number;
@@ -327,11 +340,20 @@ export function buildEstadoResultadoNiif18(
     });
   }
 
-  // Bloque de descarte: solo si hay algo que descartar.
+  // ─────────────────────────────────────────────────────────────────────────
+  // BLOQUE DE LAS CUENTAS SIN CATEGORÍA NIIF 18.
+  //
+  // NO es un bloque de descarte: estas cuentas SÍ entran al resultado (ver
+  // `utilidadAntesImpuesto`, más abajo). Se muestran aparte porque no se pueden
+  // ubicar en una actividad, y verlas ES la señal de que hay que clasificarlas.
+  //
+  // Un reporte que dejara cuentas afuera de su propio total en silencio es lo
+  // que destruye la confianza de un contador el día que lo descubre él.
+  // ─────────────────────────────────────────────────────────────────────────
   if (sinClasificar.length > 0) {
     filas.push({
       kind: "bloque",
-      label: "SIN CLASIFICAR",
+      label: "CUENTAS SIN CATEGORÍA NIIF 18 ASIGNADA",
       actividad: "operacion",
     });
     for (const c of ordenar(sinClasificar)) {
@@ -339,7 +361,7 @@ export function buildEstadoResultadoNiif18(
     }
     filas.push({
       kind: "subtotal",
-      label: "Total sin clasificar",
+      label: "Total sin categoría asignada (incluido en el resultado)",
       valor: presentar(sumar(sinClasificar)),
     });
   }

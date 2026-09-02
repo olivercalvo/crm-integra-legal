@@ -97,8 +97,9 @@ export default async function BalanceGeneralPage() {
           <p className="mt-1">
             Diferencia de <strong>{formatAmount(bg.descuadre)}</strong> entre el Total de Activo (
             {formatAmount(bg.activos.total)}) y el Total Pasivo + Patrimonio (
-            {formatAmount(bg.totalPasivoPatrimonio)}). Revisá los saldos de apertura en el Plan de
-            Cuentas: la suma de los débitos y los créditos de la balanza tiene que dar cero.
+            {formatAmount(bg.totalPasivoPatrimonio)}). Revisá los <strong>saldos de apertura</strong>{" "}
+            en el Plan de Cuentas y los <strong>asientos del período</strong>: la suma de los
+            débitos y los créditos de la balanza tiene que dar cero.
           </p>
         </div>
       )}
@@ -106,11 +107,10 @@ export default async function BalanceGeneralPage() {
       <div className="space-y-2">
         <SignConventionNote />
         <p className="text-xs text-gray-500">
-          <strong>Utilidad del Ejercicio:</strong> es un renglón calculado que trae la utilidad
-          operativa del Estado de Resultado (antes de impuesto). Está{" "}
-          <strong>pendiente de confirmación del contador</strong> si el patrimonio debe llevar la
-          utilidad operativa o la neta. Cuando exista el cierre de ejercicio con asientos, el
-          resultado se posteará a una cuenta de patrimonio y este renglón calculado desaparece.
+          <strong>Utilidad del Ejercicio:</strong> el patrimonio incluye la{" "}
+          <strong>utilidad operativa del período</strong>, que es un renglón calculado desde el
+          Estado de Resultado. Cuando exista el cierre de ejercicio, el resultado se posteará
+          como asiento y este renglón calculado desaparece.
         </p>
       </div>
     </div>

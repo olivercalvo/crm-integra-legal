@@ -128,9 +128,10 @@ export function LibroMayorTable({
         <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>
-            Las contrapartidas marcadas con <strong>*</strong> corresponden a asientos con más
-            de una cuenta del lado opuesto. Se muestran como &ldquo;Varios&rdquo;;{" "}
-            <strong>qué mostrar en ese caso está pendiente de confirmación del contador</strong>.
+            El <strong>*</strong> indica que ese movimiento tiene{" "}
+            <strong>más de una cuenta del lado opuesto</strong>, así que no hay una única
+            contrapartida y se muestra como &ldquo;Varios&rdquo;.{" "}
+            <strong>El detalle completo se ve al abrir la fila.</strong>
           </span>
         </p>
       )}

@@ -163,6 +163,19 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   existiendo como respaldo de la migración `033`. Eliminarlas es un commit
   posterior, después de verificar que nada se perdió.
 
+### Exportación de reportes (desde 2026-09-02)
+- **El formato es XLSX, no CSV**, y el motivo es concreto: un CSV abre el DV `05` como `5`. Además
+  el separador de Excel depende de la configuración regional de la máquina, no del archivo. El
+  motor está en `src/lib/finanzas/reports/exportar-xlsx.ts`; `xlsx` ya era dependencia.
+- 🔒 **Una exportación es tan sensible como su pantalla.** Cada ruta de export verifica el rol con
+  la MISMA lista que la pantalla, saca el `tenant_id` del perfil (nunca del request) y usa los
+  mismos loaders y builders — no una consulta paralela.
+  🔒 **Hay dos tests que lo verifican** en `nav-guard.test.ts`: cruzan los roles declarados en cada
+  ruta de export contra el middleware en los dos sentidos, y fallan si alguna lee el tenant del
+  request. Al agregar una ruta de export nueva, sumarla a la lista `EXPORTS` de ese archivo.
+- **Una celda sin dato va VACÍA**, nunca "—" ni "N/A": Excel filtra por "vacías" y cualquier
+  relleno rompe ese filtro.
+
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)
 - Verificación post-deploy obligatoria

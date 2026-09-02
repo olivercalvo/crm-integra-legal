@@ -1,5 +1,131 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Exportación a Excel del Mayor y de la Antigüedad] - 2026-09-02
+
+Lo que cierra el pedido de proveedores. Josuarth: *"si yo entro a la cuenta de gastos de
+combustible, yo debo poder extraer eso en Excel y ese Excel debe venir con DV, nombre, cantidad de
+gastos"*. Separar el RUC del DV en la ficha solo demuestra su valor cuando salen así en el archivo
+con el que él arma los anexos de la renta.
+
+### Por qué xlsx y no CSV
+
+La razón que decide **no** es el encoding —un CSV con BOM abre bien— sino esta:
+
+🔴 **Un CSV destruye el DV.** El `05` es texto, pero Excel lo lee como número y lo abre como `5`.
+Justo la columna por la que se pidió todo esto quedaría mal en la mitad de los casos, y en
+silencio: el archivo se ve bien hasta que alguien compara contra el formulario de la DGI.
+
+Los demás motivos, en orden:
+
+- **El separador.** Excel en español usa `;` según la configuración regional de la máquina, no del
+  archivo. Un CSV con comas se abre en una sola columna en la compu de Josuarth, o al revés en la
+  de otro. La línea `sep=;` lo arregla en Excel y rompe en todo lo demás.
+- **Un RUC como `1554821-1-741203`** entra en el terreno donde Excel adivina formatos.
+- **Las tildes** no dependen de que nadie acierte el encoding.
+- **No suma una dependencia:** `xlsx` ya estaba en el repo y ya lo usaba el export del VAT Summary.
+
+Costo asumido: un xlsx no se lee con `cat`. Vale la pena.
+
+### Qué trae el archivo
+
+**Mayor:** fecha · tipo de transacción · número de documento · nombre · **RUC** · **DV** ·
+descripción · contrapartida · importe · saldo.
+
+**Antigüedad:** tercero · **RUC** · **DV** · documento · vence · días vencido · tramo · las cinco
+columnas de tramo · total. Una fila por documento, que es la forma en que una planilla sirve para
+algo; agrupada se ve mejor en pantalla y es inútil en Excel.
+
+Las fechas van como fecha de Excel (ordenables y filtrables por rango), los importes como número
+con formato de moneda, los días vencidos como entero —"183.00 días" hace frenar a quien lee— y el
+RUC y el DV como **texto explícito**, que es lo que salva al `05`.
+
+### La antigüedad salió con el mismo motor
+
+Sin nada especial: el reporte ya estaba detallado por documento y las columnas de tercero son las
+mismas. Se agregó a las dos pantallas (cobrar y pagar).
+
+### 🔒 La exportación no es una puerta lateral
+
+Tres candados en cada ruta, y **dos tests nuevos que los verifican leyendo el código**:
+
+1. **El rol se verifica en la ruta**, con la misma lista que la pantalla.
+2. **El `tenant_id` sale del perfil autenticado, nunca del request.**
+3. **Se exporta lo que la pantalla arma**, con los mismos loaders y el mismo builder — no hay una
+   consulta paralela que pueda traer de más.
+
+`nav-guard.test.ts` ahora cruza los roles declarados en cada ruta de export contra el middleware,
+**en los dos sentidos**: un rol que puede exportar algo que la pantalla le rebota es un agujero, y
+uno que ve la pantalla pero no puede exportar es un botón que le va a fallar. Cubre también el
+export del VAT Summary, que ya existía y no tenía esta verificación.
+
+### Celdas vacías, de verdad vacías
+
+Un movimiento sin tercero —un asiento de diario, la fila de saldo inicial— deja Nombre, RUC y DV
+**sin celda**. No "—", no "N/A". Excel tiene que poder filtrar por "vacías", y cualquier relleno
+rompe ese filtro. Verificado leyendo el archivo generado: las celdas no existen.
+
+### ⚠️ Los clientes todavía no tienen DV
+
+`clients` tiene `ruc` y `tax_id`, pero **no una columna `dv`**. Así que en un movimiento de cliente
+la columna DV sale vacía, y eso es el estado real del sistema, no un error del exportador. Los
+proveedores sí lo tienen (migración 033), que es justamente el caso que nombró Josuarth
+—combustible— y el que se verificó. **Cerrar el lado de clientes es una migración propia.**
+
+### Verificación: archivos reales, leídos de vuelta
+
+Candado confirmado: staging. Se generaron tres archivos y se leyeron con la misma librería, así que
+lo que sigue es lo que quedó EN EL ARCHIVO, no lo que el código quiso escribir.
+
+**1) Mayor de `610009 Combustible` — el ejemplo textual de Josuarth** (18.129 bytes)
+
+```
+ 7 | Fecha      | Tipo de transacción | Número | Nombre                    | RUC        | DV | Descripción                            | Contrapartida     | Importe | Saldo
+ 8 | «vacía»    | Saldo inicial       | «vacía»| «vacía»                   | «vacía»    |«vacía»| Saldo inicial                       | «vacía»           | «vacía» | 1,100.56
+ 9 | 22/02/2026 | Gasto / compra      | 2      | ESTACIÓN DELTA VÍA ESPAÑA | 8-712-1904 | 48 | Combustible de la flota — febrero 2026  | Cuentas por pagar | 246.40  | 1,346.96
+```
+
+**2) Mayor de `100004 Cuentas por Cobrar`** — el caso cliente, con la columna DV vacía:
+
+```
+ 9 | 05/04/2026 | Factura | 5 | FERRETERÍA VALLARINO, S.A.  | 1554821-1-741203 | «vacía» | Factura FAC-HON-000001 … | Varios | 1,070.00 | 193,017.55
+11 | 20/04/2026 | Pago    | 7 | FERRETERÍA VALLARINO, S.A.  | 1554821-1-741203 | «vacía» | Cobro de la factura …    | Banco  | -1,070.00| 192,097.55
+```
+
+**3) Antigüedad de Cuentas por Pagar:**
+
+```
+ 8 | Tercero                           | RUC              | DV | Documento                              | Vence      | Días | Tramo     | … | Más de 91 | Total
+ 9 | INMOBILIARIA COSTA DEL ESTE, S.A. | 1550231-1-702455 | 05 | Alquiler de oficina — febrero 2026     | 03/03/2026 | 183  | Más de 91 |   | 1,850.00  | 1,850.00
+10 | DISTRIBUIDORA OFIPLUS, S.A.       | 1620884-1-819377 | 7  | Compra consolidada de insumos…         | 29/04/2026 | 126  | Más de 91 |   | 1,497.85  | 1,497.85
+11 | ESTACIÓN DELTA VÍA ESPAÑA         | 8-712-1904       | 48 | Combustible de la flota — febrero 2026 | 22/02/2026 | 192  | Más de 91 |   | 246.40    | 246.40
+```
+
+Chequeos sobre el archivo ya escrito:
+
+| | |
+|---|---|
+| DV en el mayor | `"48"`, tipo `s` — **texto** |
+| RUC en el mayor | `"8-712-1904"`, tipo `s` — **texto** |
+| DV `"05"` en la antigüedad | **conserva el cero** |
+| Saldo inicial: Nombre / RUC / DV | **celda ausente** en las tres |
+| Tilde | `"ESTACIÓN DELTA VÍA ESPAÑA"` intacta |
+| Importe | `246.4`, tipo `n` — **número sumable** |
+
+Los RUC y DV de staging se cargaron con `sql/verificacion/staging_ruc_dv_proveedores.sql`, que
+**no es parte de ninguna migración**: los proveedores creados automáticamente quedan sin RUC a
+propósito.
+
+### Tests
+
+**520 en verde** (+34). 16 del motor de exportación —que leen el buffer de vuelta, no confían en la
+intención del código— y 16 del armado de las hojas, más los 2 de permisos. Typecheck limpio, build
+de producción compilando. Lint: 21 preexistentes, 0 nuevos.
+
+**⚠️ Sin verificar en pantalla:** la extensión de Chrome sigue desconectada. Los archivos se
+generaron y se verificaron llamando a los mismos builders que usan las rutas, pero **falta apretar
+el botón con sesión de contador**.
+
+
 ## [Proveedores como entidad] - 2026-09-02
 
 Lo que Josuarth especificó al detalle el 25/08 y no dependía de ninguna respuesta pendiente. De

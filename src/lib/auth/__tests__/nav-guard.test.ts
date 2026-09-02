@@ -380,3 +380,94 @@ test("el contador puede abrir el detalle de una factura, pero no el módulo de v
     "editar no"
   );
 });
+
+// ===========================================================================
+// LAS RUTAS DE EXPORTACIÓN  (02/09/2026)
+// ===========================================================================
+// Una exportación es tan sensible como la pantalla que la origina, y más fácil
+// de olvidar: no aparece en el menú, así que ninguno de los tests de arriba la
+// mira. Si mañana alguien agrega un rol a la pantalla del mayor y no a su
+// export —o al revés— nadie se entera hasta que un contador ve un 403, o hasta
+// que alguien baja un archivo que no debería.
+//
+// Estos tests LEEN las rutas y comparan su lista de roles contra el middleware.
+
+/** Rutas de exportación, con la pantalla de la que salen. */
+const EXPORTS = [
+  {
+    archivo: "src/app/api/finanzas/reportes/mayor/export/route.ts",
+    pantalla: "/finanzas/reportes/mayor",
+  },
+  {
+    archivo: "src/app/api/finanzas/reportes/aging/export/route.ts",
+    pantalla: "/finanzas/reportes/aging",
+  },
+  {
+    archivo: "src/app/api/finanzas/reportes/vat-summary/export/route.ts",
+    pantalla: "/finanzas/reportes/vat-summary",
+  },
+];
+
+/** Extrae la lista de roles declarada en el archivo de la ruta. */
+function rolesDeclarados(fuente: string): string[] {
+  const m = fuente.match(/const\s+(?:ROLES|READING_ROLES)\s*=\s*\[([^\]]*)\]/);
+  if (!m) return [];
+  return Array.from(m[1].matchAll(/"([a-z]+)"/g)).map((x) => x[1]);
+}
+
+test("cada exportación exige exactamente los roles que ven su pantalla", () => {
+  const problemas: string[] = [];
+
+  for (const { archivo, pantalla } of EXPORTS) {
+    const fuente = readFileSync(join(process.cwd(), archivo), "utf8");
+    const declarados = rolesDeclarados(fuente);
+
+    if (declarados.length === 0) {
+      problemas.push(`   · ${archivo} no declara ninguna lista de roles`);
+      continue;
+    }
+
+    for (const role of ROLES) {
+      const veLaPantalla = puedeAccederA(role, pantalla);
+      const puedeExportar = declarados.includes(role);
+
+      if (puedeExportar && !veLaPantalla) {
+        problemas.push(
+          `   · [${role}] puede EXPORTAR ${archivo} pero el middleware le rebota ${pantalla}` +
+            " — la exportación es una puerta lateral"
+        );
+      }
+      if (veLaPantalla && !puedeExportar) {
+        problemas.push(
+          `   · [${role}] ve ${pantalla} pero su exportación lo rechaza — el botón le va a fallar`
+        );
+      }
+    }
+  }
+
+  assert.deepEqual(problemas, [], `\n${problemas.join("\n")}\n`);
+});
+
+test("ninguna ruta de exportación acepta un tenant_id por parámetro", () => {
+  // El `tenant_id` sale SIEMPRE del perfil autenticado. Si una ruta lo leyera
+  // del request, cualquiera podría bajarse los libros de otro bufete.
+  const problemas: string[] = [];
+
+  for (const { archivo } of EXPORTS) {
+    const fuente = readFileSync(join(process.cwd(), archivo), "utf8");
+    for (const patron of [
+      /searchParams\.get\(\s*["']tenant/i,
+      /sp\.get\(\s*["']tenant/i,
+      /body\.tenant_id/i,
+    ]) {
+      if (patron.test(fuente)) {
+        problemas.push(`   · ${archivo} lee el tenant del request`);
+      }
+    }
+    if (!/ctx\.tenantId/.test(fuente)) {
+      problemas.push(`   · ${archivo} no usa ctx.tenantId — ¿de dónde saca el bufete?`);
+    }
+  }
+
+  assert.deepEqual(problemas, [], `\n${problemas.join("\n")}\n`);
+});

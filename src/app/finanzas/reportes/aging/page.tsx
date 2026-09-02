@@ -9,6 +9,7 @@ import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import { StatementHeader, OpeningBalancesNotice } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
 import { AntiguedadTable } from "./_components/antiguedad-table";
+import { BotonExportar } from "../_components/boton-exportar";
 
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];
 
@@ -236,6 +237,17 @@ export default async function AntiguedadPage({
           columnas se muestran igual para que la estructura del reporte no cambie según los datos.
         </p>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-gray-500">
+          El archivo sale <strong>detallado por documento</strong>, con el RUC y el DV del tercero
+          en columnas separadas.
+        </p>
+        <BotonExportar
+          href={`/api/finanzas/reportes/aging/export?tipo=${tipo}`}
+          nombreSugerido={`Antiguedad_${esCobrar ? "CxC" : "CxP"}.xlsx`}
+        />
+      </div>
 
       <AntiguedadTable reporte={reporte} destinos={destinos} />
     </div>

@@ -12,6 +12,7 @@ import {
 import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { StatementHeader } from "../_components/financial-statement";
+import { BotonExportar } from "../_components/boton-exportar";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
 import { LibroMayorTable } from "./_components/libro-mayor-table";
 import { MayorFiltros } from "./_components/mayor-filtros";
@@ -112,7 +113,25 @@ export default async function LibroMayorPage({
       )}
 
       {cuenta && mayor && (
-        <LibroMayorTable mayor={mayor} destinos={destinos} />
+        <>
+          {/* La exportación que pidió Josuarth: "si yo entro a la cuenta de
+              gastos de combustible, yo debo poder extraer eso en Excel y ese
+              Excel debe venir con DV, nombre, cantidad de gastos". */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              El archivo trae el <strong>RUC y el DV en columnas separadas</strong>, como los pide
+              el formulario de la DGI para los anexos de la declaración de renta.
+            </p>
+            <BotonExportar
+              href={`/api/finanzas/reportes/mayor/export?cuenta=${encodeURIComponent(cuenta.code)}${
+                desde ? `&desde=${desde}` : ""
+              }${hasta ? `&hasta=${hasta}` : ""}`}
+              nombreSugerido={`Mayor_${cuenta.code}.xlsx`}
+            />
+          </div>
+
+          <LibroMayorTable mayor={mayor} destinos={destinos} />
+        </>
       )}
 
       {cuenta && mayor && mayor.cantidadMovimientos === 0 && (

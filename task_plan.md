@@ -20,6 +20,27 @@ cerrado el "sin verificar" que dejó la caída de internet del 01/09.
 **Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
 red local. No hay motivo para postergar el correo por el estado de staging.
 
+### Bloque cerrado el 02/09 — Exportación a Excel del Mayor y la Antigüedad
+
+| # | Entregable | Estado |
+|---|---|---|
+| EXP.1 | Export del Libro Mayor por cuenta, con RUC y DV en columnas separadas | ✅ |
+| EXP.2 | Export de la Antigüedad (cobrar y pagar) con el mismo motor | ✅ |
+| EXP.3 | Formato xlsx — un CSV destruye el DV `05` | ✅ decidido y documentado |
+| EXP.4 | Permisos: el export exige los mismos roles que la pantalla | ✅ 2 tests que lo verifican |
+| EXP.5 | Celdas sin tercero VACÍAS, no "—" ni "N/A" | ✅ verificado en el archivo |
+| EXP.6 | Verificación con archivos reales, leídos de vuelta | ✅ 3 archivos |
+
+**Lo que queda:**
+
+1. **`clients` no tiene columna `dv`.** En un movimiento de cliente la columna DV sale vacía. Los
+   proveedores sí lo tienen. Cerrarlo es una migración propia — y ojo que `clients` tiene datos en
+   producción, así que aplica el mismo cuidado que la `033`.
+2. **Verificar el botón en pantalla con sesión de contador** — la extensión de Chrome sigue
+   desconectada.
+3. Los RUC y DV reales de los proveedores los tienen las licenciadas; en staging hay valores de
+   demostración.
+
 ### Bloque cerrado el 02/09 — Proveedores como entidad
 
 | # | Entregable | Estado |

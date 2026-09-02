@@ -31,28 +31,23 @@ export default async function BalanceGeneralPage() {
   // patrimonio sea exactamente la utilidad operativa del Estado de Resultado.
   const { balanceGeneral: bg } = buildAccountingReports(accounts);
 
-  /**
-   * El plan de Josuar tiene una cuenta de patrimonio "Utilidad del Ejercicio"
-   * (300003) Y este reporte agrega un renglón calculado con el mismo nombre.
-   * Mientras las cuentas de patrimonio estén en 0 los totales dan bien, pero si
-   * alguien les carga un saldo el resultado se contaría DOS VECES.
-   *
-   * El chequeo mira el SALDO, no el nombre de la cuenta: cualquier saldo de
-   * patrimonio distinto de cero merece que el contador confirme que no se está
-   * duplicando el resultado del período.
-   */
-  const saldoCuentasPatrimonio = bg.patrimonio.groups.reduce(
-    (acc, g) => acc + g.subtotal,
-    0
-  );
-  const riesgoDobleConteo = Math.abs(saldoCuentasPatrimonio) >= 0.005;
+  // El riesgo de doble conteo lo detecta el BUILDER, que es quien tiene los
+  // números: desde que el Balance suma el ledger, un asiento puede acreditar la
+  // cuenta de utilidad sin que nadie cargue nada a mano.
+  const riesgoDobleConteo = bg.patrimonioConSaldo.length > 0;
+  const saldoCuentasPatrimonio = bg.patrimonioConSaldo.reduce((a, r) => a + r.amount, 0);
+
+  // Cuentas DESACTIVADAS que entran igual porque tienen movimientos. Sacarlas
+  // descuadraría el estado; dejarlas sin avisar sería un renglón que el contador
+  // no reconoce en su plan de cuentas.
+  const inactivasConMovimiento = accounts.filter((a) => a.inactivaConMovimiento);
 
   return (
     <div className="space-y-4">
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title="Estado de Situación Financiera"
-        subtitle="Balance General · Saldos de apertura"
+        subtitle="Balance General · Saldos de apertura + movimientos del mayor"
         generatedAt={formatGeneratedAt()}
       />
 
@@ -67,6 +62,21 @@ export default async function BalanceGeneralPage() {
             suma el renglón calculado <strong>Utilidad del Ejercicio</strong>. Si alguna de esas
             cuentas ya representa el resultado del período,{" "}
             <strong>se estaría contando dos veces</strong>. Confirmalo con el contador.
+          </span>
+        </p>
+      )}
+
+      {inactivasConMovimiento.length > 0 && (
+        <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Hay{" "}
+            <strong>
+              {inactivasConMovimiento.length} cuenta(s) desactivada(s) con movimientos
+            </strong>{" "}
+            ({inactivasConMovimiento.map((a) => a.code).join(", ")}). Se incluyen igual: sus
+            asientos son un hecho contable y sacarlas descuadraría el balance. Si ya no se usan,
+            hay que reclasificar esos movimientos antes de darlas de baja.
           </span>
         </p>
       )}

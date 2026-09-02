@@ -68,9 +68,11 @@ export function StatementHeader({
 export function OpeningBalancesNotice() {
   return (
     <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-      Este reporte se arma con los <strong>saldos de apertura</strong> cargados en el Plan de
-      Cuentas. Cuando entre el motor de asientos, pasará a incluir los movimientos del período.
-      La <strong>fecha de corte</strong> está pendiente de confirmación del contador.
+      Este reporte suma los <strong>saldos de apertura</strong> del Plan de Cuentas{" "}
+      <strong>más todos los movimientos registrados</strong> en el libro mayor. Los mismos
+      números que muestra el mayor de cada cuenta.{" "}
+      <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
+      importar la fecha. El corte está pendiente de definir con el contador.
     </p>
   );
 }

@@ -46,7 +46,25 @@ export interface ReportAccount {
   name: string;
   account_type: AccountType;
   subcategoria: Subcategoria | null;
+  /**
+   * Saldo para reportar, en convención de balanza.
+   *
+   * Desde el 02/09/2026 es `saldo_inicial + Σ movimientos del ledger`, no el
+   * saldo de apertura a secas. Los campos de abajo lo desglosan.
+   */
   saldo: number;
+  /** El saldo de apertura, sin movimientos. Opcional: los tests arman cuentas a mano. */
+  saldoInicial?: number;
+  /** Neto del ledger (débitos − créditos) que se sumó al inicial. */
+  movimientoLedger?: number;
+  /**
+   * true si la cuenta está DESACTIVADA pero tiene movimientos.
+   *
+   * Entra al reporte igual —su saldo es un hecho contable y sacarlo descuadraría
+   * el estado— pero la pantalla tiene que decirlo: es un renglón que el contador
+   * no espera ver en su plan de cuentas.
+   */
+  inactivaConMovimiento?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +148,22 @@ export interface BalanceGeneral {
   /** Total de Activo + Total Pasivo+Patrimonio. 0 = cuadra. */
   descuadre: number;
   cuadra: boolean;
+  /**
+   * Cuentas de patrimonio con saldo distinto de cero.
+   *
+   * ⚠️ RIESGO DE DOBLE CONTEO. Este reporte suma las cuentas de patrimonio Y
+   * agrega un renglón CALCULADO con la utilidad del ejercicio. Si la cuenta
+   * `300003 Utilidad del Ejercicio` del plan de Josuar tiene saldo, el resultado
+   * aparece dos veces y el balance se descuadra.
+   *
+   * Mientras el saldo venía solo de la apertura esto era hipotético. Desde que
+   * el Balance suma el ledger (02/09/2026) un asiento de cierre puede acreditar
+   * esa cuenta sin que nadie cargue nada a mano, así que el aviso lo emite el
+   * builder —que es quien tiene los números— y no la pantalla.
+   *
+   * Vacío = no hay riesgo.
+   */
+  patrimonioConSaldo: ReportRow[];
 }
 
 // ---------------------------------------------------------------------------
@@ -457,6 +491,12 @@ export function buildBalanceGeneral(
   // opuestos, así que cuadra cuando la SUMA da 0.
   const descuadre = round2(activos.total + totalPasivoPatrimonio);
 
+  // Cualquier cuenta de patrimonio con saldo es candidata a duplicar el
+  // resultado, no solo la 300003: el renglón calculado se suma igual.
+  const patrimonioConSaldo: ReportRow[] = equityAccounts
+    .filter((a) => Math.abs(a.saldo) >= EPSILON)
+    .map((a) => ({ code: a.code, name: a.name, amount: round2(a.saldo) }));
+
   return {
     activos,
     pasivos,
@@ -465,6 +505,7 @@ export function buildBalanceGeneral(
     totalPasivoPatrimonio,
     descuadre,
     cuadra: Math.abs(descuadre) < EPSILON,
+    patrimonioConSaldo,
   };
 }
 

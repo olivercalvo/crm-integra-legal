@@ -1,5 +1,99 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Convergencia de reportes — el Balance y el Mayor dicen lo mismo] - 2026-09-02
+
+### El problema
+
+Con diez asientos sembrados, el Balance mostraba Cuentas por Cobrar en **191.947,55** y el Libro
+Mayor cerraba en **194.842,55**. El Balance leía solo `saldo_inicial`; el mayor ya leía el ledger.
+
+Comparar el balance contra el mayor de una cuenta de control es lo primero que hace un contador.
+Dos números distintos para la misma cuenta no se leen como "falta una fase": se leen como que el
+sistema no es confiable.
+
+### El cambio
+
+`saldo = saldo_inicial + Σ (débitos − créditos) del ledger`, en `accounting-source.ts`. El saldo
+inicial **sigue en `chart_of_accounts`**: no se convirtió en asiento de apertura, que depende de
+la fecha de corte y sigue pendiente del contador.
+
+### Los tres guards que iban en el mismo commit
+
+**1. El filtro `active` dejó de esconder saldos.** Existía por una razón buena —las 34 cuentas
+viejas de QuickBooks ensuciaban el reporte— pero al sumar el ledger se volvía peligroso: una
+cuenta desactivada CON movimientos habría desaparecido llevándose su saldo, y el balance quedaría
+descuadrado sin decir por qué. Ahora entran las activas **más** las inactivas que tengan
+movimiento, y estas últimas vienen marcadas: la pantalla avisa cuáles son y por qué están.
+
+**2. El doble conteo de `300003` lo denuncia el builder.** El Balance suma las cuentas de
+patrimonio Y agrega un renglón calculado con la utilidad. Si `300003 Utilidad del Ejercicio`
+tiene saldo, el resultado se cuenta dos veces. Antes eso se miraba en la página; ahora lo reporta
+`buildBalanceGeneral` en `patrimonioConSaldo`, porque desde que el Balance suma el ledger **un
+asiento de cierre puede acreditar esa cuenta sin que nadie cargue nada a mano**.
+
+**3. El saldo inicial del Mayor ajustado al rango** ya estaba, del bloque del 01/09.
+
+**Fecha de corte: NO se parametrizó**, por decisión. Lo que sí cambió es que el aviso en pantalla
+dice la verdad: que el reporte suma **todos los movimientos registrados**, que **no hay corte por
+período**, y que el corte está pendiente de definir con el contador. Antes decía "cuando entre el
+motor de asientos, pasará a incluir los movimientos", que ya era falso.
+
+### 🔴 DOS DE LOS NÚMEROS PREDICHOS CAMBIARON — y la causa es una sola
+
+| | predicho el 01/09 | real | |
+|---|---|---|---|
+| Total Activo | 262.867,46 | **262.717,46** | −150,00 |
+| Total Patrimonio | −245.532,66 | **−245.382,66** | +150,00 |
+| Total Pasivo | −17.334,80 | −17.334,80 | = |
+| Cuentas por Cobrar | 194.842,55 | 194.842,55 | = |
+| Banco | 62.770,91 | 62.770,91 | = |
+| Descuadre | 0,00 | 0,00 | = |
+
+**No es un error de cálculo.** La predicción se hizo el 01/09 por la mañana; el **Bloque 0** cambió
+esa tarde el asiento del reembolso para que acredite `130003 Fondos Legales de Clientes` —un
+ACTIVO— en vez de `500005 Costos trámites legales`. Lo pide textual el acta de RM del 25/08:
+*"Reembolso al facturar: HABER 130003, nunca ingreso"*.
+
+Los 150,00 dejaron de ser un costo recuperado y pasaron a bajar el fondo del cliente: salen del
+activo y entran al resultado. Hay un test que lo demuestra — rehace el escenario viejo y obtiene
+exactamente los números predichos.
+
+### La verificación
+
+**Reconciliación cuenta por cuenta contra staging real**, que es la prueba que vale porque el
+descuadre da cero aunque el movimiento se sume a la cuenta equivocada:
+
+| | |
+|---|---|
+| Cuentas en el reporte | 64 (de 98 en el plan) |
+| Con movimiento, reconciliadas una por una | 13 |
+| **Sin movimiento, delta impreso** | **51 cuentas, 0,00 en todas** |
+| Descuadradas | **0** |
+
+Las 13 con movimiento, con su inicial, su neto del mayor y su saldo en el Balance, están en el
+detalle de la corrida. Ejemplo: `100004` = 191.947,55 + 2.895,00 = 194.842,55.
+
+**No regresión con el ledger vacío:** 257.902,46 de activo y −244.476,91 de utilidad, los
+totales del Excel de Josuar. Es lo que demuestra que desplegar esto no movería un centavo en
+producción, donde nada postea todavía.
+
+**En pantalla, con sesión de contador:** el Balance muestra CxC en 194.842,55 y el Mayor cierra
+en 194.842,55. El mismo número en los dos reportes.
+
+**Y un test que prueba que cuadrar no alcanza:** mueve 5.000 de una cuenta de activo a otra, el
+descuadre sigue en 0,00 —la partida doble se mantiene— y la reconciliación por cuenta caza las
+dos. Es la razón por la que ese es el test que importa.
+
+### Chequeos
+
+`tsc` 0 errores · **`npm test`: 419 tests, 419 pass, 0 fail, 0 skipped** (eran 409) · lint sin
+hallazgos nuevos (21 preexistentes).
+
+### No tocado, a propósito
+
+La divergencia entre el Balance y `/pyl` —dos estados de resultado distintos alimentando dos
+pantallas— sigue igual: es la pregunta que Josuarth todavía no respondió.
+
 ## [HOTFIX — las descargas pasan por el dominio de la app] - 2026-09-01 (incidente)
 
 ### El incidente

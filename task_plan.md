@@ -20,6 +20,47 @@ cerrado el "sin verificar" que dejó la caída de internet del 01/09.
 **Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
 red local. No hay motivo para postergar el correo por el estado de staging.
 
+### 🔴 PENDIENTE DE OLIVER — antes de aplicar la migración `034` en producción
+
+`sql/pending/034_asiento_unico_por_documento.sql` está aplicada en **staging** y **NO en
+producción**. Antes de aplicarla allá hay que correr este chequeo. **Si devuelve una sola fila, NO
+aplicar**: el índice fallaría a mitad, y el asiento duplicado no se puede borrar porque el trigger
+de la `023` rechaza el DELETE.
+
+```sql
+SELECT tenant_id, source_type, source_id, COUNT(*) AS asientos,
+       string_agg(entry_number::text, ', ' ORDER BY entry_number) AS numeros
+  FROM public.journal_entries
+ WHERE source_id IS NOT NULL
+ GROUP BY tenant_id, source_type, source_id
+HAVING COUNT(*) > 1;
+```
+
+Staging al 02/09/2026: **0 duplicados** (9 asientos con `source_id`, 9 combinaciones únicas).
+
+### 📋 BLOQUE PARA DESPUÉS — cableado factura/pago → asiento
+
+**Bloqueado por tres preguntas al contador.** Ninguna es decisión de desarrollo:
+
+1. **Qué cuenta de ingreso** por servicio del catálogo. `services_catalog.revenue_account` apunta
+   hoy a `4101` y `2201`, **las dos inactivas**: es el plan anterior al de Josuarth. Sin esto, el
+   asiento de una factura no se puede derivar sin hardcodear — que es el problema que se está
+   eliminando.
+2. **Qué cuenta bancaria** por defecto para los cobros. `payments` tiene `method` y `reference`,
+   pero no cuenta; hay tres bancos activos.
+3. **El ITBMS de compras** (crédito fiscal, no `200003`). También bloquea el módulo de compras.
+
+**Diseño registrado, NO decidido:** postear el asiento ANTES de emitir la factura. Un asiento
+huérfano es detectable y reversible; una factura sin asiento es una divergencia silenciosa.
+⚠️ **Antes de implementarlo hay que revisar si el correlativo de la factura se asigna al emitir**:
+si es así, el asiento posteado antes no tendría número que citar, y el diseño se cae.
+
+**Ya hecho y desbloqueado (02/09):** el UNIQUE de idempotencia, el backfill de los 250,00 y el gate
+de anulación.
+
+**Lo que sigue abierto del gate de anulación:** hoy una factura con asiento NO se puede anular. El
+asiento de reversión es su propio bloque, y necesita decidir con qué FECHA se revierte.
+
 ### 📋 BLOQUE PARA DESPUÉS — Backfill `022`: el DV embebido en el texto del RUC
 
 **Estado: diagnosticado el 02/09/2026, sin urgencia, sin fecha.** No arrancar sin aprobación

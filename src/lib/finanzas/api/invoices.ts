@@ -658,6 +658,40 @@ export async function cancelInvoice(
     );
   }
 
+  // 2b. 🔴 GATE CONTABLE (02/09/2026): si la factura ya tiene asiento, NO se
+  //     anula todavía.
+  //
+  //     Anular hoy cambiaría el status y generaría la nota de crédito, pero el
+  //     asiento seguiría en el libro tal cual: la factura desaparecería de la
+  //     antigüedad y su débito quedaría vivo en el mayor. El Balance y el auxiliar
+  //     divergirían **en silencio**, que es el único resultado inaceptable.
+  //
+  //     Revertir un asiento NO es postear su espejo: hay que decidir con qué
+  //     fecha se revierte —la del asiento original, que puede caer en un período
+  //     cerrado, o la de la anulación— y eso es criterio contable, no una
+  //     decisión de implementación. Se resuelve en el bloque de reversiones.
+  //
+  //     Mientras tanto se bloquea, que es feo pero VISIBLE. Hoy afecta a las
+  //     facturas que ya tienen asiento sembrado en staging.
+  const { data: asiento } = await db
+    .from("journal_entries")
+    .select("entry_number")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", "factura")
+    .eq("source_id", invoiceId)
+    .maybeSingle();
+
+  if (asiento) {
+    const numero = (asiento as { entry_number: number }).entry_number;
+    throw new InvoiceMutationError(
+      `Esta factura ya está registrada en el libro contable (asiento ${numero}), ` +
+        `y anularla dejaría el libro sin cuadrar con el reporte de cuentas por cobrar. ` +
+        `La anulación de facturas contabilizadas se habilita junto con el asiento de ` +
+        `reversión. Avisale a Oliver antes de hacer cualquier otra cosa con esta factura.`,
+      409
+    );
+  }
+
   // 3. Generar NC mirror (idempotente: si ya existe, devuelve la existente).
   const cn = await createCreditNoteFromInvoice(
     db,

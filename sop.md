@@ -948,7 +948,9 @@ práctica: **tocar cómo se calcula el `source_id` obliga a resetear staging**, 
 
 El tercer pago (el de FAC-REI-000001, B/. 150.00) **no tiene asiento a propósito** — ver
 `SEED_PAYMENTS` en `scripts/seed-data/staging-fixtures.ts`, donde está escrito el porqué:
-sostiene el baseline de 2,895.00 entre el mayor de Cuentas por Cobrar (194,842.55) y el Balance
+sostenía el baseline de 2,895.00 entre el mayor de Cuentas por Cobrar y el Balance — **cerrado el
+02/09/2026 con el backfill de los dos asientos que faltaban**, ver el bloque de idempotencia del
+`changelog.md`. El neto pasó a 3,145.00 y la diferencia del auxiliar quedó con una sola causa
 General (191,947.55), que es el número contra el que se va a validar la convergencia de
 reportes.
 
@@ -1209,8 +1211,8 @@ Números con los que quedó staging. Si alguno no coincide, el ambiente se tocó
 |---|---|
 | Clientes / casos / facturas | 15 / 30 / 8 |
 | Pagos y aplicaciones | 3 / 3 |
-| Asientos y líneas del ledger | 10 / 27 · cadena íntegra · correlativo 10 |
-| Mayor de Cuentas por Cobrar (100004) | inicial 191,947.55 · neto 2,895.00 · **final 194,842.55** |
+| Asientos y líneas del ledger | 12 / 31 · cadena íntegra · correlativo 12 |
+| Mayor de Cuentas por Cobrar (100004) | inicial 191,947.55 · neto 3,145.00 · **final 195,092.55** |
 | Balance — Total de Activo | 257,902.46 |
 | Estado de Resultado — utilidad operativa | −244,476.91 |
 | Plan de cuentas | 64 activas |

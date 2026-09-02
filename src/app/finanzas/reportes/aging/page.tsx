@@ -148,11 +148,11 @@ export default async function AntiguedadPage({
               <div className="flex items-start justify-between gap-4">
                 <dt className="flex-1">
                   <strong>
-                    Documentos del sistema que todavía no producen asiento contable.
+                    Documentos registrados que todavía no llegaron al libro mayor.
                   </strong>{" "}
-                  No es un error de carga: el <strong>cableado de documento a asiento aún no está
-                  construido</strong>, así que estos documentos existen en el sistema pero no
-                  llegaron al libro mayor.
+                  Al emitir una factura o registrar un cobro se genera su asiento; si un documento
+                  aparece acá es porque <strong>su asiento falló o quedó pendiente</strong>, y hay
+                  que revisarlo.
                   {reporte.control.porCablearExplicado && (
                     <>
                       {" "}

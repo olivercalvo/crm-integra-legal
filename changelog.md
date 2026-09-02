@@ -1,5 +1,103 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Idempotencia del ledger, backfill de los 250,00 y gate de anulación] - 2026-09-02
+
+Las tres piezas del cableado factura→asiento que **no dependían de ninguna respuesta del
+contador**. El posteo automático queda para cuando lleguen: derivar la cuenta de ingreso hoy
+obligaría a hardcodear el mapeo, que es exactamente el problema que se está eliminando.
+
+### 1. UNIQUE parcial — un documento, un asiento
+
+`sql/pending/034_asiento_unico_por_documento.sql`. Hasta hoy **nada impedía postear dos veces la
+misma factura**: `idx_je_tenant_source` es un índice común, no UNIQUE. Y un asiento duplicado en un
+libro inmutable **no se borra** — los triggers de la `023` rechazan el DELETE.
+
+Va en la base y no en el código a propósito: un chequeo previo en la ruta deja una ventana entre el
+SELECT y el INSERT, y dos requests concurrentes pasan los dos. El chequeo en la ruta se agrega
+igual, pero para dar un mensaje entendible, no como la garantía.
+
+Es **parcial** (`WHERE source_id IS NOT NULL`) porque los asientos manuales y el futuro asiento de
+apertura no tienen documento.
+
+**Verificado antes de escribirla:** staging tiene 9 asientos con `source_id` y 9 combinaciones
+únicas — cero duplicados. **En producción NO se verificó ni se aplicó**; la query está en el paso 1
+del archivo y en `task_plan.md`.
+
+⚠️ **Para producción:** la versión del paso 2 toma un lock de escritura. Con las decenas de filas
+de hoy es instantáneo, pero si la tabla creció hay una versión `CONCURRENTLY` comentada — que **no
+puede correr dentro de una transacción** y deja un índice inválido si falla a mitad. Las dos cosas
+están escritas en el archivo.
+
+### 2. Backfill de los 250,00 — solo staging
+
+La antigüedad de CxC difería del mayor en 191.697,55 contra una apertura de 191.947,55. Los 250,00
+de sobra tenían **dos causas nuestras**: `FAC-REI-000002` (400,00) emitida sin postear, y el cobro
+de `FAC-REI-000001` (150,00) sembrado sin asiento a propósito para preservar la línea base de
+2.895,00. Esa línea base ya cumplió.
+
+Los dos asientos siguen patrones ya decididos, ninguno es nuevo:
+
+```
+FAC-REI-000002   D 100004 Cuentas por Cobrar   400,00
+                 H 130003 Fondo Legales        400,00   ← acta del 25/08: reembolso nunca es ingreso
+cobro 4471915    D 100001 Banco                150,00
+                 H 100004 Cuentas por Cobrar   150,00
+```
+
+**Los saldos reales coincidieron con la proyección del diseño al centavo:**
+
+| Cuenta | Antes | Después | Movió | Proyectado |
+|---|---|---|---|---|
+| 100001 Banco | 62.770,91 | **62.920,91** | +150,00 | 62.920,91 ✅ |
+| 100004 Cuentas por Cobrar | 194.842,55 | **195.092,55** | +250,00 | 195.092,55 ✅ |
+| 130003 Fondo Legales | 2.369,11 | **1.969,11** | −400,00 | 1.969,11 ✅ |
+
+Los dos asientos mueven activos entre sí, así que **ningún total del Balance cambió**: Activo
+262.717,46 · Pasivo −17.334,80 · Patrimonio −245.382,66 · descuadre 0,00.
+
+**Y la diferencia del auxiliar quedó con UNA sola causa:** 191.947,55, exactamente el saldo de
+apertura. `porCablear` en 0,00, cero documentos sin asiento, cero cobros sin asiento.
+
+El script (`scripts/backfill-asientos-faltantes.mts`) es **idempotente y se verificó corriéndolo
+dos veces**: la segunda saltea los dos. Usa `postJournalEntry()`, nunca INSERT directo. Tiene
+`--dry-run` y aborta si la URL no es la de staging.
+
+### 3. Gate de anulación
+
+Hoy se podía anular una factura ya posteada: el status cambiaba, se generaba la nota de crédito, y
+**el asiento seguía vivo en el libro**. La factura desaparecía de la antigüedad y su débito quedaba
+en el mayor — divergencia silenciosa, que es el único resultado inaceptable.
+
+`cancelInvoice()` ahora rechaza con 409 si la factura tiene asiento, con un mensaje para la abogada
+y no un error técnico. Afecta a las 5 facturas con asiento de staging.
+
+**Por qué bloquear y no revertir:** revertir no es postear el asiento espejo. Hay que decidir con
+qué fecha se revierte —la del asiento original, que puede caer en un período cerrado, o la de la
+anulación— y eso es criterio contable. Bloquear es feo pero **visible**.
+
+### 4. El texto de la antigüedad
+
+De *"el cableado de documento a asiento aún no está construido"* a *"su asiento falló o quedó
+pendiente, y hay que revisarlo"*. Hoy el bloque no se muestra —no hay documentos sin asiento— pero
+cuando vuelva a aparecer va a significar eso.
+
+### Lo que queda esperando al contador
+
+Tres preguntas que **bloquean el posteo automático**, y ninguna es decisión de desarrollo:
+
+1. **Qué cuenta de ingreso** le corresponde a cada servicio del catálogo. Hoy
+   `services_catalog.revenue_account` apunta a `4101` y `2201`, **las dos inactivas** — es el plan
+   viejo. Por eso el seed hardcodeó la cuenta factura por factura.
+2. **Qué cuenta bancaria** por defecto para los cobros: `payments` tiene `method` pero no cuenta, y
+   hay tres bancos activos.
+3. **El ITBMS de compras**, que es crédito fiscal y no `200003`.
+
+Diseño registrado y **no decidido**: postear antes de emitir. Hay que revisar si el correlativo de
+la factura se asigna al emitir — en ese caso el asiento no tendría número que citar.
+
+545 tests. Typecheck limpio. Lint: 21 preexistentes.
+
+
 ## [El DV en la exportación, y el payload del receptor congelado] - 2026-09-02
 
 Los dos puntos que habían quedado abiertos del diagnóstico.

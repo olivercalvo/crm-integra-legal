@@ -121,7 +121,7 @@ export function DiarioTable({
       <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
         <p className="text-base font-medium text-integra-navy">No hay asientos en este período</p>
         <p className="mt-1 text-sm text-gray-500">
-          Probá ampliando el rango de fechas, o quitá el filtro para ver todo el diario.
+          Pruebe ampliando el rango de fechas, o quite el filtro para ver todo el diario.
         </p>
       </div>
     );

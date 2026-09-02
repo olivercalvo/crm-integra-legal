@@ -54,7 +54,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            "Este documento se generó automáticamente y no se puede eliminar manualmente. Si necesitas removerlo, elimina o cancela la entidad fuente.",
+            "Este documento se generó automáticamente y no se puede eliminar manualmente. Para removerlo, hay que eliminar o cancelar el documento que lo generó.",
         },
         { status: 403 }
       );

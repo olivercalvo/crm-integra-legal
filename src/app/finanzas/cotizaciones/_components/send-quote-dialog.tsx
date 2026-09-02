@@ -377,11 +377,11 @@ export function SendQuoteDialog({
                 </p>
                 <p className="text-xs">
                   {apiEmailError ??
-                    "Verifica con el equipo técnico que el servicio de email esté configurado."}
+                    "El servicio de correo no está configurado: avise a soporte."}
                   {" "}
                   {isResend
-                    ? "El registro de reenvío igual quedó guardado — copia el link de abajo y compártelo manualmente con el cliente."
-                    : "La cotización igual quedó marcada como enviada — copia el link de abajo y compártelo manualmente con el cliente."}
+                    ? "El registro de reenvío igual quedó guardado — copie el enlace de abajo y compártalo manualmente con el cliente."
+                    : "La cotización igual quedó marcada como enviada — copie el enlace de abajo y compártalo manualmente con el cliente."}
                 </p>
               </div>
             </div>
@@ -426,7 +426,7 @@ export function SendQuoteDialog({
             <ExternalLink size={14} className="mt-0.5 shrink-0 text-amber-600" />
             <p>
               El portal público estará disponible en una próxima
-              actualización. Cuando el cliente responda, marca la cotización
+              actualización. Cuando el cliente responda, marque la cotización
               como aceptada o rechazada manualmente desde esta misma pantalla.
             </p>
           </div>

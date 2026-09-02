@@ -35,7 +35,7 @@ export function TerceroSelector({
         className="block w-full max-w-lg rounded-md border border-gray-300 bg-white px-3 min-h-[44px] text-sm hover:border-integra-navy focus:border-integra-navy focus:outline-none"
       >
         <option value="">
-          Elegí un {tipo === "cliente" ? "cliente" : "proveedor"}…
+          Seleccione un {tipo === "cliente" ? "cliente" : "proveedor"}…
         </option>
         {opciones.map((o) => (
           <option key={o.value} value={o.value}>

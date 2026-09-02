@@ -232,7 +232,7 @@ export function SupplierForm({ proveedor, proximoNumero }: Props) {
               </li>
             ))}
             <li className="pt-1 text-[11px] italic text-amber-800">
-              Son avisos, no errores: podés guardar igual.
+              Son avisos, no errores: se puede guardar igual.
             </li>
           </ul>
         )}

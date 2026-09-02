@@ -39,7 +39,7 @@ export function DeletePaymentButton({ paymentId, paymentLabel, disabled }: Props
         setOpen(false);
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intentá de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }

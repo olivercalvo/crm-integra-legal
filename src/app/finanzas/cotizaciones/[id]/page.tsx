@@ -324,7 +324,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                       `Aceptación registrada el ${formatDateTime(quote.approved_at)}.`}
                   </p>
                   <p className="mt-2 text-xs text-gray-600">
-                    Cuando estés listo, convierte esta cotización a una o
+                    Cuando esté listo, convierta esta cotización a una o
                     dos facturas (según las líneas HON / REI) con el botón
                     de arriba.
                   </p>
@@ -441,7 +441,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                   </h2>
                   <p className="mt-1 text-sm text-amber-900">
                     Esta cotización venció el {formatDate(quote.valid_until)}.
-                    Para reactivarla, crea una nueva cotización con datos
+                    Para reactivarla, cree una nueva cotización con datos
                     actualizados.
                   </p>
                 </div>
@@ -543,8 +543,8 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
               <p className="font-semibold text-gray-700 mb-1">Cotización inmutable</p>
               <p>
                 En estado <span className="font-mono">{quote.status}</span> no
-                se permite editar líneas ni cabecera. Si necesitas cambios,
-                crea una cotización nueva.
+                se permite editar líneas ni cabecera. Para hacer cambios,
+                cree una cotización nueva.
               </p>
             </div>
           )}

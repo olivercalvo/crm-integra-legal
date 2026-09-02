@@ -158,7 +158,7 @@ export async function DELETE(
     // Prevent self-deactivation
     if (targetId === user.id) {
       return NextResponse.json(
-        { error: "No puedes desactivar tu propia cuenta" },
+        { error: "No puede desactivar su propia cuenta" },
         { status: 400 }
       );
     }

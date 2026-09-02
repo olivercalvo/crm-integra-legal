@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (uploaded.length === 0) {
       return NextResponse.json(
-        { error: "No se pudo subir ningún archivo. Verifica que Supabase Storage esté configurado." },
+        { error: "No se pudo subir ningún archivo. Es un problema de configuración del sistema: avise a soporte." },
         { status: 500 }
       );
     }

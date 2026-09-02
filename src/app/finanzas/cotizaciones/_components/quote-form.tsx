@@ -435,7 +435,7 @@ export function QuoteForm(props: Props) {
           {props.mode === "edit" && !props.source && (
             <p className="text-xs text-gray-500">
               El cliente no se puede cambiar desde el editor. Para
-              cambiarlo, cancela la cotización y crea una nueva.
+              cambiarlo, cancele la cotización y cree una nueva.
             </p>
           )}
 

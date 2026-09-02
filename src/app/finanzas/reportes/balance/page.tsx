@@ -97,7 +97,7 @@ export default async function BalanceGeneralPage() {
           <p className="mt-1">
             Diferencia de <strong>{formatAmount(bg.descuadre)}</strong> entre el Total de Activo (
             {formatAmount(bg.activos.total)}) y el Total Pasivo + Patrimonio (
-            {formatAmount(bg.totalPasivoPatrimonio)}). Revisá los <strong>saldos de apertura</strong>{" "}
+            {formatAmount(bg.totalPasivoPatrimonio)}). Revise los <strong>saldos de apertura</strong>{" "}
             en el Plan de Cuentas y los <strong>asientos del período</strong>: la suma de los
             débitos y los créditos de la balanza tiene que dar cero.
           </p>

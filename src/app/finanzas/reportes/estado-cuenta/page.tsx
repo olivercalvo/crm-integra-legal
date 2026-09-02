@@ -124,7 +124,7 @@ export default async function EstadoCuentaPage({
       ) : (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
           <p className="text-base font-medium text-integra-navy">
-            Elegí un {esCliente ? "cliente" : "proveedor"} para ver su estado de cuenta
+            Seleccione un {esCliente ? "cliente" : "proveedor"} para ver su estado de cuenta
           </p>
           <p className="mt-1 text-sm text-gray-500">
             {opciones.length} {esCliente ? "cliente(s)" : "proveedor(es)"} con movimientos

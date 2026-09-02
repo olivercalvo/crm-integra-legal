@@ -88,7 +88,7 @@ export async function fetchInvoiceEfacturaBundle(
     | undefined;
   if (!clientRow) {
     throw new MutationError(
-      "La factura no tiene cliente asociado. Esto es inesperado — contactá soporte.",
+      "La factura no tiene cliente asociado. Esto es inesperado — comuníquese con soporte.",
       500
     );
   }
@@ -111,7 +111,7 @@ export async function fetchInvoiceEfacturaBundle(
   }
   if (!linesRaw || linesRaw.length === 0) {
     throw new MutationError(
-      "La factura no tiene líneas. Agregá al menos una antes de enviar al PAC.",
+      "La factura no tiene líneas. Agregue al menos una antes de enviar al PAC.",
       400
     );
   }
@@ -204,7 +204,7 @@ export function validateClientFiscalGate(row: Record<string, unknown>): void {
     throw new MutationError(
       `No se puede emitir al PAC: el cliente está en estado "${String(
         clientStatus ?? "desconocido"
-      )}". Activá el cliente primero.`,
+      )}". Active el cliente primero.`,
       400
     );
   }

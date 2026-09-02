@@ -78,7 +78,7 @@ export function validateAcceptInput(
   }
 
   if (!consent) {
-    errors.consent_accepted = "Necesitas confirmar los términos para aceptar";
+    errors.consent_accepted = "Debe confirmar los términos para aceptar";
   }
 
   if (Object.keys(errors).length > 0) {
@@ -153,7 +153,7 @@ async function loadEligibleQuote(
   }
   if (bundle.status === "rechazada") {
     throw new MutationError(
-      "Esta cotización ya fue rechazada previamente. Si necesitas cambiar tu decisión, contacta al bufete.",
+      "Esta cotización ya fue rechazada previamente. Si desea cambiar su decisión, comuníquese con el bufete.",
       400
     );
   }

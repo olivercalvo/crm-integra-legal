@@ -257,7 +257,7 @@ export function CancelInvoiceDialog({
                   <p>
                     Esta factura ya fue autorizada por la DGI. Anularla aquí
                     solo la marca como anulada en el CRM; no la anula ante la
-                    DGI. Para anularla oficialmente, primero debes anularla en
+                    DGI. Para anularla oficialmente, primero hay que anularla en
                     el portal de eFactura PTY (admin.efacturapty.com). Ten en
                     cuenta que la DGI tiene una ventana de tiempo limitada para
                     anular desde la autorización.

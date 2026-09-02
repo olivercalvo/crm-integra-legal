@@ -114,7 +114,7 @@ export function RegisterPaymentDialog({
         reset();
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intentá de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }

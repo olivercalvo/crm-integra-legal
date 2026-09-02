@@ -72,17 +72,17 @@ export function avisosDeRuc(ruc: string | null, dv: string | null): string[] {
   if (/^\d+$/.test(ruc) && ruc.length > 6) {
     avisos.push(
       "El RUC no tiene guiones. Los formatos de la DGI suelen separarlos " +
-        "(8-123-456, 155123456-2-2015). Verificá que sea así en el documento."
+        "(8-123-456, 155123456-2-2015). Verifique que sea así en el documento."
     );
   }
   if (/\s{2,}/.test(ruc)) {
-    avisos.push("El RUC tiene espacios dobles: revisá que no sea un error de tipeo.");
+    avisos.push("El RUC tiene espacios dobles: puede ser un error de tipeo.");
   }
   // El error que este módulo existe para evitar.
   if (dv && ruc.endsWith(`-${dv}`)) {
     avisos.push(
       `El RUC parece terminar con el DV (${dv}). El RUC y el DV van en columnas ` +
-        "separadas: sacá el DV del campo RUC."
+        "separadas: el DV no va dentro del campo RUC."
     );
   }
   if (!dv) {
@@ -93,7 +93,7 @@ export function avisosDeRuc(ruc: string | null, dv: string | null): string[] {
   } else if (dv.length !== 2) {
     avisos.push(
       `El DV tiene ${dv.length} dígito${dv.length === 1 ? "" : "s"}. En el formulario ` +
-        "de la DGI son dos (un 5 se escribe 05). Se guarda igual como lo escribiste."
+        "de la DGI son dos (un 5 se escribe 05). Se guarda igual, tal como se escribió."
     );
   }
   return avisos;

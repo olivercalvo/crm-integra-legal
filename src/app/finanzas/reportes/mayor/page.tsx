@@ -66,7 +66,7 @@ export default async function LibroMayorPage({
         firmName={REPORT_FIRM_NAME}
         title="Libro Mayor"
         subtitle={
-          cuenta ? `${cuenta.code} · ${cuenta.name}` : "Elegí una cuenta para ver su mayor"
+          cuenta ? `${cuenta.code} · ${cuenta.name}` : "Seleccione una cuenta para ver su mayor"
         }
         generatedAt={formatGeneratedAt()}
       />
@@ -103,7 +103,7 @@ export default async function LibroMayorPage({
         <div className="rounded-xl border bg-white px-6 py-12 text-center">
           <BookOpen size={28} className="mx-auto text-gray-300" />
           <p className="mt-3 text-sm text-gray-500">
-            Elegí una cuenta del selector para ver su mayor.
+            Seleccione una cuenta del selector para ver su mayor.
           </p>
           {conMovimiento.length > 0 && (
             <p className="mt-1 text-xs text-gray-400">
@@ -120,7 +120,7 @@ export default async function LibroMayorPage({
               Excel debe venir con DV, nombre, cantidad de gastos". */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-gray-500">
-              Tocá una fila para ver el <strong>asiento completo con todas sus líneas</strong>. El
+              Toque una fila para ver el <strong>asiento completo con todas sus líneas</strong>. El
               archivo trae el <strong>RUC y el DV en columnas separadas</strong>, como los pide el
               formulario de la DGI para los anexos de la declaración de renta.
             </p>

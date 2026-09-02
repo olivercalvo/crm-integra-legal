@@ -128,7 +128,7 @@ export function ComprobacionTable({ reporte }: { reporte: BalanceComprobacion })
             <strong>El balance de comprobación NO cuadra.</strong> La suma de débitos difiere de
             la de créditos en <strong>B/. {money(Math.abs(totales.diferencia))}</strong>. Cada
             asiento tiene la misma plata de los dos lados, así que esto significa que hay un
-            asiento descuadrado en la base. Avisá antes de usar estos reportes.
+            asiento descuadrado en la base. Conviene avisar antes de usar estos reportes.
           </span>
         </p>
       )}

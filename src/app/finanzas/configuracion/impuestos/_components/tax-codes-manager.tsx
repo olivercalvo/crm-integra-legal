@@ -49,7 +49,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
   async function guardar(t: TaxCodeRow) {
     const rate = parseTaxRatePercent(valorPct);
     if (rate === null) {
-      setError("Escribí la tasa como porcentaje: 7 para 7%, 7.5 para 7.5%.");
+      setError("La tasa se escribe como porcentaje: 7 para 7%, 7.5 para 7.5%.");
       return;
     }
     if (rate > 1) {

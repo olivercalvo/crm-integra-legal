@@ -64,7 +64,7 @@ export function LoginForm({ notice }: { notice?: string }) {
 
   async function handleForgotPassword() {
     if (!email) {
-      setError("Ingresa tu correo electrónico primero");
+      setError("Ingrese su correo electrónico primero");
       return;
     }
     setResetLoading(true);
@@ -178,7 +178,7 @@ export function LoginForm({ notice }: { notice?: string }) {
           {resetSent && (
             <div className="flex items-center gap-2 rounded-md bg-green-500/20 px-4 py-2 text-sm text-green-200">
               <Mail size={16} />
-              Se envió un enlace de recuperación a tu correo.
+              Se envió un enlace de recuperación a su correo.
             </div>
           )}
 

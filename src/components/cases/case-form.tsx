@@ -505,7 +505,7 @@ export function CaseForm({
                 className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
               />
               <p className="text-xs text-integra-navy/70">
-                Puedes cambiar este código para seguir tu propia numeración.
+                Puede cambiar este código para seguir su propia numeración.
               </p>
             </div>
           ) : (

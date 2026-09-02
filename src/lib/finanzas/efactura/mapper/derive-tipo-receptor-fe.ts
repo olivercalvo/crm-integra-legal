@@ -36,10 +36,15 @@ export function deriveTipoReceptorFe(
     case "pasaporte":
       return TIPO_RECEPTOR_FE.CONSUMIDOR_FINAL;
     default:
+      // El mensaje llega a la pantalla de la abogada cuando falla una emisión,
+      // así que nombra el CAMPO DE LA FICHA que hay que completar, no la columna
+      // de la base. Decirle "cargá clients.tipo_receptor_fe" a quien está
+      // tratando de facturar no le dice dónde hacer clic.
       throw new Error(
-        `[efactura/mapper] No se puede derivar tipoReceptorFe del cliente ` +
-          `${client.client_number} "${client.name}" (tax_id_type=${client.tax_id_type ?? "null"}). ` +
-          `Cargá clients.tipo_receptor_fe manualmente.`
+        `No se puede determinar el tipo de receptor del cliente ` +
+          `${client.client_number} "${client.name}": su documento de identidad no permite ` +
+          `deducirlo. Abra la ficha del cliente y complete el campo ` +
+          `"Tipo de receptor FE" antes de emitir.`
       );
   }
 }

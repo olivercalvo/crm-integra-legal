@@ -135,7 +135,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
         setAccounts(json.accounts as ChartAccountRow[]);
       }
     } catch {
-      setError("La carga se aplicó, pero no se pudo refrescar el listado. Recargá la página.");
+      setError("La carga se aplicó, pero no se pudo refrescar el listado. Recargue la página.");
     }
     // El conteo del encabezado ("N cuentas contables") lo renderiza el server
     // component de la página, así que sin esto queda viejo tras la carga.
@@ -268,7 +268,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       // Mantiene sincronizado el conteo del encabezado (server component).
       router.refresh();
     } catch {
-      setError("Error de red al guardar. Intentá de nuevo.");
+      setError("Error de red al guardar. Intente de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -304,7 +304,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
       const saved = json.account as ChartAccountRow;
       setAccounts((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
     } catch {
-      setError("Error de red. Intentá de nuevo.");
+      setError("Error de red. Intente de nuevo.");
     } finally {
       setActionLoadingId(null);
     }
@@ -524,7 +524,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 {/* En cuentas de resultado NO se ofrece "sin clasificar": desde
                     NIIF 18 la subcategoría es obligatoria ahí. */}
                 {requiereSubcategoria(form.account_type) ? (
-                  <option value="">— Elegí una —</option>
+                  <option value="">— Seleccione una —</option>
                 ) : (
                   <option value="">— Sin clasificar —</option>
                 )}

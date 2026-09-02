@@ -70,7 +70,7 @@ export function DeleteClientButton({
   };
 
   const warningText = hasCases
-    ? `Este cliente tiene ${caseCount} caso(s) asociado(s). Debes eliminar los casos primero antes de poder eliminar el cliente.`
+    ? `Este cliente tiene ${caseCount} caso(s) asociado(s). Hay que eliminar los casos primero para poder eliminar el cliente.`
     : financialBlock
       ? financialBlock
       : "Esta accion no se puede deshacer. Se eliminaran tambien los documentos asociados a este cliente.";

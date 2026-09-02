@@ -13,7 +13,7 @@ const NOTICES: Record<string, string> = {
     "No pudimos validar el enlace de recuperación. Solicita uno nuevo con “¿Olvidaste tu contraseña?”.",
   recovery_otro_navegador:
     "Ese enlace se pidió desde otro navegador o dispositivo. Solicita uno nuevo acá y ábrelo en este mismo equipo.",
-  auth: "No pudimos validar el enlace. Ingresa con tu correo y contraseña.",
+  auth: "No pudimos validar el enlace. Ingrese con su correo y contraseña.",
   "no-role":
     "Tu usuario no tiene un rol asignado. Contacta al administrador del sistema.",
 };

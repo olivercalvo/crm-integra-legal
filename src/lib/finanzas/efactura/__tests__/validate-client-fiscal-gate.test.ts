@@ -200,7 +200,7 @@ test("cliente inactivo FALLA con mensaje de activación", () => {
     () => validateClientFiscalGate(row),
     (err: unknown) => {
       assert.ok(err instanceof MutationError);
-      assert.match((err as MutationError).message, /Activá el cliente/);
+      assert.match((err as MutationError).message, /Active el cliente/);
       return true;
     }
   );

@@ -340,7 +340,7 @@ function TerminalCard({
     status === "aceptada"
       ? `Esta cotización fue aceptada${approved_at ? ` el ${formatDateEs(approved_at)}` : ""}. El equipo del bufete está coordinando los siguientes pasos.`
       : status === "rechazada"
-      ? `Esta cotización fue rechazada${rejected_at ? ` el ${formatDateEs(rejected_at)}` : ""}. Si tu decisión cambió, contacta al bufete.`
+      ? `Esta cotización fue rechazada${rejected_at ? ` el ${formatDateEs(rejected_at)}` : ""}. Si su decisión cambió, comuníquese con el bufete.`
       : status === "convertida"
       ? "Esta cotización ya fue confirmada y está en proceso de facturación."
       : status === "cancelada_pre_envio"

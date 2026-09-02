@@ -140,7 +140,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       if (missing.length > 0) {
         return NextResponse.json(
           {
-            error: `Para promover el cliente a activo, debes completar: ${missing.join(", ")}.`,
+            error: `Para promover el cliente a activo, faltan estos datos: ${missing.join(", ")}.`,
             fieldErrors: missing.reduce<Record<string, string>>((acc, f) => {
               acc[f] = "Requerido para promover a activo";
               return acc;

@@ -127,9 +127,9 @@ function SuccessBanner({
         Rechazo registrado
       </h3>
       <p className="mt-2 text-sm text-gray-700 leading-relaxed">
-        Registramos tu decisión sobre la cotización{" "}
+        Registramos su decisión sobre la cotización{" "}
         <span className="font-mono font-semibold">{quote_number}</span>.
-        Te enviamos un correo de confirmación. Si tu situación cambia, puedes
+        Le enviamos un correo de confirmación. Si su situación cambia, puede
         contactarnos en cualquier momento.
       </p>
     </div>
@@ -195,7 +195,7 @@ function AcceptModal({
       e.id_document = `Máximo ${ACCEPTANCE_ID_DOCUMENT_MAX} caracteres`;
     }
     if (!consent) {
-      e.consent_accepted = "Necesitas confirmar el texto para aceptar";
+      e.consent_accepted = "Debe confirmar el texto para aceptar";
     }
     setErrors(e);
     return Object.keys(e).length === 0;

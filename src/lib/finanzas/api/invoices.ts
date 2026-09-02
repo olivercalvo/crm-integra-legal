@@ -653,7 +653,7 @@ export async function cancelInvoice(
   const amountPaid = Number(inv.amount_paid);
   if (amountPaid > 0) {
     throw new InvoiceMutationError(
-      `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Eliminá los pagos primero antes de anular.`,
+      `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Elimine los pagos primero antes de anular.`,
       400
     );
   }

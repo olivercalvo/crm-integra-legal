@@ -51,7 +51,7 @@ export async function createSupplier(
   if (error || !data) {
     if (esNombreRepetido(error)) {
       throw new MutationError(
-        `Ya existe un proveedor con la razón social "${input.legal_name}". Usá esa ficha en lugar de crear otra.`,
+        `Ya existe un proveedor con la razón social "${input.legal_name}". Use esa ficha en lugar de crear otra.`,
         409,
         error
       );
@@ -172,7 +172,7 @@ export async function deleteSupplier(db: DB, tenantId: string, userId: string, i
   if ((count ?? 0) > 0) {
     throw new MutationError(
       `${antes.legal_name} tiene ${count} gasto(s) registrados y no se puede eliminar. ` +
-        "Desactivalo para que deje de aparecer al cargar gastos nuevos; el historial se conserva.",
+        "Desactívelo para que deje de aparecer al cargar gastos nuevos; el historial se conserva.",
       409
     );
   }

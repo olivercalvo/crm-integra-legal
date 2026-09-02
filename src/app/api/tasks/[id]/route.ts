@@ -51,7 +51,7 @@ export async function PATCH(
     // gestionan el trabajo del equipo.
     if (profile.role === "asistente" && existingTask.assigned_to !== user.id) {
       return NextResponse.json(
-        { error: "Solo puedes cumplir tareas asignadas a ti" },
+        { error: "Solo se pueden cumplir las tareas asignadas a uno mismo" },
         { status: 403 }
       );
     }

@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     // el endpoint era alcanzable a mano.
     if (profile.role === "asistente" && assigned_to && assigned_to !== user.id) {
       return NextResponse.json(
-        { error: "No puedes asignar pendientes a otras personas" },
+        { error: "Los pendientes personales no se pueden asignar a otras personas" },
         { status: 403 }
       );
     }

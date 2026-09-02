@@ -110,7 +110,7 @@ export default async function ProveedoresPage({ searchParams }: PageProps) {
           </p>
           <p className="mt-1 text-sm text-gray-500">
             {search
-              ? "Probá con otro texto o limpiá el filtro."
+              ? "Pruebe con otro texto o limpie el filtro."
               : "Los proveedores se crean acá y después se eligen al cargar un gasto del bufete."}
           </p>
         </div>

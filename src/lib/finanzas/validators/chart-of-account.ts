@@ -201,7 +201,7 @@ function validateFields(
     // Si el saldo YA falló su propia validación no se pide la fecha además: dos
     // errores encadenados por la misma causa confunden más de lo que ayudan.
     if (haySaldo && !errors.saldo_inicial) {
-      errors.saldo_inicial_fecha = "Indicá a qué fecha corresponde el saldo inicial";
+      errors.saldo_inicial_fecha = "Indique a qué fecha corresponde el saldo inicial";
     }
   } else if (!esFechaISOValida(fechaRaw)) {
     errors.saldo_inicial_fecha = "Fecha inválida (formato AAAA-MM-DD)";

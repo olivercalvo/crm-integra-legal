@@ -128,7 +128,7 @@ test("asistente + tarea AJENA → 403 y NO la toca", { skip: skipNoMocks }, asyn
   const res = await PATCH(req({ status: "cumplida" }), { params: { id: "task-1" } });
   const json = (await res.json()) as { error: string };
   assert.equal(res.status, 403, "el asistente no puede cerrar tareas de otros");
-  assert.match(json.error, /asignadas a ti/);
+  assert.match(json.error, /asignadas a uno mismo/);
   assert.equal(state.captured.update, null, "no debe actualizar la tarea");
 });
 

@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "No se encontró ninguna cuenta en el archivo. Revisá que la columna Código tenga valores.",
+          "No se encontró ninguna cuenta en el archivo. Revise que la columna Código tenga valores.",
       },
       { status: 400 }
     );

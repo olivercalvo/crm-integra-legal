@@ -115,7 +115,7 @@ export function parseChartAccountsFile(buffer: ArrayBuffer | Buffer): ParseSheet
     wb = XLSX.read(buffer, { type: "buffer", cellDates: false });
   } catch {
     throw new WorkbookParseError(
-      "No se pudo leer el archivo. Verificá que sea un .xlsx, .xls o .csv válido."
+      "No se pudo leer el archivo. El archivo debe ser un .xlsx, .xls o .csv válido."
     );
   }
 
@@ -136,7 +136,7 @@ export function parseChartAccountsFile(buffer: ArrayBuffer | Buffer): ParseSheet
   if (!parsed) {
     throw new WorkbookParseError(
       'No se encontraron los encabezados. El archivo debe tener una fila con al menos "Código" y "Nombre" ' +
-        "(también se aceptan “Número”/“Cuenta” y “Nombre de cuenta”). Descargá la plantilla de ejemplo."
+        "(también se aceptan “Número”/“Cuenta” y “Nombre de cuenta”). Descargue la plantilla de ejemplo."
     );
   }
 

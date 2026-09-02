@@ -63,7 +63,7 @@ export function PublicLinkDisplay({ link }: Props) {
         <ExternalLink size={12} className="mt-0.5 shrink-0 text-amber-600" />
         <p>
           El portal público estará disponible en una próxima actualización.
-          Por ahora pega este link en el email o WhatsApp que envíes al
+          Por ahora copie este enlace en el correo o WhatsApp que le envíe al
           cliente como referencia interna.
         </p>
       </div>

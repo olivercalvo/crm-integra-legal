@@ -506,7 +506,7 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="¿Qué necesitas hacer?"
+              placeholder="¿Qué hay que hacer?"
               autoFocus
               className="w-full rounded-md border border-gray-200 px-3 py-2.5 text-sm focus:border-integra-gold focus:outline-none"
               onKeyDown={(e) => {

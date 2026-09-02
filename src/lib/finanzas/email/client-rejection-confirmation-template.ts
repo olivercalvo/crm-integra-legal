@@ -32,12 +32,12 @@ export function renderClientRejectionHtml(
       Hola, <strong>${safeClient}</strong>:
     </p>
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-      Registramos tu decisión de no proceder con la cotización
+      Registramos su decisión de no proceder con la cotización
       <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>${safeTitle ? ` <span style="font-style:italic;color:${NAVY};">(${safeTitle})</span>` : ""}.
     </p>
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
       Agradecemos el tiempo que dedicaste a revisarla. Si en el futuro tu
-      situación cambia o necesitas otra propuesta, quedamos a tu
+      situación cambia o desea otra propuesta, quedamos a su
       disposición — responder a este correo es la vía más rápida para
       retomar el contacto.
     </p>
@@ -60,11 +60,11 @@ export function renderClientRejectionText(
   return [
     `Hola, ${props.client_name}:`,
     "",
-    `Registramos tu decisión de no proceder con la cotización ${props.quote_number}.`,
+    `Registramos su decisión de no proceder con la cotización ${props.quote_number}.`,
     props.title ? `Referencia: ${props.title}` : null,
     "",
     "Agradecemos el tiempo que dedicaste a revisarla. Si en el futuro",
-    "necesitas otra propuesta, responder a este correo es la vía más rápida",
+    "desea otra propuesta, responder a este correo es la vía más rápida",
     "para retomar el contacto.",
     "",
     "Esta cotización quedó cerrada en nuestros registros y no se generarán",

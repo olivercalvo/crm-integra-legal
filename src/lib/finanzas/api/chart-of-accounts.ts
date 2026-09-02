@@ -79,7 +79,7 @@ async function contarMovimientos(
     // conservador cuando lo que está en juego son los reportes históricos.
     console.error("[finanzas/api] contarMovimientos failed", error);
     throw new MutationError(
-      "No se pudo verificar si la cuenta tiene movimientos. Intentá de nuevo.",
+      "No se pudo verificar si la cuenta tiene movimientos. Intente de nuevo.",
       500,
       error
     );
@@ -119,7 +119,7 @@ export async function createChartAccount(
   const dup = await findChartAccountByCode(db, tenantId, input.code);
   if (dup) {
     throw new MutationError(
-      `Ya existe una cuenta con el código "${input.code}". Usá un código distinto.`,
+      `Ya existe una cuenta con el código "${input.code}". Use un código distinto.`,
       400
     );
   }
@@ -149,7 +149,7 @@ export async function createChartAccount(
     // frena el segundo. Lo traducimos al mismo 409 accionable.
     if (isUniqueViolation(error)) {
       throw new MutationError(
-        `Ya existe una cuenta con el código "${input.code}". Usá un código distinto.`,
+        `Ya existe una cuenta con el código "${input.code}". Use un código distinto.`,
         400
       );
     }
@@ -255,7 +255,7 @@ export async function updateChartAccount(
     if (movs > 0) {
       throw new MutationError(
         `La cuenta "${existing.code}" tiene ${movs} movimiento(s) contables y no se le puede cambiar la naturaleza. ` +
-          `Desactivala y creá una cuenta nueva con la clasificación correcta.`,
+          `Desactívela y cree una cuenta nueva con la clasificación correcta.`,
         409
       );
     }
@@ -296,7 +296,7 @@ export async function updateChartAccount(
   const wantsCode = input.code !== undefined && input.code !== existing.code;
   if (wantsCode) {
     throw new MutationError(
-      "El código de una cuenta no se puede modificar. Si está mal, desactivala y creá una nueva.",
+      "El código de una cuenta no se puede modificar. Si está mal, desactívela y cree una nueva.",
       400
     );
   }

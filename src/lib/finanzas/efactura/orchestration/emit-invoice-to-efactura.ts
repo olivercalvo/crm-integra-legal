@@ -125,7 +125,7 @@ export async function emitInvoiceToEfactura(
       inv.fe_estado === "authorized"
         ? "Esta factura ya fue autorizada por el PAC."
         : inv.fe_estado === "pending"
-          ? "Esta factura ya tiene un envío en curso al PAC. Esperá a que se resuelva o reintentá luego."
+          ? "Esta factura ya tiene un envío en curso al PAC. Espere a que se resuelva o reintente luego."
           : `No se puede reenviar: estado fiscal "${inv.fe_estado}".`,
       409
     );
@@ -200,7 +200,7 @@ export async function emitInvoiceToEfactura(
   }
   if (!updatedCount || updatedCount === 0) {
     throw new MutationError(
-      "Otro proceso ya inició la emisión al PAC. Refrescá y volvé a intentar.",
+      "Otro proceso ya inició la emisión al PAC. Refresque y vuelva a intentar.",
       409
     );
   }
@@ -292,7 +292,7 @@ export async function emitInvoiceToEfactura(
       codRes: [],
       errorKind: "transport",
       errorMessage:
-        "Fallo de comunicación con el PAC. Reintentá en unos minutos. Detalle: " +
+        "Fallo de comunicación con el PAC. Reintente en unos minutos. Detalle: " +
         truncate(msg, 200),
       errorHint: null,
     });

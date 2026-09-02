@@ -180,7 +180,7 @@ export function PaymentsSection({
       ) : (
         <div className="rounded-md border border-dashed bg-gray-50/40 p-6 text-center text-sm text-gray-500">
           {showRegisterButton
-            ? "Hacé clic en \"Registrar pago\" para asentar el primer cobro."
+            ? "Use el botón \"Registrar pago\" para asentar el primer cobro."
             : "Esta factura aún no tiene pagos."}
         </div>
       )}

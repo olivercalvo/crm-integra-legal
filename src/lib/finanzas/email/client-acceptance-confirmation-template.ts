@@ -127,7 +127,7 @@ export function renderClientAcceptanceText(
     "Adjuntamos el PDF firmado con la evidencia electrónica de tu aceptación",
     "(firma electrónica simple conforme a la Ley 51 de 2008 de Panamá).",
     "",
-    "Próximos pasos: nuestro equipo te contactará a la brevedad para",
+    "Próximos pasos: nuestro equipo se comunicará con usted a la brevedad para",
     "coordinar el inicio de los servicios.",
     "",
     "Cordialmente,",

@@ -91,7 +91,7 @@ export function UserTable({ users: initialUsers, currentUserId }: UserTableProps
 
   async function toggleActive(user: UserRow) {
     if (user.id === currentUserId) {
-      setError("No puedes desactivar tu propia cuenta.");
+      setError("No puede desactivar su propia cuenta.");
       return;
     }
     setLoadingId(user.id);

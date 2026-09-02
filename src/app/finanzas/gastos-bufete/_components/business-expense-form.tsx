@@ -373,7 +373,7 @@ export function BusinessExpenseForm(props: Props) {
             <p className="mt-1 text-xs text-gray-500">
               {vencimientoTocado
                 ? "Editado a mano: ya no se recalcula solo."
-                : "Se propone desde el plazo del proveedor. Se puede cambiar: manda el comprobante."}
+                : "Se propone desde el plazo del proveedor y se puede cambiar: la fecha que vale es la del comprobante."}
             </p>
           </div>
 

@@ -108,7 +108,7 @@ export default async function ReportesHubPage() {
 
   const intro =
     userRole === "contador"
-      ? `Hola ${userName}, descarga aquí los reportes para el cierre mensual.`
+      ? `Hola ${userName}, aquí puede descargar los reportes para el cierre mensual.`
       : "Reportes disponibles para análisis financiero y cierre mensual.";
 
   return (

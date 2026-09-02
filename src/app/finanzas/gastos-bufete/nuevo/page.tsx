@@ -33,7 +33,7 @@ export default async function NuevoGastoBufetePage() {
         <div>
           <h1 className="text-2xl font-bold text-integra-navy">Nuevo gasto del bufete</h1>
           <p className="text-sm text-gray-500">
-            Registra una compra del bufete (alquiler, oficina, servicios, suministros).
+            Para registrar una compra del bufete: alquiler, oficina, servicios o suministros.
             El ITBMS pagado es recuperable contra DGI.
           </p>
         </div>

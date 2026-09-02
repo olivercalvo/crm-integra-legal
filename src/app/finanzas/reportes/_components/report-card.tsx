@@ -55,7 +55,7 @@ export function ReportCard({
                   : "bg-integra-navy/5 text-integra-navy/70 ring-integra-navy/10"
               )}
             >
-              {pendiente ? "No construido" : badge}
+              {pendiente ? "Planificado" : badge}
             </span>
           </div>
           <p className="mt-1.5 text-sm text-gray-600 leading-snug">

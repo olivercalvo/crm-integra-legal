@@ -77,6 +77,26 @@ export function OpeningBalancesNotice() {
   );
 }
 
+/**
+ * Aviso del DIARIO GENERAL.
+ *
+ * El diario no muestra saldos: muestra asientos. El aviso de "saldos de apertura
+ * más movimientos" no le aplica y confundía — un contador que lo lee espera ver
+ * saldos y encuentra una lista cronológica.
+ *
+ * Lo que SÍ le aplica es que no hay corte por período, igual que a los demás.
+ */
+export function JournalScopeNotice() {
+  return (
+    <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
+      Este reporte lista <strong>todos los asientos registrados</strong> en el libro, en orden
+      cronológico y con sus líneas.{" "}
+      <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
+      importar la fecha.
+    </p>
+  );
+}
+
 /** Aviso cuando hay cuentas sin subcategoría (caerían fuera del agrupamiento). */
 export function UnclassifiedWarning({ sections }: { sections: ReportSection[] }) {
   const count = sections

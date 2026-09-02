@@ -78,7 +78,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-integra-navy">
-              VAT Summary (ITBMS)
+              Resumen de ITBMS
             </h1>
             <p className="text-sm text-gray-500">
               Resumen mensual de ITBMS — período {result.period.label}

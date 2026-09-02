@@ -4,7 +4,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadAsientosDelDiario } from "@/lib/finanzas/reports/diario-general-source";
 import { buildDiarioGeneral } from "@/lib/finanzas/reports/diario-general";
 import { loadDestinosDeOrigen } from "@/lib/finanzas/reports/libro-mayor-source";
-import { StatementHeader, OpeningBalancesNotice } from "../_components/financial-statement";
+import { StatementHeader, JournalScopeNotice } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
 import { DiarioFiltros } from "./_components/diario-filtros";
 import { DiarioTable } from "./_components/diario-table";
@@ -50,7 +50,7 @@ export default async function DiarioGeneralPage({
         generatedAt={formatGeneratedAt()}
       />
 
-      <OpeningBalancesNotice />
+      <JournalScopeNotice />
 
       <DiarioFiltros desde={desde} hasta={hasta} />
 

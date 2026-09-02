@@ -26,27 +26,29 @@ interface ReportItem {
 const REPORTS: ReportItem[] = [
   {
     slug: "vat-summary",
-    title: "VAT Summary (ITBMS)",
+    title: "Resumen de ITBMS",
     description: "Resumen mensual de ITBMS para presentar a DGI.",
     icon: <Receipt size={22} />,
     badge: "Mensual",
   },
-  // El badge dice "Saldos de apertura" y no "Mensual / Anual" porque todavía no
-  // hay selector de período: ambos reportes se arman con los saldos cargados en
-  // el Plan de Cuentas. Cambia cuando entre el motor de asientos (Paso 3).
+  // CORREGIDO el 02/09/2026. El badge decía "Saldos de apertura", que dejó de
+  // ser cierto con la convergencia del mismo día: los dos reportes suman
+  // apertura MÁS los movimientos del ledger, igual que el Libro Mayor. Lo que
+  // sigue sin existir es el selector de período, y eso es lo que el badge dice
+  // ahora.
   {
     slug: "pyl",
     title: "Estado de Resultado",
     description: "Ingresos, costos, gastos y utilidad del ejercicio.",
     icon: <TrendingUp size={22} />,
-    badge: "Saldos de apertura",
+    badge: "Sin corte por período",
   },
   {
     slug: "balance",
     title: "Balance General",
     description: "Activos, pasivos y patrimonio agrupados por subcategoría.",
     icon: <Scale size={22} />,
-    badge: "Saldos de apertura",
+    badge: "Sin corte por período",
   },
   {
     slug: "mayor",

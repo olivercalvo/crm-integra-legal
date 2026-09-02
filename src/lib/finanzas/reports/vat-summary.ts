@@ -399,8 +399,8 @@ export async function getVatSummary(
     { number: 5, label: "Compras gravadas con ITBMS", value: line5, hint: "Solo las compras con ITBMS > 0" },
     { number: 6, label: "ITBMS recuperable sobre compras", value: line6, hint: "Crédito fiscal del período" },
     { number: 7, label: "Saldo del período (débito − crédito)", value: line7, is_total: true, hint: "Línea 3 − Línea 6" },
-    { number: 8, label: "ITBMS adeudado de períodos anteriores", value: line8, hint: "Saldo acumulado VAT Control (pendiente sprint futuro — hoy 0)" },
-    { number: 9, label: "Pagos a DGI realizados este período", value: line9, hint: "Suma de tax_payments con payment_date en el mes" },
+    { number: 8, label: "ITBMS adeudado de períodos anteriores", value: line8, hint: "ITBMS que quedó debiéndose de meses anteriores. Está en cero porque todavía no se ha cerrado ningún período." },
+    { number: 9, label: "Pagos a DGI realizados este período", value: line9, hint: "Suma de los pagos a la DGI con fecha dentro del mes." },
     { number: 10, label: "TOTAL A PAGAR / (CRÉDITO A FAVOR)", value: line10, is_total: true, hint: "Línea 7 + Línea 8 − Línea 9. Valor negativo = saldo a favor del bufete." },
   ];
 

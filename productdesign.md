@@ -495,6 +495,58 @@ inicial" de cada cuenta es exactamente el número que muestran esos reportes.
 
 ---
 
+### ANTIGÜEDAD DE SALDOS — el auxiliar contra su cuenta control
+
+Un solo reporte con selector **por cobrar / por pagar**. Tramos **Corriente · 1 a 30 · 31 a 60 ·
+61 a 90 · Más de 91**, contados en días desde la fecha de vencimiento.
+
+**Detallada por documento, no solo resumida por tercero.** Es lo que Josuarth pidió expresamente
+en la reunión del 25/08: dijo que vio versiones que solo dan el total por cliente y que prefiere
+la que abre y muestra qué facturas lo componen y en qué tramo cae cada una. Cada fila de tercero
+se expande y muestra sus documentos, ordenados del más vencido al menos — que es el orden en que
+se reclama.
+
+**Las tres cifras de control siempre visibles.** La guía de RM marca como no negociable que la
+suma del auxiliar cuadre con su cuenta control (`100004` en cobrar, `200001` en pagar). Hoy no
+cuadra, porque la apertura de QuickBooks vino sin detalle de documentos. La decisión de diseño es
+**declararlo, no corregirlo ni esconderlo**: la pantalla muestra juntos *total del auxiliar*,
+*saldo de la cuenta control* y *diferencia*, y explica que el grueso es la apertura. Un contador
+que ve la diferencia declarada entiende el estado del sistema; uno que la descubre solo deja de
+confiar en el reporte entero.
+
+**Los tramos vacíos se muestran igual.** La estructura del reporte no cambia según los datos que
+haya ese día; si un tramo no tiene documentos, la columna sigue ahí y una nota los nombra.
+
+**Qué NO entra al auxiliar.** El filtro es por `status` (`emitida`, `parcialmente_pagada`), no por
+`balance_due > 0`. Una factura anulada, en borrador o cancelada antes de emitirse tiene saldo
+mayor que cero —esa columna es `grand_total − amount_paid` y no mira el estado— pero no es deuda
+de nadie.
+
+**Dos límites del modelo, dichos en la pantalla:**
+
+1. **El proveedor todavía no es una entidad.** Es `supplier_name`, texto libre en cada gasto. La
+   antigüedad de CxP agrupa por ese texto, así que dos gastos escritos distinto salen como dos
+   proveedores. Crear la entidad es del módulo de compras.
+2. **Los gastos del bufete no tienen fecha de vencimiento.** Solo fecha del gasto y fecha de pago.
+   Así que su antigüedad se cuenta **desde la fecha del gasto**, que es una medida distinta y más
+   pesimista que la real.
+
+### ESTADO DE CUENTA — el mayor, mirado por tercero
+
+Por **cliente** o por **proveedor**. Deliberadamente idéntico al Libro Mayor —saldo inicial,
+movimientos con fecha, tipo, documento, descripción, débito, crédito y saldo corrido, totales al
+pie— porque es el mismo reporte visto por otro eje, y tiene que sentirse así. Usa el mismo
+vocabulario y el mismo resolvedor de enlaces al documento.
+
+El tercero viaja en la URL, así que el estado de cuenta de un cliente es un enlace que se comparte.
+
+**El saldo inicial arranca en cero, y la pantalla dice por qué.** No hay apertura por tercero: la
+que vino de QuickBooks está en la cuenta control sin repartir. No es un cero de "no debía nada",
+es un cero de "acá empieza lo que sabemos", y la diferencia entre las dos lecturas le importa a
+quien audita.
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

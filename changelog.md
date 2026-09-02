@@ -1,5 +1,123 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Antigüedad de Saldos y Estado de Cuenta] - 2026-09-02
+
+Los dos auxiliares que faltaban del bloque de reportes. Con esto el hub queda con **ocho reportes
+construidos y uno solo planificado** (Ventas Mensuales).
+
+### Antigüedad de Saldos — `/finanzas/reportes/aging`
+
+Por cobrar y por pagar, en un solo reporte con selector. Tramos **Corriente · 1 a 30 · 31 a 60 ·
+61 a 90 · Más de 91**, y —lo que Josuarth pidió expresamente en la reunión del 25/08— **detallada
+por documento**: se hace clic en un tercero y se abren las facturas o gastos que componen su
+saldo, cada uno con su fecha, sus días y su tramo.
+
+**Las tres cifras de control se muestran, y la diferencia no se maquilla.** La guía de RM marca
+como no negociable que el auxiliar cuadre con su cuenta control. Hoy no cuadra, así que la
+pantalla muestra juntos **total del auxiliar · saldo de la cuenta control · diferencia**, y
+explica de dónde sale. Un contador que ve la diferencia declarada entiende el estado del sistema;
+uno que la descubre solo deja de confiar en el reporte.
+
+Los tramos vacíos **se muestran igual**: la estructura del reporte no cambia según los datos que
+haya ese día.
+
+### Estado de Cuenta — `/finanzas/reportes/estado-cuenta`
+
+Por cliente o por proveedor. Deliberadamente igual al Libro Mayor —saldo inicial, movimientos con
+saldo corrido, totales al pie— porque es el mismo reporte mirado por tercero en vez de por cuenta.
+El tercero viaja en la URL, así que el estado de cuenta de un cliente es un enlace que se comparte.
+
+**El saldo inicial arranca en cero y la pantalla dice por qué:** la apertura de QuickBooks está en
+la cuenta control sin repartir por tercero. Un cero sin explicación se lee como "no debía nada".
+
+### Dos límites del modelo, dichos en la pantalla y no escondidos
+
+- **El proveedor todavía no es una entidad.** En `business_expenses` es `supplier_name`, texto
+  libre. No hay tabla de proveedores. La antigüedad de CxP agrupa por ese texto, así que dos
+  gastos escritos distinto salen como dos proveedores. Se resuelve con el módulo de compras.
+- **Los gastos del bufete no tienen fecha de vencimiento.** Solo `expense_date` y `payment_date`.
+  Así que la antigüedad de CxP **se cuenta desde la fecha del gasto**, que es una antigüedad
+  distinta y más pesimista que la real. También queda para el módulo de compras.
+
+Las dos cosas están escritas en la pantalla de "Por pagar", no solo en el código.
+
+### Un filtro que parece un detalle y no lo es
+
+Las facturas pendientes se filtran **por `status`, no por `balance_due > 0`**. Una factura anulada,
+en borrador o cancelada antes de emitirse tiene `balance_due` mayor que cero —esa columna es
+`grand_total − amount_paid` y no mira el estado— pero no es deuda de nadie. En staging eso habría
+inflado el auxiliar en **5.350,00** con tres documentos que nadie debe.
+
+### Corregido: el "Volver a Reportes" duplicado
+
+`StatementHeader` ya renderiza el enlace de volver, y cuatro pantallas lo repetían encima:
+**Comprobación, Diario, Antigüedad y Estado de Cuenta**. Se veía dos veces seguidas. El de
+Comprobación y Diario venía del bloque anterior y no se había notado. Queda uno solo, el del
+header.
+
+### Verificado contra staging (nunca contra producción)
+
+Candado verificado antes de correr: la connection string apunta a `xtyenhakplrkyifbcaow`
+(staging), no a `uqmmkklbhzxqybljiecs`.
+
+- **CxC:** auxiliar **3.145,00** (3 facturas) · control 100004 **194.842,55** · diferencia
+  **191.697,55**. Documento por documento contra la base, con los mismos tramos.
+- **CxP:** auxiliar **3.594,25** (3 gastos) · control 200001 **6.994,73** · diferencia
+  **3.400,48**, que es **exactamente** su saldo de apertura.
+- **Conciliación estado de cuenta ↔ antigüedad:** delta 0,00 en los 4 clientes y los 3 proveedores.
+- Verificado en pantalla con la sesión del **contador** (rol real, no admin), incluido el enlace
+  de un documento del auxiliar al detalle de su factura.
+
+Las consultas quedaron en `sql/verificacion/antiguedad_estado_cuenta.sql`, solo lectura, para que
+se puedan repetir.
+
+### ⚠️ La diferencia de CxC NO es solo el saldo de apertura
+
+La apertura es **191.947,55** y la diferencia es **191.697,55**: sobran **250,00** que no explica
+la apertura. La causa está identificada y medida con SQL, no deducida:
+
+| | monto | por qué |
+|---|---|---|
+| Factura sin asiento en el ledger | −400,00 | `FAC-REI-000002` está pendiente pero solo 4 de las 8 facturas del fixture tienen asiento |
+| Cobro sin asiento en el ledger | +150,00 | el pago de `FAC-REI-000001` se sembró sin asiento, por la decisión de Bloque 0 de preservar la línea base de 2.895,00 |
+| **neto** | **−250,00** | |
+
+Las dos son **del fixture de staging, no del reporte**: los contadores del SQL de verificación dan
+exactamente 1 factura por 400,00 y 1 pago por 150,00. En una base con todos los asientos posteados,
+la diferencia sería la apertura exacta.
+
+### Tramos sin cubrir en el fixture
+
+**Corriente** y **1 a 30** no tienen ningún documento, ni en cobrar ni en pagar. **31 a 60** y
+**61 a 90** solo los cubre cobrar; **Más de 91** solo pagar (213, 192 y 171 días). Las columnas se
+muestran igual, y la pantalla nombra los tramos vacíos.
+
+### Un detalle de husos horarios, para que no sorprenda
+
+La app cuenta los días en hora de Panamá (UTC−5) y `CURRENT_DATE` de Postgres corre en UTC. Después
+de las 19:00 locales el SQL da **un día más** que la pantalla. No cambia el tramo salvo justo en el
+borde. Está anotado en el encabezado del SQL de verificación.
+
+### Tests
+
+**454 en verde** (+18 nuevos). `antiguedad.test.ts` cubre los bordes de cada tramo uno por uno
+—día 0, 1, 30, 31, 60, 61, 90, 91— y que la diferencia contra la cuenta control se exponga en vez
+de esconderse. `estado-cuenta.test.ts` cubre el saldo corrido, el invariante
+`inicial + débitos − créditos` y que 0,1 + 0,2 no salga 0,30000000000000004.
+
+`nav-guard.test.ts` ahora incluye **aging** y **estado-cuenta** entre los reportes que enlazan
+documentos: si un enlace de esos auxiliares apuntara a algo que el contador no puede abrir, el test
+falla.
+
+Typecheck limpio. Lint: **21 errores preexistentes**, ninguno en los archivos nuevos.
+
+### Pendiente para consultar con Josuarth
+
+Para que el auxiliar cuadre con su cuenta control hace falta **el detalle de los documentos
+pendientes a la fecha de apertura** (qué facturas y qué cuentas por pagar componían los 191.947,55
+y los 3.400,48). Eso no está en el sistema y no se puede inferir: lo tiene el contador.
+
+
 ## [Balance de Comprobación y Diario General] - 2026-09-02
 
 Los dos reportes que la guía de RM lista como obligatorios y que no existían ni como marcador.

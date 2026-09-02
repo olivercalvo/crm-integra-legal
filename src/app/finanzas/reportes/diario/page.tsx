@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadAsientosDelDiario } from "@/lib/finanzas/reports/diario-general-source";
@@ -44,13 +42,6 @@ export default async function DiarioGeneralPage({
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/finanzas/reportes"
-        className="inline-flex items-center gap-1.5 text-sm text-integra-navy/70 hover:text-integra-navy"
-      >
-        <ArrowLeft size={16} />
-        Volver a Reportes
-      </Link>
 
       <StatementHeader
         firmName={REPORT_FIRM_NAME}

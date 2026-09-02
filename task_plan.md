@@ -13,13 +13,37 @@ le abrió el DETALLE de factura en solo lectura, se gatearon por rol los botones
 Emitir y Eliminar (dependían solo del status), y `nav-guard.test.ts` pasó a cubrir los enlaces
 de CONTENIDO además del menú. 409 tests, 409 pass.
 
-**⚠️ Sin verificar en pantalla:** se cayó internet en la máquina en medio de la corrida
-(`EAI_AGAIN` resolviendo supabase.co, también con DNS público). El gating está cubierto por
-tests determinísticos, pero falta abrir el detalle con sesión de contador y ver los botones.
-**Hacerlo antes de mandar el correo.**
+**✅ Verificado en pantalla el 02/09** con la sesión de `contador@staging.test` (rol contador,
+no admin): desde la Antigüedad se abrió `FAC-HON-000003` y el detalle cargó completo. Queda
+cerrado el "sin verificar" que dejó la caída de internet del 01/09.
 
 **Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
 red local. No hay motivo para postergar el correo por el estado de staging.
+
+### Bloque cerrado el 02/09 — Antigüedad de Saldos y Estado de Cuenta
+
+| # | Entregable | Estado |
+|---|---|---|
+| AG.1 | Antigüedad por cobrar y por pagar, en tramos y **detallada por documento** | ✅ |
+| AG.2 | Las **tres cifras de control** (auxiliar · cuenta control · diferencia) en pantalla | ✅ |
+| AG.3 | Estado de cuenta por cliente y por proveedor, con saldo corrido | ✅ |
+| AG.4 | Enlaces al documento por el mismo resolvedor — cubiertos por `nav-guard.test.ts` | ✅ 18 tests nuevos |
+| AG.5 | Hub sin el chip "no construido" en los dos | ✅ |
+| AG.6 | Quitado el "Volver a Reportes" duplicado en 4 pantallas | ✅ |
+
+Con esto el hub queda con **8 reportes construidos y 1 planificado** (Ventas Mensuales).
+
+**Lo que este bloque descubrió y hay que llevarle a Josuarth:**
+
+1. **El auxiliar de CxC no cuadra con su cuenta control, y NO es solo la apertura.** Diferencia
+   191.697,55 contra una apertura de 191.947,55: sobran **250,00** que vienen del fixture de
+   staging (una factura de 400,00 sin asiento, un cobro de 150,00 sin asiento). Medido con SQL,
+   no deducido. En CxP la diferencia SÍ es exactamente la apertura (3.400,48).
+2. **Consulta nueva para él:** para que el auxiliar cuadre hace falta **el detalle de los
+   documentos pendientes a la fecha de apertura**. No está en el sistema y no se puede inferir.
+3. **El proveedor no es una entidad** (`supplier_name` es texto libre) y **los gastos del bufete
+   no tienen fecha de vencimiento**. Las dos limitan la antigüedad de CxP y las dos se resuelven
+   con el módulo de compras, que sigue detrás del gate de su validación.
 
 ### ⚠️ VENTANA DE REVISIÓN ABIERTA — leer `sop.md` SOP-019 antes de tocar staging
 

@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
@@ -31,13 +30,6 @@ export default async function BalanceComprobacionPage() {
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/finanzas/reportes"
-        className="inline-flex items-center gap-1.5 text-sm text-integra-navy/70 hover:text-integra-navy"
-      >
-        <ArrowLeft size={16} />
-        Volver a Reportes
-      </Link>
 
       <StatementHeader
         firmName={REPORT_FIRM_NAME}

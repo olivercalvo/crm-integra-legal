@@ -142,6 +142,10 @@ test("el contador entra a lo suyo: reportes, gastos del bufete y configuración"
     "/finanzas/reportes",
     "/finanzas/reportes/mayor",
     "/finanzas/reportes/balance",
+    "/finanzas/reportes/comprobacion",
+    "/finanzas/reportes/diario",
+    "/finanzas/reportes/aging",
+    "/finanzas/reportes/estado-cuenta",
     "/finanzas/gastos-bufete",
     "/finanzas/configuracion/cuentas",
     "/finanzas/configuracion/impuestos",
@@ -213,6 +217,11 @@ const REPORTES_CON_ENLACE_A_DOCUMENTO = [
   // (`destino-documento.ts`), así que hereda el mismo riesgo y la misma
   // verificación.
   "/finanzas/reportes/diario",
+  // La Antigüedad abre cada documento pendiente desde la fila del tercero, y el
+  // Estado de Cuenta desde cada movimiento. Los dos usan el mismo resolvedor, así
+  // que entran a la misma verificación en vez de repetirla a mano.
+  "/finanzas/reportes/aging",
+  "/finanzas/reportes/estado-cuenta",
 ];
 
 test("todo documento enlazado desde un reporte lo puede abrir quien ve el reporte", () => {

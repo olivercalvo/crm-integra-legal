@@ -32,6 +32,39 @@ function Suma({ value }: { value: number }) {
   return <span className="font-mono text-sm tabular-nums text-gray-700">{money(value)}</span>;
 }
 
+/**
+ * Un total del PIE. Nunca se esconde, ni siquiera en cero.
+ *
+ * 🔴 Es lo contrario que `Saldo`, y a propósito. En una FILA, un saldo en cero
+ * es una cuenta sin nada que mostrar y el guion evita ensuciar 64 renglones. En
+ * el PIE, el cero es EL número: la suma de los saldos finales tiene que dar
+ * 0,00, y esa cifra es la prueba de que el libro cuadra. Mostrar un guion ahí
+ * borra justamente el dato por el que un contador abre este reporte.
+ *
+ * También normaliza el `-0`: `Math.round()` sobre un número negativo diminuto
+ * devuelve `-0`, y `toLocaleString` lo imprime como "-0.00". Un menos delante
+ * del cero se lee como un descuadre de un centavo mal redondeado.
+ */
+function SaldoTotal({ value }: { value: number }) {
+  const cero = Math.abs(value) < 0.005;
+  const normalizado = cero ? 0 : value;
+  return (
+    <span
+      className={
+        "font-mono text-sm font-bold tabular-nums " +
+        (cero ? "text-green-700" : "text-red-700")
+      }
+      title={
+        cero
+          ? "La suma de esta columna da cero: la partida doble cuadra."
+          : "Esta columna NO suma cero. Hay un asiento descuadrado."
+      }
+    >
+      {money(normalizado)}
+    </span>
+  );
+}
+
 function Saldo({ value, bold }: { value: number; bold?: boolean }) {
   const cero = Math.abs(value) < 0.005;
   return (
@@ -122,7 +155,7 @@ export function ComprobacionTable({ reporte }: { reporte: BalanceComprobacion })
               <td colSpan={2} className="px-3 py-2.5 text-sm font-bold text-integra-navy">
                 Totales ({filas.length} cuenta{filas.length === 1 ? "" : "s"})
               </td>
-              <td className="px-3 py-2.5 text-right"><Saldo value={totales.saldoInicial} bold /></td>
+              <td className="px-3 py-2.5 text-right"><SaldoTotal value={totales.saldoInicial} /></td>
               <td className="px-3 py-2.5 text-right">
                 <span className="font-mono text-sm font-bold tabular-nums text-gray-800">
                   {money(totales.debitos)}
@@ -133,11 +166,14 @@ export function ComprobacionTable({ reporte }: { reporte: BalanceComprobacion })
                   {money(totales.creditos)}
                 </span>
               </td>
-              <td className="px-3 py-2.5 text-right"><Saldo value={totales.saldoFinal} bold /></td>
+              <td className="px-3 py-2.5 text-right"><SaldoTotal value={totales.saldoFinal} /></td>
             </tr>
             <tr className={totales.cuadra ? "bg-green-50/60" : "bg-red-50"}>
               <td colSpan={5} className="px-3 py-2 text-right text-xs font-medium text-gray-600">
-                Débitos − Créditos
+                {/* Las tres pruebas del reporte, dichas juntas: las dos columnas
+                    de saldo en cero y los débitos igualando a los créditos. */}
+                Las columnas de saldo suman <strong>0,00</strong> y los débitos igualan a los
+                créditos: la partida doble cuadra. · Débitos − Créditos
               </td>
               <td className="px-3 py-2 text-right">
                 <span

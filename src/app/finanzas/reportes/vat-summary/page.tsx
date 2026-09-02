@@ -6,6 +6,8 @@ import { formatDate } from "@/lib/utils/format-date";
 import {
   getVatSummary,
   isValidMonthParam,
+  mesesConActividad,
+  nombreDeMes,
   previousMonthIso,
 } from "@/lib/finanzas/reports/vat-summary";
 import { MonthSelector } from "./_components/month-selector";
@@ -33,12 +35,20 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
     redirect("/finanzas");
   }
 
-  // Default: mes anterior completo. Si llega ?month=, validar (formato +
-  // no futuro). Mes inválido → fallback al default.
+  // Default: el ÚLTIMO MES CON ACTIVIDAD, no el mes anterior del calendario.
+  //
+  // Este reporte es la primera tarjeta del índice. Con el default viejo, el
+  // contador entraba y leía "No hubo actividad financiera" sin saber dónde
+  // buscar — en staging los datos van de febrero a junio y el reporte abría en
+  // agosto. Un mes elegido a ciegas hace dudar del sistema, no del mes.
+  //
+  // Si llega ?month= manda ese (validado). Si no hay NINGÚN mes con actividad,
+  // se cae al mes anterior y el mensaje vacío lo explica.
+  const meses = await mesesConActividad(ctx.db, ctx.tenantId);
   const requested = searchParams.month?.trim();
   const month = requested && isValidMonthParam(requested)
     ? requested
-    : previousMonthIso();
+    : meses[0] ?? previousMonthIso();
 
   // Mes vigente del calendario — límite máximo del selector (bloqueamos
   // futuros). Lo calculamos inline para evitar otro helper.
@@ -109,9 +119,21 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
               No hubo actividad financiera en {result.period.label}.
             </p>
             <p className="mt-1 text-xs text-amber-700">
-              Todas las líneas del reporte aparecen en 0. Si esperabas ver datos,
-              verifica que las facturas de ese mes no estén en estado borrador, o
-              consulta un período distinto.
+              Todas las líneas del reporte aparecen en 0.
+              {meses.length > 0 ? (
+                <>
+                  {" "}
+                  Los meses con movimientos registrados son:{" "}
+                  <strong>{meses.slice(0, 12).map(nombreDeMes).join(", ")}</strong>
+                  {meses.length > 12 ? " y anteriores" : ""}. Elija uno en el selector de arriba.
+                </>
+              ) : (
+                <>
+                  {" "}
+                  Todavía no hay ninguna factura emitida, gasto del bufete ni pago a la DGI
+                  registrado en el sistema, así que ningún mes tiene datos aún.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -120,14 +142,11 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
       {/* Tabla principal con las 10 líneas */}
       <VatSummaryTable lines={result.lines} />
 
-      {/* Aviso sobre la línea 8 (TODO histórico VAT Control) */}
-      <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600 flex items-start gap-2">
-        <Info size={14} className="mt-0.5 shrink-0 text-gray-400" />
-        <p>
-          <span className="font-medium">Línea 8 (ITBMS adeudado de períodos anteriores)</span>
-          {" "}aparece en 0 porque todavía no se ha cerrado ningún período.
-        </p>
-      </div>
+      {/* El aviso de la línea 8 vivía acá repetido. Se sacó el 02/09/2026: la
+          explicación ya viaja DENTRO de la línea, en su `hint`. Tenía sentido
+          mientras la de adentro era jerga ("pendiente sprint futuro"); una vez
+          que las dos dicen lo mismo, repetirlo solo hace dudar de si son dos
+          cosas distintas. */}
 
       {/* Detalle: facturas */}
       {result.detail.invoices.length > 0 && (

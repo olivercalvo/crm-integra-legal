@@ -17,6 +17,8 @@ import {
   Loader2,
   Lock,
   FileSpreadsheet,
+  Filter,
+  List,
 } from "lucide-react";
 import { matchesSearchQuery } from "@/lib/utils/search";
 import { ImportAccountsPanel } from "@/app/finanzas/configuracion/cuentas/_components/import-accounts-panel";
@@ -102,6 +104,17 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
   const [search, setSearch] = useState("");
+  /**
+   * Qué cuentas se listan. Por defecto SOLO LAS ACTIVAS.
+   *
+   * El plan de Josuarth convive con el anterior: de las 98 cuentas, 34 están
+   * inactivas e intercaladas por código entre las vigentes. Sin filtro, él abre
+   * su propio catálogo y ve "Cuentas por cobrar — Honorarios (Inactiva)" tres
+   * renglones arriba de "100004 Cuentas por Cobrar Clientes". Las inactivas no
+   * se borran —tienen historia contable detrás— pero tampoco son lo que alguien
+   * viene a mirar.
+   */
+  const [verInactivas, setVerInactivas] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ValidationErrors>({});
   const [saving, setSaving] = useState(false);
@@ -129,21 +142,29 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
     router.refresh();
   }
 
+  /** Cuántas inactivas esconde la vista por defecto. Se muestra en el toggle. */
+  const inactivasOcultas = useMemo(
+    () => accounts.filter((a) => !a.active).length,
+    [accounts]
+  );
+
   const filtered = useMemo(
     () =>
-      accounts.filter((a) =>
-        matchesSearchQuery(
-          search,
-          a.code,
-          a.name,
-          a.account_name_qb,
-          ACCOUNT_TYPE_LABEL_ES[a.account_type],
-          subcategoriaLabel(a.subcategoria),
-          cuentaControlLabel(a.cuenta_control),
-          a.active ? "activa" : "inactiva"
-        )
-      ),
-    [accounts, search]
+      accounts
+        .filter((a) => verInactivas || a.active)
+        .filter((a) =>
+          matchesSearchQuery(
+            search,
+            a.code,
+            a.name,
+            a.account_name_qb,
+            ACCOUNT_TYPE_LABEL_ES[a.account_type],
+            subcategoriaLabel(a.subcategoria),
+            cuentaControlLabel(a.cuenta_control),
+            a.active ? "activa" : "inactiva"
+          )
+        ),
+    [accounts, search, verInactivas]
   );
 
   const grouped = useMemo(
@@ -319,6 +340,62 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
             className="pl-9"
           />
         </div>
+
+        {/* Mismo patrón visual que el toggle de los reportes ("Solo cuentas con
+            saldo / Todas las cuentas"): dos opciones en un grupo, con el conteo
+            de lo que se esconde al lado. */}
+        <div
+          role="radiogroup"
+          aria-label="Cuentas a mostrar"
+          className="inline-flex overflow-hidden rounded-lg border border-integra-navy/20 bg-white"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={!verInactivas}
+            onClick={() => setVerInactivas(false)}
+            className={
+              "inline-flex min-h-[40px] items-center gap-1.5 px-3 text-xs font-medium transition-colors " +
+              (!verInactivas
+                ? "bg-integra-navy text-white"
+                : "text-gray-700 hover:bg-gray-50")
+            }
+          >
+            <Filter size={14} />
+            Solo activas
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={verInactivas}
+            onClick={() => setVerInactivas(true)}
+            className={
+              "inline-flex min-h-[40px] items-center gap-1.5 px-3 text-xs font-medium transition-colors " +
+              (verInactivas
+                ? "bg-integra-navy text-white"
+                : "text-gray-700 hover:bg-gray-50")
+            }
+          >
+            <List size={14} />
+            Todas
+          </button>
+        </div>
+
+        {inactivasOcultas > 0 && (
+          <p className="text-xs text-gray-500">
+            {verInactivas ? (
+              <>
+                Se muestran las <strong>{inactivasOcultas}</strong> cuenta(s) inactivas del plan
+                contable anterior.
+              </>
+            ) : (
+              <>
+                <strong>{inactivasOcultas}</strong> cuenta(s) inactivas ocultas. Son del plan
+                contable anterior y no se pueden usar para clasificar.
+              </>
+            )}
+          </p>
+        )}
         {canMutate && (
           <div className="flex flex-wrap items-center gap-2">
             <Button

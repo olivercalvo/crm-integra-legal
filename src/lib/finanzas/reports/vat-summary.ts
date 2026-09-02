@@ -176,6 +176,72 @@ function round2(n: number): number {
  *
  * Lanza si el formato de month es inválido.
  */
+/**
+ * Los meses que tienen algo que mostrar, del más reciente al más viejo.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * PARA QUÉ
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El reporte abría siempre en el mes anterior del calendario. Es la PRIMERA
+ * tarjeta del índice, así que el contador entra, hace clic en lo primero que ve
+ * y lee "No hubo actividad financiera" — sin ninguna pista de dónde sí la hay.
+ * Una pantalla vacía en el primer clic no se lee como "elegiste mal el mes": se
+ * lee como que el sistema no tiene datos.
+ *
+ * "Actividad" = una factura emitida, un gasto del bufete o un pago a la DGI en
+ * ese mes. Es el mismo universo que suman las 10 líneas del reporte, así que un
+ * mes que aparece acá nunca sale con todo en cero.
+ *
+ * Devuelve `YYYY-MM` ordenados descendente. Vacío = el sistema no tiene ningún
+ * movimiento todavía, y la pantalla lo dice con esas palabras.
+ */
+export async function mesesConActividad(
+  db: SupabaseClient,
+  tenantId: string
+): Promise<string[]> {
+  const mes = (v: unknown): string | null => {
+    const s = typeof v === "string" ? v.slice(0, 7) : "";
+    return /^\d{4}-\d{2}$/.test(s) ? s : null;
+  };
+
+  const [facturas, gastos, pagos] = await Promise.all([
+    db
+      .from("invoices")
+      .select("issue_date")
+      .eq("tenant_id", tenantId)
+      .in("status", ["emitida", "parcialmente_pagada", "pagada", "anulada"]),
+    db.from("business_expenses").select("expense_date").eq("tenant_id", tenantId),
+    db.from("tax_payments").select("payment_date").eq("tenant_id", tenantId),
+  ]);
+
+  const meses = new Set<string>();
+  for (const r of (facturas.data ?? []) as { issue_date: string }[]) {
+    const m = mes(r.issue_date);
+    if (m) meses.add(m);
+  }
+  for (const r of (gastos.data ?? []) as { expense_date: string }[]) {
+    const m = mes(r.expense_date);
+    if (m) meses.add(m);
+  }
+  for (const r of (pagos.data ?? []) as { payment_date: string }[]) {
+    const m = mes(r.payment_date);
+    if (m) meses.add(m);
+  }
+
+  return Array.from(meses).sort().reverse();
+}
+
+/** "2026-06" → "junio de 2026". Para nombrar meses en el mensaje vacío. */
+export function nombreDeMes(iso: string): string {
+  const [a, m] = iso.split("-").map(Number);
+  if (!a || !m) return iso;
+  return new Date(Date.UTC(a, m - 1, 1)).toLocaleDateString("es-PA", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export async function getVatSummary(
   db: DB,
   input: VatSummaryInput

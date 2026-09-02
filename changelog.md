@@ -65,6 +65,45 @@ Verificado en staging con un documento de tipo `case`: **200 a la abogada, 403 a
 | Documento inexistente | 404 |
 | `Cache-Control` | `private, no-store` |
 
+### Los cuatro endpoints nuevos, con archivos REALES del storage
+
+Los dos PDFs de arriba se generan al vuelo; los otros cuatro traen un archivo del
+almacenamiento. **No es el mismo camino**, así que se probaron aparte: subir → descargar por el
+endpoint → verificar → borrar todo.
+
+El nombre de prueba lleva **tilde y espacio** a propósito (`Cotización de prueba ñandú.pdf`),
+que es lo que ejercita el `Content-Disposition` con `filename*=UTF-8''`.
+
+| Endpoint | status | tipo | tamaño | nombre |
+|---|---|---|---|---|
+| `/api/documents/[id]/download` | 200 | `application/pdf` | 125 = 125 | ✅ con tilde |
+| `/api/expenses/[id]/receipt/download` | 200 | `application/pdf` | 125 = 125 | ✅ con tilde |
+| `/api/payments/[id]/receipt/download` | 200 | `application/pdf` | 125 = 125 | ✅ con tilde |
+| `/api/finanzas/business-expenses/[id]/receipt/download` | 200 | `application/pdf` | **10.485.796 = 10.485.796** | ✅ `Escritura pública grande.pdf` |
+
+Los cuatro empiezan en `%PDF-` y ninguno trae `supabase.co` en la respuesta.
+
+### El streaming, demostrado sobre 30 MB
+
+Es la razón por la que se eligió `fetch` + `res.body` en vez de `storage.download()`. Medido
+leyendo el stream trozo por trozo:
+
+| | |
+|---|---|
+| Bytes recibidos | 31.457.296 — idéntico al original |
+| Trozos del stream | **1.388** |
+| Cabeceras | 2.279 ms |
+| **Primer byte del cuerpo** | **2.280 ms** |
+| Último byte | 9.047 ms |
+
+El cuerpo empezó a llegar al **25 % del tiempo total**: el servidor fue pasando lo que le
+llegaba. Si el archivo se materializara en memoria, el primer byte saldría junto con el último.
+
+Todo lo creado para estas pruebas se borró: 5 objetos del storage, el documento y el cobro de
+prueba, y los `receipt_url` restaurados a su valor previo. Quedaron en `documents` los dos PDFs
+que el sistema genera y cachea al pedirlos (factura y cotización) — producto del uso normal, no
+de las pruebas.
+
 `next build` limpio en la rama de hotfix, con las cinco rutas nuevas presentes. `tsc` 0 errores.
 Lint sin hallazgos nuevos (21 preexistentes). Suite en `develop`: 409/409.
 

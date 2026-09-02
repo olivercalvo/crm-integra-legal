@@ -21,7 +21,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { ControlAuxiliar, DocumentoPendiente } from "@/lib/finanzas/reports/antiguedad";
+import type {
+  ControlMedido,
+  DocumentoPendiente,
+  SinAsiento,
+} from "@/lib/finanzas/reports/antiguedad";
 
 type DB = SupabaseClient;
 
@@ -55,7 +59,7 @@ async function saldoDeCuentaControl(
   db: DB,
   tenantId: string,
   code: string
-): Promise<Omit<ControlAuxiliar, "totalAuxiliar" | "diferencia" | "cuadra">> {
+): Promise<Omit<ControlMedido, "sinAsiento">> {
   const { data: cuenta } = await db
     .from("chart_of_accounts")
     .select("id, code, name, saldo_inicial")
@@ -181,29 +185,139 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
     }));
 }
 
+/**
+ * LOS DOCUMENTOS QUE TODAVÍA NO LLEGAN AL MAYOR.
+ *
+ * Es la segunda causa de que el auxiliar no cuadre, y no tiene nada que ver con
+ * la primera: la apertura es un dato histórico que falta, esto es cableado que
+ * falta construir. Un asiento se reconoce por `source_type` + `source_id`.
+ *
+ * Se mide en la base y no se deduce del residuo: si algún día hubiera una tercera
+ * causa, el reporte lo va a notar (`porCablearExplicado`) en vez de atribuirle
+ * todo a estas dos.
+ */
+async function idsConAsiento(
+  db: DB,
+  tenantId: string,
+  sourceType: string
+): Promise<Set<string>> {
+  const { data } = await db
+    .from("journal_entries")
+    .select("source_id")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", sourceType);
+
+  const ids = new Set<string>();
+  for (const e of (data ?? []) as { source_id: string | null }[]) {
+    if (e.source_id) ids.add(e.source_id);
+  }
+  return ids;
+}
+
+/** CxC: facturas del auxiliar sin asiento, y cobros sin asiento. */
+async function sinAsientoCobrar(db: DB, tenantId: string): Promise<SinAsiento> {
+  const [conAsientoFactura, conAsientoPago] = await Promise.all([
+    idsConAsiento(db, tenantId, "factura"),
+    idsConAsiento(db, tenantId, "pago"),
+  ]);
+
+  const { data: facturas } = await db
+    .from("invoices")
+    .select("id, balance_due")
+    .eq("tenant_id", tenantId)
+    .in("status", ["emitida", "parcialmente_pagada"]);
+
+  const documentos = { cantidad: 0, monto: 0 };
+  for (const f of (facturas ?? []) as { id: string; balance_due: number | string }[]) {
+    const saldo = Number(f.balance_due);
+    if (saldo > 0.005 && !conAsientoFactura.has(f.id)) {
+      documentos.cantidad += 1;
+      documentos.monto += saldo;
+    }
+  }
+
+  const { data: aplicaciones } = await db
+    .from("payment_applications")
+    .select("amount_applied, payment_id")
+    .eq("tenant_id", tenantId);
+
+  const pagosContados = new Set<string>();
+  const cobros = { cantidad: 0, monto: 0 };
+  for (const a of (aplicaciones ?? []) as {
+    amount_applied: number | string;
+    payment_id: string;
+  }[]) {
+    if (conAsientoPago.has(a.payment_id)) continue;
+    cobros.monto += Number(a.amount_applied);
+    // Un pago puede aplicarse a varias facturas: se cuenta el pago una vez.
+    if (!pagosContados.has(a.payment_id)) {
+      pagosContados.add(a.payment_id);
+      cobros.cantidad += 1;
+    }
+  }
+
+  return {
+    documentos: { cantidad: documentos.cantidad, monto: round2(documentos.monto) },
+    cobros: { cantidad: cobros.cantidad, monto: round2(cobros.monto) },
+  };
+}
+
+/**
+ * CxP: gastos del auxiliar sin asiento.
+ *
+ * No hay lado de "pagos sin asiento": el pago de un gasto no es una entidad
+ * propia, es una fecha en el gasto. Cuando exista el módulo de compras esto se
+ * vuelve simétrico con el de cobrar.
+ */
+async function sinAsientoPagar(db: DB, tenantId: string): Promise<SinAsiento> {
+  const conAsiento = await idsConAsiento(db, tenantId, "gasto");
+
+  const { data } = await db
+    .from("business_expenses")
+    .select("id, total")
+    .eq("tenant_id", tenantId)
+    .eq("status", "pendiente_pago");
+
+  const documentos = { cantidad: 0, monto: 0 };
+  for (const g of (data ?? []) as { id: string; total: number | string }[]) {
+    const monto = Number(g.total);
+    if (monto > 0.005 && !conAsiento.has(g.id)) {
+      documentos.cantidad += 1;
+      documentos.monto += monto;
+    }
+  }
+
+  return {
+    documentos: { cantidad: documentos.cantidad, monto: round2(documentos.monto) },
+    cobros: { cantidad: 0, monto: 0 },
+  };
+}
+
 export async function loadAntiguedad(
   db: DB,
   tenantId: string,
   tipo: TipoAntiguedad
 ): Promise<{
   documentos: DocumentoPendiente[];
-  control: Omit<ControlAuxiliar, "totalAuxiliar" | "diferencia" | "cuadra">;
+  control: ControlMedido;
 }> {
-  const [documentos, controlCrudo] = await Promise.all([
+  const [documentos, controlCrudo, sinAsiento] = await Promise.all([
     tipo === "cobrar" ? facturasPendientes(db, tenantId) : gastosPendientes(db, tenantId),
     saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
+    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
   ]);
 
   // El auxiliar de pagar se compara en VALOR ABSOLUTO: la cuenta por pagar tiene
   // saldo acreedor (negativo en balanza) y los documentos son montos positivos.
-  const control =
+  const control: ControlMedido =
     tipo === "pagar"
       ? {
           ...controlCrudo,
           saldoCuentaControl: Math.abs(controlCrudo.saldoCuentaControl),
           saldoApertura: Math.abs(controlCrudo.saldoApertura),
+          sinAsiento,
         }
-      : controlCrudo;
+      : { ...controlCrudo, sinAsiento };
 
   return { documentos, control };
 }

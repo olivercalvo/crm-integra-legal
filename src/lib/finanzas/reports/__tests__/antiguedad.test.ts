@@ -34,9 +34,15 @@ function doc(over: Partial<DocumentoPendiente> = {}): DocumentoPendiente {
   };
 }
 
+const NADA_SIN_ASIENTO = {
+  documentos: { cantidad: 0, monto: 0 },
+  cobros: { cantidad: 0, monto: 0 },
+};
+
 const CONTROL_VACIO = {
   saldoCuentaControl: 0,
   saldoApertura: 0,
+  sinAsiento: NADA_SIN_ASIENTO,
   cuentaCodigo: "100004",
   cuentaNombre: "Cuentas por Cobrar Clientes",
 };
@@ -156,19 +162,101 @@ test("cuando el auxiliar cuadra con su cuenta control, lo dice", () => {
 
 test("cuando NO cuadra, la diferencia se calcula y se expone — no se esconde", () => {
   // El caso real de staging: el auxiliar suma 3.145,00 y la cuenta control
-  // 194.842,55 porque la apertura vino sin detalle de documentos.
+  // 194.842,55.
   const r = buildAntiguedad([doc({ saldo: 3145 })], {
     ...CONTROL_VACIO,
     saldoCuentaControl: 194842.55,
     saldoApertura: 191947.55,
+    sinAsiento: {
+      documentos: { cantidad: 1, monto: 400 },
+      cobros: { cantidad: 1, monto: 150 },
+    },
   });
 
   assert.ok(!r.control.cuadra);
   assert.equal(r.control.totalAuxiliar, 3145);
   assert.equal(r.control.saldoCuentaControl, 194842.55);
   assert.ok(Math.abs(r.control.diferencia - 191697.55) < EPSILON);
-  // La apertura viaja para que la pantalla pueda explicar de dónde sale.
   assert.equal(r.control.saldoApertura, 191947.55);
+});
+
+// ---------------------------------------------------------------------------
+// EL DESGLOSE DE LA DIFERENCIA EN SUS DOS CAUSAS
+// Corregido el 02/09/2026: decir que la diferencia ES el saldo de apertura era
+// inexacto. En staging sobran 250,00 que la apertura no explica.
+// ---------------------------------------------------------------------------
+
+test("la diferencia se parte en apertura + documentos sin asiento, y las dos suman exacto", () => {
+  const r = buildAntiguedad([doc({ saldo: 3145 })], {
+    ...CONTROL_VACIO,
+    saldoCuentaControl: 194842.55,
+    saldoApertura: 191947.55,
+    sinAsiento: {
+      documentos: { cantidad: 1, monto: 400 },
+      cobros: { cantidad: 1, monto: 150 },
+    },
+  });
+
+  // La apertura NO es toda la diferencia: sobran 250,00.
+  assert.ok(Math.abs(r.control.porCablear - -250) < EPSILON, `porCablear=${r.control.porCablear}`);
+  // Y las dos partes reconstruyen la diferencia al centavo.
+  assert.ok(
+    Math.abs(r.control.saldoApertura + r.control.porCablear - r.control.diferencia) < EPSILON
+  );
+});
+
+test("los signos: una factura sin asiento BAJA la diferencia, un cobro sin asiento la SUBE", () => {
+  // Una factura pendiente de 400 SIN asiento: está en el auxiliar y no movió el
+  // mayor, así que la cuenta control sigue valiendo exactamente su apertura.
+  const soloFactura = buildAntiguedad([doc({ saldo: 400 })], {
+    ...CONTROL_VACIO,
+    saldoCuentaControl: 2000,
+    saldoApertura: 2000,
+    sinAsiento: { documentos: { cantidad: 1, monto: 400 }, cobros: { cantidad: 0, monto: 0 } },
+  });
+  assert.equal(soloFactura.control.porCablear, -400, "la factura BAJA la diferencia");
+  assert.ok(soloFactura.control.porCablearExplicado);
+
+  // Una factura de 150 con asiento, ya cobrada, cuyo COBRO no tiene asiento: sale
+  // del auxiliar (está pagada) pero su débito sigue vivo en el mayor.
+  const soloCobro = buildAntiguedad([], {
+    ...CONTROL_VACIO,
+    saldoCuentaControl: 2150,
+    saldoApertura: 2000,
+    sinAsiento: { documentos: { cantidad: 0, monto: 0 }, cobros: { cantidad: 1, monto: 150 } },
+  });
+  assert.equal(soloCobro.control.porCablear, 150, "el cobro SUBE la diferencia");
+  assert.ok(soloCobro.control.porCablearExplicado);
+});
+
+test("si los documentos medidos NO reconstruyen el residuo, el reporte lo declara", () => {
+  // Una tercera causa que nadie previó: el reporte no puede atribuirla a las dos
+  // conocidas, y la pantalla lo dice en vez de afirmar de más.
+  const r = buildAntiguedad([doc({ saldo: 1000 })], {
+    ...CONTROL_VACIO,
+    saldoCuentaControl: 9999,
+    saldoApertura: 5000,
+    sinAsiento: { documentos: { cantidad: 1, monto: 400 }, cobros: { cantidad: 0, monto: 0 } },
+  });
+  assert.ok(!r.control.porCablearExplicado, "el residuo no lo explican los documentos medidos");
+  // Pero la aritmética sigue cerrando: las dos partes dan la diferencia exacta.
+  assert.ok(
+    Math.abs(r.control.saldoApertura + r.control.porCablear - r.control.diferencia) < EPSILON
+  );
+});
+
+test("cuando la apertura SÍ explica toda la diferencia, no queda residuo (el caso de CxP)", () => {
+  // Cuentas por Pagar en staging: diferencia 3.400,48 = su apertura, al centavo.
+  const r = buildAntiguedad([doc({ saldo: 3594.25 })], {
+    ...CONTROL_VACIO,
+    saldoCuentaControl: 6994.73,
+    saldoApertura: 3400.48,
+    cuentaCodigo: "200001",
+    cuentaNombre: "Cuentas por pagar",
+  });
+  assert.ok(Math.abs(r.control.diferencia - 3400.48) < EPSILON);
+  assert.equal(r.control.porCablear, 0);
+  assert.ok(r.control.porCablearExplicado, "cero documentos sin asiento explican un residuo cero");
 });
 
 // ---------------------------------------------------------------------------

@@ -508,11 +508,24 @@ se reclama.
 
 **Las tres cifras de control siempre visibles.** La guía de RM marca como no negociable que la
 suma del auxiliar cuadre con su cuenta control (`100004` en cobrar, `200001` en pagar). Hoy no
-cuadra, porque la apertura de QuickBooks vino sin detalle de documentos. La decisión de diseño es
-**declararlo, no corregirlo ni esconderlo**: la pantalla muestra juntos *total del auxiliar*,
-*saldo de la cuenta control* y *diferencia*, y explica que el grueso es la apertura. Un contador
-que ve la diferencia declarada entiende el estado del sistema; uno que la descubre solo deja de
-confiar en el reporte entero.
+cuadra. La decisión de diseño es **declararlo, no corregirlo ni esconderlo**: la pantalla muestra
+juntos *total del auxiliar*, *saldo de la cuenta control* y *diferencia*. Un contador que ve la
+diferencia declarada entiende el estado del sistema; uno que la descubre solo deja de confiar en
+el reporte entero.
+
+**Y la diferencia se muestra partida en sus DOS causas, porque tiene dos.** Decir que "es el saldo
+de apertura" sería inexacto:
+
+1. **El saldo de apertura cargado sin detalle de documentos.** Es el grueso. Se arregla con un dato
+   que tiene el contador y no está en el sistema: qué documentos estaban pendientes a esa fecha.
+2. **Documentos del sistema que todavía no producen asiento**, porque el cableado de documento a
+   asiento no está construido. Una factura pendiente sin asiento está en el auxiliar y no en el
+   mayor (baja la diferencia); un cobro sin asiento ya se descontó del auxiliar y no del mayor (la
+   sube). Se arregla con desarrollo.
+
+Las dos se muestran con su monto y con los documentos que las componen. La segunda **se mide en la
+base**, no se deduce restando: si apareciera una tercera causa, el reporte lo declara en vez de
+atribuirle todo a estas dos.
 
 **Los tramos vacíos se muestran igual.** La estructura del reporte no cambia según los datos que
 haya ese día; si un tramo no tiene documentos, la columna sigue ahí y una nota los nombra.

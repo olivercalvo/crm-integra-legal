@@ -1,5 +1,74 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Antigüedad: la diferencia se desglosa en sus dos causas] - 2026-09-02
+
+Corrección de **texto y de una cifra que faltaba partir**, no de números. Ningún saldo cambió y el
+fixture de staging no se tocó.
+
+### Qué estaba mal
+
+La pantalla decía que la diferencia entre el auxiliar y su cuenta control **era el saldo de
+apertura**. No es exacto: en Cuentas por Cobrar la diferencia es 191.697,55 y la apertura
+191.947,55. Hay **250,00 de diferencia con dos orígenes distintos**, y afirmar uno solo le hace
+creer al contador que todo viene de la migración.
+
+### Qué muestra ahora
+
+Debajo de las tres cifras de control, el desglose:
+
+| | monto |
+|---|---|
+| Saldo de apertura cargado sin detalle de documentos | 191.947,55 |
+| Documentos del sistema que todavía no producen asiento | −250,00 |
+| **Diferencia total** | **191.697,55** |
+
+Y nombra los documentos: **1 factura por 400,00** que está en el auxiliar y no en el mayor, y
+**1 cobro por 150,00** ya descontado del auxiliar y todavía no del mayor.
+
+La pantalla también dice que **las dos se arreglan distinto**: la apertura necesita un dato que
+tiene el contador y no está en el sistema; el cableado de documento a asiento es desarrollo
+pendiente. Un contador que ve una diferencia con dos causas necesita saber cuánto es cada una,
+porque si no no sabe a quién reclamarle.
+
+### Cómo se garantiza que el desglose no mienta
+
+- **`porCablear` es aritmética pura** (`diferencia − saldoApertura`), así que las dos partes suman
+  la diferencia exacta siempre, sin importar qué tan bien sepamos atribuirlas.
+- **Los documentos se MIDEN en la base**, no se deducen del residuo: `antiguedad-source.ts` cruza
+  facturas y cobros contra `journal_entries` por `source_type` + `source_id`.
+- **`porCablearExplicado` es el control del control.** Si algún día apareciera una tercera causa,
+  los documentos medidos no reconstruirían el residuo y la pantalla lo diría con esas palabras, en
+  vez de atribuirle todo a las dos conocidas.
+
+### Lo que NO se hizo, a propósito
+
+**No se emparejó el fixture.** Que haya facturas con asiento y facturas sin asiento es el estado
+real del sistema hoy —el cableado de factura a asiento no está construido— y declararlo es más
+útil que esconderlo detrás de datos de prueba prolijos.
+
+### Verificado contra staging
+
+Candado confirmado antes de correr (`xtyenhakplrkyifbcaow`). Se ejecutaron `loadAntiguedad` y
+`buildAntiguedad` **reales** contra la base:
+
+- **CxC:** apertura 191.947,55 + por cablear −250,00 = **191.697,55**, la diferencia exacta.
+  Desglose explicado ✅ (1 documento por 400,00, 1 cobro por 150,00).
+- **CxP:** apertura 3.400,48 + por cablear 0,00 = **3.400,48**. Cero documentos sin asiento, que es
+  coherente con que su diferencia siempre fue exactamente la apertura.
+
+**⚠️ Sin verificar en pantalla:** la extensión de Chrome se desconectó a mitad de la corrida. El
+cálculo está verificado end-to-end contra staging y por 458 tests, pero **falta ver el bloque
+renderizado con sesión de contador**. Hacerlo antes de mandarle el acceso a Josuarth.
+
+### Tests
+
+**458 en verde** (+4). Cubren que las dos partes sumen la diferencia exacta, los signos de cada
+causa (una factura sin asiento la BAJA, un cobro sin asiento la SUBE), el caso de CxP donde la
+apertura sí explica todo, y que una tercera causa hipotética se declare en vez de atribuirse.
+
+Typecheck limpio. Lint: 21 errores preexistentes, 0 nuevos.
+
+
 ## [Antigüedad de Saldos y Estado de Cuenta] - 2026-09-02
 
 Los dos auxiliares que faltaban del bloque de reportes. Con esto el hub queda con **ocho reportes

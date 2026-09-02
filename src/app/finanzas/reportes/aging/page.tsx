@@ -121,21 +121,96 @@ export default async function AntiguedadPage({
         </div>
 
         {!reporte.control.cuadra && (
-          <p className="mt-2 flex items-start gap-2 border-t border-amber-200 pt-2 text-xs text-amber-900">
-            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span>
-              El auxiliar <strong>no cuadra</strong> con su cuenta control, y es esperable: de los{" "}
-              {money(reporte.control.saldoCuentaControl)} de{" "}
-              <strong>
-                {reporte.control.cuentaCodigo} {reporte.control.cuentaNombre}
-              </strong>
-              , <strong>{money(reporte.control.saldoApertura)}</strong> son el{" "}
-              <strong>saldo de apertura cargado desde QuickBooks sin detalle de documentos</strong>.
-              Solo los movimientos registrados en el sistema tienen facturas detrás, y son los
-              únicos que esta tabla puede abrir. Para que el auxiliar cuadre hace falta el detalle
-              de los documentos pendientes a la fecha de apertura, que lo tiene el contador.
-            </span>
-          </p>
+          <div className="mt-3 border-t border-amber-200 pt-3">
+            {/* ─────────────────────────────────────────────────────────────
+                EL DESGLOSE. La diferencia tiene DOS orígenes con dos
+                soluciones distintas: uno es un dato histórico que falta, el
+                otro es cableado que falta construir. Mostrar solo el total
+                afirmaría que todo viene de la apertura, que no es cierto.
+                ───────────────────────────────────────────────────────────── */}
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
+              De dónde sale esa diferencia
+            </p>
+
+            <dl className="space-y-1.5 text-xs text-amber-900">
+              <div className="flex items-start justify-between gap-4">
+                <dt className="flex-1">
+                  <strong>Saldo de apertura cargado sin detalle de documentos.</strong> Vino de
+                  QuickBooks como un saldo único: está en la cuenta control y no tiene ni una
+                  factura detrás que esta tabla pueda abrir.
+                </dt>
+                <dd className="shrink-0 font-mono font-bold tabular-nums">
+                  {money(reporte.control.saldoApertura)}
+                </dd>
+              </div>
+
+              <div className="flex items-start justify-between gap-4">
+                <dt className="flex-1">
+                  <strong>
+                    Documentos del sistema que todavía no producen asiento contable.
+                  </strong>{" "}
+                  No es un error de carga: el <strong>cableado de documento a asiento aún no está
+                  construido</strong>, así que estos documentos existen en el sistema pero no
+                  llegaron al libro mayor.
+                  {reporte.control.porCablearExplicado && (
+                    <>
+                      {" "}
+                      Son{" "}
+                      <strong>
+                        {reporte.control.sinAsiento.documentos.cantidad}{" "}
+                        {esCobrar ? "factura(s)" : "gasto(s)"} por{" "}
+                        {money(reporte.control.sinAsiento.documentos.monto)}
+                      </strong>{" "}
+                      que están en el auxiliar y no en el mayor
+                      {reporte.control.sinAsiento.cobros.cantidad > 0 && (
+                        <>
+                          , y{" "}
+                          <strong>
+                            {reporte.control.sinAsiento.cobros.cantidad} cobro(s) por{" "}
+                            {money(reporte.control.sinAsiento.cobros.monto)}
+                          </strong>{" "}
+                          ya descontados del auxiliar y todavía no del mayor
+                        </>
+                      )}
+                      .
+                    </>
+                  )}
+                </dt>
+                <dd className="shrink-0 font-mono font-bold tabular-nums">
+                  {money(reporte.control.porCablear)}
+                </dd>
+              </div>
+
+              <div className="flex items-start justify-between gap-4 border-t border-amber-300 pt-1.5">
+                <dt className="flex-1 font-semibold">Diferencia total</dt>
+                <dd className="shrink-0 font-mono font-bold tabular-nums">
+                  {money(reporte.control.diferencia)}
+                </dd>
+              </div>
+            </dl>
+
+            {!reporte.control.porCablearExplicado && (
+              <p className="mt-2 flex items-start gap-2 text-xs text-amber-900">
+                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  Los documentos sin asiento que el sistema encuentra{" "}
+                  <strong>no reconstruyen esos {money(reporte.control.porCablear)}</strong>. Hay
+                  una tercera causa que este reporte no sabe explicar, y se dice acá en vez de
+                  atribuirla a las dos de arriba.
+                </span>
+              </p>
+            )}
+
+            <p className="mt-2 flex items-start gap-2 text-xs text-amber-900">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              <span>
+                Las dos se arreglan distinto:{" "}
+                <strong>la apertura necesita el detalle de los documentos pendientes a esa
+                fecha</strong>, que lo tiene el contador y no está en el sistema;{" "}
+                <strong>el cableado de documento a asiento es desarrollo pendiente</strong>.
+              </span>
+            </p>
+          </div>
         )}
       </div>
 

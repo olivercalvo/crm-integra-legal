@@ -36,9 +36,12 @@ Con esto el hub queda con **8 reportes construidos y 1 planificado** (Ventas Men
 **Lo que este bloque descubrió y hay que llevarle a Josuarth:**
 
 1. **El auxiliar de CxC no cuadra con su cuenta control, y NO es solo la apertura.** Diferencia
-   191.697,55 contra una apertura de 191.947,55: sobran **250,00** que vienen del fixture de
-   staging (una factura de 400,00 sin asiento, un cobro de 150,00 sin asiento). Medido con SQL,
-   no deducido. En CxP la diferencia SÍ es exactamente la apertura (3.400,48).
+   191.697,55 contra una apertura de 191.947,55: sobran **250,00** de documentos que existen en el
+   sistema y todavía no producen asiento (una factura de 400,00, un cobro de 150,00). En CxP la
+   diferencia SÍ es exactamente la apertura (3.400,48).
+   ✅ **La pantalla ya muestra las dos causas por separado** (02/09): decir que la diferencia "era"
+   la apertura era inexacto y se corrigió. Falta verlo renderizado con sesión de contador — se
+   cayó la extensión de Chrome a mitad de la corrida.
 2. **Consulta nueva para él:** para que el auxiliar cuadre hace falta **el detalle de los
    documentos pendientes a la fecha de apertura**. No está en el sistema y no se puede inferir.
 3. **El proveedor no es una entidad** (`supplier_name` es texto libre) y **los gastos del bufete

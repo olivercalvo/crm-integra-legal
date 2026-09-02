@@ -26,7 +26,12 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
 
   const [expense, accounts, suppliers] = await Promise.all([
     getBusinessExpenseById(ctx.db, ctx.tenantId, params.id),
-    listExpenseAccountOptions(ctx.db, ctx.tenantId),
+    // El gasto que se edita puede estar clasificado contra una cuenta que se
+    // desactivó después. Se incluye igual, marcada, para no reclasificarlo en
+    // silencio al guardar.
+    getBusinessExpenseById(ctx.db, ctx.tenantId, params.id).then((e) =>
+      listExpenseAccountOptions(ctx.db, ctx.tenantId, e?.chart_account_code ?? null)
+    ),
     listSupplierOptions(ctx.db, ctx.tenantId),
   ]);
   if (!expense) notFound();

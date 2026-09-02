@@ -291,6 +291,8 @@ export function BusinessExpenseForm(props: Props) {
               {props.accounts.map((a) => (
                 <option key={a.code} value={a.code}>
                   {a.code} — {a.name}
+                  {/* Solo aparece la que el gasto ya tenía y quedó desactivada. */}
+                  {a.inactiva ? " (cuenta inactiva)" : ""}
                 </option>
               ))}
             </select>

@@ -18,6 +18,8 @@ type DB = SupabaseClient;
 export interface ExpenseAccountOption {
   code: string;
   name: string;
+  /** true solo para la cuenta que el gasto ya tenía y quedó desactivada. */
+  inactiva?: boolean;
 }
 
 interface ListBusinessExpensesParams {
@@ -244,11 +246,22 @@ export async function getBusinessExpenseById(
  */
 export async function listExpenseAccountOptions(
   db: DB,
-  tenantId: string
+  tenantId: string,
+  /**
+   * Código que hay que incluir aunque esté inactivo: el que ya tiene el gasto
+   * que se está editando. Sin esto, abrir un gasto viejo cuya cuenta se
+   * desactivó vaciaría el selector y guardar lo reclasificaría en silencio.
+   */
+  incluirCodigo?: string | null
 ): Promise<ExpenseAccountOption[]> {
+  // 🔴 SOLO ACTIVAS (02/09/2026). Hasta hoy esta consulta traía las 49 cuentas
+  // de gasto, incluidas las 19 del plan anterior a Josuarth (5101, 5201,
+  // 5205…). El formulario las ofrecía y el servidor las aceptaba, así que un
+  // gasto se podía clasificar contra una cuenta muerta — y eso no se ve hasta
+  // que el contador arma el reporte y la cuenta no aparece en ningún lado.
   const { data, error } = await db
     .from("chart_of_accounts")
-    .select("code, name")
+    .select("code, name, active")
     .eq("tenant_id", tenantId)
     .eq("account_type", "expense")
     .order("code");
@@ -257,10 +270,17 @@ export async function listExpenseAccountOptions(
     console.error("[finanzas/queries] listExpenseAccountOptions failed", error);
     return [];
   }
-  return (data ?? []).map((r) => ({
-    code: r.code as string,
-    name: r.name as string,
-  }));
+
+  const filas = (data ?? []) as { code: string; name: string; active: boolean }[];
+  return filas
+    .filter((r) => r.active || (incluirCodigo != null && r.code === incluirCodigo))
+    .map((r) => ({
+      code: r.code,
+      name: r.name,
+      // La UI lo marca para que se entienda por qué aparece una cuenta que ya
+      // no se ofrece a las demás.
+      inactiva: !r.active,
+    }));
 }
 
 /**
@@ -268,22 +288,52 @@ export async function listExpenseAccountOptions(
  * expense. Usado por los validators server-side antes de INSERT/UPDATE.
  * Devuelve true si es válido O si el code es null (cuenta no clasificada).
  */
+export type ResultadoCuentaGasto = "ok" | "no-existe" | "inactiva";
+
+/**
+ * ¿Se puede clasificar un gasto contra esta cuenta?
+ *
+ * 🔴 Devuelve `"inactiva"` para las cuentas del plan viejo. Ocultarlas del
+ * selector no alcanza: el gate del servidor es el permiso, y esconder el botón
+ * no reemplaza al rechazo — la misma regla que el repo aplica a los roles.
+ *
+ * `codigoPrevio` es la cuenta que el gasto YA tenía: si no cambió, se acepta
+ * aunque esté inactiva. Editar la descripción de un gasto viejo no puede
+ * fallar porque su cuenta se desactivó después.
+ */
+export async function validarCuentaDeGasto(
+  db: DB,
+  tenantId: string,
+  code: string | null,
+  codigoPrevio?: string | null
+): Promise<ResultadoCuentaGasto> {
+  if (code === null) return "ok";
+
+  const { data, error } = await db
+    .from("chart_of_accounts")
+    .select("code, active")
+    .eq("tenant_id", tenantId)
+    .eq("code", code)
+    .eq("account_type", "expense")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[finanzas/queries] validarCuentaDeGasto failed", error);
+    return "no-existe";
+  }
+  if (!data) return "no-existe";
+
+  const fila = data as { code: string; active: boolean };
+  if (fila.active) return "ok";
+  // Inactiva, pero es la que ya tenía: se respeta.
+  return codigoPrevio != null && code === codigoPrevio ? "ok" : "inactiva";
+}
+
+/** @deprecated Usar `validarCuentaDeGasto`, que distingue inactiva de inexistente. */
 export async function isValidExpenseAccountCode(
   db: DB,
   tenantId: string,
   code: string | null
 ): Promise<boolean> {
-  if (code === null) return true;
-  const { data, error } = await db
-    .from("chart_of_accounts")
-    .select("code")
-    .eq("tenant_id", tenantId)
-    .eq("code", code)
-    .eq("account_type", "expense")
-    .maybeSingle();
-  if (error) {
-    console.error("[finanzas/queries] isValidExpenseAccountCode failed", error);
-    return false;
-  }
-  return !!data;
+  return (await validarCuentaDeGasto(db, tenantId, code)) === "ok";
 }

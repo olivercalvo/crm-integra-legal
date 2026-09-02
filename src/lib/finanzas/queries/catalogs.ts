@@ -135,12 +135,21 @@ export async function listTaxCodesActive(db: DB, tenantId: string): Promise<TaxC
   }));
 }
 
-/** Cuentas activas del chart_of_accounts. Útil para fallback en líneas personalizadas. */
+/**
+ * Cuentas ACTIVAS del chart_of_accounts. Útil para fallback en líneas
+ * personalizadas.
+ *
+ * 🔴 Hasta el 02/09/2026 el nombre decía "Active" y la consulta NO filtraba por
+ * `active`: devolvía también las 34 cuentas del plan anterior a Josuarth. Hoy no
+ * la usa nadie, así que no llegó a hacer daño — pero un nombre que miente es
+ * peor que uno vago, porque nadie va a revisar lo que ya dice estar resuelto.
+ */
 export async function listAccountsActive(db: DB, tenantId: string): Promise<AccountOption[]> {
   const { data, error } = await db
     .from("chart_of_accounts")
     .select("code, name, account_type")
     .eq("tenant_id", tenantId)
+    .eq("active", true)
     .order("code");
 
   if (error) {

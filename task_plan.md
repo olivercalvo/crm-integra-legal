@@ -38,6 +38,28 @@ HAVING COUNT(*) > 1;
 
 Staging al 02/09/2026: **0 duplicados** (9 asientos con `source_id`, 9 combinaciones únicas).
 
+### 🔴 CAMBIA EL DISEÑO DEL BLOQUE DE COMPRAS — el gasto necesita LÍNEAS
+
+Hoy `business_expenses` tiene **una sola** `chart_account_code`. El asiento, en cambio, ya soporta
+el desglose: el gasto del 15/03 se muestra en pantalla como *"610002 Honorarios Profesionales
+$1.497,85"* y su asiento (N.º 3 del Diario) lo parte en tres —útiles 412,35 / honorarios 900,00 /
+mensajería 185,50—, que es lo correcto.
+
+**La pantalla muestra una clasificación falsa de algo que el libro tiene bien.** Y no es un bug de
+la pantalla: es que el modelo no puede representarlo. La columna única obliga a elegir una cuenta
+para una compra que toca tres.
+
+**Consecuencia para el bloque de compras, que está bloqueado esperando al contador:** cuando se
+retome, el gasto necesita una tabla `business_expense_lines` (cuenta + descripción + monto), no una
+columna. Eso cambia:
+
+- el formulario (pasa de un `<select>` a un editor de líneas, como el de facturas),
+- el cableado al asiento (una línea del asiento por línea del gasto, en vez de una sola),
+- y una migración con backfill: cada gasto actual pasa a tener una línea con su cuenta y su total.
+
+**No se arregló acá** porque es el bloque de compras y sigue bloqueado por las tres preguntas al
+contador. Anotado para que el diseño de ese bloque no arranque asumiendo la columna única.
+
 ### 📋 BLOQUE PARA DESPUÉS — cableado factura/pago → asiento
 
 **Bloqueado por tres preguntas al contador.** Ninguna es decisión de desarrollo:

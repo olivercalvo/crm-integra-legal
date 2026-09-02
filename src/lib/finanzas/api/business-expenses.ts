@@ -15,7 +15,7 @@ import type {
   BusinessExpensePaymentMethod,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
-import { isValidExpenseAccountCode } from "@/lib/finanzas/queries/business-expenses";
+import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
 import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
 type DB = SupabaseClient;
@@ -77,10 +77,21 @@ export async function createBusinessExpense(
   // de tipo expense. La FK es lógica (no constraint DB), por eso lo
   // verificamos a mano acá.
   if (input.chart_account_code !== null) {
-    const ok = await isValidExpenseAccountCode(db, tenantId, input.chart_account_code);
-    if (!ok) {
+    // Distingue "no existe" de "existe pero está inactiva": son dos errores
+    // distintos, y el segundo tiene que explicar POR QUÉ o la persona vuelve a
+    // elegir la misma cuenta del plan viejo.
+    const veredicto = await validarCuentaDeGasto(db, tenantId, input.chart_account_code);
+    if (veredicto === "no-existe") {
       throw new MutationError(
         `La cuenta contable "${input.chart_account_code}" no existe o no es de tipo gasto.`,
+        400
+      );
+    }
+    if (veredicto === "inactiva") {
+      throw new MutationError(
+        `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
+          `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +
+          `Seleccione una cuenta activa.`,
         400
       );
     }
@@ -172,10 +183,26 @@ export async function updateBusinessExpense(
   }
 
   if (input.chart_account_code !== null) {
-    const ok = await isValidExpenseAccountCode(db, tenantId, input.chart_account_code);
-    if (!ok) {
+    // `existing.chart_account_code` es la cuenta que el gasto YA tenía: si no
+    // cambió, se acepta aunque esté inactiva. Editar la descripción de un gasto
+    // viejo no puede fallar porque su cuenta se desactivó después.
+    const veredicto = await validarCuentaDeGasto(
+      db,
+      tenantId,
+      input.chart_account_code,
+      (existing as { chart_account_code: string | null }).chart_account_code
+    );
+    if (veredicto === "no-existe") {
       throw new MutationError(
         `La cuenta contable "${input.chart_account_code}" no existe o no es de tipo gasto.`,
+        400
+      );
+    }
+    if (veredicto === "inactiva") {
+      throw new MutationError(
+        `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
+          `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +
+          `Seleccione una cuenta activa.`,
         400
       );
     }

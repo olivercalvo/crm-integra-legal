@@ -20,6 +20,67 @@ cerrado el "sin verificar" que dejó la caída de internet del 01/09.
 **Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
 red local. No hay motivo para postergar el correo por el estado de staging.
 
+### 📋 BLOQUE PARA DESPUÉS — Backfill `022`: el DV embebido en el texto del RUC
+
+**Estado: diagnosticado el 02/09/2026, sin urgencia, sin fecha.** No arrancar sin aprobación
+explícita de Oliver.
+
+#### Qué pasa
+
+`sql/pending/022_backfill_dv_embebido.sql` extrae el DV que algunas licenciadas cargaron como
+texto al final del número fiscal (`"25046169-3-2021  DV 40"`), lo pasa a `digito_verificador` y
+limpia el número. **Nunca se aplicó.**
+
+#### Lo que dijo producción (consulta corrida por Oliver el 02/09/2026)
+
+**2 clientes afectados, los dos en estado "bloqueado por el gate". Cero en peligro.**
+
+| Cliente | Situación |
+|---|---|
+| CLI-026 INTEGRA LEGAL | DV embebido en el texto, `digito_verificador` vacío |
+| CLI-081 SERVICARE | DV embebido como `"DV 9"`, `digito_verificador` vacío |
+
+**No hay riesgo de mandarle un RUC sucio a la DGI.** El gate fiscal
+(`fetch-invoice-efactura-bundle.ts:225`) exige `digito_verificador` para receptores 01/03 y corta
+con un 400 accionable antes de tocar la red. La combinación peligrosa —DV pegado al texto **y**
+columna poblada, que sí dejaría pasar un `rucReceptor` sucio— **no existe en producción**.
+
+**Lo que sí pasa:** esos dos clientes **no pueden recibir factura electrónica**, y nadie lo sabe
+hasta que alguien intente facturarles.
+
+#### ⚠️ Dos cosas que NO son mecánicas y hay que resolver ANTES de correr el script
+
+1. **El DV de CLI-081 dice `"DV 9"`.** Los dígitos verificadores de la DGI son de dos posiciones,
+   así que *probablemente* sea `09` — pero podría faltarle un dígito. **No normalizarlo por
+   cuenta propia: hay que confirmarlo contra un documento del cliente.** Un DV inventado en un
+   anexo de la DGI es peor que uno faltante. El script hoy extrae `9` tal cual con
+   `regexp_match(..., 'DV\s*([0-9]+)')`, sin rellenar el cero.
+2. **Los dos tienen `tipo_receptor_fe` en NULL.** Aunque se les separe el DV, **siguen sin poder
+   emitir**: el gate también exige el tipo de receptor. Definirlo (01 contribuyente / 03 gobierno
+   / 02 consumidor final) es **una decisión del bufete, no del backfill**. El script intenta
+   inferirlo por el formato del número; para estos dos casos esa inferencia no reemplaza a que
+   alguien lo confirme.
+
+#### Orden de trabajo cuando se retome
+
+1. **Test de payload congelado** de `mapReceptor()`: los cuatro tipos de receptor (01/02/03/04)
+   más los dos casos sucios (DV pegado con y sin columna), comparados contra un JSON versionado.
+   Hoy `map-invoice.test.ts` tiene 11 tests pero **ninguno congela el bloque completo del
+   receptor**, y solo uno mira `rucReceptor`. Ese test es la red que no existe.
+2. **Sandbox de la DGI** (`EFACTURA_I_AMB`), nunca el ambiente real.
+3. **Producción, con aprobación explícita de Oliver**, y con el ROLLBACK-CHECK del propio script
+   guardado antes de correr.
+
+⚠️ **Ojo con el orden interno del script:** correr el UPDATE A (tax_id) antes que el B (ruc). El
+guard del B depende de que el A ya haya limpiado `tax_id`.
+
+#### Lo que este bloque NO es
+
+**No hay que agregar ninguna columna.** `clients.digito_verificador` ya existe y ya está
+desplegada; el payload de la DGI ya manda `rucReceptor` y `digitoVerificador` **separados y sin
+partir ningún texto** (`map-receptor.ts:114-118`). Lo único que falta es limpiar el texto de esos
+dos clientes.
+
 ### Bloque cerrado el 02/09 — Exportación a Excel del Mayor y la Antigüedad
 
 | # | Entregable | Estado |
@@ -33,9 +94,13 @@ red local. No hay motivo para postergar el correo por el estado de staging.
 
 **Lo que queda:**
 
-1. **`clients` no tiene columna `dv`.** En un movimiento de cliente la columna DV sale vacía. Los
-   proveedores sí lo tienen. Cerrarlo es una migración propia — y ojo que `clients` tiene datos en
-   producción, así que aplica el mismo cuidado que la `033`.
+1. 🔴 **BUG A CORREGIR — la exportación manda el DV de clientes vacío teniendo el dato.**
+   `tercero-fiscal.ts` escribe `dv: ""` para clientes (líneas 221 y 265) porque se construyó sobre
+   una premisa falsa: que `clients` no tenía columna de DV. **Sí la tiene, se llama
+   `digito_verificador`**, existe en producción desde la migración `019` (30/05/2026) y está
+   poblada en 11 de 15 clientes de staging. Arreglarlo es leer esa columna en vez de la cadena
+   vacía. **Riesgo cero sobre la facturación:** el exportador es solo lectura y no toca ningún
+   archivo del camino a la DGI. Pendiente de agendar.
 2. **Verificar el botón en pantalla con sesión de contador** — la extensión de Chrome sigue
    desconectada.
 3. Los RUC y DV reales de los proveedores los tienen las licenciadas; en staging hay valores de

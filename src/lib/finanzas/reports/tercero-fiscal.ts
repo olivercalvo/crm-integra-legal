@@ -30,12 +30,22 @@
  *   gasto         → business_expenses.supplier_id → suppliers
  *   manual / apertura / reversion           → sin tercero
  *
- * ⚠️ **`clients` NO tiene columna `dv` todavía.** Tiene `ruc` y `tax_id`, sin el
- * dígito verificador por separado. Así que en un movimiento de CLIENTE la
- * columna DV sale VACÍA, y eso es el estado real del sistema, no un error del
- * exportador. Los proveedores sí lo tienen (migración 033), que es justamente
- * el caso que nombró Josuarth. Cerrar el lado de clientes es una migración
- * propia.
+ * 🔴 **BUG CONOCIDO — el DV de clientes sale vacío y NO debería.**
+ *
+ * Corregido el registro el 02/09/2026: este archivo se escribió afirmando que
+ * `clients` no tenía columna de DV. **La tiene.** Se llama `digito_verificador`
+ * —no `dv`, por eso una búsqueda por ese nombre no la encontró— existe en
+ * producción desde la migración `019` (30/05/2026) y está poblada en 11 de los
+ * 15 clientes de staging. Es la MISMA columna que el mapper de la DGI ya manda
+ * como `digitoVerificador`.
+ *
+ * Así que las dos líneas de abajo que escriben `dv: ""` para clientes están
+ * mal: hay que leer `digito_verificador`. Es un arreglo de dos líneas, sin
+ * riesgo sobre la facturación (este módulo es solo lectura y no toca el camino
+ * a la DGI), pendiente de agendar. Ver `task_plan.md`.
+ *
+ * Lo que NO hay que hacer: agregar una columna `dv` a `clients`. Sería un
+ * segundo campo para el mismo dato, y el mapper seguiría leyendo el primero.
  *
  * 🔴 El RUC y el DV viajan en dos campos y se escriben en dos columnas. Nunca
  * se concatenan — hay un test que lo verifica leyendo el código.
@@ -216,8 +226,8 @@ export async function resolverTercerosFiscales(
       clientePorFactura.set(f.id, {
         nombre: texto(f.clients?.name),
         ruc: texto(f.clients?.ruc),
-        // ⚠️ Vacío a propósito: `clients` todavía no tiene columna `dv`.
-        // Ver el encabezado. No se inventa ni se parte el RUC a la fuerza.
+        // 🔴 MAL: debería ser `texto(f.clients?.digito_verificador)`.
+        // Ver el BUG CONOCIDO del encabezado.
         dv: "",
       });
     }
@@ -261,7 +271,8 @@ export async function resolverTercerosDeDocumentos(
       resultado.set(f.id, {
         nombre: texto(f.clients?.name),
         ruc: texto(f.clients?.ruc),
-        // `clients` todavía no tiene columna `dv`. Ver el encabezado.
+        // 🔴 MAL: debería ser `texto(f.clients?.digito_verificador)`.
+        // Ver el BUG CONOCIDO del encabezado.
         dv: "",
       });
     }

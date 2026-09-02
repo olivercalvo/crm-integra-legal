@@ -170,7 +170,9 @@ test("la fila de saldo inicial no inventa un tercero ni un importe", () => {
 });
 
 test("un cliente sin DV deja SOLO la columna DV vacía, no el RUC", () => {
-  // Es el estado real: `clients` todavía no tiene columna `dv`.
+  // El caso de un tercero SIN DV conocido — por ejemplo un receptor tipo 02
+  // (consumidor final), que la DGI no obliga a tenerlo. Lo que se prueba es que
+  // falte el DV no borre el RUC.
   const cliente: TerceroFiscal = {
     nombre: "FERRETERÍA VALLARINO, S.A.",
     ruc: "1554821-1-741203",

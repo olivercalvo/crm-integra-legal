@@ -1,5 +1,89 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Diagnóstico: dónde vive el DV, y corrección de una afirmación falsa] - 2026-09-02
+
+Corrida de diagnóstico, sin escribir código ni tocar datos. Salió de una preocupación de Oliver
+—si separar el DV del RUC podía romper la facturación electrónica— y de una contradicción entre
+las notas del proyecto y algo que yo había afirmado.
+
+### 🔴 La afirmación falsa era mía
+
+Escribí que **`clients` no tenía columna de DV**. Es falso. Se llama **`digito_verificador`**,
+existe en producción desde la migración `019` (30/05/2026) y está poblada en 11 de los 15
+clientes de staging.
+
+El error fue de método: busqué columnas con `column_name ILIKE '%dv%'` y ese nombre no contiene
+"dv", así que la consulta no podía encontrarla y tomé el vacío como respuesta. La de proveedores,
+que creé yo, sí se llama `dv` — por eso esa sí apareció.
+
+**La nota del proyecto era correcta:** el refinamiento del DV que pidió Josuarth se hizo sobre los
+CLIENTES y está desplegado. Lo que faltaba era el lado de proveedores, que se construyó el 02/09.
+
+### Dónde vive el DV, de verdad
+
+| Entidad | RUC | DV |
+|---|---|---|
+| Clientes | `clients.ruc` **y** `clients.tax_id` (espejados por `ruc-sync.ts`) | `clients.digito_verificador` |
+| Proveedores | `suppliers.ruc` | `suppliers.dv` |
+| Emisor (Integra) | env `EFACTURA_EMISOR_RUC` | env `EFACTURA_EMISOR_DV` |
+
+⚠️ Dos nombres distintos para el mismo concepto (`digito_verificador` en clientes, `dv` en
+proveedores). No es un bug, pero es exactamente lo que provocó el error de arriba.
+
+### Qué se le manda a la DGI: ya van separados
+
+`map-receptor.ts` arma `rucReceptor` = `tax_id ?? ruc` y `digitoVerificador` = la columna,
+**los dos verbatim**. No hay separación implícita ni parseo: se grepeó `split`/`slice`/
+`substring`/`match` sobre `ruc` en todo `src/` y hay **cero** resultados. El emisor va igual, desde
+dos variables de entorno.
+
+### Qué NO hay que hacer
+
+**No agregar una columna `dv` a `clients`.** Sería un segundo campo para el mismo dato, y el
+mapper seguiría leyendo `digito_verificador` — lo que se cargara en la nueva no llegaría nunca a
+la factura. Ese sí habría sido el error caro.
+
+### 🔴 Bug abierto: la exportación manda el DV de clientes vacío
+
+La exportación a Excel del 02/09 escribe `dv: ""` para clientes (`tercero-fiscal.ts:221` y `:265`)
+porque se construyó sobre la premisa falsa. **Hay que leer `digito_verificador`.** Es un arreglo
+de dos líneas, sin riesgo sobre la facturación —el exportador es solo lectura y no toca ningún
+archivo del camino a la DGI— y está anotado en `task_plan.md` pendiente de agendar.
+
+### El backfill `022`, con datos de producción
+
+Oliver corrió la consulta de diagnóstico en producción: **2 clientes afectados (CLI-026 INTEGRA
+LEGAL y CLI-081 SERVICARE), los dos "bloqueados por el gate", cero en peligro.**
+
+- **No hay riesgo de mandar un RUC sucio a la DGI.** El gate fiscal exige `digito_verificador`
+  para receptores 01/03 y corta con un 400 antes de tocar la red. La combinación peligrosa —DV
+  pegado al texto **y** columna poblada— no existe en producción.
+- **Lo que sí pasa:** esos dos clientes no pueden recibir factura electrónica, y nadie lo sabe
+  hasta que alguien intente facturarles.
+
+Quedó anotado como **bloque propio en `task_plan.md`**, con las dos decisiones que NO son
+mecánicas: el DV de CLI-081 dice `"DV 9"` y hay que confirmar contra un documento si son dos
+posiciones (`09`) o le falta un dígito —un DV inventado en un anexo de la DGI es peor que uno
+faltante—, y los dos tienen `tipo_receptor_fe` en NULL, que es una decisión del bufete y no del
+backfill.
+
+Orden acordado cuando se retome: **test de payload congelado → sandbox → producción con aprobación
+explícita.**
+
+### Un hueco de cobertura que este diagnóstico encontró
+
+`map-invoice.test.ts` tiene 11 tests, pero **ninguno congela el bloque completo del receptor** y
+solo uno mira `rucReceptor`. Un test de payload congelado sobre `mapReceptor()` —los cuatro tipos
+de receptor más los casos sucios— es la red que hoy no existe, y sirve para siempre, no solo para
+el `022`.
+
+### Sobre cómo probar un cambio en este camino
+
+Se descartó **comparar el PDF antes/después**: el PDF de factura imprime solo `tax_id` y **nunca
+muestra el DV** (`InvoiceDocument.tsx:535`), así que saldría idéntico y no probaría nada sobre el
+camino que importa. Sirve para otros cambios, no para este.
+
+
 ## [Exportación a Excel del Mayor y de la Antigüedad] - 2026-09-02
 
 Lo que cierra el pedido de proveedores. Josuarth: *"si yo entro a la cuenta de gastos de
@@ -66,10 +150,10 @@ rompe ese filtro. Verificado leyendo el archivo generado: las celdas no existen.
 
 ### ⚠️ Los clientes todavía no tienen DV
 
-`clients` tiene `ruc` y `tax_id`, pero **no una columna `dv`**. Así que en un movimiento de cliente
-la columna DV sale vacía, y eso es el estado real del sistema, no un error del exportador. Los
-proveedores sí lo tienen (migración 033), que es justamente el caso que nombró Josuarth
-—combustible— y el que se verificó. **Cerrar el lado de clientes es una migración propia.**
+~~`clients` tiene `ruc` y `tax_id`, pero **no una columna `dv`**.~~
+🔴 **ESTO ES FALSO. Corregido el 02/09/2026 — ver la entrada de más abajo.** `clients` SÍ
+tiene la columna, se llama `digito_verificador`, y por eso la exportación manda el DV de clientes
+vacío cuando no debería. Es un bug pendiente de corregir, no una limitación del sistema.
 
 ### Verificación: archivos reales, leídos de vuelta
 

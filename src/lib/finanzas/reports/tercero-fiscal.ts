@@ -30,19 +30,19 @@
  *   gasto         → business_expenses.supplier_id → suppliers
  *   manual / apertura / reversion           → sin tercero
  *
- * 🔴 **BUG CONOCIDO — el DV de clientes sale vacío y NO debería.**
+ * ⚠️ **EL DV DE UN CLIENTE SE LLAMA `digito_verificador`, NO `dv`.**
  *
- * Corregido el registro el 02/09/2026: este archivo se escribió afirmando que
- * `clients` no tenía columna de DV. **La tiene.** Se llama `digito_verificador`
- * —no `dv`, por eso una búsqueda por ese nombre no la encontró— existe en
- * producción desde la migración `019` (30/05/2026) y está poblada en 11 de los
- * 15 clientes de staging. Es la MISMA columna que el mapper de la DGI ya manda
- * como `digitoVerificador`.
+ * Los dos nombres conviven en el esquema y significan lo mismo:
  *
- * Así que las dos líneas de abajo que escriben `dv: ""` para clientes están
- * mal: hay que leer `digito_verificador`. Es un arreglo de dos líneas, sin
- * riesgo sobre la facturación (este módulo es solo lectura y no toca el camino
- * a la DGI), pendiente de agendar. Ver `task_plan.md`.
+ *   · `clients.digito_verificador`  — migración `019`, en producción desde el
+ *     30/05/2026. Es la MISMA columna que el mapper le manda a la DGI como
+ *     `digitoVerificador` (`map-receptor.ts`).
+ *   · `suppliers.dv`                — migración `033`, 02/09/2026.
+ *
+ * La primera versión de este archivo mandaba el DV de clientes VACÍO, porque se
+ * escribió afirmando que la columna no existía: se la buscó por el nombre `dv` y
+ * `digito_verificador` no lo contiene. Corregido el 02/09/2026. Queda escrito
+ * acá porque el próximo que busque "dv" en `clients` va a tropezar igual.
  *
  * Lo que NO hay que hacer: agregar una columna `dv` a `clients`. Sería un
  * segundo campo para el mismo dato, y el mapper seguiría leyendo el primero.
@@ -216,19 +216,23 @@ export async function resolverTercerosFiscales(
   if (idsFactura.size > 0) {
     const { data } = await db
       .from("invoices")
-      .select("id, client_id, clients!inner(id, name, ruc)")
+      .select("id, client_id, clients!inner(id, name, ruc, digito_verificador)")
       .eq("tenant_id", tenantId)
       .in("id", Array.from(idsFactura));
 
-    type Fila = { id: string; clients: { name: string; ruc: string | null } };
+    type Fila = {
+      id: string;
+      clients: { name: string; ruc: string | null; digito_verificador: string | null };
+    };
     const clientePorFactura = new Map<string, TerceroFiscal>();
     for (const f of (data ?? []) as unknown as Fila[]) {
       clientePorFactura.set(f.id, {
         nombre: texto(f.clients?.name),
         ruc: texto(f.clients?.ruc),
-        // 🔴 MAL: debería ser `texto(f.clients?.digito_verificador)`.
-        // Ver el BUG CONOCIDO del encabezado.
-        dv: "",
+        // Vacío solo cuando el cliente REALMENTE no tiene DV: un receptor tipo
+        // 02 (consumidor final) no lo requiere y la columna queda en NULL. Eso
+        // es un dato ausente legítimo, no uno perdido por el camino.
+        dv: texto(f.clients?.digito_verificador),
       });
     }
 
@@ -262,18 +266,19 @@ export async function resolverTercerosDeDocumentos(
   if (tipo === "cobrar") {
     const { data } = await db
       .from("invoices")
-      .select("id, clients!inner(name, ruc)")
+      .select("id, clients!inner(name, ruc, digito_verificador)")
       .eq("tenant_id", tenantId)
       .in("id", ids);
 
-    type Fila = { id: string; clients: { name: string; ruc: string | null } };
+    type Fila = {
+      id: string;
+      clients: { name: string; ruc: string | null; digito_verificador: string | null };
+    };
     for (const f of (data ?? []) as unknown as Fila[]) {
       resultado.set(f.id, {
         nombre: texto(f.clients?.name),
         ruc: texto(f.clients?.ruc),
-        // 🔴 MAL: debería ser `texto(f.clients?.digito_verificador)`.
-        // Ver el BUG CONOCIDO del encabezado.
-        dv: "",
+        dv: texto(f.clients?.digito_verificador),
       });
     }
     return resultado;

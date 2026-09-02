@@ -176,6 +176,19 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Una celda sin dato va VACÍA**, nunca "—" ni "N/A": Excel filtra por "vacías" y cualquier
   relleno rompe ese filtro.
 
+### Facturación electrónica — el payload del receptor está congelado (desde 2026-09-02)
+- 🔒 **`receptor-payload-congelado.test.ts` congela el bloque `informacionReceptor`** contra
+  `receptor-payload-esperado.json`. Cualquier cambio en `map-receptor.ts` que altere lo que se le
+  manda a la DGI hace fallar el test. Existe porque un error ahí **no se descubre en desarrollo:
+  se descubre como un rechazo de la DGI sobre una factura real, delante del cliente.**
+- **Si el test falla y el cambio es intencional:** `ACTUALIZAR_PAYLOAD=1 npm test`, revisar el
+  diff, y commitear el JSON **junto con** el cambio del mapper explicando por qué el payload
+  cambia. **Un commit que solo toca el JSON esperado es una alarma.**
+- **Antes de dar por buena una diferencia en `datosRucReceptor`**, probarla contra el **sandbox**
+  (`EFACTURA_I_AMB`). Nunca contra el ambiente real.
+- ⚠️ **El DV de un cliente se llama `clients.digito_verificador`, no `dv`.** El de proveedores sí
+  se llama `suppliers.dv`. Dos nombres para lo mismo; buscar por el concepto, no por el nombre.
+
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)
 - Verificación post-deploy obligatoria

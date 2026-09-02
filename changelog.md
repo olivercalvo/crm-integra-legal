@@ -1,5 +1,76 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El DV en la exportación, y el payload del receptor congelado] - 2026-09-02
+
+Los dos puntos que habían quedado abiertos del diagnóstico.
+
+### 1. La exportación ya saca el DV de los clientes
+
+`tercero-fiscal.ts` lee `clients.digito_verificador` en vez del `""` hardcodeado. Se corrigieron
+también el test y los tres comentarios escritos sobre la premisa falsa.
+
+Exportación real del mayor de `100004 Cuentas por Cobrar`, leída de vuelta del archivo:
+
+```
+ 7 | Fecha      | Tipo          | Núm | Nombre                         | RUC              | DV
+ 8 | «vacía»    | Saldo inicial | «vac»| «vacía»                       | «vacía»          | «vacía»
+ 9 | 05/04/2026 | Factura       | 5   | FERRETERÍA VALLARINO, S.A.     | 1554821-1-741203 | 08
+11 | 20/04/2026 | Pago          | 7   | FERRETERÍA VALLARINO, S.A.     | 1554821-1-741203 | 08
+12 | 20/05/2026 | Factura       | 8   | INVERSIONES TOCUMEN REAL, S.A. | 1588210-1-713366 | 00
+13 | 01/06/2026 | Factura       | 9   | PANAMÁ COSTA VERDE, S.A.       | 1602933-1-802514 | 02
+```
+
+Los tres DV salen como **texto** con sus ceros: `08`, `00`, `02`. El `00` es el caso extremo del
+argumento contra el CSV — se abriría como `0`, o directamente vacío.
+
+**⚠️ El caso del tipo 02 no se pudo mostrar en una exportación real.** El único cliente tipo 02 con
+factura en staging (CLI-012, Nidia Espinosa Caballero) la tiene en `cancelada_pre_emision` y sin
+asiento, así que no aparece ni en el mayor ni en la antigüedad. Emitirle una factura habría
+generado un asiento y movido los números de control con los que quedó staging para la revisión de
+Josuarth (SOP-019), así que **no se hizo**. El caso quedó cubierto por test: un cliente con RUC y
+sin DV deja vacía **solo** la columna DV, no el RUC.
+
+### 2. Payload del receptor congelado
+
+`receptor-payload-congelado.test.ts` + `receptor-payload-esperado.json`. Congela el bloque
+`informacionReceptor` para los cuatro tipos de receptor (01/02/03/04), un DV con cero adelante, un
+receptor con ubicación completa, y **los dos casos sucios** del backfill `022`.
+
+El caso sucio queda documentado con el payload exacto que produce:
+
+```
+SUCIO-ruc-con-dv-pegado-y-columna-cargada
+  datosRucReceptor = { ruc: "25046169-3-2021  DV 40", dv: "40", tipoContribuyente: 2 }
+```
+
+El DV viaja **dos veces**: adentro del RUC y en su campo. Es incorrecto aunque el sistema hoy lo
+produzca, y el test lo afirma para que nadie lo descubra desde un rechazo de la DGI. El otro caso
+sucio —el real en producción— corta antes de armar nada.
+
+El JSON lleva un campo `porque` por caso, explicando qué se está mirando, y el encabezado del test
+explica **cómo leer un fallo**: si el cambio no es intencional hay una regresión y se arregla el
+mapper, no el JSON; si lo es, se regenera con `ACTUALIZAR_PAYLOAD=1 npm test` y se commitea junto
+con el cambio. Un commit que solo toca el JSON esperado es una alarma.
+
+**Se verificó que la red funciona:** se alteró el DV esperado de `00` a `0` y el test falló
+nombrando el caso correcto y mostrando el diff del campo.
+
+### Dos bugs míos que aparecieron escribiendo esto
+
+1. **`cliente()` no hacía spread de `over`**, así que los siete fixtures eran el mismo cliente y el
+   congelado no probaba nada. Lo delató el caso que tenía que cortar y no cortaba.
+2. **El congelado fallaba incluso sin cambios.** `mapReceptor` devuelve claves opcionales valiendo
+   `undefined`, `JSON.stringify` las descarta al escribir y `deepStrictEqual` distingue "clave
+   ausente" de "clave en undefined". Se resolvió normalizando por JSON antes de comparar, que
+   además es más correcto: compara **lo que se serializa y viaja**, no lo que el objeto tiene en
+   memoria.
+
+Los dos estaban ocultos detrás de un test en verde. El primero solo salió porque una aserción
+independiente lo contradijo; el segundo, porque el modo de regeneración salía antes de comparar.
+
+**529 tests** (+9). Typecheck limpio. Lint: 21 preexistentes, 0 nuevos.
+
+
 ## [Diagnóstico: dónde vive el DV, y corrección de una afirmación falsa] - 2026-09-02
 
 Corrida de diagnóstico, sin escribir código ni tocar datos. Salió de una preocupación de Oliver

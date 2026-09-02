@@ -1,0 +1,130 @@
+{
+  "_leeme": "Payload congelado del bloque informacionReceptor que se le manda a la DGI. Generado por receptor-payload-congelado.test.ts. NO editar a mano salvo que el cambio en el mapper sea intencional, y en ese caso en el mismo commit y explicando por qué. Para regenerarlo: ACTUALIZAR_PAYLOAD=1 npm test",
+  "01-contribuyente-con-ruc": {
+    "porque": "El caso normal de una persona jurídica. Lleva datosRucReceptor con el RUC y el DV EN CAMPOS SEPARADOS, que es lo que la DGI valida (códigos 1601/1602).",
+    "payload": {
+      "tipoReceptorFe": "01",
+      "nombreRazonReceptor": "FERRETERÍA VALLARINO, S.A.",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "datosRucReceptor": {
+        "tipoContribuyente": 2,
+        "rucReceptor": "1554821-1-741203",
+        "digitoVerificador": "08"
+      },
+      "paisReceptor": "PA"
+    }
+  },
+  "01-contribuyente-dv-con-cero-adelante": {
+    "porque": "DV \"00\" es un valor real: en staging lo tienen INVERSIONES TOCUMEN REAL y CONSTRUCTORA CHIRIQUÍ. Tiene que viajar como texto de dos posiciones, no como el número 0.",
+    "payload": {
+      "tipoReceptorFe": "01",
+      "nombreRazonReceptor": "INVERSIONES TOCUMEN REAL, S.A.",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "datosRucReceptor": {
+        "tipoContribuyente": 2,
+        "rucReceptor": "1588210-1-713366",
+        "digitoVerificador": "00"
+      },
+      "paisReceptor": "PA"
+    }
+  },
+  "02-consumidor-final": {
+    "porque": "Una persona natural sin RUC. NO lleva datosRucReceptor, así que la ausencia de DV es correcta y no un dato faltante. Sí lleva paisReceptor PA.",
+    "payload": {
+      "tipoReceptorFe": "02",
+      "nombreRazonReceptor": "Nidia Espinosa Caballero",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "paisReceptor": "PA"
+    }
+  },
+  "03-gobierno": {
+    "porque": "Una entidad estatal. Usa la MISMA estructura que 01 — también exige RUC y DV — y por eso el gate fiscal los trata juntos.",
+    "payload": {
+      "tipoReceptorFe": "03",
+      "nombreRazonReceptor": "AUTORIDAD DEL CANAL DE PANAMÁ",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "datosRucReceptor": {
+        "tipoContribuyente": 2,
+        "rucReceptor": "8-NT-1-1234",
+        "digitoVerificador": "45"
+      },
+      "paisReceptor": "PA"
+    }
+  },
+  "04-extranjero": {
+    "porque": "Un receptor no residente. Va con grupoIdentificacionExtranjera y su país; NO lleva datosRucReceptor ni DV, y el paisReceptor NO se fuerza a PA.",
+    "payload": {
+      "tipoReceptorFe": "04",
+      "nombreRazonReceptor": "OVERSEAS HOLDINGS LTD.",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "grupoIdentificacionExtranjera": {
+        "pasaportNumeroIdentificacionExtranjera": "GB-9981772",
+        "paisExtranjero": "GB"
+      },
+      "paisReceptor": "GB"
+    }
+  },
+  "01-con-ubicacion-completa": {
+    "porque": "Con ubicación cargada aparece el bloque ubicacionReceptor. Es OPCIONAL para la DGI (grupo B405, efecto Notificación): su ausencia no rechaza la factura, pero su PRESENCIA no puede cambiar de forma sin que nos enteremos.",
+    "payload": {
+      "tipoReceptorFe": "01",
+      "nombreRazonReceptor": "PANAMÁ COSTA VERDE, S.A.",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "ubicacionReceptor": {
+        "codigoUbicacion": "8-8-7",
+        "corregimiento": "Bella Vista",
+        "distrito": "Panamá",
+        "provincia": "Panamá"
+      },
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "datosRucReceptor": {
+        "tipoContribuyente": 2,
+        "rucReceptor": "1602933-1-802514",
+        "digitoVerificador": "02"
+      },
+      "paisReceptor": "PA"
+    }
+  },
+  "SUCIO-ruc-con-dv-pegado-y-columna-cargada": {
+    "porque": "🔴 PAYLOAD INCORRECTO QUE EL SISTEMA HOY PRODUCE. El RUC arrastra ' DV 40' como texto y la columna digito_verificador también está cargada, así que el gate fiscal lo deja pasar y se le manda a la DGI un rucReceptor sucio, con el DV repetido adentro. Este caso NO existe hoy en producción (medido el 02/09/2026: los dos clientes con DV pegado tienen la columna vacía y quedan bloqueados por el gate), pero se congela para que quede constancia de que este payload está MAL y de qué forma exacta toma. Lo arregla el backfill 022, no el mapper.",
+    "payload": {
+      "tipoReceptorFe": "01",
+      "nombreRazonReceptor": "INTEGRA LEGAL",
+      "direccionReceptor": "Calle 50, Ciudad de Panamá",
+      "telefonoContactoReceptor": "+507 200-0000",
+      "correoElectronicoReceptor": "facturacion@cliente.test",
+      "correoElectronicoRecepctor": "facturacion@cliente.test",
+      "datosRucReceptor": {
+        "tipoContribuyente": 2,
+        "rucReceptor": "25046169-3-2021  DV 40",
+        "digitoVerificador": "40"
+      },
+      "paisReceptor": "PA"
+    }
+  },
+  "SUCIO-ruc-con-dv-pegado-sin-columna": {
+    "porque": "🟡 Es la situación REAL de CLI-026 y CLI-081 en producción al 02/09/2026: el DV quedó escrito dentro del texto del RUC y la columna está vacía. El mapper corta antes de armar nada. Es un fallo seguro: molesta, pero no le manda basura a la DGI.",
+    "cortaCon": "[efactura/mapper] Cliente CLI-081 \"SERVICARE\" no tiene digito_verificador. Requerido para receptor con RUC."
+  },
+  "sin-client-type": {
+    "porque": "Sin tipo de persona no se puede derivar el tipoContribuyente del receptor. El mapper corta y el gate fiscal lo convierte en un 400 accionable.",
+    "cortaCon": "[efactura/mapper] Cliente CLI-116 \"CLIENTE DE PRUEBA, S.A.\" no tiene client_type. Requerido para tipoContribuyente del receptor."
+  }
+}

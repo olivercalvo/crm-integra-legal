@@ -94,13 +94,12 @@ dos clientes.
 
 **Lo que queda:**
 
-1. 🔴 **BUG A CORREGIR — la exportación manda el DV de clientes vacío teniendo el dato.**
-   `tercero-fiscal.ts` escribe `dv: ""` para clientes (líneas 221 y 265) porque se construyó sobre
-   una premisa falsa: que `clients` no tenía columna de DV. **Sí la tiene, se llama
-   `digito_verificador`**, existe en producción desde la migración `019` (30/05/2026) y está
-   poblada en 11 de 15 clientes de staging. Arreglarlo es leer esa columna en vez de la cadena
-   vacía. **Riesgo cero sobre la facturación:** el exportador es solo lectura y no toca ningún
-   archivo del camino a la DGI. Pendiente de agendar.
+1. ✅ **CORREGIDO el 02/09** — la exportación lee `clients.digito_verificador`. Salía vacía por
+   haberse escrito sobre una premisa falsa. Verificado con una exportación real: DV `08`, `00` y
+   `02`, los tres como texto y con sus ceros.
+   🔒 **Y quedó la red que no existía:** `receptor-payload-congelado.test.ts` congela el bloque
+   `informacionReceptor` que se le manda a la DGI, para los cuatro tipos de receptor más los dos
+   casos sucios del backfill `022`.
 2. **Verificar el botón en pantalla con sesión de contador** — la extensión de Chrome sigue
    desconectada.
 3. Los RUC y DV reales de los proveedores los tienen las licenciadas; en staging hay valores de

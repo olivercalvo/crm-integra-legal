@@ -169,19 +169,49 @@ test("la fila de saldo inicial no inventa un tercero ni un importe", () => {
   assert.deepEqual(f[COL.saldo], { tipo: "numero", valor: 1100.56 });
 });
 
-test("un cliente sin DV deja SOLO la columna DV vacía, no el RUC", () => {
-  // El caso de un tercero SIN DV conocido — por ejemplo un receptor tipo 02
-  // (consumidor final), que la DGI no obliga a tenerlo. Lo que se prueba es que
-  // falte el DV no borre el RUC.
+test("un cliente CON DV lo saca en su columna, separado del RUC", () => {
+  // El caso normal: un receptor tipo 01 (contribuyente), que la DGI obliga a
+  // tener DV. Sale de `clients.digito_verificador`, la misma columna que el
+  // mapper le manda al PAC.
   const cliente: TerceroFiscal = {
     nombre: "FERRETERÍA VALLARINO, S.A.",
     ruc: "1554821-1-741203",
-    dv: "",
+    dv: "08",
   };
   const hoja = hojaDelMayor(mayor([fila()]), new Map([["e1", cliente]]), CTX);
   const f = hoja.filas[0];
 
   assert.deepEqual(f[COL.ruc], { tipo: "texto", valor: "1554821-1-741203" });
+  assert.deepEqual(f[COL.dv], { tipo: "texto", valor: "08" }, "el DV perdió el cero");
+});
+
+test("un DV '00' es un valor real y tiene que sobrevivir", () => {
+  // No es teórico: en staging, INVERSIONES TOCUMEN REAL y CONSTRUCTORA CHIRIQUÍ
+  // tienen DV "00". Es el caso extremo del cero delante — un CSV lo abriría
+  // como 0, o directamente vacío.
+  const cliente: TerceroFiscal = {
+    nombre: "INVERSIONES TOCUMEN REAL, S.A.",
+    ruc: "1588210-1-713366",
+    dv: "00",
+  };
+  const hoja = hojaDelMayor(mayor([fila()]), new Map([["e1", cliente]]), CTX);
+  assert.deepEqual(hoja.filas[0][COL.dv], { tipo: "texto", valor: "00" });
+});
+
+test("un cliente SIN DV deja vacía esa columna y NO el RUC", () => {
+  // Un receptor tipo 02 (consumidor final): la DGI no le exige DV, así que
+  // `digito_verificador` queda en NULL. La celda vacía es un dato ausente
+  // LEGÍTIMO, no uno perdido por el camino — que es lo que pasaba antes del
+  // arreglo del 02/09/2026, cuando el exportador mandaba `dv: ""` para todos.
+  const cliente: TerceroFiscal = {
+    nombre: "Nidia Espinosa Caballero",
+    ruc: "4-209-6631",
+    dv: "",
+  };
+  const hoja = hojaDelMayor(mayor([fila()]), new Map([["e1", cliente]]), CTX);
+  const f = hoja.filas[0];
+
+  assert.deepEqual(f[COL.ruc], { tipo: "texto", valor: "4-209-6631" });
   assert.equal(f[COL.dv].tipo, "vacia");
 });
 

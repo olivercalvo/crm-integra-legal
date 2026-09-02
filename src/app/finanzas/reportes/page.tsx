@@ -1,6 +1,8 @@
 import {
   BarChart3,
   BookOpen,
+  CalendarDays,
+  CheckSquare,
   Receipt,
   TrendingUp,
   Scale,
@@ -52,6 +54,20 @@ const REPORTS: ReportItem[] = [
     description: "Movimientos y saldo corrido de cada cuenta, con su contrapartida.",
     icon: <BookOpen size={22} />,
     badge: "Por cuenta",
+  },
+  {
+    slug: "comprobacion",
+    title: "Balance de Comprobación",
+    description: "Sumas y saldos por cuenta. Los mismos saldos que los estados financieros.",
+    icon: <CheckSquare size={22} />,
+    badge: "Verificación",
+  },
+  {
+    slug: "diario",
+    title: "Diario General",
+    description: "Todos los asientos en orden cronológico, con sus líneas.",
+    icon: <CalendarDays size={22} />,
+    badge: "Cronológico",
   },
   {
     slug: "ventas-mensuales",

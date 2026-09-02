@@ -57,6 +57,10 @@ export interface ReportAccount {
   saldoInicial?: number;
   /** Neto del ledger (débitos − créditos) que se sumó al inicial. */
   movimientoLedger?: number;
+  /** Σ débitos del período. Lo usa el Balance de Comprobación. */
+  debitos?: number;
+  /** Σ créditos del período. Lo usa el Balance de Comprobación. */
+  creditos?: number;
   /**
    * true si la cuenta está DESACTIVADA pero tiene movimientos.
    *

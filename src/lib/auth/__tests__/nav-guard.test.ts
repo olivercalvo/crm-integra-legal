@@ -207,7 +207,13 @@ import { join, sep } from "node:path";
 import { rutasDeEjemplo } from "@/lib/finanzas/reports/destino-documento";
 
 /** Reportes que llevan a documentos, con la ruta desde la que se enlaza. */
-const REPORTES_CON_ENLACE_A_DOCUMENTO = ["/finanzas/reportes/mayor"];
+const REPORTES_CON_ENLACE_A_DOCUMENTO = [
+  "/finanzas/reportes/mayor",
+  // El Diario General enlaza al documento de cada asiento con las MISMAS rutas
+  // (`destino-documento.ts`), así que hereda el mismo riesgo y la misma
+  // verificación.
+  "/finanzas/reportes/diario",
+];
 
 test("todo documento enlazado desde un reporte lo puede abrir quien ve el reporte", () => {
   const rotos: string[] = [];

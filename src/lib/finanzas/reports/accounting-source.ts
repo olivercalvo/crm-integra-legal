@@ -47,38 +47,66 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/** Lo que el ledger le suma a una cuenta, con el débito y el crédito aparte. */
+export interface MovimientoDeCuenta {
+  /** Σ de la columna débito. */
+  debitos: number;
+  /** Σ de la columna crédito. */
+  creditos: number;
+  /** `debitos − creditos`, en convención de balanza. */
+  neto: number;
+}
+
 /**
- * Neto por cuenta del ledger: `Σ débitos − Σ créditos`, en convención de
- * balanza, que es la misma que usan `saldo_inicial` y los dos reportes.
+ * Movimientos por cuenta del ledger, en convención de balanza — la misma que
+ * usan `saldo_inicial` y los reportes.
+ *
+ * Débitos y créditos van SEPARADOS además del neto porque el Balance de
+ * Comprobación los muestra en columnas propias. Que salgan de esta única lectura
+ * es lo que hace que ese reporte no pueda divergir del Balance General: no es
+ * que coincidan, es que es el mismo número.
  *
  * Se traen las líneas y se suman acá porque PostgREST no agrega. Son las líneas
  * de asiento del tenant: decenas hoy, miles cuando el sistema lleve un año. Si
  * algún día pesa, esto se convierte en una vista o un RPC — pero no antes de que
  * pese, y el cambio queda contenido en esta función.
  */
-async function netoPorCuenta(db: DB, tenantId: string): Promise<Map<string, number>> {
+async function movimientosPorCuenta(
+  db: DB,
+  tenantId: string
+): Promise<Map<string, MovimientoDeCuenta>> {
   const { data, error } = await db
     .from("journal_entry_lines")
     .select("account_id, debit, credit")
     .eq("tenant_id", tenantId);
 
   if (error) {
-    console.error("[finanzas/reports] netoPorCuenta failed", error);
+    console.error("[finanzas/reports] movimientosPorCuenta failed", error);
     // Devolver un mapa vacío mostraría los saldos de apertura como si fueran los
     // definitivos: exactamente la incoherencia que este módulo vino a cerrar.
     throw new Error("No se pudieron leer los movimientos del libro mayor");
   }
 
-  const neto = new Map<string, number>();
+  const mapa = new Map<string, MovimientoDeCuenta>();
   for (const fila of (data ?? []) as {
     account_id: string;
     debit: number | string;
     credit: number | string;
   }[]) {
-    const previo = neto.get(fila.account_id) ?? 0;
-    neto.set(fila.account_id, previo + Number(fila.debit) - Number(fila.credit));
+    const previo = mapa.get(fila.account_id) ?? { debitos: 0, creditos: 0, neto: 0 };
+    previo.debitos += Number(fila.debit);
+    previo.creditos += Number(fila.credit);
+    mapa.set(fila.account_id, previo);
   }
-  return neto;
+  // El neto se calcula al final para no arrastrar error de redondeo por línea.
+  for (const [id, m] of Array.from(mapa.entries())) {
+    mapa.set(id, {
+      debitos: round2(m.debitos),
+      creditos: round2(m.creditos),
+      neto: round2(m.debitos - m.creditos),
+    });
+  }
+  return mapa;
 }
 
 /**
@@ -108,9 +136,9 @@ export async function loadReportAccounts(
   db: DB,
   tenantId: string
 ): Promise<ReportAccount[]> {
-  const [{ data, error }, neto] = await Promise.all([
+  const [{ data, error }, movimientos] = await Promise.all([
     db.from("chart_of_accounts").select(SELECT_COLS).eq("tenant_id", tenantId).order("code"),
-    netoPorCuenta(db, tenantId),
+    movimientosPorCuenta(db, tenantId),
   ]);
 
   if (error) {
@@ -121,17 +149,24 @@ export async function loadReportAccounts(
   const filas = (data ?? []) as unknown as FilaCuenta[];
 
   return filas
-    .filter((r) => r.active || neto.has(r.id))
+    .filter((r) => r.active || movimientos.has(r.id))
     .map((r) => {
-      const movimiento = round2(neto.get(r.id) ?? 0);
+      const m = movimientos.get(r.id) ?? { debitos: 0, creditos: 0, neto: 0 };
+      const inicial = round2(Number(r.saldo_inicial ?? 0));
       return {
         code: r.code,
         name: r.name,
         account_type: r.account_type,
         subcategoria: r.subcategoria,
-        saldo: round2(Number(r.saldo_inicial ?? 0) + movimiento),
-        saldoInicial: round2(Number(r.saldo_inicial ?? 0)),
-        movimientoLedger: movimiento,
+        saldo: round2(inicial + m.neto),
+        saldoInicial: inicial,
+        movimientoLedger: m.neto,
+        // Débito y crédito POR SEPARADO: el Balance de Comprobación los muestra
+        // en columnas distintas. Salen de la MISMA lectura que el neto, y por eso
+        // los dos reportes no pueden divergir — no es que coincidan, es que es el
+        // mismo número.
+        debitos: m.debitos,
+        creditos: m.creditos,
         inactivaConMovimiento: !r.active,
       };
     });

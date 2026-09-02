@@ -1,5 +1,100 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Balance de Comprobación y Diario General] - 2026-09-02
+
+Los dos reportes que la guía de RM lista como obligatorios y que no existían ni como marcador.
+Ninguno inventa una regla de negocio: salen del mismo ledger y los mismos saldos que ya usan el
+Libro Mayor y el Balance.
+
+### Balance de Comprobación — el reporte puente
+
+Rotulado también **"Balance de sumas y saldos"**, que es como lo conocen en QuickBooks, para que
+Josuarth lo reconozca sin preguntarlo.
+
+Una fila por cuenta con **saldo inicial · débitos · créditos · saldo final**. Los totales al pie
+cuadran, y si no cuadraran el reporte lo dice **en rojo, con el monto de la diferencia** — no lo
+esconde.
+
+**Cómo se garantiza que sus saldos sean los mismos que los de los estados financieros:** no
+comparándolos después, sino no teniendo dos fuentes. `buildBalanceComprobacion` recibe los MISMOS
+`ReportAccount` que `buildAccountingReports`, del mismo `loadReportAccounts`. Y `saldoFinal` no se
+recalcula: es `a.saldo`, el número que ya muestran los otros dos. No es que coincidan; es que es
+el mismo número.
+
+Para eso `accounting-source.ts` pasó a traer **débitos y créditos por separado** además del neto,
+en la misma lectura. Un reporte que sumara las líneas por su cuenta habría podido divergir.
+
+### Diario General
+
+Los asientos en orden cronológico, cada uno con su cabecera —correlativo, fecha, tipo, documento
+y descripción— y sus líneas con cuenta, glosa, débito y crédito, más el total del asiento.
+
+- **El mismo vocabulario que el mayor:** "Factura", "Pago", "Asiento de diario", "Gasto / compra".
+  Sale de `tipoTransaccionLabel`, la función que ya usa el mayor, no de una copia.
+- **Los enlaces al documento salen de `destino-documento.ts`**, el mismo resolvedor que el mayor,
+  así que respetan el permiso del rol que los abre. Y `nav-guard.test.ts` ahora cubre también el
+  diario: si un enlace del diario apuntara a algo que el contador no puede abrir, el test falla.
+- **Filtro por rango de fechas** en la URL, igual que el mayor, para que un diario acotado sea un
+  enlace que se pueda compartir.
+- Una línea sin glosa propia hereda la descripción del asiento: un renglón sin texto no le dice
+  nada a quien audita.
+
+### Verificado contra staging real
+
+**El balance de comprobación cuadra:**
+
+| | |
+|---|---|
+| Σ débitos | 11.089,25 |
+| Σ créditos | 11.089,25 |
+| **Diferencia** | **0,00** |
+
+**Sus saldos finales contra los estados financieros — 64 cuentas comparadas, 0 diferencias.** Las
+13 con movimiento, impresas una por una:
+
+| código | cuenta | comprobación | estado financiero |
+|---|---|---|---|
+| 100001 | Banco General Operativa | 62.770,91 | 62.770,91 |
+| 100004 | Cuentas por Cobrar Clientes | **194.842,55** | **194.842,55** |
+| 130003 | Fondo Legales de Clientes | 2.369,11 | 2.369,11 |
+| 200001 | Cuentas por pagar | −6.994,73 | −6.994,73 |
+| 200003 | ITBMS por Pagar | −10.340,07 | −10.340,07 |
+| 400001 | Derecho Corporativo | −292.300,31 | −292.300,31 |
+| 400006 | Derecho Administrativo | −2.000,00 | −2.000,00 |
+| 500003 | Mensajeria Especializada | 4.023,48 | 4.023,48 |
+| 500005 | Costos tramites legales | 6.500,40 | 6.500,40 |
+| 610001 | Alquiler | 13.322,78 | 13.322,78 |
+| 610002 | Honorarios Profesionales | 14.119,25 | 14.119,25 |
+| 610008 | Utiles de Oficina | 4.183,33 | 4.183,33 |
+| 610009 | Combustible | 1.346,96 | 1.346,96 |
+
+**El diario:** 10 asientos y 27 líneas, los mismos que hay sembrados. **Cada asiento cuadra por
+separado** — los diez impresos con sus débitos y créditos. Y el total del diario (11.089,25 de
+cada lado) **coincide con el del balance de comprobación**, que es la comprobación cruzada entre
+los dos reportes nuevos.
+
+**En pantalla, con sesión de contador:** los dos responden 200, el hub los muestra sin chip de
+"no construido" (siguen siendo 3 los marcadores, no 5), y **los enlaces del diario abren de
+verdad**: se probaron los 6 destinos distintos, los 6 dieron 200.
+
+**Con el ledger vacío** —probado con un rango sin asientos, que es el equivalente— el diario
+muestra "No hay asientos en este período" y dice qué hacer, en vez de una tabla vacía. Ni NaN ni
+undefined en ninguna de las dos pantallas. Y el filtro parcial funciona: febrero devuelve 2
+asientos y ninguna factura de abril.
+
+### Chequeos
+
+`tsc` 0 errores · **`npm test`: 436 tests, 436 pass, 0 fail, 0 skipped** (eran 419) · lint sin
+hallazgos nuevos (21 preexistentes).
+
+### Decisiones
+
+- **Sin exportación.** Ningún otro reporte contable la tiene hoy —el único export es el del VAT
+  Summary, que existe porque se presenta a la DGI— así que agregarla acá habría sido inventar un
+  patrón para dos pantallas.
+- Iconos propios en el hub (`CheckSquare` y `CalendarDays`): `Scale` y `BookOpen` ya son del
+  Balance General y del Libro Mayor, y repetirlos hace que las tarjetas se confundan.
+
 ## [Convergencia de reportes — el Balance y el Mayor dicen lo mismo] - 2026-09-02
 
 ### El problema

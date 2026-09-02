@@ -77,8 +77,10 @@ export default async function EstadoResultadoPage() {
           tasa quedó como parámetro del reporte para cuando se use en sociedades anónimas.
         </p>
         <p className="text-xs text-gray-500">
-          La cuenta <strong>300004 Distribución a Socias</strong> está creada en el catálogo y{" "}
-          <strong>todavía no registra movimientos</strong>.
+          El renglón de <strong>Distribución a Socias</strong> es un{" "}
+          <strong>cálculo del reporte, no un asiento</strong>: la cuenta 300004 todavía no tiene
+          movimientos registrados. Cuando se postee el cierre del ejercicio, el número va a salir
+          de los asientos.
         </p>
       </div>
     </div>

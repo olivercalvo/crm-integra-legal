@@ -72,7 +72,7 @@ export function OpeningBalancesNotice() {
       <strong>más todos los movimientos registrados</strong> en el libro mayor. Los mismos
       números que muestra el mayor de cada cuenta.{" "}
       <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
-      importar la fecha. El corte está pendiente de definir con el contador.
+      importar la fecha.
     </p>
   );
 }

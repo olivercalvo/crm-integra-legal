@@ -85,7 +85,7 @@ export default async function LibroMayorPage({
         apertura del Plan de Cuentas más todos los movimientos del libro de asientos. El saldo
         final de una cuenta acá es el mismo que muestra esa cuenta en el Balance.{" "}
         <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
-        importar la fecha. El corte está pendiente de definir con el contador.
+        importar la fecha.
       </p>
 
       <MayorFiltros

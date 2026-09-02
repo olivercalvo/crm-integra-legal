@@ -13,6 +13,14 @@ import { BusinessExpenseStatusBadge } from "../_components/business-expense-stat
 import { BusinessExpenseActions } from "../_components/business-expense-actions";
 import { ReceiptUploader } from "../_components/receipt-uploader";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Gasto del bufete · Finanzas",
+};
 interface PageProps {
   params: { id: string };
   searchParams: { saved?: string };

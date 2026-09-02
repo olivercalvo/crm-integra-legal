@@ -13,6 +13,14 @@ import {
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { ReportCard } from "./_components/report-card";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Reportes Contables · Finanzas",
+};
 interface ReportItem {
   slug: string;
   title: string;

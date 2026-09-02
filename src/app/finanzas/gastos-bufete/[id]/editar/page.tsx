@@ -7,6 +7,14 @@ import {
 } from "@/lib/finanzas/queries/business-expenses";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { BusinessExpenseForm } from "../../_components/business-expense-form";
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Editar gasto · Finanzas",
+};
 import type {
   BusinessExpensePaymentMethod,
   BusinessExpenseTaxRate,

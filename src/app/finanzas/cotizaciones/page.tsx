@@ -12,6 +12,14 @@ import { DeniedToast } from "./_components/denied-toast";
 import type { ClientOption, CaseOption } from "@/lib/finanzas/types/invoice";
 import type { QuoteStatus } from "@/lib/finanzas/types/quote";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Cotizaciones · Finanzas",
+};
 interface PageProps {
   searchParams: {
     q?: string;

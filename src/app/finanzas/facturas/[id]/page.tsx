@@ -34,6 +34,14 @@ import { PaymentsSection } from "../_components/payments-section";
 import { CreditNoteCard } from "../_components/credit-note-card";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Factura · Finanzas",
+};
 interface PageProps {
   params: { id: string };
 }

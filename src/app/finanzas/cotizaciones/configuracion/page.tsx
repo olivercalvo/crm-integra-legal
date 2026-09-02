@@ -5,6 +5,14 @@ import { BackButton } from "@/components/ui/back-button";
 import { getTermsTemplateRow } from "@/lib/finanzas/api/quote-terms";
 import { TermsTemplateEditor } from "./_components/terms-template-editor";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Plantilla de Términos y Condiciones · Finanzas",
+};
 /**
  * Pantalla de configuración del módulo Cotizaciones — editor de la plantilla
  * de Términos y Condiciones (D6, D9).

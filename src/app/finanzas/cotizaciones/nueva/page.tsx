@@ -11,6 +11,14 @@ import { listObservationTemplatesActive } from "@/lib/finanzas/queries/observati
 import { QuoteForm } from "../_components/quote-form";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Nueva cotización · Finanzas",
+};
 /**
  * Crear cotización nueva.
  *

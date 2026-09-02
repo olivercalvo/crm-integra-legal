@@ -1,6 +1,14 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Finanzas",
+};
 /**
  * Entrada al módulo Finanzas. Redirige según el rol:
  *   - contador → /finanzas/reportes (su única vista permitida)

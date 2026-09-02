@@ -15,6 +15,14 @@ import { VatSummaryTable } from "./_components/vat-summary-table";
 import { DetailSection } from "./_components/detail-section";
 import { ExportButtons } from "./_components/export-buttons";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Resumen de ITBMS · Reportes",
+};
 interface PageProps {
   searchParams: { month?: string };
 }

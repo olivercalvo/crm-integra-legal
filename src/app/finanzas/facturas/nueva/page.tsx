@@ -9,6 +9,14 @@ import {
 import { InvoiceForm } from "../_components/invoice-form";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Nueva factura · Finanzas",
+};
 interface PageProps {
   searchParams: { client_id?: string; case_id?: string };
 }

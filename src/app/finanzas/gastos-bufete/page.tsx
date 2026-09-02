@@ -14,6 +14,14 @@ import { BusinessExpenseList } from "./_components/business-expense-list";
 import { BusinessExpenseFilters } from "./_components/business-expense-filters";
 import type { BusinessExpenseStatus } from "@/lib/finanzas/types/business-expense";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Gastos del Bufete · Finanzas",
+};
 interface PageProps {
   searchParams: {
     q?: string;

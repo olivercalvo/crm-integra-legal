@@ -44,6 +44,14 @@ import { PublicLinkDisplay } from "../_components/public-link-display";
 import { QuoteTermsCollapsible } from "../_components/quote-terms-collapsible";
 import { getPublicAppUrl } from "@/lib/utils/public-url";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Cotización · Finanzas",
+};
 interface PageProps {
   params: { id: string };
 }

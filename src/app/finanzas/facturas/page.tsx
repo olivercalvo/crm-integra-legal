@@ -11,6 +11,14 @@ import { InvoicesFilters } from "./_components/invoices-filters";
 import { InvoicesList } from "./_components/invoices-list";
 import type { InvoiceKind, InvoiceStatus } from "@/lib/finanzas/types/invoice";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Facturas · Finanzas",
+};
 interface PageProps {
   searchParams: {
     q?: string;

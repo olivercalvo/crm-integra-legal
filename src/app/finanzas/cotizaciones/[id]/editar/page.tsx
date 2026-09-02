@@ -13,6 +13,14 @@ import { QuoteForm } from "../../_components/quote-form";
 import type { QuoteLineEditorInput } from "../../_components/quote-lines-editor";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Editar cotización · Finanzas",
+};
 interface PageProps {
   params: { id: string };
 }

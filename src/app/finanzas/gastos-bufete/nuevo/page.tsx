@@ -5,6 +5,14 @@ import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expen
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { BusinessExpenseForm } from "../_components/business-expense-form";
 
+
+/**
+ * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
+ * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
+ */
+export const metadata = {
+  title: "Nuevo gasto · Finanzas",
+};
 const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
 export default async function NuevoGastoBufetePage() {

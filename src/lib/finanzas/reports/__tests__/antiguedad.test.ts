@@ -283,3 +283,61 @@ test("un proveedor sin id se agrupa por su nombre — no es una entidad todavía
   assert.equal(r.filas.length, 2, "se agrupan por el texto del nombre");
   assert.equal(r.filas[0].total, 2000);
 });
+
+// ---------------------------------------------------------------------------
+// LA CADENA COMPLETA: plazo del proveedor → vencimiento → tramo  (02/09/2026)
+// ---------------------------------------------------------------------------
+// Era el motivo por el que Josuarth pidió los términos de pago. Antes de la
+// migración 033 no existía `due_date` y la antigüedad se contaba desde la fecha
+// del gasto, que da una lectura más pesimista que la real.
+//
+// En staging esto NO se puede ver: los tres gastos tienen entre 171 y 213 días,
+// así que un plazo de 30 o 45 los mueve pero no los saca de "más de 91". Estos
+// tests cubren el salto de tramo con fechas elegidas para provocarlo.
+
+import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
+
+/** Días entre dos fechas YYYY-MM-DD, en UTC. */
+function diasEntre(desde: string, hasta: string): number {
+  return Math.round(
+    (new Date(`${hasta}T00:00:00Z`).getTime() - new Date(`${desde}T00:00:00Z`).getTime()) /
+      86_400_000
+  );
+}
+
+test("el plazo del proveedor puede cambiar el tramo de un documento", () => {
+  const hoy = "2026-09-02";
+  const gasto = "2026-07-24"; // 40 días atrás
+
+  // Contado: vence el mismo día, 40 días vencido → "31 a 60".
+  const contado = vencimientoPorPlazo(gasto, 0);
+  assert.equal(tramoDe(diasEntre(contado, hoy)), "d31_60");
+
+  // A 30 días: vence el 23/08, 10 días vencido → "1 a 30". Cambió de tramo.
+  const treinta = vencimientoPorPlazo(gasto, 30);
+  assert.equal(treinta, "2026-08-23");
+  assert.equal(tramoDe(diasEntre(treinta, hoy)), "d1_30");
+
+  // A 60 días: vence el 22/09, todavía no vence → "corriente".
+  const sesenta = vencimientoPorPlazo(gasto, 60);
+  assert.equal(tramoDe(diasEntre(sesenta, hoy)), "corriente");
+});
+
+test("el desplazamiento en días es EXACTAMENTE el plazo del proveedor", () => {
+  // Es la propiedad que se verificó contra staging documento por documento:
+  // dias_viejo − dias_nuevo = payment_terms_days.
+  const hoy = "2026-09-02";
+  for (const [gastoFecha, plazo] of [
+    ["2026-02-01", 30],
+    ["2026-02-22", 0],
+    ["2026-03-15", 45],
+  ] as const) {
+    const viejo = diasEntre(gastoFecha, hoy);
+    const nuevo = diasEntre(vencimientoPorPlazo(gastoFecha, plazo), hoy);
+    assert.equal(viejo - nuevo, plazo, `${gastoFecha} a ${plazo} días`);
+  }
+});
+
+test("sin vencimiento cargado, contar desde la fecha del gasto es tratarlo como contado", () => {
+  assert.equal(vencimientoPorPlazo("2026-05-10", 0), "2026-05-10");
+});

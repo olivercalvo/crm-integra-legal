@@ -45,6 +45,19 @@ export interface BusinessExpenseRow {
   id: string;
   tenant_id: string;
   expense_date: string;            // YYYY-MM-DD
+  /**
+   * Vencimiento del gasto. Default = expense_date + plazo del proveedor,
+   * editable. Es la fecha con la que la antigüedad calcula los tramos; antes de
+   * que existiera, se contaban desde expense_date y salían más pesimistas.
+   */
+  due_date: string | null;
+  /** Proveedor como entidad (migración 033). NULLABLE: los viejos no lo tienen. */
+  supplier_id: string | null;
+  /**
+   * ⚠️ RESPALDO de la migración 033, no la fuente de verdad.
+   * El proveedor real es `supplier_id`. Estas dos columnas quedan hasta
+   * verificar que nada se perdió; eliminarlas es un commit posterior.
+   */
   supplier_name: string | null;
   supplier_ruc: string | null;
   chart_account_code: string | null;
@@ -64,6 +77,15 @@ export interface BusinessExpenseRow {
   updated_at: string;
 }
 
+/** Snapshot del proveedor para el listado y el detalle. */
+export interface SupplierSnapshot {
+  id: string;
+  supplier_number: string;
+  legal_name: string;
+  trade_name: string | null;
+  payment_terms_days: number;
+}
+
 /** Snapshot mínimo de la cuenta contable para joins. */
 export interface ChartAccountSnapshot {
   code: string;
@@ -73,6 +95,23 @@ export interface ChartAccountSnapshot {
 /** Item del listado con join al chart_of_accounts para mostrar el nombre. */
 export interface BusinessExpenseListItem extends BusinessExpenseRow {
   account: ChartAccountSnapshot | null;
+  supplier: SupplierSnapshot | null;
+}
+
+/**
+ * El nombre del proveedor a mostrar.
+ *
+ * Prioriza la entidad y cae al texto libre viejo solo si el gasto no está
+ * enlazado. Así, un gasto migrado muestra EXACTAMENTE lo mismo que mostraba
+ * antes de la migración 033.
+ */
+export function nombreProveedorDeGasto(
+  g: Pick<BusinessExpenseListItem, "supplier" | "supplier_name">
+): string | null {
+  if (g.supplier) {
+    return g.supplier.trade_name?.trim() || g.supplier.legal_name;
+  }
+  return g.supplier_name;
 }
 
 /** Detalle completo. Hoy igual al list item; se separa por extensibilidad. */
@@ -86,6 +125,19 @@ export interface BusinessExpenseWithDetails extends BusinessExpenseListItem {
 /** Payload de creación. */
 export interface CreateBusinessExpenseInput {
   expense_date: string;            // YYYY-MM-DD
+  /**
+   * Vencimiento del gasto. Default = expense_date + plazo del proveedor,
+   * editable. Es la fecha con la que la antigüedad calcula los tramos; antes de
+   * que existiera, se contaban desde expense_date y salían más pesimistas.
+   */
+  due_date: string | null;
+  /** Proveedor como entidad (migración 033). NULLABLE: los viejos no lo tienen. */
+  supplier_id: string | null;
+  /**
+   * ⚠️ RESPALDO de la migración 033, no la fuente de verdad.
+   * El proveedor real es `supplier_id`. Estas dos columnas quedan hasta
+   * verificar que nada se perdió; eliminarlas es un commit posterior.
+   */
   supplier_name: string | null;
   supplier_ruc: string | null;
   chart_account_code: string | null;

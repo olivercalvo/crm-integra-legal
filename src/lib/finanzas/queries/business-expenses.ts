@@ -9,6 +9,7 @@ import type {
   BusinessExpenseListItem,
   BusinessExpenseStatus,
   BusinessExpenseWithDetails,
+  SupplierSnapshot,
 } from "@/lib/finanzas/types/business-expense";
 
 type DB = SupabaseClient;
@@ -45,6 +46,34 @@ export interface ListBusinessExpensesResult {
 const DEFAULT_PAGE_SIZE = 25;
 
 /**
+ * Trae los proveedores de un conjunto de gastos, en una sola query.
+ *
+ * Se separa del SELECT principal por lo mismo que las cuentas contables: el join
+ * de Supabase necesitaría la FK declarada en el esquema que lee PostgREST, y
+ * una query extra es más barata de leer que de depurar.
+ */
+async function hidratarProveedores(
+  db: DB,
+  tenantId: string,
+  filas: { supplier_id: string | null }[]
+): Promise<Record<string, SupplierSnapshot>> {
+  const ids = Array.from(
+    new Set(filas.map((r) => r.supplier_id).filter((v): v is string => !!v))
+  );
+  if (ids.length === 0) return {};
+
+  const { data } = await db
+    .from("suppliers")
+    .select("id, supplier_number, legal_name, trade_name, payment_terms_days")
+    .eq("tenant_id", tenantId)
+    .in("id", ids);
+
+  const mapa: Record<string, SupplierSnapshot> = {};
+  for (const s of (data ?? []) as unknown as SupplierSnapshot[]) mapa[s.id] = s;
+  return mapa;
+}
+
+/**
  * Lista paginada de gastos del bufete con join al chart_of_accounts.
  * Ordenada por expense_date DESC por default (la consulta más frecuente
  * de la UI).
@@ -63,7 +92,8 @@ export async function listBusinessExpenses(
     .from("business_expenses")
     .select(
       `
-        id, tenant_id, expense_date, supplier_name, supplier_ruc,
+        id, tenant_id, expense_date, due_date, supplier_id,
+        supplier_name, supplier_ruc,
         chart_account_code, description,
         subtotal, tax_rate, tax_amount, total,
         status, payment_date, payment_method,
@@ -120,11 +150,15 @@ export async function listBusinessExpenses(
     }
   }
 
+  // Mismo criterio que las cuentas: una query aparte en vez del join de Supabase.
+  const supplierMap = await hidratarProveedores(db, tenantId, (data ?? []) as { supplier_id: string | null }[]);
+
   const rows: BusinessExpenseListItem[] = (data ?? []).map((r) => ({
     ...(r as unknown as BusinessExpenseListItem),
     account: r.chart_account_code
       ? { code: r.chart_account_code as string, name: accountMap[r.chart_account_code as string] ?? r.chart_account_code as string }
       : null,
+    supplier: r.supplier_id ? supplierMap[r.supplier_id as string] ?? null : null,
   }));
 
   return {
@@ -148,7 +182,8 @@ export async function getBusinessExpenseById(
     .from("business_expenses")
     .select(
       `
-        id, tenant_id, expense_date, supplier_name, supplier_ruc,
+        id, tenant_id, expense_date, due_date, supplier_id,
+        supplier_name, supplier_ruc,
         chart_account_code, description,
         subtotal, tax_rate, tax_amount, total,
         status, payment_date, payment_method,
@@ -190,9 +225,14 @@ export async function getBusinessExpenseById(
     createdByName = (u?.full_name as string | undefined) ?? null;
   }
 
+  const supplierMap = await hidratarProveedores(db, tenantId, [
+    { supplier_id: (data.supplier_id as string | null) ?? null },
+  ]);
+
   return {
     ...(data as unknown as BusinessExpenseWithDetails),
     account,
+    supplier: data.supplier_id ? supplierMap[data.supplier_id as string] ?? null : null,
     created_by_name: createdByName,
   };
 }

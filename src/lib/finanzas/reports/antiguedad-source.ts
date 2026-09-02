@@ -5,18 +5,23 @@
  * DOS COSAS QUE HAY QUE SABER ANTES DE LEER ESTE ARCHIVO
  * ─────────────────────────────────────────────────────────────────────────────
  *
- * 1. **EL PROVEEDOR TODAVÍA NO ES UNA ENTIDAD.** En `business_expenses` es
- *    `supplier_name`, texto libre que se reescribe en cada gasto. No hay tabla de
- *    proveedores. Así que la antigüedad de cuentas por pagar agrupa POR ESE
- *    TEXTO: dos gastos escritos con una coma de diferencia salen como dos
- *    proveedores distintos. Crear la entidad es del módulo de compras y va
- *    después; acá se agrupa con lo que hay y la pantalla lo advierte.
+ * 1. **EL PROVEEDOR YA ES UNA ENTIDAD** (migración 033, 02/09/2026). Se agrupa
+ *    por `supplier_id`, no por el texto de `supplier_name`. Antes, dos gastos
+ *    del mismo proveedor escritos con una coma de diferencia salían como dos
+ *    proveedores distintos; eso se terminó.
  *
- * 2. **LOS GASTOS DEL BUFETE NO TIENEN FECHA DE VENCIMIENTO.** La tabla solo
- *    tiene `expense_date` y `payment_date`; el campo de vencimiento está en la
- *    lista de pendientes del módulo de compras. Así que la antigüedad de CxP se
- *    cuenta desde la FECHA DEL GASTO, no desde su vencimiento — que es una
- *    antigüedad distinta y más pesimista. La pantalla lo dice con esas palabras.
+ *    `supplier_name` sigue existiendo como RESPALDO de la migración y como
+ *    salida para un gasto suelto sin ficha. Un gasto sin `supplier_id` se
+ *    agrupa por ese texto, igual que antes: no se pierde ni se esconde.
+ *
+ * 2. **LA ANTIGÜEDAD SE CUENTA DESDE `due_date`**, que también llegó con la 033.
+ *    El vencimiento sale del plazo del proveedor (contado, 30, 60, 90) y es
+ *    editable por gasto. Antes no existía el campo y se contaba desde la fecha
+ *    del gasto, que daba una antigüedad más pesimista que la real. Era
+ *    exactamente el motivo por el que Josuarth pidió los términos de pago.
+ *
+ *    Un gasto sin `due_date` cae de nuevo en `expense_date`, que es lo mismo que
+ *    tratarlo como contado.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -145,16 +150,16 @@ async function facturasPendientes(db: DB, tenantId: string): Promise<DocumentoPe
 /**
  * Gastos del bufete pendientes de pago.
  *
- * La antigüedad se cuenta desde `expense_date`: no hay fecha de vencimiento (ver
- * el encabezado del archivo). Y el tercero es `supplier_name`, texto libre.
+ * Agrupa por `supplier_id` —la ficha del proveedor— y cuenta la antigüedad desde
+ * `due_date`. Los dos campos llegaron con la migración 033; ver el encabezado.
  */
 async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPendiente[]> {
   const { data, error } = await db
     .from("business_expenses")
-    .select("id, supplier_name, description, expense_date, total")
+    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total")
     .eq("tenant_id", tenantId)
     .eq("status", "pendiente_pago")
-    .order("expense_date");
+    .order("due_date");
 
   if (error) {
     console.error("[finanzas/antiguedad] gastosPendientes failed", error);
@@ -163,26 +168,56 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
 
   type Fila = {
     id: string;
+    supplier_id: string | null;
     supplier_name: string | null;
     description: string | null;
     expense_date: string;
+    due_date: string | null;
     total: number | string;
   };
 
-  return ((data ?? []) as unknown as Fila[])
-    .filter((g) => Number(g.total) > 0.005)
-    .map((g) => ({
+  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => Number(g.total) > 0.005);
+
+  // El nombre sale de la ficha, en una query aparte. Así dos gastos del mismo
+  // proveedor muestran el MISMO nombre aunque se hayan tipeado distinto.
+  const ids = Array.from(
+    new Set(filas.map((g) => g.supplier_id).filter((v): v is string => !!v))
+  );
+  const nombres = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: provs } = await db
+      .from("suppliers")
+      .select("id, legal_name, trade_name")
+      .eq("tenant_id", tenantId)
+      .in("id", ids);
+    for (const p of (provs ?? []) as {
+      id: string;
+      legal_name: string;
+      trade_name: string | null;
+    }[]) {
+      nombres.set(p.id, p.trade_name?.trim() || p.legal_name);
+    }
+  }
+
+  return filas.map((g) => {
+    // Sin vencimiento cargado se cae en la fecha del gasto, que equivale a
+    // tratarlo como contado. Es el comportamiento viejo, no un caso de error.
+    const referencia = String(g.due_date ?? g.expense_date).slice(0, 10);
+    const nombreFicha = g.supplier_id ? nombres.get(g.supplier_id) : undefined;
+
+    return {
       id: g.id,
       numero: g.description?.trim() || "(sin descripción)",
-      tercero: g.supplier_name?.trim() || "(sin proveedor)",
-      // null a propósito: el proveedor no es una entidad, así que no hay id al
-      // que enlazar. Se agrupa por el texto.
-      terceroId: null,
-      fechaReferencia: String(g.expense_date).slice(0, 10),
-      diasVencido: diasDesde(String(g.expense_date).slice(0, 10)),
+      tercero: nombreFicha ?? g.supplier_name?.trim() ?? "(sin proveedor)",
+      // Ya hay id al que agrupar y enlazar. Un gasto sin ficha sigue cayendo en
+      // null y se agrupa por su texto, como antes.
+      terceroId: g.supplier_id,
+      fechaReferencia: referencia,
+      diasVencido: diasDesde(referencia),
       saldo: round2(Number(g.total)),
       sourceType: "gasto",
-    }));
+    };
+  });
 }
 
 /**

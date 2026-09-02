@@ -42,9 +42,9 @@ export default async function EstadoCuentaPage({
         value: c.id,
         label: c.name,
       }))
-    : (await loadProveedoresConMovimiento(ctx.db, ctx.tenantId)).map((n) => ({
-        value: n,
-        label: n,
+    : (await loadProveedoresConMovimiento(ctx.db, ctx.tenantId)).map((o) => ({
+        value: o.value,
+        label: o.esFicha ? o.label : `${o.label} (sin ficha)`,
       }));
 
   let estado = null;
@@ -110,8 +110,8 @@ export default async function EstadoCuentaPage({
           {!esCliente && (
             <>
               {" "}
-              El proveedor se identifica por su <strong>nombre escrito</strong>: todavía no es una
-              entidad del sistema.
+              El proveedor sale de su <strong>ficha</strong>; los que dicen
+              &ldquo;sin ficha&rdquo; son gastos viejos cargados con el nombre a mano.
             </>
           )}
         </span>

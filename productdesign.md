@@ -495,6 +495,41 @@ inicial" de cada cuenta es exactamente el número que muestran esos reportes.
 
 ---
 
+### F-017: Proveedores
+
+**Prioridad:** P0 del cierre contable — pedido al detalle por Josuarth el 25/08/2026.
+
+Ficha con: **número correlativo** (PRV-NNN), **razón social**, **razón comercial**, **RUC**,
+**DV**, dirección, teléfono, correo, **términos de pago**, estado activo/inactivo y notas.
+
+**RUC y DV son dos campos, y esa es la feature.** No es un detalle de implementación: es el
+motivo por el que se pidió el módulo. Los anexos de la declaración de renta se arman —en palabras
+de Josuarth— "con el RUC en una columna y el DV en otra columna porque así está en el formulario de
+la DGI". Se guardan separados, se muestran separados y hay un test que impide que alguien los
+concatene más adelante.
+
+**La validación del RUC es deliberadamente débil.** Panamá tiene varias familias de RUC
+conviviendo, y ninguna lista es exhaustiva. Se valida el largo y que los caracteres sean
+plausibles; el formato se **comenta** en pantalla en ámbar, sin bloquear el guardado. El criterio:
+un campo que rechaza un dato bueno deja a la persona sin salida, y uno permisivo acepta un tipeo
+que se corrige después. El DV sí se acota a dígitos.
+
+**Los términos de pago son el eslabón que faltaba.** El plazo del proveedor (contado, 30, 60, 90 o
+el que sea) propone el **vencimiento del gasto**, editable porque manda el comprobante, y del
+vencimiento salen los **tramos** de la antigüedad de cuentas por pagar. Antes no existía el campo
+de vencimiento y la antigüedad se contaba desde la fecha del gasto, que daba una lectura más
+pesimista que la real.
+
+**El proveedor en el gasto es opcional.** Obligatorio rompería los gastos que ya existen sin uno, y
+va contra la regla de Rose de default editable y nada cerrado. Un gasto suelto se puede cargar con
+el nombre a mano; la pantalla avisa que para los anexos de renta hace falta la ficha.
+
+**Duplicados: se avisan, no se fusionan.** Dos fichas que comparten RUC se marcan en el listado y
+en la ficha. El sistema no las une solo porque fusionar de más no tiene vuelta atrás, y quién es
+quién lo sabe una persona.
+
+---
+
 ### ANTIGÜEDAD DE SALDOS — el auxiliar contra su cuenta control
 
 Un solo reporte con selector **por cobrar / por pagar**. Tramos **Corriente · 1 a 30 · 31 a 60 ·

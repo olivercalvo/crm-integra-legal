@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
+import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { BusinessExpenseForm } from "../_components/business-expense-form";
 
 const MUTATING_ROLES = ["admin", "abogada", "contador"];
@@ -12,7 +13,10 @@ export default async function NuevoGastoBufetePage() {
     redirect("/finanzas/gastos-bufete");
   }
 
-  const accounts = await listExpenseAccountOptions(ctx.db, ctx.tenantId);
+  const [accounts, suppliers] = await Promise.all([
+    listExpenseAccountOptions(ctx.db, ctx.tenantId),
+    listSupplierOptions(ctx.db, ctx.tenantId),
+  ]);
 
   return (
     <div className="space-y-5">
@@ -27,7 +31,7 @@ export default async function NuevoGastoBufetePage() {
         </div>
       </div>
 
-      <BusinessExpenseForm mode="create" accounts={accounts} />
+      <BusinessExpenseForm mode="create" accounts={accounts} suppliers={suppliers} />
     </div>
   );
 }

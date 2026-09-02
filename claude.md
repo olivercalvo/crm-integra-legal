@@ -26,7 +26,7 @@
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
 | **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva |
-| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas` y dentro de él a tres subárboles + el DETALLE de factura (`/finanzas/facturas/{id}`, solo lectura — auditar el mayor es llegar al documento; el listado, crear y editar siguen cerrados): **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos). **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
+| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas` y dentro de él a tres subárboles + el DETALLE de factura (`/finanzas/facturas/{id}`, solo lectura — auditar el mayor es llegar al documento; el listado, crear y editar siguen cerrados): **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo), **Proveedores** (`/finanzas/proveedores/*`, con CRUD completo — de ahí salen el RUC y el DV de los anexos de renta, y el plazo con el que la antigüedad calcula vencimientos; ampliado el 02/09/2026) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos). **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
 | **Asistente** | **Alcance reducido el 24/08/2026 por decisión del cliente.** Ve SOLO tres pantallas: Dashboard (`/legal`), Casos (`/legal/casos` — todos los del bufete, SOLO LECTURA) y Mis Pendientes (`/legal/pendientes`). Dentro de un caso puede hacer exactamente dos cosas: **subir documentos y comentar**. **Sigue cumpliendo tareas** desde Mis Pendientes — pero solo las asignadas a él, y no las crea: crear/asignar tareas es admin/abogada (`POST /api/tasks` le responde 403). Si necesita dejarse un recordatorio en un caso, usa un comentario. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. **NO puede:** ver ni registrar gastos (`/legal/gastos` le rebota, el tab Gastos del caso no se le renderiza y `/api/expenses` le responde 403), cambiar el estado de un caso (el `CaseStatusChanger` no se le renderiza y `PATCH /api/cases/[id]` le responde 403 incluso con `action="change-status"`), editar/crear/borrar casos ni clientes, **crear ni asignar tareas** (ni de caso ni pendientes personales de otra persona), acceder a Finanzas |
 
 > **Los permisos se hacen cumplir en el servidor, no en el menú.** Cada restricción de
@@ -140,6 +140,28 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   trabajar, y T4b filtra al resto.
 - Hay una válvula de escape para restauraciones y correcciones autorizadas
   (`finanzas.amount_paid_override`). Cuándo sí y cuándo NO: `sop.md` SOP-017.
+
+### Proveedores — RUC y DV (desde 2026-09-02)
+- 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`
+  (`ruc`, `dv`) y dos campos en pantalla. Josuarth lo pidió textual el 25/08: los
+  anexos de la declaración de renta van "con el RUC en una columna y el DV en otra
+  columna porque así está en el formulario de la DGI". Juntarlos rompe el trabajo
+  para el que se pidió el módulo.
+  🔒 **Hay un test que lo verifica:** `src/lib/finanzas/validators/__tests__/ruc-dv-separados.test.ts`
+  lee el código buscando la operación de unirlos (`+`, template string, `.join`,
+  `.concat`). Es una regla que un tipo de TypeScript no puede sostener.
+- ⚠️ **Del RUC se valida el LARGO, no el formato.** En Panamá conviven cédulas
+  (`8-123-456`), prefijos (`PE-`, `E-`, `N-`), jurídicos (`155123456-2-2015`) y
+  folios viejos. Un validador estricto rechaza RUC legítimos y deja a alguien sin
+  poder cargar. El formato se **avisa en pantalla** (`avisosDeRuc()`), no se impone.
+  El DV sí se acota a dígitos, porque es un número por definición.
+- **`payment_terms_days` NO es un tramo de la antigüedad.** Es el plazo del
+  proveedor (0 = contado). De ahí sale `business_expenses.due_date`, y del
+  vencimiento salen los tramos. Son tres cosas encadenadas. Cambiar el plazo de un
+  proveedor **no reescribe** los vencimientos ya cargados.
+- **`supplier_id` en el gasto es OPCIONAL** y `supplier_name`/`supplier_ruc` siguen
+  existiendo como respaldo de la migración `033`. Eliminarlas es un commit
+  posterior, después de verificar que nada se perdió.
 
 ### Deploy
 - Checklist de 13 pasos pre-deploy (ver `sop.md`)

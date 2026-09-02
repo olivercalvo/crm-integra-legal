@@ -5,8 +5,10 @@
  * (crédito). Las facturas en borrador, anuladas o canceladas antes de emitir NO
  * entran: no son deuda de nadie, igual que en la antigüedad.
  *
- * PROVEEDOR: sus gastos del bufete. El proveedor es texto libre —no hay entidad—
- * así que se busca por nombre exacto. Ver el encabezado de `antiguedad-source.ts`.
+ * PROVEEDOR: sus gastos del bufete. Desde la migración 033 el proveedor ES una
+ * entidad, así que se busca por `supplier_id` y no por el texto del nombre. Un
+ * gasto viejo sin ficha sigue encontrándose por su `supplier_name`, para que
+ * nada quede fuera del estado de cuenta.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -39,22 +41,65 @@ export async function loadClientesConMovimiento(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Los nombres de proveedor que aparecen en gastos del bufete. */
+/**
+ * Los proveedores con gastos registrados.
+ *
+ * Devuelve la FICHA cuando existe (`id` real) y cae al nombre suelto solo para
+ * los gastos que no tienen ficha. El `value` es lo que viaja por la URL.
+ */
+export interface OpcionProveedor {
+  /** id de la ficha, o el nombre suelto si el gasto no tiene ficha. */
+  value: string;
+  label: string;
+  /** false = es un nombre suelto, no una entidad. */
+  esFicha: boolean;
+}
+
 export async function loadProveedoresConMovimiento(
   db: DB,
   tenantId: string
-): Promise<string[]> {
+): Promise<OpcionProveedor[]> {
   const { data } = await db
     .from("business_expenses")
-    .select("supplier_name")
+    .select("supplier_id, supplier_name")
     .eq("tenant_id", tenantId);
 
-  const nombres = new Set<string>();
-  for (const g of (data ?? []) as { supplier_name: string | null }[]) {
-    const n = g.supplier_name?.trim();
-    if (n) nombres.add(n);
+  const filas = (data ?? []) as { supplier_id: string | null; supplier_name: string | null }[];
+
+  const idsConFicha = Array.from(
+    new Set(filas.map((g) => g.supplier_id).filter((v): v is string => !!v))
+  );
+
+  const opciones: OpcionProveedor[] = [];
+  if (idsConFicha.length > 0) {
+    const { data: provs } = await db
+      .from("suppliers")
+      .select("id, legal_name, trade_name")
+      .eq("tenant_id", tenantId)
+      .in("id", idsConFicha);
+    for (const p of (provs ?? []) as {
+      id: string;
+      legal_name: string;
+      trade_name: string | null;
+    }[]) {
+      opciones.push({
+        value: p.id,
+        label: p.trade_name?.trim() || p.legal_name,
+        esFicha: true,
+      });
+    }
   }
-  return Array.from(nombres).sort((a, b) => a.localeCompare(b));
+
+  // Gastos sin ficha: se ofrecen por su texto, para que no queden invisibles.
+  const sueltos = new Set<string>();
+  for (const g of filas) {
+    if (g.supplier_id) continue;
+    const n = g.supplier_name?.trim();
+    if (n) sueltos.add(n);
+  }
+  sueltos.forEach((n) => opciones.push({ value: n, label: n, esFicha: false }));
+
+  return opciones.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /** Movimientos de un CLIENTE: facturas y cobros, en orden cronológico. */
@@ -139,14 +184,24 @@ export async function loadMovimientosDeCliente(
 export async function loadMovimientosDeProveedor(
   db: DB,
   tenantId: string,
-  supplierName: string
+  /** id de la ficha, o el nombre suelto para un gasto sin ficha. */
+  proveedor: string
 ): Promise<MovimientoTercero[]> {
-  const { data, error } = await db
+  const esId =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+      proveedor
+    );
+
+  let q = db
     .from("business_expenses")
     .select("id, description, expense_date, payment_date, total, status")
-    .eq("tenant_id", tenantId)
-    .eq("supplier_name", supplierName)
-    .order("expense_date");
+    .eq("tenant_id", tenantId);
+
+  // Con ficha se busca por id; sin ficha, por el texto y SOLO entre los que no
+  // tienen ficha, para no duplicar un gasto que ya salió por su proveedor.
+  q = esId ? q.eq("supplier_id", proveedor) : q.is("supplier_id", null).eq("supplier_name", proveedor);
+
+  const { data, error } = await q.order("expense_date");
 
   if (error) {
     console.error("[finanzas/estado-cuenta] gastos failed", error);

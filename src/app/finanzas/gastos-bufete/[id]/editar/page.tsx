@@ -5,6 +5,7 @@ import {
   getBusinessExpenseById,
   listExpenseAccountOptions,
 } from "@/lib/finanzas/queries/business-expenses";
+import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { BusinessExpenseForm } from "../../_components/business-expense-form";
 import type {
   BusinessExpensePaymentMethod,
@@ -23,9 +24,10 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
     redirect(`/finanzas/gastos-bufete/${params.id}`);
   }
 
-  const [expense, accounts] = await Promise.all([
+  const [expense, accounts, suppliers] = await Promise.all([
     getBusinessExpenseById(ctx.db, ctx.tenantId, params.id),
     listExpenseAccountOptions(ctx.db, ctx.tenantId),
+    listSupplierOptions(ctx.db, ctx.tenantId),
   ]);
   if (!expense) notFound();
 
@@ -48,9 +50,12 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
       <BusinessExpenseForm
         mode="edit"
         accounts={accounts}
+        suppliers={suppliers}
         initial={{
           id: expense.id,
           expense_date: expense.expense_date,
+          due_date: expense.due_date,
+          supplier_id: expense.supplier_id,
           supplier_name: expense.supplier_name,
           supplier_ruc: expense.supplier_ruc,
           chart_account_code: expense.chart_account_code,

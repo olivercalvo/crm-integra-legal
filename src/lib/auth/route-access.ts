@@ -117,6 +117,11 @@ export const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
   "/finanzas/reportes",
   "/finanzas/gastos-bufete",
   "/finanzas/configuracion",
+  // Proveedores (02/09/2026). Es el maestro de datos que el contador usa para
+  // los anexos de la declaración de renta —el RUC y el DV salen de acá— y de
+  // donde sale el plazo con el que la antigüedad calcula los vencimientos.
+  // Quien llena el formulario de la DGI tiene que poder corregir esos campos.
+  "/finanzas/proveedores",
 ];
 
 /**

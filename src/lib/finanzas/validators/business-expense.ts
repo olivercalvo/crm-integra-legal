@@ -36,6 +36,7 @@ export type ValidationResult<T> =
   | { ok: false; data: null; errors: ValidationErrors };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const VALID_STATUSES: BusinessExpenseStatus[] = ["pendiente_pago", "pagado"];
 const VALID_PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
   "efectivo",
@@ -85,6 +86,34 @@ export function validateCreateBusinessExpense(
     errors.description = "Descripción muy corta (mínimo 3 caracteres)";
   } else if (description.length > 500) {
     errors.description = "Descripción muy larga (máximo 500 caracteres)";
+  }
+
+  // supplier_id (opcional): el proveedor como entidad. Se valida que parezca un
+  // uuid; que exista y sea del bufete lo verifica el helper server-side, igual
+  // que con chart_account_code.
+  let supplierId: string | null = null;
+  if (raw.supplier_id != null && String(raw.supplier_id).trim() !== "") {
+    const v = String(raw.supplier_id).trim();
+    if (!UUID_RE.test(v)) {
+      errors.supplier_id = "Proveedor inválido";
+    } else {
+      supplierId = v;
+    }
+  }
+
+  // due_date (opcional): si no llega, el helper server-side lo calcula desde el
+  // plazo del proveedor. Solo se exige que sea una fecha y que no sea anterior
+  // al gasto — un vencimiento previo a la compra no existe.
+  let dueDate: string | null = null;
+  if (raw.due_date != null && String(raw.due_date).trim() !== "") {
+    const v = String(raw.due_date).trim();
+    if (!DATE_RE.test(v)) {
+      errors.due_date = "Fecha de vencimiento inválida (esperado YYYY-MM-DD)";
+    } else if (raw.expense_date && DATE_RE.test(String(raw.expense_date)) && v < String(raw.expense_date)) {
+      errors.due_date = "El vencimiento no puede ser anterior a la fecha del gasto";
+    } else {
+      dueDate = v;
+    }
   }
 
   // supplier_name (opcional, validar longitud si llega)
@@ -212,6 +241,8 @@ export function validateCreateBusinessExpense(
     errors: null,
     data: {
       expense_date: raw.expense_date as string,
+      due_date: dueDate,
+      supplier_id: supplierId,
       supplier_name: supplierName,
       supplier_ruc: supplierRuc,
       chart_account_code: chartAccountCode,

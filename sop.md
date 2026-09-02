@@ -1215,3 +1215,98 @@ Números con los que quedó staging. Si alguno no coincide, el ambiente se tocó
 | Estado de Resultado — utilidad operativa | −244,476.91 |
 | Plan de cuentas | 64 activas |
 | Desfases de `amount_paid` | 0 |
+
+---
+
+## SOP-020: Proveedores — el RUC, el DV y el plazo de pago
+
+**Desde:** 2026-09-02 (migración `033_proveedores_entidad.sql`)
+
+### Por qué existe este SOP
+
+Josuarth pidió el módulo por una razón concreta, y el día que alguien "simplifique" alguna de
+estas tres cosas lo rompe sin darse cuenta.
+
+### 1. 🔴 El RUC y el DV NO se concatenan. Nunca.
+
+Son dos columnas (`suppliers.ruc`, `suppliers.dv`) y dos campos en pantalla, porque los anexos de
+la declaración de renta se arman así: *"que esté bien diferenciado el RUC en una columna y el DV
+en otra columna porque así está en el formulario de la DGI"*.
+
+`ruc` guarda el RUC **sin** el dígito verificador. Si hace falta mostrarlos juntos, se muestran en
+dos elementos al lado — no se arma un string.
+
+**Cómo se hace cumplir:** `src/lib/finanzas/validators/__tests__/ruc-dv-separados.test.ts` lee
+todo `src/` buscando la *operación* de unirlos (`+`, template string, `.join`, `.concat`), saltea
+comentarios y nombres de test, y tiene un test que verifica que el escáner detecta una
+concatenación de verdad. Es una regla que TypeScript no puede sostener: `ruc + dv` compila.
+
+### 2. ⚠️ Del RUC se valida el LARGO, no el formato
+
+En Panamá conviven al menos estas familias, y ninguna lista es exhaustiva:
+
+| Tipo | Ejemplo |
+|---|---|
+| Persona natural por cédula | `8-123-456`, `3-101-1234`, `10-15-99` |
+| Con prefijo | `PE-8-123-456`, `E-8-123-456`, `N-19-1234` |
+| Persona jurídica moderna | `155123456-2-2015` |
+| Folios y fichas viejas | `1234567-1-123456` |
+
+**El criterio es: validá poco y avisá en pantalla.** Un campo que rechaza un RUC legítimo bloquea a
+quien está cargando y no hay forma de saltearlo; uno permisivo acepta un tipeo que se corrige
+después. `avisosDeRuc()` devuelve los comentarios —el DV pegado al RUC, el DV faltante, el DV de un
+solo dígito— y la UI los muestra en ámbar **sin bloquear el guardado**, diciéndolo con esas
+palabras.
+
+El DV sí se acota a dígitos (1 a 3), porque un dígito verificador es un número por definición. Se
+aceptan tres para no rechazar un `5` escrito sin el cero delante.
+
+**Si alguien propone endurecer la validación del RUC:** que traiga primero la lista completa de
+formatos que la DGI acepta. Sin esa lista, endurecer es apostar.
+
+### 3. El plazo de pago NO es un tramo de la antigüedad
+
+Son tres cosas encadenadas, y confundirlas es el error fácil:
+
+```
+plazo del proveedor  →  vencimiento del gasto  →  tramo de la antigüedad
+(payment_terms_days)    (business_expenses.due_date)   (corriente / 1-30 / …)
+```
+
+- El **plazo** vive en la ficha del proveedor. 0 = contado. Acepta 0 a 365: "30, 60, 90" son los
+  habituales, no los únicos.
+- El **vencimiento** vive en el gasto, se propone desde el plazo y **es editable**: manda lo que
+  diga el comprobante. El formulario deja de recalcularlo en cuanto alguien lo toca.
+- Los **tramos** los calcula el reporte desde el vencimiento.
+
+🔴 **Cambiar el plazo de un proveedor NO reescribe los vencimientos ya cargados.** Sería reescribir
+historia. El default aplica a los gastos nuevos; los viejos se editan de a uno.
+
+Un gasto sin `due_date` se cuenta desde `expense_date`, que equivale a tratarlo como contado. Es el
+comportamiento viejo, no un caso de error.
+
+### 4. Lo que la migración 033 dejó a medias, a propósito
+
+- **`supplier_name` y `supplier_ruc` siguen en `business_expenses`.** Son el respaldo de la
+  migración. Eliminarlas es un commit posterior, después de verificar que nada se perdió —el mismo
+  patrón que se usó con `clients.active`, y por la misma lección.
+- **`supplier_id` es NULLABLE.** Obligatorio rompería los gastos que ya existen sin proveedor.
+- **No hay UNIQUE sobre el RUC.** Si en producción dos nombres compartieran RUC, un UNIQUE haría
+  fallar la migración entera. Los duplicados se **detectan y se avisan** (`proveedoresConRucRepetido`),
+  y unirlos es decisión de una persona.
+- **Los proveedores creados automáticamente quedan en contado y sin RUC.** No sabemos su plazo real
+  y suponerlo movería la antigüedad sin que nadie lo decidiera. Su nota lo dice.
+
+### 5. Si hay que correr la 033 en producción
+
+`business_expenses` **tiene datos reales allá**. La migración está escrita para eso: es
+idempotente, transaccional, no borra nada y trae un ROLLBACK comentado al final. Aun así:
+
+1. Backup antes (SOP de DB Safety).
+2. Correr el inventario primero — `sql/verificacion/inventario_proveedores.sql`, solo lectura —
+   para saber cuántos nombres hay y si alguno parece el mismo proveedor escrito de dos formas.
+3. Si aparecen duplicados, decidir **antes** si se unen a mano; la migración no los fusiona.
+4. Verificar después: ningún gasto sin enlazar, ningún gasto sin `due_date`, y el auxiliar de
+   cuentas por pagar sumando lo mismo que antes.
+
+Y como siempre: **el único camino a producción es un merge a `main`**.

@@ -218,12 +218,13 @@ export default async function AntiguedadPage({
         <p className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
           <Info size={14} className="mt-0.5 shrink-0" />
           <span>
-            Dos cosas propias de cuentas por pagar:{" "}
-            <strong>la antigüedad se cuenta desde la fecha del gasto</strong>, no desde su
-            vencimiento, porque los gastos del bufete todavía no tienen campo de vencimiento. Y{" "}
-            <strong>el proveedor se agrupa por su nombre escrito</strong>: todavía no es una
-            entidad del sistema, así que dos gastos escritos distinto salen como dos proveedores.
-            Las dos cosas se resuelven con el módulo de compras.
+            La antigüedad se cuenta desde la <strong>fecha de vencimiento</strong> de cada gasto,
+            que sale del <strong>plazo de pago de la ficha del proveedor</strong> y se puede
+            ajustar gasto por gasto.{" "}
+            <Link href="/finanzas/proveedores" className="font-medium underline">
+              Ver proveedores
+            </Link>
+            . Un gasto sin vencimiento cargado se cuenta desde su fecha, o sea como contado.
           </span>
         </p>
       )}

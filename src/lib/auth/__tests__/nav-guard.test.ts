@@ -147,6 +147,10 @@ test("el contador entra a lo suyo: reportes, gastos del bufete y configuración"
     "/finanzas/reportes/aging",
     "/finanzas/reportes/estado-cuenta",
     "/finanzas/gastos-bufete",
+    // Proveedores (02/09/2026): de ahí salen el RUC y el DV para los anexos de
+    // renta, y el plazo con el que la antigüedad calcula los vencimientos.
+    "/finanzas/proveedores",
+    "/finanzas/proveedores/nuevo",
     "/finanzas/configuracion/cuentas",
     "/finanzas/configuracion/impuestos",
   ]) {

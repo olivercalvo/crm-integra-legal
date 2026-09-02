@@ -1,5 +1,128 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Proveedores como entidad] - 2026-09-02
+
+Lo que Josuarth especificó al detalle el 25/08 y no dependía de ninguna respuesta pendiente. De
+paso arregla algo que este mismo módulo había detectado: la antigüedad de cuentas por pagar
+agrupaba por texto libre, así que dos gastos del mismo proveedor escritos distinto salían como dos
+proveedores.
+
+### La ficha — `/finanzas/proveedores`
+
+Número correlativo (`PRV-001`, por la misma secuencia atómica que clientes y facturas), razón
+social, razón comercial, **RUC y DV en columnas separadas**, dirección, teléfono, correo, términos
+de pago, activo/inactivo y notas. Listado con búsqueda, alta, ficha y edición. Roles: admin,
+abogada y contador.
+
+### 🔴 RUC y DV nunca se concatenan
+
+Es el requisito literal: los anexos de la declaración de renta van *"con el RUC en una columna y el
+DV en otra columna porque así está en el formulario de la DGI"*. Son dos columnas en la base, dos
+campos en el formulario, dos celdas en el listado y dos celdas en la ficha.
+
+**Hay un test que lo hace cumplir.** `ruc-dv-separados.test.ts` lee todo el código buscando la
+*operación* de unirlos (`+`, template string, `.join`, `.concat`) y falla explicando por qué. Es
+una regla que un tipo de TypeScript no puede sostener: `ruc + dv` compila perfecto.
+
+### ⚠️ El RUC se valida POCO, a propósito
+
+En Panamá conviven cédulas (`8-123-456`), prefijos (`PE-`, `E-`, `N-`), jurídicos
+(`155123456-2-2015`) y folios viejos. **No se valida la estructura**: solo el largo y que los
+caracteres puedan pertenecer a un RUC. Un campo que rechaza un RUC legítimo deja a alguien sin
+poder cargar y sin forma de saltearlo; uno permisivo acepta un tipeo que después se corrige.
+
+Lo que sí hace es **avisar**: si el RUC parece traer el DV pegado, si falta el DV, si el DV no
+tiene dos dígitos. Salen en ámbar, debajo del campo, y **no impiden guardar** — la pantalla lo
+dice con esas palabras. Hay 21 tests, y el más importante recorre diez RUC panameños reales y falla
+si alguno se rechaza.
+
+El DV sí se acota a dígitos (1 a 3), porque un dígito verificador es un número. Se aceptan tres
+para no rechazar un `5` escrito sin el cero delante.
+
+### El punto que cierra el círculo: plazo → vencimiento → tramo
+
+Era el motivo por el que Josuarth pidió los términos de pago. `business_expenses` ganó
+**`due_date`**, que antes no existía y por eso la antigüedad se contaba desde la fecha del gasto —
+una lectura más pesimista que la real.
+
+Ahora: el **plazo del proveedor** (contado, 30, 60, 90… cualquier valor de 0 a 365) propone el
+**vencimiento del gasto**, que es **editable** porque manda el comprobante, y del vencimiento salen
+los **tramos** de la antigüedad. El formulario de gastos recalcula el vencimiento al cambiar la
+fecha o el proveedor, y deja de recalcular en cuanto alguien lo toca a mano.
+
+Cambiar el plazo de un proveedor **no reescribe** los vencimientos ya cargados: sería reescribir
+historia. Aplica a los gastos nuevos.
+
+### La migración `033`, escrita para producción desde el primer momento
+
+`business_expenses` **tiene datos reales en producción** que no podemos ver. La migración está
+escrita para eso: **idempotente** (se corrió dos veces contra staging sin efecto adicional),
+**transaccional**, **no borra nada** y trae un **ROLLBACK comentado** que la revierte entera.
+
+- `supplier_name` y `supplier_ruc` **quedan intactas** como respaldo. Eliminarlas es un commit
+  posterior, después de verificar.
+- `supplier_id` es **NULLABLE**: obligatorio rompería los gastos que ya existen sin proveedor.
+- **No hay UNIQUE sobre el RUC.** Si en producción dos nombres compartieran RUC, un UNIQUE haría
+  fallar la migración entera. Se indexa para buscar y **se avisa en pantalla** cuando dos fichas
+  comparten RUC; unirlas es decisión de una persona.
+
+**La deduplicación es conservadora:** agrupa por `lower(btrim(supplier_name))` — mismo texto
+ignorando mayúsculas y espacios. NO normaliza tildes ni sufijos societarios, porque fusionar de más
+no tiene vuelta atrás: "FARMACIA ARROCHA" y "FARMACIA ARROCHA CHITRÉ" pueden ser dos proveedores
+distintos.
+
+### Inventario de staging antes de tocar nada
+
+**3 gastos, 3 nombres distintos, 0 duplicados** por cualquier criterio (ni RUC compartido ni nombre
+normalizado igual), **0 RUC cargados**. La deduplicación acá fue 1 a 1 y no hizo falta revisarla a
+mano. En producción no se puede saber sin verla, y por eso la migración es conservadora.
+
+### Verificación contra staging (nunca contra producción)
+
+Candado confirmado antes de cada corrida: `xtyenhakplrkyifbcaow`.
+
+| Lo que se pidió verificar | Resultado |
+|---|---|
+| Ningún gasto perdió su proveedor | **3 de 3** con el nombre nuevo idéntico al viejo |
+| Gastos sin enlazar | **0** |
+| Gastos sin vencimiento | **0** |
+| El auxiliar de CxP suma lo mismo que antes | **3.594,25 → 3.594,25** |
+| Idempotencia | 2ª corrida: 3 proveedores, secuencia 3, auxiliar 3.594,25 — sin cambios |
+| RUC y DV como columnas separadas | `ruc text`, `dv text`, y el test de concatenación en verde |
+
+**Cómo se movió cada documento** (con plazos de demostración cargados en staging):
+
+| Proveedor | Plazo | Días antes | Días ahora | Se movió | ¿Lo explica el plazo? |
+|---|---|---|---|---|---|
+| INMOBILIARIA COSTA DEL ESTE | 30 | 213 | 183 | 30 | ✅ |
+| ESTACIÓN DELTA VÍA ESPAÑA | contado | 192 | 192 | 0 | ✅ |
+| DISTRIBUIDORA OFIPLUS | 45 | 171 | 126 | 45 | ✅ |
+
+**⚠️ Ningún documento cambió de TRAMO**, y es esperable: los tres tienen entre 171 y 213 días, así
+que 30 o 45 días de plazo los mueve pero no los saca de "más de 91". El salto de tramo está cubierto
+por tests con fechas elegidas para provocarlo — un gasto de 40 días pasa de "31 a 60" a "1 a 30" con
+plazo 30, y a "corriente" con plazo 60.
+
+Los plazos de staging se cargaron con `sql/verificacion/staging_plazos_proveedores.sql`, que **NO es
+parte de la migración**: la 033 deja a todos los proveedores creados automáticamente en **contado**,
+porque no sabemos su plazo real y suponerlo movería la antigüedad sin que nadie lo decidiera.
+
+### Tests
+
+**486 en verde** (+28). Typecheck limpio, **build de producción completo sin errores nuevos**.
+Lint: 21 preexistentes, 0 nuevos. `nav-guard.test.ts` cubre `/finanzas/proveedores` para el
+contador.
+
+**⚠️ Sin verificar en pantalla:** la extensión de Chrome sigue desconectada desde el bloque
+anterior. El build compila las cuatro pantallas nuevas y la lógica está cubierta por tests, pero
+falta abrirlas con sesión de contador.
+
+### Fuera de alcance, por decisión
+
+El módulo de compras completo, el formulario compartido con gastos de trámite, y el flujo contable
+del gasto — que sigue esperando la respuesta sobre la tarjeta de crédito.
+
+
 ## [Antigüedad: la diferencia se desglosa en sus dos causas] - 2026-09-02
 
 Corrección de **texto y de una cifra que faltaba partir**, no de números. Ningún saldo cambió y el

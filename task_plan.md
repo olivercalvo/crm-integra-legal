@@ -20,6 +20,33 @@ cerrado el "sin verificar" que dejó la caída de internet del 01/09.
 **Corrección:** los "530 de Supabase" anotados esta mañana eran, casi con seguridad, esta misma
 red local. No hay motivo para postergar el correo por el estado de staging.
 
+### Bloque cerrado el 02/09 — Proveedores como entidad
+
+| # | Entregable | Estado |
+|---|---|---|
+| PRV.1 | Migración `033`: tabla `suppliers`, secuencia PRV-NNN, `supplier_id` y `due_date` en gastos | ✅ idempotente + rollback |
+| PRV.2 | RUC y DV en columnas separadas, con test que impide concatenarlos | ✅ |
+| PRV.3 | Validación permisiva del RUC + avisos que no bloquean | ✅ 21 tests |
+| PRV.4 | Términos de pago → vencimiento del gasto → tramos de la antigüedad | ✅ |
+| PRV.5 | Pantallas: listado, alta, ficha, edición | ✅ build limpio |
+| PRV.6 | Antigüedad y estado de cuenta agrupan por ficha, no por texto | ✅ |
+| PRV.7 | Selector de proveedor + vencimiento en el formulario de gastos | ✅ |
+
+**Verificado contra staging:** 3 de 3 gastos conservan su proveedor, 0 sin enlazar, 0 sin
+vencimiento, el auxiliar de CxP sigue en 3.594,25 y cada documento se movió exactamente el plazo
+de su proveedor (30 / 0 / 45 días).
+
+**Lo que queda de este bloque:**
+
+1. **Eliminar `supplier_name` y `supplier_ruc`** de `business_expenses`. Quedaron como respaldo a
+   propósito; es un commit posterior, cuando se confirme que nada se perdió.
+2. **Cargar los RUC, los DV y los plazos reales.** Los tres proveedores de staging se crearon
+   automáticamente y quedaron sin RUC y en contado. Los datos reales los tienen las licenciadas.
+3. **Verificar las cuatro pantallas nuevas con sesión de contador** — la extensión de Chrome está
+   desconectada desde ayer.
+4. **La migración `033` NO está aplicada en producción.** Está escrita para poder correr allá
+   (idempotente, transaccional, sin borrar, con rollback), pero eso es un merge a `main`.
+
 ### Bloque cerrado el 02/09 — Antigüedad de Saldos y Estado de Cuenta
 
 | # | Entregable | Estado |

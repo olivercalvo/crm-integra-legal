@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Save, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,12 @@ import {
   type CreateBusinessExpenseInput,
 } from "@/lib/finanzas/types/business-expense";
 import type { ExpenseAccountOption } from "@/lib/finanzas/queries/business-expenses";
+import type { SupplierOption } from "@/lib/finanzas/queries/suppliers";
+import { paymentTermsLabel, vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
 interface BaseProps {
   accounts: ExpenseAccountOption[];
+  suppliers: SupplierOption[];
 }
 
 interface CreateProps extends BaseProps {
@@ -88,6 +92,23 @@ export function BusinessExpenseForm(props: Props) {
   const [expenseDate, setExpenseDate] = useState<string>(init?.expense_date ?? todayIso());
   const [supplierName, setSupplierName] = useState<string>(init?.supplier_name ?? "");
   const [supplierRuc, setSupplierRuc] = useState<string>(init?.supplier_ruc ?? "");
+  const [supplierId, setSupplierId] = useState<string>(init?.supplier_id ?? "");
+  const [dueDate, setDueDate] = useState<string>(init?.due_date ?? "");
+  /**
+   * Si la persona tocó el vencimiento a mano, deja de recalcularse solo. El
+   * plazo del proveedor propone; el comprobante manda.
+   */
+  const [vencimientoTocado, setVencimientoTocado] = useState<boolean>(
+    Boolean(init?.due_date)
+  );
+
+  const proveedorElegido = props.suppliers.find((s) => s.id === supplierId) ?? null;
+
+  /** Recalcula el vencimiento salvo que ya lo hayan editado a mano. */
+  function proponerVencimiento(fechaGasto: string, plazo: number | null) {
+    if (vencimientoTocado) return;
+    setDueDate(fechaGasto ? vencimientoPorPlazo(fechaGasto, plazo ?? 0) : "");
+  }
   const [accountCode, setAccountCode] = useState<string>(init?.chart_account_code ?? "");
   const [description, setDescription] = useState<string>(init?.description ?? "");
   const [subtotal, setSubtotal] = useState<string>(
@@ -159,6 +180,9 @@ export function BusinessExpenseForm(props: Props) {
 
     const payload: Partial<CreateBusinessExpenseInput> = {
       expense_date: expenseDate,
+      supplier_id: supplierId || null,
+      due_date: dueDate || null,
+      // Se conservan como respaldo y para el caso sin entidad (ver la pantalla).
       supplier_name: supplierName.trim() || null,
       supplier_ruc: supplierRuc.trim() || null,
       chart_account_code: accountCode || null,
@@ -239,7 +263,10 @@ export function BusinessExpenseForm(props: Props) {
             <Input
               type="date"
               value={expenseDate}
-              onChange={(e) => setExpenseDate(e.target.value)}
+              onChange={(e) => {
+                setExpenseDate(e.target.value);
+                proponerVencimiento(e.target.value, proveedorElegido?.payment_terms_days ?? 0);
+              }}
               disabled={isPending}
               className={errors.expense_date ? "border-red-300" : ""}
             />
@@ -272,37 +299,120 @@ export function BusinessExpenseForm(props: Props) {
             )}
           </div>
 
-          {/* Proveedor */}
-          <div data-error={!!errors.supplier_name}>
+          {/* ───────────────────────────────────────────────────────────────
+              PROVEEDOR. Antes eran dos campos de texto libre que se
+              reescribían en cada gasto, y por eso la antigüedad de cuentas por
+              pagar mostraba el mismo proveedor dos veces cuando el nombre venía
+              tipeado distinto. Ahora se elige la ficha.
+              ─────────────────────────────────────────────────────────────── */}
+          <div data-error={!!errors.supplier_id}>
             <Label className="mb-1 block">Proveedor</Label>
-            <Input
-              type="text"
-              value={supplierName}
-              onChange={(e) => setSupplierName(e.target.value)}
+            <select
+              value={supplierId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSupplierId(id);
+                const p = props.suppliers.find((x) => x.id === id) ?? null;
+                if (p) setSupplierName("");
+                proponerVencimiento(expenseDate, p?.payment_terms_days ?? 0);
+              }}
               disabled={isPending}
-              placeholder='Ej. "Cable Onda S.A."'
-              className={errors.supplier_name ? "border-red-300" : ""}
-            />
-            {errors.supplier_name && (
-              <p className="mt-1 text-xs text-red-600">{errors.supplier_name}</p>
+              className={
+                "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                (errors.supplier_id ? "border-red-300" : "border-gray-300")
+              }
+            >
+              <option value="">Sin ficha de proveedor</option>
+              {props.suppliers.map((sp) => (
+                <option key={sp.id} value={sp.id}>
+                  {sp.supplier_number} — {sp.trade_name?.trim() || sp.legal_name}
+                </option>
+              ))}
+            </select>
+            {errors.supplier_id && (
+              <p className="mt-1 text-xs text-red-600">{errors.supplier_id}</p>
             )}
+            <p className="mt-1 text-xs text-gray-500">
+              {proveedorElegido ? (
+                <>
+                  Plazo: <strong>{paymentTermsLabel(proveedorElegido.payment_terms_days)}</strong>.{" "}
+                  <Link
+                    href={`/finanzas/proveedores/${proveedorElegido.id}`}
+                    className="text-integra-navy underline"
+                  >
+                    Ver ficha
+                  </Link>
+                </>
+              ) : (
+                <>
+                  El RUC y el DV viven en la ficha del proveedor.{" "}
+                  <Link href="/finanzas/proveedores/nuevo" className="text-integra-navy underline">
+                    Crear un proveedor
+                  </Link>
+                </>
+              )}
+            </p>
           </div>
 
-          {/* RUC */}
-          <div data-error={!!errors.supplier_ruc}>
-            <Label className="mb-1 block">RUC del proveedor</Label>
+          {/* Vencimiento: lo que la antigüedad usa para calcular los tramos. */}
+          <div data-error={!!errors.due_date}>
+            <Label className="mb-1 block">Vence</Label>
             <Input
-              type="text"
-              value={supplierRuc}
-              onChange={(e) => setSupplierRuc(e.target.value)}
+              type="date"
+              value={dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                setVencimientoTocado(true);
+              }}
               disabled={isPending}
-              placeholder="Ej. 155123456-2-2024"
-              className={errors.supplier_ruc ? "border-red-300" : ""}
+              className={errors.due_date ? "border-red-300" : ""}
             />
-            {errors.supplier_ruc && (
-              <p className="mt-1 text-xs text-red-600">{errors.supplier_ruc}</p>
-            )}
+            {errors.due_date && <p className="mt-1 text-xs text-red-600">{errors.due_date}</p>}
+            <p className="mt-1 text-xs text-gray-500">
+              {vencimientoTocado
+                ? "Editado a mano: ya no se recalcula solo."
+                : "Se propone desde el plazo del proveedor. Podés cambiarlo: manda el comprobante."}
+            </p>
           </div>
+
+          {/* Sin ficha: el texto libre de siempre, para no cerrar nada. */}
+          {!supplierId && (
+            <>
+              <div data-error={!!errors.supplier_name}>
+                <Label className="mb-1 block">Nombre del proveedor (sin ficha)</Label>
+                <Input
+                  type="text"
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  disabled={isPending}
+                  placeholder='Ej. "Cable Onda S.A."'
+                  className={errors.supplier_name ? "border-red-300" : ""}
+                />
+                {errors.supplier_name && (
+                  <p className="mt-1 text-xs text-red-600">{errors.supplier_name}</p>
+                )}
+              </div>
+
+              <div data-error={!!errors.supplier_ruc}>
+                <Label className="mb-1 block">RUC (sin ficha)</Label>
+                <Input
+                  type="text"
+                  value={supplierRuc}
+                  onChange={(e) => setSupplierRuc(e.target.value)}
+                  disabled={isPending}
+                  placeholder="Ej. 155123456-2-2024"
+                  className={errors.supplier_ruc ? "border-red-300" : ""}
+                />
+                {errors.supplier_ruc && (
+                  <p className="mt-1 text-xs text-red-600">{errors.supplier_ruc}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Un gasto suelto se puede cargar así, pero <strong>los anexos de renta
+                  necesitan la ficha</strong>: ahí el RUC y el DV van separados.
+                </p>
+              </div>
+            </>
+          )}
 
           {/* Descripción */}
           <div className="sm:col-span-2" data-error={!!errors.description}>

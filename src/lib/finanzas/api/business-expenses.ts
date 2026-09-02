@@ -16,10 +16,52 @@ import type {
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { isValidExpenseAccountCode } from "@/lib/finanzas/queries/business-expenses";
+import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
 type DB = SupabaseClient;
 
 const ENTITY = "business_expenses";
+
+/**
+ * El vencimiento que le corresponde a un gasto.
+ *
+ * Si el formulario mandó uno, manda ese: lo que diga el comprobante gana sobre
+ * el plazo del proveedor. Si no, se calcula desde el plazo del proveedor, y si
+ * tampoco hay proveedor se asume contado (vence el mismo día).
+ *
+ * Está acá y no en el validador porque necesita leer el plazo de la base.
+ */
+async function resolverVencimiento(
+  db: DB,
+  tenantId: string,
+  input: { due_date: string | null; supplier_id: string | null; expense_date: string }
+): Promise<string> {
+  if (input.due_date) return input.due_date;
+
+  if (input.supplier_id) {
+    const { data } = await db
+      .from("suppliers")
+      .select("payment_terms_days")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.supplier_id)
+      .maybeSingle();
+    if (data) {
+      return vencimientoPorPlazo(input.expense_date, Number(data.payment_terms_days ?? 0));
+    }
+  }
+  return input.expense_date;
+}
+
+/** Que el proveedor exista y sea de este bufete. La FK no alcanza: es global. */
+async function proveedorValido(db: DB, tenantId: string, id: string): Promise<boolean> {
+  const { data } = await db
+    .from("suppliers")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  return !!data;
+}
 
 // ---------------------------------------------------------------------------
 // CREATE
@@ -44,11 +86,18 @@ export async function createBusinessExpense(
     }
   }
 
+  if (input.supplier_id !== null && !(await proveedorValido(db, tenantId, input.supplier_id))) {
+    throw new MutationError("El proveedor seleccionado no existe.", 400);
+  }
+  const dueDate = await resolverVencimiento(db, tenantId, input);
+
   const { data, error } = await db
     .from("business_expenses")
     .insert({
       tenant_id: tenantId,
       expense_date: input.expense_date,
+      due_date: dueDate,
+      supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
       chart_account_code: input.chart_account_code,
@@ -107,8 +156,8 @@ export async function updateBusinessExpense(
   const { data: existing, error: errExisting } = await db
     .from("business_expenses")
     .select(
-      `id, expense_date, supplier_name, supplier_ruc, chart_account_code,
-       description, subtotal, tax_rate, tax_amount,
+      `id, expense_date, due_date, supplier_id, supplier_name, supplier_ruc,
+       chart_account_code, description, subtotal, tax_rate, tax_amount,
        status, payment_date, payment_method, notes`
     )
     .eq("tenant_id", tenantId)
@@ -132,10 +181,17 @@ export async function updateBusinessExpense(
     }
   }
 
+  if (input.supplier_id !== null && !(await proveedorValido(db, tenantId, input.supplier_id))) {
+    throw new MutationError("El proveedor seleccionado no existe.", 400);
+  }
+  const dueDateUpdate = await resolverVencimiento(db, tenantId, input);
+
   const { error: errUpdate } = await db
     .from("business_expenses")
     .update({
       expense_date: input.expense_date,
+      due_date: dueDateUpdate,
+      supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
       chart_account_code: input.chart_account_code,

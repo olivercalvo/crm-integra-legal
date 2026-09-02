@@ -16,6 +16,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+
+import { serveStorageFile } from "@/lib/storage/serve-file";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import {
   ensureInvoicePdfRow,
@@ -32,7 +34,6 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
-const SIGNED_URL_TTL_SECONDS = 300; // 5 minutos
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
@@ -58,24 +59,28 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { data, error } = await ctx.db.storage
-      .from(invoicePdfBucket())
-      .createSignedUrl(result.storage_key, SIGNED_URL_TTL_SECONDS);
-
-    if (error || !data?.signedUrl) {
-      console.error("[finanzas/pdf] invoice createSignedUrl failed", error);
-      return NextResponse.json(
-        { error: "No se pudo firmar el URL del PDF" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      url: data.signedUrl,
-      regenerated: result.regenerated,
-      version: result.version,
-      file_name: result.file_name,
+    // Se DEVUELVE EL ARCHIVO, no un enlace firmado.
+    //
+    // Hasta el 01/09/2026 esta ruta respondía `{ url: signedUrl }` y el
+    // navegador abría ese enlace, que apunta a `*.supabase.co`. Una de las
+    // licenciadas no pudo descargar una factura porque ese dominio no resolvía
+    // en su red: `DNS_PROBE_FINISHED_NXDOMAIN`. Ahora el navegador solo habla
+    // con el dominio del CRM y el archivo lo trae el servidor.
+    // Ver `src/lib/storage/serve-file.ts`.
+    const respuesta = await serveStorageFile({
+      admin: ctx.db,
+      bucket: invoicePdfBucket(),
+      storageKey: result.storage_key,
+      fileName: result.file_name,
     });
+
+    // El cuerpo ahora es el PDF, así que `regenerated` —que la UI usa para
+    // avisar "se regeneró"— viaja en una cabecera propia.
+    if (respuesta.ok) {
+      respuesta.headers.set("X-Pdf-Regenerated", result.regenerated ? "1" : "0");
+      respuesta.headers.set("X-Pdf-Version", String(result.version));
+    }
+    return respuesta;
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error generando el PDF";

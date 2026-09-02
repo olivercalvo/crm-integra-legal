@@ -1,5 +1,51 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Corrección: tres errores míos en el aviso de la antigüedad] - 2026-09-02
+
+Los tres los introduje en el bloque de idempotencia del mismo día, y los tres se veían en la
+pantalla renderizada.
+
+### 1. Un texto que anticipaba código que no existe
+
+Escribí *"Al emitir una factura o registrar un cobro se genera su asiento"*. **Es falso.** El
+posteo automático quedó bloqueado por las tres preguntas al contador — lo dije yo mismo en el
+diseño y después redacté el aviso como si ya estuviera hecho.
+
+Ahora dice lo que pasa hoy: *"Los asientos todavía no se generan solos al emitir una factura o
+registrar un cobro: hoy se cargan aparte, así que un documento nuevo aparece acá hasta que su
+asiento se registre."*
+
+### 2. Una frase vieja contradiciendo a la nueva en la misma pantalla
+
+El cierre seguía diciendo *"el cableado de documento a asiento es desarrollo pendiente"* mientras
+el párrafo de arriba afirmaba que el asiento se generaba solo. Cambié una y no la otra.
+
+### 3. El bloque se mostraba con todo en cero
+
+Dije que el desglose *"se adapta solo"* y **no lo verifiqué**. Se renderizaba igual, con
+`Son 0 factura(s) por 0.00` y un `0.00` al lado: un renglón que le pide al contador descartar una
+causa que no existe.
+
+Ahora hay una condición explícita — `hayQueCablear`, con tolerancia de centavo y no `=== 0` — y
+cuando la única causa es el saldo de apertura **no hay desglose**: una sola frase que la nombra y
+dice cómo se resuelve.
+
+### Verificado en la pantalla renderizada, no con grep
+
+La extensión de Chrome sigue desconectada, así que me autentiqué contra Supabase por HTTP, armé la
+cookie de `@supabase/ssr` y traje el HTML de las dos pantallas. **Por cobrar** (diferencia
+191.947,55) y **por pagar** (3.400,48) muestran la versión de una sola causa, y las cinco cadenas
+problemáticas están ausentes en las dos.
+
+### Lo que NO pude verificar
+
+**La rama de dos causas no tiene datos que la produzcan**: después del backfill, `porCablear` es
+0,00 en las dos pantallas. Compila y la lógica del builder está cubierta por tests, pero **no la vi
+renderizada**. Va a aparecer la primera vez que se registre una factura sin asiento.
+
+545 tests. Typecheck limpio. Build compilando. Lint: 21 preexistentes.
+
+
 ## [Idempotencia del ledger, backfill de los 250,00 y gate de anulación] - 2026-09-02
 
 Las tres piezas del cableado factura→asiento que **no dependían de ninguna respuesta del

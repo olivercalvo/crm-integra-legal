@@ -488,10 +488,18 @@ contestarlas sea cambiar un lugar y no rastrear el criterio por media pantalla:
 3. **Signo del importe.** Hoy es convención de balanza (débito positivo, crédito negativo),
    igual que el Balance General. La alternativa es mostrarlo según la naturaleza de la cuenta.
 
-**Advertencia visible en la pantalla:** el mayor lee del libro de asientos, mientras el Balance
-y el Estado de Resultado todavía se arman solo con los saldos de apertura. O sea que **no
-coinciden**, y un contador que compare los números tiene que saber por qué. La fila "Saldo
-inicial" de cada cuenta es exactamente el número que muestran esos reportes.
+**Los tres reportes leen la MISMA fuente** (convergencia, 02/09/2026): el Libro Mayor, el Balance
+General y el Estado de Resultado se arman con `saldo_inicial + Σ movimientos del ledger`. El saldo
+final de una cuenta en el mayor es el mismo que muestra esa cuenta en el Balance — comparar los
+dos es lo primero que hace un contador, y dos números distintos no se leen como "falta una fase"
+sino como que el sistema no es confiable.
+
+> Hasta el 02/09/2026 esto decía lo contrario —que el Balance se armaba solo con saldos de
+> apertura— y la pantalla del mayor llevaba un aviso diciéndolo. Las dos cosas quedaron viejas el
+> mismo día que convergían los reportes, y el aviso sobrevivió tres bloques.
+
+Lo que SÍ sigue pendiente es el **corte por período**: hoy se suma todo lo registrado sin importar
+la fecha, y eso la pantalla lo dice.
 
 ---
 

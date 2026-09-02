@@ -134,8 +134,19 @@ export interface IsrLine {
   rate: number;
   /** Monto en convención de balanza: positivo (débito), reduce la ganancia. */
   amount: number;
-  /** false cuando no hubo utilidad y por lo tanto no se aplicó impuesto. */
-  applied: boolean;
+  /**
+   * ¿El período cerró con GANANCIA? No confundir con "se cobró impuesto".
+   *
+   * Se llamaba `applied`, y con la tasa en 0 —que es el caso de Integra, sociedad
+   * civil— daba `true` con un monto de 0,00: leído solo, decía que se aplicó un
+   * impuesto que no se cobró. Peor: los dos builders lo llenaban con criterios
+   * distintos, así que el MISMO campo significaba una cosa en el ER clásico y
+   * otra en el NIIF 18.
+   *
+   * Ahora significa una sola cosa en los dos: hubo utilidad. Si hace falta saber
+   * si se cobró algo, se mira `amount`.
+   */
+  huboUtilidad: boolean;
 }
 
 export interface BalanceGeneral {
@@ -365,7 +376,7 @@ export function buildEstadoResultado(
     gananciaBruta,
     gastos,
     utilidadOperativa,
-    isr: { rate: isrRate, amount: isrAmount, applied: hayUtilidad },
+    isr: { rate: isrRate, amount: isrAmount, huboUtilidad: hayUtilidad },
     utilidadNeta: round2(utilidadOperativa + isrAmount),
   };
 }

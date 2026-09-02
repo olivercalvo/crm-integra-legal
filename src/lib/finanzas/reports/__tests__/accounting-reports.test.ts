@@ -223,7 +223,7 @@ test("ISR: con una tasa explícita se aplica y reduce la utilidad", () => {
     isrRate: 0.25,
   });
   assertMoney(er.utilidadOperativa, -1000, "Utilidad Operativa");
-  assert.equal(er.isr.applied, true);
+  assert.equal(er.isr.huboUtilidad, true);
   assert.equal(er.isr.rate, 0.25);
   assertMoney(er.isr.amount, 250, "ISR 25% de 1000");
   assertMoney(er.utilidadNeta, -750, "Utilidad Neta");
@@ -236,7 +236,7 @@ test("ISR: con PÉRDIDA no se aplica (queda en 0)", () => {
     acc("600001", "expense", "gastos_operativos", 500),
   ]);
   assertMoney(er.utilidadOperativa, 400, "Utilidad Operativa (pérdida)");
-  assert.equal(er.isr.applied, false);
+  assert.equal(er.isr.huboUtilidad, false);
   assertMoney(er.isr.amount, 0, "ISR");
   assertMoney(er.utilidadNeta, 400, "Utilidad Neta = operativa cuando hay pérdida");
 });
@@ -247,7 +247,7 @@ test("ISR: resultado en cero no se grava", () => {
     acc("600001", "expense", "gastos_operativos", 100),
   ]);
   assertMoney(er.utilidadOperativa, 0, "Utilidad Operativa");
-  assert.equal(er.isr.applied, false);
+  assert.equal(er.isr.huboUtilidad, false);
   assertMoney(er.isr.amount, 0, "ISR");
 });
 
@@ -280,7 +280,7 @@ test("sin cuentas: todo en cero y el balance cuadra", () => {
   const { estadoResultado: er, balanceGeneral: bg } = buildAccountingReports([]);
   assertMoney(er.ingresos.total, 0, "Ingresos");
   assertMoney(er.utilidadOperativa, 0, "Utilidad Operativa");
-  assert.equal(er.isr.applied, false);
+  assert.equal(er.isr.huboUtilidad, false);
   assertMoney(bg.activos.total, 0, "Activo");
   assert.equal(bg.cuadra, true);
 });

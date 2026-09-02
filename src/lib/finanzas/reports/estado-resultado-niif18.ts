@@ -364,7 +364,11 @@ export function buildEstadoResultadoNiif18(
   // Impuesto: en balanza, una ganancia es NEGATIVA. Solo se grava si la hubo.
   const hayUtilidad = utilidadAntesImpuesto < -0.005;
   const impuesto = hayUtilidad ? round2(-utilidadAntesImpuesto * isrRate) : 0;
-  const isr: IsrLine = { rate: isrRate, amount: impuesto, applied: hayUtilidad && impuesto !== 0 };
+  // `huboUtilidad` es exactamente eso y nada más. Antes acá decía
+  // `applied: hayUtilidad && impuesto !== 0`, o sea el MISMO campo con otro
+  // criterio que el ER clásico: un `false` significaba "no se cobró" en un
+  // reporte y "no hubo ganancia" en el otro.
+  const isr: IsrLine = { rate: isrRate, amount: impuesto, huboUtilidad: hayUtilidad };
 
   filas.push({
     kind: "impuesto",

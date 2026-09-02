@@ -257,7 +257,7 @@ test("con PÉRDIDA: no hay impuesto y la distribución la absorbe igual", () => 
     acc("600001", "expense", "gastos_operativos", 500),
   ]);
   assertMoney(er.totales.utilidadAntesImpuesto, 400, "pérdida (positiva en balanza)");
-  assert.equal(er.isr.applied, false, "una pérdida no se grava");
+  assert.equal(er.isr.huboUtilidad, false, "una pérdida no se grava");
   assertMoney(er.totales.impuesto, 0, "ISR");
 
   const neta = valor(er.filas, "► Utilidad Neta");

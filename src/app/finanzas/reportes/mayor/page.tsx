@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import {
   loadCuentaDelMayor,
@@ -72,19 +72,20 @@ export default async function LibroMayorPage({
       />
 
       {/*
-        Este aviso NO es decorativo: hoy el mayor y los estados financieros leen
-        de fuentes distintas, y un contador que compare los números tiene que
-        saber por qué no coinciden.
+        CORREGIDO el 02/09/2026. Este aviso decía que el Balance y el Estado de
+        Resultado se armaban "solo con los saldos de apertura" y que por eso no
+        coincidían con el mayor. Dejó de ser cierto en el bloque de convergencia
+        del mismo día: los tres leen `saldo_inicial + Σ ledger`. Un aviso que
+        avisa de un problema que ya no existe hace dudar de los números que SÍ
+        están bien.
       */}
-      <p className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-        <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-        <span>
-          El Libro Mayor lee del <strong>libro de asientos</strong>. El Balance General y el
-          Estado de Resultado todavía se arman <strong>solo con los saldos de apertura</strong>,
-          así que no incluyen estos movimientos. La fila{" "}
-          <strong>&ldquo;Saldo inicial&rdquo;</strong> de cada cuenta es exactamente el número
-          que muestran esos reportes.
-        </span>
+      <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
+        El Libro Mayor, el <strong>Balance General</strong> y el{" "}
+        <strong>Estado de Resultado</strong> leen la <strong>misma fuente</strong>: el saldo de
+        apertura del Plan de Cuentas más todos los movimientos del libro de asientos. El saldo
+        final de una cuenta acá es el mismo que muestra esa cuenta en el Balance.{" "}
+        <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
+        importar la fecha. El corte está pendiente de definir con el contador.
       </p>
 
       <MayorFiltros

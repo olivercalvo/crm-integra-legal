@@ -77,7 +77,7 @@ function InlineCommentField({ caseId }: { caseId: string }) {
         type="text"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Escribe un comentario..."
+        placeholder="Escriba un comentario..."
         className="flex-1 rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-integra-navy/30"
         autoFocus
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}

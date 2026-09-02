@@ -105,5 +105,5 @@ export async function findActiveClientByRuc(
  * Tuteo neutro panameño (voseo es anti-patrón en el proyecto, ver CLAUDE.md).
  */
 export function rucConflictMessage(existing: ExistingClientRef): string {
-  return `Ya existe un cliente con ese RUC: ${existing.client_number} (${existing.name}). Usa esa ficha en lugar de crear una nueva.`;
+  return `Ya existe un cliente con ese RUC: ${existing.client_number} (${existing.name}). Corresponde usar esa ficha en lugar de crear una nueva.`;
 }

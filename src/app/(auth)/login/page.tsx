@@ -6,7 +6,7 @@ import { LoginForm } from "@/components/auth/login-form";
  * volvía al login sin ninguna explicación de por qué.
  */
 const NOTICES: Record<string, string> = {
-  expired: "Tu sesión expiró por inactividad. Ingresa de nuevo.",
+  expired: "Su sesión expiró por inactividad. Ingrese de nuevo.",
   recovery_expired:
     "El enlace de recuperación venció o ya fue usado. Solicita uno nuevo con “¿Olvidaste tu contraseña?”.",
   recovery:
@@ -15,7 +15,7 @@ const NOTICES: Record<string, string> = {
     "Ese enlace se pidió desde otro navegador o dispositivo. Solicita uno nuevo acá y ábrelo en este mismo equipo.",
   auth: "No pudimos validar el enlace. Ingrese con su correo y contraseña.",
   "no-role":
-    "Tu usuario no tiene un rol asignado. Contacta al administrador del sistema.",
+    "Su usuario no tiene un rol asignado. Comuníquese con el administrador del sistema.",
 };
 
 interface PageProps {

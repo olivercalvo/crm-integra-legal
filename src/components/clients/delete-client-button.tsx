@@ -64,7 +64,7 @@ export function DeleteClientButton({
       router.push(`/legal/clientes?deleted=${encodeURIComponent(clientNumber)}`);
       router.refresh();
     } catch {
-      setError("Error de conexion. Intenta de nuevo.");
+      setError("Error de conexión. Intente de nuevo.");
       setLoading(false);
     }
   };

@@ -37,7 +37,7 @@ export function DeleteQuoteButton({ quoteId, quoteLabel, disabled }: Props) {
         }
         router.push(`/finanzas/cotizaciones?deleted=${encodeURIComponent(quoteLabel)}`);
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }

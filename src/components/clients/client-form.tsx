@@ -142,7 +142,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
     }
     if (s === 1) {
       if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        errors.email = "Ingresa un correo válido";
+        errors.email = "Ingrese un correo válido";
       }
     }
     setFieldErrors(errors);
@@ -222,7 +222,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
       router.push(`/legal/clientes/${data.id}`);
       router.refresh();
     } catch {
-      setError("Error de conexión. Intenta de nuevo.");
+      setError("Error de conexión. Intente de nuevo.");
     } finally {
       setLoading(false);
     }

@@ -60,7 +60,7 @@ export function AddTaskForm({ caseId, users }: AddTaskFormProps) {
         reset();
         router.refresh();
       } catch {
-        setError("Error de conexión. Verifica tu conexión a internet.");
+        setError("Error de conexión. Verifique su conexión a internet.");
       }
     });
   };

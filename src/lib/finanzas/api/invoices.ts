@@ -319,7 +319,7 @@ export async function emitInvoice(
   }
   if (!lineCount || lineCount === 0) {
     throw new InvoiceMutationError(
-      "La factura no tiene líneas. Agrega al menos una antes de emitir.",
+      "La factura no tiene líneas. Agregue al menos una antes de emitir.",
       400
     );
   }
@@ -642,7 +642,7 @@ export async function cancelInvoice(
   }
   if (inv.status === "borrador" || inv.status === "cancelada_pre_emision") {
     throw new InvoiceMutationError(
-      "No se puede anular una factura no emitida. Para descartarla, usa Eliminar.",
+      "No se puede anular una factura no emitida. Para descartarla está el botón Eliminar.",
       400
     );
   }

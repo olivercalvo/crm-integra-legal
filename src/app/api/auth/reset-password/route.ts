@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const email = String((body as { email?: unknown })?.email ?? "").trim();
   if (!email || !EMAIL_RE.test(email)) {
     return NextResponse.json(
-      { ok: false, error: "Ingresa un correo válido" },
+      { ok: false, error: "Ingrese un correo válido" },
       { status: 400 }
     );
   }

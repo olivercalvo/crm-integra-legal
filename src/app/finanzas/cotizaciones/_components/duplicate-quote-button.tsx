@@ -57,7 +57,7 @@ export function DuplicateQuoteButton({
           router.refresh();
         }
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }

@@ -48,7 +48,7 @@ export function AddCommentForm({ caseId }: AddCommentFormProps) {
         router.refresh();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Error desconocido";
-        setError(`Error de conexión: ${message}. Verifica tu conexión a internet.`);
+        setError(`Error de conexión: ${message}. Verifique su conexión a internet.`);
       }
     });
   };

@@ -141,7 +141,7 @@ export default async function ClientesPage({ searchParams }: PageProps) {
       {list.length === 0 && (
         <EmptySearchResult
           query={search}
-          emptyMessage="Aún no hay clientes. Crea el primero haciendo clic en «Nuevo Cliente»."
+          emptyMessage="Aún no hay clientes. El primero se crea con el botón «Nuevo Cliente»."
           icon={<User size={40} className="mb-3 text-gray-300" />}
         />
       )}

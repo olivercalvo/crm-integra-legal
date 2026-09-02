@@ -1140,6 +1140,30 @@ limpió, y el checklist va a seguir saliendo en amarillo hasta que alguien los t
 muertos y `prefer-const`); el riesgo está en tocar 17 archivos de una, así que conviene un
 commit propio, sin mezclar con features, y correr la suite completa después.
 
+### A-ter. Centralizar el mensaje de error de red — refactor, prioridad media
+
+Detectado el 02/09/2026 durante el barrido de tuteo, y anotado porque el barrido lo
+dejó a la vista sin resolverlo: **la misma frase de error de red está escrita a mano
+en 33 archivos**.
+
+    "Error de red. Intente de nuevo."          (y sus variantes "al guardar", "al subir")
+    "Error inesperado. Intente recargar la página."
+    "Error de conexión. Verifique su conexión a internet."
+
+No es un problema de idioma — el idioma ya quedó corregido. Es que **cambiar esa frase
+hoy cuesta 33 ediciones y debería costar una**. El barrido de septiembre tuvo que tocar
+33 archivos para conjugar un verbo, y dos de esos archivos además tenían la palabra
+"conexion" sin tilde desde que se escribieron: nadie la vio nunca porque no había un
+solo lugar donde mirarla.
+
+- [ ] Constante o helper compartido (candidato: `src/lib/ui/mensajes.ts`) con las tres
+      variantes, más el `catch` de red que hoy se repite igual en cada handler.
+- [ ] Reemplazar las 33 ocurrencias por la constante.
+- [ ] Test que falle si vuelve a aparecer la cadena literal fuera del módulo.
+
+**Es refactor, no texto.** Deliberadamente NO se hizo junto con el barrido de tuteo,
+para que ese commit fuera solo copy y su diff se pudiera leer de un vistazo.
+
 ### B. Bug buscador de clientes en form de cotización (alta, rápido)
 El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
 

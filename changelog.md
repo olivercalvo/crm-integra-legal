@@ -1,5 +1,68 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Trato de usted en todo el CRM interno — grupos 1 a 7] - 2026-09-02
+
+Cierre del barrido de tuteo. El inventario anterior (81 cadenas, casi todas de Finanzas)
+había dejado afuera los imperativos en segunda persona sin tilde — `registra`, `verifica`,
+`intenta` — que un detector de voseo no ve porque son **homógrafos de la tercera persona
+del indicativo**: "registra" es tanto *vos registrá* como *él registra*. Hubo que listarlos
+y clasificarlos a mano.
+
+**115 coincidencias en bruto → 86 imperativos reales + 29 falsos positivos.** De los 86,
+este commit corrige **77**: todo lo interno. Los 9 del portal público y los correos al
+cliente quedan para un bloque aparte, a pedido de Oliver, porque son la voz del bufete
+hacia sus clientes y se revisan uno por uno.
+
+### Qué cambió
+
+- **39 ocurrencias de tres frases repetidas** en 33 archivos: `"Intenta de nuevo"` →
+  `"Intente de nuevo"`, `"Intenta recargar"` → `"Intente recargar"`,
+  `"Verifica tu conexión a internet"` → `"Verifique su conexión a internet"`.
+- **39 cadenas puntuales**: login, validaciones de formulario, estados vacíos,
+  placeholders, conflictos de negocio, guía de errores del PAC e importación masiva.
+
+### Doce resueltas en impersonal, no en usted
+
+Donde el usted sonaba rígido se usó la forma impersonal, siguiendo el criterio de
+redacción de Oliver ("no traduzcas mecánicamente"). Los siete **estados vacíos** son el
+caso claro: *"Aún no hay facturas. La primera se crea con el botón de arriba"* dice lo
+mismo que *"créela usted"* sin dar una orden a quien recién entra a una pantalla vacía.
+Igual criterio en *"Primero hay que eliminar los casos"*, *"Para descartarla está el
+botón Eliminar"*, *"Corresponde usar esa ficha…"* (×2) y el error del importador, que
+ahora describe la columna en vez de mandar: *"la columna Tipo Fiscal (o Tipo) debe decir
+'Natural' o 'Jurídica'"*.
+
+### Dos faltas de ortografía, de paso
+
+`delete-client-button.tsx` y `delete-document-button.tsx` decían **"Error de conexion"**
+sin tilde. Estaban así desde que se escribieron; salieron a la luz porque el barrido
+obligó a leer las 33 copias de la misma frase. Ver `task_plan.md` **A-ter**: la frase
+debería estar centralizada, y ese es justamente el argumento.
+
+### Tres tests actualizados
+
+- `delete-financial-guard.route.test.ts` y `classify-pac-error.test.ts` afirmaban sobre
+  el texto anterior.
+- `classify-pac-error.test.ts` tenía además un test llamado *"La guía usa tuteo neutro
+  panameño"* que **exigía** el tuteo. Se reescribió como *"La guía trata de usted (ni
+  tuteo ni voseo)"*: ahora afirma las tres cosas, para que el trato correcto quede
+  clavado en los dos sentidos y no solo contra el voseo.
+
+545/545 tests en verde. `tsc` limpio. Los 21 errores de ESLint son los mismos de antes
+del cambio (verificado con `git stash`): este commit no agrega ni quita ninguno.
+
+### Lo que NO se tocó
+
+- **Los 29 falsos positivos.** *"La tasa se aplica a los documentos…"*, *"Esta acción
+  asigna el número definitivo"*, *"el resultado del ejercicio cierra en cero"* y
+  compañía son tercera persona del indicativo, no imperativos.
+- **`delete-confirmation-modal.tsx`**: se cambió la instrucción visible (*"Escriba …
+  para confirmar"*) pero **no** el valor esperado ni la comparación `inputValue ===
+  confirmCode`. Se verificó además, con una búsqueda de comparaciones contra literales
+  en español, que ninguna otra cadena del barrido se compare en vez de mostrarse.
+- **Portal público y correos al cliente** (grupo 8, 9 cadenas): bloque aparte.
+
+
 ## [Corrección: tres errores míos en el aviso de la antigüedad] - 2026-09-02
 
 Los tres los introduje en el bloque de idempotencia del mismo día, y los tres se veían en la

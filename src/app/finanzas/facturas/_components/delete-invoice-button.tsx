@@ -37,7 +37,7 @@ export function DeleteInvoiceButton({ invoiceId, invoiceLabel, disabled }: Props
         }
         router.push(`/finanzas/facturas?deleted=${encodeURIComponent(invoiceLabel)}`);
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }

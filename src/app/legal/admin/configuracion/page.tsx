@@ -51,7 +51,7 @@ export default async function ConfiguracionPage() {
           catalogName="Clasificaciones"
           apiEndpoint="cat_classifications"
           columns={CLASSIFICATIONS_COLUMNS}
-          emptyMessage="No hay clasificaciones. Agrega una para comenzar."
+          emptyMessage="Todavía no hay clasificaciones. La primera se agrega con el botón Agregar."
         />
       </section>
 
@@ -69,7 +69,7 @@ export default async function ConfiguracionPage() {
           catalogName="Estados"
           apiEndpoint="cat_statuses"
           columns={STATUSES_COLUMNS}
-          emptyMessage="No hay estados. Agrega uno para comenzar."
+          emptyMessage="Todavía no hay estados. El primero se agrega con el botón Agregar."
         />
       </section>
 
@@ -87,7 +87,7 @@ export default async function ConfiguracionPage() {
           catalogName="Instituciones"
           apiEndpoint="cat_institutions"
           columns={INSTITUTIONS_COLUMNS}
-          emptyMessage="No hay instituciones. Agrega una para comenzar."
+          emptyMessage="Todavía no hay instituciones. La primera se agrega con el botón Agregar."
         />
       </section>
 

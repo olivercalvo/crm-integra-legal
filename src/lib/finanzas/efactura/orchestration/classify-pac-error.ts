@@ -74,7 +74,7 @@ const CODE_HINTS: Array<{ codes: string[]; hint: string }> = [
     codes: RUC_REJECTION_CODES,
     hint:
       "El RUC del cliente parece inválido o incompleto. " +
-      "Verifica el RUC en la ficha del cliente y reintenta.",
+      "Verifique el RUC en la ficha del cliente y reintente.",
   },
 ];
 
@@ -158,7 +158,7 @@ export interface PacErrorClassification {
 
 const DUPLICATE_MESSAGE =
   "El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado — " +
-  "revisa en el portal del PAC antes de reintentar.";
+  "revise en el portal del PAC antes de reintentar.";
 
 /**
  * Clasifica un rechazo del PAC. `fallbackSummary` se usa cuando no hay códigos

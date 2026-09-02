@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         return NextResponse.json(
-          { error: `El número de cliente "${customNumber.trim()}" ya existe. Elige otro.` },
+          { error: `El número de cliente "${customNumber.trim()}" ya existe. Elija otro.` },
           { status: 409 }
         );
       }

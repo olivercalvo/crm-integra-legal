@@ -72,7 +72,7 @@ test("CASO REAL: agrega la guía accionable de RUC", () => {
   assert.equal(
     c.errorHint,
     "El RUC del cliente parece inválido o incompleto. " +
-      "Verifica el RUC en la ficha del cliente y reintenta."
+      "Verifique el RUC en la ficha del cliente y reintente."
   );
 });
 
@@ -181,9 +181,14 @@ test("hintForCodRes cubre ambos códigos de RUC por separado", () => {
   }
 });
 
-test("La guía usa tuteo neutro panameño (voseo es anti-patrón, CLAUDE.md)", () => {
+// La guía la lee la abogada en pantalla cuando el PAC rechaza una factura.
+// El trato es USTED en toda la app: el tuteo se dejó atrás en el barrido de
+// septiembre 2026, y el voseo nunca fue admisible (CLAUDE.md). El test afirma
+// las tres cosas para que nadie reintroduzca ninguna de las dos formas.
+test("La guía trata de usted (ni tuteo ni voseo)", () => {
   const hint = hintForCodRes([{ dCodRes: "1601" }])!;
-  assert.match(hint, /Verifica/);
-  assert.match(hint, /reintenta/);
-  assert.equal(/Verificá|reintentá/.test(hint), false);
+  assert.match(hint, /Verifique/);
+  assert.match(hint, /reintente/);
+  assert.equal(/Verifica|reintenta/.test(hint), false, "quedó tuteo");
+  assert.equal(/Verificá|reintentá/.test(hint), false, "quedó voseo");
 });

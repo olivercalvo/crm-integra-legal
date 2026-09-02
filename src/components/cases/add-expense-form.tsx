@@ -53,7 +53,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   const handleAddExpense = () => {
     const amount = parseFloat(expAmount);
     if (!amount || amount <= 0 || !expConcept.trim() || !expDate) {
-      setError("Completa todos los campos del gasto");
+      setError("Complete todos los campos del gasto");
       return;
     }
     // Validate file if selected
@@ -108,7 +108,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
         resetExpense();
         router.refresh();
       } catch {
-        setError("Error de conexión. Verifica tu conexión a internet.");
+        setError("Error de conexión. Verifique su conexión a internet.");
       }
     });
   };
@@ -116,7 +116,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   const handleAddPayment = () => {
     const amount = parseFloat(payAmount);
     if (!amount || amount <= 0 || !payDate) {
-      setError("Completa todos los campos del pago");
+      setError("Complete todos los campos del pago");
       return;
     }
     startTransition(async () => {
@@ -139,7 +139,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
         resetPayment();
         router.refresh();
       } catch {
-        setError("Error de conexión. Verifica tu conexión a internet.");
+        setError("Error de conexión. Verifique su conexión a internet.");
       }
     });
   };

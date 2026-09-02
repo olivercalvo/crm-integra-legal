@@ -125,7 +125,7 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
             hasFilters
               ? "No hay gastos que coincidan con los filtros aplicados."
               : canMutate
-                ? "Aún no hay gastos del bufete. Registra el primero con el botón de arriba."
+                ? "Aún no hay gastos del bufete. El primero se registra con el botón de arriba."
                 : "Aún no hay gastos del bufete cargados."
           }
         />

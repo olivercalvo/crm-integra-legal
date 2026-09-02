@@ -93,7 +93,7 @@ export function ConvertToInvoicesDialog({
           `/finanzas/facturas/${invoiceIds[0]}?converted=${invoiceIds.length}`
         );
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }

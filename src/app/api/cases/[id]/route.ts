@@ -240,7 +240,7 @@ export async function PATCH(
         return NextResponse.json(
           {
             error:
-              "No se pudo asignar un código único para la nueva clasificación tras varios intentos. Intenta de nuevo en unos segundos.",
+              "No se pudo asignar un código único para la nueva clasificación tras varios intentos. Intente de nuevo en unos segundos.",
           },
           { status: 409 }
         );

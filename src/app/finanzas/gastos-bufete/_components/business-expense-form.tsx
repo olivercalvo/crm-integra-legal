@@ -239,7 +239,7 @@ export function BusinessExpenseForm(props: Props) {
         }
       } catch (err) {
         console.error(err);
-        setSubmitError("Error de red al guardar. Intenta de nuevo.");
+        setSubmitError("Error de red al guardar. Intente de nuevo.");
       }
     });
   }

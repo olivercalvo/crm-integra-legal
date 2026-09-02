@@ -161,7 +161,7 @@ export function SendQuoteDialog({
         // Refresh para que el server component recargue con sent_at actualizado.
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }

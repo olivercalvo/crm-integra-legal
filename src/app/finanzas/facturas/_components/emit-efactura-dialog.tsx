@@ -129,7 +129,7 @@ export function EmitEfacturaDialog({
         // pase a estado 'error' aunque el usuario no cierre el modal
         router.refresh();
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }
@@ -172,7 +172,7 @@ export function EmitEfacturaDialog({
 
           <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
             <p>
-              <span className="font-semibold">Verifica antes de enviar.</span>{" "}
+              <span className="font-semibold">Verifique antes de enviar.</span>{" "}
               Si el receptor o los montos están incorrectos, la corrección
               tendrá que hacerse en eFactura (no en el CRM).
             </p>

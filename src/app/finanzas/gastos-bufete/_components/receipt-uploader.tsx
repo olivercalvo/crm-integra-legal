@@ -90,7 +90,7 @@ export function ReceiptUploader({
         }
         router.refresh();
       } catch {
-        setError("Error de red al subir. Intenta de nuevo.");
+        setError("Error de red al subir. Intente de nuevo.");
       } finally {
         if (fileRef.current) fileRef.current.value = "";
       }
@@ -113,7 +113,7 @@ export function ReceiptUploader({
         setShowDelete(false);
         router.refresh();
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }

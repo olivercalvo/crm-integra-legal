@@ -313,7 +313,7 @@ test(
     const body = (await res.json()) as { error: string };
 
     assert.equal(res.status, 400);
-    assert.equal(body.error, "Este cliente tiene 4 caso(s) asociado(s). Elimina los casos primero.");
+    assert.equal(body.error, "Este cliente tiene 4 caso(s) asociado(s). Primero hay que eliminar los casos.");
     assertNadaBorrado();
   }
 );

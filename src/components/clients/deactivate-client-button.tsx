@@ -41,7 +41,7 @@ export function DeactivateClientButton({ clientId, clientName }: DeactivateClien
       router.push("/legal/clientes");
       router.refresh();
     } catch {
-      alert("Error de conexión. Intenta de nuevo.");
+      alert("Error de conexión. Intente de nuevo.");
     } finally {
       setLoading(false);
       setConfirming(false);

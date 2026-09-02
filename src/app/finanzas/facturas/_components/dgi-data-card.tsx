@@ -297,7 +297,7 @@ function DgiFormModal({ invoiceId, initial, onClose }: ModalProps) {
         router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {
-        setError("Error de red. Intenta de nuevo.");
+        setError("Error de red. Intente de nuevo.");
       }
     });
   }

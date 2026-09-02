@@ -161,7 +161,7 @@ export function InlineCaseInfoEditor({
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error desconocido";
-      setError(`Error de conexión: ${message}. Verifica tu conexión a internet.`);
+      setError(`Error de conexión: ${message}. Verifique su conexión a internet.`);
     }
   };
 
@@ -189,7 +189,7 @@ export function InlineCaseInfoEditor({
         });
       } catch {
         setClassificationChangeModal((m) => ({ ...m, open: false, loadingPreview: false }));
-        setError("No se pudo calcular el nuevo código. Intenta de nuevo.");
+        setError("No se pudo calcular el nuevo código. Intente de nuevo.");
       }
       return;
     }

@@ -67,7 +67,7 @@ export function TermsTemplateEditor({ initialContent, initialUpdatedAt }: Props)
         // Auto-clear el flag "justSaved" tras 4s.
         setTimeout(() => setJustSaved(false), 4000);
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }
@@ -89,7 +89,7 @@ export function TermsTemplateEditor({ initialContent, initialUpdatedAt }: Props)
           rows={20}
           maxLength={MAX_CHARS}
           className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none"
-          placeholder="Escribe los Términos y Condiciones del bufete…"
+          placeholder="Escriba aquí los Términos y Condiciones del bufete…"
         />
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">

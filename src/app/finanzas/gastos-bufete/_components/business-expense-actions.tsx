@@ -84,7 +84,7 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
         setShowMarkPaid(false);
         router.refresh();
       } catch {
-        setMarkPaidError("Error de red. Intenta de nuevo.");
+        setMarkPaidError("Error de red. Intente de nuevo.");
       }
     });
   }
@@ -104,7 +104,7 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
         router.push("/finanzas/gastos-bufete?deleted=1");
         router.refresh();
       } catch {
-        setDeleteError("Error de red. Intenta de nuevo.");
+        setDeleteError("Error de red. Intente de nuevo.");
       }
     });
   }

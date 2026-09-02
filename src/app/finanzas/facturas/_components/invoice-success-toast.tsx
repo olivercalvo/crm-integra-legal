@@ -73,11 +73,11 @@ export function InvoiceSuccessToast() {
     message = "Factura autorizada por la DGI";
   } else if (fe === "pending") {
     icon = <Loader2 size={18} className="text-amber-600 shrink-0 animate-spin" />;
-    message = "Envío en proceso. Refresca en unos segundos.";
+    message = "Envío en proceso. Vuelva a cargar la página en unos segundos.";
     palette = "warning";
   } else if (fe === "error") {
     icon = <AlertCircle size={18} className="text-red-600 shrink-0" />;
-    message = "El PAC rechazó la factura. Revisa el detalle.";
+    message = "El PAC rechazó la factura. Revise el detalle.";
     palette = "danger";
   } else if (converted) {
     const count = parseInt(converted, 10);

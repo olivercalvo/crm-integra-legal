@@ -148,7 +148,7 @@ export function CancelInvoiceDialog({
         router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }

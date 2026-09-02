@@ -41,7 +41,7 @@ export function DeleteCaseButton({
       router.push(`/legal/casos?deleted=${encodeURIComponent(caseCode)}`);
       router.refresh();
     } catch {
-      alert("Error de conexión. Intenta de nuevo.");
+      alert("Error de conexión. Intente de nuevo.");
       setLoading(false);
     }
   };

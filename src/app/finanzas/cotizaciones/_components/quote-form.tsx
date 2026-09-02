@@ -214,7 +214,7 @@ export function QuoteForm(props: Props) {
 
     if (clientSelector.mode === "existing") {
       if (!clientSelector.client_id) {
-        e.client_id = "Selecciona un cliente";
+        e.client_id = "Seleccione un cliente";
       }
     } else {
       const p = clientSelector.new_prospect;
@@ -252,7 +252,7 @@ export function QuoteForm(props: Props) {
     }
 
     if (lines.length === 0) {
-      e.lines = "Agrega al menos una línea";
+      e.lines = "Agregue al menos una línea";
     } else {
       lines.forEach((ln, idx) => {
         if (!ln.description?.trim()) {
@@ -381,7 +381,7 @@ export function QuoteForm(props: Props) {
         }
       } catch (err) {
         console.error(err);
-        setSubmitError("Error de red al guardar. Intenta de nuevo.");
+        setSubmitError("Error de red al guardar. Intente de nuevo.");
       }
     });
   }

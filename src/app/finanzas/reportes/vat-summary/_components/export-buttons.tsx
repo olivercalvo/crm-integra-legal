@@ -41,7 +41,7 @@ export function ExportButtons({ month }: Props) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      setError("Error de red. Intenta de nuevo.");
+      setError("Error de red. Intente de nuevo.");
     } finally {
       setLoading(null);
     }

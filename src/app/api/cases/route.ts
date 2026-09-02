@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         return NextResponse.json(
-          { error: `El código de expediente "${customCode.trim()}" ya existe. Elige otro.` },
+          { error: `El código de expediente "${customCode.trim()}" ya existe. Elija otro.` },
           { status: 409 }
         );
       }

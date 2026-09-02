@@ -138,7 +138,7 @@ export default async function CotizacionesListPage({ searchParams }: PageProps) 
           emptyMessage={
             hasFilters
               ? "No hay cotizaciones que coincidan con los filtros aplicados."
-              : "Aún no hay cotizaciones. Crea la primera haciendo clic en «Nueva cotización»."
+              : "Aún no hay cotizaciones. La primera se crea con el botón «Nueva cotización»."
           }
         />
       ) : (

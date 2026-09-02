@@ -37,7 +37,7 @@ export function DeleteDocumentButton({
       setOpen(false);
       router.refresh();
     } catch {
-      alert("Error de conexion. Intenta de nuevo.");
+      alert("Error de conexión. Intente de nuevo.");
       setLoading(false);
     }
   };

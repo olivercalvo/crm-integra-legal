@@ -488,7 +488,7 @@ export function validateImport(
         row: client.rowNumber,
         field: "tipo fiscal",
         message:
-          "Tipo de persona requerido: indica 'Natural' o 'Jurídica' en la columna Tipo Fiscal (o Tipo)",
+          "Tipo de persona requerido: la columna Tipo Fiscal (o Tipo) debe decir 'Natural' o 'Jurídica'",
         severity: "error",
       });
       hasError = true;
@@ -514,7 +514,7 @@ export function validateImport(
         errors.push({
           row: client.rowNumber,
           field: "ruc",
-          message: `RUC ya registrado en ${dbMatch.client_number} (${dbMatch.name}). Usa esa ficha en lugar de crear un cliente nuevo.`,
+          message: `RUC ya registrado en ${dbMatch.client_number} (${dbMatch.name}). Corresponde usar esa ficha en lugar de crear un cliente nuevo.`,
           severity: "error",
         });
         hasError = true;

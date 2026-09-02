@@ -61,7 +61,7 @@ export async function POST(
 
     if (count && count > 0) {
       return NextResponse.json(
-        { error: `Este cliente tiene ${count} caso(s) asociado(s). Elimina los casos primero.` },
+        { error: `Este cliente tiene ${count} caso(s) asociado(s). Primero hay que eliminar los casos.` },
         { status: 400 }
       );
     }

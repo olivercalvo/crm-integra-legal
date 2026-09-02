@@ -177,7 +177,7 @@ export function validateCreateQuote(
   const hasClientId = !!raw.client_id;
   const hasNewProspect = !!raw.new_prospect;
   if (hasClientId === hasNewProspect) {
-    errors.client_id = "Indica un cliente existente O los datos de un cliente nuevo (no ambos, no ninguno)";
+    errors.client_id = "Indique un cliente existente O los datos de un cliente nuevo (no ambos, no ninguno)";
   } else if (hasClientId && !UUID_RE.test(String(raw.client_id))) {
     errors.client_id = "Cliente inválido";
   } else if (hasNewProspect) {
@@ -217,7 +217,7 @@ export function validateCreateQuote(
 
   const lines = Array.isArray(raw.lines) ? raw.lines : [];
   if (lines.length === 0) {
-    errors.lines = "Agrega al menos una línea a la cotización";
+    errors.lines = "Agregue al menos una línea a la cotización";
   } else {
     lines.forEach((ln, idx) => {
       const lineErrors = validateLine(ln);
@@ -271,7 +271,7 @@ export function validateUpdateQuote(
   const hasNewProspect = raw.new_prospect !== undefined && raw.new_prospect !== null;
   if (hasClientId && hasNewProspect) {
     errors.client_id =
-      "Indica un cliente existente O los datos de un cliente nuevo (no ambos)";
+      "Indique un cliente existente O los datos de un cliente nuevo (no ambos)";
   } else if (hasClientId && !UUID_RE.test(String(raw.client_id))) {
     errors.client_id = "Cliente inválido";
   } else if (hasNewProspect) {
@@ -1108,7 +1108,7 @@ export async function sendQuote(
   if (errCount) throw new MutationError(pgErrorToMessage(errCount), 500, errCount);
   if (!count || count === 0) {
     throw new MutationError(
-      "La cotización no tiene líneas. Agrega al menos una antes de enviar.",
+      "La cotización no tiene líneas. Agregue al menos una antes de enviar.",
       400
     );
   }

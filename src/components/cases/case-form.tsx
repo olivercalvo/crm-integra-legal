@@ -303,7 +303,7 @@ export function CaseForm({
         });
       } catch {
         setClassificationChangeModal((m) => ({ ...m, open: false, loadingPreview: false }));
-        setError("No se pudo calcular el nuevo código. Intenta de nuevo.");
+        setError("No se pudo calcular el nuevo código. Intente de nuevo.");
       }
       return;
     }
@@ -501,7 +501,7 @@ export function CaseForm({
                 id="case-code"
                 value={caseCode}
                 onChange={(e) => setCaseCode(e.target.value)}
-                placeholder={suggestedCode || "Selecciona clasificación primero"}
+                placeholder={suggestedCode || "Seleccione primero la clasificación"}
                 className="min-h-[48px] font-mono text-lg font-bold border-integra-gold/30 bg-white"
               />
               <p className="text-xs text-integra-navy/70">

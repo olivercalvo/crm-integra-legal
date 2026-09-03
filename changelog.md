@@ -1,5 +1,81 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El selector de cuentas: lista corta + guard del servidor] - 2026-09-03
+
+El selector de cada fila de `/legal/gastos?vista=gastos` ofrecía **las 64 cuentas del plan**.
+Entre ellas `300001 Capital Social`, `400001 Derecho Corporativo` y `100001 Banco General` —
+todas **activas**, así que el chequeo de inactivas no las frenaba. Nada impedía que una tasa de
+Registro Público quedara clasificada como Capital Social y el asiento se posteara contra
+patrimonio. Y es una pantalla de limpieza masiva: alguien va a pasar por 128 filas con el mouse.
+
+### 🔬 El error ya había pasado. Lo cometí yo, en el gasto de demostración
+
+Sembré "Honorario del gestor externo" contra **`610002 Honorarios Profesionales`**. La correcta
+es **`500004 Honorarios Profesionales Externos`**: `610002` son los honorarios que paga el
+bufete por lo suyo —su contador, su propio abogado—, no el gestor externo de un caso.
+
+**Lo importante no es el error: es quién lo cometió.** Alguien que acababa de diseñar el modelo
+de líneas, veinte minutos antes, eligiendo de 64 cuentas donde dos se llaman casi igual.
+
+⚠️ **Y quedó permanente.** El asiento 13 de staging ya estaba posteado y los asientos son
+inmutables: el trigger de la `038` bloquea editar sus líneas. El script quedó corregido para las
+próximas siembras, y avisa si encuentra la clasificación vieja. Para dejarlo bien hay que
+re-sembrar staging.
+
+### 📐 Las dos reglas, escritas donde se pueden encontrar
+
+> Las `5000xx` son **servicios de terceros comprados para el caso**.
+> Las `610xxx` son **recursos propios del bufete consumidos en el caso**.
+
+> El servidor rechaza **lo imposible, no lo improbable**: un guard equivocado bloquea trabajo
+> legítimo y se descubre tarde, con alguien trabado; una sugerencia equivocada cuesta un clic.
+
+Están en `contabilidad/cuentas-de-gasto.ts` y en `sop.md` SOP-024, con el caso concreto.
+
+### La lista es DERIVADA, no siete códigos
+
+`130003` + todas las cuentas activas de tipo `cost`. Hoy dan siete. Si el contador agrega
+`500007 Peritos`, **aparece sola**; con una lista literal no aparecería nunca y nadie se
+enteraría, porque la cuenta existe y el selector simplemente no la muestra. Hay un test que
+agrega una cuenta de costo y verifica que salga.
+
+"Ver todas las cuentas" está a un clic, con una línea que explica cuándo usarlo — el caso raro
+es real: un viaje a una audiencia va a `610018 Gastos de viajes`.
+
+### El guard: tres tipos imposibles
+
+`income`, `equity` y **`liability`**. El del pasivo es el más fuerte: el asiento del gasto ya
+acredita `200001`, así que una línea contra un pasivo dejaría **la misma cuenta de los dos
+lados**. Corre en las tres rutas que escriben una cuenta.
+
+`asset` no se puede cerrar —`130003` es un activo y es el caso principal— y `100001 Banco
+General` **pasa** aunque sea un disparate: la lista corta ya lo saca del camino, y bloquearlo
+sería aplicar el sesgo equivocado al mecanismo equivocado.
+
+### 🔴 Corrección: compras NO tenía el agujero que reporté
+
+Dije que `business_expenses` aceptaba cualquier cuenta activa sin validación de tipo. **Es
+falso.** `validarCuentaDeGasto()` (`queries/business-expenses.ts:304`) existe desde antes y
+filtra `account_type = 'expense'` — es **más estricto** que este guard nuevo.
+
+Por eso **no se tocó compras**: extenderle este predicado lo *aflojaría*, no lo cerraría, y
+aflojar un guard en silencio es peor que el problema que creí encontrar.
+
+⚠️ Queda una consulta abierta de verdad, distinta: ese guard contradice el acta del 25/08, que
+pide para compras "la cuenta de gasto, **costo o activo**". Comprar una computadora va a
+`110001 Mobiliario y equipo` y hoy la ruta lo rechaza.
+
+### Tests: 700 (+26)
+
+`cuentas-de-gasto.test.ts` (19) — que la lista sea derivada, que `100001` **pase** el guard,
+que todo tipo del vocabulario esté decidido, y el caso `610002`/`500004`.
+`crear-con-lineas.route.test.ts` (+7) — patrimonio, ingreso y pasivo rechazados; `610002`
+aceptado; el error apuntando a la línea que falla.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre). Producción intacta.
+
+---
+
 ## [Formulario de alta con líneas + el gasto de demostración en staging] - 2026-09-03
 
 Con esto el bloque de gastos de trámite queda **completo**, salvo el

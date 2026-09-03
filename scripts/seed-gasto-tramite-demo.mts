@@ -102,7 +102,16 @@ const FECHA = "2026-03-15";
 /** Las tres líneas del gasto del fixture del 15/03. */
 const LINEAS = [
   { orden: 1, desc: "Útiles y timbres fiscales", cuenta: "130003", monto: 412.35 },
-  { orden: 2, desc: "Honorario del gestor externo", cuenta: "610002", monto: 900.0 },
+  // 🔴 `500004`, NO `610002`. La primera versión de este script usó
+  // `610002 Honorarios Profesionales` y estaba MAL: esa es la cuenta de los
+  // honorarios que paga el bufete por LO SUYO —su contador, su propio abogado—.
+  // El gestor externo de un caso es un servicio de tercero comprado PARA el
+  // caso, o sea `500004 Honorarios Profesionales Externos`, que es de costo.
+  //
+  // Las dos se llaman casi igual y el error lo cometió quien acababa de diseñar
+  // este modelo. Es la evidencia que motivó la lista corta de siete cuentas —
+  // ver `contabilidad/cuentas-de-gasto.ts`.
+  { orden: 2, desc: "Honorario del gestor externo", cuenta: "500004", monto: 900.0 },
   { orden: 3, desc: "Mensajería y traslados", cuenta: "500005", monto: 185.5 },
 ];
 const TOTAL = LINEAS.reduce((s, l) => s + l.monto, 0);
@@ -178,6 +187,26 @@ const { data: existente } = await db
 
 if (existente) {
   console.log(`ℹ️  El gasto de demostración ya existe (${existente.id}).`);
+  // ⚠️ Si el asiento ya se posteó con la clasificación vieja, NO se puede
+  // arreglar: los asientos son inmutables y el trigger de la `038` bloquea la
+  // edición de las líneas de un gasto asentado. La única salida es re-sembrar
+  // staging. Se avisa en vez de fallar en silencio.
+  const { data: lineaVieja } = await db
+    .from("expense_lines")
+    .select("id")
+    .eq("expense_id", existente.id)
+    .eq("chart_account_code", "610002")
+    .maybeSingle();
+
+  if (lineaVieja) {
+    console.log("");
+    console.log("⚠️  Este gasto tiene una línea contra 610002, que es la clasificación");
+    console.log("   ERRÓNEA de la primera versión de este script. La correcta es 500004.");
+    console.log("   Si el gasto ya está posteado NO se puede corregir: los asientos son");
+    console.log("   inmutables. Para dejarlo bien hay que re-sembrar staging.");
+    console.log("");
+  }
+
   if (existente.posted_entry_id) {
     const { data: e } = await db
       .from("journal_entries")

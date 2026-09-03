@@ -32,6 +32,8 @@ const state: {
   user: { id: string } | null;
   profile: { role: string; tenant_id: string } | null;
   fallanLineas: boolean;
+  /** El plan de cuentas que "ve" la ruta al validar las líneas. */
+  plan: { code: string; name: string; active: boolean; account_type: string }[];
   capturado: {
     expenseInsert: Record<string, unknown> | null;
     lineasInsert: Record<string, unknown>[] | null;
@@ -41,13 +43,27 @@ const state: {
   user: null,
   profile: null,
   fallanLineas: false,
+  plan: [],
   capturado: { expenseInsert: null, lineasInsert: null, borroElGasto: false },
 };
+
+/** El recorte del plan real que usan estos tests. */
+const PLAN_POR_DEFECTO = [
+  { code: "130003", name: "Fondo Legales de Clientes", active: true, account_type: "asset" },
+  { code: "500004", name: "Honorarios Profesionales Externos", active: true, account_type: "cost" },
+  { code: "500005", name: "Costos tramites legales", active: true, account_type: "cost" },
+  { code: "610002", name: "Honorarios Profesionales", active: true, account_type: "expense" },
+  { code: "300001", name: "Capital Social", active: true, account_type: "equity" },
+  { code: "400001", name: "Derecho Corporativo", active: true, account_type: "income" },
+  { code: "200001", name: "Cuentas por pagar", active: true, account_type: "liability" },
+  { code: "4101", name: "Vieja de QuickBooks", active: false, account_type: "income" },
+];
 
 function reset(over: Partial<typeof state> = {}) {
   state.user = { id: "u1" };
   state.profile = { role: "abogada", tenant_id: "t-real" };
   state.fallanLineas = false;
+  state.plan = PLAN_POR_DEFECTO;
   state.capturado = { expenseInsert: null, lineasInsert: null, borroElGasto: false };
   Object.assign(state, over);
 }
@@ -71,6 +87,12 @@ function makeAdmin() {
         return { data: null, error: null };
       }
 
+      if (table === "chart_of_accounts") {
+        // La ruta pide `.in("code", codigos)`. El fake no filtra: devuelve el
+        // plan entero y la ruta busca en él, que es lo que hace de verdad.
+        return { data: state.plan, error: null };
+      }
+
       if (table === "expense_lines" && s.op === "insert") {
         state.capturado.lineasInsert = s.payload as Record<string, unknown>[];
         return state.fallanLineas
@@ -84,6 +106,8 @@ function makeAdmin() {
     const b: Record<string, unknown> = {
       select: () => b,
       eq: () => b,
+      // La ruta filtra el plan con `.in("code", codigos)`.
+      in: () => b,
       insert: (payload: unknown) => {
         s.op = "insert";
         s.payload = payload;
@@ -308,4 +332,91 @@ test("sin sesión → 401", { skip: skipNoMocks }, async () => {
   reset({ user: null });
   const res = await POST(req({ ...BASE, lines: [linea()] }));
   assert.equal(res.status, 401);
+});
+
+// ===========================================================================
+// 6. EL GUARD DE CUENTAS
+// ===========================================================================
+
+test(
+  "🔴 una cuenta de PATRIMONIO en una línea → 400, y no crea nada",
+  { skip: skipNoMocks },
+  async () => {
+    // Es el caso concreto que motivó el guard: en la pantalla de limpieza,
+    // `300001 Capital Social` está ACTIVA y a un clic de distancia de una tasa
+    // judicial. El chequeo de inactivas no la frena.
+    reset();
+    const res = await POST(
+      req({ ...BASE, lines: [linea({ chart_account_code: "300001" })] })
+    );
+    assert.equal(res.status, 400);
+    assert.equal(state.capturado.expenseInsert, null);
+    const body = await res.json();
+    assert.match(body.fieldErrors["lineas.0.chart_account_code"], /capital de las socias/);
+  }
+);
+
+test("una cuenta de INGRESO en una línea → 400", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "400001" })] }));
+  assert.equal(res.status, 400);
+  assert.equal(state.capturado.expenseInsert, null);
+});
+
+test(
+  "una cuenta de PASIVO en una línea → 400: dejaría la misma cuenta de los dos lados",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "200001" })] }));
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.match(body.fieldErrors["lineas.0.chart_account_code"], /los dos lados/);
+  }
+);
+
+test("una cuenta INACTIVA en una línea → 400", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "4101" })] }));
+  assert.equal(res.status, 400);
+  assert.match(
+    (await res.json()).fieldErrors["lineas.0.chart_account_code"],
+    /inactiva/
+  );
+});
+
+test("una cuenta que no existe en el plan → 400", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "999999" })] }));
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).fieldErrors["lineas.0.chart_account_code"], /no existe/);
+});
+
+test(
+  "el error apunta a la LÍNEA que falla, no a la primera",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    const res = await POST(
+      req({
+        ...BASE,
+        lines: [
+          linea({ chart_account_code: "130003" }),
+          linea({ chart_account_code: "300001" }),
+        ],
+      })
+    );
+    const body = await res.json();
+    assert.ok(!body.fieldErrors["lineas.0.chart_account_code"], "la 0 está bien");
+    assert.ok(body.fieldErrors["lineas.1.chart_account_code"], "la 1 es la mala");
+  }
+);
+
+test("610002 se ACEPTA: es improbable, no imposible", { skip: skipNoMocks }, async () => {
+  // El servidor rechaza lo imposible, no lo improbable. Un viaje a una audiencia
+  // va legítimamente a una 610xxx; lo que hace la lista corta es que no sea el
+  // default, no que esté prohibida.
+  reset();
+  const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "610002" })] }));
+  assert.equal(res.status, 201);
 });

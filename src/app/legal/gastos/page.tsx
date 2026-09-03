@@ -65,7 +65,7 @@ export default async function GastosPage({ searchParams }: PageProps) {
   const cuentas = vistaGastos
     ? (await listChartAccounts(db, tenantId))
         .filter((c) => c.active)
-        .map((c) => ({ code: c.code, name: c.name }))
+        .map((c) => ({ code: c.code, name: c.name, account_type: c.account_type }))
     : [];
 
   // Fetch all cases with their expenses and payments

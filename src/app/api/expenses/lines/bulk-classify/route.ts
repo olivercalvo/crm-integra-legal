@@ -52,6 +52,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 
 export const runtime = "nodejs";
 
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
     // `business_expenses`) la base no lo impediría.
     const { data: cuentaRow, error: errCuenta } = await admin
       .from("chart_of_accounts")
-      .select("code, name, active")
+      .select("code, name, active, account_type")
       .eq("tenant_id", profile.tenant_id)
       .eq("code", cuenta)
       .maybeSingle();
@@ -142,6 +143,16 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 }
       );
+    }
+
+    // 🔴 Un ingreso, un patrimonio o un pasivo NUNCA clasifican un gasto. No es
+    // preferencia de interfaz: es aritmética contable, y por eso vive del lado
+    // del servidor igual que el chequeo de las inactivas. Ver
+    // `contabilidad/cuentas-de-gasto.ts` — el guard rechaza lo IMPOSIBLE, no lo
+    // improbable, y esta ruta escribe decenas de filas de un clic.
+    const rechazo = motivoDeRechazo(cuentaRow as never);
+    if (rechazo) {
+      return NextResponse.json({ error: rechazo }, { status: 400 });
     }
 
     // ─────────────────────────────────────────────────────────────────────────

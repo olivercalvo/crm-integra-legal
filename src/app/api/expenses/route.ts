@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { validarLineas } from "@/lib/finanzas/validators/expense-line";
 import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
+import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -70,6 +71,63 @@ export async function POST(request: NextRequest) {
     if (!validadas.ok) {
       return NextResponse.json(
         { error: "Revise las líneas del gasto", fieldErrors: validadas.errors },
+        { status: 400 }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LAS CUENTAS DE LAS LÍNEAS, CONTRA EL PLAN
+    // ─────────────────────────────────────────────────────────────────────────
+    // `validarLineas()` es un módulo PURO: sabe que la cuenta es obligatoria y
+    // que no puede venir vacía, pero no conoce el plan de cuentas. Que exista,
+    // que esté activa y que su TIPO pueda clasificar un gasto se verifica acá,
+    // que es donde hay base de datos.
+    //
+    // `chart_account_code` es un FK LÓGICO (sin constraint, igual que en
+    // `business_expenses`), así que sin esto se puede escribir un código que
+    // ningún reporte sabe agrupar — o clasificar una tasa judicial como Capital
+    // Social. Ver `contabilidad/cuentas-de-gasto.ts`.
+    const codigos = Array.from(
+      new Set(validadas.data.lineas.map((l) => l.chart_account_code))
+    );
+
+    const { data: cuentasDelPlan, error: errCuentas } = await admin
+      .from("chart_of_accounts")
+      .select("code, name, active, account_type")
+      .eq("tenant_id", profile.tenant_id)
+      .in("code", codigos);
+
+    if (errCuentas) {
+      console.error("Error leyendo el plan de cuentas:", errCuentas);
+      return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    }
+
+    const porCodigo = new Map(
+      ((cuentasDelPlan ?? []) as { code: string }[]).map((c) => [c.code, c])
+    );
+
+    const erroresDeCuenta: Record<string, string> = {};
+    validadas.data.lineas.forEach((l, i) => {
+      const cuenta = porCodigo.get(l.chart_account_code) as
+        | { code: string; name: string; active: boolean; account_type: never }
+        | undefined;
+      const clave = `lineas.${i}.chart_account_code`;
+      if (!cuenta) {
+        erroresDeCuenta[clave] = `La cuenta ${l.chart_account_code} no existe en el plan`;
+        return;
+      }
+      if (cuenta.active === false) {
+        erroresDeCuenta[clave] =
+          `La cuenta ${cuenta.code} está inactiva: el gasto no aparecería en ningún reporte`;
+        return;
+      }
+      const rechazo = motivoDeRechazo(cuenta);
+      if (rechazo) erroresDeCuenta[clave] = rechazo;
+    });
+
+    if (Object.keys(erroresDeCuenta).length > 0) {
+      return NextResponse.json(
+        { error: "Revise las cuentas de las líneas", fieldErrors: erroresDeCuenta },
         { status: 400 }
       );
     }

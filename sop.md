@@ -1702,3 +1702,94 @@ vuelve deuda permanente. Una lista de gastos entre casos sirve igual después.
 🎨 **Se presenta como un estado, no como una alarma:** chip y no banner, ámbar y reloj y nunca
 rojo y triángulo, el chip **desaparece al llegar a cero**, y muestra avance (`84 de 128`) en vez
 de deuda. La explicación aparece una sola vez, en gris chico y solo con el filtro activo.
+
+
+---
+
+## SOP-024: Qué cuenta puede clasificar un gasto — la lista corta y el guard
+
+### El error real que lo motivó, y quién lo cometió
+
+El 03/09/2026, al sembrar el gasto de demostración de staging, se clasificó "Honorario del
+gestor externo" contra **`610002 Honorarios Profesionales`**. La correcta es
+**`500004 Honorarios Profesionales Externos`**.
+
+`610002` son los honorarios que paga el bufete por LO SUYO —su contador, su propio abogado—.
+El gestor externo de un caso es un servicio de tercero comprado PARA el caso.
+
+**Lo importante no es el error: es quién lo cometió.** La misma persona que acababa de diseñar
+el modelo de líneas, veinte minutos antes, eligiendo de 64 cuentas donde dos se llaman casi
+igual. Si eso alcanza para equivocar a alguien con el modelo entero en la cabeza, alcanza de
+sobra para equivocar a quien pasa por 128 filas haciendo clic rápido en la pantalla de limpieza.
+
+Y quedó **permanente**: el asiento ya estaba posteado, y los asientos son inmutables.
+
+### 📐 REGLA 1 — qué separa un costo de un gasto en un caso
+
+> Las **`5000xx`** son **servicios de terceros comprados para el caso**.
+> Las **`610xxx`** son **recursos propios del bufete consumidos en el caso**.
+
+Con ese criterio se resuelve solo:
+
+| Caso | Cuenta | Por qué |
+|---|---|---|
+| Traductor, notario, investigador, gestor externo | `5000xx` | alguien le facturó al bufete por ese caso |
+| Una abogada viaja a Chitré a una audiencia; el combustible; la papelería de un escrito | `610xxx` | el bufete consumió lo suyo |
+
+No es casualidad que las seis cuentas de costo del plan sean, una por una, servicios de
+terceros: Josuarth armó ese bloque exactamente para esto.
+
+### 📐 REGLA 2 — el servidor rechaza lo imposible, no lo improbable
+
+> Un guard equivocado **bloquea trabajo legítimo y se descubre tarde**, con alguien trabado y
+> sin entender por qué. Una sugerencia equivocada **cuesta un clic**.
+
+Por eso los dos mecanismos tienen sesgos **opuestos y deliberados**:
+
+| | Sesgo | Qué hace |
+|---|---|---|
+| **La lista** (`cuentasSugeridasParaTramite`) | opinada, corta | ofrece 7 de 64; el resto a un clic |
+| **El guard** (`esTipoValidoParaGasto`) | conservador | rechaza solo los 3 tipos sin lectura contable posible |
+
+`100001 Banco General` como clasificación de una tasa judicial es un disparate —el banco es de
+DÓNDE sale la plata, no en qué se convirtió— y aun así **no se bloquea**: no es estructuralmente
+imposible, y la lista corta ya lo saca del camino.
+
+### La lista es DERIVADA, no siete códigos literales
+
+`130003` + **todas las cuentas activas de tipo `cost`**.
+
+Hardcodear los siete se desactualizaría el día que RM toque el plan, que es exactamente lo que
+van a hacer: si el contador agrega `500007 Peritos`, con la regla derivada aparece sola; con una
+lista literal no aparece nunca **y nadie se entera**, porque la cuenta existe y el selector
+simplemente no la muestra.
+
+### Los tres tipos imposibles
+
+| Tipo | Por qué |
+|---|---|
+| `income` | registra lo que el bufete factura, no en qué se gastó la plata |
+| `equity` | registra el capital de las socias y el resultado, no un desembolso |
+| **`liability`** | **el más fuerte de los tres:** el asiento del gasto YA acredita `200001`; una línea contra un pasivo dejaría la misma cuenta de los dos lados. Y "pagar una deuda" no es esto — es DEBE CxP / HABER banco, otro flujo |
+
+`asset` NO se puede cerrar: `130003` es un activo y es el caso principal.
+`112001 Depr. acumulada` pasa: debitarla es legítimo en una baja de activo.
+
+### Dónde vive, y por qué junto
+
+`src/lib/finanzas/contabilidad/cuentas-de-gasto.ts` — **la lista y el predicado en el mismo
+archivo**. Si vivieran separados divergirían: la pantalla ofrecería algo que la ruta rechaza, o
+al revés. Hay un test que cruza los dos (`todo lo sugerido pasa el guard`).
+
+El guard corre en las tres rutas que escriben una cuenta:
+`POST /api/expenses`, `PATCH /api/expenses/lines/[id]` y `POST /api/expenses/lines/bulk-classify`.
+
+### ⚠️ Compras (`business_expenses`) NO usa este predicado, y tiene el suyo
+
+`validarCuentaDeGasto()` en `queries/business-expenses.ts` filtra `account_type = 'expense'` —
+es **más estricto** que este guard: además de los tres imposibles, rechaza `cost` y `asset`.
+
+🔴 **Y eso contradice el acta del 25/08**, que pide para compras "la cuenta de gasto, **costo o
+activo** que elija el usuario". Comprar una computadora es una compra del bufete y va a
+`110001 Mobiliario y equipo`, que hoy la ruta rechaza. Es una consulta abierta, no un cambio
+que convenga hacer sin decidirlo.

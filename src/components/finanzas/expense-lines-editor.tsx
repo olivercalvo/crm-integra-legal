@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ListFilter, Plus, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,11 @@ import {
   type ExpenseLineDraft,
 } from "@/lib/finanzas/types/expense-line";
 import { lineaVacia } from "@/lib/finanzas/validators/expense-line";
+import {
+  cuentasClasificables,
+  cuentasSugeridasParaTramite,
+} from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 /**
  * EDITOR DE LÍNEAS DE GASTO — compartido por gastos de trámite y compras.
@@ -57,6 +62,11 @@ import { lineaVacia } from "@/lib/finanzas/validators/expense-line";
 export interface CuentaOption {
   code: string;
   name: string;
+  /**
+   * Hace falta para armar la lista corta y para no ofrecer una cuenta que el
+   * servidor va a rechazar. Ver `contabilidad/cuentas-de-gasto.ts`.
+   */
+  account_type: AccountType;
 }
 
 interface Props {
@@ -85,6 +95,25 @@ export function ExpenseLinesEditor({
   disabled = false,
   moneda = "B/.",
 }: Props) {
+  /**
+   * El selector arranca con las SIETE que tienen sentido para un gasto de
+   * trámite, no con las 64 del plan.
+   *
+   * El 03/09/2026 se clasificó un honorario de gestor externo contra
+   * `610002 Honorarios Profesionales` en vez de `500004 Honorarios Profesionales
+   * Externos` — se llaman casi igual y solo una es de costo. Lo hizo alguien que
+   * acababa de diseñar este modelo. Con 64 opciones el error es cuestión de
+   * tiempo; con siete, hay que buscarlo.
+   *
+   * "Ver todas" existe porque el caso raro es REAL —una abogada que viaja a una
+   * audiencia va a `610018 Gastos de viajes`— pero cuesta un clic más que lo
+   * probable, que es como tiene que ser.
+   */
+  const [verTodas, setVerTodas] = useState(false);
+  const sugeridas = useMemo(() => cuentasSugeridasParaTramite(cuentas), [cuentas]);
+  const todas = useMemo(() => cuentasClasificables(cuentas), [cuentas]);
+  const opciones = verTodas ? todas : sugeridas;
+
   const totales = useMemo(
     () =>
       totalesDeLineas(
@@ -210,7 +239,7 @@ export function ExpenseLinesEditor({
                     }
                   >
                     <option value="">— Elija una —</option>
-                    {cuentas.map((c) => (
+                    {opciones.map((c) => (
                       <option key={c.code} value={c.code}>
                         {c.code} · {c.name}
                       </option>
@@ -274,16 +303,40 @@ export function ExpenseLinesEditor({
         })}
       </div>
 
-      <Button
-        type="button"
-        onClick={agregar}
-        variant="ghost"
-        disabled={disabled}
-        className="min-h-[44px] text-integra-navy"
-      >
-        <Plus size={16} className="mr-1" />
-        Agregar línea
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          onClick={agregar}
+          variant="ghost"
+          disabled={disabled}
+          className="min-h-[44px] text-integra-navy"
+        >
+          <Plus size={16} className="mr-1" />
+          Agregar línea
+        </Button>
+
+        {todas.length > sugeridas.length && (
+          <button
+            type="button"
+            onClick={() => setVerTodas((v) => !v)}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-3 text-xs font-medium text-gray-500 hover:text-integra-navy"
+          >
+            <ListFilter size={14} />
+            {verTodas
+              ? `Ver solo las ${sugeridas.length} habituales`
+              : `Ver todas las cuentas (${todas.length})`}
+          </button>
+        )}
+      </div>
+
+      {verTodas && (
+        <p className="text-xs text-gray-500">
+          Las habituales de un gasto de trámite son el fondo del cliente y las cuentas de
+          costo. Las demás existen para casos puntuales —un viaje a una audiencia va a
+          <span className="font-medium"> Gastos de viajes</span>— pero si dudás, es una de
+          las habituales.
+        </p>
+      )}
 
       {/* Totales — los mismos que calcula el validador y la base */}
       <div className="rounded-lg border border-integra-navy/20 bg-integra-navy/5 p-3">

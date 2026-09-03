@@ -35,6 +35,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 
 export const runtime = "nodejs";
 
@@ -140,7 +141,7 @@ export async function PATCH(
     // `chart_account_code` es un FK LÓGICO, la base no lo valida.
     const { data: cuentaRow } = await admin
       .from("chart_of_accounts")
-      .select("code, name, active")
+      .select("code, name, active, account_type")
       .eq("tenant_id", profile.tenant_id)
       .eq("code", cuenta)
       .maybeSingle();
@@ -158,6 +159,12 @@ export async function PATCH(
         },
         { status: 400 }
       );
+    }
+
+    // 🔴 Regla contable, no de interfaz: ver `contabilidad/cuentas-de-gasto.ts`.
+    const rechazo = motivoDeRechazo(cuentaRow as never);
+    if (rechazo) {
+      return NextResponse.json({ error: rechazo }, { status: 400 });
     }
 
     const { error: errUpdate } = await admin

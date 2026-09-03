@@ -3,10 +3,15 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Check, History, Loader2, X } from "lucide-react";
+import { Check, History, ListFilter, Loader2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CUENTA_TRAMITE_DEFAULT } from "@/lib/finanzas/types/expense-line";
+import {
+  cuentasClasificables,
+  cuentasSugeridasParaTramite,
+} from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 /**
  * LISTA DE GASTOS DE TRÁMITE ENTRE CASOS, con la limpieza de los sin clasificar.
@@ -59,6 +64,8 @@ export interface GastoIndividualRow {
 export interface CuentaOption {
   code: string;
   name: string;
+  /** Para la lista corta y para no ofrecer lo que el servidor rechaza. */
+  account_type: AccountType;
 }
 
 interface Props {
@@ -92,6 +99,28 @@ export function GastosIndividualesTable({
   const [confirmando, setConfirmando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState<string | null>(null);
+
+  /**
+   * 🔴 EL SELECTOR NO OFRECE LAS 64 CUENTAS DEL PLAN.
+   *
+   * Esta es una pantalla de limpieza masiva: alguien va a pasar por 128 filas
+   * haciendo clic rápido. Entre las 64 activas están `300001 Capital Social`,
+   * `400001 Derecho Corporativo` y `100001 Banco General` — ninguna puede ser la
+   * clasificación de una tasa judicial, y todas están ACTIVAS, así que el
+   * chequeo de inactivas no las frena.
+   *
+   * Un gasto de trámite responde UNA pregunta: ¿es recuperable del cliente
+   * (`130003`) o es costo propio del bufete (`5000xx`)? Esas siete son el
+   * default; el resto está a un clic.
+   *
+   * El guard del servidor rechaza aparte lo imposible (ingreso, patrimonio,
+   * pasivo). Los dos hacen falta: el servidor es el permiso, y esconder lo que
+   * no tiene sentido es lo que evita el error de dedo.
+   */
+  const [verTodas, setVerTodas] = useState(false);
+  const sugeridas = useMemo(() => cuentasSugeridasParaTramite(cuentas), [cuentas]);
+  const todasLasCuentas = useMemo(() => cuentasClasificables(cuentas), [cuentas]);
+  const opciones = verTodas ? todasLasCuentas : sugeridas;
 
   /** Las filas que se pueden clasificar en lote: una sola línea sin cuenta. */
   const clasificables = useMemo(
@@ -205,6 +234,32 @@ export function GastosIndividualesTable({
         </div>
       )}
 
+      {/* El escape del caso raro. Va al lado del chip y no dentro de cada fila:
+          si estuviera por fila, habría que apretarlo 128 veces. */}
+      {todasLasCuentas.length > sugeridas.length && (
+        <button
+          type="button"
+          onClick={() => setVerTodas((v) => !v)}
+          className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+        >
+          <ListFilter size={14} />
+          {verTodas
+            ? `Ver solo las ${sugeridas.length} cuentas habituales`
+            : `Ver todas las cuentas (${todasLasCuentas.length})`}
+        </button>
+      )}
+
+      {verTodas && (
+        <p className="text-xs text-gray-500">
+          Un gasto de trámite casi siempre va al{" "}
+          <span className="font-medium">fondo del cliente</span> —si se le refactura— o a
+          una <span className="font-medium">cuenta de costo</span> —si lo absorbe el
+          bufete—. Las demás son para casos puntuales: un viaje a una audiencia va a{" "}
+          <span className="font-medium">Gastos de viajes</span>. Si dudás, es una de las
+          habituales.
+        </p>
+      )}
+
       {/* La explicación aparece UNA vez, con el filtro activo, y en gris chico. */}
       {filtroActivo && (
         <p className="text-sm text-gray-500">
@@ -237,7 +292,7 @@ export function GastosIndividualesTable({
                   onChange={(e) => setCuentaMasiva(e.target.value)}
                   className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
                 >
-                  {cuentas.map((c) => (
+                  {opciones.map((c) => (
                     <option key={c.code} value={c.code}>
                       {c.code} · {c.name}
                     </option>
@@ -385,7 +440,7 @@ export function GastosIndividualesTable({
                             className="block min-w-[13rem] rounded-md border border-amber-300 bg-amber-50 px-2 min-h-[40px] text-xs text-amber-900 focus:border-integra-navy focus:outline-none"
                           >
                             <option value="">Sin clasificar — elegir cuenta</option>
-                            {cuentas.map((c) => (
+                            {opciones.map((c) => (
                               <option key={c.code} value={c.code}>
                                 {c.code} · {c.name}
                               </option>

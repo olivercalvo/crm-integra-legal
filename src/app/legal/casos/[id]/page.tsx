@@ -67,7 +67,7 @@ export default async function ExpedienteDetailPage({
   ]);
   const cuentasParaGastos = cuentasPlan
     .filter((c) => c.active)
-    .map((c) => ({ code: c.code, name: c.name }));
+    .map((c) => ({ code: c.code, name: c.name, account_type: c.account_type }));
   const proveedoresParaGastos = proveedores.map((p) => ({
     id: p.id,
     legal_name: p.legal_name,

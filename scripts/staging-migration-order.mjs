@@ -78,4 +78,35 @@ export const BUNDLE_2 = [
   // Va DESPUÉS de 20260505000007 (define T7a) porque lo reemplaza para que
   // anuncie su paso, y después de nada más: solo toca invoices y su trigger.
   "sql/pending/032_amount_paid_derivado.sql",
+  // 033 y 034 se aplicaron a mano en staging el 02/09/2026 y quedaron fuera de
+  // esta lista. Se agregan el 03/09: sin ellas, un `--reset` reconstruye una
+  // staging SIN proveedores y SIN el UNIQUE que impide postear dos veces el
+  // mismo documento, que es peor que la base que reemplaza.
+  //
+  // 033 va después de 010 (crea business_expenses, a la que le agrega
+  // supplier_id y due_date).
+  "sql/pending/033_proveedores_entidad.sql",
+  // 034 va después de 023 (crea journal_entries). Su paso 1 es un SELECT de
+  // chequeo que devuelve 0 filas en una base recién armada.
+  "sql/pending/034_asiento_unico_por_documento.sql",
 ];
+
+// ---------------------------------------------------------------------------
+// ⚠️ 035 NO ESTÁ EN ESTA LISTA, Y ES A PROPÓSITO
+// ---------------------------------------------------------------------------
+// `035_reembolso_a_fondos_legales.sql` apunta los servicios REIM-* a la cuenta
+// `130003`, y esa cuenta NO viene de ninguna migración: la crea
+// `npm run seed:staging` desde el Excel de las 62 cuentas de Josuar.
+//
+// Este bundle corre ANTES del seed (este script termina diciendo "Siguiente:
+// npm run seed:staging"). Si 035 estuviera acá, su guard abortaría en toda base
+// recién reseteada, porque el FK compuesto de `services_catalog` no tendría a
+// dónde apuntar.
+//
+// El reparto queda así, y son dos caminos para la misma regla:
+//   · base que YA existe (staging hoy, producción algún día) → la migración 035.
+//   · base recién armada (`--reset` + seed)                  → el seed lo deja
+//     bien solo, en `scripts/seed-staging.ts` (buscá "REIM").
+//
+// Si alguien cambia la cuenta del reembolso, hay que mover LOS DOS.
+// ---------------------------------------------------------------------------

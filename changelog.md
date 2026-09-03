@@ -1,5 +1,119 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Auditoría del inventario + el reembolso apunta a 130003 + "Cobros"] - 2026-09-03
+
+Tres cosas, en el orden en que se hicieron. Las dos últimas son el prólogo del bloque de
+gastos de trámite: no tiene sentido construir un asiento que DEBE `130003` mientras el
+catálogo de servicios apunta a otra cuenta para lo mismo, ni tocar los formularios de cobro
+dejándolos diciendo "Pago".
+
+### 1. El inventario de la reunión del 25/08 mentía en las dos direcciones
+
+Se auditaron **fila por fila las ocho secciones** de
+`Clientes/Integra/Temas Contables/REQUISITOS-REUNION-25-AGOSTO.md` contra el código real —no
+contra el inventario, ni contra `task_plan.md`. **Once filas estaban mal marcadas**, y en
+los dos sentidos, que es lo que lo hacía caro: filas en ⬜ que estaban terminadas, y una
+fila en ✅ que no existía.
+
+**Estaban hechas y decía que no:** tipo de documento en desplegable
+(`invoice-form.tsx:250-267`), balance y ER a cualquier fecha (se hizo el 02/09), el saldo
+inicial del mayor sí se ajusta al rango (`libro-mayor.ts:88-101`), importación masiva de
+saldos (`bulk/route.ts:190-212`), estado de cuenta por cliente y proveedor (no es un
+placeholder), subcategoría de depreciación acumulada, el guard de cuentas con movimientos
+(`api/chart-of-accounts.ts:246-277`), el filtro de subcategorías por tipo
+(`manager.tsx:531`), la tasa de ITBMS configurable, balance de comprobación, diario general
+y la antigüedad detallada por documento.
+
+**Y la que decía ✅ sin serlo:** el reembolso a `130003`. Estaba leído de un *fixture de
+test* (`reports/__tests__/convergencia.test.ts:137-140`), no del sistema. Ver el punto 2.
+
+**Además, la sospecha de "12 tests ocultos detrás de `skip`" es falsa:** `npm test` da 575
+pass y **0 skipped**. No hay ningún renombrado `gastos_operativos` a medias — se completó
+con la migración `025`.
+
+**El arreglo estructural, que es el que importa.** El documento tenía DOS fuentes de verdad:
+las tablas de las secciones 1 a 8 y un bloque narrativo "estado al cierre del día" que decía
+"donde difieran, manda este bloque". Esa estructura es la que lo hizo mentir tres veces en
+dos días. Ahora **hay una sola fuente —las tablas—**, cada fila lleva su prueba en
+`archivo:línea`, y la regla para marcar ✅ es que se pueda señalar el código. El bloque
+narrativo se eliminó.
+
+### 2. Los seis servicios de reembolso apuntan a `130003`, no a `2201`
+
+`sql/pending/035_reembolso_a_fondos_legales.sql`. Lo decidió el acta del 25/08 ("Reembolso al
+facturar: HABER 130003, nunca ingreso") y hasta hoy el catálogo decía otra cosa.
+
+**No es un detalle de nomenclatura: son dos lados del balance.** `2201` es un PASIVO y
+`130003` un ACTIVO, y acreditar un pasivo lo aumenta mientras acreditar un activo lo
+disminuye. El acta decidió dos asientos que forman un par y solo cierran del lado del activo:
+
+    Al incurrir el gasto:      DEBE 130003  /  HABER Cuentas por Pagar
+    Al facturar el reembolso:  DEBE CxC     /  HABER 130003
+
+El bufete adelanta plata por el cliente (el activo sube) y al facturarle el reembolso el
+adelanto se cancela contra la cuenta por cobrar: `130003` vuelve a cero y lo que el cliente
+debe queda entero en CxC, sin pasar nunca por una cuenta de ingreso. Con `2201` en su lugar,
+facturar el reembolso **inflaría un pasivo en vez de cancelar el adelanto** y el trust fund
+quedaría contado dos veces.
+
+**La inconsistencia ya estaba en el repo, en el otro sentido.** Los dos scripts que siembran
+el ledger (`seed-asientos.ts:163,183` y `backfill-asientos-faltantes.mts:159-160`) ya
+posteaban contra `130003`. O sea: **los asientos sembrados estaban bien y el catálogo estaba
+mal.** Nadie lo notó porque ninguna ruta de `/api` postea al ledger todavía —
+`revenue_account` se lee (`queries/catalogs.ts:80`) pero nadie lo usa para armar un asiento.
+
+**No reescribe nada histórico:** `revenue_account` NO se snapshotea en `invoice_lines` (ahí
+el snapshot es `tax_code`/`tax_rate`). Es configuración, no dato histórico.
+
+**Lo que NO se tocó:** los `HON-*` siguen en `4101`. Qué cuenta de ingreso ACTIVA va en cada
+servicio es una de las tres definiciones que faltan del contador, y postear contra una cuenta
+inactiva del plan viejo es peor que no postear.
+
+**El guard, y por qué:** `130003` no viene de ninguna migración — la crea
+`npm run seed:staging` desde el Excel de las 62 cuentas de Josuar. Sin la cuenta, el FK
+compuesto de `services_catalog` rechaza el UPDATE con un error que no dice nada. El paso 1 lo
+chequea antes y aborta con un mensaje legible.
+
+**Por eso 035 NO está en `BUNDLE_2`.** El bundle corre ANTES del seed, así que la migración
+abortaría en toda base reseteada. La misma regla vive en dos lugares, uno por situación: la
+migración arregla una base que ya existe, y `apuntarReembolsosAFondosLegales()` en
+`seed-staging.ts` deja bien una recién armada. **Si cambia la cuenta, van los dos** — está
+escrito en los dos archivos y en `staging-migration-order.mjs`.
+
+**Aplicado a staging**, con los NOTICE leídos: los 6 servicios (`REIM-ADM`, `REIM-GOB`,
+`REIM-NOT`, `REIM-OTH`, `REIM-REG`, `REIM-TIM`) pasaron de `2201` a `130003`. Segunda corrida:
+0 filas, guard OK, verificación en 6. **Producción NO** — hay facturas de reembolso reales y
+el cambio se revisa con RM antes.
+
+### 3. `033` y `034` entraron al bundle de staging
+
+Se habían aplicado a mano el 02/09 y quedaron fuera de la lista. Sin ellas un `--reset`
+reconstruía una staging **sin proveedores** y **sin el UNIQUE que impide postear dos veces el
+mismo documento** — o sea, peor que la base que reemplaza.
+
+### 4. "Pago" → "Cobro" en los dos formularios que lo escriben
+
+Estaba a medias desde el 02/09 y **así era peor que no haberlo empezado**: el mismo registro
+se leía "Cobro" y se escribía "Pago", justo la confusión que Rose pidió eliminar ("desde
+Integra, pago es dinero que sale"). La lectura ya estaba corregida en
+`legal/casos/[id]/page.tsx`; faltaban los formularios.
+
+- `add-expense-form.tsx` — los dos botones que abren el formulario, el título, el label de
+  fecha, el botón de guardar y el mensaje de error de validación.
+- `section-expense-form.tsx` — pestaña, título, label de fecha, botón y error.
+
+Los identificadores internos (`payAmount`, `handleAddPayment`, `/api/payments`,
+`payment_type`) quedan como están: son código, no interfaz, y renombrarlos es un refactor con
+su propio riesgo. El requisito era el texto que ve la persona.
+
+### Lo que NO se hizo, a propósito
+
+El bloque de gastos de trámite quedó **solo en diseño**. Y sigue en pie el pendiente menor del
+02/09: los badges del hub de reportes dicen "Sin corte por período" para `/pyl` y `/balance`
+(`reportes/page.tsx:53,59`), que dejó de ser cierto.
+
+---
+
 ## [Filtro de período en los tres estados financieros] - 2026-09-02
 
 Es el renglón que Josuarth pidió el 18/08: *"Balance y estado de resultados a cualquier

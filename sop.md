@@ -669,6 +669,50 @@ de balance —no cuadraría, le faltaría exactamente el resultado acumulado— 
 metería movimiento del ejercicio dentro de un asiento que dice ser de apertura. Está pendiente
 de confirmación del contador antes de escribir el motor de posteo.
 
+### La cuenta del reembolso: `130003`, y por qué el lado importa (03/09/2026)
+
+Los servicios `REIM-*` de `services_catalog` apuntan a **`130003 Fondo Legales de Clientes`**.
+Lo decidió el acta del 25/08: *"Reembolso al facturar: HABER 130003, nunca ingreso"*.
+
+Hasta el 03/09 apuntaban a `2201 Cuentas por pagar a clientes`, que es como se sembraron en
+`20260505000002:202-203` y `sql/pending/012:112-115`. Lo corrige
+`sql/pending/035_reembolso_a_fondos_legales.sql`.
+
+**No es lo mismo con otro nombre: `2201` es un PASIVO y `130003` un ACTIVO.** Acreditar un
+pasivo lo AUMENTA; acreditar un activo lo DISMINUYE. El acta decidió dos asientos que forman
+un par y solo cierran del lado del activo:
+
+```
+Al incurrir el gasto de trámite:  DEBE 130003  /  HABER Cuentas por Pagar
+Al facturar el reembolso:         DEBE CxC     /  HABER 130003
+```
+
+El bufete adelanta plata por el cliente (el activo sube) y al facturarle el reembolso el
+adelanto se cancela contra la cuenta por cobrar: **`130003` vuelve a cero** y lo que el cliente
+debe queda entero en CxC, sin tocar una cuenta de ingreso. Con `2201` en su lugar, facturar el
+reembolso inflaría un pasivo en vez de cancelar el adelanto, y el fondo del cliente quedaría
+contado dos veces.
+
+El modelo viejo —tratar el fondo del cliente como una deuda del bufete hacia él— no es un
+error contable en abstracto, pero **no es el que eligió RM y conviven mal**: hay que elegir uno.
+
+🔗 **La regla vive en DOS lugares y hay que mover los dos:**
+
+| Situación | Dónde |
+|---|---|
+| Base que YA existe (staging hoy, producción algún día) | `sql/pending/035_reembolso_a_fondos_legales.sql` |
+| Base recién armada (`--reset` + seed) | `apuntarReembolsosAFondosLegales()` en `scripts/seed-staging.ts` |
+
+**Por qué 035 NO está en `BUNDLE_2`:** necesita que `130003` exista, y esa cuenta no viene de
+ninguna migración — la crea `npm run seed:staging` desde el Excel de las 62 cuentas. El bundle
+corre ANTES del seed, así que ahí la migración abortaría en toda base reseteada. La nota larga
+está en `scripts/staging-migration-order.mjs`.
+
+⚠️ **Los `HON-*` siguen en `4101`, a propósito.** Qué cuenta de ingreso ACTIVA va en cada
+servicio es una de las tres definiciones que faltan del contador. `4101` es del plan viejo y
+está inactiva: postear contra ella es peor que no postear. Por eso el seed la deja inactiva
+pero existiendo — para no romperle el FK a `services_catalog`.
+
 ---
 
 ## SOP-014: El ledger — cómo se escribe y cómo NO

@@ -116,7 +116,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
   const handleAddPayment = () => {
     const amount = parseFloat(payAmount);
     if (!amount || amount <= 0 || !payDate) {
-      setError("Complete todos los campos del pago");
+      setError("Complete todos los campos del cobro");
       return;
     }
     startTransition(async () => {
@@ -168,14 +168,14 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             className="min-h-[48px] bg-green-600 text-white hover:bg-green-700 font-semibold"
           >
             <Plus size={18} className="mr-1" />
-            Pago para Trámite
+            Cobro para Trámite
           </Button>
           <Button
             onClick={() => { setShowPaymentForm(true); setPayType("administrativo"); setShowExpenseForm(false); setError(null); }}
             className="min-h-[48px] bg-teal-600 text-white hover:bg-teal-700 font-semibold"
           >
             <Plus size={18} className="mr-1" />
-            Pago Administrativo
+            Cobro Administrativo
           </Button>
         </div>
       )}
@@ -268,7 +268,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
       {showPaymentForm && (
         <div className={`rounded-xl border p-4 space-y-3 ${payType === "administrativo" ? "border-teal-200 bg-teal-50/30" : "border-green-200 bg-green-50/30"}`}>
           <h4 className={`font-semibold ${payType === "administrativo" ? "text-teal-700" : "text-green-700"}`}>
-            {payType === "administrativo" ? "Nuevo Pago para Gastos Administrativos" : "Nuevo Pago para Gastos del Trámite"}
+            {payType === "administrativo" ? "Nuevo Cobro para Gastos Administrativos" : "Nuevo Cobro para Gastos del Trámite"}
           </h4>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -283,7 +283,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Fecha de pago</Label>
+              <Label>Fecha del cobro</Label>
               <Input
                 type="date"
                 value={payDate}
@@ -298,7 +298,7 @@ export function AddExpenseForm({ caseId }: AddExpenseFormProps) {
             </Button>
             <Button onClick={handleAddPayment} disabled={isPending} className="min-h-[44px] bg-green-600 hover:bg-green-700">
               {isPending ? <Loader2 size={16} className="mr-1 animate-spin" /> : <Save size={16} className="mr-1" />}
-              Guardar Pago
+              Guardar Cobro
             </Button>
           </div>
         </div>

@@ -1110,7 +1110,73 @@ eFactura PRODUCTION-READY y en uso real por las licenciadas.
 
 ## Backlog próxima sesión (orden de prioridad)
 
-### A-0. ESTADO AL CIERRE DEL 02/09/2026 — por acá se retoma
+### A-0. ESTADO AL 03/09/2026 — por acá se retoma
+
+`develop`, **575 tests en verde**, `tsc` limpio. Los 21 errores de ESLint son la deuda vieja
+de A-bis: este día no agregó ni quitó ninguno. Producción intacta.
+
+**Hecho hoy (commit único):**
+
+1. **Auditoría del inventario del 25/08, fila por fila contra el código.** Las ocho secciones
+   de `REQUISITOS-REUNION-25-AGOSTO.md`. **Once filas estaban mal marcadas, en los dos
+   sentidos.** El documento se reescribió: se eliminó el bloque narrativo "estado al cierre
+   del día" que competía con las tablas, y ahora **cada fila lleva su prueba en
+   `archivo:línea`**. Esa doble fuente de verdad es lo que lo hizo mentir tres veces en dos
+   días.
+2. **`sql/pending/035`** — los 6 servicios `REIM-*` de `2201` a `130003`. Aplicado a staging,
+   idempotencia verificada. **Producción NO.**
+3. **`033` y `034` al `BUNDLE_2`** de staging: se habían aplicado a mano el 02/09 y sin ellas
+   un `--reset` armaba una base sin proveedores y sin el UNIQUE de asiento por documento.
+4. **"Pago" → "Cobro"** en `add-expense-form.tsx` y `section-expense-form.tsx`. Cierra el
+   punto 2 del estado del 02/09.
+
+**Los tres bloqueos reales, confirmados contra el código** (el resto de lo que falta se puede
+construir hoy):
+
+1. **La fecha de los saldos cargados** → el asiento de apertura. Ver A-quinquies. Puede
+   resolverse sin preguntar: a qué fecha se generó el reporte de QuickBooks.
+2. **Qué cuenta de ingreso ACTIVA va en cada servicio** → el cableado factura→asiento.
+   `services_catalog.revenue_account` de los `HON-*` sigue en `4101`, del plan viejo e
+   inactiva.
+3. **Contra qué cuenta va el ITBMS que el bufete PAGA** → el asiento de compras. No es
+   `200003` (ese es el que cobró y le debe a la DGI); el de compras es crédito fiscal, un
+   activo, y **no hay cuenta para eso en el plan**.
+
+**Ya NO están bloqueados** (el inventario decía que sí): el banco del cobro (Rose contestó —
+falta el campo, `payments` no lo tiene), el reembolso a `130003` (hecho hoy), los ocho
+renglones de gastos de trámite (el acta decidió su asiento), el capital de las socias (Rose:
+"debe existir la opción"), y la captura del reporte de antigüedad de Josuarth — **obsoleta**,
+el reporte ya está construido.
+
+**Pendiente, en este orden:**
+
+1. **EL BLOQUE: gastos de trámite con encabezado + líneas, y su asiento.** Diseño aprobado el
+   03/09; la implementación no arrancó. Es el bloque elegido porque construye **la primera
+   ruta de `/api` que postea al ledger** (hoy no hay ninguna: `postJournalEntry` solo se llama
+   desde su definición y desde `scripts/backfill-asientos-faltantes.mts`), y ese patrón lo van
+   a copiar factura, cobro y compra. Además el modelo de líneas lo reusa compras, donde el
+   hallazgo del 02/09 fue que un gasto necesita tres cuentas y el modelo admite una.
+2. **Ver las tres pantallas del filtro de período renderizadas.** Lo único del bloque del
+   02/09 que no se verificó en pantalla. El dev server local viene muriéndose; el camino es
+   `scripts/render-pantalla.mts` contra staging, que necesita
+   `VERCEL_AUTOMATION_BYPASS_SECRET` y hoy no lo tenemos.
+   Rutas: `/finanzas/reportes/balance?hasta=2026-05-31`,
+   `/finanzas/reportes/pyl?desde=2026-05-01&hasta=2026-06-30`,
+   `/finanzas/reportes/comprobacion?desde=2026-05-01&hasta=2026-06-30`.
+3. **Buscar a qué fecha se generó el reporte de QuickBooks** de los saldos de apertura. Paso
+   previo de **A-quinquies**, y ese dato lo tenemos nosotros. Si aparece, el arreglo es un
+   UPDATE de `saldo_inicial_fecha` y no hay que preguntarle nada a RM.
+4. **Higiene chica del hub de reportes:** los badges de `/pyl` y `/balance` siguen diciendo
+   "Sin corte por período" (`reportes/page.tsx:53,59`), que dejó de ser cierto el 02/09.
+5. **Pantalla de asientos manuales.** El motor está entero (`postJournalEntry()` valida y
+   postea, el RPC serializa correlativo y hash). Después del bloque, porque el bloque deja el
+   patrón de la ruta.
+6. **El hueco de auditoría de A-quater**: aceptar o rechazar una cotización a mano no registra
+   QUIÉN. Camino barato en su propio bloque más abajo.
+
+---
+
+### A-0-bis. ESTADO AL CIERRE DEL 02/09/2026
 
 `develop` limpio, producción intacta, **575 tests en verde**, `tsc` limpio. Los 21 errores
 de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.

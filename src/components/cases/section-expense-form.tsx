@@ -117,7 +117,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
   const handleAddPayment = () => {
     const amount = parseFloat(payAmount);
     if (!amount || amount <= 0 || !payDate) {
-      setError("Complete todos los campos del pago");
+      setError("Complete todos los campos del cobro");
       return;
     }
     startTransition(async () => {
@@ -174,7 +174,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
             className="min-h-[44px] bg-green-600 hover:bg-green-700 text-white font-semibold"
           >
             <Plus size={16} className="mr-1" />
-            {isTramite ? "Pago de Trámite" : "Pago Administrativo"}
+            {isTramite ? "Cobro de Trámite" : "Cobro Administrativo"}
           </Button>
         </div>
       )}
@@ -248,7 +248,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
           }}
         >
           <h4 className={`font-semibold ${isTramite ? "text-green-700" : "text-teal-700"}`}>
-            {isTramite ? "Nuevo Pago de Trámite" : "Nuevo Pago Administrativo"}
+            {isTramite ? "Nuevo Cobro de Trámite" : "Nuevo Cobro Administrativo"}
           </h4>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
@@ -260,7 +260,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
               <Input value={payDescription} onChange={(e) => setPayDescription(e.target.value)} placeholder="Ej: Transferencia bancaria" className="min-h-[48px]" />
             </div>
             <div className="space-y-1.5">
-              <Label>Fecha de pago</Label>
+              <Label>Fecha del cobro</Label>
               <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="min-h-[48px]" />
             </div>
           </div>
@@ -270,7 +270,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
             </Button>
             <Button onClick={handleAddPayment} disabled={isPending} className="min-h-[44px] bg-green-600 hover:bg-green-700">
               {isPending ? <Loader2 size={16} className="mr-1 animate-spin" /> : <Save size={16} className="mr-1" />}
-              Guardar Pago
+              Guardar Cobro
             </Button>
           </div>
         </div>

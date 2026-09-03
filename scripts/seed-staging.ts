@@ -482,7 +482,7 @@ async function seedChartOfAccounts(): Promise<void> {
 
   // Producción tiene las cuentas viejas de QuickBooks desactivadas: los
   // reportes filtran active=true y no las ven. Replicamos ese estado sin borrar
-  // nada (services_catalog todavía referencia 4101 y 2201 por FK).
+  // nada (services_catalog todavía referencia 4101 por FK — ver abajo).
   const codigos = plan.map((a) => a.code);
   const { error } = await db
     .from("chart_of_accounts")
@@ -495,6 +495,63 @@ async function seedChartOfAccounts(): Promise<void> {
     `✅ Plan de cuentas — ${plan.length} cuentas activas ` +
       `(${JOSUAR_ACCOUNTS.length} de Josuar + ${CUENTAS_FASE1.length} de Fase 1), ` +
       (enCero ? "saldo inicial en 0" : "CON saldos de apertura reales")
+  );
+
+  await apuntarReembolsosAFondosLegales();
+}
+
+/**
+ * Los servicios REIM-* del catálogo apuntan a `130003 Fondo Legales de
+ * Clientes`, nunca a una cuenta de ingreso ni al pasivo `2201`.
+ *
+ * Lo decidió el acta de la reunión del 25/08/2026 ("Reembolso al facturar:
+ * HABER 130003, nunca ingreso") y el par de asientos solo cierra del lado del
+ * activo: al incurrir el gasto DEBE 130003 / HABER CxP, y al facturar el
+ * reembolso DEBE CxC / HABER 130003, con lo que la cuenta vuelve a cero.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 🔗 ESTA FUNCIÓN Y `sql/pending/035_reembolso_a_fondos_legales.sql` SON LA
+ *    MISMA REGLA POR DOS CAMINOS. SI SE CAMBIA LA CUENTA, VAN LAS DOS.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *   · La migración 035 arregla una base que YA existe (staging hoy, producción
+ *     algún día, con aprobación).
+ *   · Esta función deja bien una base recién armada.
+ *
+ * Por qué no alcanza con la migración: 035 necesita que `130003` exista, y esa
+ * cuenta la crea este mismo seed. El bundle de migraciones corre ANTES del
+ * seed, así que 035 no puede estar en él (nota larga en
+ * `scripts/staging-migration-order.mjs`).
+ *
+ * Va DESPUÉS del upsert del plan de cuentas y no antes: `services_catalog` tiene
+ * un FK compuesto `(tenant_id, revenue_account) → chart_of_accounts`, así que la
+ * cuenta destino tiene que existir para que el UPDATE entre.
+ *
+ * Los HON-* NO se tocan: siguen en `4101`, que es una de las definiciones que
+ * faltan del contador (qué cuenta de ingreso ACTIVA va en cada servicio). Es
+ * justamente por eso que la 4101 se queda inactiva pero existiendo, para no
+ * romper su FK.
+ */
+async function apuntarReembolsosAFondosLegales(): Promise<void> {
+  const CUENTA_REEMBOLSO = "130003";
+
+  const { data, error } = await db
+    .from("services_catalog")
+    .update({ revenue_account: CUENTA_REEMBOLSO })
+    .eq("tenant_id", TENANT_ID)
+    .eq("service_type", "reembolso")
+    .neq("revenue_account", CUENTA_REEMBOLSO)
+    .select("code");
+
+  if (error) {
+    throw new Error(`apuntar reembolsos a ${CUENTA_REEMBOLSO}: ${error.message}`);
+  }
+
+  const movidos = data?.length ?? 0;
+  console.log(
+    movidos === 0
+      ? `✅ Reembolsos — ya apuntaban a ${CUENTA_REEMBOLSO}`
+      : `✅ Reembolsos — ${movidos} servicio(s) movidos a ${CUENTA_REEMBOLSO} ` +
+          `(${data!.map((s) => s.code).join(", ")})`
   );
 }
 

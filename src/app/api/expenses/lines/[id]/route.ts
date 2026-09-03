@@ -130,8 +130,11 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
+            // ⚠️ NO prometer la reversión a secas: todavía no está construida, y
+            // quien lea esto va a ir a buscarla. Ver task_plan.md §A-0-bis-2.
             `Este gasto ya está registrado en el libro contable (asiento ${numero}) ` +
-            `y no se le puede cambiar la cuenta. Para corregirlo hace falta un asiento de reversión.`,
+            `y no se le puede cambiar la cuenta. Corregirlo requiere un asiento de reversión, ` +
+            `que todavía no está disponible en el sistema: avísele a Oliver.`,
         },
         { status: 409 }
       );

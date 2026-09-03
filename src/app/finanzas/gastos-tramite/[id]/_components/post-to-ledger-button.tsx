@@ -102,8 +102,9 @@ export function PostToLedgerButton({ expenseId, total }: Props) {
       <p className="text-xs text-gray-600">
         <strong className="font-semibold">Un asiento no se borra.</strong> Desde ese momento
         el gasto queda inmutable: no se le puede cambiar el monto, la fecha, el proveedor ni
-        las líneas. Corregirlo requiere un asiento de reversión. El comprobante sí se puede
-        seguir adjuntando.
+        las líneas. Corregirlo requiere un asiento de reversión, que{" "}
+        <strong className="font-semibold">todavía no está disponible en el sistema</strong>:
+        revise el detalle antes de confirmar. El comprobante sí se puede seguir adjuntando.
       </p>
       {error && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

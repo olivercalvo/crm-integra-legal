@@ -1320,6 +1320,40 @@ error de tipeo.
 
 **Falta:** el builder del asiento espejo, la ruta, y el botón en el detalle del asiento.
 
+#### 📝 Y CUATRO AVISOS QUE HAY QUE REVERTIR EL DÍA QUE EXISTA
+
+Hoy prometían un remedio que no existe: *"Corregirlo requiere un asiento de reversión"* — un
+contador se equivoca, lo lee, va a buscarla y no la encuentra. El 03/09 se les agregó la
+cláusula *"que todavía no está disponible en el sistema"*.
+
+🔴 **El día que la reversión exista hay que sacarla, y solo esa cláusula.** Es exactamente lo
+que nos pasó CUATRO veces esta semana con los badges del hub de reportes: un texto que describe
+lo que al sistema le falta se vuelve falso en cuanto alguien lo construye, y nadie se acuerda de
+volver.
+
+| Archivo | Contexto | Qué queda cuando exista |
+|---|---|---|
+| `asientos/_components/asiento-manual-form.tsx` (confirmación) | DESPUÉS de postear | "…requiere un asiento de reversión." |
+| `asientos/_components/asiento-manual-form.tsx` (pie del form) | ANTES de postear | Ídem, y se puede sacar el "verifique antes de registrarlo" |
+| `gastos-tramite/[id]/_components/post-to-ledger-button.tsx` | ANTES de postear | Ídem |
+| `api/expenses/lines/[id]/route.ts` | Error 409 | Ídem, y el "avísele a Oliver" pasa a ser un enlace a la reversión |
+
+**Se buscan con:** `grep -rn "todavía no está" src/ --include="*.ts" --include="*.tsx"` — devuelve las cuatro.
+
+⚠️ Con la frase completa NO funciona: en el JSX queda partida en dos líneas (`disponible` cae en el renglón siguiente) y `grep` es línea a línea, así que solo encuentra dos de las cuatro. Un puntero roto en una nota como ésta es peor que no tenerla: el que la use va a creer que ya arregló todo.
+
+⚠️ **Tres mensajes MÁS con la misma frase viven en los triggers de la `038`** (SQL). No se
+tocaron porque cambiarlos exige una migración, y solo se ven si alguien escribe en la base
+saltándose las rutas —o sea, un desarrollador, no un contador—. Cuando se haga la reversión,
+revisarlos en la misma migración:
+
+```
+grep -n "asiento de reversión" sql/pending/038_gasto_tramite_al_ledger.sql
+```
+
+**Ya está bien y no hay que tocarlo:** `api/invoices.ts:690` dice *"se habilita junto con el
+asiento de reversión. Avisale a Oliver"* — nunca prometió que existiera.
+
 **🔒 Y hay una pregunta contable que NO es de diseño — va a Josuarth, por correo:**
 
 > ¿La reversión se postea con la **fecha del asiento original** —lo que puede caer en un período

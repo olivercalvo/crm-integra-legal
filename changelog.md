@@ -1,5 +1,70 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Compras: gasto, costo o activo — un requisito del acta que estaba incumplido] - 2026-09-03
+
+### No faltaba un guard: el que había prohibía comprar una computadora
+
+`110001 Mobiliario y equipo` es un activo, y el acta del 25/08 pide para compras *"la cuenta de
+gasto, **costo o activo** que elija el usuario"*. Tanto el selector
+(`listExpenseAccountOptions`) como el guard (`validarCuentaDeGasto`) filtraban
+`account_type = 'expense'`: **faltaban dos de los tres**.
+
+Sin eso, una compra capitalizable o se registraba contra una cuenta de gasto —inflando el
+resultado del ejercicio con algo que había que capitalizar— o no se registraba.
+
+### 📐 REGLA 3 — una lista sugerida y un guard NO se derivan uno del otro
+
+> Son mecanismos distintos, con sesgos opuestos. Uno responde *"¿qué es lo más probable?"*; el
+> otro *"¿qué es imposible?"*. Derivar uno del otro produce un error, y produce los dos.
+
+Hoy los vimos a los dos, el mismo día:
+
+- **Trámite** — una lista de presentación demasiado **ancha** usada como conjunto válido: se
+  podía clasificar una tasa judicial como `300001 Capital Social`.
+- **Compras** — un filtro de presentación **endurecido en permiso**: el `.eq()` escrito "para
+  que el select solo muestre cuentas relevantes" se reusó como guard del servidor.
+
+Queda en `sop.md` SOP-024 junto a las otras dos.
+
+### El mensaje también estaba mal, y era peor que el bloqueo
+
+Como el tipo se filtraba **dentro de la consulta**, un activo legítimo volvía como
+`"no-existe"`: le decía a la persona que la cuenta **no estaba en el plan** cuando sí estaba y
+era la correcta. Mandaba a buscar el problema al lugar equivocado — el mismo patrón que el bug
+de `detail` vs `cause` de esta mañana.
+
+Ahora el veredicto es discriminado: `ok` / `no-existe` / `inactiva` / `tipo-invalido`, este
+último con el motivo ya redactado. **Existir, estar activa y poder clasificar un desembolso son
+tres cosas distintas y merecen tres respuestas distintas.**
+
+### El selector se movió en el mismo commit
+
+Aflojar el guard sin tocar la consulta del selector **no se nota**: la cuenta capitalizable
+sigue sin poder elegirse desde la pantalla. Hay un test para cada mitad.
+
+También se borró `isValidExpenseAccountCode()`, un envoltorio `@deprecated` sin ningún uso —
+misma decisión que con `add-expense-form.tsx` esta mañana.
+
+### Tests: 714 (+14)
+
+`cuenta-de-compra.test.ts` — el caso concreto de la computadora contra `110001`, que el
+selector la ofrezca, los tres tipos del acta, y que un tipo inválido **no** se reporte como "no
+existe".
+
+### 🔒 Lo que queda bloqueado, y por quién
+
+La **lista corta de compras** no se hizo. El recorte útil sería `610xxx` + `110001`, y su valor
+está en sacar de en medio las 8 cuentas de planilla. Pero: **¿`600006 CSS Patronal` y
+`600007 Seguro Educativo` se registran como una compra con proveedor, o salen de la planilla?**
+Si es lo primero, sacarlas esconde algo que se usa todos los meses.
+
+No es una decisión de diseño: es cómo trabaja el bufete. Va a **Daveiva**, no a RM.
+`task_plan.md` §A-0-ter.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre). Producción intacta.
+
+---
+
 ## [El selector de cuentas: lista corta + guard del servidor] - 2026-09-03
 
 El selector de cada fila de `/legal/gastos?vista=gastos` ofrecía **las 64 cuentas del plan**.

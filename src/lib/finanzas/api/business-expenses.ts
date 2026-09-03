@@ -73,21 +73,30 @@ export async function createBusinessExpense(
   userId: string,
   input: CreateBusinessExpenseInput
 ) {
-  // Validación cross-tabla: si llega chart_account_code, debe existir y ser
-  // de tipo expense. La FK es lógica (no constraint DB), por eso lo
-  // verificamos a mano acá.
+  // Validación cross-tabla: si llega chart_account_code, debe existir, estar
+  // activa y ser de un tipo que pueda clasificar un desembolso — gasto, costo o
+  // ACTIVO, que es lo que pide el acta del 25/08 ("la cuenta de gasto, costo o
+  // activo que elija el usuario"). La FK es lógica (no constraint de BD), por eso
+  // se verifica a mano acá.
   if (input.chart_account_code !== null) {
     // Distingue "no existe" de "existe pero está inactiva": son dos errores
     // distintos, y el segundo tiene que explicar POR QUÉ o la persona vuelve a
     // elegir la misma cuenta del plan viejo.
     const veredicto = await validarCuentaDeGasto(db, tenantId, input.chart_account_code);
-    if (veredicto === "no-existe") {
+    if (veredicto.estado === "no-existe") {
       throw new MutationError(
-        `La cuenta contable "${input.chart_account_code}" no existe o no es de tipo gasto.`,
+        `La cuenta contable "${input.chart_account_code}" no existe en el Plan de Cuentas.`,
         400
       );
     }
-    if (veredicto === "inactiva") {
+    // El tipo se informa con su MOTIVO, que ya viene redactado desde
+    // `cuentas-de-gasto.ts`. Antes este caso caía en "no existe o no es de tipo
+    // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
+    // estaba ahí y el problema era otro.
+    if (veredicto.estado === "tipo-invalido") {
+      throw new MutationError(veredicto.mensaje, 400);
+    }
+    if (veredicto.estado === "inactiva") {
       throw new MutationError(
         `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
           `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +
@@ -192,13 +201,20 @@ export async function updateBusinessExpense(
       input.chart_account_code,
       (existing as { chart_account_code: string | null }).chart_account_code
     );
-    if (veredicto === "no-existe") {
+    if (veredicto.estado === "no-existe") {
       throw new MutationError(
-        `La cuenta contable "${input.chart_account_code}" no existe o no es de tipo gasto.`,
+        `La cuenta contable "${input.chart_account_code}" no existe en el Plan de Cuentas.`,
         400
       );
     }
-    if (veredicto === "inactiva") {
+    // El tipo se informa con su MOTIVO, que ya viene redactado desde
+    // `cuentas-de-gasto.ts`. Antes este caso caía en "no existe o no es de tipo
+    // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
+    // estaba ahí y el problema era otro.
+    if (veredicto.estado === "tipo-invalido") {
+      throw new MutationError(veredicto.mensaje, 400);
+    }
+    if (veredicto.estado === "inactiva") {
       throw new MutationError(
         `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
           `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +

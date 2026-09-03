@@ -1755,6 +1755,34 @@ Por eso los dos mecanismos tienen sesgos **opuestos y deliberados**:
 DÓNDE sale la plata, no en qué se convirtió— y aun así **no se bloquea**: no es estructuralmente
 imposible, y la lista corta ya lo saca del camino.
 
+### 📐 REGLA 3 — una lista sugerida y un guard NO se derivan uno del otro
+
+> Una **lista sugerida** y un **guard** son mecanismos distintos, con sesgos
+> opuestos. Uno responde *"¿qué es lo más probable?"*; el otro *"¿qué es
+> imposible?"*. **Derivar uno del otro produce un error, y produce los dos.**
+
+El 03/09/2026 los vimos a los dos, el mismo día, en los dos módulos:
+
+| | Qué pasó | Consecuencia |
+|---|---|---|
+| **Gastos de trámite** | Una lista de presentación demasiado **ancha** —las 64 cuentas— usada como si fuera el conjunto válido | Se podía clasificar una tasa judicial como `300001 Capital Social`, y el asiento se posteaba contra patrimonio |
+| **Compras** | Un filtro de presentación **endurecido en permiso**: `listExpenseAccountOptions` filtraba `account_type = 'expense'` "para que el select solo muestre cuentas relevantes", y `validarCuentaDeGasto` reusó el mismo `.eq()` como guard del servidor | **No se podía comprar una computadora.** `110001 Mobiliario y equipo` es un activo, y el acta lo pide explícitamente |
+
+El de compras además daba el mensaje equivocado: como el tipo se filtraba **dentro
+de la consulta**, un activo legítimo volvía como `"no-existe"` — le decía a la
+persona que la cuenta no estaba en el plan cuando sí estaba y era la correcta.
+**Existir, estar activa y poder clasificar un desembolso son tres cosas distintas y
+merecen tres respuestas distintas.**
+
+🔑 **La prueba de que están bien separados:** el guard y la lista pueden discrepar
+sin que ninguno esté mal. `100001 Banco General` **pasa el guard y no está en la
+lista** — es improbable, no imposible. Si un mecanismo se deriva del otro, esa
+discrepancia no se puede expresar, y hay que elegir entre bloquear de más o sugerir
+de más.
+
+Lo que sí tiene que cumplirse es la inclusión: **todo lo sugerido pasa el guard.**
+Ofrecer algo que la ruta rechaza es un botón que rebota. Hay un test que lo fija.
+
 ### La lista es DERIVADA, no siete códigos literales
 
 `130003` + **todas las cuentas activas de tipo `cost`**.
@@ -1784,12 +1812,20 @@ al revés. Hay un test que cruza los dos (`todo lo sugerido pasa el guard`).
 El guard corre en las tres rutas que escriben una cuenta:
 `POST /api/expenses`, `PATCH /api/expenses/lines/[id]` y `POST /api/expenses/lines/bulk-classify`.
 
-### ⚠️ Compras (`business_expenses`) NO usa este predicado, y tiene el suyo
+### Compras usa el MISMO predicado desde el 03/09/2026
 
-`validarCuentaDeGasto()` en `queries/business-expenses.ts` filtra `account_type = 'expense'` —
-es **más estricto** que este guard: además de los tres imposibles, rechaza `cost` y `asset`.
+`validarCuentaDeGasto()` filtraba `account_type = 'expense'` y rechazaba `cost` y `asset` —
+contra el acta del 25/08, que pide "la cuenta de gasto, **costo o activo** que elija el
+usuario". Hoy delega en `esTipoValidoParaGasto()` y devuelve un veredicto discriminado
+(`ok` / `no-existe` / `inactiva` / `tipo-invalido`).
 
-🔴 **Y eso contradice el acta del 25/08**, que pide para compras "la cuenta de gasto, **costo o
-activo** que elija el usuario". Comprar una computadora es una compra del bufete y va a
-`110001 Mobiliario y equipo`, que hoy la ruta rechaza. Es una consulta abierta, no un cambio
-que convenga hacer sin decidirlo.
+⚠️ **El selector se movió en el mismo commit.** Aflojar el guard sin tocar
+`listExpenseAccountOptions()` no se nota: la cuenta capitalizable sigue sin poder elegirse.
+🔒 `cuenta-de-compra.test.ts` fija las dos mitades, con el caso concreto de comprar una
+computadora contra `110001`.
+
+**Lo que NO se hizo:** una lista corta para compras. El recorte útil sería sacar las 8 cuentas
+de planilla (`600001 Sueldos`, `600004 Décimo Tercer Mes`…), y ahí hay una pregunta que no es
+de diseño: **¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran como una compra
+con proveedor, o salen de la planilla y nunca pasan por este módulo?** Depende de cómo trabaja
+el bufete. Va a Daveiva; está anotado en `task_plan.md`.

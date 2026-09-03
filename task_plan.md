@@ -1297,6 +1297,31 @@ de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.
 `_userId` descartado) y A-quinquies (los saldos que contradicen la regla de Rose). Ninguno
 de los dos se arregló a propósito.
 
+### A-0-ter. 🔒 BLOQUEADO POR DAVEIVA — la lista corta de cuentas de compras
+
+**La pregunta, en una línea:** ¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran
+en el CRM como una **compra con proveedor**, o salen de la **planilla** y nunca pasan por
+`/finanzas/gastos-bufete`?
+
+**Por qué bloquea.** Gastos de trámite tiene una lista corta de 7 cuentas sobre 46 posibles, y
+ese recorte es lo que evita clasificar una tasa judicial como Capital Social. Para compras el
+recorte útil sería `610xxx` (19 operativas) + `110001 Mobiliario y equipo` = 20 sobre 46 — y
+todo su valor está en **sacar de en medio las 8 cuentas de planilla** (`600001 Sueldos`,
+`600003 Vacaciones`, `600004 Décimo Tercer Mes`, `600006 CSS Patronal`…).
+
+Si la CSS patronal se carga como compra con proveedor, sacarla de la lista corta **esconde algo
+que se usa todos los meses**, que es el único costo que tiene ese mecanismo. No es una decisión
+de diseño: es cómo trabaja el bufete, y la respuesta está en Daveiva, no en RM.
+
+**Lo que NO está bloqueado y ya se hizo (03/09):** el guard de compras acepta gasto, costo y
+activo, que es lo que pide el acta. Ver `sop.md` SOP-024.
+
+**Cuando llegue la respuesta:** la lista vive en `contabilidad/cuentas-de-gasto.ts`, al lado de
+la de trámite, y tiene que ser **derivada** —por tipo o por prefijo— no una lista de códigos
+literales, por el mismo motivo que la otra: se desactualiza el día que RM toque el plan.
+
+---
+
 ### A. eFactura go-live (prioridad de Oliver)
 Desbloqueo = respuesta de Eduardo (punto de facturación + confirmación de folios) + `CPBS_REI` del contador. Luego, en ese orden:
 1. Cargar las 3 variables pendientes en Vercel Production.

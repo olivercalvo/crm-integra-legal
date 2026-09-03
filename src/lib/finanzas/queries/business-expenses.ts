@@ -12,14 +12,22 @@ import type {
   SupplierSnapshot,
 } from "@/lib/finanzas/types/business-expense";
 
+import {
+  esTipoValidoParaGasto,
+  motivoDeRechazo,
+} from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
+
 type DB = SupabaseClient;
 
-/** Opción del select de cuenta contable (filtrado a account_type='expense'). */
+/** Opción del select de cuenta contable de una compra del bufete. */
 export interface ExpenseAccountOption {
   code: string;
   name: string;
   /** true solo para la cuenta que el gasto ya tenía y quedó desactivada. */
   inactiva?: boolean;
+  /** Naturaleza de la cuenta, para poder agrupar el selector. */
+  account_type?: AccountType;
 }
 
 interface ListBusinessExpensesParams {
@@ -240,9 +248,29 @@ export async function getBusinessExpenseById(
 }
 
 /**
- * Cuentas de gasto disponibles para clasificar un business_expense.
- * Filtramos a `account_type='expense'` para que el select del form solo
- * muestre cuentas relevantes (no activos, no pasivos, no ingresos).
+ * Cuentas disponibles para clasificar una compra del bufete.
+ *
+ * =============================================================================
+ * GASTO, COSTO **O ACTIVO** — corregido el 03/09/2026
+ * =============================================================================
+ * Hasta hoy filtraba `account_type = expense` y el comentario decía "para que el
+ * select del form solo muestre cuentas relevantes (no activos, no pasivos, no
+ * ingresos)".
+ *
+ * **Estaba mal, y contra un requisito explícito.** El acta del 25/08/2026 pide
+ * para compras "la cuenta de gasto, **costo o activo** que elija el usuario".
+ * Faltaban dos de los tres.
+ *
+ * El caso que lo rompe es cotidiano: **comprar una computadora** va a
+ * `110001 Mobiliario y equipo`, que es un activo. Con el filtro viejo no se podía
+ * elegir, así que o se registraba contra una cuenta de gasto —inflando el
+ * resultado del ejercicio con algo que había que capitalizar— o no se registraba.
+ *
+ * Y el filtro no era solo del selector: `validarCuentaDeGasto()` reusaba el mismo
+ * `.eq()` como GUARD. Un criterio de presentación convertido en permiso. Ver
+ * `sop.md` SOP-024, tercera regla.
+ *
+ * El selector y el guard se mueven JUNTOS: aflojar uno sin el otro no se nota.
  */
 export async function listExpenseAccountOptions(
   db: DB,
@@ -261,9 +289,11 @@ export async function listExpenseAccountOptions(
   // que el contador arma el reporte y la cuenta no aparece en ningún lado.
   const { data, error } = await db
     .from("chart_of_accounts")
-    .select("code, name, active")
+    .select("code, name, active, account_type")
     .eq("tenant_id", tenantId)
-    .eq("account_type", "expense")
+    // Los tres tipos del acta. Qué tipo NO puede clasificar un desembolso vive en
+    // `cuentas-de-gasto.ts`, así que el selector y el guard no pueden divergir.
+    .in("account_type", ["asset", "cost", "expense"])
     .order("code");
 
   if (error) {
@@ -271,12 +301,18 @@ export async function listExpenseAccountOptions(
     return [];
   }
 
-  const filas = (data ?? []) as { code: string; name: string; active: boolean }[];
+  const filas = (data ?? []) as {
+    code: string;
+    name: string;
+    active: boolean;
+    account_type: AccountType;
+  }[];
   return filas
     .filter((r) => r.active || (incluirCodigo != null && r.code === incluirCodigo))
     .map((r) => ({
       code: r.code,
       name: r.name,
+      account_type: r.account_type,
       // La UI lo marca para que se entienda por qué aparece una cuenta que ya
       // no se ofrece a las demás.
       inactiva: !r.active,
@@ -288,7 +324,11 @@ export async function listExpenseAccountOptions(
  * expense. Usado por los validators server-side antes de INSERT/UPDATE.
  * Devuelve true si es válido O si el code es null (cuenta no clasificada).
  */
-export type ResultadoCuentaGasto = "ok" | "no-existe" | "inactiva";
+export type ResultadoCuentaGasto =
+  | { estado: "ok" }
+  | { estado: "no-existe" }
+  | { estado: "inactiva" }
+  | { estado: "tipo-invalido"; mensaje: string };
 
 /**
  * ¿Se puede clasificar un gasto contra esta cuenta?
@@ -307,33 +347,48 @@ export async function validarCuentaDeGasto(
   code: string | null,
   codigoPrevio?: string | null
 ): Promise<ResultadoCuentaGasto> {
-  if (code === null) return "ok";
+  if (code === null) return { estado: "ok" };
 
+  // El `.eq("account_type", "expense")` que estaba acá hacía DOS cosas a la vez,
+  // y una estaba mal: filtraba el tipo Y decidía el permiso. Un activo legítimo
+  // volvía como "no-existe", o sea que el mensaje decía que la cuenta no estaba
+  // en el plan cuando sí estaba y era la correcta.
+  //
+  // Ahora la consulta trae la cuenta y el TIPO se juzga aparte, con el predicado
+  // compartido: existir, estar activa y poder clasificar un desembolso son tres
+  // cosas distintas y merecen tres respuestas distintas.
   const { data, error } = await db
     .from("chart_of_accounts")
-    .select("code, active")
+    .select("code, name, active, account_type")
     .eq("tenant_id", tenantId)
     .eq("code", code)
-    .eq("account_type", "expense")
     .maybeSingle();
 
   if (error) {
     console.error("[finanzas/queries] validarCuentaDeGasto failed", error);
-    return "no-existe";
+    return { estado: "no-existe" };
   }
-  if (!data) return "no-existe";
+  if (!data) return { estado: "no-existe" };
 
-  const fila = data as { code: string; active: boolean };
-  if (fila.active) return "ok";
+  const fila = data as {
+    code: string;
+    name: string;
+    active: boolean;
+    account_type: AccountType;
+  };
+
+  // El TIPO se juzga PRIMERO: una cuenta de ingreso no clasifica un desembolso ni
+  // aunque esté activa, y contestar "está inactiva" mandaría a buscar el problema
+  // al lugar equivocado.
+  if (!esTipoValidoParaGasto(fila.account_type)) {
+    return { estado: "tipo-invalido", mensaje: motivoDeRechazo(fila)! };
+  }
+
+  if (fila.active) return { estado: "ok" };
   // Inactiva, pero es la que ya tenía: se respeta.
-  return codigoPrevio != null && code === codigoPrevio ? "ok" : "inactiva";
+  return codigoPrevio != null && code === codigoPrevio
+    ? { estado: "ok" }
+    : { estado: "inactiva" };
 }
 
-/** @deprecated Usar `validarCuentaDeGasto`, que distingue inactiva de inexistente. */
-export async function isValidExpenseAccountCode(
-  db: DB,
-  tenantId: string,
-  code: string | null
-): Promise<boolean> {
-  return (await validarCuentaDeGasto(db, tenantId, code)) === "ok";
-}
+

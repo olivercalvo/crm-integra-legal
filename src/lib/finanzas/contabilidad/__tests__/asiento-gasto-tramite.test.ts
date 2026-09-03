@@ -192,7 +192,7 @@ test("la cuenta por pagar es un parámetro, no un literal regado", () => {
 test("el ITBMS va al débito de SU línea, no a una cuenta de crédito fiscal", () => {
   // En un gasto de trámite el impuesto es pass-through: el bufete paga 107 por
   // cuenta del cliente y le refactura 107 exento. Es lo que hace que este bloque
-  // NO dependa de la consulta pendiente al contador sobre el crédito fiscal.
+  // sea distinto del de una COMPRA, donde el ITBMS va al débito de 200003.
   const r = construirAsientoDeGastoTramite(GASTO, [
     linea({ line_order: 1, amount: 100, tax_rate: 0.07, tax_amount: 7, line_total: 107 }),
   ]);

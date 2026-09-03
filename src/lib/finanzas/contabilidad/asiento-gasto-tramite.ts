@@ -35,8 +35,11 @@
  * `default_tax_code = 'EXENTO'`). No es crédito fiscal porque el gasto no es del
  * bufete. Por eso el débito de cada línea es su `line_total`, no su `amount`.
  *
- * 🔑 Es lo que hace que este bloque NO esté bloqueado por la consulta pendiente
- * al contador sobre la cuenta de crédito fiscal: esa pregunta es solo de compras.
+ * ⚠️ En una COMPRA del bufete es distinto: ahí el ITBMS pagado va al DÉBITO de
+ * `200003 ITBMS por Pagar`, la misma cuenta que las ventas usan al crédito —
+ * Josuarth: *"es una sola cuenta... y ahí va todo lo que vendo y lo que compro"*.
+ * En un gasto de trámite no, porque el gasto no es del bufete: es del cliente, y
+ * se le refactura entero.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * 🔴 UNA LÍNEA SIN CUENTA NO SE POSTEA, Y EL TIPO LO OBLIGA

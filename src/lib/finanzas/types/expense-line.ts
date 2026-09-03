@@ -30,12 +30,23 @@
  *     tienen `default_tax_code = 'EXENTO'`). No es crédito fiscal, porque el
  *     gasto no es del bufete: va entero a la cuenta del activo recuperable.
  *
- *   · **Compra del bufete** — el ITBMS SÍ es crédito fiscal, un activo propio.
- *     Y esa cuenta NO EXISTE en el plan: es una de las tres definiciones que
- *     faltan del contador.
+ *   · **Compra del bufete** — el ITBMS pagado va al **DÉBITO de `200003 ITBMS
+ *     por Pagar`**, la MISMA cuenta que las ventas usan al crédito.
  *
- * 🔑 Consecuencia práctica: **el gasto de trámite no está bloqueado por la
- * pregunta del ITBMS.** Ese bloqueo es solo de compras.
+ * ⚠️ CORREGIDO EL 03/09/2026. Este comentario decía que el ITBMS de compras era
+ * crédito fiscal contra una cuenta que "NO EXISTE en el plan", y que eso estaba
+ * pendiente de definición del contador. **Estaba mal: Josuarth ya lo había
+ * contestado en la reunión del 25/08**, textual:
+ *
+ *   "Pero hay otra cuenta ITMS por pagar. No, es una sola. Es una sola cuenta.
+ *    Que se llama ITMS por pagar. Y ahí va todo lo que vendo y lo que compro."
+ *
+ * Y el motivo, que es de operación y no de teoría: *"Hay sistemas contables que
+ * tienen una ITD para compra y una ITD para ingreso. Pero luego el contador todos
+ * los meses tiene que cerrar. Entonces nosotros preferimos tener un solo mayor."*
+ *
+ * O sea que `200003` es una cuenta de saldo NETO: lo que el bufete le debe a la
+ * DGI menos lo que puede descontar. No hacía falta ninguna cuenta nueva.
  */
 
 // ---------------------------------------------------------------------------

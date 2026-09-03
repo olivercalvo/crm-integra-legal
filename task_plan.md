@@ -1138,9 +1138,16 @@ construir hoy):
 2. **Qué cuenta de ingreso ACTIVA va en cada servicio** → el cableado factura→asiento.
    `services_catalog.revenue_account` de los `HON-*` sigue en `4101`, del plan viejo e
    inactiva.
-3. **Contra qué cuenta va el ITBMS que el bufete PAGA** → el asiento de compras. No es
-   `200003` (ese es el que cobró y le debe a la DGI); el de compras es crédito fiscal, un
-   activo, y **no hay cuenta para eso en el plan**.
+3. ~~Contra qué cuenta va el ITBMS que el bufete PAGA~~ → 🔴 **NUNCA ESTUVO BLOQUEADO.**
+   Josuarth lo contestó en la reunión del 25/08 y este plan afirmaba lo contrario:
+
+   > *"Pero hay otra cuenta ITMS por pagar. No, es una sola. Es una sola cuenta. Que se llama
+   > ITMS por pagar. Y ahí va todo lo que vendo y lo que compro."*
+
+   Es UNA sola cuenta, `200003`, con **ventas al crédito y compras al débito**. El motivo es de
+   operación: *"Hay sistemas contables que tienen una ITD para compra y una ITD para ingreso.
+   Pero luego el contador todos los meses tiene que cerrar. Entonces nosotros preferimos tener
+   un solo mayor."* Corregido el 03/09/2026 — **cuarta vez que el dato estaba y no lo leímos.**
 
 **Ya NO están bloqueados** (el inventario decía que sí): el banco del cobro (Rose contestó —
 falta el campo, `payments` no lo tiene), el reembolso a `130003` (hecho hoy), los ocho
@@ -1296,6 +1303,53 @@ de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.
 **Los dos bloques de análisis que quedaron escritos hoy y no se tocaron:** A-quater (el
 `_userId` descartado) y A-quinquies (los saldos que contradicen la regla de Rose). Ninguno
 de los dos se arregló a propósito.
+
+### A-0-quater. Dos requisitos del 25/08 que NO estaban anotados (hallados el 03/09)
+
+Aparecieron releyendo la transcripción. Ninguno está construido y ninguno está bloqueado.
+
+#### 1. El botón "pasar a contabilidad" por gasto
+
+Rose insistió DOS veces, y es una regla de negocio, no una comodidad:
+
+> *"ojo con mandar a la contabilidad lo que no es contable, lo que no es tuyo"*
+
+El caso concreto: a veces **el cliente le paga directo al notario** y la licenciada solo sube la
+evidencia al caso. Ese gasto no es del bufete y no debe llegar al libro. Josuarth propuso la
+solución:
+
+> *"a menos que le pongas un botón de pasar contabilidad y si ella pone que no, pues no se pasa
+> contabilidad"*
+
+⚠️ **Hoy TODO gasto de trámite es posteable**: `/finanzas/gastos-tramite/{id}` muestra el botón
+"Registrar en el libro contable" sin preguntar nada. Hace falta una columna en `expenses` —algo
+como `va_a_contabilidad boolean NOT NULL DEFAULT true`— y que el botón y la ruta la respeten.
+
+**Y hay una pregunta de diseño que conviene resolver antes:** ¿el default es `true` o `false`?
+Con `true` el flujo normal no cambia y la licenciada tiene que acordarse de desmarcar lo ajeno —
+o sea, el error silencioso es mandar de más. Con `false` nada llega solo al libro y el contador
+tiene que empujar cada gasto — el error es no mandar. Rose habló de "ojo con mandar de más", lo
+que sugiere `true` con una marca visible, pero **no lo dijo explícito**.
+
+#### 2. El agrupamiento de gastos para que el gerente lea el Estado de Resultados
+
+Rose lo pidió para que el ER se lea de un vistazo, agrupando por **naturaleza**:
+
+- **Servicios básicos** — alquiler, luz, agua, teléfono, internet
+- **Gastos de personal**
+- **Otros administrativos**
+
+⚠️ **NO es lo mismo que las categorías NIIF 18**, y confundirlos haría rehacer trabajo hecho.
+NIIF 18 agrupa por **ACTIVIDAD** (operación / inversión / financiamiento) y ya está construido
+(`estado-resultado-niif18.ts`, las nueve subcategorías). Esto agrupa por **NATURALEZA dentro de
+los gastos operativos**. Son **dos ejes distintos**, y hoy existe solo el primero.
+
+Probablemente sea un tercer campo en `chart_of_accounts` —al lado de `account_type` y
+`subcategoria`— o un mapa por prefijo de código (`610001-610006` = servicios básicos…). El mapa
+por prefijo es más barato y más frágil: si RM agrega una cuenta de servicios con otro código,
+cae en "otros" sin que nadie se entere. Conviene el campo.
+
+---
 
 ### A-0-bis-2. 🔴 LA REVERSIÓN DE ASIENTOS — pasa a ser el bloque INMEDIATAMENTE siguiente
 

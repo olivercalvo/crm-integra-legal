@@ -1,5 +1,112 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Filtro de período en los tres estados financieros] - 2026-09-02
+
+Es el renglón que Josuarth pidió el 18/08: *"Balance y estado de resultados a cualquier
+fecha histórica, misma respuesta siempre"*. Hasta hoy los tres estados mostraban la
+historia completa y no había forma de pedir un cierre mensual. Un Estado de Resultado sin
+corte de período no es un cierre: es un acumulado desde el origen.
+
+### La semántica, que no es la misma en los tres
+
+- **Balance General — A UNA FECHA.** Un solo campo. No existe "el activo entre marzo y
+  junio": es la foto del patrimonio en un instante.
+- **Estado de Resultado — DE UN PERÍODO**, y **excluye la apertura de las cuentas de
+  resultado**. Lo acumulado de ejercicios anteriores no es resultado de este trimestre.
+- **Balance de Comprobación — DE UN PERÍODO**, con saldo inicial al comienzo del rango.
+
+### El problema que podía romper el Balance, y cómo se resolvió
+
+El renglón "Utilidad del Ejercicio" del patrimonio sale de un cálculo de resultado. Si ese
+cálculo pasaba a ser el DEL PERÍODO mientras el Balance necesita el ACUMULADO a su fecha,
+el estado dejaba de cuadrar. Y no por poco: medido en staging, **el descuadre habría sido
+de 244.476,91**.
+
+La regla que lo cierra: **el Balance nunca toma su número del Estado de Resultado que se
+muestra en pantalla.** Son dos cargas con alcances distintos —el Balance con `{hasta}` y
+la apertura incluida; `/pyl` con `{desde, hasta}` y la apertura excluida— y el Balance
+calcula su utilidad **del mismo conjunto de cuentas que él mismo usa**. Cuadra por
+construcción, no por coincidencia.
+
+### Un parámetro en la fuente, cero cambios en los builders
+
+El rango se resolvió en `loadReportAccounts`, no partiendo el cálculo. Que los tres
+reportes no puedan divergir no es una coincidencia a mantener a mano: es que los tres leen
+esa función. **Los tres builders quedaron sin tocar** — `buildBalanceComprobacion` ya leía
+`saldoInicial` / `debitos` / `creditos` sin recalcular, así que alcanzó con que el loader
+entregue el saldo al inicio del rango en vez de la apertura.
+
+Cada cuenta vuelve ahora con el desglose completo: `saldoApertura`, `movimientoAnterior`,
+`debitos`/`creditos` del rango, `saldoInicial` (= apertura + anterior) y `saldo`.
+
+### El aviso dice el NÚMERO, no el hecho
+
+Cuando el Estado de Resultado tiene período activo, la nota dice **"Se excluyeron
+244.476,91 de saldos de apertura de cuentas de resultado, que corresponden a ejercicios
+anteriores al corte"**. Con el número el contador puede verificarlo y ve la
+inconsistencia; sin el número es una disculpa. El valor sale de sumar `aperturaExcluida`
+de las cuentas —el mismo dato que el reporte no usó— y no de un cálculo paralelo que
+podría desincronizarse.
+
+### Verificación
+
+**Con datos reales de staging**, corriendo el mismo código que las pantallas sobre cinco
+cortes distintos: los cuatro invariantes dan bien en los cinco.
+
+| Corte | Activo | Pasivo | Patrimonio | Descuadre |
+|---|---|---|---|---|
+| sin filtro | 262.717,46 | −17.334,80 | −245.382,66 | 0,00 |
+| al 30/04/2026 | 258.972,46 | −17.089,80 | −241.882,66 | 0,00 |
+| al 31/05/2026 | 260.577,46 | −17.194,80 | −243.382,66 | 0,00 |
+| 10/04 → 30/06 | 262.717,46 | −17.334,80 | −245.382,66 | 0,00 |
+
+Y el Estado de Resultado del período 01/05 → 30/06 da **−905,75**, con **244.476,91**
+excluidos — que es exactamente el número de la nota.
+
+**30 tests nuevos** (575 en total, todos en verde) sobre siete cortes distintos:
+
+1. Sin filtro, los cuatro totales al centavo. El caso por defecto no se movió.
+2. **Σ saldo inicial = 0,00 en cualquier corte.** Un ledger de partida doble está cuadrado
+   en cualquier fecha; si un corte lo rompe, el corte está mal. Es la alarma más barata
+   del bloque.
+3. Σ débitos = Σ créditos dentro del rango.
+4. **Con filtro activo, Activo = Pasivo + Patrimonio al centavo**, sobre un rango que
+   corta ENTRE dos asientos para que lo anterior NO netee a cero cuenta por cuenta. Esa
+   precaución no es teórica: verificando el Libro Mayor ese mismo día, el primer rango
+   probado tenía los movimientos previos cancelándose (+1.070 +150 −1.070 −150) y el
+   resultado se veía idéntico a no ajustar nada. Un rango así habría dado por buena una
+   implementación rota.
+5. **Los tres números de resultado son el mismo** —clásico, NIIF 18 y el renglón del
+   Balance—. Hoy coinciden en −245.382,66 pero nada lo protegía: son dos builders
+   distintos alimentados por la misma fuente, y si se separaran, la pantalla que lee el
+   contador y el patrimonio del Balance dirían números distintos sin que nadie se entere.
+
+### Lo que quedó afuera, a propósito
+
+- **El Libro Mayor no se tocó.** Ya tenía su filtro y su saldo de arranque ajustado, ambos
+  verificados contra datos reales. Unificar su `sumaMovimientosAnteriores()` con la versión
+  general del loader es una simplificación posterior con su propio commit: hoy funciona y
+  meterlo acá sería arriesgar lo único que ya sabemos que anda.
+- **Antigüedad, Estado de cuenta y Ventas mensuales.** No son reportes de período: son
+  fotos a hoy. "Filtrarlos" no es acotar un rango sino mover la fecha de referencia de los
+  tramos, que es otro diseño con su propia pregunta contable (¿un documento pagado después
+  del corte se muestra como pendiente?). Van en su propio bloque.
+- **El resultado del ejercicio vs. el acumulado histórico.** El Balance a una fecha lleva
+  al patrimonio el acumulado hasta esa fecha. Hoy coincide con el resultado del ejercicio
+  porque el ledger tiene uno solo; cuando haya dos, hace falta el asiento de cierre que
+  lleva el resultado a `300003`. Ya estaba previsto como Paso 3 y ya tiene su advertencia
+  de doble conteo en `buildBalanceGeneral`.
+
+### Un hallazgo que NO se arregló
+
+Medir el peso de las aperturas destapó que **los saldos cargados contradicen la regla que
+dio Rose**: 15 cuentas de resultado tienen 244.476,91 de apertura fechada **01/01/2026**,
+y Rose escribió que *"al 1 de enero solo tienen saldo las cuentas del estado de situación
+financiera"*. O la fecha está mal (y eso es el acumulado del año) o los saldos se cargaron
+mal. **Ningún saldo se modificó.** Queda anotado con el número y las dos hipótesis en
+`task_plan.md` **A-quinquies**, para ir al correo como pregunta.
+
+
 ## [Dos banners que decían que el portal no existe] - 2026-09-02
 
 Oliver verificó que el correo de la cotización **sí** manda el enlace al portal y que

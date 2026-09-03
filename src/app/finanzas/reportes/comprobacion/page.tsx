@@ -6,6 +6,7 @@ import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildBalanceComprobacion } from "@/lib/finanzas/reports/balance-comprobacion";
 import { StatementHeader, OpeningBalancesNotice } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
+import { PeriodoFiltros, fechaLarga } from "../_components/periodo-filtros";
 import { ComprobacionTable } from "./_components/comprobacion-table";
 
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];
@@ -14,16 +15,29 @@ export const metadata = {
   title: "Balance de Comprobación · Reportes",
 };
 
-export default async function BalanceComprobacionPage() {
+export default async function BalanceComprobacionPage({
+  searchParams,
+}: {
+  searchParams: { desde?: string; hasta?: string };
+}) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
     redirect("/finanzas");
   }
 
+  const desde = searchParams.desde?.trim() || "";
+  const hasta = searchParams.hasta?.trim() || "";
+
   // La MISMA lectura que alimenta el Balance General y el Estado de Resultado.
   // Es lo que garantiza que los saldos finales coincidan cuenta por cuenta: no
   // hay dos fuentes que puedan separarse.
-  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId);
+  //
+  // Con `desde`, la columna "Saldo inicial" deja de ser la apertura de la cuenta
+  // y pasa a ser el saldo al arrancar el período (apertura + lo anterior). El
+  // builder no cambió: lee el mismo campo, que ahora trae otra cosa.
+  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId, {
+    rango: { desde, hasta },
+  });
   const reporte = buildBalanceComprobacion(accounts);
 
   const inactivas = reporte.filas.filter((f) => f.inactivaConMovimiento);
@@ -34,9 +48,30 @@ export default async function BalanceComprobacionPage() {
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title="Balance de Comprobación"
-        subtitle="También llamado Balance de sumas y saldos"
+        subtitle={
+          desde || hasta
+            ? `Sumas y saldos · ${desde ? `Del ${fechaLarga(desde)}` : "Desde el inicio"} ${
+                hasta ? `al ${fechaLarga(hasta)}` : "a hoy"
+              }`
+            : "También llamado Balance de sumas y saldos"
+        }
         generatedAt={formatGeneratedAt()}
       />
+
+      <PeriodoFiltros
+        basePath="/finanzas/reportes/comprobacion"
+        modo="rango"
+        desde={desde}
+        hasta={hasta}
+      />
+
+      {desde && (
+        <p className="rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-600">
+          La columna <strong>Saldo inicial</strong> es el saldo al{" "}
+          <strong>{fechaLarga(desde)}</strong>: el de apertura de cada cuenta más todo lo
+          movido antes de esa fecha. Los débitos y créditos son solo los del período.
+        </p>
+      )}
 
       <OpeningBalancesNotice />
 

@@ -1312,3 +1312,91 @@ idempotente, transaccional, no borra nada y trae un ROLLBACK comentado al final.
    cuentas por pagar sumando lo mismo que antes.
 
 Y como siempre: **el único camino a producción es un merge a `main`**.
+
+---
+
+## SOP-021: El corte de fechas de los estados financieros
+
+Desde el 02/09/2026 el Balance General, el Estado de Resultado y el Balance de
+Comprobación aceptan corte por fecha. **Las tres semánticas son distintas y confundirlas
+es un error contable, no de interfaz.**
+
+| Reporte | Forma | Qué le pasa a la apertura |
+|---|---|---|
+| Balance General | **A UNA FECHA** (`hasta`) | se incluye siempre |
+| Estado de Resultado | **DE UN PERÍODO** (`desde`/`hasta`) | la de cuentas de resultado se **EXCLUYE** |
+| Balance de Comprobación | **DE UN PERÍODO** (`desde`/`hasta`) | se incluye, dentro del saldo inicial |
+
+El Balance no lleva `desde` a propósito: no existe "el activo entre marzo y junio".
+
+### 🔴 La regla que no se puede romper
+
+> **`buildBalanceGeneral` recibe siempre una utilidad calculada sobre el IDÉNTICO
+> `ReportAccount[]` que se le entrega.** Nunca un número que venga de otra carga con otro
+> alcance de fechas.
+
+El renglón "Utilidad del Ejercicio" del patrimonio sale de un cálculo de resultado. Si
+alguna vez se le pasa el resultado DEL PERÍODO mientras sus activos son los ACUMULADOS a
+la fecha, el Balance deja de cuadrar — medido en staging, por **244.476,91**. Hoy la
+garantía la da `buildAccountingReports()`, que arma los dos del mismo conjunto. Si se
+separan esas dos llamadas alguna vez, hay que mantener la regla a mano.
+
+Por eso son **dos cargas distintas**, no una compartida:
+
+```ts
+// /balance — acumulado a la fecha, apertura incluida
+loadReportAccounts(db, tenantId, { rango: { hasta } })
+
+// /pyl — período, apertura de resultado excluida. NO alimenta al Balance.
+loadReportAccounts(db, tenantId, {
+  rango: { desde, hasta },
+  aperturaDeResultado: "excluir",
+})
+```
+
+### El rango vive en la FUENTE, no en los builders
+
+`loadReportAccounts()` es lo que hace que los tres reportes no puedan divergir: no es una
+coincidencia a mantener, es que los tres leen la misma función. **Partir el cálculo en
+calculadoras separadas destruiría esa garantía.** Los tres builders no saben nada de
+fechas y así tienen que seguir.
+
+### Cómo verificar que un corte está bien hecho
+
+Cuatro invariantes. Los tres primeros valen en **cualquier** rango:
+
+1. **Σ saldo inicial = 0,00.** Un ledger de partida doble está cuadrado en cualquier
+   fecha. Si un corte lo rompe, el corte está mal. Es la alarma más barata que hay.
+2. **Σ débitos = Σ créditos** dentro del rango.
+3. **Activo = Pasivo + Patrimonio**, o sea `descuadre` 0,00.
+4. Sin filtro, los cuatro totales son los de siempre: Activo **262.717,46** · Pasivo
+   **−17.334,80** · Patrimonio **−245.382,66** · descuadre **0,00**.
+
+🔒 Están fijados en `src/lib/finanzas/reports/__tests__/periodo-estados-financieros.test.ts`
+sobre siete cortes.
+
+### ⚠️ Al elegir un rango para probar: cuidado con el neteo a cero
+
+**Un rango cuyos movimientos previos se cancelan entre sí no prueba nada.** El 02/09/2026,
+verificando el Libro Mayor contra staging, el primer rango probado (mayo–junio sobre la
+cuenta 100004) tenía los movimientos de abril netos en cero —+1.070 +150 −1.070 −150— y el
+saldo ajustado se veía idéntico al de apertura. Ese rango habría dado por buena una
+implementación rota, en los dos sentidos.
+
+**Elegir siempre un corte donde lo anterior NO se cancele**, y confirmarlo antes de sacar
+conclusiones: `arranque_ajustado` en el Mayor, `movimientoAnterior ≠ 0` en el loader.
+
+### El aviso del Estado de Resultado lleva el número
+
+Con período activo, `/pyl` avisa **cuánto** excluyó, no solo que excluyó algo: *"Se
+excluyeron 244.476,91 de saldos de apertura…"*. Con el número el contador lo verifica; sin
+el número es una disculpa. El valor se suma de `aperturaExcluida` de las cuentas —el mismo
+dato que el reporte no usó— y nunca de un cálculo paralelo.
+
+Ese número, además, es hoy una pregunta abierta para RM: ver `task_plan.md` **A-quinquies**.
+
+### Lo que NO tiene corte de fechas
+
+El Libro Mayor y el Diario ya lo tenían. **Antigüedad, Estado de cuenta y Ventas mensuales
+no**, y no es un olvido: son fotos a hoy, no reportes de período. Filtrarlas es mover la
+fecha de referencia de los tramos, que es otro diseño con su propia pregunta contable.

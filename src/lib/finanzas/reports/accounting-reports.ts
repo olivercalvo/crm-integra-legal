@@ -53,8 +53,22 @@ export interface ReportAccount {
    * saldo de apertura a secas. Los campos de abajo lo desglosan.
    */
   saldo: number;
-  /** El saldo de apertura, sin movimientos. Opcional: los tests arman cuentas a mano. */
+  /**
+   * Saldo al ARRANCAR el período. Sin filtro de fechas es la apertura de la
+   * cuenta; con `desde`, es la apertura más todo lo movido antes del corte.
+   * Opcional: los tests arman cuentas a mano.
+   */
   saldoInicial?: number;
+  /** La apertura pura de `chart_of_accounts`. Siempre el valor real. */
+  saldoApertura?: number;
+  /**
+   * Cuánto de esa apertura se DEJÓ AFUERA del cálculo. Distinto de cero solo en
+   * el Estado de Resultado por período. La pantalla lo suma para poder decir el
+   * número exacto que excluyó.
+   */
+  aperturaExcluida?: number;
+  /** Neto del ledger ANTERIOR a `desde`. 0 sin filtro. */
+  movimientoAnterior?: number;
   /** Neto del ledger (débitos − créditos) que se sumó al inicial. */
   movimientoLedger?: number;
   /** Σ débitos del período. Lo usa el Balance de Comprobación. */

@@ -11,6 +11,7 @@ import {
   formatAmount,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
+import { PeriodoFiltros, fechaLarga } from "../_components/periodo-filtros";
 import { BalanceStatement } from "./_components/balance-statement";
 
 // Mismo set de roles que el resto de /finanzas/reportes.
@@ -20,13 +21,24 @@ export const metadata = {
   title: "Balance General · Reportes",
 };
 
-export default async function BalanceGeneralPage() {
+export default async function BalanceGeneralPage({
+  searchParams,
+}: {
+  searchParams: { hasta?: string };
+}) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
     redirect("/finanzas");
   }
 
-  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId);
+  // UN solo extremo. El Balance es la foto del patrimonio a una fecha: no
+  // existe "el activo entre marzo y junio", así que un `desde` no significaría
+  // nada acá y por eso ni se lee.
+  const hasta = searchParams.hasta?.trim() || "";
+
+  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId, {
+    rango: { hasta },
+  });
   // Los dos reportes se arman juntos para que la "Utilidad del Ejercicio" del
   // patrimonio sea exactamente la utilidad operativa del Estado de Resultado.
   const { balanceGeneral: bg } = buildAccountingReports(accounts);
@@ -47,9 +59,15 @@ export default async function BalanceGeneralPage() {
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title="Estado de Situación Financiera"
-        subtitle="Balance General · Saldos de apertura + movimientos del mayor"
+        subtitle={
+          hasta
+            ? `Balance General · Al ${fechaLarga(hasta)}`
+            : "Balance General · Saldos de apertura + movimientos del mayor"
+        }
         generatedAt={formatGeneratedAt()}
       />
+
+      <PeriodoFiltros basePath="/finanzas/reportes/balance" modo="fecha" hasta={hasta} />
 
       <OpeningBalancesNotice />
       <UnclassifiedWarning sections={[bg.activos, bg.pasivos, bg.patrimonio]} />

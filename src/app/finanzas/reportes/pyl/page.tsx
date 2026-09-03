@@ -6,8 +6,10 @@ import { buildEstadoResultadoNiif18 } from "@/lib/finanzas/reports/estado-result
 import {
   StatementHeader,
   OpeningBalancesNotice,
+  formatAmount,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
+import { PeriodoFiltros, fechaLarga } from "../_components/periodo-filtros";
 import { EstadoResultadoStatement } from "./_components/estado-resultado-statement";
 
 // Mismo set de roles que el resto de /finanzas/reportes.
@@ -17,13 +19,44 @@ export const metadata = {
   title: "Estado de Resultado · Reportes",
 };
 
-export default async function EstadoResultadoPage() {
+export default async function EstadoResultadoPage({
+  searchParams,
+}: {
+  searchParams: { desde?: string; hasta?: string };
+}) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
     redirect("/finanzas");
   }
 
-  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId);
+  const desde = searchParams.desde?.trim() || "";
+  const hasta = searchParams.hasta?.trim() || "";
+  const hayPeriodo = Boolean(desde || hasta);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // POR QUÉ SE EXCLUYE LA APERTURA CUANDO HAY PERÍODO
+  // ───────────────────────────────────────────────────────────────────────────
+  // El saldo de apertura de una cuenta de resultado es lo acumulado de ejercicios
+  // anteriores. Sumarlo a un trimestre convertiría el reporte en un acumulado
+  // desde el origen disfrazado de trimestre, que es justo lo que este filtro vino
+  // a arreglar.
+  //
+  // SIN período se sigue incluyendo, para que el reporte por defecto dé
+  // exactamente lo de siempre.
+  //
+  // ⚠️ Esto hace que el reporte SIN filtro y el reporte del año completo NO den
+  // lo mismo, y la diferencia no es chica. La nota de abajo lo dice con el número
+  // exacto en vez de esconderlo: hoy son 244.476,91 de apertura contra 905,75 de
+  // movimiento real del ledger.
+  const accounts = await loadReportAccounts(ctx.db, ctx.tenantId, {
+    rango: { desde, hasta },
+    aperturaDeResultado: hayPeriodo ? "excluir" : "incluir",
+  });
+
+  // Cuánto se dejó afuera. Se suma de las cuentas, no se recalcula aparte: es el
+  // mismo número que el reporte no usó.
+  const aperturaExcluida = accounts.reduce((a, c) => a + (c.aperturaExcluida ?? 0), 0);
+  const hayAperturaExcluida = Math.abs(aperturaExcluida) >= 0.005;
 
   // Integra es sociedad civil: sin ISR a nivel de empresa y con distribución a
   // socias. Los dos son los defaults del builder; se escriben acá igual para que
@@ -35,11 +68,36 @@ export default async function EstadoResultadoPage() {
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title="Estado de Resultado"
-        subtitle="Saldos de apertura · Clasificado por actividad (NIIF 18)"
+        subtitle={
+          hayPeriodo
+            ? `${desde ? `Del ${fechaLarga(desde)}` : "Desde el inicio"} ${
+                hasta ? `al ${fechaLarga(hasta)}` : "a hoy"
+              } · Clasificado por actividad (NIIF 18)`
+            : "Saldos de apertura · Clasificado por actividad (NIIF 18)"
+        }
         generatedAt={formatGeneratedAt()}
       />
 
-      <OpeningBalancesNotice />
+      <PeriodoFiltros
+        basePath="/finanzas/reportes/pyl"
+        modo="rango"
+        desde={desde}
+        hasta={hasta}
+      />
+
+      {hayAperturaExcluida && (
+        <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Se excluyeron <strong>{formatAmount(Math.abs(aperturaExcluida))}</strong> de saldos
+            de apertura de cuentas de resultado, que corresponden a ejercicios anteriores al
+            corte. Por eso este reporte no coincide con el que se ve sin filtro: aquel los
+            incluye.
+          </span>
+        </p>
+      )}
+
+      {!hayPeriodo && <OpeningBalancesNotice />}
 
       {er.sinClasificar.length > 0 && (
         <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">

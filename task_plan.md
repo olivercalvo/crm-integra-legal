@@ -1210,6 +1210,57 @@ un `user_id`. Agregarla es una **migración**, y eso saca el arreglo de la categ
       con su migración y su backfill (las filas viejas quedarían en NULL, que es
       honesto: de verdad no se sabe quién fue).
 
+### A-quinquies. Los saldos cargados contradicen la regla que dio la contadora — PREGUNTA PARA EL CORREO
+
+Apareció el 02/09/2026 midiendo el peso de las aperturas para diseñar el filtro de
+período. **No se tocó ningún saldo y no hay que tocarlo hasta que RM responda.**
+
+**El dato, medido en staging:**
+
+- **15 cuentas de resultado** (income / cost / expense) tienen `saldo_inicial` distinto
+  de cero, por un total de **244.476,91**.
+- **Las 15 tienen `saldo_inicial_fecha = 2026-01-01`.** No es una que quedó mal: son
+  todas, con la misma fecha.
+- Para dimensionarlo: la Utilidad del Ejercicio que hoy hace cuadrar el Balance es
+  −245.382,66, de los cuales **−244.476,91 son apertura y solo −905,75 son movimiento
+  real del ledger**. El 99,6 % del resultado del sistema es un saldo cargado.
+
+**La regla que dio Rose** (correo del 25/08, hilo "Papel de trabajo", respondiendo a
+"¿desde qué fecha arrancan los saldos cargados?"):
+
+> "Las cuentas de resultado se cierran al cierre de cada período (1 de enero al 31 de
+> diciembre). **Al 1 de enero solo tienen saldo las cuentas del estado de situación
+> financiera**."
+
+**Las dos cosas no pueden ser ciertas a la vez.** Si al 1 de enero solo las cuentas de
+balance tienen saldo, entonces 15 cuentas de resultado con saldo fechado 01/01/2026 son
+un dato imposible.
+
+**Las dos hipótesis:**
+
+1. **La fecha está mal y el saldo está bien.** El corte real es posterior al 1 de enero
+   —el inventario dice que los saldos cargados traen cuentas de resultado con movimiento
+   de enero a agosto— y entonces 244.476,91 es el **acumulado del ejercicio hasta la
+   fecha del reporte de QuickBooks** del que salieron. En ese caso hay que corregir
+   `saldo_inicial_fecha` a la fecha real, que es un dato que tenemos nosotros (a qué
+   fecha se generó ese reporte) y no RM.
+2. **La fecha está bien y los saldos están mal cargados.** Las cuentas de resultado no
+   deberían tener apertura, y esos 244.476,91 se cargaron donde no correspondía.
+
+**Por qué importa más allá de la prolijidad:** el Estado de Resultado por período excluye
+esas aperturas —es lo correcto— y por eso muestra 905,75 donde el reporte sin filtro
+muestra 245.382,66. Esa diferencia es visible en pantalla y un contador la va a preguntar.
+La respuesta honesta hoy es "no sabemos a qué fecha corresponden esos saldos". La pantalla
+ya lo dice con el número exacto; lo que falta es la respuesta.
+
+- [ ] Va al correo a RM como pregunta, con el número y las dos hipótesis.
+- [ ] Antes de mandarlo: buscar de nuestro lado a qué fecha se generó el reporte de
+      QuickBooks del que salieron los saldos. Si aparece, la hipótesis 1 queda confirmada
+      sin molestar a Rose y el arreglo es un UPDATE de `saldo_inicial_fecha`.
+- [ ] **Ningún saldo se modifica hasta tener la respuesta.** Cambiar `saldo_inicial` de
+      una cuenta de resultado mueve la Utilidad del Ejercicio y con ella el patrimonio del
+      Balance.
+
 ### B. Bug buscador de clientes en form de cotización (alta, rápido)
 El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
 

@@ -55,7 +55,7 @@ export function renderClientAcceptanceHtml(
       Hola, <strong>${safeClient}</strong>:
     </p>
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-      Confirmamos que registramos tu aceptación de la cotización
+      Confirmamos que registramos su aceptación de la cotización
       <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>.
       ${safeTitle ? `<br /><span style="font-style:italic;color:${NAVY};">${safeTitle}</span>` : ""}
     </p>
@@ -83,12 +83,12 @@ export function renderClientAcceptanceHtml(
 
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
       Adjuntamos a este correo el PDF firmado, que incluye una página final
-      con la evidencia electrónica de tu aceptación (firma electrónica simple
+      con la evidencia electrónica de su aceptación (firma electrónica simple
       conforme a la Ley 51 de 2008 de la República de Panamá).
     </p>
 
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-      Próximos pasos: nuestro equipo te contactará a la brevedad para
+      Próximos pasos: nuestro equipo se comunicará con usted a la brevedad para
       coordinar el inicio de los servicios y los detalles operativos.
     </p>
 
@@ -117,14 +117,14 @@ export function renderClientAcceptanceText(
   return [
     `Hola, ${props.client_name}:`,
     "",
-    `Confirmamos que registramos tu aceptación de la cotización ${props.quote_number}.`,
+    `Confirmamos que registramos su aceptación de la cotización ${props.quote_number}.`,
     props.title ? `Referencia: ${props.title}` : null,
     "",
     `Aceptada: ${props.accepted_at_panama}`,
     `Firmante: ${props.signer_name} (${props.signer_position})`,
     `Monto: ${formatMoney(props.grand_total, props.currency)}`,
     "",
-    "Adjuntamos el PDF firmado con la evidencia electrónica de tu aceptación",
+    "Adjuntamos el PDF firmado con la evidencia electrónica de su aceptación",
     "(firma electrónica simple conforme a la Ley 51 de 2008 de Panamá).",
     "",
     "Próximos pasos: nuestro equipo se comunicará con usted a la brevedad para",

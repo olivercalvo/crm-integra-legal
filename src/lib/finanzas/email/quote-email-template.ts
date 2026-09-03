@@ -145,7 +145,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                   Hola, <strong>${safeClient}</strong>:
                 </p>
                 <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
-                  Te enviamos la cotización <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>
+                  Le enviamos la cotización <strong style="color:${NAVY};font-family:monospace;">${safeNumber}</strong>
                   para los servicios solicitados${safeTitle ? `: <span style="font-style:italic;color:${NAVY};">${safeTitle}</span>` : ""}.
                 </p>
 
@@ -179,7 +179,7 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                     <td style="border-radius:6px;background-color:${GOLD};">
                       <a href="${safeLink}" target="_blank" rel="noopener noreferrer"
                          style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:700;color:${NAVY};text-decoration:none;letter-spacing:0.5px;">
-                        Ver cotización online →
+                        Ver cotización en línea →
                       </a>
                     </td>
                   </tr>
@@ -190,8 +190,8 @@ export function renderQuoteEmailHtml(props: QuoteEmailProps): string {
                 </p>
 
                 <p style="margin:14px 0;font-size:14px;line-height:1.6;color:${GRAY_700};">
-                  Desde el portal online puedes aceptar o rechazar la cotización
-                  con tu firma electrónica. Si prefieres discutir algún detalle
+                  Desde el portal en línea puede aceptar o rechazar la cotización
+                  con su firma electrónica. Si prefiere conversar algún detalle
                   primero, basta con responder este correo.
                 </p>
 
@@ -239,8 +239,8 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
 
   lines.push(
     title && title.trim().length > 0
-      ? `Te enviamos la cotización ${quote_number}: ${title}.`
-      : `Te enviamos la cotización ${quote_number}.`,
+      ? `Le enviamos la cotización ${quote_number}: ${title}.`
+      : `Le enviamos la cotización ${quote_number}.`,
     "",
     `Monto total: ${formatMoney(grand_total, currency)}`,
     `Vigencia hasta: ${formatDateEs(valid_until)}`
@@ -262,11 +262,11 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
 
   lines.push(
     "",
-    `Ver cotización online: ${public_link}`,
+    `Ver cotización en línea: ${public_link}`,
     "El PDF también va adjunto a este correo.",
     "",
-    "Desde el portal puedes aceptar o rechazar la cotización con tu firma",
-    "electrónica. Si prefieres discutir algún detalle primero, basta con",
+    "Desde el portal en línea puede aceptar o rechazar la cotización con su",
+    "firma electrónica. Si prefiere conversar algún detalle primero, basta con",
     "responder este correo.",
     "",
     "Cordialmente,",

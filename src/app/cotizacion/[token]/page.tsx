@@ -73,7 +73,7 @@ function ShellFooter() {
     <footer className="mt-12 border-t bg-white py-6">
       <div className="mx-auto max-w-3xl px-4 text-center text-xs text-gray-500 leading-relaxed">
         <p>
-          ¿Tienes dudas? Escríbenos a{" "}
+          ¿Tiene dudas? Escríbanos a{" "}
           <a
             href={`mailto:${CONTACT_EMAIL}`}
             className="font-medium text-integra-navy hover:underline"
@@ -137,8 +137,8 @@ function ExpiredCard({ quote_number, valid_until }: { quote_number: string; vali
           <p className="mt-1 text-sm text-gray-500 font-mono">{quote_number}</p>
           <p className="mt-4 text-sm text-gray-700 leading-relaxed">
             Esta cotización venció el{" "}
-            <strong>{formatDateEs(valid_until)}</strong>. Contacta al bufete
-            para una cotización actualizada con condiciones vigentes.
+            <strong>{formatDateEs(valid_until)}</strong>. Comuníquese con el bufete
+            para recibir una cotización actualizada con condiciones vigentes.
           </p>
           <a
             href={`mailto:${CONTACT_EMAIL}?subject=Cotización ${encodeURIComponent(quote_number)} vencida`}
@@ -163,7 +163,7 @@ export default async function CotizacionPublicPage({ params }: PageProps) {
     return (
       <ErrorShell
         title="Link inválido"
-        message="El link de esta cotización no tiene un formato válido. Verifica que hayas copiado el link completo del correo."
+        message="El enlace de esta cotización no tiene un formato válido. Es posible que se haya copiado incompleto. Ábralo directamente desde el correo que recibió."
       />
     );
   }

@@ -1,5 +1,65 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Trato de usted en el portal público y los correos al cliente] - 2026-09-02
+
+Cierre del barrido de tuteo. Este es el bloque que Oliver pidió revisar cadena por
+cadena y aparte de todo lo demás, con un motivo explícito: **es la voz del bufete
+hacia sus clientes.** Un toast de error interno lo ve una abogada tres segundos; el
+correo de una cotización lo lee la persona que va a contratar al bufete.
+
+**28 cadenas en 5 archivos:** el portal `/cotizacion/[token]`, las respuestas de
+`quote-portal.ts` que el cliente ve en pantalla, el correo de la cotización y el de
+confirmación de aceptación.
+
+### No alcanzaba con conjugar
+
+Cuatro se reescribieron enteras porque el problema no era la persona verbal:
+
+- *"Verifica que hayas copiado el link completo del correo"* → **"El enlace de esta
+  cotización no tiene un formato válido. Es posible que se haya copiado incompleto.
+  Ábralo directamente desde el correo que recibió."** La versión anterior señalaba
+  el error sin decir qué hacer.
+- *"Cuéntanos por qué no procedes"* → **"por qué no desea continuar"**. "No procede"
+  se lee como "no corresponde".
+- *"queda en tu legajo"* → **"queda en su expediente"**. `Legajo` es rioplatense; en
+  Panamá se dice expediente. Es exactamente el tipo de palabra que delata que el
+  sistema no se escribió acá. (El `legajo` de `posting.ts:171` se dejó: ahí es el
+  término contable correcto y vive en un comentario de código.)
+- Sale **"(doble clic)"** de los dos mensajes de doble envío. Es jerga nuestra y le
+  echa la culpa al cliente de una condición de carrera.
+
+### Una sola forma: "en línea", nunca "online"
+
+`online` no estaba en un solo lugar sino en tres, todos en el mismo correo: el botón
+`Ver cotización online →` del HTML, el `Ver cotización online: {link}` del texto plano
+y el `portal online` del cuerpo. Los otros nueve usos de la palabra en el repo son
+código de la cola offline (`connectivityService.on("online")`) y no se tocaron.
+
+### Seis que el barrido de imperativos no podía ver
+
+El detector buscaba imperativos (`verifica`, `intenta`). Estas seis son tuteo **sin**
+imperativo, y aparecieron al leer los archivos completos para redactar la propuesta:
+`¿Tienes dudas?`, `no procedes`, `te contactará` y tres `Te enviamos la cotización`.
+
+Se incluyeron porque dejarlas afuera producía el peor resultado posible: el correo
+habría abierto con *"Te enviamos la cotización COT-001269"* y tres párrafos después
+dicho *"Desde el portal en línea puede aceptar o rechazar…"*. **Tuteo y usted en el
+mismo correo es peor que cualquiera de los dos solo.**
+
+### Lo que NO se tocó
+
+- **`buildConsentText()`** — el texto que el cliente firma electrónicamente. Está en
+  primera persona (*"Yo, {nombre}, en mi calidad de…"*), así que no tenía tuteo, y
+  además está versionado (`CONSENT_TEXT_VERSION`): cada aceptación guarda en la BD el
+  texto exacto que se mostró. Lo único que se ajustó ahí son los **placeholders de la
+  vista previa** (`[tu nombre]` → `[su nombre]`), que no forman parte del texto firmado.
+- La referencia a la **Ley 51 de 2008** y el resto de las frases con peso legal.
+
+Verificación final: una búsqueda de segunda persona (`tu`, `tus`, `te`, `estás`,
+`tienes`, `puedes`, `prefieres`, `procedes`) sobre los cinco archivos vuelve **vacía**.
+545/545 tests. `tsc` limpio.
+
+
 ## [Trato de usted en todo el CRM interno — grupos 1 a 7] - 2026-09-02
 
 Cierre del barrido de tuteo. El inventario anterior (81 cadenas, casi todas de Finanzas)

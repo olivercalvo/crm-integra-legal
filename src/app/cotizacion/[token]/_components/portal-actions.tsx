@@ -112,10 +112,10 @@ function SuccessBanner({
           ¡Aceptación registrada!
         </h3>
         <p className="mt-2 text-sm text-gray-700 leading-relaxed">
-          Registramos tu aceptación de la cotización{" "}
+          Registramos su aceptación de la cotización{" "}
           <span className="font-mono font-semibold">{quote_number}</span>.
-          Te enviamos por correo el PDF firmado con la evidencia electrónica.
-          Nuestro equipo te contactará a la brevedad.
+          Le enviamos por correo el PDF firmado con la evidencia electrónica.
+          Nuestro equipo se comunicará con usted a la brevedad.
         </p>
       </div>
     );
@@ -169,8 +169,8 @@ function AcceptModal({
 
   // Vista previa del consent que el cliente está a punto de firmar.
   const consentPreview = buildConsentText({
-    full_name: fullName.trim() || "[tu nombre]",
-    position: position.trim() || "[tu cargo]",
+    full_name: fullName.trim() || "[su nombre]",
+    position: position.trim() || "[su cargo]",
     id_document: idDocument.trim() || null,
     client_name,
     quote_number,
@@ -229,7 +229,7 @@ function AcceptModal({
         onSuccess();
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }
@@ -237,9 +237,9 @@ function AcceptModal({
   return (
     <ModalShell title="Aceptar cotización" onClose={isPending ? undefined : onClose}>
       <p className="text-sm text-gray-700 leading-relaxed">
-        Estás a punto de aceptar la cotización{" "}
+        Está a punto de aceptar la cotización{" "}
         <span className="font-mono font-semibold">{quote_number}</span> en
-        nombre de <strong>{client_name}</strong>. Completa tus datos para
+        nombre de <strong>{client_name}</strong>. Complete sus datos para
         firmar electrónicamente:
       </p>
 
@@ -421,7 +421,7 @@ function RejectModal({
         onSuccess();
         router.refresh();
       } catch {
-        setSubmitError("Error de red. Intenta de nuevo.");
+        setSubmitError("Error de red. Intente de nuevo.");
       }
     });
   }
@@ -431,8 +431,8 @@ function RejectModal({
   return (
     <ModalShell title={`Rechazar cotización ${quote_number}`} onClose={isPending ? undefined : onClose}>
       <p className="text-sm text-gray-700 leading-relaxed">
-        Cuéntanos por qué no procedes con esta cotización. Tu motivo nos
-        ayuda a mejorar nuestras propuestas y queda en tu legajo.
+        Cuéntenos por qué no desea continuar con esta cotización. Su motivo nos
+        ayuda a mejorar nuestras propuestas y queda en su expediente.
       </p>
 
       <div className="mt-4 space-y-4">

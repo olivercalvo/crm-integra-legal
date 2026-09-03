@@ -104,7 +104,7 @@ export function validateRejectInput(
   const errors: PortalValidationErrors = {};
 
   if (reason.length < REJECTION_REASON_MIN) {
-    errors.reason = `Cuéntanos brevemente por qué no procedes (mínimo ${REJECTION_REASON_MIN} caracteres)`;
+    errors.reason = `Cuéntenos brevemente por qué no desea continuar (mínimo ${REJECTION_REASON_MIN} caracteres)`;
   } else if (reason.length > REJECTION_REASON_MAX) {
     errors.reason = `Máximo ${REJECTION_REASON_MAX} caracteres`;
   }
@@ -140,7 +140,7 @@ async function loadEligibleQuote(
 
   if (isQuoteExpired(bundle.valid_until)) {
     throw new MutationError(
-      "Esta cotización venció. Contacta al bufete para una cotización actualizada.",
+      "Esta cotización venció. Comuníquese con el bufete para recibir una cotización actualizada.",
       400
     );
   }
@@ -159,7 +159,7 @@ async function loadEligibleQuote(
   }
   if (bundle.status === "convertida") {
     throw new MutationError(
-      "Esta cotización ya fue convertida en facturas. Contacta al bufete para más información.",
+      "Esta cotización ya fue convertida en facturas. Comuníquese con el bufete para más información.",
       400
     );
   }
@@ -238,7 +238,7 @@ export async function commitAcceptance(
     const code = (errAcc as { code?: string } | null)?.code;
     if (code === "23505") {
       throw new MutationError(
-        "Esta cotización ya fue aceptada (doble clic). Recarga la página.",
+        "Esta cotización ya fue aceptada. Vuelva a cargar la página.",
         409,
         errAcc
       );
@@ -319,7 +319,7 @@ export async function commitRejection(
     const code = (errRej as { code?: string } | null)?.code;
     if (code === "23505") {
       throw new MutationError(
-        "Esta cotización ya fue rechazada (doble clic). Recarga la página.",
+        "Esta cotización ya fue rechazada. Vuelva a cargar la página.",
         409,
         errRej
       );

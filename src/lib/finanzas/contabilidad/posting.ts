@@ -116,6 +116,27 @@ export interface AsientoInput {
   reversal_reason?: string | null;
   /** Fecha de REGISTRO. Default: hoy (doble fecha, Art. 13a). ISO. */
   record_date?: string | null;
+  /**
+   * Referencia del documento de respaldo: Nº de recibo, memo, planilla.
+   *
+   * ⚠️ NO es lo mismo que `description`. `description` es la NATURALEZA del
+   * asiento (Art. 5.5) y es obligatoria; `reference` es el papel que lo respalda
+   * y es opcional. El contador los lee distinto y la DGI mira el primero.
+   *
+   * Entra en el hash: es contenido contable del asiento.
+   */
+  reference?: string | null;
+  /**
+   * Token contra el doble envío, generado por la pantalla al abrir el formulario.
+   *
+   * 🔑 Hace falta SOLO donde no hay `source_id`, o sea en los asientos manuales.
+   * El UNIQUE de la `034` es parcial (`WHERE source_id IS NOT NULL`), así que un
+   * asiento sin documento queda fuera del índice y un doble clic lo postea dos
+   * veces — y un asiento duplicado NO SE BORRA.
+   *
+   * NO entra en el hash: resuelve un problema de HTTP, no de contabilidad.
+   */
+  idempotency_key?: string | null;
 }
 
 /**
@@ -148,6 +169,8 @@ export async function postJournalEntry(
     p_reversal_reason: input.reversal_reason ?? null,
     p_created_by: userId ?? null,
     p_record_date: input.record_date ?? null,
+    p_reference: input.reference ?? null,
+    p_idempotency_key: input.idempotency_key ?? null,
   });
 
   if (error) {

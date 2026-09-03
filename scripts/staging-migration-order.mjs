@@ -97,6 +97,11 @@ export const BUNDLE_2 = [
   // 038 va después de 036 (sus triggers son sobre `expense_lines`) y después de
   // 023 (amplía el CHECK de `journal_entries.source_type`).
   "sql/pending/038_gasto_tramite_al_ledger.sql",
+  // 039 REDEFINE `post_journal_entry`: va después de la 030, que es la que lo
+  // dejó SECURITY DEFINER y con EXECUTE solo para service_role. Los dropea y los
+  // rehace ella misma; su paso 4 verifica que ni anon ni authenticated queden
+  // pudiendo ejecutarlo.
+  "sql/pending/039_asientos_manuales.sql",
 ];
 
 // ---------------------------------------------------------------------------

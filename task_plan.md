@@ -1297,6 +1297,46 @@ de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.
 `_userId` descartado) y A-quinquies (los saldos que contradicen la regla de Rose). Ninguno
 de los dos se arregló a propósito.
 
+### A-0-bis-2. 🔴 LA REVERSIÓN DE ASIENTOS — pasa a ser el bloque INMEDIATAMENTE siguiente
+
+**Por qué cambió de prioridad.** Era "algún día". Dejó de serlo el 03/09/2026, y el motivo es
+una consecuencia directa de la pantalla de asientos manuales:
+
+> Hasta hoy el libro solo tiene asientos **sembrados** y de **gastos de trámite**, y estos
+> últimos pasan por un gate que exige líneas clasificadas y cuentas válidas. En cuanto exista la
+> pantalla de asientos manuales, **un contador puede equivocarse a mano — y no hay forma de
+> deshacerlo.** Los asientos son inmutables por diseño: los triggers de la `023` rechazan UPDATE
+> y DELETE.
+
+O sea: la pantalla de asientos manuales **crea** la necesidad de la reversión. No se puede
+entregar una y postergar la otra mucho tiempo sin dejar al contador sin salida ante su propio
+error de tipeo.
+
+**Lo que YA está listo en la base** (no hay que construirlo):
+- `source_type = 'reversion'` en el CHECK.
+- `reverses_entry_id` + `reversal_reason`, con el CHECK `je_reversion_requires_ref` que exige
+  apuntar al original y un motivo de 3+ caracteres (Art. 5.7 del DE 34/1998). Lo restauró la
+  `029` después de que la `028` lo dropeara sin querer.
+
+**Falta:** el builder del asiento espejo, la ruta, y el botón en el detalle del asiento.
+
+**🔒 Y hay una pregunta contable que NO es de diseño — va a Josuarth, por correo:**
+
+> ¿La reversión se postea con la **fecha del asiento original** —lo que puede caer en un período
+> ya cerrado, y el RPC lo va a rechazar— o con la **fecha de la reversión**?
+
+Las dos son prácticas legítimas y tienen consecuencias distintas:
+- Con la fecha original, el período del error queda corregido en su propio mes, pero hay que
+  poder reabrir un período cerrado (y hoy `post_journal_entry` aborta con
+  *"El período 2026-03 está CERRADO: no admite asientos nuevos"*).
+- Con la fecha de reversión, ningún período cerrado se toca, pero el mes del error queda
+  reportado mal para siempre y la corrección aparece en otro.
+
+No inventar la respuesta. Sin ella, el builder se puede escribir pero la ruta no sabe qué fecha
+mandarle al RPC.
+
+---
+
 ### A-0-ter. 🔒 BLOQUEADO POR RM — la lista corta de cuentas de compras
 
 **La pregunta, en una línea:** ¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran

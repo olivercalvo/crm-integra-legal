@@ -89,10 +89,38 @@ export const BUNDLE_2 = [
   // 034 va después de 023 (crea journal_entries). Su paso 1 es un SELECT de
   // chequeo que devuelve 0 filas en una base recién armada.
   "sql/pending/034_asiento_unico_por_documento.sql",
+  // 036 crea `expense_lines`. Va acá porque el resto del esquema la necesita
+  // (los triggers de la 038 cuelgan de ella). Su BACKFILL no hace nada en este
+  // momento —`expenses` está vacía— y por eso hay que VOLVER A CORRERLA después
+  // del seed. Es idempotente: la segunda pasada es la que crea las líneas.
+  "sql/pending/036_expense_lines.sql",
+  // 038 va después de 036 (sus triggers son sobre `expense_lines`) y después de
+  // 023 (amplía el CHECK de `journal_entries.source_type`).
+  "sql/pending/038_gasto_tramite_al_ledger.sql",
 ];
 
 // ---------------------------------------------------------------------------
-// ⚠️ 035 NO ESTÁ EN ESTA LISTA, Y ES A PROPÓSITO
+// ⚠️ 035 Y 037 NO ESTÁN EN ESTA LISTA, Y ES A PROPÓSITO
+// ---------------------------------------------------------------------------
+// Las dos necesitan datos que crea el SEED, no el esquema, así que corren
+// DESPUÉS. La secuencia completa para levantar staging de cero:
+//
+//   1. node scripts/apply-staging-sql.mjs --reset      ← esta lista
+//   2. npm run seed:staging                            ← cuentas, casos, gastos
+//   3. node scripts/run-sql.mjs sql/pending/035_reembolso_a_fondos_legales.sql
+//   4. node scripts/run-sql.mjs sql/pending/036_expense_lines.sql   ← 2ª pasada:
+//      ahora sí hay gastos, y su backfill les crea UNA línea sin clasificar.
+//   5. node scripts/run-sql.mjs sql/pending/037_expense_lines_cuenta_obligatoria.sql
+//   6. npm run seed:asientos
+//   7. npx tsx scripts/seed-gasto-tramite-demo.mts
+//
+// 🔴 EL ORDEN 4 → 5 ES OBLIGATORIO. El backfill de 036 inserta
+// `chart_account_code = NULL` y el CHECK de 037 lo rechaza: al revés, la 036
+// aborta. Está explicado en el encabezado de la 037.
+//
+// ⚠️ Y el paso 4 no es opcional: sin él los 20 gastos del seed quedan SIN LÍNEAS,
+// que es un estado peor que el que reemplaza — no se pueden postear y la pantalla
+// de limpieza no tiene nada que mostrar.
 // ---------------------------------------------------------------------------
 // `035_reembolso_a_fondos_legales.sql` apunta los servicios REIM-* a la cuenta
 // `130003`, y esa cuenta NO viene de ninguna migración: la crea

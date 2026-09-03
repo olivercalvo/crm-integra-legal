@@ -343,4 +343,4 @@ if (Math.abs(despues.descuadre) >= 0.005) {
   process.exit(1);
 }
 console.log(`🔗 La pantalla:  /finanzas/gastos-tramite/${expenseId}`);
-console.log(`🔗 El mayor:     /finanzas/reportes/mayor  (cuentas 130003, 610002, 500005, 200001)\n`);
+console.log(`🔗 El mayor:     /finanzas/reportes/mayor  (cuentas 130003, 500004, 500005, 200001)\n`);

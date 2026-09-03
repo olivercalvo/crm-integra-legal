@@ -1,5 +1,101 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [038 — el gasto de trámite llega al libro contable] - 2026-09-03
+
+**Queda cerrado el camino documento → asiento para el primer tipo de documento del sistema.**
+Hasta hoy ninguna ruta de `/api` posteaba al ledger: `postJournalEntry()` solo se llamaba desde
+su propia definición y desde un script, y los asientos de staging los puso `seed-asientos.ts`.
+
+### El asiento: N débitos contra un crédito único
+
+    DEBE  610001  Útiles de oficina        412,35
+    DEBE  500005  Honorario externo        900,00
+    DEBE  610002  Mensajería               185,50
+    HABER 200001  Cuentas por pagar              1.497,85
+
+**Cuadra por construcción**: el crédito ES la suma de los débitos, calculada por la misma
+función. Dos líneas con la misma cuenta NO se consolidan, a propósito — cada renglón conserva su
+descripción, que es lo que Josuarth pidió ver en el mayor ("se abren las fracciones").
+
+El ITBMS va al débito de su propia línea y **no** a una cuenta de crédito fiscal: en un gasto de
+trámite el impuesto es pass-through. 🔑 Es lo que hace que este bloque **no dependa** de la
+consulta pendiente al contador — esa pregunta es solo de compras.
+
+### 🔴 El rechazo que le da sentido al NULL
+
+Si cualquier línea tiene `chart_account_code` en NULL, **la ruta no postea**: 422 con
+*"Este gasto tiene 2 líneas sin cuenta contable (las líneas 2, 3). Clasifíquelas antes de
+registrarlo en el libro."*
+
+Lo decide el builder devolviendo un resultado discriminado, no lanzando: el compilador obliga a
+manejar el caso. **Sin este rechazo el NULL sería solo una columna vacía.** Con él, es lo que
+impide que un gasto que nadie clasificó entre al libro contra una cuenta inventada — y el libro
+no se corrige después.
+
+### Idempotencia en tres capas, y un bug que encontró su propio test
+
+1. `expenses.posted_entry_id` — corta temprano, sin tocar el ledger. Es un cache.
+2. `SELECT` sobre `journal_entries` — la verdad, con el número de asiento en el mensaje. ⚠️ Si
+   ese SELECT falla se **aborta**: postear de más es lo único que no se puede deshacer.
+3. El UNIQUE parcial de la `034` — **la garantía**. Las dos primeras dejan una ventana que dos
+   requests simultáneos pasan. El `23505` se traduce al mismo mensaje de la capa 2.
+
+⚠️ **El código de Postgres viaja en `MutationError.detail`, no en `cause`.** La primera versión
+del bloque miraba `cause` y contestaba 422 ("el asiento está mal armado") a un doble clic que ya
+estaba posteado. Lo encontró el test de la capa 3 antes de que existiera la pantalla.
+
+Y si el cache falla **después** del posteo, el request sigue siendo 201: el asiento ya está en el
+libro y devolver un error haría que alguien reintente un posteo hecho.
+
+### Inmutabilidad: el guard va en la BASE, no en la ruta
+
+Dos triggers, sobre `expenses` y sobre `expense_lines`. El gate de la ruta da el mensaje; el
+trigger es el permiso — toda la escritura del módulo va con el cliente de servicio, que saltea
+RLS, así que un script o el SQL Editor editarían igual.
+
+La lista de lo editable es **blanca y explícita**: con una lista negra, cada columna nueva de
+`expenses` nacería editable sin que nadie lo decida.
+
+| ✅ | ❌ |
+|---|---|
+| comprobante (escanear el recibo tarde no toca los libros), `posted_entry_id` | monto, fecha, concepto, caso, proveedor, vencimiento, cuenta de pago, las líneas, y borrar el gasto |
+
+🔒 **Verificado contra staging con el RPC real y ROLLBACK**:
+`sql/tests/verificacion-038-inmutabilidad.sql`, ocho casos, **8/8**, sin dejar asiento ni
+consumir correlativo.
+
+### El CHECK anónimo, otra vez
+
+`'gasto_tramite'` es un valor NUEVO — `'gasto'` ya está tomado por `business_expenses` y es lo
+que `destino-documento.ts` usa para el enlace del mayor. Compartirlo mandaría un gasto de trámite
+a la pantalla de compras con un id que ahí no existe. Ventaja extra: **cero backfill**.
+
+⚠️ Al ampliar el CHECK se filtró por **contenido** (`'%source_type%'` **y** `'%factura%'`), que es
+la lección de la `029`: la primera versión de la `028` dropeó los dos CHECK que mencionan
+`source_type` y se llevó puesto `je_reversion_requires_ref`. La `038` además **verifica al final
+que ese constraint siga en pie** — la comprobación que le habría ahorrado la `029` a la `028`.
+Staging: 1 constraint dropeado, el correcto.
+
+Las tres fuentes se movieron juntas: el CHECK de la base, `SourceType` en `posting.ts` y
+`RUTA_DEL_DOCUMENTO`.
+
+### Tests: 661 (+35)
+
+- `asiento-gasto-tramite.test.ts` (18) — el rechazo por NULL, la forma del asiento, que el ITBMS
+  no toque `200003`, y que `source_type` no sea `gasto`.
+- `post-to-ledger.route.test.ts` (17) — que un gasto sin clasificar **no llegue al RPC**, las
+  tres capas de idempotencia, el tenant del perfil, "ante la duda no se postea", y que un cache
+  fallido no voltee un posteo hecho.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre).
+
+### Lo que falta del bloque
+
+El **formulario de alta** con proveedor, vencimiento y líneas, y el botón que llama a esta ruta.
+Después: `VALIDATE CONSTRAINT` cuando no queden líneas sin clasificar.
+
+---
+
 ## [Limpieza de gastos sin clasificar — vista, masiva y el CHECK que cierra el hueco] - 2026-09-03
 
 ### 🔬 El experimento primero: qué hace de verdad `CHECK ... NOT VALID`

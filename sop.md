@@ -851,6 +851,75 @@ el texto contra "Varios"**: esa etiqueta es lo primero que va a cambiar.
 
 ---
 
+### 🧭 EL PATRÓN DE UNA RUTA QUE POSTEA (desde el 03/09/2026)
+
+`app/api/expenses/[id]/post-to-ledger/route.ts` es la **primera ruta de `/api` que escribe en
+el ledger**, y está pensada para que factura, cobro y compra la copien. Los seis puntos, en
+orden:
+
+1. **Auth → perfil → rol.** `createClient()` para la sesión, `createAdminClient()` para todo lo
+   demás. El `tenant_id` sale de `users`, **nunca del body** — el RPC es `SECURITY DEFINER` y
+   desde la `030` dejó de correr bajo RLS, así que la ruta es la única que valida contra qué
+   bufete se escribe.
+2. **Capa 1 — el cache.** `expenses.posted_entry_id` corta temprano sin pegarle al ledger. Es
+   un cache: puede estar desactualizado, por eso no es la garantía.
+3. **Capa 2 — la verdad.** `SELECT` sobre `journal_entries` por `(source_type, source_id)`. Da
+   el mensaje entendible con el número de asiento. ⚠️ **Si ese SELECT falla, se ABORTA** — no se
+   asume "no hay asiento": postear de más es lo único que no se puede deshacer.
+4. **El armado, en un módulo PURO** (`contabilidad/asiento-gasto-tramite.ts`) que devuelve un
+   resultado discriminado. Nada de I/O ahí adentro, y el compilador obliga a manejar el
+   rechazo.
+5. **El posteo, solo por `postJournalEntry()`.** Cero INSERT directo.
+6. **Capa 3 — el UNIQUE de la `034`.** Es LA garantía: las capas 1 y 2 dejan una ventana entre
+   el SELECT y el INSERT que dos requests simultáneos pasan. El `23505` se traduce **al mismo
+   mensaje de la capa 2**: para quien apretó dos veces, las dos rutas tienen que contar lo mismo.
+
+⚠️ **El código de Postgres viaja en `MutationError.detail`, NO en `cause`.** `postJournalEntry`
+hace `new MutationError(msg, 422, error)` y el tercer argumento es `detail`. La primera versión
+de la ruta miraba `cause` y contestaba 422 ("el asiento está mal armado") a un doble clic que en
+realidad ya estaba posteado. Lo encontró su propio test.
+
+⚠️ **Si el cache falla DESPUÉS del posteo, el request NO falla.** El asiento ya está en el libro
+y eso es lo irreversible; devolver un error haría que alguien reintente un posteo que ya se hizo.
+Se loguea y se sigue: la verdad la lee `getNumeroDeAsiento()` contra `journal_entries`.
+
+### Un gasto asentado no se edita — y el guard vive en la BASE
+
+`038` pone dos triggers (`expenses` y `expense_lines`). El gate de la ruta da el mensaje; el
+trigger es el permiso. Toda la escritura de este módulo va con el cliente de servicio, que
+**saltea RLS**: un script, el SQL Editor o una segunda ruta editan igual, y eso deja el asiento
+diciendo una cosa y el documento otra, en silencio y para siempre.
+
+La lista de lo editable con el gasto ya asentado es **BLANCA y explícita** — con una lista negra,
+cada columna nueva de `expenses` nacería editable sin que nadie lo decida:
+
+| ✅ Permitido | ❌ Rechazado |
+|---|---|
+| `receipt_url`, `receipt_filename` — escanear el recibo tarde no toca los libros | monto, fecha, concepto, caso, proveedor, vencimiento, cuenta de pago |
+| `posted_entry_id` — es lo que escribe el propio posteo | agregar, modificar o borrar cualquier línea |
+| | borrar el gasto |
+
+🔒 Verificado contra staging con el RPC real y ROLLBACK:
+`sql/tests/verificacion-038-inmutabilidad.sql`, ocho casos, 8/8.
+
+### `gasto` y `gasto_tramite` son DOS `source_type` distintos
+
+| valor | tabla | pantalla |
+|---|---|---|
+| `gasto` | `business_expenses` (compras del bufete) | `/finanzas/gastos-bufete/{id}` |
+| `gasto_tramite` | `expenses` (módulo Legal) | `/finanzas/gastos-tramite/{id}` |
+
+Compartirlos mandaría un gasto de trámite a la pantalla de compras con un id que ahí no existe —
+el bug del 01/09/2026 que originó `destino-documento.ts`. Un valor nuevo tiene además **cero
+backfill**. Las tres fuentes se mueven juntas: el CHECK de la base, `SourceType` en `posting.ts`
+y `RUTA_DEL_DOCUMENTO`.
+
+⚠️ **Al tocar ese CHECK, filtrar por CONTENIDO y no solo por columna.** Hay DOS que mencionan
+`source_type` y la primera versión de la `028` dropeó los dos, perdiendo
+`je_reversion_requires_ref` (ver `029`). La `038` filtra además por `'%factura%'` y **verifica al
+final que ese constraint siga en pie**, que es la comprobación que le habría ahorrado la `029`.
+
+
 ## SOP-015: El bucket `documents` es PRIVADO
 
 ### Qué significa privado, y qué NO significa

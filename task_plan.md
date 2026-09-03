@@ -1178,12 +1178,15 @@ el reporte ya está construido.
    limpieza de los sin clasificar: vista "Gastos" en `/legal/gastos` con chip, selector por
    fila y asignación masiva que **solo llena blancos**.
 
-   **Falta, en este orden:**
-   - **`038`**: ampliar el CHECK de `journal_entries.source_type` con `'gasto_tramite'` ⚠️
-     filtrando por CONTENIDO y no solo por columna (lección de la `029`), el builder del
-     asiento (N débitos + 1 crédito a `200001`), la ruta que postea respetando SOP-014, y el
-     **trigger de inmutabilidad** sobre `expenses` y `expense_lines`.
-   - **El formulario de alta** con proveedor, vencimiento y líneas.
+   **`038` HECHA (03/09):** el CHECK de `source_type` con `'gasto_tramite'` (filtrado por
+   contenido y verificando que `je_reversion_requires_ref` siga en pie), el builder puro del
+   asiento, `POST /api/expenses/[id]/post-to-ledger` — **la primera ruta de `/api` que escribe
+   en el ledger**, con las tres capas de idempotencia — y los dos triggers de inmutabilidad.
+   Verificado contra staging con el RPC real y ROLLBACK: 8/8.
+
+   **Falta:**
+   - **El formulario de alta** con proveedor, vencimiento y líneas, y el botón que llama a la
+     ruta de posteo.
    - Cuando no queden líneas en NULL:
      `ALTER TABLE expense_lines VALIDATE CONSTRAINT expense_lines_cuenta_obligatoria;`
 

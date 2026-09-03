@@ -50,10 +50,23 @@ type DB = SupabaseClient;
 /**
  * De dónde viene el asiento. Espeja el CHECK
  * `journal_entries_source_type_check`; si se agrega un valor, van los dos.
+ *
+ * ⚠️ `gasto` y `gasto_tramite` son DOS COSAS DISTINTAS, y confundirlas manda un
+ * documento a la pantalla equivocada:
+ *
+ *   · `gasto`          → `business_expenses`, las compras del bufete.
+ *                        Enlaza a `/finanzas/gastos-bufete/{id}`.
+ *   · `gasto_tramite`  → `expenses`, los gastos de trámite del módulo Legal.
+ *                        Enlaza a `/finanzas/gastos-tramite/{id}`.
+ *
+ * El mapeo vive en `reports/destino-documento.ts`. Reusar `gasto` para los dos
+ * llevaría un gasto de trámite a la pantalla de compras con un id que ahí no
+ * existe — el bug del 01/09/2026 que originó ese archivo.
  */
 export type SourceType =
   | "factura"
   | "gasto"
+  | "gasto_tramite"
   | "pago"
   | "nota_credito"
   | "manual"
@@ -63,6 +76,7 @@ export type SourceType =
 export const SOURCE_TYPES: SourceType[] = [
   "factura",
   "gasto",
+  "gasto_tramite",
   "pago",
   "nota_credito",
   "manual",

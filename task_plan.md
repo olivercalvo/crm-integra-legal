@@ -273,7 +273,7 @@ la migración toca `categoriaNiif18De()` y el mapper, no el builder del reporte.
 | # | Tarea | Estado |
 |---|-------|--------|
 | B0.1 | Candado de correo fuera de producción + eFactura `iAmb` | ✅ SOP-018, 8 tests |
-| B0.2 | "Pagos" → "Cobros" en gastos del caso | ✅ |
+| B0.2 | "Pagos" → "Cobros" en gastos del caso | 🟡 **A MEDIAS** — ver A-0 punto 2. La pantalla del caso ya dice Cobros; los DOS formularios que crean el registro siguen diciendo Pago. Estaba marcado ✅ por error hasta el 02/09/2026 |
 | B0.3 | ITBMS configurable: pantalla nueva + seed reconciliando el catálogo | ✅ |
 | B0.4 | Tipo de documento a lista desplegable | ✅ |
 | B0.5 | Reembolso al facturar → HABER `130003` | ✅ verificado en el asiento 6 |
@@ -1109,6 +1109,66 @@ eFactura PRODUCTION-READY y en uso real por las licenciadas.
 - [PENDIENTE] Primera emisión real de prueba (documento fiscal real, con cuidado — factura pequeña a receptor conocido).
 
 ## Backlog próxima sesión (orden de prioridad)
+
+### A-0. ESTADO AL CIERRE DEL 02/09/2026 — por acá se retoma
+
+`develop` limpio, producción intacta, **575 tests en verde**, `tsc` limpio. Los 21 errores
+de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.
+
+**Commiteado hoy:**
+
+| SHA | Qué |
+|---|---|
+| `87836e5` | Grupo C — totales del pie, filtro del plan y mes con datos |
+| `d791e27` | Todo el texto visible de voseo/tuteo a usted |
+| `76f11e5` | Título de pestaña en las 17 pantallas de Finanzas que no lo tenían |
+| `739be0c` | Tres cadenas en tuteo que se escaparon del barrido |
+| `bf8ea00` | Trato de usted en el CRM interno (grupos 1 a 7) |
+| `2f32c31` | Trato de usted en el portal público y los correos al cliente |
+| `49eeda5` | Los dos banners que decían que el portal no existe |
+| `801692b` | **Corte por fecha en los tres estados financieros** |
+
+**Pendiente, en este orden:**
+
+1. **Ver las tres pantallas filtradas renderizadas.** Es lo ÚNICO del bloque del filtro de
+   período que no se verificó en pantalla: los números se comprobaron corriendo el código
+   real de las pantallas contra staging, pero nadie miró el HTML. El dev server local viene
+   muriéndose en esta máquina; el camino es `scripts/render-pantalla.mts` contra el deploy
+   de staging, que necesita `VERCEL_AUTOMATION_BYPASS_SECRET` y hoy no lo tenemos.
+   Rutas: `/finanzas/reportes/balance?hasta=2026-05-31`,
+   `/finanzas/reportes/pyl?desde=2026-05-01&hasta=2026-06-30`,
+   `/finanzas/reportes/comprobacion?desde=2026-05-01&hasta=2026-06-30`.
+
+2. **"Pagos" → "Cobros" en los dos formularios que crean el registro.** Está a medias y así
+   es PEOR que no haberlo empezado: el mismo registro se llama **Cobro cuando se lee** y
+   **Pago cuando se escribe**, que es justo la confusión que Rose pidió eliminar ("desde
+   Integra, pago es dinero que sale"). Hecho: `legal/casos/[id]/page.tsx:664, 756, 823`.
+   Falta: `add-expense-form.tsx:171, 178, 271, 286, 301` y
+   `section-expense-form.tsx:177, 251, 263, 273` — pestañas "Pago para Trámite" / "Pago
+   Administrativo", título "Nuevo Pago para Gastos del Trámite", "Fecha de pago" y el botón
+   "Guardar Pago". Es solo texto.
+
+3. **Buscar a qué fecha se generó el reporte de QuickBooks** del que salieron los saldos de
+   apertura. Es el paso previo de **A-quinquies** y puede resolver la contradicción sin
+   molestar a RM: ese dato lo tenemos nosotros. Si aparece, el arreglo es un UPDATE de
+   `saldo_inicial_fecha` y no hay que preguntar nada.
+
+4. **Pantalla de asientos manuales.** Faltan las dos cosas —UI y ruta de API—, pero el
+   trabajo de fondo está hecho: `postJournalEntry()` valida y postea, y el RPC serializa
+   correlativo y hash-chain. Hoy `postJournalEntry` se llama desde exactamente dos lugares
+   (su propia definición y `scripts/backfill-asientos-faltantes.mts`): **ninguna ruta de
+   `/api` postea al ledger**, y el asiento de diario del fixture lo creó
+   `scripts/seed-asientos.ts`. La ruta es fina: validar líneas, cuadre y período, y llamar
+   al helper — respetando SOP-014 (server-side, cliente de servicio, `tenant_id` del perfil
+   y NUNCA del body).
+
+5. **El hueco de auditoría de A-quater**: aceptar o rechazar una cotización a mano no
+   registra QUIÉN lo hizo. Detalle, hipótesis y el camino barato (`audit_log`, sin tocar el
+   esquema) en su propio bloque más abajo.
+
+**Los dos bloques de análisis que quedaron escritos hoy y no se tocaron:** A-quater (el
+`_userId` descartado) y A-quinquies (los saldos que contradicen la regla de Rose). Ninguno
+de los dos se arregló a propósito.
 
 ### A. eFactura go-live (prioridad de Oliver)
 Desbloqueo = respuesta de Eduardo (punto de facturación + confirmación de folios) + `CPBS_REI` del contador. Luego, en ese orden:

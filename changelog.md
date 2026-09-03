@@ -1,5 +1,88 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Formulario de alta con líneas + el gasto de demostración en staging] - 2026-09-03
+
+Con esto el bloque de gastos de trámite queda **completo**, salvo el
+`VALIDATE CONSTRAINT` que espera a que no queden líneas sin clasificar.
+
+### El gasto de demostración: la cadena completa se puede recorrer
+
+`scripts/seed-gasto-tramite-demo.mts` (idempotente, con candado anti-producción). Siembra el
+gasto del fixture del 15/03 —el que motivó todo el modelo de líneas— con **tres líneas contra
+tres cuentas distintas**, y lo postea usando el builder y el RPC reales.
+
+Un asiento de una línea no demostraba nada. Con tres se ve el asiento compuesto, y sobre todo
+se ve **"Varios"** en el mayor de `200001` — el caso ambiguo que `contrapartida.ts` resolvía
+desde hace días y que hasta hoy no se podía mirar en pantalla.
+
+    Asiento 13
+      DEBE  130003  Fondo Legales de Clientes    Útiles y timbres fiscales       412,35
+      DEBE  610002  Honorarios Profesionales     Honorario del gestor externo    900,00
+      DEBE  500005  Costos trámites legales      Mensajería y traslados          185,50
+      HABER 200001  Cuentas por pagar                                                  1.497,85
+
+### ⚠️ Los totales del Balance de staging cambiaron
+
+| | Antes | Después | Δ |
+|---|---:|---:|---:|
+| **Activo** | 262.717,46 | **263.129,81** | +412,35 |
+| **Pasivo** | 17.334,80 | **18.832,65** | +1.497,85 |
+| **Patrimonio** | 245.382,66 | **244.297,16** | −1.085,50 |
+| **Descuadre** | 0,00 | **0,00** | — |
+
+El patrimonio baja porque dos de las tres líneas van a cuentas de resultado (`610002` gasto y
+`500005` costo, 1.085,50 juntas) y eso reduce la utilidad del ejercicio. El activo sube solo
+por la línea que va a `130003`. **412,35 = 1.497,85 − 1.085,50**: cuadra por construcción, y el
+descuadre sigue en 0,00.
+
+### El formulario de alta
+
+`section-expense-form.tsx` — proveedor, vencimiento y el editor de líneas que ya existía.
+
+- **El vencimiento se precarga con `payment_terms_days` del proveedor** y queda editable. Se
+  recalcula si se cambia la fecha del gasto: el plazo corre desde el gasto, no desde hoy.
+  ⚠️ La suma de días usa `Date.UTC` a propósito — con la zona local, en Panamá (UTC−5) el
+  resultado se corre un día para atrás, y un vencimiento corrido cambia el tramo de la
+  antigüedad.
+- 🔴 **Ya no hay campo de monto.** El monto del encabezado ES la suma de las líneas, y lo
+  calcula el servidor: si viniera del request, el encabezado y el detalle podrían decir cosas
+  distintas y el asiento se arma con una sola de las dos. El botón muestra el total calculado
+  para que se vea de dónde sale.
+- El monto sugerido del gasto administrativo (B/. 21,50) ahora precarga la **primera línea** en
+  vez de un campo suelto.
+
+### `POST /api/expenses` exige líneas
+
+No es una restricción gratuita: **un gasto sin líneas no se puede postear** —el builder no
+tiene contra qué cuenta armar el asiento— así que aceptarlo sería crear en silencio documentos
+que nunca van a llegar a la contabilidad. Si el INSERT de líneas falla, el encabezado se borra:
+un gasto huérfano es basura invisible.
+
+### El botón de posteo
+
+En `/finanzas/gastos-tramite/{id}`, y **solo cuando la acción se puede ejecutar**: el rol puede,
+el gasto no está posteado, y no falta ninguna cuenta. Si falta clasificar, el aviso ámbar ya
+explica qué hacer y un botón deshabilitado al lado sería ruido.
+
+La confirmación dice el importe **y las dos consecuencias**: que un asiento no se borra, y que
+desde ese momento el gasto queda inmutable salvo el comprobante.
+
+### Hallazgo: `add-expense-form.tsx` es código muerto
+
+No se monta en ningún lado — la pantalla del caso usa `SectionExpenseForm`. Se le aplicó igual
+el renombrado "Pago" a "Cobro" esta mañana. **No se borró**: es una decisión aparte y conviene
+confirmarla antes.
+
+### Tests: 674 (+13)
+
+`crear-con-lineas.route.test.ts` — que las líneas sean obligatorias, que **un `amount` del body
+se ignore** y el monto salga de las líneas, que la cuenta sea obligatoria al crear, el
+compensating delete, y que el tenant salga del perfil.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre). Producción intacta.
+
+---
+
 ## [038 — el gasto de trámite llega al libro contable] - 2026-09-03
 
 **Queda cerrado el camino documento → asiento para el primer tipo de documento del sistema.**

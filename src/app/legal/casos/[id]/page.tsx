@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
 import { SectionExpenseForm } from "@/components/cases/section-expense-form";
+import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
+import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { ExpenseRow } from "@/components/expenses/expense-actions";
 import { PaymentRow } from "@/components/expenses/payment-actions";
 import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
@@ -51,6 +53,26 @@ export default async function ExpedienteDetailPage({
   searchParams,
 }: PageProps) {
   const { db, tenantId, userRole } = await getAuthenticatedContext();
+
+  // Catálogos del formulario de gastos. Se cargan acá, en el server component,
+  // y no en el form: son los mismos para las dos secciones (trámite y
+  // administrativo) y así se leen una vez en vez de cuatro.
+  //
+  // Solo cuentas ACTIVAS: los reportes filtran por `active`, así que ofrecer una
+  // inactiva sería ofrecer una clasificación que después no se ve en ningún lado.
+  // La ruta de API lo vuelve a validar — el dropdown no es un permiso.
+  const [cuentasPlan, proveedores] = await Promise.all([
+    listChartAccounts(db, tenantId),
+    listSupplierOptions(db, tenantId),
+  ]);
+  const cuentasParaGastos = cuentasPlan
+    .filter((c) => c.active)
+    .map((c) => ({ code: c.code, name: c.name }));
+  const proveedoresParaGastos = proveedores.map((p) => ({
+    id: p.id,
+    legal_name: p.legal_name,
+    payment_terms_days: Number(p.payment_terms_days ?? 0),
+  }));
   // ?tab=gastos escrito a mano por un asistente cae a "info": el tab está fuera
   // de su alcance, y sin esta normalización vería la página sin contenido.
   const requestedTab = searchParams.tab ?? "info";
@@ -628,7 +650,12 @@ export default async function ExpedienteDetailPage({
             <CardContent className="space-y-4">
               {/* Buttons for this section */}
               {(userRole === "admin" || userRole === "abogada") && (
-                <SectionExpenseForm caseId={params.id} sectionType="tramite" />
+                <SectionExpenseForm
+                  caseId={params.id}
+                  sectionType="tramite"
+                  cuentas={cuentasParaGastos}
+                  proveedores={proveedoresParaGastos}
+                />
               )}
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -720,7 +747,12 @@ export default async function ExpedienteDetailPage({
             <CardContent className="space-y-4">
               {/* Buttons for this section */}
               {(userRole === "admin" || userRole === "abogada") && (
-                <SectionExpenseForm caseId={params.id} sectionType="administrativo" />
+                <SectionExpenseForm
+                  caseId={params.id}
+                  sectionType="administrativo"
+                  cuentas={cuentasParaGastos}
+                  proveedores={proveedoresParaGastos}
+                />
               )}
 
               <div className="grid gap-4 lg:grid-cols-2">

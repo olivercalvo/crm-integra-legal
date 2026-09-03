@@ -15,6 +15,7 @@ import {
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { formatDate } from "@/lib/utils/format-date";
 import { getGastoTramiteContable } from "@/lib/finanzas/queries/expense-tramite";
+import { PostToLedgerButton } from "./_components/post-to-ledger-button";
 import {
   cuentaLabel,
   haySinClasificar,
@@ -81,6 +82,15 @@ export const metadata = {
  */
 const READING_ROLES = ["admin", "abogada", "contador"];
 
+/**
+ * Quién puede REGISTRAR el gasto en el libro. Tiene que coincidir con
+ * `EXPENSE_WRITE_ROLES` de `POST /api/expenses/[id]/post-to-ledger`.
+ *
+ * El contador entra a esta pantalla —la abre desde el Libro Mayor— pero NO
+ * postea: gastos de trámite es del módulo Legal.
+ */
+const POSTING_ROLES = ["admin", "abogada"];
+
 interface PageProps {
   params: { id: string };
 }
@@ -103,6 +113,15 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
 
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
+
+  // El botón aparece solo cuando la acción se puede ejecutar de verdad. Si falta
+  // clasificar, el aviso ámbar de más abajo ya explica qué hacer y un botón
+  // deshabilitado al lado sería ruido.
+  const puedePostear =
+    POSTING_ROLES.includes(ctx.userRole) &&
+    !posteado &&
+    !sinClasificar &&
+    gasto.lineas.length > 0;
 
   // El encabezado y las líneas conviven hasta que `amount` se vuelva derivado
   // (commit posterior, después de verificar producción). Mientras conviven,
@@ -248,6 +267,10 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
             </p>
           </div>
         </div>
+      )}
+
+      {puedePostear && (
+        <PostToLedgerButton expenseId={gasto.id} total={fmtMoney(gasto.totales.total)} />
       )}
 
       {/* ── Líneas ─────────────────────────────────────────────────── */}

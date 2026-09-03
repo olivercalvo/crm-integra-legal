@@ -1184,9 +1184,30 @@ el reporte ya está construido.
    en el ledger**, con las tres capas de idempotencia — y los dos triggers de inmutabilidad.
    Verificado contra staging con el RPC real y ROLLBACK: 8/8.
 
-   **Falta:**
-   - **El formulario de alta** con proveedor, vencimiento y líneas, y el botón que llama a la
-     ruta de posteo.
+   **BLOQUE COMPLETO (03/09).** El formulario de alta con proveedor, vencimiento precargado
+   desde el plazo del proveedor y el editor de líneas; `POST /api/expenses` exigiendo líneas y
+   calculando el monto del lado del servidor; y el botón de posteo en la pantalla del gasto.
+
+   **Falta solo, cuando no queden líneas sin clasificar:**
+   ```sql
+   ALTER TABLE public.expense_lines VALIDATE CONSTRAINT expense_lines_cuenta_obligatoria;
+   ```
+   Mientras quede una en NULL ese comando falla, así que es el semáforo: el día que corre
+   limpio, la limpieza terminó.
+
+   **Staging tiene un gasto posteado de demostración** (asiento 13, tres líneas contra tres
+   cuentas) para poder recorrer mayor a asiento a documento a pantalla. Lo siembra
+   `scripts/seed-gasto-tramite-demo.mts`, idempotente, y hay que volver a correrlo después de
+   cada `seed:staging`.
+
+   ⚠️ **Pendiente de decisión:** `src/components/cases/add-expense-form.tsx` es **código
+   muerto** —no se monta en ningún lado, la pantalla del caso usa `SectionExpenseForm`— y se le
+   aplicó igual el renombrado "Pago" a "Cobro". Borrarlo es una decisión aparte.
+
+   ⚠️ **`GUIA-REVISION-RM.md` no existe** en el repo ni en la carpeta del cliente, y nada lo
+   referencia. Los totales nuevos del Balance de staging (Activo 263.129,81 / Pasivo 18.832,65
+   / Patrimonio 244.297,16 / descuadre 0,00) están en el changelog del 03/09; falta saber a qué
+   documento iban.
    - Cuando no queden líneas en NULL:
      `ALTER TABLE expense_lines VALIDATE CONSTRAINT expense_lines_cuenta_obligatoria;`
 

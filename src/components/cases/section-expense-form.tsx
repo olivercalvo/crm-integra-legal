@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useMemo, useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
@@ -8,13 +8,54 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
+import {
+  ExpenseLinesEditor,
+  type CuentaOption,
+} from "@/components/finanzas/expense-lines-editor";
+import { lineaVacia } from "@/lib/finanzas/validators/expense-line";
+import {
+  CUENTA_TRAMITE_DEFAULT,
+  totalesDeLineas,
+  type ExpenseLineDraft,
+} from "@/lib/finanzas/types/expense-line";
+
+/** Un proveedor elegible, con su plazo para precargar el vencimiento. */
+export interface ProveedorOption {
+  id: string;
+  legal_name: string;
+  payment_terms_days: number;
+}
 
 interface SectionExpenseFormProps {
   caseId: string;
   sectionType: "tramite" | "administrativo";
+  /** Cuentas activas del plan, para el selector de cada línea. */
+  cuentas?: CuentaOption[];
+  /** Proveedores activos. El vencimiento sale de su `payment_terms_days`. */
+  proveedores?: ProveedorOption[];
 }
 
-export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormProps) {
+/**
+ * Suma `dias` a una fecha ISO y devuelve otra fecha ISO.
+ *
+ * ⚠️ Se hace con `Date.UTC` a propósito: `new Date("2026-03-15")` se interpreta
+ * como medianoche UTC, y sumarle días con la zona local puede correr el
+ * resultado un día para atrás en Panamá (UTC−5). Un vencimiento corrido un día
+ * cambia el tramo de la antigüedad.
+ */
+export function sumarDias(fechaIso: string, dias: number): string {
+  const [a, m, d] = fechaIso.split("-").map(Number);
+  if (!a || !m || !d) return fechaIso;
+  const t = Date.UTC(a, m - 1, d) + dias * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+export function SectionExpenseForm({
+  caseId,
+  sectionType,
+  cuentas = [],
+  proveedores = [],
+}: SectionExpenseFormProps) {
   const router = useRouter();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -22,11 +63,41 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
   const [error, setError] = useState<string | null>(null);
 
   // Expense fields
-  const [expAmount, setExpAmount] = useState("");
   const [expConcept, setExpConcept] = useState("");
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
   const [expFile, setExpFile] = useState<File | null>(null);
   const expFileRef = useRef<HTMLInputElement>(null);
+  const [expSupplier, setExpSupplier] = useState("");
+  const [expDueDate, setExpDueDate] = useState("");
+  const [expLineas, setExpLineas] = useState<ExpenseLineDraft[]>([
+    lineaVacia("l0", CUENTA_TRAMITE_DEFAULT),
+  ]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // El monto del encabezado ES la suma de las líneas. No hay campo de monto: si
+  // lo hubiera, habría dos verdades y el asiento se arma con una sola.
+  const totalLineas = useMemo(
+    () =>
+      totalesDeLineas(
+        expLineas.map((l) => ({
+          amount: Number(l.amount.replace(",", ".")) || 0,
+          tax_amount: Number(l.tax_amount.replace(",", ".")) || 0,
+        }))
+      ).total,
+    [expLineas]
+  );
+
+  /**
+   * Al elegir proveedor se precarga el vencimiento con su plazo de pago.
+   * Es una PRECARGA, no una imposición: queda editable, y cambiar el plazo del
+   * proveedor después NO reescribe los vencimientos ya cargados.
+   */
+  function elegirProveedor(id: string) {
+    setExpSupplier(id);
+    const p = proveedores.find((x) => x.id === id);
+    if (p) setExpDueDate(sumarDias(expDate, p.payment_terms_days));
+    else setExpDueDate("");
+  }
 
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
@@ -36,11 +107,14 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
   const isTramite = sectionType === "tramite";
 
   const resetExpense = () => {
-    setExpAmount("");
     setExpConcept("");
     setExpDate(new Date().toISOString().split("T")[0]);
     setExpFile(null);
     if (expFileRef.current) expFileRef.current.value = "";
+    setExpSupplier("");
+    setExpDueDate("");
+    setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT)]);
+    setFieldErrors({});
     setShowExpenseForm(false);
     setError(null);
   };
@@ -54,9 +128,9 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
   };
 
   const handleAddExpense = () => {
-    const amount = parseFloat(expAmount);
-    if (!amount || amount <= 0 || !expConcept.trim() || !expDate) {
-      setError("Complete todos los campos del gasto");
+    setFieldErrors({});
+    if (!expConcept.trim() || !expDate) {
+      setError("Complete el concepto y la fecha del gasto");
       return;
     }
     if (expFile) {
@@ -77,15 +151,21 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             case_id: caseId,
-            amount,
             concept: expConcept.trim(),
             date: expDate,
             expense_type: sectionType,
+            supplier_id: expSupplier || null,
+            due_date: expDueDate || null,
+            // El monto NO se manda: lo calcula el servidor sumando las líneas.
+            // Mandarlo sería ofrecer una segunda verdad que alguien puede
+            // manipular con un `curl`.
+            lines: expLineas,
           }),
         });
         const json = await response.json().catch(() => ({}));
         if (!response.ok) {
           setError(json.error ?? `Error ${response.status}`);
+          if (json.fieldErrors) setFieldErrors(json.fieldErrors);
           return;
         }
 
@@ -156,7 +236,17 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
               setShowExpenseForm(true);
               setShowPaymentForm(false);
               setError(null);
-              if (sectionType === "administrativo") setExpAmount("21.50");
+              // El gasto administrativo tiene un monto habitual. Ahora que el
+              // monto vive en las líneas, la sugerencia precarga la PRIMERA
+              // línea en vez de un campo suelto.
+              if (sectionType === "administrativo") {
+                setExpLineas([
+                  {
+                    ...lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT),
+                    amount: "21.50",
+                  },
+                ]);
+              }
             }}
             size="sm"
             className="min-h-[44px] bg-red-600 hover:bg-red-700 text-white font-semibold"
@@ -199,20 +289,75 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
           {sectionType === "administrativo" && (
             <p className="text-xs text-amber-600">Monto sugerido: B/.21.50 (editable)</p>
           )}
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label>Monto (B/.)</Label>
-              <NumberInput min="0.01" step="0.01" value={expAmount} onChange={(e) => setExpAmount(e.target.value)} placeholder="0.00" className="min-h-[48px]" />
-            </div>
+          {/* Encabezado del documento. El MONTO no está: sale de las líneas. */}
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Concepto</Label>
-              <Input value={expConcept} onChange={(e) => setExpConcept(e.target.value)} placeholder="Ej: Timbres fiscales" className="min-h-[48px]" />
+              <Input value={expConcept} onChange={(e) => setExpConcept(e.target.value)} placeholder="Ej: Trámite Registro Público" className="min-h-[48px]" />
             </div>
             <div className="space-y-1.5">
-              <Label>Fecha</Label>
-              <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} className="min-h-[48px]" />
+              <Label>Fecha del gasto</Label>
+              <Input
+                type="date"
+                value={expDate}
+                onChange={(e) => {
+                  setExpDate(e.target.value);
+                  // Si ya hay proveedor, el vencimiento se recalcula: el plazo
+                  // corre desde la fecha del gasto, no desde la de hoy.
+                  const p = proveedores.find((x) => x.id === expSupplier);
+                  if (p) setExpDueDate(sumarDias(e.target.value, p.payment_terms_days));
+                }}
+                className="min-h-[48px]"
+              />
             </div>
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Proveedor (opcional)</Label>
+              <select
+                value={expSupplier}
+                onChange={(e) => elegirProveedor(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[48px] text-sm focus:border-integra-navy focus:outline-none"
+              >
+                <option value="">— Sin proveedor —</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.legal_name}
+                    {p.payment_terms_days > 0 ? ` (${p.payment_terms_days} días)` : " (contado)"}
+                  </option>
+                ))}
+              </select>
+              {proveedores.length === 0 && (
+                <p className="text-xs text-gray-400">
+                  No hay proveedores cargados todavía.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Vencimiento</Label>
+              <Input
+                type="date"
+                value={expDueDate}
+                onChange={(e) => setExpDueDate(e.target.value)}
+                className="min-h-[48px]"
+              />
+              <p className="text-xs text-gray-400">
+                Se precarga con el plazo del proveedor y se puede cambiar. De acá salen
+                los tramos de la antigüedad.
+              </p>
+            </div>
+          </div>
+
+          {/* El detalle contable. Es el mismo editor que va a usar Compras. */}
+          <ExpenseLinesEditor
+            lineas={expLineas}
+            onChange={setExpLineas}
+            cuentas={cuentas}
+            cuentaPorDefecto={CUENTA_TRAMITE_DEFAULT}
+            errors={fieldErrors}
+            disabled={isPending}
+          />
           <div className="space-y-1.5">
             <Label className="text-sm flex items-center gap-1">
               <Paperclip size={14} /> Adjuntar recibo (opcional)
@@ -233,7 +378,7 @@ export function SectionExpenseForm({ caseId, sectionType }: SectionExpenseFormPr
             </Button>
             <Button onClick={handleAddExpense} disabled={isPending} className="min-h-[44px] bg-red-600 hover:bg-red-700">
               {isPending ? <Loader2 size={16} className="mr-1 animate-spin" /> : <Save size={16} className="mr-1" />}
-              Guardar Gasto
+              Guardar Gasto{totalLineas > 0 ? ` · B/. ${totalLineas.toFixed(2)}` : ""}
             </Button>
           </div>
         </div>

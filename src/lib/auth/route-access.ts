@@ -202,7 +202,13 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
  * un módulo entero dentro de uno abierto. El subárbol completo —listado, alta,
  * detalle— es de admin y contador.
  */
-export const ADMIN_CONTADOR_ONLY_PREFIXES = ["/finanzas/asientos"];
+export const ADMIN_CONTADOR_ONLY_PREFIXES = [
+  "/finanzas/asientos",
+  // Períodos contables (03/09/2026). Mismo criterio: decidir qué ejercicio
+  // admite movimientos es una atribución de cierre contable, y cerrar un mes
+  // le cambia el resultado a TODO el sistema — no solo a quien lo cierra.
+  "/finanzas/periodos",
+];
 
 /**
  * Home primaria por rol — destino cuando el rol no tiene acceso a la ruta.

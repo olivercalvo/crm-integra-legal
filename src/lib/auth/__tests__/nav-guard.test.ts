@@ -172,6 +172,43 @@ test("el contador NO entra a facturación, cotizaciones ni al módulo legal", ()
   }
 });
 
+test("asientos y períodos son de admin y contador — la ABOGADA no entra", () => {
+  // Son las dos únicas rutas de /finanzas cerradas a la abogada, y las dos
+  // necesitan `ADMIN_CONTADOR_ONLY_PREFIXES` porque su `ROLE_ROUTES` le abre todo
+  // `/finanzas`. Sin esa lista, el gate general la dejaría pasar.
+  //
+  // El criterio, el mismo en las dos: `updateChartAccount()` ya reserva a admin y
+  // contador la reclasificación contable de una cuenta ("quien modifica la
+  // clasificación contable de una cuenta debe ser el contador", guía de RM). Un
+  // asiento manual escribe directo en el libro sin documento que lo respalde, y
+  // cerrar un período le cambia el resultado a todo el sistema. Si la abogada no
+  // puede lo menos, no puede lo más.
+  for (const ruta of ["/finanzas/asientos", "/finanzas/periodos"]) {
+    assert.equal(puedeAccederA("admin", ruta), true, `el admin entra a ${ruta}`);
+    assert.equal(puedeAccederA("contador", ruta), true, `el contador entra a ${ruta}`);
+    assert.equal(
+      puedeAccederA("abogada", ruta),
+      false,
+      `🔒 la abogada NO debe entrar a ${ruta} — su ROLE_ROUTES le abre /finanzas, ` +
+        `así que solo ADMIN_CONTADOR_ONLY_PREFIXES la puede dejar afuera`
+    );
+    assert.equal(puedeAccederA("asistente", ruta), false, `el asistente no entra a ${ruta}`);
+  }
+});
+
+test("el gate de admin+contador cubre el subárbol, no solo la raíz", () => {
+  // Va por PREFIJO y no por patrón: si mañana se agrega /finanzas/periodos/2026
+  // o /finanzas/asientos/nuevo, quedan cubiertos sin tocar nada.
+  assert.equal(puedeAccederA("abogada", "/finanzas/periodos/2026"), false);
+  assert.equal(puedeAccederA("abogada", "/finanzas/asientos/nuevo"), false);
+  assert.equal(puedeAccederA("contador", "/finanzas/periodos/2026"), true);
+});
+
+test("un prefijo vecino NO queda cerrado por parecerse", () => {
+  // "/finanzas/periodos" no puede cerrar "/finanzas/periodos-informe".
+  assert.equal(puedeAccederA("abogada", "/finanzas/periodos-informe"), true);
+});
+
 test("el asistente sigue con su alcance reducido del 24/08/2026", () => {
   assert.equal(puedeAccederA("asistente", "/legal/casos"), true);
   assert.equal(puedeAccederA("asistente", "/legal/pendientes"), true);

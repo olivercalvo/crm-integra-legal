@@ -18,6 +18,7 @@ import {
   Scale,
   Wallet,
   BookOpenCheck,
+  CalendarClock,
   Percent,
 } from "lucide-react";
 
@@ -88,6 +89,9 @@ export const TABS: TabDef[] = [
       // está en ADMIN_CONTADOR_ONLY_PREFIXES; esta línea solo esconde el botón, y
       // `nav-guard.test.ts` verifica que las dos digan lo mismo.
       { label: "Asientos de Diario", href: "/finanzas/asientos",                  icon: BookOpenCheck,  roles: ["admin", "contador"] },
+      // Períodos: cerrar un mes impide asientos nuevos con esa fecha. El gate
+      // real es ADMIN_CONTADOR_ONLY_PREFIXES; esta línea solo esconde el botón.
+      { label: "Períodos Contables", href: "/finanzas/periodos",                 icon: CalendarClock,  roles: ["admin", "contador"] },
       { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
       { label: "Impuestos",         href: "/finanzas/configuracion/impuestos",   icon: Percent,        roles: ["admin", "abogada", "contador"] },
     ],

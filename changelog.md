@@ -1,5 +1,92 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cierre y reapertura de períodos contables] - 2026-09-03
+
+**Cero migraciones.** `accounting_periods` existe desde la `023` y
+`post_journal_entry` rechaza desde la `030` todo asiento cuya fecha caiga en un período
+cerrado. Lo único que faltaba era **poder cerrarlo desde la aplicación**: hasta hoy la única
+forma era un `UPDATE` a mano en el SQL Editor — o sea, el cierre contable dependía de que
+alguien con la contraseña de la base lo hiciera por afuera del sistema.
+
+### 🔴 Al reabrir, `closed_at` y `closed_by` se CONSERVAN
+
+Es la decisión de diseño del bloque, y va al revés de lo que parece prolijo.
+
+Limpiarlos dejaría un período reabierto **idéntico a uno que nunca se cerró**. Y no son lo
+mismo: el segundo nunca se certificó; el primero es un ejercicio que el contador **ya dio por
+cerrado ante la DGI** y que hoy vuelve a admitir asientos. Borrar esas columnas borra
+exactamente el hecho que hay que ver.
+
+Conservándolas aparece un **tercer estado visible** —`status='abierto'` + `closed_at IS NOT
+NULL` = "reabierto"— que la pantalla muestra distinto de "abierto", con la fecha del cierre
+deshecho y quién lo había cerrado. La columna `status` sigue teniendo dos valores; no hizo
+falta tocar el esquema.
+
+⚠️ Lo que esas columnas NO pueden: guardan solo el **último** cierre. En un ciclo cerrar →
+reabrir → cerrar, la primera fecha se pisa. **El historial completo va a `audit_log`.**
+
+### Cerrar y reabrir no son la misma acción con el signo cambiado
+
+Dos confirmaciones distintas, sin componente compartido:
+
+- **Cerrar** — sobria. Dice cuántos asientos quedan dentro y que desde ahí no entran más.
+- **Reabrir** — en ámbar. Dice que el período **ya fue cerrado**, por quién y cuándo, y que
+  reabrirlo *"permite registrar asientos en un ejercicio ya certificado"*: los estados de ese
+  mes dejarían de reproducirse igual que cuando se emitieron.
+
+Un diálogo genérico las haría leer igual, que es justo lo que hay que evitar.
+
+### 🔑 Un bug que encontró leer el esquema antes de escribir
+
+La primera versión auditaba con `action: "close"` / `"reopen"`. Pero `audit_log.action` tiene
+`CHECK (action IN ('create','update','delete'))` desde el esquema inicial: **la base lo habría
+rechazado**, y como el insert no cortaba el flujo, la entrada simplemente no se escribía **en
+silencio**. Ahora va como `"update"` con `old_value` → `new_value`, que distingue igual las dos
+transiciones y no necesita migración. Y el error se loguea.
+
+### Una acción que no cambia nada no escribe
+
+Cerrar lo ya cerrado o reabrir lo abierto no es un error —es un doble clic, o dos personas a la
+vez— pero **no puede escribir**: un cierre repetido pisaría `closed_at` con una fecha nueva y
+perdería la original. Se contesta `sinCambios` y no se toca la fila.
+
+### Alcance de la ruta
+
+`PATCH /api/finanzas/periodos` **no crea ni borra** períodos: solo abre y cierra los que
+existen. Crear sigue siendo exclusivo de `ensure_accounting_periods()`, y la `030` le revocó
+INSERT a `service_role` justamente para que no haya dos caminos.
+
+### Segunda ruta de `/finanzas` cerrada a la abogada
+
+Se suma a `ADMIN_CONTADOR_ONLY_PREFIXES` con los asientos manuales. `nav-guard.test.ts` tiene
+ahora el caso explícito para las dos, más el subárbol (`/finanzas/periodos/2026`) y la trampa
+del prefijo vecino (`/finanzas/periodos-informe` NO queda cerrado por parecerse).
+
+### 🔒 Verificado contra staging, de punta a punta
+
+`scripts/verificar-cierre-periodo.mts` — el test de ruta prueba con un fake que se escribe
+`status='cerrado'`; lo que **no** puede probar es la consecuencia. Este script recorre la cadena
+entera contra la base real, dentro de un ROLLBACK:
+
+```
+1) ANTES     ✅ el período está abierto · un asiento de ese mes SE POSTEA
+2) CERRAR    ✅ período 2026-09 cerrado
+3) DESPUÉS   ✅ RECHAZADO — "El período 2026-09 está CERRADO: no admite asientos nuevos."
+4) OTRO MES  ✅ sigue entrando — el cierre es por período, no global
+5) REABRIR   ✅ queda REABIERTO (closed_at conservado) · vuelve a aceptar asientos
+                                                                          7/7
+```
+
+⚠️ Requirió **SAVEPOINT por intento**: cuando el RPC lanza —que es justo el caso a provocar—
+PostgreSQL aborta la transacción entera y todo lo siguiente falla con `25P02`. Sin eso, el
+primer rechazo esperado mataba los pasos 4 y 5.
+
+Staging quedó intacta: 24 períodos, 0 cerrados, 11 asientos.
+
+789 tests (+31), `tsc` limpio, 21 errores de ESLint (los de siempre). Producción intacta.
+
+---
+
 ## [Asientos manuales de diario — la pantalla] - 2026-09-03
 
 `/finanzas/asientos`, la ruta `POST /api/finanzas/asientos` y el módulo puro

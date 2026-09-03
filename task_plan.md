@@ -1150,33 +1150,45 @@ el reporte ya está construido.
 
 **Pendiente, en este orden:**
 
-0. 🔴 **PRE-FLIGHT DE `expenses` EN PRODUCCIÓN — bloquea la migración del bloque.**
-   `expenses.amount` no tiene NINGÚN `CHECK` de signo (`amount NUMERIC(12,2) NOT NULL` y nada
-   más), y desde acá no se puede ver producción. Ese dato decide el `CHECK` de
-   `expense_lines.amount`: si va `> 0` y en producción hay un gasto en 0, **la migración
-   aborta a mitad el día del deploy**. Correr y traer el resultado:
+0. ✅ **PRE-FLIGHT DE `expenses` — HECHO (Oliver, 03/09).** 128 gastos, 0 en cero o negativos,
+   0 sin concepto, 97 con comprobante, min/max 0,50 / 3.033,00. El `CHECK` de
+   `expense_lines.amount` quedó en `> 0`. La consulta queda abajo por si hay que repetirla el
+   día del deploy a producción, que es lo recomendado.
 
-   ```sql
-   SELECT COUNT(*)                                        AS total,
-          COUNT(*) FILTER (WHERE amount <= 0)             AS cero_o_negativos,
-          COUNT(*) FILTER (WHERE concept IS NULL
-                             OR btrim(concept) = '')      AS sin_concepto,
-          COUNT(*) FILTER (WHERE receipt_url IS NOT NULL)  AS con_adjunto,
+   <details><summary>La consulta</summary>
+
+   ~~~sql
+   SELECT COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE amount <= 0) AS cero_o_negativos,
+          COUNT(*) FILTER (WHERE concept IS NULL OR btrim(concept) = '') AS sin_concepto,
+          COUNT(*) FILTER (WHERE receipt_url IS NOT NULL) AS con_adjunto,
           MIN(amount), MAX(amount)
      FROM expenses;
-   ```
+   ~~~
+   </details>
 
-   Con `cero_o_negativos = 0` el CHECK va `> 0`. Si no, va `>= 0` y los negativos se miran uno
-   por uno. `sin_concepto` importa porque `expense_lines.description` es `NOT NULL` y el
-   backfill la saca de `concept`.
+1. **EL BLOQUE: gastos de trámite con encabezado + líneas, y su asiento.**
 
-1. **EL BLOQUE: gastos de trámite con encabezado + líneas, y su asiento.** Diseño aprobado el
-   03/09. **Paso 1 hecho y commiteado**: modelo de líneas compartido con compras
-   (`types/expense-line.ts`), validador, editor de líneas reusable
+   **Hecho y commiteado (03/09):** modelo de líneas compartido con compras
+   (`types/expense-line.ts`), validador, editor reusable
    (`components/finanzas/expense-lines-editor.tsx`), pantalla contable
    `/finanzas/gastos-tramite/{id}` con su recorte de privacidad (SOP-022) y el permiso del
-   contador. **Falta**: la migración `036` (bloqueada por el punto 0), el builder del asiento,
-   la ruta que postea, el trigger de inmutabilidad y el formulario de alta. Es el bloque elegido porque construye **la primera
+   contador, migración `036` (tabla + 4 columnas de encabezado + backfill + 5 verificaciones),
+   migración `037` (el `CHECK NOT VALID` que cierra el hueco del validador, SOP-023), y la
+   limpieza de los sin clasificar: vista "Gastos" en `/legal/gastos` con chip, selector por
+   fila y asignación masiva que **solo llena blancos**.
+
+   **Falta, en este orden:**
+   - **`038`**: ampliar el CHECK de `journal_entries.source_type` con `'gasto_tramite'` ⚠️
+     filtrando por CONTENIDO y no solo por columna (lección de la `029`), el builder del
+     asiento (N débitos + 1 crédito a `200001`), la ruta que postea respetando SOP-014, y el
+     **trigger de inmutabilidad** sobre `expenses` y `expense_lines`.
+   - **El formulario de alta** con proveedor, vencimiento y líneas.
+   - Cuando no queden líneas en NULL:
+     `ALTER TABLE expense_lines VALIDATE CONSTRAINT expense_lines_cuenta_obligatoria;`
+
+   ⚠️ **Nada de esto se vio renderizado todavía.** El dev server local viene muriéndose; lo
+   verificado es `tsc`, 626 tests y las migraciones contra staging. Es el bloque elegido porque construye **la primera
    ruta de `/api` que postea al ledger** (hoy no hay ninguna: `postJournalEntry` solo se llama
    desde su definición y desde `scripts/backfill-asientos-faltantes.mts`), y ese patrón lo van
    a copiar factura, cobro y compra. Además el modelo de líneas lo reusa compras, donde el

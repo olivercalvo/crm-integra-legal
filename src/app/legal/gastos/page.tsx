@@ -1,16 +1,72 @@
+import Link from "next/link";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 import { GastosTable } from "@/components/expenses/gastos-table";
+import { GastosIndividualesTable } from "@/components/expenses/gastos-individuales-table";
+import {
+  contarLineasSinClasificar,
+  listarGastosDeTramite,
+} from "@/lib/finanzas/queries/expense-tramite";
+import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 
 function formatCurrency(amount: number): string {
   return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export default async function GastosPage() {
+/**
+ * Dos vistas de la misma pantalla:
+ *
+ *   · `por-caso` (default) — el balance por caso de siempre.
+ *   · `gastos`             — los gastos de trámite individuales, entre casos.
+ *
+ * La segunda se agregó el 03/09/2026 y nació de una necesidad concreta: la
+ * migración `036` dejó gastos históricos sin cuenta contable, y **no existía
+ * ninguna pantalla que listara gastos individuales** — resolverlos habría
+ * significado entrar caso por caso.
+ *
+ * Va como VISTA y no como pantalla `/gastos/sin-clasificar` aparte porque una
+ * pantalla dedicada a una limpieza es un arreglo temporal que se vuelve deuda
+ * permanente: hay que acordarse de borrarla. Una lista de gastos entre casos
+ * sirve igual después.
+ *
+ * El gate no cambia: `/legal/gastos` sigue siendo admin y abogada (el asistente
+ * lo tiene bloqueado en ASISTENTE_BLOCKED_PATTERNS y el contador no entra a
+ * /legal).
+ */
+interface PageProps {
+  searchParams: { vista?: string; filtro?: string };
+}
+
+export default async function GastosPage({ searchParams }: PageProps) {
   // El asistente ya no llega acá: el middleware lo rebota a /legal antes de
   // renderizar (ASISTENTE_BLOCKED_PATTERNS). Gastos es admin/abogada.
   const { db, tenantId } = await getAuthenticatedContext();
+
+  const vistaGastos = searchParams.vista === "gastos";
+  const soloSinClasificar = searchParams.filtro === "sin-clasificar";
+
+  // El conteo va SIEMPRE: alimenta el contador del toggle, que es lo que hace
+  // visible el trabajo pendiente desde la vista por caso. Es un COUNT con head,
+  // no trae filas.
+  const { sinClasificar, total: totalLineas } = await contarLineasSinClasificar(
+    db,
+    tenantId
+  );
+
+  // El resto solo si se está mirando esa vista.
+  const gastosIndividuales = vistaGastos
+    ? await listarGastosDeTramite(db, tenantId, { soloSinClasificar })
+    : [];
+
+  // Solo cuentas ACTIVAS: los reportes filtran por `active` y ofrecer una
+  // inactiva sería ofrecer una clasificación que después no se ve en ningún lado.
+  // La ruta de API lo vuelve a validar — el dropdown no es un permiso.
+  const cuentas = vistaGastos
+    ? (await listChartAccounts(db, tenantId))
+        .filter((c) => c.active)
+        .map((c) => ({ code: c.code, name: c.name }))
+    : [];
 
   // Fetch all cases with their expenses and payments
   const { data: cases } = await db
@@ -59,6 +115,48 @@ export default async function GastosPage() {
         <p className="text-sm text-gray-500">Resumen financiero por caso</p>
       </div>
 
+      {/* Toggle de vista. Dos enlaces y no un componente cliente: es navegación,
+          y así el estado vive en la URL y se puede compartir o marcar. */}
+      <div className="flex gap-2">
+        <Link
+          href="/legal/gastos"
+          className={
+            "inline-flex min-h-[40px] items-center rounded-lg border px-4 text-sm font-semibold transition " +
+            (!vistaGastos
+              ? "border-integra-navy bg-integra-navy text-white"
+              : "border-gray-200 bg-white text-gray-600 hover:border-integra-navy")
+          }
+        >
+          Por caso
+        </Link>
+        <Link
+          href="/legal/gastos?vista=gastos"
+          className={
+            "inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-4 text-sm font-semibold transition " +
+            (vistaGastos
+              ? "border-integra-navy bg-integra-navy text-white"
+              : "border-gray-200 bg-white text-gray-600 hover:border-integra-navy")
+          }
+        >
+          Gastos
+          {sinClasificar > 0 && !vistaGastos && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+              {sinClasificar}
+            </span>
+          )}
+        </Link>
+      </div>
+
+      {vistaGastos ? (
+        <GastosIndividualesTable
+          rows={gastosIndividuales}
+          cuentas={cuentas}
+          sinClasificar={sinClasificar}
+          totalLineas={totalLineas}
+          filtroActivo={soloSinClasificar}
+        />
+      ) : (
+      <>
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
@@ -106,6 +204,8 @@ export default async function GastosPage() {
         </div>
       ) : (
         <GastosTable rows={rows} statuses={statuses} />
+      )}
+      </>
       )}
     </div>
   );

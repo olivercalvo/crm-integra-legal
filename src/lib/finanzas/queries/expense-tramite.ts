@@ -251,3 +251,137 @@ export async function getNumeroDeAsiento(
 
   return data ? Number((data as { entry_number: number }).entry_number) : null;
 }
+
+// ---------------------------------------------------------------------------
+// LISTADO ENTRE CASOS — la vista "Gastos" de /legal/gastos
+// ---------------------------------------------------------------------------
+
+/**
+ * ⚠️ ESTE LISTADO NO ES PARA EL CONTADOR.
+ *
+ * Todo lo de arriba en este archivo alimenta `/finanzas/gastos-tramite/{id}` y
+ * está recortado para que el contador no vea el expediente. Lo de acá abajo
+ * alimenta `/legal/gastos`, que es del módulo Legal y es de **admin y abogada**:
+ * ellas ya ven el caso entero, así que acá el nombre del cliente y la descripción
+ * del caso no son un dato nuevo.
+ *
+ * La separación importa: si algún día alguien reusa `listarGastosDeTramite()`
+ * para una pantalla de Finanzas, **el recorte de privacidad no viaja con ella**.
+ * El test de privacidad mira el join de `getGastoTramiteContable`, no éste.
+ */
+
+/** Un gasto en el listado entre casos. */
+export interface GastoTramiteEnLista {
+  id: string;
+  date: string;
+  concept: string;
+  amount: number;
+  case_id: string;
+  case_code: string;
+  client_name: string;
+  /** Líneas sin cuenta contable. Por construcción: 0 o 1 (ver abajo). */
+  lineas_sin_clasificar: number;
+  /** Total de líneas del gasto. */
+  lineas_total: number;
+  /**
+   * El id de la ÚNICA línea sin clasificar, si hay exactamente una. Es lo que
+   * habilita el selector en la fila.
+   *
+   * 🔑 **Por construcción siempre es 0 o 1, y lo garantiza el esquema:** las
+   * líneas sin cuenta son EXACTAMENTE las que creó el backfill de la `036`, que
+   * hace una por gasto; y desde la `037` ninguna línea nueva puede nacer en NULL.
+   * El caso "dos sin clasificar en el mismo gasto" no se puede producir.
+   *
+   * Aun así la pantalla contempla `> 1` y manda al detalle, porque un invariante
+   * que la UI asume sin verificar es el que revienta el día que alguien corre un
+   * script.
+   */
+  linea_sin_clasificar_id: string | null;
+}
+
+export interface FiltroGastos {
+  /** true = solo los que tienen alguna línea sin cuenta contable. */
+  soloSinClasificar?: boolean;
+}
+
+/**
+ * Los gastos de trámite de todos los casos, con el estado de clasificación de
+ * sus líneas.
+ */
+export async function listarGastosDeTramite(
+  db: DB,
+  tenantId: string,
+  filtro: FiltroGastos = {}
+): Promise<GastoTramiteEnLista[]> {
+  const { data, error } = await db
+    .from("expenses")
+    .select(
+      `id, date, concept, amount,
+       case_id,
+       cases!inner(case_code, clients(name)),
+       expense_lines(id, chart_account_code)`
+    )
+    .eq("tenant_id", tenantId)
+    .order("date", { ascending: false });
+
+  if (error) {
+    console.error("[finanzas/queries] listarGastosDeTramite failed", error);
+    throw new Error("No se pudieron leer los gastos de trámite");
+  }
+
+  const filas = ((data ?? []) as Record<string, unknown>[]).map((f) => {
+    const caso = (f.cases ?? null) as
+      | { case_code: string; clients: { name: string } | null }
+      | null;
+    const lineas = (f.expense_lines ?? []) as {
+      id: string;
+      chart_account_code: string | null;
+    }[];
+    const sinCuenta = lineas.filter((l) => !l.chart_account_code);
+
+    return {
+      id: String(f.id),
+      date: String(f.date),
+      concept: String(f.concept ?? ""),
+      amount: Number(f.amount ?? 0),
+      case_id: String(f.case_id),
+      case_code: caso?.case_code ?? "—",
+      client_name: caso?.clients?.name ?? "—",
+      lineas_sin_clasificar: sinCuenta.length,
+      lineas_total: lineas.length,
+      linea_sin_clasificar_id: sinCuenta.length === 1 ? sinCuenta[0].id : null,
+    };
+  });
+
+  // El filtro se aplica acá y no en el `select` porque PostgREST no sabe filtrar
+  // el PADRE por una condición sobre sus hijos embebidos sin un `!inner` que
+  // además recortaría las líneas devueltas — y se necesita el conteo COMPLETO
+  // para distinguir "una sin clasificar" de "tres, dos ya clasificadas".
+  // Son 128 filas en producción: el costo es irrelevante y la lógica queda en un
+  // solo lugar.
+  return filtro.soloSinClasificar
+    ? filas.filter((f) => f.lineas_sin_clasificar > 0)
+    : filas;
+}
+
+/** Cuántas líneas quedan sin cuenta. Alimenta el chip del filtro. */
+export async function contarLineasSinClasificar(
+  db: DB,
+  tenantId: string
+): Promise<{ sinClasificar: number; total: number }> {
+  const [{ count: sin }, { count: total }] = await Promise.all([
+    db
+      .from("expense_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .is("chart_account_code", null)
+      .not("expense_id", "is", null),
+    db
+      .from("expense_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .not("expense_id", "is", null),
+  ]);
+
+  return { sinClasificar: sin ?? 0, total: total ?? 0 };
+}

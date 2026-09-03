@@ -1536,3 +1536,100 @@ material contable— **no al expediente**. El aislamiento real de esa ruta es el
 Se habla con Oliver, se suma el campo a `CAMPOS_DE_CASO_PERMITIDOS` **en el mismo commit y con
 el motivo escrito**, y se mueven junto con eso la tabla de roles de `CLAUDE.md` y este SOP. No
 es un cambio de pantalla.
+
+---
+
+## SOP-023: Líneas de gasto — el NULL histórico, el CHECK NOT VALID y la limpieza
+
+### El modelo, en una línea
+
+`expense_lines` cuelga de un gasto de trámite (`expenses`) **o** de una compra
+(`business_expenses`), con dos FK nullables y un CHECK de exclusividad. Una tabla, un
+validador, un editor y un builder para los dos módulos. Migración `036`.
+
+### 🔴 `chart_account_code` es NULLABLE a propósito
+
+Las líneas que creó el backfill de los gastos históricos —128 en producción— quedan en
+**NULL**, no en `130003`. Esos gastos se cargaron cuando el sistema no pedía la cuenta:
+**nadie los clasificó nunca**, y algunos pudieron ser costo propio del bufete (`500005`) y no
+fondos de cliente. Escribirles el default del acta no sería aplicar un default: sería inventar
+un dato y darle la misma apariencia que a uno cargado por una persona.
+
+Un comentario en la migración documenta la intención pero **no viaja con la fila**. Con NULL,
+el tipo de la app es `string | null` y **el builder del asiento no compila si no maneja el
+caso**. La consulta de limpieza es `WHERE chart_account_code IS NULL` y se vacía sola.
+
+### 🔬 `CHECK ... NOT VALID` — la semántica real, medida y no supuesta
+
+El `NOT NULL` no puede estar en la columna (rompería el backfill), así que la garantía la da un
+CHECK agregado después, en la `037`. **"NOT VALID" NO significa "las filas viejas quedan
+exentas para siempre"**, y confundirlo cuesta caro.
+
+Medido en staging el 03/09/2026 con `sql/tests/experimento-check-not-valid.sql`:
+
+| Operación | Resultado |
+|---|---|
+| `ADD CONSTRAINT ... NOT VALID` con 20 filas en NULL | ✅ pasa, no escanea |
+| INSERT nuevo **sin** cuenta | ✅ **RECHAZADO** (el objetivo) |
+| INSERT nuevo **con** cuenta | ✅ aceptado |
+| UPDATE de la **descripción** de una fila vieja en NULL | ⚠️ **RECHAZADO** |
+| UPDATE que **asigna** la cuenta a una fila vieja | ✅ aceptado |
+| `VALIDATE CONSTRAINT` con NULLs presentes | ✅ rechazado (correcto) |
+
+**`NOT VALID` salta el scan inicial, pero el CHECK se hace cumplir en TODO UPDATE** — incluso
+sobre una fila vieja, y aunque el UPDATE no toque la columna del CHECK. Postgres evalúa la fila
+NUEVA completa.
+
+**El costo, aceptado:** lo único prohibido es *modificar una línea histórica sin clasificarla en
+el mismo UPDATE*. Clasificarla, borrarla, el CASCADE y la asignación masiva siguen funcionando.
+Se acepta porque hoy no hay ninguna pantalla que edite una línea, porque pedir la cuenta a quien
+ya está editando esa línea es razonable, y porque empuja la limpieza en vez de dejarla para
+siempre.
+
+⚠️ **Antes de escribir cualquier UPDATE masivo sobre `expense_lines`:** si toca filas históricas
+y no les asigna cuenta, falla.
+
+### El orden 036 → 037 es obligatorio
+
+El backfill de la `036` INSERTA con NULL. Con el CHECK de la `037` puesto, ese INSERT falla y la
+migración entera aborta.
+
+### Cómo se termina la limpieza
+
+```sql
+ALTER TABLE public.expense_lines VALIDATE CONSTRAINT expense_lines_cuenta_obligatoria;
+```
+
+Mientras quede una sola línea en NULL, eso falla. **El comando es el semáforo: el día que corre
+limpio, la limpieza terminó.** No hay que llevar la cuenta a mano.
+
+### 🔑 La asignación masiva solo llena blancos
+
+`POST /api/expenses/lines/bulk-classify` filtra por `chart_account_code IS NULL`. Sin eso, un
+clic sobre 40 líneas destruye clasificaciones que alguien decidió una por una y que **nadie
+recuerda cuáles eran** — no hay historial de la cuenta anterior.
+
+⚠️ **Ese mismo filtro hace un segundo trabajo:** garantiza que la masiva nunca toca un gasto ya
+asentado. Un gasto no se puede postear con líneas en NULL, así que **toda línea en NULL
+pertenece por definición a un gasto no posteado.** El filtro de clasificación y el de
+inmutabilidad son el mismo.
+
+🚫 **Por eso la ruta masiva NO tiene un guard aparte de "gasto posteado", y no es un olvido.** Un
+segundo chequeo que siempre da lo mismo que el primero es código que nadie puede probar que haga
+falta, y el día que alguien simplifique va a sacar el equivocado. La ruta INDIVIDUAL
+(`PATCH /api/expenses/lines/[id]`) sí lo lleva, porque ahí sí se puede pedir cambiar una cuenta
+ya asignada.
+
+🔒 Los dos comportamientos los fija `bulk-classify.route.test.ts`, con un fake que **registra la
+cadena de filtros** en vez de simular una base — un fake que filtrara de mentira pasaría igual
+si el `.is()` desapareciera. Verificado por mutación: sacando el filtro, el test falla.
+
+### Dónde se resuelve, y cómo se presenta
+
+`/legal/gastos` → vista **Gastos** → chip **Sin clasificar**. Es una VISTA y no una pantalla
+`/sin-clasificar` aparte: una pantalla dedicada a una limpieza es un arreglo temporal que se
+vuelve deuda permanente. Una lista de gastos entre casos sirve igual después.
+
+🎨 **Se presenta como un estado, no como una alarma:** chip y no banner, ámbar y reloj y nunca
+rojo y triángulo, el chip **desaparece al llegar a cero**, y muestra avance (`84 de 128`) en vez
+de deuda. La explicación aparece una sola vez, en gris chico y solo con el filtro activo.

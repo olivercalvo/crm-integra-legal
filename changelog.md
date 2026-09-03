@@ -1,5 +1,88 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Limpieza de gastos sin clasificar — vista, masiva y el CHECK que cierra el hueco] - 2026-09-03
+
+### 🔬 El experimento primero: qué hace de verdad `CHECK ... NOT VALID`
+
+Oliver propuso `CHECK (chart_account_code IS NOT NULL) NOT VALID` para cerrar el hueco del
+validador —columna nullable + validador de aplicación = un `curl` la saltea— y pidió
+explícitamente **no darlo por cierto**: verificar antes qué pasa con un UPDATE sobre una fila
+vieja que sigue en NULL.
+
+Medido en staging (`sql/tests/experimento-check-not-valid.sql`, todo dentro de un ROLLBACK):
+
+| Operación | Resultado |
+|---|---|
+| `ADD CONSTRAINT ... NOT VALID` con 20 filas en NULL | ✅ pasa, no escanea |
+| INSERT nuevo **sin** cuenta | ✅ **RECHAZADO** — el objetivo |
+| INSERT nuevo **con** cuenta | ✅ aceptado |
+| UPDATE de la **descripción** de una fila vieja en NULL | ⚠️ **RECHAZADO** |
+| UPDATE que **asigna** la cuenta a una fila vieja | ✅ aceptado |
+| `VALIDATE CONSTRAINT` con NULLs presentes | ✅ rechazado |
+
+**`NOT VALID` salta el scan inicial, pero el CHECK se hace cumplir en TODO UPDATE**, incluso
+sobre una fila vieja y aunque el UPDATE no toque la columna del CHECK: Postgres evalúa la fila
+nueva completa. La intuición de "las filas viejas quedan exentas" es falsa.
+
+**Se adoptó igual**, porque el costo medido es acotado: lo único prohibido es modificar una
+línea histórica *sin clasificarla en el mismo UPDATE*. Clasificarla, borrarla, el CASCADE y la
+asignación masiva siguen funcionando, y hoy no existe ninguna pantalla que edite una línea. Va
+en la migración `037`, que **debe correr después de la 036** — el backfill de la 036 inserta
+NULL y con el CHECK puesto abortaría.
+
+El comando `VALIDATE CONSTRAINT` es además el semáforo: mientras quede una línea en NULL falla,
+así que **el día que corre limpio, la limpieza terminó**. No hay que llevar la cuenta a mano.
+
+### La limpieza necesitaba una pantalla que no existía
+
+`/legal/gastos` es un **balance por caso**; los gastos individuales solo viven dentro del
+detalle del caso. Resolver los 128 habría significado entrar caso por caso, o sea no hacerlo
+nunca.
+
+Se agregó una **vista** a esa misma pantalla —toggle "Por caso" / "Gastos"— y no una pantalla
+`/sin-clasificar` aparte: una pantalla dedicada a una limpieza es un arreglo temporal que se
+vuelve deuda permanente, y una lista de gastos entre casos sirve igual después. El gate no
+cambia: admin y abogada.
+
+🎨 **Se presenta como un estado, no como una alarma.** Chip y no banner; ámbar y reloj, nunca
+rojo y triángulo; el chip **desaparece al llegar a cero** en vez de quedar en "0 sin
+clasificar" para siempre; muestra avance (`84 de 128`) en vez de deuda; y la explicación
+aparece una sola vez, en gris chico y solo con el filtro activo. Se clasifica con un `<select>`
+en la fila misma, sin abrir el gasto.
+
+### 🔑 La masiva solo llena blancos
+
+`POST /api/expenses/lines/bulk-classify` filtra por `chart_account_code IS NULL`. Sin eso, un
+clic sobre 40 líneas destruye clasificaciones que alguien decidió una por una y que **nadie
+recuerda cuáles eran**: no hay historial de la cuenta anterior.
+
+⚠️ **Ese mismo filtro hace un segundo trabajo:** un gasto no se puede postear con líneas en
+NULL, así que toda línea en NULL pertenece por definición a un gasto **no posteado**. El filtro
+de clasificación y el de inmutabilidad son el mismo. 🚫 Por eso la ruta masiva **no** tiene un
+guard aparte de "gasto posteado" — un segundo chequeo que siempre da lo mismo que el primero es
+código que nadie puede probar que haga falta, y el día que alguien simplifique va a sacar el
+equivocado. La ruta INDIVIDUAL sí lo lleva, porque ahí sí se puede cambiar una cuenta ya
+asignada.
+
+La confirmación dice el número y la cuenta antes de aplicar: *"Se va a asignar 130003 Fondo
+Legales de Clientes a 12 gastos sin clasificar."*
+
+### Tests: 626 (+13)
+
+`bulk-classify.route.test.ts` usa un fake que **registra la cadena de filtros** en vez de
+simular una base — un fake que filtrara de mentira pasaría igual si el `.is()` desapareciera,
+porque el filtrado lo estaría haciendo el fake. Cubre además que el `tenant_id` sale del perfil
+y **no del body** aunque el body lo mande (SOP-014), que una cuenta inexistente o inactiva no
+escribe nada, los 403 de asistente y contador, y que las líneas ya clasificadas entre medio se
+informan como `omitidas` sin fallar.
+
+✅ **Verificado por mutación:** sacando el `.is("chart_account_code", null)` de la ruta, el test
+falla. No es un test vacuo.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre).
+
+---
+
 ## [Migración 036 — líneas de gasto, con los 128 gastos reales verificados] - 2026-09-03
 
 `sql/pending/036_expense_lines.sql`. Aplicada a staging, idempotente. **Producción NO**: solo

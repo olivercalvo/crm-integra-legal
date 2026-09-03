@@ -851,6 +851,86 @@ el texto contra "Varios"**: esa etiqueta es lo primero que va a cambiar.
 
 ---
 
+### 🔴 REGLA GENERAL: un `DROP FUNCTION` se lleva los GRANT
+
+> **Toda migración que haga `DROP` + `CREATE` de una función `SECURITY DEFINER`
+> tiene que RE-DECLARAR sus `GRANT` y VERIFICARLOS antes de cerrar.** El `DROP` se
+> lleva los privilegios, y la función nueva nace con `EXECUTE` para `PUBLIC`.
+
+**Por qué es de lo más difícil de detectar: nada falla.** La migración corre limpia,
+la función anda, los tests pasan y los reportes dan bien. Lo único que cambió es que
+un endurecimiento hecho en una migración anterior se deshizo **en silencio**, y no
+hay ningún síntoma hasta que alguien lo busca a propósito.
+
+Es una migración deshaciendo lo que hizo otra. Y va a volver a pasar, porque
+`post_journal_entry` se toca seguido: lleva cuatro versiones (`028`, `029`, `030`,
+`039`) en una semana.
+
+#### El caso concreto: `030` → `039`
+
+| | |
+|---|---|
+| La `030` | Revocó `EXECUTE` a `PUBLIC`, `anon` y `authenticated`, y se lo dio **solo a `service_role`**. Es lo que hace que el RPC NO sea llamable desde la sesión del usuario, y por lo tanto lo que obliga a que todo el posteo pase por una ruta server-side con el cliente de servicio |
+| La `039` | Tuvo que **dropear** la función para pasarla de 11 a 13 parámetros (ver abajo por qué no alcanzaba `CREATE OR REPLACE`) |
+| Sin el paso 3 de la `039` | El RPC habría vuelto a ser ejecutable por `anon` y `authenticated` — **exactamente lo que la `030` existe para impedir**, y sin un solo error en ningún lado |
+
+#### La plantilla, para copiar
+
+```sql
+-- 1) DROP con la firma COMPLETA de la versión vieja.
+DROP FUNCTION IF EXISTS public.mi_funcion(uuid, date, text);
+
+-- 2) CREATE ... SECURITY DEFINER ...
+
+-- 3) 🔴 REHACER LOS PERMISOS. No es opcional.
+REVOKE EXECUTE ON FUNCTION public.mi_funcion(uuid, date, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.mi_funcion(uuid, date, text, text)
+  TO service_role;
+
+-- 4) VERIFICAR, y ABORTAR si no se cumple.
+DO $verif$
+DECLARE v_funcs int; v_definer int; v_publico int;
+BEGIN
+  -- Una sola firma viva: ver la nota de la sobrecarga.
+  SELECT COUNT(*) INTO v_funcs FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'mi_funcion';
+
+  SELECT COUNT(*) INTO v_definer FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'mi_funcion' AND p.prosecdef;
+
+  SELECT COUNT(*) INTO v_publico FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'mi_funcion'
+     AND (has_function_privilege('anon', p.oid, 'EXECUTE')
+       OR has_function_privilege('authenticated', p.oid, 'EXECUTE'));
+
+  IF v_funcs   <> 1 THEN RAISE EXCEPTION 'ABORT: quedaron % firmas vivas', v_funcs; END IF;
+  IF v_definer <> 1 THEN RAISE EXCEPTION 'ABORT: no quedó SECURITY DEFINER'; END IF;
+  IF v_publico <> 0 THEN
+    RAISE EXCEPTION 'ABORT: anon o authenticated pueden ejecutarla. El DROP se llevó los GRANT y no se rehicieron.';
+  END IF;
+END $verif$;
+```
+
+`has_function_privilege()` es la clave: pregunta por el permiso EFECTIVO, así que
+agarra tanto el GRANT olvidado como el heredado de `PUBLIC`.
+
+#### ⚠️ Y de paso: `CREATE OR REPLACE` NO reemplaza si cambia la firma
+
+En PostgreSQL las funciones se sobrecargan por firma. `CREATE OR REPLACE` con un
+parámetro más **crea una segunda función**, no reemplaza la primera. Las llamadas
+viejas siguen entrando a la vieja.
+
+En la `039` eso habría sido invisible: las cuatro llamadas de once argumentos
+habrían seguido posteando **bien**, pero perdiendo el campo `reference` en silencio.
+Nadie lo nota hasta que un contador pregunta por qué su referencia no aparece en el
+Diario General.
+
+Por eso el paso 4 cuenta las firmas vivas y aborta si hay más de una.
+
 ### 🧭 EL PATRÓN DE UNA RUTA QUE POSTEA (desde el 03/09/2026)
 
 `app/api/expenses/[id]/post-to-ledger/route.ts` es la **primera ruta de `/api` que escribe en

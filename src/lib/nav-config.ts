@@ -82,6 +82,12 @@ export const TABS: TabDef[] = [
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
       { label: "Proveedores",       href: "/finanzas/proveedores",                icon: Truck,          roles: ["admin", "abogada", "contador"] },
       { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },
+      // Asientos de diario: admin y contador, la abogada NO. Un asiento manual
+      // escribe directo en el libro sin documento que lo respalde, y si la
+      // abogada no puede reclasificar una cuenta, menos puede esto. El gate real
+      // está en ADMIN_CONTADOR_ONLY_PREFIXES; esta línea solo esconde el botón, y
+      // `nav-guard.test.ts` verifica que las dos digan lo mismo.
+      { label: "Asientos de Diario", href: "/finanzas/asientos",                  icon: BookOpenCheck,  roles: ["admin", "contador"] },
       { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
       { label: "Impuestos",         href: "/finanzas/configuracion/impuestos",   icon: Percent,        roles: ["admin", "abogada", "contador"] },
     ],

@@ -179,6 +179,32 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Rutas de `/finanzas` que SOLO ven admin y contador — la abogada NO.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ES EL PRIMER CASO DE SU TIPO, Y POR ESO NECESITA SU PROPIA LISTA
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Hasta el 03/09/2026 el reparto de `/finanzas` era simple: admin y abogada
+ * entran a todo por `ROLE_ROUTES`, y el contador a un subconjunto. Los asientos
+ * de diario invierten eso por primera vez: **el contador sí, la abogada no.**
+ *
+ * Por qué la abogada queda afuera, y no es una preferencia:
+ *
+ *   · `updateChartAccount()` ya reserva a admin y contador la reclasificación
+ *     contable de una cuenta, con el criterio textual de la guía de RM: "quien
+ *     modifica la clasificación contable de una cuenta debe ser el contador".
+ *   · Un asiento manual es MÁS sensible que reclasificar una cuenta: escribe
+ *     directo en el libro **sin ningún documento que lo respalde**, y lo escrito
+ *     es inmutable. Si la abogada no puede lo menos, no puede lo más.
+ *
+ * ⚠️ Va por PREFIJO y no por patrón, al revés que el detalle de factura del
+ * contador: ahí se abría UNA pantalla dentro de un módulo cerrado; acá se cierra
+ * un módulo entero dentro de uno abierto. El subárbol completo —listado, alta,
+ * detalle— es de admin y contador.
+ */
+export const ADMIN_CONTADOR_ONLY_PREFIXES = ["/finanzas/asientos"];
+
+/**
  * Home primaria por rol — destino cuando el rol no tiene acceso a la ruta.
  * El contador cae al hub de reportes, no al selector: es donde empieza a
  * trabajar.
@@ -213,7 +239,14 @@ export function puedeAccederA(role: Role, pathname: string): boolean {
     return role === "admin";
   }
 
-  // 2. El contador, dentro de /finanzas, solo en sus prefijos. El root
+  // 2. Rutas de /finanzas reservadas a admin y contador. Va ANTES del gate del
+  //    contador y del de prefijos generales: es la única forma de sacar a la
+  //    abogada de una ruta que su `ROLE_ROUTES` le abriría.
+  if (ADMIN_CONTADOR_ONLY_PREFIXES.some((p) => cubre(p, pathname))) {
+    return role === "admin" || role === "contador";
+  }
+
+  // 3. El contador, dentro de /finanzas, solo en sus prefijos. El root
   //    /finanzas pasa: tiene un redirect por rol en su propia página.
   if (
     role === "contador" &&
@@ -224,11 +257,11 @@ export function puedeAccederA(role: Role, pathname: string): boolean {
     return false;
   }
 
-  // 3. El asistente, dentro de /legal, con sus rutas bloqueadas.
+  // 4. El asistente, dentro de /legal, con sus rutas bloqueadas.
   if (role === "asistente" && ASISTENTE_BLOCKED_PATTERNS.some((p) => p.test(pathname))) {
     return false;
   }
 
-  // 4. Prefijos generales del rol.
+  // 5. Prefijos generales del rol.
   return (ROLE_ROUTES[role] ?? []).some((p) => cubre(p, pathname));
 }

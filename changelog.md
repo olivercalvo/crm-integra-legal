@@ -1,5 +1,89 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Asientos manuales de diario — la pantalla] - 2026-09-03
+
+`/finanzas/asientos`, la ruta `POST /api/finanzas/asientos` y el módulo puro
+`contabilidad/asiento-manual.ts`. Es la ausencia más visible para un contador y la segunda
+ruta de `/api` que escribe en el ledger — copia el patrón que dejó la de gastos de trámite
+(SOP-014).
+
+### Lo que la pantalla tiene, y una cosa que no existía
+
+Fecha de la operación, **referencia**, naturaleza, y N líneas con cuenta / débito / crédito /
+descripción. La `039` agregó `journal_entries.reference`, que era el único de los cuatro campos
+del acta sin columna donde guardarse.
+
+**Descripción por línea** porque todo el punto de Josuarth es que las líneas se lean, y un
+ajuste de depreciación con seis renglones sin detalle hay que descifrarlo.
+
+**Las dos fechas del Art. 13a se muestran juntas después de postear.** No es adorno: es lo que
+le demuestra al contador que el sistema las guarda separadas y que la de registro no se retoca.
+
+### El totalizador NO es una segunda validación
+
+El cuadre lo hace cumplir el RPC, y su mensaje ya dice la diferencia:
+*"débitos 1500.00 vs créditos 1400.00 (diferencia 100.00)"*. La pantalla lo muestra **antes** de
+apretar porque es lo que el contador mira mientras carga — la diferencia en vivo es la
+diferencia entre un asiento que entra al primer intento y uno que rebota tres veces.
+
+Es la misma regla mostrada antes, no una regla nueva. Por eso el botón se deshabilita **y el
+servidor igual verifica**: por `curl`, el RPC frena. Hay un test que manda un asiento
+descuadrado y comprueba que **llegue al RPC**, o sea que la ruta no lo duplicó.
+
+Y una decisión chica del editor: al escribir en Débito se limpia Crédito. Sin eso es facilísimo
+dejar los dos cargados, y el RPC lo rechaza recién al guardar con un mensaje que no dice cuál
+línea.
+
+### 🔴 Acá NO se aplica el guard de cuentas de gasto
+
+`esTipoValidoParaGasto()` rechaza ingreso, patrimonio y pasivo. **No se usa acá, y nunca hay que
+"unificarlo".** Un asiento manual es el mecanismo para tocar lo que ningún documento toca: el
+aporte de capital va contra patrimonio, un ajuste de ingresos diferidos contra ingreso.
+Aplicarle el guard de gastos convertiría la herramienta de ajuste en la única que no puede
+ajustar.
+
+Es la **regla 3 de SOP-024 en su tercera forma**: hoy vimos un guard demasiado ancho (trámite) y
+uno demasiado estricto (compras); reusar éste sería el tercer error — un guard correcto **en el
+módulo equivocado**. Hay un test que lee el archivo y falla si aparece el import.
+
+### El rol: admin y contador. La abogada NO
+
+Primer caso de una ruta de `/finanzas` cerrada a la abogada, y por eso necesitó
+`ADMIN_CONTADOR_ONLY_PREFIXES` — su `ROLE_ROUTES` le abre todo `/finanzas`.
+
+El criterio: `updateChartAccount()` ya reserva a admin y contador la reclasificación contable de
+una cuenta, con la regla textual de la guía de RM. Un asiento manual es más sensible todavía —
+escribe directo en el libro sin ningún documento que lo respalde. Si no puede lo menos, no puede
+lo más. La tabla de `CLAUDE.md`, `route-access.ts` y `nav-config.ts` se movieron juntas.
+
+### El mensaje del período que nombraba una función de Postgres
+
+*"Provisionalo con ensure_accounting_periods()"* no le dice nada a un contador. Se traduce a
+*"El ejercicio 2025 no está abierto en el sistema… Un administrador tiene que abrirlo primero"*.
+Los demás mensajes del RPC pasan tal cual: ya están redactados para leerse.
+
+### Sin listado, a propósito
+
+El listado de asientos **ya existe**: es el Diario General. Construir un segundo sería una
+pantalla que dice lo mismo y hay que mantener sincronizada. `/finanzas/asientos` es el
+formulario, y enlaza al Diario.
+
+### Tests: 755 (+41)
+
+`asiento-manual.test.ts` (20) y `asientos.route.test.ts` (21). Entre ellos: que un asiento contra
+patrimonio se arme sin problema, que el token viaje al RPC, que la abogada reciba 403, que ante
+un error de lectura **no se postee**, y que el mensaje del período inexistente no contenga
+`ensure_accounting_periods`.
+
+⚠️ **Un test de la ruta se puso en rojo por una razón que valía**: el fake devolvía fila en todo
+lookup a `journal_entries`, y la ruta consulta esa tabla DOS veces con intenciones opuestas —por
+`idempotency_key` (donde "hay fila" significa RECHAZAR) y por `id` (donde "hay fila" es el camino
+feliz). El fake ahora distingue por el filtro, igual que el código real.
+
+`tsc` limpio, 21 errores de ESLint (los de siempre). Producción intacta.
+
+---
+
 ## [Compras: gasto, costo o activo — un requisito del acta que estaba incumplido] - 2026-09-03
 
 ### No faltaba un guard: el que había prohibía comprar una computadora

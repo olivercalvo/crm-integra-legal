@@ -1,5 +1,65 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Dos banners que decían que el portal no existe] - 2026-09-02
+
+Oliver verificó que el correo de la cotización **sí** manda el enlace al portal y que
+el portal está en uso. Aun así, dos avisos en pantalla seguían diciendo lo contrario, y
+los leían las abogadas cada vez que enviaban una cotización.
+
+### Lo que decían, y por qué era grave
+
+`public-link-display.tsx` y `send-quote-dialog.tsx` afirmaban que *"el portal público
+estará disponible en una próxima actualización"*. Quedó desactualizado cuando la Fase
+2E.4 lo puso en marcha y nadie volvió a leerlo. Consecuencia práctica: alguien que lo
+lea pega el enlace a mano en un WhatsApp creyendo que el correo no lo lleva.
+
+El segundo era peor. Decía *"Cuando el cliente responda, marque la cotización como
+aceptada o rechazada manualmente desde esta misma pantalla"* — **una instrucción que
+invita a pisar un registro con firma electrónica.**
+
+### Lo que el flujo hace de verdad (verificado leyéndolo entero)
+
+- `POST /api/finanzas/quotes/[id]/send` arma `publicLink` y se lo pasa a
+  `sendQuoteEmail` en **todos** los envíos: no hay rama condicional. La plantilla lo
+  renderiza en el HTML (botón *Ver cotización en línea*) y en el texto plano.
+  `/resend` hace lo mismo y **reutiliza el `public_token` original**.
+- El portal funciona de punta a punta: `/api/public/cotizaciones/[token]/accept` y
+  `/reject` registran la firma electrónica, cambian el status solos y disparan correos
+  **al cliente y a las abogadas** (`email_lawyers_ok` en la respuesta de ambas rutas).
+
+### Y la instrucción peligrosa ni siquiera era ejecutable
+
+Buena noticia, y la única razón por la que esto se pudo cerrar como un cambio de texto:
+`markAcceptedManual()` y `markRejectedManual()` exigen `status === 'enviada'` y
+devuelven **400** en cualquier otro estado. El botón tampoco se renderiza:
+`isQuoteDecidable()` es `status === "enviada"`. Y `quote_acceptances` /
+`quote_rejections` solo las escriben las rutas públicas del portal, con UNIQUE por
+cotización. **La evidencia de firma no se puede pisar ni desde la UI ni desde la API.**
+
+### Cómo quedaron
+
+El diálogo de envío **ya tenía** los dos mensajes correctos, condicionados a
+`email_sent`: verde "email enviado con el PDF adjunto", ámbar "no se pudo enviar —
+copie el enlace y compártalo manualmente". Lo falso era un **tercer** bloque permanente.
+Ese bloque ahora dice lo que corresponde saber, y dejó de ser una advertencia ámbar para
+ser una nota informativa gris: la señal de alarma es el bloque ámbar de arriba, y dos
+avisos ámbar juntos le quitan peso al que sí importa.
+
+En el detalle (`public-link-display`) solo va el mensaje permanente: esa pantalla **no
+sabe** si el correo salió, porque `email_sent` es el resultado del POST y no una columna
+de `quotes`. El texto está redactado para ser cierto en los dos casos.
+
+### El hallazgo que NO se arregló hoy
+
+Debajo del banner apareció un hueco de auditoría real: **aceptar o rechazar una
+cotización a mano no registra quién lo hizo.** Los helpers reciben el `userId` y lo
+descartan (`_userId`), y la ruta no escribe en `audit_log` — a diferencia de `duplicate`
+y `resend`, del mismo módulo. Es código, no texto, y se dejó anotado con su análisis
+completo en `task_plan.md` **A-quater**, incluida la pregunta que hay que responder
+antes de tocarlo (respuesta ya verificada: `quotes` **no** tiene columna para el
+usuario, así que el camino barato es `audit_log`).
+
+
 ## [Trato de usted en el portal público y los correos al cliente] - 2026-09-02
 
 Cierre del barrido de tuteo. Este es el bloque que Oliver pidió revisar cadena por

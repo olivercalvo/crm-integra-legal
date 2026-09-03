@@ -419,15 +419,23 @@ export function SendQuoteDialog({
             </div>
           </div>
 
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-xs text-amber-900"
-          >
-            <ExternalLink size={14} className="mt-0.5 shrink-0 text-amber-600" />
+          {/*
+            Este bloque decía que el portal "estará disponible en una próxima
+            actualización" y que había que marcar la cotización a mano cuando el
+            cliente respondiera. Las dos cosas eran falsas: el portal funciona, el
+            enlace ya viaja en el correo, y el status se mueve solo. Peor todavía,
+            la instrucción de marcar a mano ni siquiera es ejecutable — una vez que
+            el cliente respondió, `isQuoteDecidable()` es false y la API contesta
+            400. Nota informativa, no advertencia: el aviso REAL de que algo salió
+            mal es el bloque ámbar de arriba, condicionado a email_sent === false.
+          */}
+          <div className="flex items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            <ExternalLink size={14} className="mt-0.5 shrink-0 text-gray-400" />
             <p>
-              El portal público estará disponible en una próxima
-              actualización. Cuando el cliente responda, marque la cotización
-              como aceptada o rechazada manualmente desde esta misma pantalla.
+              El enlace lleva al portal donde el cliente acepta o rechaza la
+              cotización con su firma electrónica. Cuando responde, la
+              cotización cambia de estado sola y les llega un aviso por correo:
+              no hay que marcarla a mano.
             </p>
           </div>
         </div>

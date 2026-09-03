@@ -1164,6 +1164,52 @@ solo lugar donde mirarla.
 **Es refactor, no texto.** Deliberadamente NO se hizo junto con el barrido de tuteo,
 para que ese commit fuera solo copy y su diff se pudiera leer de un vistazo.
 
+### A-quater. Aceptar/rechazar una cotización a mano no registra QUIÉN — hueco de auditoría
+
+Encontrado el 02/09/2026 investigando por qué un banner le decía a las abogadas que
+marcaran la cotización a mano. El banner era falso y ya se corrigió; **esto es lo que
+apareció debajo, y es lo valioso del hallazgo.** No se arregló a propósito: no es texto.
+
+**Lo que pasa hoy**
+
+- `markAcceptedManual()` — `src/lib/finanzas/api/quotes.ts:1217` — y
+  `markRejectedManual()` — `:1259` — **reciben el `userId` y lo descartan**. No es una
+  omisión ambigua: el parámetro está escrito `_userId`, con guion bajo, que es la forma
+  de decirle a TypeScript "sé que no lo uso".
+- El UPDATE guarda `approved_at` / `rejected_at` (el **cuándo**) y pone
+  `approved_by_ip` / `approved_by_user_agent` en `NULL` deliberadamente, para marcar que
+  la decisión **fue manual y no vino del portal**. Así que queda el CUÁNDO y queda el
+  QUE FUE MANUAL — pero **no queda el QUIÉN**.
+- **La ruta `mark-accepted` no escribe en `audit_log`.** Las rutas `duplicate` y
+  `resend` del mismo módulo **sí** lo hacen. Esa asimetría, dentro del mismo sprint y
+  el mismo directorio, es lo que hace pensar que es un descuido y no una decisión de
+  diseño: si se hubiera decidido no auditarlo, las otras dos tampoco auditarían.
+- Lo pueden hacer **tres roles**: `admin`, `abogada` y `contador`
+  (`ALLOWED_ROLES` en `src/app/api/finanzas/quotes/[id]/mark-accepted/route.ts:10`).
+
+**Lo que NO está roto** (verificado en la misma investigación, para que nadie lo
+arregle de más): una decisión tomada desde el portal **no se puede pisar**. Los dos
+helpers exigen `status === 'enviada'` y devuelven 400 en cualquier otro estado; el
+botón tampoco se renderiza, porque `isQuoteDecidable()` es `status === "enviada"`. La
+evidencia de firma electrónica (`quote_acceptances` / `quote_rejections`) solo la
+escriben las rutas públicas del portal, con un UNIQUE por cotización. Ni se pisa, ni
+queda huérfana.
+
+**La pregunta a responder ANTES de tocar nada**
+
+¿Hay una columna en `quotes` donde escribir el usuario? **Verificado: no la hay.**
+`quotes` tiene `sent_by` para el envío, pero para la decisión solo tiene
+`approved_by_ip` / `approved_by_user_agent` y sus gemelas de rechazo — ninguna guarda
+un `user_id`. Agregarla es una **migración**, y eso saca el arreglo de la categoría
+"chico".
+
+- [ ] **Evaluar primero el camino barato: escribir en `audit_log`**, igual que hacen
+      `duplicate` y `resend`, sin tocar el esquema. Si alcanza para responder "quién
+      aceptó la COT-00XXXX y cuándo", el tema se cierra ahí.
+- [ ] Solo si no alcanza, evaluar `approved_by` / `rejected_by` como columnas nuevas,
+      con su migración y su backfill (las filas viejas quedarían en NULL, que es
+      honesto: de verdad no se sabe quién fue).
+
 ### B. Bug buscador de clientes en form de cotización (alta, rápido)
 El toggle "cliente existente" en el form de cotización **no lista prospectos**, aunque la nota de UI dice "activo o prospecto". Causa: `listClientsActive` filtra solo `client_status='active'`. Detectado en el smoke del 2026-06-23 (no encontraba `ZZZ-SMOKE-BASE-CLIENT` que era prospect). Es parte de por qué Milena terminaba duplicando. Fix puntual rápido o se absorbe en **C (PROSPECTOS-UNIFY)**.
 

@@ -1827,5 +1827,5 @@ computadora contra `110001`.
 **Lo que NO se hizo:** una lista corta para compras. El recorte útil sería sacar las 8 cuentas
 de planilla (`600001 Sueldos`, `600004 Décimo Tercer Mes`…), y ahí hay una pregunta que no es
 de diseño: **¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran como una compra
-con proveedor, o salen de la planilla y nunca pasan por este módulo?** Depende de cómo trabaja
-el bufete. Va a Daveiva; está anotado en `task_plan.md`.
+con proveedor, o salen de la planilla y nunca pasan por este módulo?** Va a RM —son los
+contadores del bufete y saben cómo se asienta la planilla—; está anotado en `task_plan.md`.

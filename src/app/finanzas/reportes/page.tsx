@@ -39,24 +39,35 @@ const REPORTS: ReportItem[] = [
     icon: <Receipt size={22} />,
     badge: "Mensual",
   },
-  // CORREGIDO el 02/09/2026. El badge decía "Saldos de apertura", que dejó de
-  // ser cierto con la convergencia del mismo día: los dos reportes suman
-  // apertura MÁS los movimientos del ledger, igual que el Libro Mayor. Lo que
-  // sigue sin existir es el selector de período, y eso es lo que el badge dice
-  // ahora.
+  // ⚠️ ESTE BADGE YA MINTIÓ DOS VECES. Historia corta, porque es una trampa que
+  // se repite:
+  //
+  //   · Decía "Saldos de apertura". Dejó de ser cierto el 02/09 a la mañana con
+  //     la convergencia: los dos reportes pasaron a sumar apertura MÁS los
+  //     movimientos del ledger.
+  //   · Se cambió a "Sin corte por período"… y esa misma tarde entró el corte por
+  //     fecha (commit 801692b). Volvió a mentir en menos de un día.
+  //
+  // 🔑 La lección: **un badge que describe lo que al reporte le FALTA se vuelve
+  // falso en cuanto alguien lo construye, y nadie se acuerda de venir a
+  // cambiarlo.** Los dos de acá ahora dicen QUÉ ES el reporte —una foto a una
+  // fecha, un resultado de un período— que es una propiedad de su naturaleza
+  // contable y no del estado del código. Eso no caduca.
   {
     slug: "pyl",
     title: "Estado de Resultado",
-    description: "Ingresos, costos, gastos y utilidad del ejercicio.",
+    description: "Ingresos, costos, gastos y utilidad del período.",
     icon: <TrendingUp size={22} />,
-    badge: "Sin corte por período",
+    // El ER es DE UN PERÍODO, con `desde` y `hasta`. Ver sop.md SOP-021.
+    badge: "Por período",
   },
   {
     slug: "balance",
     title: "Balance General",
-    description: "Activos, pasivos y patrimonio agrupados por subcategoría.",
+    description: "Activos, pasivos y patrimonio a una fecha de corte.",
     icon: <Scale size={22} />,
-    badge: "Sin corte por período",
+    // El Balance es A UNA FECHA: no existe "el activo entre marzo y junio".
+    badge: "A una fecha",
   },
   {
     slug: "mayor",
@@ -70,7 +81,8 @@ const REPORTS: ReportItem[] = [
     title: "Balance de Comprobación",
     description: "Sumas y saldos por cuenta. Los mismos saldos que los estados financieros.",
     icon: <CheckSquare size={22} />,
-    badge: "Verificación",
+    // También de período, con saldo inicial al comienzo del rango (SOP-021).
+    badge: "Por período",
   },
   {
     slug: "diario",

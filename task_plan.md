@@ -1297,7 +1297,7 @@ de ESLint son la deuda vieja de A-bis: este día no agregó ni quitó ninguno.
 `_userId` descartado) y A-quinquies (los saldos que contradicen la regla de Rose). Ninguno
 de los dos se arregló a propósito.
 
-### A-0-ter. 🔒 BLOQUEADO POR DAVEIVA — la lista corta de cuentas de compras
+### A-0-ter. 🔒 BLOQUEADO POR RM — la lista corta de cuentas de compras
 
 **La pregunta, en una línea:** ¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran
 en el CRM como una **compra con proveedor**, o salen de la **planilla** y nunca pasan por
@@ -1311,7 +1311,8 @@ todo su valor está en **sacar de en medio las 8 cuentas de planilla** (`600001 
 
 Si la CSS patronal se carga como compra con proveedor, sacarla de la lista corta **esconde algo
 que se usa todos los meses**, que es el único costo que tiene ese mecanismo. No es una decisión
-de diseño: es cómo trabaja el bufete, y la respuesta está en Daveiva, no en RM.
+de diseño: es cómo se registra la planilla, y la respuesta está en RM — son los contadores
+del bufete y saben cómo se asienta.
 
 **Lo que NO está bloqueado y ya se hizo (03/09):** el guard de compras acepta gasto, costo y
 activo, que es lo que pide el acta. Ver `sop.md` SOP-024.

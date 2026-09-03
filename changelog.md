@@ -1,5 +1,104 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Gastos de trámite — Paso 1: pantalla contable y editor de líneas] - 2026-09-03
+
+Primer código del bloque de gastos de trámite. **No incluye la migración ni el asiento**: el
+`CHECK` de `amount` espera el resultado del pre-flight contra producción, así que se hizo lo
+que no depende de eso.
+
+### El modelo de líneas, compartido por los dos módulos
+
+`expense_lines` con **arco exclusivo**: dos FK nullables (`expense_id` /
+`business_expense_id`) y un `CHECK` de exclusividad. Una sola tabla, un solo validador, un solo
+editor y un solo builder — compras entra con cero esquema nuevo.
+
+Lo que **no** se comparte es a dónde va el ITBMS: en un gasto de trámite es pass-through (va
+entero al activo recuperable, porque el gasto no es del bufete) y en una compra es crédito
+fiscal, cuya cuenta no existe en el plan. 🔑 **Por eso el gasto de trámite NO está bloqueado
+por la pregunta del ITBMS al contador** — ese bloqueo es solo de compras.
+
+`supplier_id` NO va en la línea: un documento tiene un proveedor, y si hay dos son dos
+documentos. Una columna nullable que siempre es NULL confunde a quien la lea en seis meses.
+
+### 🔴 `chart_account_code` es NULLABLE, y es una decisión
+
+Las líneas que el backfill va a crear para los gastos históricos quedan en **NULL**, no en
+`130003`. Esos gastos se cargaron cuando el campo no existía: **nadie los clasificó nunca**, y
+algunos pudieron ser costo propio del bufete (`500005`) y no fondos de cliente. Escribirles el
+default no sería aplicar un default: sería inventar un dato y darle la misma apariencia que a
+uno cargado por una persona.
+
+Por qué NULL y no un comentario en la migración: un comentario documenta la intención pero **no
+viaja con la fila**. En seis meses alguien escribe un script para postear gastos históricos,
+consulta la tabla, ve `130003` en todas y no tiene ningún motivo para leer el encabezado de una
+migración. Es el mismo error que costó tiempo tres veces esta semana.
+
+Por qué NULL y no un flag `clasificacion_verificada`: es una columna que hay que acordarse de
+consultar. Con `string | null` **el builder del asiento no compila** si no maneja el caso, así
+que una línea sin clasificar no se puede postear por accidente. Y la consulta de limpieza
+(`WHERE chart_account_code IS NULL`) se vacía sola a medida que alguien clasifica.
+
+Lo nuevo nunca nace en NULL: lo exige el validador, con un test que lo fija. El `NOT NULL` dejó
+de estar en la base y pasó a estar ahí.
+
+### Pantalla `/finanzas/gastos-tramite/{id}` — y su recorte de privacidad
+
+Existe porque el contador no entra a `/legal/*` y sí entra al Libro Mayor: sin ella, el ícono
+del mayor le prometería abrir el gasto y lo depositaría en otra parte. Mismo patrón que el
+detalle de factura — **el detalle sí, el listado no**, y como patrón de ruta y no prefijo, para
+que un listado futuro no se herede solo.
+
+🔒 **Es una puerta al módulo Legal, así que su alcance es política del bufete.** Muestra monto,
+líneas, cuentas, fecha, proveedor con RUC y DV en columnas separadas, vencimiento, comprobante
+y **del caso solo el NÚMERO**. Nada de descripción, partes, documentos, notas ni historial.
+
+**El recorte vive en el `select`, no en el JSX.** Si el query trajera el caso entero y la
+pantalla eligiera qué renderizar, el dato confidencial ya estaría en el servidor y a un
+`{caso.description}` de distancia. Así **nunca sale de la base**. Y el código del caso **no es
+un enlace**: un `<Link>` a `/legal/casos/{id}` sería la puerta de atrás en una línea.
+
+Detalle completo en `sop.md` SOP-022.
+
+### El comprobante: el contador dejó de tener un 403
+
+`/api/expenses/[id]/receipt/download` rechazaba al contador explícitamente. Era correcto
+mientras no tuviera forma de llegar a un gasto de trámite; con la pantalla nueva, un 403 ahí
+deja un botón de descarga que falla al apretarlo. Auditar un asiento es poder ver su
+comprobante. ⚠️ Amplía el acceso a **un archivo** —material contable— no al expediente.
+
+### `source_type = 'gasto_tramite'`, un valor nuevo
+
+`'gasto'` ya está tomado por `business_expenses` y es lo que `destino-documento.ts` usa para
+decidir a qué pantalla lleva el ícono del mayor. Compartirlo mandaría un gasto de trámite a
+`/finanzas/gastos-bufete` con un id que ahí no existe — el bug del 01/09 otra vez. Un valor
+nuevo tiene además cero backfill: `'gasto'` sigue significando lo mismo que hoy.
+
+### Tests: 613 (+38)
+
+- `expense-line.test.ts` (29) — la cuenta obligatoria al crear, los totales del caso real de
+  tres cuentas que motivó el modelo, el redondeo al final y no línea por línea, y la línea
+  vacía que se descarta en silencio.
+- `gastos-tramite-privacidad.test.ts` (9) — el que pidió Oliver. Lista **blanca** de campos de
+  `cases`, así que falla también con un campo que a nadie se le hubiera ocurrido prohibir.
+
+⚠️ **La primera versión del test de privacidad se disparó con un falso positivo propio**:
+miraba todos los `.select(...)` del archivo pegados y marcó `description`, que es
+`expense_lines.description`. Se lo hizo **preciso** en vez de agregarle una excepción — un test
+que grita cuando no hay nada roto se termina desactivando. Y al hacerlo quedó más fuerte, porque
+pasó de lista negra a lista blanca.
+
+### Lo que falta del bloque
+
+La migración `036` (tabla + columnas del encabezado + backfill), el builder del asiento, la ruta
+que postea, el trigger de inmutabilidad y el formulario de alta. **La migración está bloqueada
+por el pre-flight de `expenses` en producción**: `amount` no tiene ningún `CHECK` de signo y no
+se puede saber desde acá si hay algún gasto en 0 o negativo. Con ese dato se decide si el
+`CHECK` de la línea va `> 0` o `>= 0`.
+
+`tsc` limpio. 21 errores de ESLint, los mismos de siempre; cero en los archivos nuevos.
+
+---
+
 ## [Auditoría del inventario + el reembolso apunta a 130003 + "Cobros"] - 2026-09-03
 
 Tres cosas, en el orden en que se hicieron. Las dos últimas son el prólogo del bloque de

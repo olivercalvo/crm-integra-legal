@@ -31,6 +31,19 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
   // pantalla propia.
   nota_credito: (id) => `/finanzas/facturas/${id}`,
   gasto: (id) => `/finanzas/gastos-bufete/${id}`,
+  // ───────────────────────────────────────────────────────────────────────────
+  // `gasto_tramite` es un source_type APARTE de `gasto`, y no por prolijidad
+  // ───────────────────────────────────────────────────────────────────────────
+  // `gasto` ya está tomado por `business_expenses` (las compras del bufete) y es
+  // el que apunta al renglón de arriba. Un gasto de trámite es otra tabla
+  // (`expenses`, del módulo Legal) y otra pantalla: si compartieran source_type,
+  // el ícono del mayor mandaría un gasto de trámite a `/finanzas/gastos-bufete`
+  // con un id que ahí no existe. Sería el bug del 01/09 que originó este archivo,
+  // reintroducido un módulo más adelante.
+  //
+  // Elegir un valor nuevo tiene además una ventaja de migración: cero backfill.
+  // `gasto` sigue significando exactamente lo que significa hoy.
+  gasto_tramite: (id) => `/finanzas/gastos-tramite/${id}`,
   // El pago no tiene pantalla propia: vive en el detalle de la factura que
   // canceló, así que su destino se resuelve mirando `payment_applications` y
   // termina en la misma ruta que `factura`. Ver `loadDestinosDeOrigen`.

@@ -155,6 +155,27 @@ export const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
  */
 export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   /^\/finanzas\/facturas\/(?!nuevo$)[^/]+$/,
+  // ───────────────────────────────────────────────────────────────────────────
+  // Detalle de un GASTO DE TRÁMITE (03/09/2026)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Un gasto de trámite vive en `/legal/casos/{id}`, y el contador NO entra a
+  // /legal en absoluto. Pero sí entra al Libro Mayor, y la guía de RM pide que
+  // "cada reporte permite llegar al documento origen": sin esta ruta, el ícono
+  // del mayor le prometería abrir el gasto y lo depositaría en otra pantalla.
+  // Es el mismo arreglo que el detalle de factura, un módulo más adelante.
+  //
+  // 🔒 La pantalla muestra el gasto y NADA del caso más que su código —
+  // decisión de política del bufete, no de diseño. El recorte se hace en el
+  // `select` de `queries/expense-tramite.ts` y lo fija
+  // `gastos-tramite-privacidad.test.ts`.
+  //
+  // Es un PATRÓN y no un prefijo, igual que facturas: hoy no hay listado de
+  // gastos de trámite bajo /finanzas, y si alguien agrega uno mañana el
+  // contador NO lo hereda sin que alguien lo decida acá.
+  //   ✅ /finanzas/gastos-tramite/{id}
+  //   ❌ /finanzas/gastos-tramite        (no existe, y si existiera: no)
+  //   ❌ /finanzas/gastos-tramite/{id}/editar   (es solo lectura)
+  /^\/finanzas\/gastos-tramite\/(?!nuevo$)[^/]+$/,
 ];
 
 /**

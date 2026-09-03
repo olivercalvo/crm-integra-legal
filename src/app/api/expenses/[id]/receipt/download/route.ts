@@ -5,8 +5,25 @@
  * Reemplaza a `/receipt/url`, que entregaba un enlace firmado directo a
  * `*.supabase.co`. Ver `src/lib/storage/serve-file.ts`.
  *
- * PERMISOS: sesión + mismo tenant. El gasto de trámite es del módulo legal, así
- * que el contador —que no entra ahí— queda fuera.
+ * PERMISOS: sesión + mismo tenant, y CUALQUIER rol de los cuatro.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * EL CONTADOR ENTRA ACÁ DESDE EL 03/09/2026 (antes tenía un 403 explícito)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * El comentario original decía "el gasto de trámite es del módulo legal, así que
+ * el contador —que no entra ahí— queda fuera", y era correcto mientras el
+ * contador no tuviera forma de llegar a un gasto de trámite.
+ *
+ * Dejó de serlo con `/finanzas/gastos-tramite/{id}`: cuando el cableado
+ * documento→asiento exista, el Libro Mayor va a enlazar el asiento de un gasto
+ * de trámite a esa pantalla, y auditar un asiento ES poder ver su comprobante —
+ * la guía de RM lo pide en su lista de validación. Un 403 acá dejaría la
+ * pantalla con un botón de descarga que falla al apretarlo.
+ *
+ * ⚠️ **Esto amplía el acceso del contador a UN archivo, no al expediente.** Es
+ * el comprobante del gasto: una factura o un recibo de un proveedor, que es
+ * material contable. El contenido legal del caso sigue cerrado, y lo fija
+ * `gastos-tramite-privacidad.test.ts`.
  */
 import { NextRequest, NextResponse } from "next/server";
 
@@ -39,9 +56,9 @@ export async function GET(
     if (!profile) {
       return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
     }
-    if (profile.role === "contador") {
-      return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
-    }
+    // Sin gate por rol: los cuatro roles pueden bajar el comprobante de un gasto
+    // de trámite. El aislamiento real es el `.eq("tenant_id", ...)` de abajo.
+    // Ver la nota del encabezado sobre por qué el contador dejó de tener un 403.
 
     const { data: expense } = await admin
       .from("expenses")

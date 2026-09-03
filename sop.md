@@ -1444,3 +1444,95 @@ Ese número, además, es hoy una pregunta abierta para RM: ver `task_plan.md` **
 El Libro Mayor y el Diario ya lo tenían. **Antigüedad, Estado de cuenta y Ventas mensuales
 no**, y no es un olvido: son fotos a hoy, no reportes de período. Filtrarlas es mover la
 fecha de referencia de los tramos, que es otro diseño con su propia pregunta contable.
+
+---
+
+## SOP-022: El contador y el gasto de trámite — una puerta al módulo Legal, recortada
+
+### El problema que resuelve, y por qué no es una pantalla más
+
+Un gasto de trámite vive dentro de un caso, en `/legal/casos/{id}`. El contador **no entra a
+`/legal/*` en absoluto**: `route-access.ts` le da `contador: ["/", "/finanzas"]`.
+
+Pero el contador sí entra al Libro Mayor, y la guía de RM pide en su lista de validación que
+"cada reporte permite llegar al documento origen". Sin una pantalla bajo `/finanzas`, el ícono
+del mayor le prometería abrir el gasto y lo depositaría en otra parte — **exactamente el bug
+del 01/09/2026 que originó `destino-documento.ts`**, reintroducido un módulo más adelante.
+
+De ahí `/finanzas/gastos-tramite/{id}`, mismo patrón que el detalle de factura: **el detalle
+sí, el listado no.**
+
+### 🔒 Pero es una puerta a información confidencial, y el recorte es política del bufete
+
+Los casos son confidenciales. Esta pantalla le abre al contador un acceso al módulo Legal que
+antes no tenía, así que su alcance lo decidió Oliver el 03/09/2026 y **no es negociable desde
+el código**:
+
+| | |
+|---|---|
+| ✅ **Muestra** | monto, líneas, cuentas contables, fecha, proveedor (razón social, RUC y DV en columnas separadas), vencimiento, comprobante, y el **NÚMERO** del caso |
+| ❌ **No muestra** | descripción del caso, partes, cliente, documentos, notas, historial |
+
+El número le alcanza para identificar el gasto en su papel de trabajo, que es para lo que lo
+necesita. En palabras de Oliver: *"ampliar el acceso del contador al contenido legal por la
+puerta de atrás sería un cambio de política del bufete, no una pantalla"*.
+
+### Dónde vive el recorte: en el `select`, NUNCA en el JSX
+
+`src/lib/finanzas/queries/expense-tramite.ts`, y la constante
+`CAMPOS_DE_CASO_PERMITIDOS = ["case_code"]`.
+
+Si el query trajera el caso entero y la pantalla eligiera qué renderizar, **el dato
+confidencial ya estaría en el servidor y a un `{caso.description}` de distancia**. Cualquiera
+que agregue un campo a la vista en seis meses lo tendría a mano sin enterarse de que no debe.
+Con el recorte en el query, el dato **nunca sale de la base**.
+
+Por el mismo motivo la pantalla **no hace ni un `.from()` propio**: todo lo que muestra pasa
+por el query recortado, que es el único lugar que hay que auditar.
+
+### ⚠️ Y por eso el código del caso NO es un enlace
+
+Un `<Link href={/legal/casos/${id}}>` sería la puerta de atrás en una línea. El middleware se
+lo rebotaría al contador —un botón que falla al apretarlo— y para la abogada sería un atajo
+que esta pantalla no tiene por qué ofrecer. **El número va como texto.**
+
+### 🔒 El test que lo sostiene
+
+`src/lib/finanzas/queries/__tests__/gastos-tramite-privacidad.test.ts`. Es una regla que
+ningún tipo de TypeScript puede sostener: agregar `description` al `select` compila perfecto y
+pasa un code review si el diff es grande. Así que se verifica **leyendo el código**, igual que
+`ruc-dv-separados.test.ts`.
+
+Comprueba cinco cosas:
+
+1. `CAMPOS_DE_CASO_PERMITIDOS` es exactamente `["case_code"]`.
+2. El embed `cases(...)` del query pide **solo** campos de esa lista blanca — y rechaza
+   `cases(*)`. Es lista **blanca** y no negra a propósito: así falla también con un campo que a
+   nadie se le hubiera ocurrido prohibir.
+3. El query no hace `.from()` sobre `cases`, `comments`, `documents` ni `clients`. Un
+   `.from("cases")` directo esquivaría la comprobación del punto 2.
+4. La pantalla no consulta la base por su cuenta, y no construye ninguna ruta `/legal/*`.
+5. El permiso y el enlace se mueven juntos: el contador abre el detalle y **no** el listado, el
+   `/editar` ni `/nuevo`; y `gasto_tramite` enlaza a esta pantalla y **no** a la de compras.
+
+**Nota sobre la primera versión de ese test:** miraba todos los `.select(...)` del archivo
+pegados en una cadena y marcó `description`, que es `expense_lines.description` — legítima. Se
+lo hizo PRECISO en vez de agregarle una excepción. Un test que grita cuando no hay nada roto se
+termina desactivando, y entonces deja de proteger.
+
+### El comprobante: el contador dejó de tener un 403
+
+`/api/expenses/[id]/receipt/download` tenía un `if (profile.role === "contador") return 403`.
+Era correcto mientras el contador no tuviera forma de llegar a un gasto de trámite; dejó de
+serlo con esta pantalla, porque **auditar un asiento es poder ver su comprobante** y un 403 acá
+dejaría un botón de descarga que falla al apretarlo.
+
+⚠️ Esto amplía el acceso del contador a **un archivo** —una factura o un recibo de proveedor,
+material contable— **no al expediente**. El aislamiento real de esa ruta es el
+`.eq("tenant_id", ...)`, no el gate por rol.
+
+### Si hay que ampliar el alcance
+
+Se habla con Oliver, se suma el campo a `CAMPOS_DE_CASO_PERMITIDOS` **en el mismo commit y con
+el motivo escrito**, y se mueven junto con eso la tabla de roles de `CLAUDE.md` y este SOP. No
+es un cambio de pantalla.

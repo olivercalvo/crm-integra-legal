@@ -1150,8 +1150,33 @@ el reporte ya está construido.
 
 **Pendiente, en este orden:**
 
+0. 🔴 **PRE-FLIGHT DE `expenses` EN PRODUCCIÓN — bloquea la migración del bloque.**
+   `expenses.amount` no tiene NINGÚN `CHECK` de signo (`amount NUMERIC(12,2) NOT NULL` y nada
+   más), y desde acá no se puede ver producción. Ese dato decide el `CHECK` de
+   `expense_lines.amount`: si va `> 0` y en producción hay un gasto en 0, **la migración
+   aborta a mitad el día del deploy**. Correr y traer el resultado:
+
+   ```sql
+   SELECT COUNT(*)                                        AS total,
+          COUNT(*) FILTER (WHERE amount <= 0)             AS cero_o_negativos,
+          COUNT(*) FILTER (WHERE concept IS NULL
+                             OR btrim(concept) = '')      AS sin_concepto,
+          COUNT(*) FILTER (WHERE receipt_url IS NOT NULL)  AS con_adjunto,
+          MIN(amount), MAX(amount)
+     FROM expenses;
+   ```
+
+   Con `cero_o_negativos = 0` el CHECK va `> 0`. Si no, va `>= 0` y los negativos se miran uno
+   por uno. `sin_concepto` importa porque `expense_lines.description` es `NOT NULL` y el
+   backfill la saca de `concept`.
+
 1. **EL BLOQUE: gastos de trámite con encabezado + líneas, y su asiento.** Diseño aprobado el
-   03/09; la implementación no arrancó. Es el bloque elegido porque construye **la primera
+   03/09. **Paso 1 hecho y commiteado**: modelo de líneas compartido con compras
+   (`types/expense-line.ts`), validador, editor de líneas reusable
+   (`components/finanzas/expense-lines-editor.tsx`), pantalla contable
+   `/finanzas/gastos-tramite/{id}` con su recorte de privacidad (SOP-022) y el permiso del
+   contador. **Falta**: la migración `036` (bloqueada por el punto 0), el builder del asiento,
+   la ruta que postea, el trigger de inmutabilidad y el formulario de alta. Es el bloque elegido porque construye **la primera
    ruta de `/api` que postea al ledger** (hoy no hay ninguna: `postJournalEntry` solo se llama
    desde su definición y desde `scripts/backfill-asientos-faltantes.mts`), y ese patrón lo van
    a copiar factura, cobro y compra. Además el modelo de líneas lo reusa compras, donde el

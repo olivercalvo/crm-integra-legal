@@ -7,6 +7,7 @@ import {
   Download,
   FileText,
   Hash,
+  History,
   Scale,
   Truck,
 } from "lucide-react";
@@ -207,17 +208,27 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
       </div>
 
       {/* ── Avisos ─────────────────────────────────────────────────── */}
+      {/* Aviso de gasto histórico.
+          🎨 ÁMBAR Y NO ROJO, deliberadamente. Rojo dice "algo se rompió"; acá no
+          se rompió nada. Es TRABAJO PENDIENTE que hasta hoy era invisible: el
+          gasto se cargó cuando el sistema no pedía la cuenta. El ícono es un
+          reloj y no un triángulo por el mismo motivo. */}
       {sinClasificar && (
         <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+          <History size={18} className="mt-0.5 shrink-0 text-amber-600" />
           <div className="text-sm text-amber-800">
-            <p className="font-semibold">Hay líneas sin cuenta contable.</p>
+            <p className="font-semibold">Gasto histórico, sin cuenta contable todavía.</p>
             <p className="mt-1">
-              Este gasto se cargó antes de que el sistema pidiera la cuenta, así que{" "}
+              Se cargó antes de que el sistema pidiera la cuenta, así que{" "}
               <strong>nadie la clasificó</strong>. No se le asignó una por defecto a
               propósito: pudo haber sido fondo del cliente o costo propio del bufete, y
-              suponerlo sería inventar el dato. Hasta que se clasifique,{" "}
-              <strong>este gasto no se puede registrar en el libro</strong>.
+              suponerlo sería inventar el dato.
+            </p>
+            <p className="mt-2">
+              Mientras no tenga cuenta,{" "}
+              <strong>este gasto no se puede registrar en el libro contable</strong>. Los
+              gastos <strong>nuevos ya no pueden quedar así</strong>: el formulario exige
+              la cuenta de cada línea al crearlos.
             </p>
           </div>
         </div>

@@ -139,6 +139,16 @@ export function ExpenseLinesEditor({
         </span>
       </div>
 
+      {/* La cuenta es obligatoria al crear aunque la columna sea NULLABLE: el
+          NULL existe SOLO para los gastos históricos, que se cargaron cuando el
+          sistema no la pedía. Decirlo acá evita que alguien vea un gasto viejo
+          sin cuenta y suponga que es opcional. */}
+      <p className="text-xs text-gray-500">
+        Cada línea necesita su cuenta contable. Los gastos anteriores a esta pantalla
+        pueden no tenerla —se cargaron antes de que el sistema la pidiera— pero un gasto
+        nuevo no se guarda sin ella.
+      </p>
+
       {errorGeneral && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {errorGeneral}

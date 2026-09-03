@@ -1,5 +1,77 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Migración 036 — líneas de gasto, con los 128 gastos reales verificados] - 2026-09-03
+
+`sql/pending/036_expense_lines.sql`. Aplicada a staging, idempotente. **Producción NO**: solo
+por merge a `main`, con backup y con el pre-flight vuelto a correr el mismo día.
+
+### El pre-flight decidió el esquema
+
+Corrido por Oliver contra producción: **128 gastos**, 0 en cero o negativos, 0 sin concepto,
+**97 con comprobante** (76%), montos entre 0,50 y 3.033,00.
+
+Los dos números que mandan: `cero_o_negativos = 0` habilita el `CHECK amount > 0` (con un solo
+gasto en 0 habría tenido que ser `>= 0`, **y la migración habría abortado a mitad el día del
+deploy**); `sin_concepto = 0` deja al backfill sacar `description` de `concept` sin fallback,
+porque la columna es `NOT NULL`.
+
+El número está escrito en el encabezado de la migración porque cambia cómo hay que leerla: no
+son filas de prueba, son 128 gastos cargados a mano por las licenciadas con 97 recibos
+escaneados detrás.
+
+### El comprobante no se toca, y además se afirma
+
+`receipt_url` vive en el ENCABEZADO y ahí se queda: un recibo de 107 no se parte en tres. La
+migración **no lee, no mueve y no re-referencia un solo objeto de Storage**. Aun así el número
+queda afirmado en el log — 97 antes, 97 después — porque un número verificado vale más que una
+promesa de diseño.
+
+### Cinco verificaciones, en cantidad y no solo en cuadre
+
+Dos errores distintos pueden dar la misma suma: un gasto que perdió su línea y otro que ganó
+una de más suman igual y son dos bugs. Por eso se compara contra una foto de antes:
+
+1. `COUNT(expenses)` antes = después — no se creó ni se borró un gasto.
+2. `COUNT(expense_lines)` = `COUNT(expenses)` — uno a uno, exacto.
+3. Ningún gasto sin línea. Redundante con (2) por aritmética, pero lo **nombra**: dice cuál de
+   los dos problemas es.
+4. `SUM(lines.amount)` = `SUM(expenses.amount)` al centavo, **y gasto por gasto** — el total
+   podría dar bien con dos errores compensándose.
+5. `COUNT(receipt_url IS NOT NULL)` sin cambios.
+
+Cualquiera que falle: `RAISE EXCEPTION` y revierte todo. Es una sola transacción.
+
+### Las líneas del backfill quedan sin cuenta, y se ve como lo que es
+
+`chart_account_code` en NULL, no en `130003`. La decisión está explicada en el commit anterior;
+lo que se agregó hoy es cómo se **presenta**: la pantalla lo muestra en **ámbar y con un ícono
+de reloj, no en rojo con un triángulo**. Rojo dice "algo se rompió"; acá no se rompió nada, es
+trabajo pendiente que hasta hoy era invisible.
+
+El texto lo dice en los dos sentidos, que es lo que pidió Oliver: el gasto es **histórico** —se
+cargó antes de que el sistema pidiera la cuenta— y **los nuevos ya no pueden quedar así**,
+porque el formulario exige la cuenta de cada línea. El editor lo repite arriba de las líneas,
+para que nadie vea un gasto viejo sin cuenta y suponga que el campo es opcional.
+
+### Lo que la migración NO hace, y dónde va
+
+- No dropea `expenses.amount` ni lo vuelve derivado. Conviven; es el patrón seguro de migración
+  destructiva de CLAUDE.md.
+- No amplía el CHECK de `journal_entries.source_type` con `'gasto_tramite'` ni crea el trigger
+  de inmutabilidad: van en la `037` junto con la ruta que postea. Un trigger sin posteo es
+  código muerto y sin probar. ⚠️ Al tocar ese CHECK, filtrar por su CONTENIDO — hay dos que
+  mencionan `source_type` y la primera versión de la `028` dropeó los dos.
+
+### Pendiente de decisión
+
+**No existe ninguna pantalla que liste gastos individuales.** `/legal/gastos` es un balance por
+caso y los gastos sueltos solo viven dentro del detalle del caso. El filtro "sin clasificar"
+que pidió Oliver no tiene dónde colgarse todavía: hay que decidir la superficie primero.
+
+613 tests, `tsc` limpio, 21 errores de ESLint (los de siempre).
+
+---
+
 ## [Gastos de trámite — Paso 1: pantalla contable y editor de líneas] - 2026-09-03
 
 Primer código del bloque de gastos de trámite. **No incluye la migración ni el asiento**: el

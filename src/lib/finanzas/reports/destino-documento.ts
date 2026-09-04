@@ -48,6 +48,12 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
   // canceló, así que su destino se resuelve mirando `payment_applications` y
   // termina en la misma ruta que `factura`. Ver `loadDestinosDeOrigen`.
   pago: (id) => `/finanzas/facturas/${id}`,
+  // Un pago a PROVEEDOR es la otra punta y tiene su propio `source_type` desde
+  // la migración `042`, exactamente por el motivo del bloque de arriba: con
+  // `pago` habría mandado a `/finanzas/facturas/<id-de-una-compra>`. Su
+  // `source_id` ES el id de la compra —no hay tabla de pagos a proveedor— así
+  // que el destino es la compra misma.
+  pago_proveedor: (id) => `/finanzas/gastos-bufete/${id}`,
 };
 
 /**

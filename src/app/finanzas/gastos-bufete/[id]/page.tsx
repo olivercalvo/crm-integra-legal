@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote, ArrowLeft, Plus } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
@@ -38,6 +39,9 @@ function fmtMoney(n: number | string): string {
 
 export default async function GastoBufeteDetailPage({ params, searchParams }: PageProps) {
   const ctx = await getAuthenticatedContext();
+  // Lista corta y opinada para el selector; el guard del servidor acepta
+  // cualquier activo activo (SOP-024 regla 3).
+  const bancos = await listarCuentasDeBanco(ctx.db, ctx.tenantId);
   if (!READING_ROLES.includes(ctx.userRole)) {
     redirect("/finanzas");
   }
@@ -115,6 +119,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             </Link>
           )}
           <BusinessExpenseActions
+            bancos={bancos}
             id={expense.id}
             status={expense.status}
             canMutate={canMutate}

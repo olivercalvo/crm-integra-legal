@@ -31,6 +31,7 @@ import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
 import { PaymentsSection } from "../_components/payments-section";
+import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { CreditNoteCard } from "../_components/credit-note-card";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 
@@ -48,6 +49,9 @@ interface PageProps {
 
 export default async function FacturaDetallePage({ params }: PageProps) {
   const { db, tenantId, userRole } = await getAuthenticatedContext();
+  // Las cuentas que la pantalla ofrece como banco del cobro. Lista corta y
+  // opinada; el guard del servidor acepta cualquier activo activo (SOP-024 r3).
+  const bancos = await listarCuentasDeBanco(db, tenantId);
   const invoice = await getInvoiceById(db, tenantId, params.id);
 
   if (!invoice) notFound();
@@ -338,6 +342,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               parciales/totales). En anuladas y borradores no se muestra. */}
           {showPaymentsSection && (
             <PaymentsSection
+          bancos={bancos}
               invoiceId={invoice.id}
               invoiceNumber={invoice.invoice_number}
               payments={payments}

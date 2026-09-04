@@ -19,6 +19,8 @@ interface Props {
   status: BusinessExpenseStatus;
   /** Si el usuario puede mutar (admin/abogada/contador). Solo el asistente queda sin acceso al módulo. */
   canMutate: boolean;
+  /** Cuentas ofrecidas como banco del pago. De `listarCuentasDeBanco()`. */
+  bancos: { code: string; name: string }[];
 }
 
 const PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
@@ -42,7 +44,7 @@ function todayIso(): string {
  *
  * Sin permisos de mutación se renderiza solo un texto explicativo.
  */
-export function BusinessExpenseActions({ id, status, canMutate }: Props) {
+export function BusinessExpenseActions({ id, status, canMutate, bancos }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -50,6 +52,8 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
   const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [paymentDate, setPaymentDate] = useState(todayIso());
   const [paymentMethod, setPaymentMethod] = useState<BusinessExpensePaymentMethod | "">("");
+  // 🔴 Sin default: la cuenta de donde SALE la plata la elige quien registra.
+  const [bankAccount, setBankAccount] = useState("");
   const [markPaidError, setMarkPaidError] = useState<string | null>(null);
 
   // Delete
@@ -74,6 +78,7 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
           body: JSON.stringify({
             payment_date: paymentDate,
             payment_method: paymentMethod || null,
+            payment_account_code: bankAccount || null,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -185,6 +190,27 @@ export function BusinessExpenseActions({ id, status, canMutate }: Props) {
                     {PAYMENT_METHODS.map((pm) => (
                       <option key={pm} value={pm}>
                         {BUSINESS_EXPENSE_PAYMENT_METHOD_LABEL[pm]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 🔴 BANCO. Obligatorio y sin preselección: es lo que el
+                    asiento acredita, y el asiento es inmutable. */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Banco de donde salió el pago
+                  </label>
+                  <select
+                    value={bankAccount}
+                    onChange={(e) => setBankAccount(e.target.value)}
+                    disabled={isPending}
+                    className="block w-full rounded-md border border-gray-300 px-3 min-h-[44px] text-sm bg-white"
+                  >
+                    <option value="">Elija la cuenta…</option>
+                    {bancos.map((b) => (
+                      <option key={b.code} value={b.code}>
+                        {b.code} — {b.name}
                       </option>
                     ))}
                   </select>

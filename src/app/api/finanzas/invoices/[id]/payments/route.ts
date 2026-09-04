@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreatePayment } from "@/lib/finanzas/validators/payment";
 import { createPayment } from "@/lib/finanzas/api/payments";
@@ -52,7 +55,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.db,
       ctx.tenantId,
       ctx.userId,
-      validation.data
+      validation.data,
+      // 🔑 SOP-014: el posteo va con el cliente de SERVICIO; el tenant sale del
+      //    contexto autenticado, nunca del body.
+      createAdminClient()
     );
     return NextResponse.json({ id: result.id }, { status: 201 });
   } catch (err) {

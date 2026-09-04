@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateMarkAsPaid } from "@/lib/finanzas/validators/business-expense";
 import { markBusinessExpenseAsPaid } from "@/lib/finanzas/api/business-expenses";
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const validation = validateMarkAsPaid(body as { payment_date?: unknown; payment_method?: unknown });
+  const validation = validateMarkAsPaid(body as { payment_date?: unknown; payment_method?: unknown; payment_account_code?: unknown });
   if (!validation.ok) {
     return NextResponse.json(
       { error: "Validación fallida", fieldErrors: validation.errors },
@@ -41,7 +44,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       params.id,
       ctx.userId,
       validation.data.payment_date,
-      validation.data.payment_method
+      validation.data.payment_method,
+      validation.data.payment_account_code,
+      // 🔑 SOP-014: cliente de servicio para el posteo.
+      createAdminClient()
     );
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {

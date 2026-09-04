@@ -70,6 +70,23 @@ export function validateCreatePayment(
     }
   }
 
+  // 🔴 payment_account_code — OBLIGATORIO. El banco lo elige quien registra,
+  //    sin default (Rose, 25/08). La existencia de la cuenta en el plan la
+  //    verifica el servidor con un lookup; acá solo presencia y formato.
+  let paymentAccountCode: string | null = null;
+  const rawCta = raw?.payment_account_code;
+  if (rawCta == null || String(rawCta).trim() === "") {
+    errors.payment_account_code =
+      "Elija la cuenta bancaria donde entró el cobro.";
+  } else {
+    const code = String(rawCta).trim();
+    if (code.length > 20) {
+      errors.payment_account_code = "Código de cuenta muy largo";
+    } else {
+      paymentAccountCode = code;
+    }
+  }
+
   // notes (opcional, longitud)
   let notes: string | null = null;
   if (raw?.notes != null && String(raw.notes).trim() !== "") {
@@ -93,6 +110,7 @@ export function validateCreatePayment(
       payment_date: paymentDate,
       amount: round2(amount),
       method,
+      payment_account_code: paymentAccountCode,
       reference,
       notes,
     },

@@ -1,5 +1,112 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cableado cobro y pago → asiento] - 2026-09-04
+
+Filas 15 y 16 del acta del 25/08. Dos movimientos espejo:
+
+    COBRO de una factura   DEBE el banco elegido / HABER 100004 Cuentas por Cobrar
+    PAGO a un proveedor    DEBE 200001 Cuentas por pagar / HABER el banco elegido
+
+### 🔴 El banco lo elige quien registra. Sin default.
+
+Rose, 25/08: *"el banco del cobro lo escoge quien registra"*. Hay tres bancos activos y **no son
+intercambiables**: `100003 Banco General Saldo Clientes` guarda plata que NO es del bufete. Un
+default a la operativa diría que el bufete cobró algo que en realidad está reteniendo — y el
+asiento es inmutable.
+
+Por eso: obligatorio en el formulario **y** rechazado por el servidor. Los dos. El formulario
+guía, el servidor garantiza; un `curl` saltea la pantalla.
+
+`payments.payment_account_code` (migración `041`) es NULLABLE **solo por los cobros anteriores**:
+nadie eligió su banco porque el campo no existía. Escribirles `100001` habría sido inventar el
+dato. Mismo patrón que `expense_lines.chart_account_code` en la `036`.
+
+### `pago_proveedor` es un `source_type` propio — migración `042`
+
+Podría haber reusado `pago`: el UNIQUE de la `034` no habría chocado porque el `source_id` es el
+id de una COMPRA. **Pero `destino-documento.ts:50` mapea `pago → /finanzas/facturas/{id}`**, así
+que un pago a proveedor con ese tipo habría mandado al contador a una factura inexistente.
+
+Ese archivo ya argumentó este caso exacto para `gasto_tramite` vs `gasto`, y lo llamó *"el bug del
+01/09 reintroducido un módulo más adelante"*. Es la misma situación una tabla después. Cero
+backfill: `pago` sigue significando lo que significaba.
+
+### El orden del DELETE compensatorio, MEDIDO
+
+Deshacer un cobro toca dos filas y T7a cuelga de la segunda, así que había que saber si el orden
+cambia el resultado. Medido contra staging dentro de un ROLLBACK, con FAC-HON-000003:
+
+- **A)** borrar la application y después el payment → `amount_paid` 100→0, status `parcialmente_pagada`→`emitida`
+- **B)** borrar solo el payment (CASCADE) → **idéntico**
+
+**Los dos dan el mismo estado final.** Se eligió **B**, y no por gusto: es una sentencia en vez de
+dos (este código corre cuando algo YA falló); si se borrara la application primero y el segundo
+DELETE fallara quedaría **un pago sin aplicación**, que es exactamente el estado que el
+compensatorio original existe para impedir; y el CASCADE está declarado en el esquema, así que no
+puede desincronizarse del código.
+
+### 🔴 Gate contable en `deletePayment` — y acá el agujero era peor
+
+`grep "journal_entries"` en `api/payments.ts` daba **cero** hasta hoy, y dos de los tres cobros de
+staging ya tenían asiento.
+
+Y el daño de borrarlos era doble: el CASCADE se lleva la `payment_application`, T7a recalcula y
+**la factura vuelve a 'emitida'**. Medido: FAC-HON-000001 pasaría de `1070.00/pagada` a
+`0.00/emitida` mientras el asiento 7 sigue diciendo que entró la plata. Dos verdades opuestas, y
+solo una corregible.
+
+Los dos cobros contabilizados quedan **inborrables**, y está bien: un cobro contabilizado se
+revierte, no se borra. Que la reversión no exista todavía hace el bloqueo visible.
+
+### ⚠️ Dos familias de rutas que se llaman casi igual
+
+Queda escrito en el encabezado de `asiento-tesoreria.ts`, y hay una verificación que lo comprueba:
+
+| Ruta | Tabla | ¿Postea? |
+|---|---|---|
+| `/api/finanzas/invoices/[id]/payments`, `/api/finanzas/payments/[id]` | `payments` | **sí** |
+| `/api/payments`, `/api/payments/[id]` | `client_payments` | 🔴 **no, y no debe** |
+
+`client_payments` es el cobro a nivel CASO del módulo Legal: no tiene columnas contables, no tiene
+banco, y no es un hecho contable del bufete. Lo contable es la factura y su cobro. Si alguien
+"unifica los pagos", el síntoma sería un libro que cobra dos veces la misma plata.
+
+### La cuarta instancia de la divergencia del seed, cerrada
+
+`seed-asientos.ts:146` tenía `const CTA_BANCO = "100001"` y `payments` no tenía columna de banco:
+los asientos sembrados debitaban esa cuenta porque el generador la eligió. Ahora el banco vive en
+el fixture (`SEED_PAYMENTS[].bank_account`), el seed lo escribe en el documento y el asiento lo
+LEE de ahí. Verificado: `doc:100001 / asiento:100001` en los dos cobros con asiento.
+
+⚠️ La convergencia usa `.is("payment_account_code", null)`: **nunca pisa un banco que alguien haya
+elegido**. Misma restricción que la asignación masiva de cuentas de gasto.
+
+### Alcance decidido: no hay tabla de pagos a proveedor
+
+El pago es un cambio de estado de la COMPRA, así que solo existe el **pago total**. Sin pago
+parcial, sin un pago que salde tres compras, sin anticipos. El acta no pide ninguna de las tres:
+las filas 15 y 16 son del lado del cliente.
+
+### Verificado contra staging, dentro de un ROLLBACK
+
+`scripts/verificar-asiento-tesoreria.ts` — cinco pasos, con un cobro nuevo al banco `100002`
+(a propósito NO la operativa, para que se vea que no hay default):
+
+1. DEBE 100002 500.00 / HABER 100004 500.00 — cuadra
+2. Sin banco: rechaza explicando por qué no se puede deducir. Con `610001` (un gasto): rechaza
+3. Reintento → 23505
+4. El gate: se mide qué pasaría sin él
+5. El orden en el código, y que el comentario registre la medición
+
+### Archivos
+
+- `sql/pending/041_banco_del_cobro.sql`, `sql/pending/042_pago_proveedor_source_type.sql`
+- `src/lib/finanzas/contabilidad/asiento-tesoreria.ts` — los dos asientos
+- `src/lib/finanzas/queries/tesoreria-para-asiento.ts` — loaders + lista de bancos
+- `src/lib/finanzas/api/payments.ts` — posteo, compensatorio y gate
+- `src/lib/finanzas/api/business-expenses.ts` — `markBusinessExpenseAsPaid` postea
+- 22 tests nuevos (858 en total)
+
 ## [Cableado compra → asiento, y la cuenta se muda a la línea] - 2026-09-04
 
 Fila 12 del acta del 25/08. Al registrar una compra del bufete, el sistema registra su asiento:

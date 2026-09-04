@@ -24,6 +24,8 @@ import {
   SOURCE_TYPE_COMPRA,
 } from "@/lib/finanzas/contabilidad/asiento-compra";
 import { cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asiento";
+import { construirAsientoDePagoProveedor } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
+import { cargarPagoProveedorParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 
 /** Centavos, y una sola vez. */
 function round2(n: number): number {
@@ -520,14 +522,54 @@ export async function deleteBusinessExpense(
 // MARK AS PAID (atajo para cambiar status)
 // ---------------------------------------------------------------------------
 
+/**
+ * Marca una compra como pagada **y postea el asiento del pago**.
+ *
+ *   DEBE  200001 Cuentas por pagar  (baja lo que debíamos)
+ *   HABER el banco elegido          (sale plata)
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * NO HAY TABLA DE PAGOS A PROVEEDOR, Y ES UNA DECISIÓN DE ALCANCE
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El pago se modela como un cambio de estado de la COMPRA, no como un documento
+ * propio. Consecuencias, todas asumidas:
+ *
+ *   · Solo existe el pago TOTAL de una compra. No hay pago parcial, ni un pago
+ *     que salde tres compras, ni anticipos a proveedor.
+ *   · El `source_id` del asiento es el id de la COMPRA.
+ *
+ * El acta no pide ninguna de las tres: la fila 15 pide el módulo de *recibir*
+ * pago y la 16 los cobros parciales, las dos del lado del CLIENTE. El día que
+ * haga falta, esto se migra a una tabla propia igual que la cuenta de la compra
+ * se migró a `expense_lines`.
+ *
+ * 🔴 `source_type` es `pago_proveedor`, NO `pago`. Ver la migración `042`: con
+ * `pago`, el enlace del Libro Mayor mandaría a `/finanzas/facturas/<id-de-una-
+ * compra>`.
+ *
+ * ⚠️ ORDEN: se postea ANTES del UPDATE a 'pagado'. Acá SÍ se puede —al revés que
+ * al crear una compra— porque la compra YA existe y su id también: no hace falta
+ * DELETE compensatorio, alcanza con no hacer el UPDATE.
+ */
 export async function markBusinessExpenseAsPaid(
   db: DB,
   tenantId: string,
   id: string,
   userId: string,
   paymentDate: string,
-  paymentMethod: BusinessExpensePaymentMethod | null
+  paymentMethod: BusinessExpensePaymentMethod | null,
+  /** La cuenta de donde SALIÓ la plata. Obligatoria: la elige quien registra. */
+  paymentAccountCode: string | null,
+  /** 🔑 Obligatorio (SOP-014). Ver `createBusinessExpense`. */
+  ledgerDb: DB
 ) {
+  if (!paymentAccountCode) {
+    throw new MutationError(
+      "Falta la cuenta bancaria de donde salió el pago. La elige quien registra: " +
+        "es lo que el asiento acredita y no se puede deducir.",
+      400
+    );
+  }
   const { data: existing, error: errExisting } = await db
     .from("business_expenses")
     .select("id, status, payment_date, payment_method")
@@ -545,12 +587,32 @@ export async function markBusinessExpenseAsPaid(
     throw new MutationError("La compra ya está marcada como pagada.", 409);
   }
 
+  // ---- EL ASIENTO, ANTES DEL UPDATE --------------------------------------
+  const pago = await cargarPagoProveedorParaAsiento(
+    ledgerDb,
+    tenantId,
+    id,
+    paymentDate,
+    paymentAccountCode
+  );
+  if (!pago) {
+    throw new MutationError("Compra no encontrada", 404);
+  }
+
+  const armadoPago = construirAsientoDePagoProveedor(pago);
+  if (!armadoPago.ok) {
+    throw new MutationError(armadoPago.mensaje, 422);
+  }
+
+  await postJournalEntry(ledgerDb, tenantId, armadoPago.asiento, userId);
+
   const { error: errUpdate } = await db
     .from("business_expenses")
     .update({
       status: "pagado",
       payment_date: paymentDate,
       payment_method: paymentMethod,
+      payment_account_code: paymentAccountCode,
     })
     .eq("tenant_id", tenantId)
     .eq("id", id);

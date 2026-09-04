@@ -1091,12 +1091,32 @@ async function seedPayments(): Promise<void> {
         payment_date: p.date,
         amount: p.amount,
         method: p.method,
+        // El banco vive en el DOCUMENTO desde la `041`; `seed-asientos` lo lee
+        // de acá en vez de tener una constante propia.
+        payment_account_code: p.bank_account,
         reference: p.reference,
         status: "registrado",
         created_by: userIds.get("abogada"),
       });
       if (error) throw new Error(`insert payment ${p.clave}: ${error.message}`);
       nuevos++;
+    } else {
+      // 🔑 CONVERGENCIA DEL BANCO, y solo donde está en NULL.
+      //
+      // La columna `payment_account_code` llegó con la migración `041`, después
+      // de que estos cobros ya estuvieran sembrados, así que quedaron en NULL y
+      // el `insert` de arriba no vuelve a correr. Sin esto, un staging viejo
+      // tiene cobros que el seed declara con banco pero la tabla no.
+      //
+      // ⚠️ El `.is(..., null)` es lo que hace que esto sea seguro: **nunca pisa
+      //    un banco que alguien haya elegido**. Es la misma restricción que la
+      //    asignación masiva de cuentas de gasto, y por el mismo motivo.
+      const { error: errBanco } = await db
+        .from("payments")
+        .update({ payment_account_code: p.bank_account })
+        .eq("id", pagoId)
+        .is("payment_account_code", null);
+      if (errBanco) throw new Error(`banco del pago ${p.clave}: ${errBanco.message}`);
     }
 
     // La aplicación. ACÁ es donde T7a recalcula `amount_paid` y transiciona el

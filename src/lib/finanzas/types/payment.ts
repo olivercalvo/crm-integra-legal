@@ -50,6 +50,14 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
  * misma operación lógica).
  */
 export interface CreatePaymentInput {
+  /**
+   * 🔴 La cuenta del plan donde ENTRÓ la plata (migración `041`).
+   *
+   * Obligatoria: la elige quien registra, sin default. Rose, 25/08. La columna
+   * es NULLABLE en la base solo por los cobros anteriores a la `041`; para uno
+   * nuevo, `createPayment` la exige y el formulario también.
+   */
+  payment_account_code: string | null;
   invoice_id: string;
   payment_date: string; // YYYY-MM-DD
   amount: number;

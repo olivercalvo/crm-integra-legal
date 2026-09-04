@@ -300,8 +300,28 @@ export function validateUpdateBusinessExpense(
 export function validateMarkAsPaid(raw: {
   payment_date?: unknown;
   payment_method?: unknown;
-}): ValidationResult<{ payment_date: string; payment_method: BusinessExpensePaymentMethod | null }> {
+  payment_account_code?: unknown;
+}): ValidationResult<{
+  payment_date: string;
+  payment_method: BusinessExpensePaymentMethod | null;
+  payment_account_code: string | null;
+}> {
   const errors: ValidationErrors = {};
+
+  // 🔴 El banco es OBLIGATORIO. Sin él no se puede armar el asiento del pago, y
+  //    sin asiento la compra no se marca como pagada. Lo elige quien registra,
+  //    sin default (Rose, 25/08).
+  let paymentAccountCode: string | null = null;
+  if (raw.payment_account_code == null || String(raw.payment_account_code).trim() === "") {
+    errors.payment_account_code = "Elija la cuenta bancaria de donde salió el pago.";
+  } else {
+    const code = String(raw.payment_account_code).trim();
+    if (code.length > 20) {
+      errors.payment_account_code = "Código de cuenta muy largo";
+    } else {
+      paymentAccountCode = code;
+    }
+  }
 
   if (!raw.payment_date || !DATE_RE.test(String(raw.payment_date))) {
     errors.payment_date = "Fecha de pago inválida (esperado YYYY-MM-DD)";
@@ -327,6 +347,7 @@ export function validateMarkAsPaid(raw: {
     data: {
       payment_date: raw.payment_date as string,
       payment_method: paymentMethod,
+      payment_account_code: paymentAccountCode,
     },
   };
 }

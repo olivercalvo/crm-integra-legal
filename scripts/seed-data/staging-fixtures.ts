@@ -470,6 +470,18 @@ export interface SeedPayment {
   method: "efectivo" | "transferencia" | "cheque" | "tarjeta" | "ach" | "otro";
   /** Clave natural — única. Por acá lo resuelve `seed-asientos`. */
   reference: string;
+  /**
+   * 🔴 La cuenta bancaria donde ENTRÓ la plata (`payments.payment_account_code`,
+   * migración `041`).
+   *
+   * Va acá, en el DOCUMENTO, y no como constante del generador de asientos.
+   * Hasta el 04/09/2026 `seed-asientos.ts` tenía `const CTA_BANCO = "100001"`
+   * hardcodeado y el documento no podía decir de qué banco se trataba: era la
+   * cuarta instancia de la divergencia "el seed sabe algo que la tabla no puede
+   * expresar" (las otras tres: `services_catalog` en facturas, y la cuenta y las
+   * líneas de las compras). Ahora el asiento lo LEE de acá.
+   */
+  bank_account: string;
 }
 
 export const SEED_PAYMENTS: SeedPayment[] = [
@@ -481,6 +493,7 @@ export const SEED_PAYMENTS: SeedPayment[] = [
     amount: 1070,
     method: "transferencia",
     reference: "Transferencia Banco General 4471902",
+    bank_account: "100001",
   },
   // ---- EL PAGO QUE FALTABA, Y QUE NO LLEVA ASIENTO ------------------------
   // Este es el cobro cuya ausencia produjo el desfase del 28/08: la factura
@@ -508,6 +521,7 @@ export const SEED_PAYMENTS: SeedPayment[] = [
     amount: 150,
     method: "transferencia",
     reference: "Transferencia Banco General 4471915",
+    bank_account: "100001",
   },
   // Cobro PARCIAL: la factura queda en 'parcialmente_pagada' y la CxC no baja a
   // cero. Da el caso de una cuenta con movimientos de los dos lados que no se
@@ -519,6 +533,7 @@ export const SEED_PAYMENTS: SeedPayment[] = [
     amount: 1000,
     method: "transferencia",
     reference: "Transferencia Banco General 4488115",
+    bank_account: "100001",
   },
 ];
 

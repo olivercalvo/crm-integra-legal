@@ -67,7 +67,14 @@ export type SourceType =
   | "factura"
   | "gasto"
   | "gasto_tramite"
+  /** Cobro de una FACTURA (tabla `payments`). Ver `asiento-tesoreria.ts`. */
   | "pago"
+  /**
+   * Pago a un PROVEEDOR (el `source_id` es el id de la compra). Migración `042`.
+   * Es un tipo aparte de `pago` porque `destino-documento.ts` manda cada uno a
+   * una pantalla distinta; compartirlo repetiría el bug del 01/09.
+   */
+  | "pago_proveedor"
   | "nota_credito"
   | "manual"
   | "reversion"
@@ -78,6 +85,7 @@ export const SOURCE_TYPES: SourceType[] = [
   "gasto",
   "gasto_tramite",
   "pago",
+  "pago_proveedor",
   "nota_credito",
   "manual",
   "reversion",

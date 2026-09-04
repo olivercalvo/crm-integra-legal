@@ -14,6 +14,8 @@ interface Props {
   grandTotal: number;
   amountPaid: number;
   balanceDue: number;
+  /** Las cuentas ofrecidas como banco del cobro. */
+  bancos: { code: string; name: string }[];
   /** True si el rol del usuario actual puede registrar/eliminar pagos. */
   canMutate: boolean;
 }
@@ -27,6 +29,7 @@ interface Props {
  *   - Botón eliminar por fila (solo canMutate y status='registrado')
  */
 export function PaymentsSection({
+  bancos,
   invoiceId,
   invoiceNumber,
   payments,
@@ -56,6 +59,7 @@ export function PaymentsSection({
         </div>
         {showRegisterButton && (
           <RegisterPaymentDialog
+          bancos={bancos}
             invoiceId={invoiceId}
             invoiceNumber={invoiceNumber}
             balanceDue={balanceDue}

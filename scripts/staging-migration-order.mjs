@@ -102,6 +102,11 @@ export const BUNDLE_2 = [
   // rehace ella misma; su paso 4 verifica que ni anon ni authenticated queden
   // pudiendo ejecutarlo.
   "sql/pending/039_asientos_manuales.sql",
+  // 041 agrega `payments.payment_account_code`. No depende del seed.
+  "sql/pending/041_banco_del_cobro.sql",
+  // 042 agrega `pago_proveedor` al CHECK de source_type. Va DESPUÉS de la 038,
+  // que fue la última en tocar ese CHECK.
+  "sql/pending/042_pago_proveedor_source_type.sql",
 ];
 
 // ---------------------------------------------------------------------------
@@ -119,6 +124,10 @@ export const BUNDLE_2 = [
 //   6. npm run seed:asientos                           ← crea las 3 compras y sus líneas
 //   7. node scripts/run-sql.mjs sql/pending/040_compras_con_lineas.sql
 //   8. npx tsx scripts/seed-gasto-tramite-demo.mts
+//
+// ⚠️ La `041` (banco del cobro) y la `042` (source_type `pago_proveedor`) SÍ van
+// en BUNDLE_2: solo agregan una columna y un valor al CHECK, no dependen de
+// ningún dato del seed. Están listadas arriba.
 //
 // 🔴 EL ORDEN 4 → 5 ES OBLIGATORIO. El backfill de 036 inserta
 // `chart_account_code = NULL` y el CHECK de 037 lo rechaza: al revés, la 036

@@ -18,6 +18,8 @@ interface Props {
   invoiceId: string;
   invoiceNumber: string;
   balanceDue: number;
+  /** Las cuentas que se ofrecen como banco. Vienen de `listarCuentasDeBanco()`. */
+  bancos: { code: string; name: string }[];
   disabled?: boolean;
 }
 
@@ -35,6 +37,7 @@ export function RegisterPaymentDialog({
   invoiceId,
   invoiceNumber,
   balanceDue,
+  bancos,
   disabled,
 }: Props) {
   const router = useRouter();
@@ -44,6 +47,10 @@ export function RegisterPaymentDialog({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("transferencia");
   const [reference, setReference] = useState("");
+  // 🔴 Sin default. El banco lo elige quien registra (Rose, 25/08): el bufete
+  //    tiene una cuenta operativa y una de saldos de clientes, y preseleccionar
+  //    una haría que la mayoría de los cobros terminen en la que estaba puesta.
+  const [bankAccount, setBankAccount] = useState("");
   const [notes, setNotes] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -72,6 +79,9 @@ export function RegisterPaymentDialog({
     if (!paymentDate) {
       errors.payment_date = "Fecha requerida";
     }
+    if (!bankAccount) {
+      errors.payment_account_code = "Elija la cuenta bancaria donde entró el cobro.";
+    }
     if (!isFinite(amountNum) || amountNum <= 0) {
       errors.amount = "El monto debe ser mayor a 0";
     } else if (amountNum > balanceDue + 0.001) {
@@ -97,6 +107,7 @@ export function RegisterPaymentDialog({
               payment_date: paymentDate,
               amount: amountNum,
               method,
+              payment_account_code: bankAccount || null,
               reference: reference.trim() || null,
               notes: notes.trim() || null,
             }),
@@ -245,6 +256,44 @@ export function RegisterPaymentDialog({
             </select>
             {fieldErrors.method && (
               <p className="mt-1 text-xs text-red-600">{fieldErrors.method}</p>
+            )}
+          </div>
+
+          {/* ───────────────────────────────────────────────────────────────
+              BANCO. Obligatorio y SIN preselección: lo elige quien registra
+              (Rose, 25/08). La cuenta operativa y la de saldos de clientes no
+              significan lo mismo, y el asiento que sale de acá es inmutable.
+              ─────────────────────────────────────────────────────────────── */}
+          <div>
+            <Label htmlFor="payment_account_code" className="text-sm">
+              Banco donde entró el cobro
+            </Label>
+            <select
+              id="payment_account_code"
+              value={bankAccount}
+              onChange={(e) => {
+                setBankAccount(e.target.value);
+                if (fieldErrors.payment_account_code) {
+                  setFieldErrors({ ...fieldErrors, payment_account_code: "" });
+                }
+              }}
+              disabled={isPending}
+              className={
+                "mt-1 block w-full rounded-md border px-3 py-2 text-sm bg-white focus:outline-none focus:border-integra-navy h-10 " +
+                (fieldErrors.payment_account_code ? "border-red-300" : "border-gray-300")
+              }
+            >
+              <option value="">Elija la cuenta…</option>
+              {bancos.map((b) => (
+                <option key={b.code} value={b.code}>
+                  {b.code} — {b.name}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.payment_account_code && (
+              <p className="mt-1 text-xs text-red-600">
+                {fieldErrors.payment_account_code}
+              </p>
             )}
           </div>
 

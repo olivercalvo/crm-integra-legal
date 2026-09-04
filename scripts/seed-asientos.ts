@@ -143,7 +143,16 @@ function id(name: string): string {
 // CUENTAS QUE USA EL FIXTURE
 // ===========================================================================
 
-const CTA_BANCO = "100001"; // Banco General Operativa
+// ⚠️ `CTA_BANCO` YA NO EXISTE, y es el punto del cambio del 04/09/2026.
+//
+// Hasta esa fecha había acá un `const CTA_BANCO = "100001"` y todos los asientos
+// de cobro debitaban esa cuenta — no porque el documento lo dijera, sino porque
+// el generador lo eligió. `payments` no tenía columna de banco.
+//
+// Era la CUARTA instancia del mismo problema: el seed declara el asiento y el
+// documento no puede reproducirlo. Con `payments.payment_account_code`
+// (migración `041`), el banco vive en el documento y el asiento LO LEE DE AHÍ,
+// igual que la cuenta de una compra se lee de `expense_lines`.
 const CTA_CXC = "100004"; // Cuentas por Cobrar Clientes  (cuenta_control: clientes)
 const CTA_CXP = "200001"; // Cuentas por pagar            (cuenta_control: proveedores)
 const CTA_ITBMS = "200003"; // ITBMS por Pagar
@@ -488,11 +497,18 @@ async function main() {
   // consume, igual que a las facturas. Ver el encabezado del bloque COBROS.
   const { data: pagos, error: errPag } = await db
     .from("payments")
-    .select("id, payment_date, amount, reference")
+    .select("id, payment_date, amount, reference, payment_account_code")
     .eq("tenant_id", TENANT_ID);
   if (errPag) throw new Error(`leer pagos: ${errPag.message}`);
 
-  type Pago = { id: string; payment_date: string; amount: number | string; reference: string | null };
+  type Pago = {
+    id: string;
+    payment_date: string;
+    amount: number | string;
+    reference: string | null;
+    /** El banco, leído del DOCUMENTO. Ver el comentario de CTA_BANCO arriba. */
+    payment_account_code: string | null;
+  };
   const pagoPorReferencia = new Map<string, Pago>(
     ((pagos ?? []) as Pago[]).filter((p) => p.reference).map((p) => [p.reference as string, p])
   );
@@ -674,7 +690,14 @@ async function main() {
       source_type: "pago",
       source_id: pago.id,
       lineas: [
-        { code: CTA_BANCO, debit: monto, credit: 0, description: pago.reference },
+        // 🔑 Del DOCUMENTO, no de una constante. Si el pago no tiene banco, esto
+        //    fallaría al postear — que es exactamente lo que tiene que pasar.
+        {
+          code: pago.payment_account_code as string,
+          debit: monto,
+          credit: 0,
+          description: pago.reference,
+        },
         { code: CTA_CXC, debit: 0, credit: monto, description: cliente },
       ],
     });

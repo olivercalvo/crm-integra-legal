@@ -108,6 +108,12 @@ veces, y las tres son el mismo mecanismo:
 | 1 | Facturas | La cuenta de ingreso por ÁREA DEL CASO (`400001`, `400006`), sin leer `services_catalog` | 🔴 abierta — se cierra con el mapeo de los `HON-*` |
 | 2 | Compras (cuenta) | `chart_account_code` era UNA sola y el seed elegía "la de mayor peso" | ✅ **cerrada el 04/09** |
 | 3 | Compras (líneas) | El asiento de la compra #3 tenía TRES débitos (`610008` 412,35 + `610002` 900 + `500003` 185,50) y la fila decía `610002` | ✅ **cerrada el 04/09** |
+| 4 | Cobros (banco) | `seed-asientos.ts:146` tenía `const CTA_BANCO = "100001"` y `payments` no tenía columna de banco | ✅ **cerrada el 04/09** |
+
+**Cómo se cerró la 4:** la migración `041` agregó `payments.payment_account_code`, el fixture
+`SEED_PAYMENTS` declara `bank_account` por cobro, y `seed-asientos.ts` lo LEE del documento en vez
+de tener una constante. Verificado el 04/09: los dos cobros con asiento tienen `doc:100001` y
+`asiento:100001`.
 
 **Cómo se cerraron 2 y 3:** la migración `040` mudó la cuenta a `expense_lines` y el seed pasó
 a escribir su `desglose` ahí. Ahora **el seed y la aplicación derivan el asiento del mismo
@@ -138,13 +144,26 @@ seed, que es el problema que se está eliminando. Se unifica el mismo día que s
 TODA factura emitida**, no solo a las cuatro sembradas. El asiento de reversión es el bloque
 inmediatamente siguiente y necesita decidir con qué FECHA se revierte — también al correo.
 
-### 📋 BLOQUE PARA DESPUÉS — cableado del COBRO → asiento
+### ✅ CABLEADO COBRO Y PAGO → ASIENTO — HECHO el 04/09/2026
 
-**Bloqueado por una pregunta al contador:** **qué cuenta bancaria** por defecto para los cobros.
-`payments` tiene `method` y `reference`, pero no cuenta; hay tres bancos activos.
+Filas 15 y 16 del acta. **No estaba bloqueado**: Rose ya lo había contestado entero el 25/08
+—*"el banco del cobro lo escoge quien registra"*— y lo que faltaba no era un default sino
+**aceptar que no hay default**. La pregunta "¿cuál es el banco por defecto?" no tenía respuesta
+porque la respuesta era "ninguno".
 
-⚠️ Rose ya contestó la mitad el 25/08: *"el banco del cobro lo escoge quien registra"*. Lo que
-falta es si hay un default y cuál.
+- Cobro: `createPayment` postea DEBE el banco elegido / HABER `100004`.
+- Pago a proveedor: `markBusinessExpenseAsPaid` postea DEBE `200001` / HABER el banco.
+- `payments.payment_account_code` (migración `041`), NULLABLE, los viejos en NULL.
+- Gate contable en `deletePayment`.
+
+**Lo que NO entró, y es alcance decidido:** no hay tabla de pagos a proveedor. El pago es un
+cambio de estado de la COMPRA, así que **solo existe el pago total de una compra** — sin pago
+parcial, sin un pago que salde tres compras, sin anticipos a proveedor. El acta no pide ninguna
+de las tres (las filas 15 y 16 son del lado del CLIENTE). El día que haga falta, se migra a una
+tabla propia igual que la cuenta de la compra se migró a `expense_lines`.
+
+**Tampoco entró** la pantalla propia `/finanzas/cobros` de la fila 15. El cobro sigue viviendo
+dentro del detalle de la factura.
 
 ~~**El ITBMS de compras** (crédito fiscal, no `200003`)~~ → 🔴 **NUNCA ESTUVO BLOQUEADO.** Es UNA
 sola cuenta, `200003`, ventas al crédito y compras al débito. Ver más abajo la cita textual de

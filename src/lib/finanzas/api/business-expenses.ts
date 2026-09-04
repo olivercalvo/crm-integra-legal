@@ -17,6 +17,18 @@ import type {
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
 import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
+import type { AsientoInput } from "@/lib/finanzas/contabilidad/posting";
+import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import {
+  construirAsientoDeCompra,
+  SOURCE_TYPE_COMPRA,
+} from "@/lib/finanzas/contabilidad/asiento-compra";
+import { cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asiento";
+
+/** Centavos, y una sola vez. */
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
 
 type DB = SupabaseClient;
 
@@ -63,29 +75,120 @@ async function proveedorValido(db: DB, tenantId: string, id: string): Promise<bo
   return !!data;
 }
 
+
+/**
+ * 🔴 GATE CONTABLE — una compra que ya está en el libro no se edita ni se borra.
+ *
+ * Mismo patrón que `cancelInvoice` (`api/invoices.ts`), y por el mismo motivo:
+ * el asiento es INMUTABLE. Si la compra cambia de monto, de cuenta o de fecha, o
+ * si desaparece, el asiento sigue en el libro tal cual, y el documento deja de
+ * respaldarlo. Un contador que audite el mayor llega a una compra que dice otra
+ * cosa — o a ninguna.
+ *
+ * Corregir una compra contabilizada requiere un asiento de REVERSIÓN, que es su
+ * propio bloque y todavía necesita decidir con qué fecha se revierte.
+ *
+ * ⚠️ Hasta el 04/09/2026 este gate NO existía en compras: `update` y `delete`
+ * podían tocar libremente una compra con asiento, y las tres compras sembradas
+ * en staging ya tenían el suyo. El agujero estaba abierto, no era teórico.
+ */
+async function gateContable(db: DB, tenantId: string, id: string, verbo: string) {
+  const { data: asiento } = await db
+    .from("journal_entries")
+    .select("entry_number")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", SOURCE_TYPE_COMPRA)
+    .eq("source_id", id)
+    .maybeSingle();
+
+  if (asiento) {
+    const numero = (asiento as { entry_number: number }).entry_number;
+    throw new MutationError(
+      `Esta compra ya está registrada en el libro contable (asiento ${numero}), ` +
+        `así que no se puede ${verbo}. Los asientos son inmutables por ley. ` +
+        `La corrección de compras contabilizadas se habilita junto con el asiento ` +
+        `de reversión.`,
+      409
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CREATE
 // ---------------------------------------------------------------------------
 
+/**
+ * Registra una compra del bufete **y su asiento contable**.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * 🔴 REGISTRAR → POSTEAR → DESHACER EL REGISTRO SI EL POSTEO FALLA
+ * ═════════════════════════════════════════════════════════════════════════════
+ * **No es "postear antes de registrar"**, que es lo que hace `emitInvoice` con
+ * las facturas, y decirlo así acá sería falso. Una compra no tiene ciclo
+ * borrador → emitir: nace registrada en el mismo INSERT que la crea. Y el
+ * `source_id` del asiento **es** el id de la compra, que no existe hasta después
+ * de ese INSERT. Postear antes es literalmente imposible.
+ *
+ * Entonces el orden real es:
+ *
+ *   1. INSERT de la compra (y de sus líneas)
+ *   2. Postear el asiento
+ *   3. Si el posteo falla → **DELETE compensatorio** de la compra
+ *
+ * El efecto visible para quien usa el sistema es el mismo que en la factura —una
+ * compra que no se pudo contabilizar no queda registrada— pero la mecánica es
+ * otra, y quien lea esto tiene que saber cuál es.
+ *
+ * ⚠️ El DELETE compensatorio es seguro acá **porque `business_expenses` NO es
+ * inmutable**. En `journal_entries` sería imposible: los triggers de la `023`
+ * rechazan DELETE, y por eso el ledger se escribe con un RPC que hace todo
+ * adentro. Es el mismo patrón que `credit-notes.ts` usa para las líneas de una
+ * nota de crédito.
+ *
+ * ⚠️ Si el DELETE compensatorio **también** falla, se registra en el log y se
+ * lanza el error del posteo, no el del DELETE: lo que la persona necesita saber
+ * es por qué no se contabilizó. La compra huérfana queda, y es detectable con
+ * una consulta (compras sin asiento) — que es justamente el caso reversible.
+ */
 export async function createBusinessExpense(
   db: DB,
   tenantId: string,
   userId: string,
-  input: CreateBusinessExpenseInput
+  input: CreateBusinessExpenseInput,
+  ledgerDb: DB
 ) {
-  // Validación cross-tabla: si llega chart_account_code, debe existir, estar
-  // activa y ser de un tipo que pueda clasificar un desembolso — gasto, costo o
-  // ACTIVO, que es lo que pide el acta del 25/08 ("la cuenta de gasto, costo o
-  // activo que elija el usuario"). La FK es lógica (no constraint de BD), por eso
-  // se verifica a mano acá.
-  if (input.chart_account_code !== null) {
+  // ---- Las líneas, y su cuenta ------------------------------------------
+  // 🔑 La cuenta es OBLIGATORIA acá, en el servidor, además de serlo en el
+  //    formulario. El formulario guía; el servidor garantiza. Un `curl` saltea
+  //    la pantalla, y una compra sin cuenta no se puede imputar a nada.
+  if (input.lineas.length === 0) {
+    throw new MutationError("La compra necesita al menos una línea.", 400);
+  }
+
+  // Validación cross-tabla POR LÍNEA: la cuenta debe existir, estar activa y ser
+  // de un tipo que pueda recibir un desembolso — gasto, costo o ACTIVO, que es
+  // lo que pide el acta del 25/08 ("la cuenta de gasto, costo o activo que elija
+  // el usuario"). La FK es lógica (no hay constraint de BD), por eso se verifica
+  // a mano. Se recorren TODAS y se informa la primera que falla, nombrando su
+  // número de línea: con varias líneas, "la cuenta X está inactiva" sin decir
+  // cuál línea obliga a adivinar.
+  for (let i = 0; i < input.lineas.length; i++) {
+    const l = input.lineas[i];
+    const nro = i + 1;
+    if (!l.chart_account_code) {
+      throw new MutationError(
+        `La línea ${nro} ("${l.description}") no tiene cuenta contable. ` +
+          `Cada línea de una compra tiene que decir contra qué cuenta se imputa.`,
+        400
+      );
+    }
     // Distingue "no existe" de "existe pero está inactiva": son dos errores
     // distintos, y el segundo tiene que explicar POR QUÉ o la persona vuelve a
     // elegir la misma cuenta del plan viejo.
-    const veredicto = await validarCuentaDeGasto(db, tenantId, input.chart_account_code);
+    const veredicto = await validarCuentaDeGasto(db, tenantId, l.chart_account_code);
     if (veredicto.estado === "no-existe") {
       throw new MutationError(
-        `La cuenta contable "${input.chart_account_code}" no existe en el Plan de Cuentas.`,
+        `Línea ${nro}: la cuenta contable "${l.chart_account_code}" no existe en el Plan de Cuentas.`,
         400
       );
     }
@@ -94,13 +197,13 @@ export async function createBusinessExpense(
     // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
     // estaba ahí y el problema era otro.
     if (veredicto.estado === "tipo-invalido") {
-      throw new MutationError(veredicto.mensaje, 400);
+      throw new MutationError(`Línea ${nro}: ${veredicto.mensaje}`, 400);
     }
     if (veredicto.estado === "inactiva") {
       throw new MutationError(
-        `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
-          `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +
-          `Seleccione una cuenta activa.`,
+        `Línea ${nro}: la cuenta "${l.chart_account_code}" está inactiva en el Plan de ` +
+          `Cuentas: es del plan contable anterior y no se puede usar para clasificar ` +
+          `gastos nuevos. Seleccione una cuenta activa.`,
         400
       );
     }
@@ -111,6 +214,12 @@ export async function createBusinessExpense(
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);
 
+  // Los totales del encabezado los calcula el SERVIDOR sumando las líneas, no
+  // llegan del cliente: si llegaran, un cliente podría mandar un total que no
+  // es la suma y el asiento no cuadraría contra su propio documento.
+  const subtotal = round2(input.lineas.reduce((s, l) => s + l.amount, 0));
+  const taxAmount = round2(input.lineas.reduce((s, l) => s + l.tax_amount, 0));
+
   const { data, error } = await db
     .from("business_expenses")
     .insert({
@@ -120,11 +229,14 @@ export async function createBusinessExpense(
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
-      chart_account_code: input.chart_account_code,
+      // 🔴 SIEMPRE null: la cuenta vive en la línea desde la migración `040`, y
+      //    el CHECK `business_expenses_cuenta_vive_en_la_linea` rechaza otra
+      //    cosa. No se lee `input.chart_account_code` a propósito.
+      chart_account_code: null,
       description: input.description,
-      subtotal: input.subtotal,
+      subtotal,
       tax_rate: input.tax_rate,
-      tax_amount: input.tax_amount,
+      tax_amount: taxAmount,
       status: input.status,
       payment_date: input.payment_date,
       payment_method: input.payment_method,
@@ -139,6 +251,77 @@ export async function createBusinessExpense(
     throw new MutationError(pgErrorToMessage(error), 500, error);
   }
 
+  const compraId = data.id as string;
+
+  /** Deshace el registro. Ver el encabezado: por qué se puede y por qué acá sí. */
+  async function deshacerRegistro(causa: unknown) {
+    const { error: errDel } = await db
+      .from("business_expenses")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .eq("id", compraId);
+    if (errDel) {
+      // No se pisa el error original: lo que hace falta explicar es por qué no
+      // se contabilizó. La compra huérfana queda registrada en el log.
+      console.error(
+        "[finanzas/api] DELETE compensatorio FALLÓ para la compra %s. Quedó registrada sin asiento.",
+        compraId,
+        errDel
+      );
+    }
+    throw causa;
+  }
+
+  // ---- Las líneas -------------------------------------------------------
+  const { error: errLineas } = await db.from("expense_lines").insert(
+    input.lineas.map((l, i) => ({
+      tenant_id: tenantId,
+      business_expense_id: compraId,
+      line_order: i + 1,
+      description: l.description,
+      chart_account_code: l.chart_account_code,
+      amount: l.amount,
+      tax_rate: l.tax_rate,
+      tax_amount: l.tax_amount,
+    }))
+  );
+  if (errLineas) {
+    console.error("[finanzas/api] insert de expense_lines falló", errLineas);
+    await deshacerRegistro(new MutationError(pgErrorToMessage(errLineas), 500, errLineas));
+  }
+
+  // ---- EL ASIENTO -------------------------------------------------------
+  const compra = await cargarCompraParaAsiento(ledgerDb, tenantId, compraId);
+  if (!compra) {
+    await deshacerRegistro(
+      new MutationError("La compra se registró pero no se pudo releer para contabilizarla.", 500)
+    );
+  }
+
+  const armado = construirAsientoDeCompra(compra as NonNullable<typeof compra>);
+  if (!armado.ok) {
+    // 422: la compra está bien formada como documento; lo que está mal es la
+    // clasificación contable de una línea. El mensaje ya nombra cuál.
+    await deshacerRegistro(new MutationError(armado.mensaje, 422));
+  }
+
+  try {
+    await postJournalEntry(
+      ledgerDb,
+      tenantId,
+      (armado as { ok: true; asiento: AsientoInput }).asiento,
+      userId
+    );
+  } catch (err) {
+    // El asiento ya existía: solo puede pasar si este mismo `compraId` ya se
+    // posteó, y como el id lo acaba de generar el INSERT, es prácticamente
+    // imposible. Se trata igual que cualquier otro fallo —deshacer— en vez de
+    // dejarlo pasar como en `emitInvoice`: allá el reintento era de un documento
+    // que YA existía; acá la compra es nueva, así que un choque significa que
+    // algo está mal, no que se reintentó.
+    await deshacerRegistro(err);
+  }
+
   await db.from("audit_log").insert({
     tenant_id: tenantId,
     user_id: userId,
@@ -150,15 +333,16 @@ export async function createBusinessExpense(
     new_value: JSON.stringify({
       expense_date: input.expense_date,
       description: input.description,
-      subtotal: input.subtotal,
-      tax_amount: input.tax_amount,
+      subtotal,
+      tax_amount: taxAmount,
       status: input.status,
-      chart_account_code: input.chart_account_code,
+      lineas: input.lineas.length,
+      cuentas: input.lineas.map((l) => l.chart_account_code),
       supplier_name: input.supplier_name,
     }),
   });
 
-  return { id: data.id as string, total: Number(data.total) };
+  return { id: compraId, total: Number(data.total) };
 }
 
 // ---------------------------------------------------------------------------
@@ -191,38 +375,13 @@ export async function updateBusinessExpense(
     throw new MutationError("Gasto no encontrado", 404);
   }
 
-  if (input.chart_account_code !== null) {
-    // `existing.chart_account_code` es la cuenta que el gasto YA tenía: si no
-    // cambió, se acepta aunque esté inactiva. Editar la descripción de un gasto
-    // viejo no puede fallar porque su cuenta se desactivó después.
-    const veredicto = await validarCuentaDeGasto(
-      db,
-      tenantId,
-      input.chart_account_code,
-      (existing as { chart_account_code: string | null }).chart_account_code
-    );
-    if (veredicto.estado === "no-existe") {
-      throw new MutationError(
-        `La cuenta contable "${input.chart_account_code}" no existe en el Plan de Cuentas.`,
-        400
-      );
-    }
-    // El tipo se informa con su MOTIVO, que ya viene redactado desde
-    // `cuentas-de-gasto.ts`. Antes este caso caía en "no existe o no es de tipo
-    // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
-    // estaba ahí y el problema era otro.
-    if (veredicto.estado === "tipo-invalido") {
-      throw new MutationError(veredicto.mensaje, 400);
-    }
-    if (veredicto.estado === "inactiva") {
-      throw new MutationError(
-        `La cuenta "${input.chart_account_code}" está inactiva en el Plan de Cuentas: es del ` +
-          `plan contable anterior y no se puede usar para clasificar gastos nuevos. ` +
-          `Seleccione una cuenta activa.`,
-        400
-      );
-    }
-  }
+  await gateContable(db, tenantId, id, "editar");
+
+  // La cuenta ya NO vive acá: desde la migración `040` está en
+  // `expense_lines.chart_account_code`, una por línea, y un CHECK fuerza esta
+  // columna a NULL. La validación de cuenta que había en este punto quedó sin
+  // objeto y se eliminó — dejarla habría sido validar un campo que ya nadie
+  // escribe.
 
   if (input.supplier_id !== null && !(await proveedorValido(db, tenantId, input.supplier_id))) {
     throw new MutationError("El proveedor seleccionado no existe.", 400);
@@ -237,7 +396,8 @@ export async function updateBusinessExpense(
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
-      chart_account_code: input.chart_account_code,
+      // Sigue en NULL: la cuenta vive en la línea (migración `040`).
+      chart_account_code: null,
       description: input.description,
       subtotal: input.subtotal,
       tax_rate: input.tax_rate,
@@ -316,6 +476,10 @@ export async function deleteBusinessExpense(
   if (!existing) {
     throw new MutationError("Gasto no encontrado", 404);
   }
+
+  // ANTES de tocar el storage: si el borrado no va a poder completarse, no hay
+  // que haber borrado ya el comprobante.
+  await gateContable(db, tenantId, id, "borrar");
 
   // Borrar receipt del storage si existe (consistente con expenses legacy).
   if (existing.receipt_url) {

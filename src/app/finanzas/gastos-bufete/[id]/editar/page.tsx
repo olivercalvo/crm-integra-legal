@@ -32,16 +32,29 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
     redirect(`/finanzas/gastos-bufete/${params.id}`);
   }
 
-  const [expense, accounts, suppliers] = await Promise.all([
+  const [expense, lineasRes, suppliers] = await Promise.all([
     getBusinessExpenseById(ctx.db, ctx.tenantId, params.id),
-    // El gasto que se edita puede estar clasificado contra una cuenta que se
-    // desactivó después. Se incluye igual, marcada, para no reclasificarlo en
-    // silencio al guardar.
-    getBusinessExpenseById(ctx.db, ctx.tenantId, params.id).then((e) =>
-      listExpenseAccountOptions(ctx.db, ctx.tenantId, e?.chart_account_code ?? null)
-    ),
+    ctx.db
+      .from("expense_lines")
+      .select("line_order, description, chart_account_code, amount, tax_rate, tax_amount")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("business_expense_id", params.id)
+      .order("line_order", { ascending: true }),
     listSupplierOptions(ctx.db, ctx.tenantId),
   ]);
+  const lineasDeLaCompra = lineasRes.data as
+    | { line_order: number; description: string; chart_account_code: string | null;
+        amount: number | string; tax_rate: number | string; tax_amount: number | string }[]
+    | null;
+
+  // Una línea puede estar clasificada contra una cuenta que se desactivó
+  // después. Se incluyen igual, marcadas, para no reclasificarla en silencio al
+  // guardar — antes esto se hacía con la única cuenta del encabezado.
+  const accounts = await listExpenseAccountOptions(
+    ctx.db,
+    ctx.tenantId,
+    (lineasDeLaCompra ?? []).map((l) => l.chart_account_code).find((c) => !!c) ?? null
+  );
   if (!expense) notFound();
 
   return (
@@ -71,7 +84,14 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           supplier_id: expense.supplier_id,
           supplier_name: expense.supplier_name,
           supplier_ruc: expense.supplier_ruc,
-          chart_account_code: expense.chart_account_code,
+          // La cuenta vive en las líneas desde la `040`.
+          lineas: (lineasDeLaCompra ?? []).map((l) => ({
+            description: l.description as string,
+            chart_account_code: l.chart_account_code as string | null,
+            amount: Number(l.amount),
+            tax_rate: Number(l.tax_rate),
+            tax_amount: Number(l.tax_amount),
+          })),
           description: expense.description,
           subtotal: Number(expense.subtotal),
           tax_rate: Number(expense.tax_rate) as BusinessExpenseTaxRate,

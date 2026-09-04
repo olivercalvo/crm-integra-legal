@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreateBusinessExpense } from "@/lib/finanzas/validators/business-expense";
 import { createBusinessExpense } from "@/lib/finanzas/api/business-expenses";
@@ -89,7 +92,11 @@ export async function POST(request: NextRequest) {
       ctx.db,
       ctx.tenantId,
       ctx.userId,
-      validation.data
+      validation.data,
+      // 🔑 SOP-014: el posteo necesita el cliente de SERVICIO — desde la `030` el
+      //    RPC tiene EXECUTE solo para `service_role`. El `tenant_id` sale del
+      //    contexto autenticado, nunca del cuerpo del request.
+      createAdminClient()
     );
     return NextResponse.json({ id: result.id, total: result.total }, { status: 201 });
   } catch (err) {

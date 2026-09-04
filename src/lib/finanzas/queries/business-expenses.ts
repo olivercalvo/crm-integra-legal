@@ -88,6 +88,28 @@ async function hidratarProveedores(
  * Ordenada por expense_date DESC por default (la consulta más frecuente
  * de la UI).
  */
+/**
+ * La cuenta que muestra el listado, a partir de las cuentas de las líneas.
+ *
+ * · ninguna → `null` (la compra no está clasificada)
+ * · una     → esa
+ * · varias  → **"Varios"**, sin código. Es el mismo criterio que el resolutor de
+ *   contrapartida del Libro Mayor usa con un asiento compuesto: cuando no hay UNA
+ *   respuesta, decirlo es más honesto que elegir la primera y que el lector crea
+ *   que es la única.
+ */
+function cuentaDeLista(
+  cuentas: Set<string> | undefined,
+  nombres: Record<string, string>
+): { code: string; name: string } | null {
+  if (!cuentas || cuentas.size === 0) return null;
+  if (cuentas.size === 1) {
+    const code = Array.from(cuentas)[0];
+    return { code, name: nombres[code] ?? code };
+  }
+  return { code: "", name: `Varios (${cuentas.size} cuentas)` };
+}
+
 export async function listBusinessExpenses(
   db: DB,
   tenantId: string,
@@ -118,7 +140,23 @@ export async function listBusinessExpenses(
     .range(from, to);
 
   if (params.status) q = q.eq("status", params.status);
-  if (params.accountCode) q = q.eq("chart_account_code", params.accountCode);
+  // 🔴 El filtro por cuenta se resuelve contra `expense_lines`, no contra el
+  //    encabezado: desde la `040` la columna del encabezado está siempre en NULL
+  //    y `.eq("chart_account_code", X)` no devolvería NUNCA nada. Un filtro que
+  //    calla es peor que uno que falla.
+  if (params.accountCode) {
+    const { data: ids } = await db
+      .from("expense_lines")
+      .select("business_expense_id")
+      .eq("tenant_id", tenantId)
+      .eq("chart_account_code", params.accountCode)
+      .not("business_expense_id", "is", null);
+    const lista = Array.from(
+      new Set((ids ?? []).map((r) => r.business_expense_id as string))
+    );
+    // Sin resultados, `.in("id", [])` devuelve vacío, que es lo correcto.
+    q = q.in("id", lista);
+  }
   if (params.fromDate) q = q.gte("expense_date", params.fromDate);
   if (params.toDate) q = q.lte("expense_date", params.toDate);
   if (params.hasItbms === true) q = q.gt("tax_amount", 0);
@@ -140,15 +178,34 @@ export async function listBusinessExpenses(
   // Hidratamos los account names en una sola query separada para evitar
   // el join de Supabase que requiere FK declarada (no la tenemos por D — la FK
   // es lógica). Es un single round-trip extra y mucho más legible.
+  // Las cuentas salen de las LÍNEAS. Una compra puede tener varias; el listado
+  // muestra la única cuando hay una sola y "Varios" cuando hay más, que es el
+  // mismo criterio que usa el resolutor de contrapartida del Libro Mayor para el
+  // asiento compuesto. Mostrar una de las tres sería elegir por el lector.
+  const idsCompras = (data ?? []).map((r) => r.id as string);
+  const cuentasPorCompra = new Map<string, Set<string>>();
+  if (idsCompras.length > 0) {
+    const { data: lns } = await db
+      .from("expense_lines")
+      .select("business_expense_id, chart_account_code")
+      .eq("tenant_id", tenantId)
+      .in("business_expense_id", idsCompras);
+    for (const l of (lns ?? []) as {
+      business_expense_id: string;
+      chart_account_code: string | null;
+    }[]) {
+      if (!l.chart_account_code) continue;
+      const set = cuentasPorCompra.get(l.business_expense_id) ?? new Set<string>();
+      set.add(l.chart_account_code);
+      cuentasPorCompra.set(l.business_expense_id, set);
+    }
+  }
+
   const codes = Array.from(
-    new Set(
-      (data ?? [])
-        .map((r) => r.chart_account_code as string | null)
-        .filter((c): c is string => !!c)
-    )
+    new Set(Array.from(cuentasPorCompra.values()).flatMap((s) => Array.from(s)))
   );
 
-  let accountMap: Record<string, string> = {};
+  const accountMap: Record<string, string> = {};
   if (codes.length > 0) {
     const { data: accs } = await db
       .from("chart_of_accounts")
@@ -165,9 +222,7 @@ export async function listBusinessExpenses(
 
   const rows: BusinessExpenseListItem[] = (data ?? []).map((r) => ({
     ...(r as unknown as BusinessExpenseListItem),
-    account: r.chart_account_code
-      ? { code: r.chart_account_code as string, name: accountMap[r.chart_account_code as string] ?? r.chart_account_code as string }
-      : null,
+    account: cuentaDeLista(cuentasPorCompra.get(r.id as string), accountMap),
     supplier: r.supplier_id ? supplierMap[r.supplier_id as string] ?? null : null,
   }));
 
@@ -210,19 +265,28 @@ export async function getBusinessExpenseById(
     return null;
   }
 
-  // Account name (lookup independiente, FK lógica)
-  let account: { code: string; name: string } | null = null;
-  if (data.chart_account_code) {
-    const { data: acc } = await db
+  // Las cuentas salen de las LÍNEAS (migración `040`). Mismo criterio que el
+  // listado: una sola cuenta se nombra, varias dicen "Varios".
+  const { data: lineasCta } = await db
+    .from("expense_lines")
+    .select("chart_account_code")
+    .eq("tenant_id", tenantId)
+    .eq("business_expense_id", id);
+  const cuentas = new Set(
+    ((lineasCta ?? []) as { chart_account_code: string | null }[])
+      .map((l) => l.chart_account_code)
+      .filter((c): c is string => !!c)
+  );
+  const nombres: Record<string, string> = {};
+  if (cuentas.size > 0) {
+    const { data: accs } = await db
       .from("chart_of_accounts")
       .select("code, name")
       .eq("tenant_id", tenantId)
-      .eq("code", data.chart_account_code)
-      .maybeSingle();
-    account = acc
-      ? { code: acc.code as string, name: acc.name as string }
-      : { code: data.chart_account_code as string, name: data.chart_account_code as string };
+      .in("code", Array.from(cuentas));
+    for (const a of accs ?? []) nombres[a.code as string] = a.name as string;
   }
+  const account = cuentaDeLista(cuentas, nombres);
 
   // Creator name
   let createdByName: string | null = null;

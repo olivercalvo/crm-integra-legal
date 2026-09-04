@@ -97,7 +97,33 @@ LAB→400003, CIV→400004, PEN→400005, MIG→400007) y **aun así no se compl
 resultados. Van los siete juntos al correo a Josuarth. El día que conteste, el cableado es un
 UPDATE al catálogo y **cero código**.
 
-**🔴 HAY DOS CRITERIOS CONVIVIENDO Y HAY QUE UNIFICARLOS CUANDO LLEGUE ESE MAPEO.**
+### 🔴 LA DIVERGENCIA DEL SEED — tres instancias, una cerrada
+
+`scripts/seed-asientos.ts` **declara el asiento y deriva el documento**, al revés que la
+aplicación. Eso produjo asientos sembrados que el documento no puede expresar. Apareció tres
+veces, y las tres son el mismo mecanismo:
+
+| # | Dónde | Qué sabía el seed que la tabla no podía decir | Estado |
+|---|---|---|---|
+| 1 | Facturas | La cuenta de ingreso por ÁREA DEL CASO (`400001`, `400006`), sin leer `services_catalog` | 🔴 abierta — se cierra con el mapeo de los `HON-*` |
+| 2 | Compras (cuenta) | `chart_account_code` era UNA sola y el seed elegía "la de mayor peso" | ✅ **cerrada el 04/09** |
+| 3 | Compras (líneas) | El asiento de la compra #3 tenía TRES débitos (`610008` 412,35 + `610002` 900 + `500003` 185,50) y la fila decía `610002` | ✅ **cerrada el 04/09** |
+
+**Cómo se cerraron 2 y 3:** la migración `040` mudó la cuenta a `expense_lines` y el seed pasó
+a escribir su `desglose` ahí. Ahora **el seed y la aplicación derivan el asiento del mismo
+lugar**. Verificado contra staging el 04/09 — las tres compras sembradas tienen líneas que
+reproducen exactamente los débitos de su asiento:
+
+```
+✅ Alquiler          documento: 610001:1850                              asiento: idem
+✅ Combustible       documento: 610009:246.40                            asiento: idem
+✅ Compra consolidada documento: 610008:412.35 + 610002:900 + 500003:185.50  asiento: idem
+```
+
+**La 1 sigue abierta** y no se puede cerrar sin la respuesta de Josuarth: arreglarla antes
+significaría hardcodear el mapeo en el seed, que es el problema que se está eliminando.
+
+**🔴 EN FACTURAS SIGUEN CONVIVIENDO DOS CRITERIOS.**
 `scripts/seed-asientos.ts` elige la cuenta de ingreso **por área del caso, hardcodeada** (los
 asientos sembrados en staging usan `400001 Derecho Corporativo` y `400006 Derecho Administrativo`),
 **sin leer `services_catalog`**. O sea que los asientos sembrados y los que postea la aplicación

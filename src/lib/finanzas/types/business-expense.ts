@@ -123,6 +123,23 @@ export interface BusinessExpenseWithDetails extends BusinessExpenseListItem {
 // ---------- Input shapes --------------------------------------------------
 
 /** Payload de creación. */
+/**
+ * Una línea de compra tal como llega del formulario.
+ *
+ * Espeja `expense_lines`, que desde la `036` cuelga de un gasto de trámite **o**
+ * de una compra por arco exclusivo. Es la misma tabla: por eso una compra no
+ * necesitó esquema nuevo.
+ */
+export interface LineaDeCompraInput {
+  description: string;
+  /** 🔑 Obligatoria. `null` se rechaza en el servidor, no solo en la pantalla. */
+  chart_account_code: string | null;
+  /** Base imponible de la línea. */
+  amount: number;
+  tax_rate: number;
+  tax_amount: number;
+}
+
 export interface CreateBusinessExpenseInput {
   expense_date: string;            // YYYY-MM-DD
   /**
@@ -140,10 +157,24 @@ export interface CreateBusinessExpenseInput {
    */
   supplier_name: string | null;
   supplier_ruc: string | null;
-  chart_account_code: string | null;
+  // 🔴 `chart_account_code` YA NO ESTÁ EN EL INPUT. La cuenta vive en
+  //    `expense_lines.chart_account_code`, una por línea (migración `040`), y un
+  //    CHECK fuerza la columna del encabezado a NULL. Sacarlo del tipo —en vez
+  //    de dejarlo deprecado— es lo que hace que el compilador señale a cada
+  //    lugar que todavía lo mandaba, uno por uno, en vez de dejarlos compilar
+  //    mandando un dato que se ignora en silencio.
+  /**
+   * Las líneas de la compra. **Obligatorias y con cuenta**: una compra sin
+   * líneas no se puede registrar en el libro, y una línea sin cuenta no se
+   * puede imputar. Lo valida `validarLineasDeCompra()` y, en la base, el CHECK
+   * `expense_lines_cuenta_obligatoria` de la `037`.
+   */
+  lineas: LineaDeCompraInput[];
   description: string;
+  /** Σ de `lineas[].amount`. Lo calcula el SERVIDOR, no llega del cliente. */
   subtotal: number;
   tax_rate: number;                // decimal (0.07 = 7%)
+  /** Σ de `lineas[].tax_amount`. Lo calcula el SERVIDOR. */
   tax_amount: number;
   status: BusinessExpenseStatus;
   payment_date: string | null;

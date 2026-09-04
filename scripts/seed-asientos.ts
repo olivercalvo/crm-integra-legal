@@ -565,10 +565,17 @@ async function main() {
   // =========================================================================
   for (const op of GASTOS) {
     const total = round2(op.desglose.reduce((s, d) => s + d.monto, 0));
-    // La cuenta de mayor peso representa al gasto en el documento, que tiene
-    // UN solo `chart_account_code` aunque el asiento toque varias cuentas.
-    const principal = [...op.desglose].sort((a, b) => b.monto - a.monto)[0].code;
 
+    // ⚠️ Hasta el 04/09/2026 acá se elegía "la cuenta de mayor peso" para el
+    //    `chart_account_code` del encabezado, porque el documento tenía UNA sola
+    //    cuenta y el asiento tocaba varias. Eso hacía que el asiento sembrado NO
+    //    se pudiera derivar del documento: la compra #3 decía `610002` y su
+    //    asiento tenía tres líneas. Era la tercera instancia del mismo problema
+    //    (las otras dos: `services_catalog` para facturas, y ésta).
+    //
+    //    Desde la migración `040` el desglose se escribe en `expense_lines`, que
+    //    es de donde la aplicación arma el asiento. **El seed y la app ya derivan
+    //    el asiento del mismo lugar**, así que la divergencia se cerró.
     const gastoId = id(`business_expense:${op.clave}`);
     const r = await upsertPorId(
       "business_expenses",
@@ -576,7 +583,8 @@ async function main() {
       {
         expense_date: op.fecha,
         supplier_name: op.proveedor,
-        chart_account_code: principal,
+        // NULL obligatorio: `business_expenses_cuenta_vive_en_la_linea` (040).
+        chart_account_code: null,
         description: op.descripcion,
         subtotal: total,
         tax_rate: 0,
@@ -590,6 +598,24 @@ async function main() {
       op.clave
     );
     r.creado ? docsCreados++ : docsExistentes++;
+
+    // Las LÍNEAS del documento — el mismo desglose del que sale el asiento.
+    // Idempotente: se borran y se reescriben, así que una segunda corrida no
+    // duplica. `expense_lines` no es inmutable (a diferencia del ledger), por
+    // eso acá el DELETE sí se puede.
+    await db.from("expense_lines").delete().eq("business_expense_id", r.id);
+    await db.from("expense_lines").insert(
+      op.desglose.map((d, i) => ({
+        tenant_id: TENANT_ID,
+        business_expense_id: r.id,
+        line_order: i + 1,
+        description: d.glosa ?? op.descripcion,
+        chart_account_code: d.code,
+        amount: d.monto,
+        tax_rate: 0,
+        tax_amount: 0,
+      }))
+    );
 
     asientos.push({
       clave: op.clave,

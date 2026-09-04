@@ -105,7 +105,7 @@ export const BUNDLE_2 = [
 ];
 
 // ---------------------------------------------------------------------------
-// ⚠️ 035 Y 037 NO ESTÁN EN ESTA LISTA, Y ES A PROPÓSITO
+// ⚠️ 035, 037 Y 040 NO ESTÁN EN ESTA LISTA, Y ES A PROPÓSITO
 // ---------------------------------------------------------------------------
 // Las dos necesitan datos que crea el SEED, no el esquema, así que corren
 // DESPUÉS. La secuencia completa para levantar staging de cero:
@@ -116,8 +116,9 @@ export const BUNDLE_2 = [
 //   4. node scripts/run-sql.mjs sql/pending/036_expense_lines.sql   ← 2ª pasada:
 //      ahora sí hay gastos, y su backfill les crea UNA línea sin clasificar.
 //   5. node scripts/run-sql.mjs sql/pending/037_expense_lines_cuenta_obligatoria.sql
-//   6. npm run seed:asientos
-//   7. npx tsx scripts/seed-gasto-tramite-demo.mts
+//   6. npm run seed:asientos                           ← crea las 3 compras y sus líneas
+//   7. node scripts/run-sql.mjs sql/pending/040_compras_con_lineas.sql
+//   8. npx tsx scripts/seed-gasto-tramite-demo.mts
 //
 // 🔴 EL ORDEN 4 → 5 ES OBLIGATORIO. El backfill de 036 inserta
 // `chart_account_code = NULL` y el CHECK de 037 lo rechaza: al revés, la 036
@@ -126,6 +127,17 @@ export const BUNDLE_2 = [
 // ⚠️ Y el paso 4 no es opcional: sin él los 20 gastos del seed quedan SIN LÍNEAS,
 // que es un estado peor que el que reemplaza — no se pueden postear y la pantalla
 // de limpieza no tiene nada que mostrar.
+//
+// 🔴 LA 040 VA DESPUÉS DEL `seed:asientos` (paso 6), no antes. Su backfill crea
+// una línea por COMPRA leyendo `business_expenses.chart_account_code`, y las
+// compras las crea ese seed. Corrida antes, no encontraría ninguna y dejaría el
+// CHECK puesto sobre una tabla vacía — lo que después haría fallar al seed, que
+// escribiría `chart_account_code` en el encabezado.
+//
+// ⚠️ Desde el 04/09 `seed-asientos.ts` escribe las líneas en `expense_lines` y
+// manda `chart_account_code: null` en el encabezado, así que es compatible con la
+// 040 corra antes o después. El orden de arriba es el que además deja el CHECK
+// validado sobre datos reales.
 // ---------------------------------------------------------------------------
 // `035_reembolso_a_fondos_legales.sql` apunta los servicios REIM-* a la cuenta
 // `130003`, y esa cuenta NO viene de ninguna migración: la crea

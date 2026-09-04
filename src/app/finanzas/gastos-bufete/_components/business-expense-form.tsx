@@ -25,6 +25,8 @@ import {
 } from "@/lib/finanzas/types/business-expense";
 import type { ExpenseAccountOption } from "@/lib/finanzas/queries/business-expenses";
 import type { SupplierOption } from "@/lib/finanzas/queries/suppliers";
+import { ExpenseLinesEditor } from "@/components/finanzas/expense-lines-editor";
+import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
 import { paymentTermsLabel, vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
 interface BaseProps {
@@ -109,7 +111,21 @@ export function BusinessExpenseForm(props: Props) {
     if (vencimientoTocado) return;
     setDueDate(fechaGasto ? vencimientoPorPlazo(fechaGasto, plazo ?? 0) : "");
   }
-  const [accountCode, setAccountCode] = useState<string>(init?.chart_account_code ?? "");
+  // 🔴 De UNA cuenta a N LÍNEAS (migración `040`). La cuenta dejó de vivir en el
+  //    encabezado: cada línea dice contra qué cuenta se imputa su parte, que es
+  //    lo que el acta pide y lo que el asiento necesita.
+  const [lineas, setLineas] = useState<ExpenseLineDraft[]>(
+    init?.lineas?.length
+      ? init.lineas.map((l, i) => ({
+          key: `l${i}`,
+          description: l.description,
+          chart_account_code: l.chart_account_code ?? "",
+          amount: String(l.amount),
+          tax_rate: String(l.tax_rate),
+          tax_amount: String(l.tax_amount),
+        }))
+      : [{ key: "l0", description: "", chart_account_code: "", amount: "", tax_rate: "0.07", tax_amount: "" }]
+  );
   const [description, setDescription] = useState<string>(init?.description ?? "");
   const [subtotal, setSubtotal] = useState<string>(
     init ? String(init.subtotal) : ""
@@ -185,8 +201,17 @@ export function BusinessExpenseForm(props: Props) {
       // Se conservan como respaldo y para el caso sin entidad (ver la pantalla).
       supplier_name: supplierName.trim() || null,
       supplier_ruc: supplierRuc.trim() || null,
-      chart_account_code: accountCode || null,
+      lineas: lineas.map((l) => ({
+        description: l.description.trim(),
+        chart_account_code: l.chart_account_code || null,
+        amount: Number(l.amount) || 0,
+        tax_rate: Number(l.tax_rate) || 0,
+        tax_amount: Number(l.tax_amount) || 0,
+      })),
       description: description.trim(),
+      // El servidor recalcula los dos sumando las líneas. Se mandan igual para
+      // que el cliente muestre el total sin esperar la respuesta; si difieren,
+      // gana el servidor.
       subtotal: subtotalNum,
       tax_rate: taxRate,
       tax_amount: taxNum,
@@ -275,29 +300,32 @@ export function BusinessExpenseForm(props: Props) {
             )}
           </div>
 
-          {/* Cuenta contable */}
-          <div data-error={!!errors.chart_account_code}>
-            <Label className="mb-1 block">Cuenta contable</Label>
-            <select
-              value={accountCode}
-              onChange={(e) => setAccountCode(e.target.value)}
+          {/* ───────────────────────────────────────────────────────────────
+              LÍNEAS. El mismo editor que usa el gasto de trámite — es la misma
+              tabla `expense_lines` desde la `036`, por arco exclusivo.
+              🔑 La cuenta es OBLIGATORIA en cada línea. El formulario guía; el
+              servidor garantiza (`createBusinessExpense` la exige y la valida
+              contra el plan vigente, línea por línea).
+              ─────────────────────────────────────────────────────────────── */}
+          <div className="sm:col-span-2">
+            <Label className="mb-1 block">Líneas de la compra</Label>
+            <ExpenseLinesEditor
+              lineas={lineas}
+              onChange={setLineas}
+              // `account_type` es opcional en `ExpenseAccountOption` y el editor
+              // lo pide siempre. Se completa con `expense`, que es lo que la
+              // opción representaba antes de que el tipo existiera: la lista ya
+              // viene filtrada a asset/cost/expense por
+              // `listExpenseAccountOptions`, así que el valor no cambia qué se
+              // ofrece — solo satisface el tipo.
+              cuentas={props.accounts.map((a) => ({
+                ...a,
+                account_type: a.account_type ?? "expense",
+              }))}
               disabled={isPending}
-              className={
-                "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
-                (errors.chart_account_code ? "border-red-300" : "border-gray-300")
-              }
-            >
-              <option value="">Sin clasificar</option>
-              {props.accounts.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.code} — {a.name}
-                  {/* Solo aparece la que el gasto ya tenía y quedó desactivada. */}
-                  {a.inactiva ? " (cuenta inactiva)" : ""}
-                </option>
-              ))}
-            </select>
-            {errors.chart_account_code && (
-              <p className="mt-1 text-xs text-red-600">{errors.chart_account_code}</p>
+            />
+            {errors.lineas && (
+              <p className="mt-1 text-xs text-red-600">{errors.lineas}</p>
             )}
           </div>
 

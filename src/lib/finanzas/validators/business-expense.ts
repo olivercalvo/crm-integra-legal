@@ -22,6 +22,7 @@
  */
 
 import type {
+  LineaDeCompraInput,
   CreateBusinessExpenseInput,
   BusinessExpenseStatus,
   BusinessExpensePaymentMethod,
@@ -138,16 +139,46 @@ export function validateCreateBusinessExpense(
     }
   }
 
-  // chart_account_code (opcional, validar formato si llega — la existencia
-  // contra chart_of_accounts la verifica el caller server-side con DB lookup)
-  let chartAccountCode: string | null = null;
-  if (raw.chart_account_code != null && String(raw.chart_account_code).trim() !== "") {
-    const code = String(raw.chart_account_code).trim();
-    if (code.length > 20) {
-      errors.chart_account_code = "Código de cuenta muy largo";
-    } else {
-      chartAccountCode = code;
+  // ---- LÍNEAS ------------------------------------------------------------
+  // 🔴 OBLIGATORIAS, Y CON CUENTA. Antes acá había un `chart_account_code`
+  //    OPCIONAL en el encabezado; desde la migración `040` la cuenta vive en la
+  //    línea y una compra sin cuenta no se puede imputar a nada, así que dejó de
+  //    ser opcional. La existencia de la cuenta en el plan la verifica el caller
+  //    server-side con un lookup — acá solo el formato y la presencia.
+  const lineas: LineaDeCompraInput[] = [];
+  const rawLineas = Array.isArray(raw.lineas) ? raw.lineas : [];
+  if (rawLineas.length === 0) {
+    errors.lineas = "La compra necesita al menos una línea.";
+  }
+  for (let i = 0; i < rawLineas.length; i++) {
+    const l = (rawLineas[i] ?? {}) as unknown as Record<string, unknown>;
+    const nro = i + 1;
+    const desc = String(l.description ?? "").trim();
+    if (desc.length < 3 || desc.length > 300) {
+      errors[`lineas.${i}.description`] = `Línea ${nro}: la descripción va de 3 a 300 caracteres.`;
     }
+    const code = String(l.chart_account_code ?? "").trim();
+    if (code === "") {
+      errors[`lineas.${i}.chart_account_code`] = `Línea ${nro}: falta la cuenta contable.`;
+    } else if (code.length > 20) {
+      errors[`lineas.${i}.chart_account_code`] = `Línea ${nro}: código de cuenta muy largo.`;
+    }
+    const amount = Number(l.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors[`lineas.${i}.amount`] = `Línea ${nro}: el monto tiene que ser mayor que cero.`;
+    }
+    const lineaTaxRate = Number(l.tax_rate ?? 0);
+    const lineaTaxAmount = Number(l.tax_amount ?? 0);
+    if (!Number.isFinite(lineaTaxAmount) || lineaTaxAmount < 0) {
+      errors[`lineas.${i}.tax_amount`] = `Línea ${nro}: el ITBMS no puede ser negativo.`;
+    }
+    lineas.push({
+      description: desc,
+      chart_account_code: code === "" ? null : code,
+      amount: round2(amount),
+      tax_rate: lineaTaxRate,
+      tax_amount: round2(lineaTaxAmount),
+    });
   }
 
   // subtotal
@@ -245,7 +276,7 @@ export function validateCreateBusinessExpense(
       supplier_id: supplierId,
       supplier_name: supplierName,
       supplier_ruc: supplierRuc,
-      chart_account_code: chartAccountCode,
+      lineas,
       description,
       subtotal: round2(subtotal),
       tax_rate: taxRate as BusinessExpenseTaxRate,

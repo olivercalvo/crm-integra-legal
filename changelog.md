@@ -1,5 +1,114 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cableado compra → asiento, y la cuenta se muda a la línea] - 2026-09-04
+
+Fila 12 del acta del 25/08. Al registrar una compra del bufete, el sistema registra su asiento:
+
+    DEBE  la cuenta de CADA línea, por su base
+    DEBE  200003 ITBMS por Pagar, por la suma de los impuestos
+    HABER 200001 Cuentas por pagar, por el total
+
+### 🔴 El ITBMS de compras va al DÉBITO de 200003 — la misma cuenta que las ventas
+
+No hay cuenta de crédito fiscal separada. Josuarth, 25/08: *"es una sola cuenta que se llama
+ITBMS por pagar y ahí va todo lo que vendo y lo que compro"*. El plan de trabajo afirmó lo
+contrario durante semanas; hubo que corregirlo cuatro veces. Hay un test que falla si alguien
+introduce una segunda cuenta.
+
+### `business_expenses.chart_account_code` se APAGA — migración `040`
+
+La columna era **una sola cuenta**; el asiento admite N. Se migró a `expense_lines` (una línea
+por compra, con la cuenta del encabezado), se vació el encabezado y se selló con
+`CHECK (chart_account_code IS NULL)`, **validado**.
+
+**Por qué apagarla y no dejarla como espejo derivado.** El repo tiene ese patrón y funciona:
+`invoices.amount_paid` lo mantiene T7a y T4b rechaza cualquier otra escritura. Acá no sirve, y
+no es lo mismo: `amount_paid` es `SUM(...)`, **un escalar bien definido para N filas**;
+"la cuenta" de una compra de tres líneas **no tiene respuesta correcta**. Cualquier valor sería
+la elección arbitraria de una de las tres, y las otras dos desaparecerían del encabezado sin que
+nada lo diga. Un espejo que no puede reflejar no es un espejo: es una segunda verdad.
+
+**No se hizo DROP.** Patrón de CLAUDE.md (lecciones de Cotizaciones): agregar → backfill →
+refactorizar → verificar producción → dropear en una migración separada.
+
+**Se sacó `chart_account_code` del INPUT de TypeScript** en vez de dejarlo deprecado: así el
+compilador señaló los cinco lugares que todavía lo mandaban, uno por uno, en vez de dejarlos
+compilar mandando un dato que se ignora en silencio.
+
+**Lectores migrados a las líneas** — sin esto habrían quedado mostrando NULL, sin error:
+- el listado de compras, **incluido el filtro por cuenta** (que con `.eq()` sobre el encabezado
+  no habría devuelto nada nunca — un filtro que calla es peor que uno que falla)
+- el detalle
+- `vat-summary.ts`, el papel de trabajo del ITBMS
+
+Una compra de varias cuentas muestra **"Varios (N cuentas)"** en el listado, el mismo criterio
+del resolutor de contrapartida del Libro Mayor. En el detalle de ITBMS se listan **todas**: ahí
+el contador necesita ver contra qué se imputó el crédito fiscal, no un resumen.
+
+### 🔴 Registrar → postear → deshacer, y el comentario lo dice así
+
+**No es "postear antes de registrar"**, que es lo que hace `emitInvoice`. Una compra no tiene
+ciclo borrador → emitir: nace registrada en el mismo INSERT que la crea, y el `source_id` del
+asiento **es** el id de la compra, que no existe hasta después de ese INSERT. Postear antes es
+literalmente imposible.
+
+El orden real: INSERT → postear → **DELETE compensatorio** si el posteo falla. Mismo patrón que
+`credit-notes.ts`. Es seguro porque `business_expenses` **no** es inmutable — en
+`journal_entries` sería imposible. El efecto visible es el mismo que en la factura; la mecánica
+no, y el comentario del código lo dice con esas palabras.
+
+### 🔴 Gate contable en editar y borrar — no existía
+
+`grep "journal_entries"` en `api/business-expenses.ts` daba **cero** hasta hoy: `update` y
+`delete` podían tocar libremente una compra con asiento, y las tres sembradas en staging ya
+tenían el suyo. El agujero estaba abierto, no era teórico. Ahora las dos rechazan con 409
+nombrando el número de asiento, igual que `cancelInvoice`.
+
+### Cuenta obligatoria: en el formulario Y en el servidor
+
+El formulario usa el editor de líneas compartido con el gasto de trámite (misma tabla desde la
+`036`, por arco exclusivo). El servidor exige la cuenta línea por línea y la valida contra el
+plan vigente con el MISMO predicado que el selector (`cuentas-de-gasto.ts`) — el formulario
+guía, el servidor garantiza.
+
+### `source_type` es `'gasto'`, no `'compra'`
+
+`'compra'` no está en el CHECK de `journal_entries`, y `'gasto'` **ya** significa
+`business_expenses` en `destino-documento.ts`. Los asientos sembrados ya lo usan con
+`source_id` = el id de la compra, así que el UNIQUE de la `034` **ya estaba aplicando**. Agregar
+`'compra'` habría dejado dos tipos para la misma tabla y los asientos viejos en el anterior.
+Cero migración de esquema para esto.
+
+### La divergencia del seed: dos de tres instancias cerradas
+
+`seed-asientos.ts` declaraba el asiento y derivaba el documento. Ahora escribe su `desglose` en
+`expense_lines`, o sea que **el seed y la aplicación derivan el asiento del mismo lugar**.
+Verificado: las tres compras sembradas tienen líneas que reproducen exactamente los débitos de
+su asiento. La instancia de facturas sigue abierta, esperando el mapeo de los `HON-*`.
+
+### Verificado contra staging, dentro de un ROLLBACK
+
+`scripts/verificar-asiento-compra.ts` — crea una compra NUEVA con ITBMS ≠ 0 (las tres de
+staging tienen impuesto en cero y ya tienen asiento):
+
+1. Dos líneas, dos cuentas → DEBE 610008 100 + DEBE 610002 200 + DEBE 200003 21 / HABER 200001 321
+2. Una línea contra `4101` se rechaza nombrando línea y cuenta; el RPC también (segunda capa)
+3. El reintento choca contra `journal_entries_un_asiento_por_documento` (23505)
+4. El gate contable tiene con qué operar
+5. El orden en el código, y que el comentario no mienta sobre él
+
+⚠️ La comprobación 5 tuvo que reescribirse: `!/postear antes de registrar/` daba **falso
+positivo**, porque el comentario contiene esa frase NEGADA. Ahora verifica lo afirmativo.
+
+### Archivos
+
+- `sql/pending/040_compras_con_lineas.sql` (aplicada a staging; **pre-flight obligatorio antes
+  de producción** — aborta si alguna compra no tiene cuenta)
+- `src/lib/finanzas/contabilidad/asiento-compra.ts` — módulo puro
+- `src/lib/finanzas/queries/compra-para-asiento.ts` — loader
+- `src/lib/finanzas/api/business-expenses.ts` — posteo, DELETE compensatorio y los dos gates
+- 21 tests nuevos (836 en total)
+
 ## [Cableado factura → asiento] - 2026-09-04
 
 Fila 2 del acta del 25/08. Al emitir una factura, el sistema registra su asiento:

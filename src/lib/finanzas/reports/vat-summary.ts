@@ -378,12 +378,31 @@ export async function getVatSummary(
   }>;
 
   // ── Hidratar account name (FK lógica, lookup separado) ─────────────────
+  // 🔴 Las cuentas salen de `expense_lines`, no del encabezado: desde la
+  //    migración `040` `business_expenses.chart_account_code` está siempre en
+  //    NULL. Si esto siguiera leyendo el encabezado, la columna "Cuenta" del
+  //    detalle de ITBMS quedaría vacía para TODAS las compras — sin error, sin
+  //    aviso, solo un reporte peor.
+  const cuentasPorCompra = new Map<string, string[]>();
+  if (expenses.length > 0) {
+    const { data: lns } = await db
+      .from("expense_lines")
+      .select("business_expense_id, chart_account_code")
+      .eq("tenant_id", tenantId)
+      .in("business_expense_id", expenses.map((e) => e.id));
+    for (const l of (lns ?? []) as {
+      business_expense_id: string;
+      chart_account_code: string | null;
+    }[]) {
+      if (!l.chart_account_code) continue;
+      const arr = cuentasPorCompra.get(l.business_expense_id) ?? [];
+      if (!arr.includes(l.chart_account_code)) arr.push(l.chart_account_code);
+      cuentasPorCompra.set(l.business_expense_id, arr);
+    }
+  }
+
   const accountCodes = Array.from(
-    new Set(
-      expenses
-        .map((e) => e.chart_account_code)
-        .filter((c): c is string => !!c)
-    )
+    new Set(Array.from(cuentasPorCompra.values()).flat())
   );
   const accountMap: Record<string, string> = {};
   if (accountCodes.length > 0) {
@@ -510,10 +529,16 @@ export async function getVatSummary(
     expense_date: e.expense_date,
     supplier_name: e.supplier_name,
     description: e.description,
-    account_code: e.chart_account_code,
-    account_name: e.chart_account_code
-      ? (accountMap[e.chart_account_code] ?? null)
-      : null,
+    // Una sola cuenta se nombra; varias se listan separadas por coma. Acá NO se
+    // dice "Varios" como en el listado: este es el papel de trabajo del contador
+    // para la declaración, y ahí necesita ver contra qué cuentas se imputó el
+    // crédito fiscal, no un resumen.
+    account_code: cuentasPorCompra.get(e.id)?.join(", ") ?? null,
+    account_name:
+      cuentasPorCompra
+        .get(e.id)
+        ?.map((c) => accountMap[c] ?? c)
+        .join(", ") ?? null,
     subtotal: Number(e.subtotal),
     tax_rate: Number(e.tax_rate),
     tax_amount: Number(e.tax_amount),

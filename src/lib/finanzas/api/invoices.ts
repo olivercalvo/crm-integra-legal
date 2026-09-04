@@ -24,6 +24,9 @@ import type {
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createCreditNoteFromInvoice } from "@/lib/finanzas/api/credit-notes";
+import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
+import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
 
 type DB = SupabaseClient;
 
@@ -272,18 +275,50 @@ export async function updateInvoice(
 // ---------------------------------------------------------------------------
 
 /**
- * Genera el invoice_number con get_next_sequence_number() y transiciona el
- * status a 'emitida'. T2 valida la transición.
+ * Genera el invoice_number con get_next_sequence_number(), **registra el asiento
+ * contable** y transiciona el status a 'emitida'. T2 valida la transición.
  *
  * Atomicidad: el SELECT FOR UPDATE dentro de la función SQL bloquea la
  * fila numbering_sequences. Si entre el RPC y el UPDATE invoices algo
  * falla, el número quedaría consumido sin asignar (gap). Aceptable para
  * MVP — Daveiva ya tiene gaps históricos de QuickBooks.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * 🔴 EL ASIENTO SE POSTEA ANTES DE EMITIR, Y SI FALLA NO SE EMITE
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El orden es: correlativo → asiento → UPDATE a 'emitida'. **No hay transacción
+ * que abarque las tres cosas**: el correlativo y el UPDATE van por supabase-js y
+ * el asiento por un RPC con otro cliente. Así que hay que elegir de qué lado cae
+ * el error, y se eligió éste:
+ *
+ *   · Si el asiento falla → la factura queda en BORRADOR, sin número escrito.
+ *     Se corrige la configuración y se vuelve a emitir.
+ *   · Si emitiéramos primero → una factura emitida sin asiento. Eso es una
+ *     divergencia SILENCIOSA entre el documento y el libro, que es exactamente
+ *     lo que este módulo existe para impedir.
+ *
+ * ⚠️ **El correlativo SÍ se pierde igual.** `get_next_sequence_number` ya
+ * consumió el número cuando el asiento falla, y no se devuelve: la secuencia no
+ * tiene rollback y dos emisiones concurrentes no pueden compartir un número. O
+ * sea que un intento fallido deja un HUECO en la numeración. Es el mismo gap que
+ * el comentario de arriba ya aceptaba para el caso del UPDATE fallido; lo que
+ * cambia es que ahora hay una causa más probable que un error de red — un
+ * servicio mal configurado. Se acepta a conciencia: un hueco en la numeración se
+ * explica, un asiento duplicado en un libro inmutable no se borra.
+ *
+ * 🔑 **`ledgerDb` es OBLIGATORIO, no opcional.** Desde la migración `030` el RPC
+ * tiene `EXECUTE` solo para `service_role`, así que hace falta el cliente de
+ * servicio (SOP-014). Podría haber sido un parámetro opcional que, ausente,
+ * saltease el posteo — y sería el agujero perfecto: alguien agrega un segundo
+ * llamador, no pasa el cliente, y las facturas de ese camino dejan de entrar al
+ * libro sin que nadie se entere. Al ser obligatorio, el compilador lo impide.
  */
 export async function emitInvoice(
   db: DB,
   tenantId: string,
-  invoiceId: string
+  invoiceId: string,
+  ledgerDb: DB,
+  userId: string | null
 ) {
   // 1. Cargar la factura para conocer su kind (necesario para sequence_type).
   const { data: inv, error: errFetch } = await db
@@ -342,6 +377,49 @@ export async function emitInvoice(
   const formatted = `${PREFIX_BY_KIND[inv.invoice_kind as InvoiceKind]}-${String(
     nextNumber
   ).padStart(6, "0")}`;
+
+  // 3b. EL ASIENTO. Con el correlativo ya generado y ANTES de emitir.
+  //
+  //     Si esto lanza, la función corta acá: la factura sigue en 'borrador' y el
+  //     `formatted` de arriba nunca se escribe. Ver el encabezado para por qué
+  //     este orden y qué pasa con el número consumido.
+  const factura = await cargarFacturaParaAsiento(
+    ledgerDb,
+    tenantId,
+    invoiceId,
+    formatted
+  );
+  if (!factura) {
+    throw new InvoiceMutationError("Factura no encontrada", 404);
+  }
+
+  const armado = construirAsientoDeFactura(factura);
+  if (!armado.ok) {
+    // 422: la factura está bien formada como documento, lo que está mal es la
+    // configuración contable de un servicio. El mensaje ya nombra cuál.
+    throw new InvoiceMutationError(armado.mensaje, 422);
+  }
+
+  try {
+    await postJournalEntry(ledgerDb, tenantId, armado.asiento, userId);
+  } catch (err) {
+    // El asiento ya existía: es un reintento de una emisión que sí posteó pero
+    // no llegó a hacer el UPDATE. No es un error — hay que dejar que la emisión
+    // termine, o la factura quedaría en borrador para siempre con su asiento ya
+    // en el libro. Las dos llaves (`source_id` y `idempotency_key`) salen del
+    // mismo invoice.id, así que cualquiera de los dos 23505 significa esto.
+    const detalle = err instanceof MutationError ? err.detail : undefined;
+    const code = (detalle as { code?: string } | undefined)?.code;
+    if (code !== "23505") {
+      throw err instanceof MutationError
+        ? new InvoiceMutationError(err.message, err.status, detalle)
+        : err;
+    }
+    console.warn(
+      "[finanzas] la factura %s ya tenía asiento; se completa la emisión",
+      invoiceId
+    );
+  }
 
   // 4. UPDATE status='emitida' + invoice_number=formatted. T2 valida.
   const { error: errUpd } = await db

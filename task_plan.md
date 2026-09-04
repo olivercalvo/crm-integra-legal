@@ -60,28 +60,69 @@ columna. Eso cambia:
 **No se arregló acá** porque es el bloque de compras y sigue bloqueado por las tres preguntas al
 contador. Anotado para que el diseño de ese bloque no arranque asumiendo la columna única.
 
-### 📋 BLOQUE PARA DESPUÉS — cableado factura/pago → asiento
+### ✅ CABLEADO FACTURA → ASIENTO — HECHO el 04/09/2026
 
-**Bloqueado por tres preguntas al contador.** Ninguna es decisión de desarrollo:
+El posteo vive en `emitInvoice()` (`api/invoices.ts`), entre el correlativo y el UPDATE a
+`emitida`. Módulo puro en `contabilidad/asiento-factura.ts`, loader en
+`queries/factura-para-asiento.ts`, verificación contra staging en
+`scripts/verificar-asiento-factura.ts`.
 
-1. **Qué cuenta de ingreso** por servicio del catálogo. `services_catalog.revenue_account` apunta
-   hoy a `4101` y `2201`, **las dos inactivas**: es el plan anterior al de Josuarth. Sin esto, el
-   asiento de una factura no se puede derivar sin hardcodear — que es el problema que se está
-   eliminando.
-2. **Qué cuenta bancaria** por defecto para los cobros. `payments` tiene `method` y `reference`,
-   pero no cuenta; hay tres bancos activos.
-3. **El ITBMS de compras** (crédito fiscal, no `200003`). También bloquea el módulo de compras.
+**🔴 EL SUPUESTO REGISTRADO ACÁ SE CAYÓ, y así fue como se cayó.** Este bloque decía:
 
-**Diseño registrado, NO decidido:** postear el asiento ANTES de emitir la factura. Un asiento
-huérfano es detectable y reversible; una factura sin asiento es una divergencia silenciosa.
-⚠️ **Antes de implementarlo hay que revisar si el correlativo de la factura se asigna al emitir**:
-si es así, el asiento posteado antes no tendría número que citar, y el diseño se cae.
+> *Diseño registrado, NO decidido: postear el asiento ANTES de emitir la factura. ⚠️ Antes de
+> implementarlo hay que revisar si el correlativo de la factura se asigna al emitir: si es así,
+> el asiento posteado antes no tendría número que citar, y el diseño se cae.*
 
-**Ya hecho y desbloqueado (02/09):** el UNIQUE de idempotencia, el backfill de los 250,00 y el gate
-de anulación.
+**Se asigna al emitir** (`api/invoices.ts`, `get_next_sequence_number` dentro de `emitInvoice`).
+La advertencia era correcta y el diseño se cayó. Lo que sobrevive es el CRITERIO —postear antes
+de emitir, y que el fallo del posteo aborte la emisión— con el posteo movido a *después* del
+correlativo, no antes. Vale la pena que quede escrito: la nota de advertencia hizo su trabajo.
 
-**Lo que sigue abierto del gate de anulación:** hoy una factura con asiento NO se puede anular. El
-asiento de reversión es su propio bloque, y necesita decidir con qué FECHA se revierte.
+**⚠️ El correlativo se pierde si el posteo falla.** `get_next_sequence_number` es un `UPDATE`
+sobre `numbering_sequences`; vía supabase-js cada RPC es su propia transacción auto-commiteada,
+así que el número ya está commiteado cuando el asiento falla. Un intento fallido deja un HUECO en
+la numeración. Se acepta a conciencia: un hueco se explica, un asiento duplicado en un libro
+inmutable no se borra. Medido el 04/09 (`verificar-asiento-factura.ts`, paso 4).
+
+**Lo que quedó bloqueado, y es UNA sola pregunta:**
+
+**Qué cuenta de ingreso ACTIVA va en cada servicio `HON-*`.** Los siete apuntan a `4101`, del plan
+anterior al de Josuarth e **inactiva**. Hoy el sistema los RECHAZA al emitir, con un mensaje que
+nombra el servicio y la cuenta — que es el comportamiento correcto, no una degradación. Los seis
+`REIM-*` ya apuntan a `130003` (migración `035`) y postean bien.
+
+Cinco de los siete tienen correspondencia 1:1 por nombre con el plan vigente (COR→400001,
+LAB→400003, CIV→400004, PEN→400005, MIG→400007) y **aun así no se completaron**: `HON-FAM` y
+`HON-OTROS` no tienen destino evidente, y elegir por ellos decide qué mide el estado de
+resultados. Van los siete juntos al correo a Josuarth. El día que conteste, el cableado es un
+UPDATE al catálogo y **cero código**.
+
+**🔴 HAY DOS CRITERIOS CONVIVIENDO Y HAY QUE UNIFICARLOS CUANDO LLEGUE ESE MAPEO.**
+`scripts/seed-asientos.ts` elige la cuenta de ingreso **por área del caso, hardcodeada** (los
+asientos sembrados en staging usan `400001 Derecho Corporativo` y `400006 Derecho Administrativo`),
+**sin leer `services_catalog`**. O sea que los asientos sembrados y los que postea la aplicación
+salen de fuentes distintas. Hoy no choca porque el seed corre sobre una base vacía, pero es
+exactamente el tipo de divergencia que aparece cuando alguien compara staging con producción.
+**No se arregla ahora**: arreglarlo antes de tener el mapeo significaría hardcodear el mapeo en el
+seed, que es el problema que se está eliminando. Se unifica el mismo día que se cargue
+`revenue_account` de los `HON-*`.
+
+**Lo que sigue abierto del gate de anulación:** hoy una factura con asiento NO se puede anular
+(`api/invoices.ts`, gate contable en `cancelInvoice`). **Con el cableado puesto, eso ahora aplica a
+TODA factura emitida**, no solo a las cuatro sembradas. El asiento de reversión es el bloque
+inmediatamente siguiente y necesita decidir con qué FECHA se revierte — también al correo.
+
+### 📋 BLOQUE PARA DESPUÉS — cableado del COBRO → asiento
+
+**Bloqueado por una pregunta al contador:** **qué cuenta bancaria** por defecto para los cobros.
+`payments` tiene `method` y `reference`, pero no cuenta; hay tres bancos activos.
+
+⚠️ Rose ya contestó la mitad el 25/08: *"el banco del cobro lo escoge quien registra"*. Lo que
+falta es si hay un default y cuál.
+
+~~**El ITBMS de compras** (crédito fiscal, no `200003`)~~ → 🔴 **NUNCA ESTUVO BLOQUEADO.** Es UNA
+sola cuenta, `200003`, ventas al crédito y compras al débito. Ver más abajo la cita textual de
+Josuarth.
 
 ### 📋 BLOQUE PARA DESPUÉS — Backfill `022`: el DV embebido en el texto del RUC
 
@@ -1135,9 +1176,11 @@ construir hoy):
 
 1. **La fecha de los saldos cargados** → el asiento de apertura. Ver A-quinquies. Puede
    resolverse sin preguntar: a qué fecha se generó el reporte de QuickBooks.
-2. **Qué cuenta de ingreso ACTIVA va en cada servicio** → el cableado factura→asiento.
-   `services_catalog.revenue_account` de los `HON-*` sigue en `4101`, del plan viejo e
-   inactiva.
+2. **Qué cuenta de ingreso ACTIVA va en cada servicio `HON-*`.**
+   `services_catalog.revenue_account` de los siete sigue en `4101`, del plan viejo e inactiva.
+   ⚠️ **Ya NO bloquea el cableado**: factura→asiento está construido (04/09) y rechaza esos
+   siete servicios al emitir, nombrando el servicio y la cuenta. Bloquea la EMISIÓN de facturas
+   de honorarios, que es distinto y más visible. Los `REIM-*` postean bien.
 3. ~~Contra qué cuenta va el ITBMS que el bufete PAGA~~ → 🔴 **NUNCA ESTUVO BLOQUEADO.**
    Josuarth lo contestó en la reunión del 25/08 y este plan afirmaba lo contrario:
 

@@ -1,5 +1,101 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cableado factura → asiento] - 2026-09-04
+
+Fila 2 del acta del 25/08. Al emitir una factura, el sistema registra su asiento:
+
+    DEBE  100004 Cuentas por Cobrar Clientes    (el grand_total)
+    HABER la cuenta de ingreso de CADA servicio (por su subtotal)
+    HABER 200003 ITBMS por Pagar                (la suma de los impuestos)
+
+**Cero migraciones.** `source_type='factura'` ya estaba en el CHECK, el UNIQUE de
+idempotencia ya existía (`034`) y `journal_entries.idempotency_key` también (`039`).
+
+### El orden: correlativo → asiento → emisión
+
+El posteo vive **dentro de `emitInvoice()`**, entre el correlativo y el UPDATE a `emitida`.
+No hay transacción que abarque las tres cosas —el correlativo y el UPDATE van por
+supabase-js, el asiento por un RPC con el cliente de servicio— así que hubo que elegir de qué
+lado cae el error:
+
+- Si el asiento falla → **la factura queda en borrador**, sin número escrito.
+- Si emitiéramos primero → una factura emitida sin asiento, que es una divergencia
+  **silenciosa** entre el documento y el libro. Es lo que este módulo existe para impedir.
+
+⚠️ **El correlativo se pierde igual.** `get_next_sequence_number` es un `UPDATE` sobre
+`numbering_sequences` y por supabase-js cada RPC es su propia transacción auto-commiteada: el
+número ya está commiteado cuando el asiento falla. Un intento fallido deja un **hueco en la
+numeración**. Se acepta a conciencia — un hueco se explica, un asiento duplicado en un libro
+inmutable no se borra. Medido contra staging el 04/09.
+
+🔑 **`ledgerDb` es un parámetro OBLIGATORIO de `emitInvoice`**, no opcional. Podría haber sido
+opcional y, ausente, saltear el posteo — y sería el agujero perfecto: alguien agrega un
+segundo llamador, no pasa el cliente, y las facturas de ese camino dejan de entrar al libro
+sin que nadie se entere. Al ser obligatorio, lo impide el compilador.
+
+### 🔴 No hay cuenta de ingreso por defecto. Nunca.
+
+La cuenta sale de `services_catalog.revenue_account`. Si el servicio apunta a una cuenta que
+no existe o está **inactiva**, el sistema **rechaza la emisión** con un mensaje que nombra el
+servicio y la cuenta:
+
+> No se puede registrar la factura FAC-HON-000001 en el libro contable: HON-COR → cuenta 4101
+> no existe o está inactiva en el plan de cuentas vigente. Corrija la cuenta de ingreso del
+> servicio en el catálogo antes de emitir.
+
+Un default convertiría un error de configuración en un ingreso mal clasificado que nadie ve
+hasta que el contador lee el estado de resultados — y el asiento es inmutable. Rechazar es
+ruidoso y reversible; adivinar es silencioso y no.
+
+Hay un test que lo fija (`asiento-factura.test.ts`): si alguien agrega un fallback, falla.
+
+**Consecuencia hoy:** los siete servicios `HON-*` apuntan a `4101`, del plan anterior a
+Josuarth e inactiva, así que **las facturas de honorarios no se pueden emitir hasta que el
+contador diga qué cuenta activa va en cada uno**. Los seis `REIM-*` apuntan a `130003`
+(migración `035`) y postean bien. Cinco de los siete tienen correspondencia 1:1 por nombre con
+el plan vigente y **aun así no se completaron**: `HON-FAM` y `HON-OTROS` no tienen destino
+evidente, y elegir por ellos decide qué mide el estado de resultados.
+
+### El guard de ruta y el del RPC hacen cosas distintas
+
+El RPC **ya rechazaba** la cuenta inactiva (paso 4: `AND c.active` dentro del `EXISTS`).
+Medido, no supuesto. Pero su mensaje dice solo el código —`Cuenta(s) inexistentes o inactivas
+en el plan: 4101`— y con eso nadie sabe qué tocar. **El guard de la aplicación existe por el
+mensaje, no por el permiso**: el permiso ya lo tiene la base.
+
+### Idempotencia: dos llaves, la misma verdad
+
+- `source_id = invoice.id` con `source_type='factura'` → el UNIQUE parcial de la `034`. **Es
+  la garantía.**
+- `idempotency_key = 'factura:<invoice.id>'` → la de la `039`. Gratis, y derivada del mismo
+  id, así que no pueden discrepar.
+
+🔴 Un `23505` **no aborta la emisión**: es el reintento de una emisión que sí posteó pero no
+llegó al UPDATE, y tratarlo como error dejaría la factura en borrador para siempre con su
+asiento ya en el libro. El código de Postgres viaja en `MutationError.detail`, no en `cause`
+— el mismo detalle que costó un bug el 03/09.
+
+### Verificado contra staging, dentro de un ROLLBACK
+
+`scripts/verificar-asiento-factura.ts` — usa el módulo real sobre facturas reales:
+
+1. `FAC-REI-000002` (REIM-GOB → 130003) postea: DEBE 100004 400.00 / HABER 130003 400.00, sin
+   ITBMS porque el reembolso es exento. Cuadra contra el documento.
+2. `FAC-HON-000001` (HON-COR → 4101) se rechaza, y el mensaje nombra servicio y cuenta. El RPC
+   también lo rechaza (segunda capa).
+3. El reintento choca contra `journal_entries_un_asiento_por_documento` (23505).
+4. El correlativo avanza y no vuelve.
+
+### Archivos
+
+- `src/lib/finanzas/contabilidad/asiento-factura.ts` — módulo puro
+- `src/lib/finanzas/queries/factura-para-asiento.ts` — loader (tres consultas: el FK compuesto
+  `(tenant_id, revenue_account)` no lo sigue PostgREST)
+- `src/lib/finanzas/api/invoices.ts` — `emitInvoice` con el posteo
+- `src/app/api/finanzas/invoices/[id]/emit/route.ts` — pasa el cliente de servicio (SOP-014)
+- 19 tests nuevos (815 en total)
+- `@types/pg` como devDependency: el script de verificación es `.ts` y entra al `tsc`
+
 ## [Cierre y reapertura de períodos contables] - 2026-09-03
 
 **Cero migraciones.** `accounting_periods` existe desde la `023` y

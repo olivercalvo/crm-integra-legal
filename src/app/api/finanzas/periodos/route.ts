@@ -54,6 +54,8 @@ import {
   codigoPeriodo,
   esAccionPeriodo,
   laAccionCambiaAlgo,
+  validarMotivoReapertura,
+  valorAuditadoDeReapertura,
 } from "@/lib/finanzas/contabilidad/periodos";
 
 export const runtime = "nodejs";
@@ -118,6 +120,7 @@ export async function PATCH(request: NextRequest) {
     const year: unknown = body?.year;
     const month: unknown = body?.month;
     const accion: unknown = body?.accion;
+    const motivoRaw: unknown = body?.motivo;
 
     if (typeof year !== "number" || !Number.isInteger(year)) {
       return NextResponse.json({ error: "Falta el año del período." }, { status: 400 });
@@ -130,6 +133,22 @@ export async function PATCH(request: NextRequest) {
         { error: "La acción tiene que ser 'cerrar' o 'reabrir'." },
         { status: 400 }
       );
+    }
+
+    // 🔴 EL MOTIVO ES OBLIGATORIO AL REABRIR, Y SE VALIDA ACÁ.
+    //
+    // En el SERVIDOR, no en la pantalla: el textarea del formulario ayuda a
+    // escribirlo, pero un `curl` la saltea. Reabrir un período certificado sin
+    // dejar dicho por qué es exactamente lo que esta validación existe para
+    // impedir.
+    //
+    // Cerrar NO lo pide: es rutina de cierre contable y no hay nada que
+    // justificar.
+    let motivo: string | null = null;
+    if (accion === "reabrir") {
+      const v = validarMotivoReapertura(motivoRaw);
+      if (!v.ok) return NextResponse.json({ error: v.mensaje }, { status: 400 });
+      motivo = v.motivo;
     }
 
     // El período tiene que EXISTIR. Esta ruta no lo crea: crear períodos es
@@ -215,7 +234,11 @@ export async function PATCH(request: NextRequest) {
       action: "update",
       field: "status",
       old_value: fila.status,
-      new_value: accion === "cerrar" ? "cerrado" : "abierto",
+      // Al reabrir, el motivo viaja DENTRO de `new_value`. Es el "audit_log
+      // enriquecido": no hace falta una columna nueva ni una migración, y la
+      // pantalla de auditoría lo muestra sin cambios.
+      new_value:
+        accion === "cerrar" ? "cerrado" : valorAuditadoDeReapertura(motivo as string),
     });
 
     // Si la auditoría falla, el período YA cambió y eso es lo que importa: se

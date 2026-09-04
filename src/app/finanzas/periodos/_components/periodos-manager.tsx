@@ -10,6 +10,8 @@ import {
   codigoPeriodo,
   estadoDe,
   etiquetaPeriodo,
+  MOTIVO_REAPERTURA_MAX,
+  MOTIVO_REAPERTURA_MIN,
   type PeriodoRow,
 } from "@/lib/finanzas/contabilidad/periodos";
 
@@ -61,6 +63,7 @@ export function PeriodosManager({ periodos }: Props) {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState("");
 
   const anios = useMemo(() => agruparPorAnio(periodos), [periodos]);
 
@@ -81,7 +84,10 @@ export function PeriodosManager({ periodos }: Props) {
       const res = await fetch("/api/finanzas/periodos", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pendiente),
+        // El motivo solo se manda al reabrir. Cerrar no lo pide.
+        body: JSON.stringify(
+          pendiente.accion === "reabrir" ? { ...pendiente, motivo } : pendiente
+        ),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -93,6 +99,7 @@ export function PeriodosManager({ periodos }: Props) {
       // que decir que se hizo algo.
       if (data?.sinCambios) setAviso(data.mensaje);
       setPendiente(null);
+      setMotivo("");
       startTransition(() => router.refresh());
     } catch {
       setError("Error de conexión. Revise su internet e intente de nuevo.");
@@ -178,15 +185,41 @@ export function PeriodosManager({ periodos }: Props) {
             cuando se emitieron.
           </p>
 
+          {/* 🔴 El motivo es OBLIGATORIO, y lo exige el servidor. Este campo ayuda
+              a escribirlo; el rechazo real está en la ruta, porque un `curl` se
+              saltea la pantalla. */}
+          <div>
+            <label
+              htmlFor="motivo-reapertura"
+              className="mb-1 block text-xs font-semibold text-amber-900"
+            >
+              ¿Por qué hay que reabrirlo? *
+            </label>
+            <textarea
+              id="motivo-reapertura"
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              rows={3}
+              maxLength={MOTIVO_REAPERTURA_MAX}
+              placeholder="Ej: llegó la factura del Registro Público de marzo, fechada dentro del período"
+              className="block w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-amber-700">
+              Queda guardado en la auditoría junto con quién reabre y cuándo. Mínimo{" "}
+              {MOTIVO_REAPERTURA_MIN} caracteres.
+            </p>
+          </div>
+
           <p className="text-xs text-amber-800">
-            Queda registrado quién lo reabre y cuándo. El período seguirá marcado como
-            reabierto aunque se vuelva a cerrar.
+            El período seguirá marcado como reabierto aunque se vuelva a cerrar.
           </p>
 
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={aplicar}
-              disabled={enviando || isPending}
+              disabled={
+                enviando || isPending || motivo.trim().length < MOTIVO_REAPERTURA_MIN
+              }
               className="min-h-[44px] bg-amber-700 text-white hover:bg-amber-800"
             >
               {enviando || isPending ? (
@@ -196,7 +229,14 @@ export function PeriodosManager({ periodos }: Props) {
               )}
               Entiendo, reabrir de todos modos
             </Button>
-            <Button variant="ghost" onClick={() => setPendiente(null)} className="min-h-[44px]">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPendiente(null);
+                setMotivo("");
+              }}
+              className="min-h-[44px]"
+            >
               Cancelar
             </Button>
           </div>

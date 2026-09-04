@@ -154,3 +154,80 @@ export function agruparPorAnio(periodos: readonly PeriodoRow[]): AnioDePeriodos[
       };
     });
 }
+
+// ---------------------------------------------------------------------------
+// EL MOTIVO DE LA REAPERTURA
+// ---------------------------------------------------------------------------
+
+/**
+ * Largo mínimo del motivo al reabrir un período.
+ *
+ * ⚠️ Son DIEZ y no tres, que es lo que pide el repo para `reversal_reason` y
+ * `cancellation_reason`. El motivo del cambio: con tres, `"asd"` pasa — y un
+ * motivo que no dice nada es peor que ninguno, porque deja el registro con
+ * apariencia de justificado. Diez obliga a escribir una frase corta.
+ *
+ * No es una cifra mágica; es el punto donde deja de poder cumplirse tecleando
+ * al azar sin darse cuenta.
+ */
+export const MOTIVO_REAPERTURA_MIN = 10;
+
+/** Tope, para que entre cómodo en `audit_log.new_value`. */
+export const MOTIVO_REAPERTURA_MAX = 500;
+
+export type MotivoValidado =
+  | { ok: true; motivo: string }
+  | { ok: false; mensaje: string };
+
+/**
+ * Valida el motivo de una reapertura.
+ *
+ * 🔴 **Solo se exige al REABRIR.** Cerrar un período es rutina de cierre
+ * contable y no necesita justificarse; reabrir uno deshace algo que ya se
+ * certificó ante la DGI, y ahí la pregunta "¿por qué?" tiene que quedar
+ * contestada por escrito.
+ */
+export function validarMotivoReapertura(raw: unknown): MotivoValidado {
+  const texto = typeof raw === "string" ? raw.trim() : "";
+
+  if (texto === "") {
+    return {
+      ok: false,
+      mensaje:
+        "Para reabrir un período hace falta explicar por qué: queda registrado y es lo que " +
+        "justifica que un ejercicio ya certificado vuelva a admitir asientos.",
+    };
+  }
+  if (texto.length < MOTIVO_REAPERTURA_MIN) {
+    return {
+      ok: false,
+      mensaje:
+        `El motivo es demasiado corto (mínimo ${MOTIVO_REAPERTURA_MIN} caracteres). ` +
+        `Escriba qué se va a corregir y por qué no puede esperar al período siguiente.`,
+    };
+  }
+  if (texto.length > MOTIVO_REAPERTURA_MAX) {
+    return {
+      ok: false,
+      mensaje: `El motivo no puede pasar de ${MOTIVO_REAPERTURA_MAX} caracteres.`,
+    };
+  }
+  return { ok: true, motivo: texto };
+}
+
+/**
+ * Lo que se guarda en `audit_log.new_value`.
+ *
+ * ⚠️ Va como PROSA y no como JSON, aunque el repo use `JSON.stringify` en otras
+ * auditorías. El motivo es la pantalla: `formatValue()` en
+ * `legal/admin/auditoria/page.tsx` solo trunca a 60 caracteres, así que un JSON
+ * se mostraría crudo y cortado —`{"estado":"abierto","motivo":"…`— y lo primero
+ * que se leería sería la sintaxis en vez del dato.
+ *
+ * Con prosa, los primeros caracteres visibles son el estado y el arranque del
+ * motivo, que es exactamente lo que alguien busca al revisar la auditoría. El
+ * valor completo queda en la base.
+ */
+export function valorAuditadoDeReapertura(motivo: string): string {
+  return `abierto — motivo: ${motivo}`;
+}

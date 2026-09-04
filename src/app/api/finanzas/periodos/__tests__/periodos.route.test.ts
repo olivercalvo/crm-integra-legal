@@ -133,7 +133,8 @@ function req(body: unknown): NextRequest {
 }
 
 const CERRAR = { year: 2026, month: 3, accion: "cerrar" };
-const REABRIR = { year: 2026, month: 3, accion: "reabrir" };
+const MOTIVO_OK = "llegó la factura del Registro Público fechada en marzo";
+const REABRIR = { year: 2026, month: 3, accion: "reabrir", motivo: MOTIVO_OK };
 
 // ===========================================================================
 // 1. 🔴 AL REABRIR NO SE TOCAN closed_at NI closed_by
@@ -198,6 +199,104 @@ test("reabrir uno YA abierto no escribe", { skip: skipNoMocks }, async () => {
 });
 
 // ===========================================================================
+// 2-bis. 🔴 EL MOTIVO ES OBLIGATORIO AL REABRIR
+// ===========================================================================
+
+test(
+  "🔴 reabrir SIN motivo → 400, y no escribe",
+  { skip: skipNoMocks },
+  async () => {
+    // La validación es del SERVIDOR. El textarea de la pantalla ayuda a
+    // escribirlo, pero un `curl` la saltea — y reabrir un período certificado sin
+    // dejar dicho por qué es exactamente lo que esto impide.
+    reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+    const res = await PATCH(req({ year: 2026, month: 3, accion: "reabrir" }));
+    assert.equal(res.status, 400);
+    assert.equal(state.capturado.update, null, "no debe tocar el período");
+    assert.match((await res.json()).error, /explicar por qué/i);
+  }
+);
+
+test(
+  "un motivo demasiado corto → 400: 'asd' no es un motivo",
+  { skip: skipNoMocks },
+  async () => {
+    // El repo pide 3 caracteres para `reversal_reason`. Acá son 10, porque con 3
+    // un motivo vacío de contenido pasa igual y deja el registro con apariencia
+    // de justificado, que es peor que no tener ninguno.
+    reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+    const res = await PATCH(req({ year: 2026, month: 3, accion: "reabrir", motivo: "asd" }));
+    assert.equal(res.status, 400);
+    assert.equal(state.capturado.update, null);
+    assert.match((await res.json()).error, /demasiado corto/i);
+  }
+);
+
+test("un motivo de solo espacios no cuenta", { skip: skipNoMocks }, async () => {
+  reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+  const res = await PATCH(
+    req({ year: 2026, month: 3, accion: "reabrir", motivo: "              " })
+  );
+  assert.equal(res.status, 400);
+  assert.equal(state.capturado.update, null);
+});
+
+test(
+  "🔴 CERRAR no pide motivo: es rutina de cierre contable",
+  { skip: skipNoMocks },
+  async () => {
+    reset();
+    const res = await PATCH(req(CERRAR));
+    assert.equal(
+      res.status,
+      200,
+      "exigir un motivo para cerrar convertiría el cierre mensual en un trámite"
+    );
+    assert.equal(state.capturado.update?.status, "cerrado");
+  }
+);
+
+test(
+  "el motivo queda GUARDADO en la auditoría, no solo validado",
+  { skip: skipNoMocks },
+  async () => {
+    // Validarlo y tirarlo sería peor que no pedirlo: le da al usuario la
+    // sensación de que quedó registrado cuando no.
+    reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+    await PATCH(req(REABRIR));
+    const a = state.capturado.audit!;
+    assert.ok(
+      String(a.new_value).includes(MOTIVO_OK),
+      `el motivo tiene que viajar dentro de new_value; llegó: ${a.new_value}`
+    );
+    assert.match(String(a.new_value), /^abierto/, "el estado va primero, para que se lea truncado");
+  }
+);
+
+test(
+  "el motivo se guarda recortado, sin los espacios de los bordes",
+  { skip: skipNoMocks },
+  async () => {
+    reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+    await PATCH(
+      req({ year: 2026, month: 3, accion: "reabrir", motivo: `   ${MOTIVO_OK}   ` })
+    );
+    assert.ok(!String(state.capturado.audit?.new_value).includes("   "));
+  }
+);
+
+test(
+  "el motivo NO se escribe en accounting_periods: no hay columna, y no hace falta",
+  { skip: skipNoMocks },
+  async () => {
+    // Va por `audit_log` enriquecido justamente para no necesitar una migración.
+    reset({ periodo: { id: "per-1", status: "cerrado", closed_at: "2026-04-01T10:00:00Z" } });
+    await PATCH(req(REABRIR));
+    assert.deepEqual(Object.keys(state.capturado.update!).sort(), ["status"]);
+  }
+);
+
+// ===========================================================================
 // 3. AUDITORÍA
 // ===========================================================================
 
@@ -226,7 +325,10 @@ test("la reapertura queda auditada con su transición", { skip: skipNoMocks }, a
   await PATCH(req(REABRIR));
   const a = state.capturado.audit!;
   assert.equal(a.old_value, "cerrado");
-  assert.equal(a.new_value, "abierto");
+  // `new_value` arranca con el estado y sigue con el motivo — ver
+  // `valorAuditadoDeReapertura()`. Es prosa y no JSON porque `formatValue()` de
+  // la pantalla de auditoría solo trunca a 60 caracteres.
+  assert.match(String(a.new_value), /^abierto — motivo: /);
 });
 
 // ===========================================================================

@@ -3,20 +3,17 @@
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Save, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   validateCreateBusinessExpense,
   type ValidationErrors,
 } from "@/lib/finanzas/validators/business-expense";
 import {
-  VALID_TAX_RATES,
   BUSINESS_EXPENSE_STATUS_LABEL,
   BUSINESS_EXPENSE_PAYMENT_METHOD_LABEL,
-  computeExpectedTaxAmount,
   computeTotal,
   type BusinessExpenseStatus,
   type BusinessExpensePaymentMethod,
@@ -96,6 +93,9 @@ export function BusinessExpenseForm(props: Props) {
   const [supplierRuc, setSupplierRuc] = useState<string>(init?.supplier_ruc ?? "");
   const [supplierId, setSupplierId] = useState<string>(init?.supplier_id ?? "");
   const [dueDate, setDueDate] = useState<string>(init?.due_date ?? "");
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState<string>(
+    init?.supplier_invoice_number ?? ""
+  );
   /**
    * Si la persona tocó el vencimiento a mano, deja de recalcularse solo. El
    * plazo del proveedor propone; el comprobante manda.
@@ -127,19 +127,6 @@ export function BusinessExpenseForm(props: Props) {
       : [{ key: "l0", description: "", chart_account_code: "", amount: "", tax_rate: "0.07", tax_amount: "" }]
   );
   const [description, setDescription] = useState<string>(init?.description ?? "");
-  const [subtotal, setSubtotal] = useState<string>(
-    init ? String(init.subtotal) : ""
-  );
-  const [taxRate, setTaxRate] = useState<BusinessExpenseTaxRate>(
-    (init?.tax_rate as BusinessExpenseTaxRate) ?? 0.07
-  );
-  const [taxAmount, setTaxAmount] = useState<string>(
-    init ? String(init.tax_amount) : ""
-  );
-  // Si estamos editando, asumimos manualOverride=false (el valor inicial
-  // viene de BD y se considera "calculado"). El usuario puede editarlo manual
-  // y se marca como override en el momento que lo toca.
-  const [manualOverride, setManualOverride] = useState(false);
   const [status, setStatus] = useState<BusinessExpenseStatus>(init?.status ?? "pagado");
   const [paymentDate, setPaymentDate] = useState<string>(
     init?.payment_date ?? todayIso()
@@ -153,19 +140,6 @@ export function BusinessExpenseForm(props: Props) {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // ---- Auto-cálculo de tax_amount cuando cambia subtotal o tax_rate -------
-  useEffect(() => {
-    if (manualOverride) return;
-    const sub = Number(subtotal);
-    if (!isFinite(sub) || sub < 0) {
-      // Si el subtotal está vacío o inválido, dejamos el campo vacío.
-      // No forzamos 0 porque rompe la UX si el usuario está tipeando.
-      return;
-    }
-    const expected = computeExpectedTaxAmount(sub, taxRate);
-    setTaxAmount(expected.toFixed(2));
-  }, [subtotal, taxRate, manualOverride]);
-
   // ---- Status: cambio de pagado ↔ pendiente_pago --------------------------
   useEffect(() => {
     if (status === "pagado" && !paymentDate) {
@@ -176,19 +150,25 @@ export function BusinessExpenseForm(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // ---- Cálculo del total para mostrar (read-only) -------------------------
-  const subtotalNum = Number(subtotal) || 0;
-  const taxNum = Number(taxAmount) || 0;
+  /** Dos decimales, igual que el validador y la API. */
+  const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+  // ---- Los importes del encabezado, derivados de las líneas ---------------
+  // Misma regla que `validators/business-expense.ts` y que la API. Se recalcula
+  // en cada render en vez de guardarse en estado: así no puede quedar viejo
+  // respecto de las líneas, que es de donde sale.
+  const subtotalNum = round2(lineas.reduce((a, l) => a + (Number(l.amount) || 0), 0));
+  const taxNum = round2(lineas.reduce((a, l) => a + (Number(l.tax_amount) || 0), 0));
   const totalNum = computeTotal(subtotalNum, taxNum);
 
-  // ---- Recalcular ITBMS manual --------------------------------------------
-  function handleRecalcTax() {
-    setManualOverride(false);
-    const sub = Number(subtotal);
-    if (isFinite(sub) && sub >= 0) {
-      setTaxAmount(computeExpectedTaxAmount(sub, taxRate).toFixed(2));
-    }
-  }
+  /** La tasa que viaja en el encabezado. Ver el comentario de la sección de importes. */
+  const taxRateDerivada = (() => {
+    if (taxNum <= 0) return 0;
+    const gravadas = lineas
+      .filter((l) => (Number(l.tax_amount) || 0) > 0)
+      .map((l) => Number(l.tax_rate) || 0);
+    return gravadas.length > 0 ? Math.max(...gravadas) : 0;
+  })();
 
   // ---- Submit -------------------------------------------------------------
   async function handleSubmit() {
@@ -198,6 +178,7 @@ export function BusinessExpenseForm(props: Props) {
       expense_date: expenseDate,
       supplier_id: supplierId || null,
       due_date: dueDate || null,
+      supplier_invoice_number: supplierInvoiceNumber.trim() || null,
       // Se conservan como respaldo y para el caso sin entidad (ver la pantalla).
       supplier_name: supplierName.trim() || null,
       supplier_ruc: supplierRuc.trim() || null,
@@ -213,7 +194,7 @@ export function BusinessExpenseForm(props: Props) {
       // que el cliente muestre el total sin esperar la respuesta; si difieren,
       // gana el servidor.
       subtotal: subtotalNum,
-      tax_rate: taxRate,
+      tax_rate: taxRateDerivada as BusinessExpenseTaxRate,
       tax_amount: taxNum,
       status,
       payment_date: status === "pagado" ? (paymentDate || null) : null,
@@ -384,6 +365,32 @@ export function BusinessExpenseForm(props: Props) {
             </p>
           </div>
 
+          {/* ───────────────────────────────────────────────────────────────
+              NÚMERO DE FACTURA DEL PROVEEDOR (migración `044`). Es lo que se
+              usa para conciliar contra el estado de cuenta del proveedor y para
+              el anexo de compras de la DGI. Opcional a propósito: hay recibos y
+              vales sin numeración de factura.
+              ─────────────────────────────────────────────────────────────── */}
+          <div data-error={!!errors.supplier_invoice_number}>
+            <Label className="mb-1 block">N.º de factura del proveedor</Label>
+            <Input
+              type="text"
+              value={supplierInvoiceNumber}
+              onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+              disabled={isPending}
+              maxLength={50}
+              placeholder="Ej. 001-002-000123456"
+              className={errors.supplier_invoice_number ? "border-red-300" : ""}
+            />
+            {errors.supplier_invoice_number && (
+              <p className="mt-1 text-xs text-red-600">{errors.supplier_invoice_number}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              El número tal como viene en el comprobante. Opcional: si el gasto no
+              tiene factura numerada, se deja vacío.
+            </p>
+          </div>
+
           {/* Vencimiento: lo que la antigüedad usa para calcular los tramos. */}
           <div data-error={!!errors.due_date}>
             <Label className="mb-1 block">Vence</Label>
@@ -466,87 +473,51 @@ export function BusinessExpenseForm(props: Props) {
       <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-integra-navy">Montos</h2>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {/* Subtotal */}
-          <div data-error={!!errors.subtotal}>
-            <Label className="mb-1 block">Subtotal (B/.) *</Label>
-            <NumberInput
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={subtotal}
-              onChange={(e) => setSubtotal(e.target.value)}
-              disabled={isPending}
-              placeholder="0.00"
-              className={errors.subtotal ? "border-red-300" : ""}
-            />
-            {errors.subtotal && (
-              <p className="mt-1 text-xs text-red-600">{errors.subtotal}</p>
-            )}
-          </div>
+        {/* ─────────────────────────────────────────────────────────────────
+            LOS IMPORTES SE DERIVAN DE LAS LÍNEAS, NO SE TIPEAN.
 
-          {/* Tasa ITBMS */}
-          <div data-error={!!errors.tax_rate}>
-            <Label className="mb-1 block">Tasa ITBMS *</Label>
-            <select
-              value={taxRate}
-              onChange={(e) => {
-                setTaxRate(Number(e.target.value) as BusinessExpenseTaxRate);
-                setManualOverride(false);
-              }}
-              disabled={isPending}
-              className={
-                "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
-                (errors.tax_rate ? "border-red-300" : "border-gray-300")
-              }
-            >
-              {VALID_TAX_RATES.map((r) => (
-                <option key={r} value={r}>
-                  {r === 0 ? "Exento (0%)" : `${(r * 100).toFixed(0)}%`}
-                </option>
-              ))}
-            </select>
-            {errors.tax_rate && (
-              <p className="mt-1 text-xs text-red-600">{errors.tax_rate}</p>
-            )}
-          </div>
+            Hasta el 09/09/2026 acá había tres campos editables —subtotal, tasa
+            de ITBMS y monto de ITBMS— que convivían con las líneas sin estar
+            conectados. Eso obligaba a cargar los importes dos veces y, peor,
+            rompía dos casos legítimos contra
+            `business_expenses_tax_consistency_check`:
 
-          {/* ITBMS calculado (editable) */}
-          <div data-error={!!errors.tax_amount}>
-            <Label className="mb-1 flex items-center justify-between">
-              <span>ITBMS (B/.) *</span>
-              {manualOverride && (
-                <button
-                  type="button"
-                  onClick={handleRecalcTax}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-integra-navy hover:text-integra-gold"
-                  title="Volver al cálculo automático"
-                >
-                  <RefreshCw size={12} />
-                  Recalcular
-                </button>
-              )}
-            </Label>
-            <NumberInput
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={taxAmount}
-              onChange={(e) => {
-                setTaxAmount(e.target.value);
-                setManualOverride(true);
-              }}
-              disabled={isPending || taxRate === 0}
-              placeholder="0.00"
-              className={errors.tax_amount ? "border-red-300" : ""}
-            />
-            {errors.tax_amount && (
-              <p className="mt-1 text-xs text-red-600">{errors.tax_amount}</p>
-            )}
-            {!errors.tax_amount && manualOverride && (
-              <p className="mt-1 text-xs text-gray-500">Valor manual (override del cálculo automático)</p>
-            )}
+              · Todas las líneas exentas y la tasa del encabezado en su valor por
+                DEFECTO (7%) → la base rechazaba la compra.
+              · Líneas mixtas —una gravada y una exenta, la factura del internet
+                que planteó Josuarth— con la tasa del encabezado en 0% → también.
+
+            Ahora el encabezado es un RESUMEN. El ITBMS de cada línea se sigue
+            pudiendo ajustar a mano en el editor de líneas, que es donde vive el
+            dato: si el comprobante trae un redondeo distinto, se corrige ahí.
+            ───────────────────────────────────────────────────────────────── */}
+        <div className="rounded-md border bg-gray-50 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Subtotal</span>
+            <span className="font-mono font-medium text-gray-900">
+              B/. {fmtMoney(subtotalNum)}
+            </span>
           </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">
+              ITBMS{" "}
+              <span className="text-xs text-gray-400">
+                (suma de las líneas gravadas)
+              </span>
+            </span>
+            <span className="font-mono font-medium text-gray-900">
+              B/. {fmtMoney(taxNum)}
+            </span>
+          </div>
+          {(errors.subtotal || errors.tax_amount || errors.tax_rate) && (
+            <p className="text-xs text-red-600">
+              {errors.subtotal ?? errors.tax_amount ?? errors.tax_rate}
+            </p>
+          )}
+          <p className="text-xs text-gray-500">
+            Se calculan sumando las líneas de arriba. Para cambiarlos, edite la
+            línea correspondiente.
+          </p>
         </div>
 
         {/* Total calculado (read-only) */}

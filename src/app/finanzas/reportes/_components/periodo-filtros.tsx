@@ -113,18 +113,3 @@ export function PeriodoFiltros({
     </div>
   );
 }
-
-/**
- * Formato largo de una fecha ISO para los encabezados de los estados
- * ("30 de junio de 2026"). En UTC a propósito: `YYYY-MM-DD` no tiene hora, y
- * dejarlo a la zona local corre el día uno para atrás al oeste de Greenwich.
- */
-export function fechaLarga(iso: string): string {
-  const [a, m, d] = iso.split("-").map(Number);
-  return new Date(Date.UTC(a, (m ?? 1) - 1, d ?? 1)).toLocaleDateString("es-PA", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}

@@ -84,6 +84,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           supplier_id: expense.supplier_id,
           supplier_name: expense.supplier_name,
           supplier_ruc: expense.supplier_ruc,
+          supplier_invoice_number: expense.supplier_invoice_number,
           // La cuenta vive en las líneas desde la `040`.
           lineas: (lineasDeLaCompra ?? []).map((l) => ({
             description: l.description as string,

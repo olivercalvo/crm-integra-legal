@@ -1909,3 +1909,97 @@ de planilla (`600001 Sueldos`, `600004 Décimo Tercer Mes`…), y ahí hay una p
 de diseño: **¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran como una compra
 con proveedor, o salen de la planilla y nunca pasan por este módulo?** Va a RM —son los
 contadores del bufete y saben cómo se asienta la planilla—; está anotado en `task_plan.md`.
+
+---
+
+## SOP-025: La frontera cliente/servidor — qué puede cruzar y qué no
+
+**Por qué existe:** el 09/09/2026, delante de RM, tres pantallas de reportes devolvieron
+«Application error: a server-side exception has occurred» al aplicar un filtro de fechas.
+`fechaLarga()` vivía en `_components/periodo-filtros.tsx`, que empieza con `"use client"`, y los
+Server Components de pyl, balance y comprobación la importaban de ahí.
+
+### La regla
+
+> Un módulo `"use client"` sólo puede exportar **componentes** hacia un módulo de servidor.
+
+Cuando un Server Component importa de un módulo cliente **no recibe la función**: recibe la
+referencia de cliente que React usa para hidratar. Llamarla lanza `… is not a function`.
+
+- ✅ `export function PeriodoFiltros()` — componente, cruza la frontera
+- ❌ `export function fechaLarga()` — función común, **no** cruza
+- ❌ `export const TROZO = 3180` — constante, **no** cruza
+
+### Por qué no alcanza con tener cuidado
+
+**Nada lo detecta antes de producción.** TypeScript compila, `next build` pasa y la pantalla
+funciona mientras no se ejecute la línea que llama a la función. Acá eso significaba «anda sin
+filtro, revienta con filtro» — y el filtro es justo lo que hace un contador.
+
+En producción el mensaje ni siquiera nombra el archivo: sale un digest opaco
+(`483177356`) y hay que ir a los logs del hosting para saber qué pasó.
+
+### El arreglo, cuando pasa
+
+**No es renombrar la función.** Es MOVERLA a un módulo sin `"use client"`, que los dos lados
+pueden importar. Precedente: `src/lib/finanzas/reports/fecha-larga.ts`.
+
+### 🔒 El candado
+
+`src/lib/finanzas/reports/__tests__/frontera-cliente-servidor.test.ts` recorre `src/`, junta lo
+que cada módulo `"use client"` exporta y no es un componente (por PascalCase, la convención de
+`claude.md` §10) y falla si algún módulo de servidor lo importa. El mensaje nombra el archivo, el
+símbolo y el arreglo.
+
+---
+
+## SOP-026: Los importes del encabezado de una compra salen de las líneas
+
+**Por qué existe:** hasta el 09/09/2026 el formulario de Gastos del Bufete tenía tres campos
+editables en el encabezado —subtotal, tasa de ITBMS y monto de ITBMS— que convivían con las
+líneas **sin estar conectados a ellas**. Se cargaba todo dos veces, y no era sólo incómodo.
+
+### Lo que rompía, medido
+
+`business_expenses_tax_consistency_check` acopla los tres campos del encabezado. Medido contra
+staging con INSERTs reales dentro de una transacción con ROLLBACK:
+
+| Caso | Resultado con la tasa tipeada a mano |
+|---|---|
+| Mixta (una gravada al 7% + una exenta), cabecera 7% | pasa |
+| **Todas exentas, cabecera 7%** — el valor **por defecto** del formulario | **RECHAZA** |
+| **Mixta, cabecera 0%** | **RECHAZA** |
+| Todas gravadas 7%, cabecera 7% | pasa |
+
+O sea: dejar el formulario como venía y cargar dos renglones exentos no guardaba, y el error que
+salía era el CHECK crudo de Postgres.
+
+### La regla
+
+    subtotal   = Σ amount de las líneas
+    tax_amount = Σ tax_amount de las líneas
+    tax_rate   = 0 si no hay ITBMS
+                 si hay, la tasa MÁS ALTA entre las líneas que efectivamente lo pagan
+
+`tax_rate` en el encabezado **no es un dato contable**: el ITBMS real es la suma por línea. La
+columna existe desde antes de que hubiera líneas, y el CHECK la mira. La regla es la mínima que
+lo satisface sin mentir.
+
+### Se calcula en TRES lugares, y es a propósito
+
+| Dónde | Por qué ahí |
+|---|---|
+| `business-expense-form.tsx` | mostrar el total sin esperar la respuesta |
+| `validators/business-expense.ts` | validar antes de pegarle a la base |
+| `api/business-expenses.ts` | el servidor no confía en un número que llegó por la red |
+
+⚠️ Si divergen, la compra se guarda con un encabezado que no es la suma de sus partes y el asiento
+deja de cuadrar contra su propio documento. Lo fija
+`validators/__tests__/compra-importes-derivados.test.ts`.
+
+### Dónde se ajusta el ITBMS a mano
+
+En la LÍNEA, no en el encabezado. Si el comprobante trae un redondeo distinto, se corrige en el
+renglón que lo tiene. La tasa de línea se acota a `0..1` (el rango del CHECK de la base), **no** a
+la whitelist panameña: el campo es numérico libre para que un comprobante raro se pueda cargar.
+

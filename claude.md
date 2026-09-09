@@ -256,6 +256,25 @@ que vivía acá era falsa y por eso se corrigió.
 
 ## Módulo Finanzas — Anulación de facturas
 
+### ⚠️ Regla nueva del 09/09/2026 — TODAVÍA NO IMPLEMENTADA
+
+Acta de la reunión con RM:
+
+> **Una factura de venta sólo se anula dentro del MISMO MES.** Cerrado el mes, la
+> corrección es **nota de crédito con fecha del día** — nunca con la fecha del
+> documento original.
+
+Y su par, que aplica a todo el módulo contable:
+
+> **La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
+> que revierte.
+
+🔴 **Lo de abajo describe el comportamiento de HOY, que todavía no cumple esta
+regla:** el botón de anular sigue disponible mientras el status lo permita, sin
+mirar en qué mes cae `issue_date`. El gate por mes y el desvío a nota de crédito
+son un commit propio. Se anota acá —y no sólo en `task_plan.md`— para que nadie
+lea la sección siguiente como si fuera la política vigente del bufete.
+
 ### Estado actual (Camino 1, MVP transitorio)
 
 Las abogadas y admins pueden anular facturas emitidas desde la UI:

@@ -1,5 +1,114 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Correcciones de la reunión del 09/09 con RM] - 2026-09-09
+
+Tres fallos en vivo delante del cliente. La causa de dos de ellos era la misma y no era la que
+parecía.
+
+### 🔴 La causa raíz: base adelantada, código atrasado
+
+El deploy que corría la demo era **82dd1fe** (03/09). Los tres commits del cableado contable
+—`722eaed` factura→asiento, `14dbcfc` compra→asiento, `55dbd91` cobro y pago→asiento— estaban
+**commiteados en local y nunca subidos**. Pero staging ya tenía aplicadas las migraciones `036`
+a `042`.
+
+Es la lección de lock-step del Sprint 2E.1, otra vez: *"schema y código DEBEN moverse en
+lock-step"*. Ahí fue dropear una columna antes de refactorizar; acá fue aplicar un CHECK y dejar
+su código sin publicar. Mismo resultado: la base exige algo que el código desplegado no sabe dar.
+
+### La factura que no llegó al mayor — el diagnóstico que NO era
+
+La hipótesis era que `emitInvoice` rechazaba con 422 por la cuenta `4101` inactiva. **No fue
+eso.** `emitInvoice` consume el correlativo ANTES de armar el asiento, así que un 422 deja un
+hueco en la numeración. `numbering_sequences.invoice_hon` seguía en `last_number = 7`, con
+`updated_at` del 04/09: la secuencia no se tocó el 09/09.
+
+Y en el build desplegado `emitInvoice` **no tenía ni una línea de posteo**. Nunca se pulsó
+emitir; y si se hubiera pulsado, habría salido una factura emitida **sin asiento**, en silencio,
+que es peor.
+
+El 422 sí habría ocurrido con el código nuevo, así que el relink va **en la misma tanda** que el
+push: subir el cableado sin arreglar el catálogo cambiaba el silencio por un rechazo en la demo
+siguiente.
+
+### Relink de los servicios de honorarios — migración `043`
+
+Los siete `HON-*` apuntaban a `4101`, del plan anterior y **inactiva**. Las cinco que Josuarth
+confirmó: `HON-COR→400001`, `HON-LAB→400003`, `HON-CIV→400004`, `HON-PEN→400005`,
+`HON-MIG→400007`.
+
+**`HON-FAM` y `HON-OTROS` siguen en `4101` y siguen rechazando, a propósito.** El bufete no
+decidió su cuenta. Un rechazo con nombre y apellido es reversible; un ingreso mal clasificado
+dentro de un libro inmutable, no.
+
+Las 34 cuentas del plan viejo quedan **INACTIVAS, no borradas**. Auditoría completa: `4101` era la
+única cuenta inactiva referenciada en todo el sistema, y **cero líneas de asiento** apuntaban a
+una inactiva.
+
+### El filtro que rompía los reportes — frontera cliente/servidor
+
+`fechaLarga()` vivía en `_components/periodo-filtros.tsx`, que es `"use client"`. Los Server
+Components de **pyl, balance y comprobación** la importaban de ahí. Un Server Component que
+importa de un módulo cliente no recibe la función: recibe la referencia de cliente, y llamarla
+lanza `TypeError: … is not a function`.
+
+Como sólo se invoca cuando hay período, las tres pantallas andaban sin filtro y devolvían 500 al
+aplicar uno. Se movió a `src/lib/finanzas/reports/fecha-larga.ts`, sin `"use client"`.
+
+🔒 **Candado nuevo:** `reports/__tests__/frontera-cliente-servidor.test.ts` falla si un módulo de
+servidor importa de un `"use client"` algo que no es un componente. Nada más lo detectaba:
+TypeScript compila, `next build` pasa y la pantalla anda mientras no se ejecute la línea.
+
+**Mayor y antigüedad no se reprodujeron**: 64 cuentas del mayor, las dos pestañas de antigüedad y
+las rutas de export, todas 200.
+
+### Compras — el `610005` del encabezado, y lo que había debajo
+
+El formulario desplegado mandaba `chart_account_code` en el encabezado y el CHECK
+`business_expenses_cuenta_vive_en_la_linea` de la `040` lo rechazaba. El 23514 salía **crudo a
+pantalla** (`Failing row contains…`) por la rama de `pgErrorToMessage`. El arreglo ya estaba
+escrito en `14dbcfc`; sólo faltaba publicarlo.
+
+**Y había un fallo silencioso al lado:** el mismo día entró *"SERVICIO DE TELEFONO DE AGOSTO
+2026"* (B/. 29,96) **sin cuenta y sin líneas**, porque en el build viejo la cuenta era opcional.
+Uno se rechazó a gritos; el otro entró mal sin avisar. Borrado de staging.
+
+### Los importes del encabezado de una compra ahora se DERIVAN de las líneas
+
+Medido contra staging con INSERTs reales dentro de un ROLLBACK:
+
+| Caso | Antes |
+|---|---|
+| Mixta (gravada + exenta), cabecera 7% | pasa |
+| **Todas exentas, cabecera 7% — el valor por DEFECTO del formulario** | **la base rechaza** |
+| **Mixta, cabecera 0%** | **la base rechaza** |
+
+El encabezado tenía tres campos editables —subtotal, tasa, ITBMS— que convivían con las líneas
+sin estar conectados. Ahora `subtotal`, `tax_amount` y `tax_rate` salen de las líneas en los tres
+lugares (pantalla, validador y API). El ITBMS por línea se sigue ajustando a mano en el editor de
+líneas, que es donde vive el dato.
+
+### Número de factura del proveedor — migración `044`
+
+`business_expenses.supplier_invoice_number`, opcional (hay recibos y vales sin numeración), con
+CHECK de **largo y nunca de formato** —mismo criterio que el RUC de la `033`— e índice de
+búsqueda. Sin UNIQUE todavía: no cubriría las compras sin proveedor y un 23505 sin traducir
+repetiría el error crudo del 09/09. Queda anotado.
+
+`due_date` editable ya venía en `14dbcfc`: se propone desde `payment_terms_days` del proveedor y
+deja de recalcularse en cuanto se toca.
+
+### Bajado del inventario
+
+El botón *"pasar a contabilidad"* **no se construye**. Todos los gastos de trámite pasan a
+contabilidad. Rose fue explícita.
+
+### Pendiente anotado, fuera de esta tanda
+
+20 líneas de gasto de trámite (B/. 7.600) sin cuenta contable — el backfill de la `036`, con su
+CHECK `NOT VALID`. Ninguna está posteada y ninguna puede postearse hasta que se les asigne cuenta.
+
+
 ## [Cableado cobro y pago → asiento] - 2026-09-04
 
 Filas 15 y 16 del acta del 25/08. Dos movimientos espejo:

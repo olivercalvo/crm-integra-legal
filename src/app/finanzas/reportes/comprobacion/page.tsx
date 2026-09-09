@@ -6,7 +6,8 @@ import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildBalanceComprobacion } from "@/lib/finanzas/reports/balance-comprobacion";
 import { StatementHeader, OpeningBalancesNotice } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
-import { PeriodoFiltros, fechaLarga } from "../_components/periodo-filtros";
+import { PeriodoFiltros } from "../_components/periodo-filtros";
+import { fechaLarga } from "@/lib/finanzas/reports/fecha-larga";
 import { ComprobacionTable } from "./_components/comprobacion-table";
 
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];

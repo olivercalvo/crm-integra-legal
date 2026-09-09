@@ -9,7 +9,8 @@ import {
   formatAmount,
 } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
-import { PeriodoFiltros, fechaLarga } from "../_components/periodo-filtros";
+import { PeriodoFiltros } from "../_components/periodo-filtros";
+import { fechaLarga } from "@/lib/finanzas/reports/fecha-larga";
 import { EstadoResultadoStatement } from "./_components/estado-resultado-statement";
 
 // Mismo set de roles que el resto de /finanzas/reportes.

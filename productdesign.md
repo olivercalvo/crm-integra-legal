@@ -601,6 +601,34 @@ que vino de QuickBooks está en la cuenta control sin repartir. No es un cero de
 es un cero de "acá empieza lo que sabemos", y la diferencia entre las dos lecturas le importa a
 quien audita.
 
+### GASTOS DEL BUFETE — la compra se carga por LÍNEAS
+
+Una compra del bufete tiene **una o más líneas**, y cada línea dice contra qué cuenta se imputa
+su parte y cuánto ITBMS paga. No hay una cuenta única en el encabezado: la factura del internet
+puede traer un renglón gravado y uno exento, y una sola cuenta obligaría a partir el comprobante
+en dos gastos que no existen.
+
+**Los importes del encabezado son un RESUMEN, no un campo.** Subtotal, ITBMS y total se calculan
+sumando las líneas y se muestran en solo lectura. Para corregir un redondeo, se edita la línea que
+lo tiene. Antes eran tres campos editables al lado de las líneas, y cargar dos renglones exentos
+dejando la tasa en su valor por defecto **no guardaba**.
+
+El encabezado sí guarda lo que describe al documento entero:
+
+- **Proveedor** — la ficha, de donde salen el RUC, el DV y el plazo de pago
+- **N.º de factura del proveedor** — opcional, porque hay recibos y vales sin numeración. Es lo
+  que se busca al conciliar contra el estado de cuenta del proveedor y lo que pide el anexo de
+  compras de la DGI
+- **Vence** — se propone desde el plazo del proveedor y se puede cambiar: **la fecha que vale es
+  la del comprobante**. En cuanto se toca a mano, deja de recalcularse solo. De acá salen los
+  tramos de la antigüedad de cuentas por pagar
+
+🔴 **Una compra que no se puede contabilizar no queda registrada.** Se registra, se postea el
+asiento y, si el posteo falla, se deshace el registro. El nombre del módulo se queda como está:
+*Gastos del Bufete*.
+
+---
+
 ---
 
 ## REQUERIMIENTOS NO FUNCIONALES

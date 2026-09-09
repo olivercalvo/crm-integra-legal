@@ -60,6 +60,13 @@ export interface BusinessExpenseRow {
    */
   supplier_name: string | null;
   supplier_ruc: string | null;
+  /**
+   * Número del comprobante del proveedor que respalda la compra
+   * (migración `044`). Opcional: hay desembolsos sin factura numerada
+   * —recibos, vales de caja chica—, y exigirlo dejaría esos gastos sin
+   * poder cargarse. Se valida el LARGO, nunca el formato.
+   */
+  supplier_invoice_number: string | null;
   chart_account_code: string | null;
   description: string;
   subtotal: string | number;       // NUMERIC(12,2) → string vía REST
@@ -157,6 +164,13 @@ export interface CreateBusinessExpenseInput {
    */
   supplier_name: string | null;
   supplier_ruc: string | null;
+  /**
+   * Número del comprobante del proveedor que respalda la compra
+   * (migración `044`). Opcional: hay desembolsos sin factura numerada
+   * —recibos, vales de caja chica—, y exigirlo dejaría esos gastos sin
+   * poder cargarse. Se valida el LARGO, nunca el formato.
+   */
+  supplier_invoice_number: string | null;
   // 🔴 `chart_account_code` YA NO ESTÁ EN EL INPUT. La cuenta vive en
   //    `expense_lines.chart_account_code`, una por línea (migración `040`), y un
   //    CHECK fuerza la columna del encabezado a NULL. Sacarlo del tipo —en vez

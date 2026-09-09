@@ -159,6 +159,18 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                   )
                 }
               />
+              {/* El comprobante que respalda la compra (migración `044`): es lo
+                  que se busca al conciliar contra el proveedor. */}
+              <Item
+                label="N.º factura proveedor"
+                value={
+                  expense.supplier_invoice_number ? (
+                    <span className="font-mono">{expense.supplier_invoice_number}</span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
               <div className="sm:col-span-2">
                 <Item label="Descripción" value={expense.description} />
               </div>

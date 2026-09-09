@@ -1,5 +1,50 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> RETOMAR ACÁ — TANDA DEL 09/09/2026, POST-REUNIÓN CON RM <<<
+
+**Estado:** subido a `origin/develop` y desplegado en staging. **Producción no se tocó.**
+
+### Hecho en esta tanda
+
+- [x] **Relink de servicios** (migración `043`): `HON-COR→400001`, `HON-LAB→400003`,
+      `HON-CIV→400004`, `HON-PEN→400005`, `HON-MIG→400007`. Idempotente, aplicada en staging.
+- [x] **Publicado el cableado contable** — los tres commits que estaban en local sin subir
+      (`722eaed`, `14dbcfc`, `55dbd91`). Era la causa raíz de dos de los tres fallos.
+- [x] **`fechaLarga` fuera del módulo `"use client"`** → `lib/finanzas/reports/fecha-larga.ts`.
+      pyl, balance y comprobación vuelven a responder con filtro.
+- [x] **Candado de frontera cliente/servidor** (`frontera-cliente-servidor.test.ts`).
+- [x] **Compras:** importes del encabezado derivados de las líneas, en los tres lugares.
+- [x] **Migración `044`**: `supplier_invoice_number` + campo en el formulario y en el detalle.
+- [x] **Gasto huérfano borrado** de staging (el del teléfono, sin cuenta ni líneas).
+- [x] Bajado del inventario: el botón *"pasar a contabilidad"* **no se construye**.
+
+### Pendiente, anotado y FUERA de esta tanda
+
+- [ ] **20 líneas de gasto de trámite sin cuenta (B/. 7.600)** — el backfill de la `036`. Ninguna
+      posteada; ninguna puede postearse hasta asignarles cuenta. Necesita asignación masiva.
+- [ ] **`HON-FAM` y `HON-OTROS`** siguen en `4101` y siguen rechazando. Falta la decisión del
+      bufete sobre a qué cuenta de ingreso van.
+- [ ] **Selector de código de impuesto por línea** en compras (paridad con facturación). Hoy es
+      un campo numérico libre, que ya permite mezclar.
+- [ ] **UNIQUE de `supplier_invoice_number`** por proveedor — necesita decidir qué pasa con las
+      compras sin proveedor y traducir el 23505 a español.
+- [ ] **`updateBusinessExpense` no reescribe `expense_lines`.** Hoy es inalcanzable (toda compra
+      entra al libro en el mismo acto y el gate contable la vuelve no editable), pero está.
+- [ ] Error de lint preexistente en `src/lib/utils/import-parser.ts:259` (`sheetName` sin usar).
+
+### Saldos de apertura
+
+Al **30 de junio de 2026**. El sistema arranca a registrar desde **julio**.
+
+### Reglas nuevas del acta del 09/09
+
+- La **reversión** lleva SIEMPRE la fecha en que se hace, nunca la del original.
+- Una **factura de venta sólo se anula dentro del mismo mes**. Cerrado el mes, la corrección es
+  **nota de crédito con fecha del día**.
+- Con las **nueve subcategorías** alcanza. No se agregan impuestos a las ganancias ni operaciones
+  discontinuadas.
+
+
 ## >>> RETOMAR ACA — STAGING LISTO PARA JOSUARTH — 01/09/2026 <<<
 
 **Lo que sigue:** mandarle el correo a Josuarth con el acceso, y **esperar su feedback antes de

@@ -37,6 +37,31 @@ type DB = SupabaseClient;
 const ENTITY = "business_expenses";
 
 /**
+ * Los importes del ENCABEZADO, derivados de las líneas. Una sola regla, usada
+ * por el alta y por la edición.
+ *
+ * 🔴 No se leen del input aunque vengan: si un cliente pudiera mandar un total
+ *    que no es la suma de las líneas, el asiento no cuadraría contra su propio
+ *    documento. El validador los deriva también, para que la pantalla muestre el
+ *    total sin esperar la respuesta; acá se vuelve a hacer porque el servidor no
+ *    puede confiar en un número que llegó por la red.
+ *
+ * ⚠️ `tax_rate` es el que más importa, y es el que antes NO se derivaba.
+ *    `business_expenses_tax_consistency_check` acopla los tres campos, y con la
+ *    tasa tipeada a mano en el encabezado rechazaba dos casos legítimos
+ *    (medidos contra staging el 09/09/2026): todas las líneas exentas con la
+ *    tasa por defecto en 7%, y líneas mixtas con la tasa en 0%. Ver
+ *    `validators/business-expense.ts`, que documenta la regla completa.
+ */
+function importesDelEncabezado(lineas: { amount: number; tax_rate: number; tax_amount: number }[]) {
+  const subtotal = round2(lineas.reduce((a, l) => a + l.amount, 0));
+  const taxAmount = round2(lineas.reduce((a, l) => a + l.tax_amount, 0));
+  const gravadas = lineas.filter((l) => l.tax_amount > 0).map((l) => l.tax_rate);
+  const taxRate = taxAmount > 0 && gravadas.length > 0 ? Math.max(...gravadas) : 0;
+  return { subtotal, taxAmount, taxRate };
+}
+
+/**
  * El vencimiento que le corresponde a un gasto.
  *
  * Si el formulario mandó uno, manda ese: lo que diga el comprobante gana sobre
@@ -219,8 +244,7 @@ export async function createBusinessExpense(
   // Los totales del encabezado los calcula el SERVIDOR sumando las líneas, no
   // llegan del cliente: si llegaran, un cliente podría mandar un total que no
   // es la suma y el asiento no cuadraría contra su propio documento.
-  const subtotal = round2(input.lineas.reduce((s, l) => s + l.amount, 0));
-  const taxAmount = round2(input.lineas.reduce((s, l) => s + l.tax_amount, 0));
+  const { subtotal, taxAmount, taxRate } = importesDelEncabezado(input.lineas);
 
   const { data, error } = await db
     .from("business_expenses")
@@ -231,13 +255,14 @@ export async function createBusinessExpense(
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
+      supplier_invoice_number: input.supplier_invoice_number,
       // 🔴 SIEMPRE null: la cuenta vive en la línea desde la migración `040`, y
       //    el CHECK `business_expenses_cuenta_vive_en_la_linea` rechaza otra
       //    cosa. No se lee `input.chart_account_code` a propósito.
       chart_account_code: null,
       description: input.description,
       subtotal,
-      tax_rate: input.tax_rate,
+      tax_rate: taxRate,
       tax_amount: taxAmount,
       status: input.status,
       payment_date: input.payment_date,
@@ -363,6 +388,7 @@ export async function updateBusinessExpense(
     .from("business_expenses")
     .select(
       `id, expense_date, due_date, supplier_id, supplier_name, supplier_ruc,
+       supplier_invoice_number,
        chart_account_code, description, subtotal, tax_rate, tax_amount,
        status, payment_date, payment_method, notes`
     )
@@ -389,6 +415,7 @@ export async function updateBusinessExpense(
     throw new MutationError("El proveedor seleccionado no existe.", 400);
   }
   const dueDateUpdate = await resolverVencimiento(db, tenantId, input);
+  const importesEditados = importesDelEncabezado(input.lineas);
 
   const { error: errUpdate } = await db
     .from("business_expenses")
@@ -398,12 +425,13 @@ export async function updateBusinessExpense(
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
       supplier_ruc: input.supplier_ruc,
+      supplier_invoice_number: input.supplier_invoice_number,
       // Sigue en NULL: la cuenta vive en la línea (migración `040`).
       chart_account_code: null,
       description: input.description,
-      subtotal: input.subtotal,
-      tax_rate: input.tax_rate,
-      tax_amount: input.tax_amount,
+      subtotal: importesEditados.subtotal,
+      tax_rate: importesEditados.taxRate,
+      tax_amount: importesEditados.taxAmount,
       status: input.status,
       payment_date: input.payment_date,
       payment_method: input.payment_method,
@@ -419,7 +447,8 @@ export async function updateBusinessExpense(
 
   // Audit log: diff de campos modificados
   const fields = [
-    "expense_date", "supplier_name", "supplier_ruc", "chart_account_code",
+    "expense_date", "supplier_name", "supplier_ruc", "supplier_invoice_number",
+    "chart_account_code",
     "description", "subtotal", "tax_rate", "tax_amount",
     "status", "payment_date", "payment_method", "notes",
   ] as const;

@@ -148,6 +148,7 @@ const INPUT = {
   supplier_id: null,
   supplier_name: "PROV",
   supplier_ruc: null,
+    supplier_invoice_number: null,
   lineas: [
     {
       description: "Útiles",

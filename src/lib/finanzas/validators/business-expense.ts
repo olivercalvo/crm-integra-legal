@@ -47,8 +47,26 @@ const VALID_PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
   "otro",
 ];
 
-/** Tolerancia (en B/.) al verificar tax_amount contra subtotal × tax_rate. */
-const TAX_AMOUNT_TOLERANCE = 0.02;
+/**
+ * La tasa que va en el ENCABEZADO, derivada de las líneas.
+ *
+ * No es un dato contable: el ITBMS real de la compra es la SUMA de los importes
+ * de cada línea, y cada línea tiene su propia tasa. Esta tasa existe sólo porque
+ * la columna existe desde antes de que hubiera líneas, y porque
+ * `business_expenses_tax_consistency_check` la mira.
+ *
+ * La regla, que es la mínima que satisface ese CHECK y además no miente:
+ *   · sin ITBMS  → 0   (compra íntegramente exenta)
+ *   · con ITBMS  → la tasa MÁS ALTA entre las líneas que efectivamente lo pagan
+ *
+ * Con una sola tasa —el caso normal— devuelve exactamente esa tasa, así que las
+ * compras de siempre se guardan igual que antes.
+ */
+function derivarTasaDeCabecera(lineas: LineaDeCompraInput[], taxAmount: number): number {
+  if (taxAmount <= 0) return 0;
+  const gravadas = lineas.filter((l) => l.tax_amount > 0).map((l) => l.tax_rate);
+  return gravadas.length > 0 ? Math.max(...gravadas) : 0;
+}
 
 /**
  * Normaliza un tax_rate a uno de los valores whitelist. Acepta cualquier
@@ -128,6 +146,20 @@ export function validateCreateBusinessExpense(
     }
   }
 
+  // supplier_invoice_number (opcional, sólo largo — nunca formato).
+  // Mismo criterio que el RUC de proveedores: en Panamá conviven numeraciones
+  // de facturación electrónica, talonarios preimpresos y recibos con serie
+  // propia. Un validador estricto rechazaría comprobantes legítimos.
+  let supplierInvoiceNumber: string | null = null;
+  if (raw.supplier_invoice_number != null && String(raw.supplier_invoice_number).trim() !== "") {
+    const n = String(raw.supplier_invoice_number).trim();
+    if (n.length > 50) {
+      errors.supplier_invoice_number = "Número de factura muy largo (máximo 50 caracteres)";
+    } else {
+      supplierInvoiceNumber = n;
+    }
+  }
+
   // supplier_ruc (opcional, validar longitud si llega)
   let supplierRuc: string | null = null;
   if (raw.supplier_ruc != null && String(raw.supplier_ruc).trim() !== "") {
@@ -167,7 +199,15 @@ export function validateCreateBusinessExpense(
     if (!Number.isFinite(amount) || amount <= 0) {
       errors[`lineas.${i}.amount`] = `Línea ${nro}: el monto tiene que ser mayor que cero.`;
     }
+    // La tasa de la línea se acota al rango que acepta la base
+    // (`business_expenses_tax_rate_range_check`: 0..1). NO se acota a la
+    // whitelist panameña {0, 7%, 10%, 15%}: el campo es numérico libre a
+    // propósito para que un comprobante con un redondeo distinto se pueda
+    // cargar tal como vino.
     const lineaTaxRate = Number(l.tax_rate ?? 0);
+    if (!Number.isFinite(lineaTaxRate) || lineaTaxRate < 0 || lineaTaxRate > 1) {
+      errors[`lineas.${i}.tax_rate`] = `Línea ${nro}: la tasa de ITBMS va de 0 a 1 (0,07 = 7%).`;
+    }
     const lineaTaxAmount = Number(l.tax_amount ?? 0);
     if (!Number.isFinite(lineaTaxAmount) || lineaTaxAmount < 0) {
       errors[`lineas.${i}.tax_amount`] = `Línea ${nro}: el ITBMS no puede ser negativo.`;
@@ -181,39 +221,41 @@ export function validateCreateBusinessExpense(
     });
   }
 
-  // subtotal
-  const subtotal = Number(raw.subtotal);
-  if (!isFinite(subtotal) || subtotal < 0) {
-    errors.subtotal = "Subtotal debe ser un número >= 0";
-  }
+  // ---- LOS IMPORTES DEL ENCABEZADO SE DERIVAN DE LAS LÍNEAS --------------
+  //
+  // 🔴 NO se leen de `raw.subtotal` / `raw.tax_rate` / `raw.tax_amount`. Antes sí:
+  //    el encabezado era la fuente de verdad y las líneas no existían. Desde la
+  //    migración `040` la verdad está en las líneas, y mantener dos fuentes hacía
+  //    que la compra se guardara con importes que no eran la suma de sus partes.
+  //
+  // ⚠️ Esto NO es cosmético: `business_expenses_tax_consistency_check` acopla los
+  //    tres campos del encabezado, y con el valor tipeado a mano rechazaba dos
+  //    casos legítimos (medidos contra staging el 09/09/2026):
+  //
+  //      · Todas las líneas EXENTAS con la tasa del encabezado en 7% —que es el
+  //        valor por DEFECTO del formulario— → CHECK rechaza.
+  //      · Líneas mixtas con la tasa del encabezado en 0% → CHECK rechaza.
+  //
+  //    Derivando los tres, los dos casos pasan y el encabezado describe de verdad
+  //    al documento. La compra mixta que planteó Josuarth (la factura del
+  //    internet: un renglón gravado y uno exento) es el caso central.
+  //
+  // El servidor vuelve a derivarlos en `createBusinessExpense` sobre las mismas
+  // líneas. Que se calcule en los dos lados no es duplicación por descuido: el
+  // cliente necesita mostrar el total sin esperar la respuesta, y el servidor no
+  // puede confiar en un número que llegó por la red.
+  const subtotal = round2(lineas.reduce((acc, l) => acc + l.amount, 0));
+  const taxAmount = round2(lineas.reduce((acc, l) => acc + l.tax_amount, 0));
+  const taxRateCrudo = derivarTasaDeCabecera(lineas, taxAmount);
+  // `normalizeTaxRate` sólo limpia el ruido de coma flotante cuando la tasa
+  // derivada ES una de las panameñas; si es otra, se respeta tal cual.
+  const taxRate = normalizeTaxRate(taxRateCrudo) ?? taxRateCrudo;
 
-  // tax_rate (whitelist)
-  const taxRate = normalizeTaxRate(raw.tax_rate);
-  if (taxRate === null) {
-    errors.tax_rate = "Tasa ITBMS inválida (use 0%, 7%, 10% o 15%)";
-  }
-
-  // tax_amount
-  const taxAmount = Number(raw.tax_amount);
-  if (!isFinite(taxAmount) || taxAmount < 0) {
-    errors.tax_amount = "Monto ITBMS debe ser un número >= 0";
-  }
-
-  // Coherencia (replica el CHECK de BD para fail fast con mensaje legible)
-  if (taxRate !== null && isFinite(subtotal) && subtotal >= 0 && isFinite(taxAmount) && taxAmount >= 0) {
-    if (taxRate === 0 && taxAmount !== 0) {
-      errors.tax_amount = "Si la tasa es 0%, el monto ITBMS debe ser 0";
-    } else if (taxRate > 0 && subtotal === 0 && taxAmount !== 0) {
-      errors.tax_amount = "Si el subtotal es 0, el monto ITBMS debe ser 0";
-    } else if (taxRate > 0 && subtotal > 0 && taxAmount === 0) {
-      errors.tax_amount = "Con subtotal e impuesto declarado, el monto ITBMS debe ser > 0";
-    } else if (taxRate > 0 && subtotal > 0) {
-      // Verificar coherencia con tolerancia (permite redondeos del comprobante)
-      const expected = round2(subtotal * taxRate);
-      if (Math.abs(taxAmount - expected) > TAX_AMOUNT_TOLERANCE) {
-        errors.tax_amount = `Monto ITBMS (B/. ${taxAmount.toFixed(2)}) no coincide con subtotal × tasa (esperado ≈ B/. ${expected.toFixed(2)})`;
-      }
-    }
+  if (taxAmount > 0 && taxRate === 0) {
+    // Hay ITBMS pero ninguna línea declara una tasa. Es incoherente y el CHECK
+    // de la base lo rechazaría con un mensaje crudo; se corta acá con uno claro.
+    errors.tax_amount =
+      "Hay ITBMS cargado pero ninguna línea tiene tasa. Revise la tasa de las líneas gravadas.";
   }
 
   // status
@@ -276,6 +318,7 @@ export function validateCreateBusinessExpense(
       supplier_id: supplierId,
       supplier_name: supplierName,
       supplier_ruc: supplierRuc,
+      supplier_invoice_number: supplierInvoiceNumber,
       lineas,
       description,
       subtotal: round2(subtotal),

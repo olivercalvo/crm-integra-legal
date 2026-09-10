@@ -1,10 +1,46 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — TANDA DEL 09/09/2026, POST-REUNIÓN CON RM <<<
+## >>> RETOMAR ACÁ — TANDA DEL 10/09/2026 <<<
 
 **Estado:** subido a `origin/develop` y desplegado en staging. **Producción no se tocó.**
 
 ### Hecho en esta tanda
+
+- [x] **El botón del asiento manual ya dice por qué está apagado.** La decisión se mudó a
+      `estadoDelRegistro()` en `contabilidad/asiento-manual.ts`, que devuelve el MOTIVO además
+      del booleano. Era lo que bloqueó la demo del 09/09: cuatro cláusulas y una sola con
+      explicación en pantalla.
+- [x] **`account_code` entró en las condiciones.** Antes el botón se habilitaba con las cuentas
+      sin elegir y el rechazo llegaba del servidor.
+- [x] **`MoneyInput`, un solo campo de dinero** en 13 campos de 11 archivos.
+
+### Inventario del mismo patrón en otros formularios — 10/09/2026
+
+Se revisaron todos los botones de guardar, emitir y registrar con condición de más de una
+cláusula. **La conclusión tranquilizadora: el asiento manual era el único caso grave.** Los
+formularios grandes de facturación y de gastos de bufete usan el patrón opuesto y correcto —el
+botón siempre se puede apretar y los errores salen al enviar, campo por campo (`disabled={isPending}`
+a secas)—, así que no tienen forma de quedar mudos.
+
+Lo que quedó anotado, ninguno bloqueante:
+
+- [ ] **Mayor — "Aplicar filtro"** (`reportes/mayor/_components/mayor-filtros.tsx:110`):
+      `disabled={!code}`, sin texto que lo explique. Es una sola cláusula y el selector de cuenta
+      está justo arriba, pero es un botón apagado sin motivo **en una pantalla de la demo**.
+- [ ] **Plantilla T&C** (`cotizaciones/configuracion/_components/terms-template-editor.tsx:136`):
+      `isPending || !isDirty || !isValid`. El largo mínimo SÍ se explica con el contador de
+      caracteres; `!isDirty` (nada cambió) no dice nada. Convención habitual, admin-only.
+- [ ] **Gasto de trámite sin líneas** (`gastos-tramite/[id]/page.tsx:124`): el botón de postear
+      se oculta y la tabla dice *"Este gasto todavía no tiene líneas"*, pero no dice que POR ESO
+      no se puede pasar a contabilidad. El caso hermano —líneas sin clasificar— sí tiene su aviso
+      ámbar explícito.
+
+Verificados y **correctos**, no hace falta tocarlos: la fecha del saldo inicial en el plan de
+cuentas (*"Se habilita cuando cargás un saldo distinto de 0"*), el selector de cliente al editar
+una cotización, y el modal de anulación con pagos registrados, que cambia el título y explica qué
+hacer.
+
+### Hecho el 09/09/2026
 
 - [x] **Relink de servicios** (migración `043`): `HON-COR→400001`, `HON-LAB→400003`,
       `HON-CIV→400004`, `HON-PEN→400005`, `HON-MIG→400007`. Idempotente, aplicada en staging.

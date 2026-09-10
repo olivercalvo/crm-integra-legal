@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 
 import {
   armarAsientoManual,
+  estadoDelRegistro,
   lineaManualVacia,
   lineaManualVaciaODescartable,
   parseImporte,
@@ -226,4 +227,145 @@ test("el módulo no importa nada de `cuentas-de-gasto`", async () => {
     !lineasDeImport.some((l) => l.includes("cuentas-de-gasto")),
     "🔴 `asiento-manual.ts` NO debe importar el guard de cuentas de gasto: un ajuste va contra patrimonio o ingreso tan seguido como contra gasto"
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// estadoDelRegistro — POR QUÉ EL BOTÓN ESTÁ APAGADO
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// El 09/09/2026 esto bloqueó la demo delante del cliente: RM armó un asiento
+// de 100 contra 100, el totalizador se puso verde y el botón siguió apagado
+// porque faltaba la descripción — que no avisaba nada. Se leía como un botón
+// roto.
+//
+// Estos tests fijan las dos mitades: que el motivo exista siempre que el botón
+// esté apagado, y que corregir el descuadre DENTRO DE LA MISMA SESIÓN de
+// edición habilite el registro.
+
+/**
+ * Réplica de `actualizar()` del formulario
+ * (`asientos/_components/asiento-manual-form.tsx`). Se copia a propósito: lo
+ * que se prueba es la SESIÓN DE EDICIÓN, no una llamada suelta. Un test que
+ * arme el arreglo final a mano no habría detectado nada de esto.
+ */
+function editar(
+  lineas: LineaManualDraft[],
+  i: number,
+  cambios: Partial<LineaManualDraft>
+): LineaManualDraft[] {
+  const copia = [...lineas];
+  const l = { ...copia[i], ...cambios };
+  if ("debit" in cambios && cambios.debit !== "") l.credit = "";
+  if ("credit" in cambios && cambios.credit !== "") l.debit = "";
+  copia[i] = l;
+  return copia;
+}
+
+test("🔴 descuadrado y corregido a cuadrado EN LA MISMA SESIÓN habilita el registro", () => {
+  // Exactamente el camino de la reunión del 09/09.
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  lineas = editar(lineas, 0, { account_code: "610001" });
+  lineas = editar(lineas, 1, { account_code: "100001" });
+  const descripcion = "Depreciación de mobiliario — agosto";
+
+  // 90 contra 100: no cuadra, y el motivo dice de qué lado falta.
+  lineas = editar(lineas, 0, { debit: "90" });
+  lineas = editar(lineas, 1, { credit: "100" });
+  const descuadrado = estadoDelRegistro(lineas, descripcion);
+  assert.equal(descuadrado.puede, false);
+  assert.match(descuadrado.motivo ?? "", /no cuadra/i);
+  assert.match(descuadrado.motivo ?? "", /10\.00/);
+  assert.match(descuadrado.motivo ?? "", /débito/);
+
+  // Se corrige el 90 a 100 sin recargar nada.
+  lineas = editar(lineas, 0, { debit: "100" });
+  const corregido = estadoDelRegistro(lineas, descripcion);
+  assert.equal(
+    corregido.puede,
+    true,
+    `el botón tiene que habilitarse; motivo devuelto: ${corregido.motivo}`
+  );
+  assert.equal(corregido.motivo, null);
+});
+
+test("sin descripción el botón está apagado, y lo DICE", () => {
+  // El bloqueo invisible del 09/09: el totalizador en verde y el botón muerto.
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  lineas = editar(lineas, 0, { account_code: "610001", debit: "100" });
+  lineas = editar(lineas, 1, { account_code: "100001", credit: "100" });
+
+  assert.ok(totalesManuales(lineas).cuadra, "el asiento cuadra");
+
+  const estado = estadoDelRegistro(lineas, "");
+  assert.equal(estado.puede, false);
+  assert.match(estado.motivo ?? "", /naturaleza del asiento/i);
+});
+
+test("una línea sin cuenta apaga el botón y nombra CUÁL línea", () => {
+  // Antes de esto el botón se habilitaba y el rechazo llegaba del servidor.
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  lineas = editar(lineas, 0, { account_code: "610001", debit: "100" });
+  lineas = editar(lineas, 1, { credit: "100" }); // sin cuenta
+
+  const estado = estadoDelRegistro(lineas, "Ajuste de cierre");
+  assert.equal(estado.puede, false);
+  assert.match(estado.motivo ?? "", /línea 2/i);
+});
+
+test("el formulario vacío pide los importes, no el cuadre", () => {
+  const lineas = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  const estado = estadoDelRegistro(lineas, "");
+  assert.equal(estado.puede, false);
+  assert.match(estado.motivo ?? "", /importes/i);
+});
+
+test("mientras se envía, el motivo lo dice en vez de quedar mudo", () => {
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  lineas = editar(lineas, 0, { account_code: "610001", debit: "100" });
+  lineas = editar(lineas, 1, { account_code: "100001", credit: "100" });
+
+  const estado = estadoDelRegistro(lineas, "Ajuste de cierre", true);
+  assert.equal(estado.puede, false);
+  assert.match(estado.motivo ?? "", /registrando/i);
+});
+
+test("🔒 apagado SIEMPRE trae motivo, y habilitado NUNCA", () => {
+  // La regla que sostiene el arreglo: no se puede agregar una condición nueva
+  // sin escribir su frase. Si alguien suma una cláusula muda, esto falla.
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  const casos: Array<[LineaManualDraft[], string, boolean]> = [];
+  casos.push([lineas, "", false]);
+
+  lineas = editar(lineas, 0, { account_code: "610001", debit: "100" });
+  casos.push([lineas, "Ajuste de cierre", false]); // no cuadra todavía
+  lineas = editar(lineas, 1, { credit: "100" });
+  casos.push([lineas, "Ajuste de cierre", false]); // falta la cuenta de la 2
+  lineas = editar(lineas, 1, { account_code: "100001" });
+  casos.push([lineas, "", false]); // falta la descripción
+  casos.push([lineas, "Ajuste de cierre", true]);
+
+  for (const [ls, desc, esperado] of casos) {
+    const e = estadoDelRegistro(ls, desc);
+    assert.equal(e.puede, esperado);
+    if (e.puede) assert.equal(e.motivo, null, "habilitado no lleva motivo");
+    else assert.ok((e.motivo ?? "").length > 0, "apagado SIEMPRE lleva motivo");
+  }
+});
+
+test("los motivos hablan como un contador, no como el código", () => {
+  // Nombran lo que falta en la pantalla. Nunca el campo del código ni su largo.
+  let lineas: LineaManualDraft[] = [lineaManualVacia("l0"), lineaManualVacia("l1")];
+  lineas = editar(lineas, 0, { account_code: "610001", debit: "100" });
+  lineas = editar(lineas, 1, { account_code: "100001", credit: "90" });
+
+  const motivos = [
+    estadoDelRegistro([lineaManualVacia("l0")], "").motivo,
+    estadoDelRegistro(lineas, "").motivo,
+    estadoDelRegistro(lineas, "Ajuste").motivo,
+  ];
+
+  for (const m of motivos) {
+    assert.ok(m, "hay motivo");
+    assert.doesNotMatch(m!, /descripcion|account_code|length|null|undefined|<|>=/i, m!);
+  }
 });

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABEL,
@@ -205,13 +205,9 @@ export function RegisterPaymentDialog({
                 *
               </span>
             </Label>
-            <NumberInput
+            <MoneyInput
               id="amount"
               ref={amountInputRef}
-              inputMode="decimal"
-              step="0.01"
-              min="0.01"
-              max={balanceDue}
               placeholder="0.00"
               value={amount}
               onChange={(e) => {

@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { NumberInput } from "@/components/ui/number-input";
 import { ServiceCombobox, SERVICE_CUSTOM } from "@/components/finanzas/service-combobox";
 import { TaxCodeSelect } from "@/components/finanzas/tax-code-select";
@@ -319,13 +320,9 @@ export function QuoteLinesEditor({
                       >
                         $
                       </span>
-                      <NumberInput
-                        min="0"
-                        step="0.01"
-                        inputMode="decimal"
+                      <MoneyInput
                         value={ln.unit_price}
                         onChange={(e) => patchLine(idx, { unit_price: Number(e.target.value) })}
-                        onFocus={(e) => e.target.select()}
                         disabled={disabled}
                         className={`pl-7 ${lineErrors.unit_price ? "border-red-300" : ""}`}
                       />

@@ -2003,3 +2003,55 @@ En la LÍNEA, no en el encabezado. Si el comprobante trae un redondeo distinto, 
 renglón que lo tiene. La tasa de línea se acota a `0..1` (el rango del CHECK de la base), **no** a
 la whitelist panameña: el campo es numérico libre para que un comprobante raro se pueda cargar.
 
+
+---
+
+## SOP-027: Un botón apagado tiene que decir por qué
+
+**Origen:** la demo del 09/09/2026. RM armó un asiento manual cuadrado, 100 contra 100, y el
+botón "Registrar en el libro" nunca se habilitó. No era el cuadre ni un problema de recálculo:
+el botón decidía con un booleano de cuatro cláusulas y **una sola tenía explicación en
+pantalla**. La que bloqueaba —la descripción del asiento— no avisaba nada. Desde afuera se veía
+como un botón roto, y costó el módulo que más le gustó al cliente.
+
+### La regla
+
+> **Toda condición que deshabilite un botón de guardar, emitir o registrar tiene que poder
+> decir por qué, en pantalla y con palabras del negocio.**
+
+La forma de hacerla cumplir no es acordarse: es **devolver el motivo en vez de un booleano**.
+
+```ts
+// ❌ Se puede agregar una cláusula muda sin que nadie se entere.
+const puedeGuardar = hayAlgo && cuadra && descripcion.length >= 3 && !enviando;
+
+// ✅ Agregar una cláusula OBLIGA a escribir su frase.
+const { puede, motivo } = estadoDelRegistro(lineas, descripcion, enviando);
+```
+
+El ejemplo vivo es `estadoDelRegistro()` en `lib/finanzas/contabilidad/asiento-manual.ts`.
+
+### Tres detalles que importan
+
+1. **Un solo motivo, el próximo paso.** No la lista de todo lo que falta. El orden es el de
+   dependencia: sin importes no tiene sentido hablar de cuadre.
+2. **Redactado para quien carga, no para quien programa.** *"Falta describir la naturaleza del
+   asiento"*, nunca `descripcion.length < 3`. Y cuando se puede, se nombra el elemento concreto:
+   *"Elegí la cuenta contable de la línea 2"*.
+3. **La lógica va en un módulo puro, no en el `.tsx`.** El proyecto no tiene jsdom ni
+   testing-library: la suite es `node:test` sobre `src/**/*.test.ts`. Si la decisión vive dentro
+   del componente, no se puede probar. Sacarla es lo que hace que el test exista.
+
+### El patrón alternativo, que también es correcto
+
+El botón **siempre habilitado**, con la validación al enviar y el error inline campo por campo.
+Es lo que hacen `invoice-form.tsx` y `business-expense-form.tsx` (`disabled={isPending}` a
+secas), y no tiene forma de quedar mudo. Cualquiera de los dos sirve. **Lo que no sirve es el
+intermedio:** deshabilitar por contenido y no explicar.
+
+### Al revisar
+
+Buscar `disabled={` con más de una cláusula, o cualquier `disabled={!algo}` donde `algo` dependa
+de lo que la persona cargó. Por cada cláusula, preguntarse qué ve alguien que no puede apretar el
+botón. Si la respuesta es "nada", es el bug del 09/09 otra vez.
+

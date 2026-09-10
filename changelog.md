@@ -1,5 +1,88 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Botón del asiento manual + campo de dinero único] - 2026-09-10
+
+Dos cosas de la reunión del 09/09 con RM. La primera bloqueaba el módulo que más les gustó.
+
+### 🔴 El botón de "Registrar en el libro" que nunca se habilitaba
+
+RM armó un asiento de 100 al débito contra 100 al crédito y el botón siguió apagado. Antes lo
+habían probado con 90 contra 100: el sistema mostró la diferencia y no dejó guardar, que es
+correcto y les gustó. Al corregirlo, nada.
+
+**No era el cuadre, y no era un problema de recálculo.** `totalesManuales()` recalcula bien:
+se reprodujo la sesión de edición entera —90 contra 100, corregido a 100— contra el módulo real,
+y da `cuadra: true`. El `useMemo` depende de `lineas` y `actualizar()` copia el array, así que
+nunca hubo un valor viejo.
+
+La causa estaba en `asiento-manual-form.tsx:99-100`. El botón decidía con un booleano de cuatro
+cláusulas:
+
+```ts
+hayAlgo && totales.cuadra && descripcion.trim().length >= 3 && !enviando
+```
+
+y **sólo una de las cuatro tenía explicación en pantalla**: el cuadre, con su panel ámbar. La que
+bloqueaba de verdad era la descripción, que no avisaba nada — el campo tiene el asterisco en la
+etiqueta y nada más. Con la descripción vacía el botón estaba apagado en los dos momentos, así
+que el rechazo de 90 contra 100 pareció ser la regla de cuadre funcionando, y corregir el cuadre
+no cambió nada. Desde afuera se veía como un botón roto.
+
+El mensaje correcto ya existía **del lado del servidor** (`api/finanzas/asientos/route.ts:137`),
+pero el cliente apagaba el botón antes de que pudiera llegar nunca.
+
+**El arreglo:** la decisión se mudó a `estadoDelRegistro()` en `contabilidad/asiento-manual.ts`,
+que devuelve el MOTIVO además del booleano, y el motivo se muestra al lado del botón. La regla
+que queda: **una condición que apaga el botón tiene que poder decir por qué.** Devolver un motivo
+en vez de un booleano es lo que hace imposible agregar una cláusula muda.
+
+Los motivos están redactados para un contador, no para un programador: *"Falta describir la
+naturaleza del asiento: qué operación registra"*, no `descripcion.length < 3`. Hay un test que
+lo verifica.
+
+**Y se agregó `account_code` a las condiciones.** Era un hueco real: hasta hoy el botón se
+habilitaba con las cuentas sin elegir y el rechazo llegaba recién del servidor. Ahora el motivo
+dice *cuál* línea.
+
+🔒 **Tests nuevos** en `asiento-manual.test.ts`, incluido el caso exacto de la reunión: un asiento
+descuadrado corregido a cuadrado **dentro de la misma sesión de edición** habilita el registro.
+El test replica `actualizar()` del formulario a propósito — armar el arreglo final a mano no
+habría detectado nada de esto. Más un candado: apagado SIEMPRE trae motivo, habilitado NUNCA.
+
+### Un solo campo de dinero en todo el sistema — 13 campos, 11 archivos
+
+Josuarth notó que unos campos de monto mostraban las flechitas de incremento y otros no. Eran dos
+implementaciones conviviendo: `<Input type="number">` crudo en unos lados y `NumberInput` en
+otros. El caso suelto era **"Saldo inicial"** del plan de cuentas, el último `type="number"` a
+pelo que quedaba.
+
+Componente único: **`components/ui/money-input.tsx`** (`MoneyInput`), con la lógica pura en
+`lib/utils/monto-input.ts`. Sin flechitas, alineado a la derecha con `tabular-nums`, dos decimales
+y separador de miles al mostrar. El alto, el borde y el anillo de foco salen del `Input`
+compartido, así que son los mismos que el resto.
+
+**Es `type="text"` con `inputMode="decimal"`, y no es un atajo.** Un `type="number"` NO PUEDE
+mostrar separador de miles: el navegador considera `"1,234.56"` un valor inválido y devuelve
+cadena vacía, o sea que el importe se pierde al escribirlo.
+
+🔴 **Lo que sale por `onChange` es SIEMPRE canónico** —sin separador de miles, con punto decimal—,
+igual que lo que entregaba el `type="number"` que reemplaza. El `1,234.56` es sólo lo que se
+pinta cuando el campo no tiene el foco; al enfocarlo se muestra `1234.56`. No es cosmético: los
+formularios hacen `Number(l.amount)` sobre lo que reciben (`business-expense-form.tsx:160`, y lo
+mismo en facturas y cotizaciones), y un `"1,234.56"` ahí da `NaN`, con el total en cero **y sin
+ningún error visible**. Hay un test dedicado a eso.
+
+**Bug encontrado escribiendo el test:** pegar `"B/. 1,234.56"` desde un correo daba `.12`. El
+punto de `B/.` sobrevive al filtro de caracteres y quedaba como separador decimal adelante.
+Corregido, con el caso fijado.
+
+**Lo que NO se tocó, a propósito:** cantidades en facturas y cotizaciones, la tasa de ITBMS
+(`tax_rate` lleva cuatro decimales, `0.0700`, y se rompería con el recorte a dos) y "Plazo en
+días" de proveedores. No son dinero y siguen con `NumberInput`, que se queda para lo numérico
+que no es plata.
+
+887 tests, 887 pass. `tsc` limpio, `next build` OK.
+
 ## [Correcciones de la reunión del 09/09 con RM] - 2026-09-09
 
 Tres fallos en vivo delante del cliente. La causa de dos de ellos era la misma y no era la que

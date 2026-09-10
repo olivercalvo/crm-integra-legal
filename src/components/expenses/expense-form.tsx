@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { PlusCircle, Loader2 } from "lucide-react";
 
@@ -71,10 +71,8 @@ export function ExpenseForm({ caseId, onSuccess }: ExpenseFormProps) {
           <Label htmlFor="expense-amount" className="text-sm font-medium text-integra-navy">
             Monto (USD)
           </Label>
-          <NumberInput
+          <MoneyInput
             id="expense-amount"
-            min="0.01"
-            step="0.01"
             placeholder="0.00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}

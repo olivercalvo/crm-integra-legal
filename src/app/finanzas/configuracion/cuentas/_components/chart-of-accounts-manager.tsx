@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -579,10 +580,8 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
             {/* Saldo inicial — permite negativos */}
             <div>
               <Label className="mb-1 block text-xs">Saldo inicial (B/.)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                inputMode="decimal"
+              <MoneyInput
+                allowNegative
                 value={form.saldo_inicial}
                 onChange={(e) => setForm({ ...form, saldo_inicial: e.target.value })}
                 disabled={saving}

@@ -48,6 +48,7 @@
  */
 
 import { round2 } from "@/lib/finanzas/types/expense-line";
+import { formatearMonto } from "@/lib/utils/monto-input";
 
 /** Una línea del asiento en edición. Strings porque vienen de inputs del DOM. */
 export interface LineaManualDraft {
@@ -139,6 +140,94 @@ export function totalesManuales(
   const creditos = round2(c);
   const diferencia = round2(debitos - creditos);
   return { debitos, creditos, diferencia, cuadra: diferencia === 0 };
+}
+
+export interface EstadoDelRegistro {
+  /** true = el botón "Registrar en el libro" va habilitado. */
+  puede: boolean;
+  /** Por qué NO se puede, redactado para quien carga. `null` si se puede. */
+  motivo: string | null;
+}
+
+/**
+ * POR QUÉ EL BOTÓN DE REGISTRAR ESTÁ APAGADO.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * ESTO EXISTE POR UN BLOQUEO REAL EN LA DEMO DEL 09/09/2026
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El formulario decidía con un booleano de cuatro cláusulas y **sólo una tenía
+ * explicación en pantalla** (el cuadre). RM armó un asiento de 100 contra 100,
+ * el totalizador se puso verde, y el botón siguió apagado porque faltaba la
+ * descripción — que no avisaba nada. Desde afuera se veía como un botón roto.
+ *
+ * La regla que quedó: **una condición que apaga el botón tiene que poder
+ * decir por qué.** Por eso esto devuelve un motivo y no un booleano: no se
+ * puede agregar una condición sin escribir su frase.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * SE DEVUELVE UN SOLO MOTIVO, EL PRÓXIMO PASO
+ * ─────────────────────────────────────────────────────────────────────────────
+ * No la lista de todo lo que falta. El orden es el de dependencia —sin importes
+ * no tiene sentido hablar de cuadre— así que cada frase es la acción que sigue.
+ *
+ * ⚠️ Las frases son para un contador, no para un programador: nombran lo que
+ *    falta en la pantalla, nunca el campo del código ni su largo mínimo.
+ */
+export function estadoDelRegistro(
+  lineas: readonly LineaManualDraft[],
+  descripcion: string,
+  enviando = false
+): EstadoDelRegistro {
+  if (enviando) {
+    return { puede: false, motivo: "Registrando el asiento…" };
+  }
+
+  // Se numeran como las ve la persona: "Línea 1" es la primera de la pantalla,
+  // aunque esté vacía y no cuente para el asiento.
+  const utiles = lineas
+    .map((l, i) => ({ linea: l, numero: i + 1 }))
+    .filter((x) => !lineaManualVaciaODescartable(x.linea));
+
+  const totales = totalesManuales(lineas);
+
+  if (totales.debitos === 0 && totales.creditos === 0) {
+    return {
+      puede: false,
+      motivo: "Cargá los importes: cada línea lleva un débito o un crédito.",
+    };
+  }
+
+  const sinCuenta = utiles.filter((x) => x.linea.account_code.trim() === "");
+  if (sinCuenta.length > 0) {
+    const ns = sinCuenta.map((x) => x.numero);
+    return {
+      puede: false,
+      motivo:
+        ns.length === 1
+          ? `Elegí la cuenta contable de la línea ${ns[0]}.`
+          : `Elegí la cuenta contable de las líneas ${ns.join(", ")}.`,
+    };
+  }
+
+  if (!totales.cuadra) {
+    // Se dice de qué lado falta, que es lo que se hace con el dato. La
+    // diferencia es `débitos − créditos`: positiva = sobra débito.
+    const falta = formatearMonto(String(Math.abs(totales.diferencia)));
+    const lado = totales.diferencia > 0 ? "crédito" : "débito";
+    return {
+      puede: false,
+      motivo: `El asiento no cuadra: faltan B/. ${falta} en el ${lado}.`,
+    };
+  }
+
+  if (descripcion.trim().length < 3) {
+    return {
+      puede: false,
+      motivo: "Falta describir la naturaleza del asiento: qué operación registra.",
+    };
+  }
+
+  return { puede: true, motivo: null };
 }
 
 export type ArmadoManual =

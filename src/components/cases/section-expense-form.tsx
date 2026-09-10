@@ -6,7 +6,7 @@ import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import {
   ExpenseLinesEditor,
@@ -398,7 +398,7 @@ export function SectionExpenseForm({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label>Monto (B/.)</Label>
-              <NumberInput min="0.01" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" className="min-h-[48px]" />
+              <MoneyInput value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0.00" className="min-h-[48px]" />
             </div>
             <div className="space-y-1.5">
               <Label>Descripción (opcional)</Label>

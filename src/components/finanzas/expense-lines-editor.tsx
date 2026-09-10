@@ -5,6 +5,7 @@ import { ListFilter, Plus, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -253,9 +254,7 @@ export function ExpenseLinesEditor({
                 {/* Base */}
                 <div className="sm:col-span-2">
                   <Label className="mb-1 block text-xs">Base ({moneda})</Label>
-                  <NumberInput
-                    min="0"
-                    step="0.01"
+                  <MoneyInput
                     value={linea.amount}
                     onChange={(ev) => actualizar(i, { amount: ev.target.value })}
                     placeholder="0.00"
@@ -285,9 +284,7 @@ export function ExpenseLinesEditor({
                 {/* ITBMS — autocompletado, editable */}
                 <div className="sm:col-span-1">
                   <Label className="mb-1 block text-xs">ITBMS</Label>
-                  <NumberInput
-                    min="0"
-                    step="0.01"
+                  <MoneyInput
                     value={linea.tax_amount}
                     onChange={(ev) => actualizar(i, { tax_amount: ev.target.value })}
                     disabled={disabled}

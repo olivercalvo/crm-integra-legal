@@ -8,8 +8,9 @@ import { BookOpenCheck, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
+  estadoDelRegistro,
   lineaManualVacia,
   totalesManuales,
   type LineaManualDraft,
@@ -96,8 +97,10 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
   const totales = useMemo(() => totalesManuales(lineas), [lineas]);
 
   const hayAlgo = totales.debitos > 0 || totales.creditos > 0;
-  const puedeGuardar =
-    hayAlgo && totales.cuadra && descripcion.trim().length >= 3 && !enviando;
+  // 🔴 La decisión NO se arma acá. Vive en `estadoDelRegistro()`, que devuelve
+  //    el MOTIVO además del booleano, y ese motivo se muestra al lado del botón.
+  //    Un botón apagado sin explicación es lo que bloqueó la demo del 09/09.
+  const registro = estadoDelRegistro(lineas, descripcion, enviando);
 
   function actualizar(i: number, cambios: Partial<LineaManualDraft>) {
     const copia = [...lineas];
@@ -326,9 +329,7 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
 
               <div className="sm:col-span-2">
                 <Label className="mb-1 block text-xs">Débito</Label>
-                <NumberInput
-                  min="0"
-                  step="0.01"
+                <MoneyInput
                   value={l.debit}
                   onChange={(e) => actualizar(i, { debit: e.target.value })}
                   placeholder="0.00"
@@ -338,9 +339,7 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
 
               <div className="sm:col-span-2">
                 <Label className="mb-1 block text-xs">Crédito</Label>
-                <NumberInput
-                  min="0"
-                  step="0.01"
+                <MoneyInput
                   value={l.credit}
                   onChange={(e) => actualizar(i, { credit: e.target.value })}
                   placeholder="0.00"
@@ -405,7 +404,8 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={guardar}
-          disabled={!puedeGuardar}
+          disabled={!registro.puede}
+          aria-describedby={registro.motivo ? "motivo-registro" : undefined}
           className="min-h-[48px] bg-integra-navy hover:bg-integra-navy/90"
         >
           {enviando || isPending ? (
@@ -415,6 +415,19 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
           )}
           Registrar en el libro
         </Button>
+
+        {/* POR QUÉ ESTÁ APAGADO. Sin esto, un botón deshabilitado se lee como un
+            botón roto — que es exactamente lo que pasó en la demo del 09/09. */}
+        {registro.motivo && (
+          <p
+            id="motivo-registro"
+            role="status"
+            className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+          >
+            {registro.motivo}
+          </p>
+        )}
+
         {/* Ver la nota de arriba: la reversión no existe todavía. Acá, que es
             ANTES de postear, el pedido correcto es que verifique. */}
         <p className="text-xs text-gray-500">

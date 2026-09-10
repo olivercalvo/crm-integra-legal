@@ -469,3 +469,107 @@ test("propagar las líneas NO movió ningún saldo", () => {
   assertMoney(mayor.totales.saldoFinal, 15100.02, "saldo final");
   assert.equal(mayor.cantidadMovimientos, 2);
 });
+
+// ===========================================================================
+// EL SALDO SE MUESTRA SEGÚN LA NATURALEZA DE LA CUENTA
+// ===========================================================================
+//
+// 🔴 SI ALGUIEN VIENE A "ARREGLAR" ESTO EN SEIS MESES, LEER PRIMERO:
+//
+// Confirmado contra el modelo de mayor que Josuarth mandó por correo el
+// 26/08/2026 (`Temas Contables/image001.png`). En su captura las cuentas de
+// activo —Caja Menuda, Banco Pichincha, clientes Panamá— muestran el saldo en
+// POSITIVO cuando el débito supera al crédito, y el signo negativo lo llevan
+// los movimientos, no el saldo.
+//
+// O sea: el saldo NO va en convención de balanza. Va según de qué lado crece la
+// cuenta. Adentro todo se sigue acumulando en balanza —`efectoEnSaldo()` hace
+// `débito − crédito`, igual que el ledger y el Balance General—; la conversión
+// pasa una sola vez, al escribir la fila.
+//
+// El negativo queda reservado para el caso ANÓMALO: una cuenta al revés de su
+// naturaleza. Eso es lo que hay que resaltar, y se perdía cuando la mitad del
+// plan salía en negativo por diseño.
+
+const INGRESO: CuentaDelMayor = {
+  code: "400004",
+  name: "Derecho Civil",
+  account_type: "income",
+  saldo_inicial: 0,
+  saldo_inicial_fecha: "2026-01-01",
+};
+
+/** Un movimiento de la cuenta `c`, sin contrapartida que importe. */
+function movDe(c: CuentaDelMayor, n: number, debit: number, credit: number): MovimientoCrudo {
+  return {
+    ...mov(n, "2026-09-10", debit, credit, [
+      herm(c.code, c.name, debit, credit, 1),
+      herm("100004", "Cuentas por Cobrar Clientes", credit, debit, 2),
+    ]),
+    account_code: c.code,
+    account_name: c.name,
+    account_type: c.account_type,
+  };
+}
+
+test("🔴 ACREEDORA (ingreso): el crédito la hace crecer y el saldo va POSITIVO", () => {
+  const m = buildMayorDeCuenta(INGRESO, [movDe(INGRESO, 1, 0, 1500)]);
+  const ultima = m.filas[m.filas.length - 1];
+
+  // El movimiento va tal cual: 1.500 al crédito.
+  assert.equal(ultima.kind, "movimiento");
+  assertMoney(ultima.credito, 1500, "crédito del movimiento");
+  assertMoney(ultima.debito, 0, "débito del movimiento");
+
+  // El SALDO, en cambio, se lee según la naturaleza: un ingreso con créditos
+  // tiene saldo positivo. En balanza sería -1500.
+  assertMoney(ultima.saldo, 1500, "saldo de una cuenta de ingreso con créditos");
+  assertMoney(m.totales.netoDelPeriodo, 1500, "el neto del pie sigue la misma convención");
+});
+
+test("🔴 DEUDORA (activo): el débito la hace crecer y el saldo va POSITIVO", () => {
+  const m = buildMayorDeCuenta(BANCO, [movDe(BANCO, 1, 2000, 0)]);
+  const ultima = m.filas[m.filas.length - 1];
+
+  assertMoney(ultima.debito, 2000, "débito del movimiento");
+  assertMoney(ultima.saldo, 14381.27 + 2000, "saldo de un banco con débitos");
+  assertMoney(m.totales.netoDelPeriodo, 2000, "neto del pie");
+});
+
+test("el NEGATIVO queda para la cuenta al revés de su naturaleza", () => {
+  // Un banco sobregirado: más créditos que débitos. ESTO sí tiene que gritar.
+  const banco = { ...BANCO, saldo_inicial: 0 };
+  const sobregirado = buildMayorDeCuenta(banco, [movDe(banco, 1, 0, 500)]);
+  const f1 = sobregirado.filas[sobregirado.filas.length - 1];
+  assertMoney(f1.saldo, -500, "un activo con saldo acreedor va NEGATIVO");
+
+  // Y al revés: un ingreso con más débitos que créditos (una nota de crédito
+  // que se comió la facturación del período).
+  const alReves = buildMayorDeCuenta(INGRESO, [movDe(INGRESO, 1, 300, 0)]);
+  const f2 = alReves.filas[alReves.filas.length - 1];
+  assertMoney(f2.saldo, -300, "un ingreso con saldo deudor va NEGATIVO");
+});
+
+test("el saldo inicial también se presenta según la naturaleza", () => {
+  // Un pasivo abre con saldo acreedor: en balanza está guardado en negativo y
+  // en pantalla tiene que leerse positivo.
+  const proveedores: CuentaDelMayor = {
+    code: "200001",
+    name: "Cuentas por pagar",
+    account_type: "liability",
+    saldo_inicial: -8529.33,
+    saldo_inicial_fecha: "2026-01-01",
+  };
+  const m = buildMayorDeCuenta(proveedores, []);
+  assertMoney(m.filas[0].saldo, 8529.33, "el pasivo abre en positivo");
+});
+
+test("🔒 la conversión NO toca el movimiento, sólo el saldo", () => {
+  // Es la garantía que evita que alguien "unifique" las dos convenciones: el
+  // débito y el crédito de una línea son el dato del ledger y van intactos.
+  const m = buildMayorDeCuenta(INGRESO, [movDe(INGRESO, 1, 0, 1500)]);
+  const ultima = m.filas[m.filas.length - 1];
+  assertMoney(ultima.importe, -1500, "`importe` sigue en balanza, para la exportación");
+  assertMoney(ultima.credito, 1500, "el crédito es el del asiento");
+  assertMoney(m.totales.totalCreditos, 1500, "y el total de créditos del pie también");
+});

@@ -49,6 +49,50 @@ export type AccountType =
   | "cost"
   | "expense";
 
+/**
+ * La NATURALEZA de una cuenta: de qué lado crece.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * DE DÓNDE SALE ESTO — leer antes de "arreglarlo"
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Del modelo de mayor que Josuarth mandó por correo el **26/08/2026**
+ * (`Temas Contables/image001.png`). En su captura, las cuentas de activo
+ * —Caja Menuda, Banco Pichincha, clientes Panamá— muestran el **saldo en
+ * POSITIVO** cuando el débito supera al crédito; el signo negativo lo llevan
+ * los movimientos, no el saldo.
+ *
+ * O sea: el saldo de una cuenta se lee **según su naturaleza**, no en
+ * convención de balanza. Una cuenta de ingreso con créditos por 1.600 muestra
+ * `1,600.00`, no `-1,600.00`.
+ *
+ * 🔴 **El negativo queda reservado para el caso ANÓMALO**: una cuenta con saldo
+ *    contrario a su naturaleza —un banco en rojo, un ingreso con más débitos
+ *    que créditos—. Eso es exactamente lo que hay que resaltar, y se pierde si
+ *    la mitad de las cuentas del plan se muestran en negativo por diseño.
+ *
+ * ⚠️ Esto NO cambia cómo se guarda nada. El ledger y el Balance General siguen
+ *    en convención de balanza (débito positivo). Es una regla de PRESENTACIÓN,
+ *    y vive acá porque es una propiedad del tipo de cuenta, no del reporte.
+ */
+export type NaturalezaDeCuenta = "deudora" | "acreedora";
+
+/** De qué lado crece cada tipo de cuenta. */
+export const NATURALEZA_POR_TIPO: Record<AccountType, NaturalezaDeCuenta> = {
+  // Crecen por el DEBE.
+  asset: "deudora",
+  cost: "deudora",
+  expense: "deudora",
+  // Crecen por el HABER.
+  liability: "acreedora",
+  equity: "acreedora",
+  income: "acreedora",
+};
+
+/** true si la cuenta crece por el HABER (pasivo, patrimonio, ingreso). */
+export function esNaturalezaAcreedora(tipo: AccountType): boolean {
+  return NATURALEZA_POR_TIPO[tipo] === "acreedora";
+}
+
 /** Valores válidos de account_type (deben coincidir con el CHECK de BD). */
 export const ACCOUNT_TYPES: AccountType[] = [
   "asset",

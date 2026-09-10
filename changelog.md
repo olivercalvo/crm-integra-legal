@@ -1,5 +1,57 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El saldo del Mayor se lee según la naturaleza de la cuenta] - 2026-09-10
+
+### El negativo dejó de ser el estado normal de media tabla
+
+Hasta hoy el Libro Mayor mostraba el saldo en **convención de balanza** (débito positivo), así
+que toda cuenta acreedora —ingreso, pasivo, patrimonio— salía en negativo: `Derecho Civil` con
+1.600 facturados se leía **`-1,600.00`**.
+
+Confirmado contra el modelo de mayor que Josuarth mandó por correo el **26/08/2026**
+(`Temas Contables/image001.png`): en su captura las cuentas de activo —Caja Menuda, Banco
+Pichincha, clientes Panamá— muestran el saldo en **positivo** cuando el débito supera al crédito,
+y el signo negativo lo llevan los movimientos, no el saldo.
+
+**La regla que quedó:**
+
+| Naturaleza | Tipos | Saldo positivo cuando… |
+|---|---|---|
+| **Deudora** | activo, costo, gasto | el débito supera al crédito |
+| **Acreedora** | pasivo, patrimonio, ingreso | el crédito supera al débito |
+
+🔴 **El negativo queda reservado para el caso ANÓMALO**: una cuenta con saldo contrario a su
+naturaleza —un banco sobregirado, un ingreso con más débitos que créditos—. Eso es justamente lo
+que hay que resaltar, y se perdía cuando la mitad del plan salía en negativo por diseño.
+
+Adentro **no cambió nada**: el ledger, el Balance General y `efectoEnSaldo()` siguen acumulando
+`débito − crédito`. La conversión pasa una sola vez, al escribir la fila
+(`saldoSegunNaturaleza()`), y **no toca `importe`, `debito` ni `credito`** — esos son el
+movimiento y van tal cual.
+
+La naturaleza vive en `types/chart-of-account.ts` (`NATURALEZA_POR_TIPO`, `esNaturalezaAcreedora`)
+porque es una propiedad del tipo de cuenta, no del reporte.
+
+🔒 **Cinco tests fijan las dos direcciones**, incluido el caso anómalo en los dos sentidos y la
+garantía de que la conversión no toca el movimiento. Con el origen de la convención escrito
+arriba, porque es exactamente el tipo de cosa que alguien "arregla" en seis meses sin saber por
+qué estaba así.
+
+### La exportación a Excel también se partió en Débito y Crédito
+
+Tenía UNA columna `Importe` con el crédito en negativo. Ahora son `Débito`, `Crédito` y `Saldo`,
+las mismas que la pantalla y con el mismo saldo. La fila de saldo inicial va con las dos columnas
+de movimiento **vacías, no en cero**: un `0.00` se suma en una tabla dinámica y el saldo inicial
+no es parte de los movimientos.
+
+### Un aviso que se volvía falso, corregido en el mismo commit
+
+El banner del Mayor decía que *"el saldo final de una cuenta acá es el mismo que muestra esa
+cuenta en el Balance"*. Con la convención nueva es el mismo **número** pero con el signo opuesto
+para las acreedoras. El texto ahora lo dice.
+
+905 tests, 905 pass.
+
 ## [Cuatro mejoras de pantalla pedidas por RM] - 2026-09-10
 
 Todas de la reunión del 09/09. Ninguna toca el cableado contable.

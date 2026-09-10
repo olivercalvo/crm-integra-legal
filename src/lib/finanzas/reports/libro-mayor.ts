@@ -18,8 +18,16 @@
  * modelo contesta dos de las tres preguntas que este módulo tenía aisladas:
  *
  *   consulta 4 → `totalesDePie()`      ✅ el pie es el NETO de movimientos
- *   consulta 5 → `importeDeLinea()`    ✅ UNA columna Importe, con signo
+ *   consulta 5 → `importeDeLinea()`    ✅ el importe con signo (ver abajo)
  *   consulta 3 → `contrapartidaDe()`   ⏳ sigue abierta (contrapartida ambigua)
+ *
+ * ⚠️ Desde el 09/09/2026 la PANTALLA y la exportación muestran **Débito y
+ * Crédito en columnas separadas**, no una sola columna con signo: lo pidió
+ * Josuarth en la reunión. `importeDeLinea()` se conserva porque el signo sigue
+ * siendo útil internamente, pero ya no es lo que se ve.
+ *
+ * Y el SALDO se presenta **según la naturaleza de la cuenta**, no en balanza:
+ * ver `saldoSegunNaturaleza()`, con el origen de la convención.
  *
  * Las dos resueltas ya estaban implementadas así, porque era lo que su modelo
  * dejaba entrever. Lo que cambió es que dejaron de ser una apuesta: hay un
@@ -33,7 +41,10 @@ import {
   contrapartidaEsAmbigua,
   type LineaParaContrapartida,
 } from "@/lib/finanzas/contabilidad/contrapartida";
-import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
+import {
+  esNaturalezaAcreedora,
+  type AccountType,
+} from "@/lib/finanzas/types/chart-of-account";
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -149,6 +160,36 @@ export function importeDeLinea(m: {
  */
 export function efectoEnSaldo(m: { debit: number; credit: number }): number {
   return round2(m.debit - m.credit);
+}
+
+/**
+ * El saldo COMO SE MUESTRA: según la naturaleza de la cuenta, no en balanza.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * POR QUÉ EL SALDO NO VA EN CONVENCIÓN DE BALANZA
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Confirmado contra el modelo de mayor que Josuarth mandó el **26/08/2026**: en
+ * su captura las cuentas de activo muestran saldo POSITIVO cuando el débito
+ * supera al crédito, y el signo negativo lo llevan los movimientos, no el
+ * saldo.
+ *
+ * Adentro todo sigue en balanza —`efectoEnSaldo()` acumula `débito − crédito`,
+ * igual que el Balance General y el ledger—. Esta función convierte SOLO al
+ * escribir la fila, que es el único lugar donde la convención importa.
+ *
+ * 🔴 **Un negativo en la columna Saldo pasa a significar algo:** que la cuenta
+ *    quedó al revés de su naturaleza —un banco sobregirado, un ingreso con más
+ *    débitos que créditos—. Antes la mitad del plan se mostraba en negativo por
+ *    diseño y ese aviso no se veía.
+ *
+ * ⚠️ NO tocar `importe`, `debito` ni `credito`: esos son el movimiento y van
+ *    tal cual. Lo que se presenta según naturaleza es el SALDO (y el neto del
+ *    período, que vive en la misma columna).
+ */
+export function saldoSegunNaturaleza(saldoEnBalanza: number, tipo: AccountType): number {
+  const v = esNaturalezaAcreedora(tipo) ? -saldoEnBalanza : saldoEnBalanza;
+  // `-0` existe en JS y se imprimiría como "-0.00".
+  return round2(v) === 0 ? 0 : round2(v);
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +411,7 @@ export function buildMayorDeCuenta(
     importe: 0,
     debito: 0,
     credito: 0,
-    saldo: round2(saldoArranque),
+    saldo: saldoSegunNaturaleza(saldoArranque, cuenta.account_type),
     entryId: null,
     sourceType: null,
     sourceId: null,
@@ -413,7 +454,7 @@ export function buildMayorDeCuenta(
       importe: importeDeLinea(m),
       debito: round2(m.debit),
       credito: round2(m.credit),
-      saldo,
+      saldo: saldoSegunNaturaleza(saldo, cuenta.account_type),
       entryId: m.entry_id,
       sourceType: m.source_type,
       sourceId: m.source_id,
@@ -424,10 +465,20 @@ export function buildMayorDeCuenta(
     });
   }
 
+  // El pie: los débitos y los créditos van tal cual —son movimientos—, pero el
+  // neto y el saldo final viven en la columna Saldo y por lo tanto siguen la
+  // MISMA convención que ella. Si no, el recuadro del pie contradiría al último
+  // renglón de la columna que tiene encima.
+  const pie = totalesDePie(saldoArranque, ordenados);
+
   return {
     cuenta,
     filas,
-    totales: totalesDePie(saldoArranque, ordenados),
+    totales: {
+      ...pie,
+      netoDelPeriodo: saldoSegunNaturaleza(pie.netoDelPeriodo, cuenta.account_type),
+      saldoFinal: saldoSegunNaturaleza(pie.saldoFinal, cuenta.account_type),
+    },
     cantidadMovimientos: ordenados.length,
   };
 }

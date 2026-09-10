@@ -73,8 +73,9 @@ const COL = {
   dv: 5,
   descripcion: 6,
   contrapartida: 7,
-  importe: 8,
-  saldo: 9,
+  debito: 8,
+  credito: 9,
+  saldo: 10,
 };
 
 const DELTA: TerceroFiscal = {
@@ -124,7 +125,9 @@ test("las columnas son las que pidió Josuarth, en orden", () => {
       "DV",
       "Descripción",
       "Contrapartida",
-      "Importe",
+      // Débito y crédito partidos, igual que la pantalla (09/09/2026).
+      "Débito",
+      "Crédito",
       "Saldo",
     ]
   );
@@ -171,7 +174,8 @@ test("la fila de saldo inicial no inventa un tercero ni un importe", () => {
   assert.equal(f[COL.nombre].tipo, "vacia");
   assert.equal(f[COL.ruc].tipo, "vacia");
   assert.equal(f[COL.dv].tipo, "vacia");
-  assert.equal(f[COL.importe].tipo, "vacia", "el saldo inicial no es un movimiento");
+  assert.equal(f[COL.debito].tipo, "vacia", "el saldo inicial no es un movimiento");
+  assert.equal(f[COL.credito].tipo, "vacia", "el saldo inicial no es un movimiento");
   assert.deepEqual(f[COL.saldo], { tipo: "numero", valor: 1100.56 });
 });
 

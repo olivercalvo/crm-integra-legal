@@ -55,7 +55,13 @@ const COLUMNAS_MAYOR = [
   { titulo: "DV", ancho: 6 },
   { titulo: "Descripción", ancho: 46 },
   { titulo: "Contrapartida", ancho: 30 },
-  { titulo: "Importe", ancho: 14 },
+  // Débito y crédito en columnas propias, igual que la pantalla (09/09/2026).
+  // Antes era UNA columna "Importe" con el crédito en negativo; el contador
+  // pega esto en su papel de trabajo y ahí las dos columnas son la estructura.
+  { titulo: "Débito", ancho: 14 },
+  { titulo: "Crédito", ancho: 14 },
+  // El saldo va según la NATURALEZA de la cuenta, no en balanza: es el mismo
+  // número que muestra la pantalla. Ver `saldoSegunNaturaleza()`.
   { titulo: "Saldo", ancho: 14 },
 ];
 
@@ -65,7 +71,9 @@ const COLUMNAS_MAYOR = [
  * La fila "Saldo inicial" entra como una fila más, con las columnas de tercero
  * vacías: es parte del reporte y quien exporta espera encontrarla. El saldo
  * corrido no se recalcula — se copia el que ya muestra la pantalla, para que el
- * Excel no pueda diferir de lo que el contador vio.
+ * Excel no pueda diferir de lo que el contador vio. Eso incluye la convención:
+ * el saldo viene según la naturaleza de la cuenta porque así lo armó
+ * `buildMayorDeCuenta()`, no porque acá se convierta de nuevo.
  */
 export function hojaDelMayor(
   mayor: MayorDeCuenta,
@@ -99,7 +107,11 @@ export function hojaDelMayor(
       texto(t.dv),
       texto(f.descripcion),
       texto(f.contrapartida),
-      f.kind === "saldo-inicial" ? texto("") : numero(f.importe),
+      // La fila de saldo inicial no es un movimiento: no tiene débito ni
+      // crédito. Van vacías, no en cero — un 0.00 se suma en una tabla
+      // dinámica y el saldo inicial no es parte de los movimientos.
+      f.kind === "saldo-inicial" ? texto("") : numero(f.debito),
+      f.kind === "saldo-inicial" ? texto("") : numero(f.credito),
       numero(f.saldo),
     ];
   });

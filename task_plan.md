@@ -6,6 +6,10 @@
 
 ### Hecho en esta tanda
 
+- [x] **El saldo del Mayor se lee según la naturaleza de la cuenta**, no en balanza. Confirmado
+      contra el modelo que Josuarth mandó el 26/08. El negativo queda para la cuenta al revés de
+      su naturaleza. Cinco tests fijan las dos direcciones.
+- [x] **La exportación del Mayor partida en Débito y Crédito**, igual que la pantalla.
 - [x] **Sin rótulo "Línea N"** en el editor de gastos y en el asiento manual (el número sigue en
       el `aria-label` del botón de borrar).
 - [x] **Libro Mayor con Débito y Crédito en columnas separadas** + Saldo. La exportación a Excel

@@ -83,7 +83,11 @@ export default async function LibroMayorPage({
         El Libro Mayor, el <strong>Balance General</strong> y el{" "}
         <strong>Estado de Resultado</strong> leen la <strong>misma fuente</strong>: el saldo de
         apertura del Plan de Cuentas más todos los movimientos del libro de asientos. El saldo
-        final de una cuenta acá es el mismo que muestra esa cuenta en el Balance.{" "}
+        final de una cuenta acá es el mismo que muestra esa cuenta en el Balance,{" "}
+        <strong>leído según la naturaleza de la cuenta</strong>: un ingreso o un pasivo se
+        muestran en positivo cuando su saldo es acreedor, que es como los lee el modelo del
+        contador. El Balance General usa la convención de balanza y los saca con el signo
+        opuesto — es el mismo número.{" "}
         {/* Acá decía «Todavía no hay corte por período», con el filtro de fechas
             renderizado inmediatamente abajo. Ver la nota de
             `OpeningBalancesNotice` en `_components/financial-statement.tsx`. */}

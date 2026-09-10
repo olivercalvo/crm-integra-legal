@@ -1,5 +1,68 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cuatro mejoras de pantalla pedidas por RM] - 2026-09-10
+
+Todas de la reunión del 09/09. Ninguna toca el cableado contable.
+
+### El rótulo "Línea 1", "Línea 2" salió del editor de gastos y del asiento manual
+
+Josuarth, textual: *"esa línea 1, línea 2, yo eliminaría eso, y simplemente las líneas"*. Las
+filas quedan sin rótulo y el botón de borrar por fila se queda donde estaba.
+
+El número **sigue en el `aria-label`** del botón de borrar, que es donde hace falta: sin él un
+lector de pantalla anuncia varios *"Quitar"* idénticos y no se sabe cuál fila se borra.
+
+No se tocaron los editores de línea de factura ni de cotización: el pedido era sobre gastos y
+asientos.
+
+### El Libro Mayor tiene Débito y Crédito en columnas separadas
+
+Antes había **una sola columna "Importe"**, con el crédito en negativo. Josuarth: *"debería decir
+débito y crédito… debe haber una columna de débito y una de crédito, y después sacas el saldo"*.
+Es la estructura estándar de un mayor y es lo primero que mira un contador.
+
+Ahora son tres: **Débito · Crédito · Saldo**, con `fmtImporte()` y alineadas a la derecha. El pie
+también se abrió: el total de débitos y el de créditos van cada uno bajo su columna, en vez de
+apretados en un texto a la izquierda.
+
+Los valores salen del movimiento (`debit` / `credit`), **no del signo de `importe`**. Daría lo
+mismo hoy —una línea lleva débito o crédito, nunca los dos— pero ataría la presentación a una
+convención de signo que el propio módulo documenta como revisable.
+
+⚠️ **La exportación a Excel sigue con UNA columna con signo.** El pedido era de pantalla y no se
+toca el archivo que el contador ya usa.
+
+### El drill-down se abre desde el número, no desde la cuenta
+
+Josuarth: *"yo quiero saber de dónde viene ese número, y le hago clic al número"*. El chevrón que
+indicaba que la fila se abre estaba pegado al **código de cuenta**, o sea del lado opuesto de la
+tabla al número que uno está mirando. Se mudó a la celda del importe, con subrayado punteado.
+
+**La fila entera sigue siendo clickeable**, así que hacer clic en la cuenta también abre el
+asiento: mover el indicador no cerró esa puerta.
+
+### "Distribución a Socias" quedó pegada a la Utilidad Operativa
+
+Josuarth: *"él tiene la utilidad operacional y después de la utilidad operacional debe ir
+distribución a socios"*.
+
+Entre las dos había tres renglones: *Utilidad antes de impuesto*, *Impuesto sobre la renta* y
+*Utilidad Neta*. Medido contra staging: en Integra los tres son **la Utilidad Operativa repetida
+dos veces con un 0.00 en el medio** —245,762.16, 0.00, 245,762.16— porque es sociedad civil, no
+paga ISR a nivel de empresa y no tiene actividad de inversión ni de financiamiento.
+
+🔴 **No se borraron: se ocultan sólo cuando son redundantes.** Vuelven solas si aportan un dato:
+
+- hay inversión, financiamiento o cuentas sin categoría → *antes de impuesto* ya no es la
+  operativa y hace falta el puente;
+- el bufete tributa a nivel de empresa → la línea del ISR es un dato, no un cero;
+- el ejercicio **no** se reparte → la Utilidad Neta es el cierre del reporte y no se toca nunca.
+
+🔒 Un test fija las tres reapariciones. La nota de sociedad civil se queda al pie, que es donde
+explica el porqué.
+
+900 tests, 900 pass.
+
 ## [Compras: la cuenta por defecto, el orden del formulario y un solo bloque de totales] - 2026-09-10
 
 Las tres son de `/finanzas/gastos-bufete/nuevo` y las tres salieron de mirar la pantalla.

@@ -6,6 +6,13 @@
 
 ### Hecho en esta tanda
 
+- [x] **Sin rótulo "Línea N"** en el editor de gastos y en el asiento manual (el número sigue en
+      el `aria-label` del botón de borrar).
+- [x] **Libro Mayor con Débito y Crédito en columnas separadas** + Saldo. La exportación a Excel
+      sigue con una sola columna con signo, a propósito.
+- [x] **El drill-down se abre desde el número**; la fila entera sigue clickeable.
+- [x] **"Distribución a Socias" pegada a la Utilidad Operativa**: las tres líneas del medio se
+      ocultan sólo cuando son el mismo número repetido, y vuelven solas si aportan un dato.
 - [x] **La cuenta por defecto de compras ya no es la de trámite.** El selector arranca vacío y
       obliga a elegir; `cuentaPorDefecto` pasó a ser obligatoria para que ningún módulo herede
       el default de otro. Trámite conserva `130003`, verificado.

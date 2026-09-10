@@ -160,10 +160,39 @@ test("el bloque de operación sale en el orden del modelo de Josuar", () => {
     "► Utilidad Bruta operativa",
     "Total gastos operativos",
     "► Utilidad Operativa",
-    "► Utilidad antes de impuesto sobre la renta",
-    "► Utilidad Neta",
+    // 🔴 La distribución va PEGADA a la utilidad operativa. Lo pidió Josuarth
+    //    el 09/09/2026: «él tiene la utilidad operacional y después de la
+    //    utilidad operacional debe ir distribución a socios».
+    //    «Utilidad antes de impuesto», «Impuesto» y «Utilidad Neta» no están
+    //    porque acá son el MISMO número de la operativa repetido dos veces con
+    //    un 0.00 en el medio. Reaparecen solas en cuanto dicen algo — lo fija
+    //    el test de abajo.
     "► Resultado del ejercicio",
   ]);
+});
+
+test("🔒 el puente al Neto REAPARECE en cuanto deja de ser redundante", () => {
+  // Con actividad de inversión, «antes de impuesto» ya no es la operativa: el
+  // reporte tiene que mostrar cómo se pasa de una a la otra.
+  const conInversion = buildEstadoResultadoNiif18([
+    ...JOSUAR_ACCOUNTS,
+    acc("450001", "income", "ingresos_inversion", -500),
+  ]);
+  const l1 = labels(conInversion.filas);
+  assert.ok(l1.includes("► Utilidad antes de impuesto sobre la renta"), "el puente vuelve");
+  assert.ok(l1.includes("► Utilidad Neta"), "y la Utilidad Neta también");
+
+  // Con impuesto a nivel de empresa, la línea del ISR es un dato y no un cero.
+  const conIsr = buildEstadoResultadoNiif18(JOSUAR_ACCOUNTS, { isrRate: 0.25 });
+  const l2 = labels(conIsr.filas);
+  assert.ok(l2.includes("Impuesto sobre la renta"), "el renglón del ISR vuelve");
+  assert.ok(l2.includes("► Utilidad Neta"), "y la Utilidad Neta también");
+
+  // Sin distribución, la Utilidad Neta es el cierre del reporte: nunca se oculta.
+  const sinDistribucion = buildEstadoResultadoNiif18(JOSUAR_ACCOUNTS, {
+    distribucionASocias: false,
+  });
+  assert.ok(labels(sinDistribucion.filas).includes("► Utilidad Neta"));
 });
 
 test("los bloques SIN cuentas no se muestran", () => {
@@ -260,9 +289,14 @@ test("con PÉRDIDA: no hay impuesto y la distribución la absorbe igual", () => 
   assert.equal(er.isr.huboUtilidad, false, "una pérdida no se grava");
   assertMoney(er.totales.impuesto, 0, "ISR");
 
-  const neta = valor(er.filas, "► Utilidad Neta");
-  assert.equal(neta.entreParentesis, true, "una PÉRDIDA sí va entre paréntesis");
-  assertMoney(neta.monto, 400, "monto de la pérdida");
+  // La Utilidad Neta no se imprime cuando es el mismo número que la operativa
+  // y el impuesto es 0 —acá lo es—, así que la pérdida se lee en el total y en
+  // la distribución, que la absorbe.
+  assertMoney(er.totales.utilidadNeta, 400, "pérdida en el total");
+  const dist = er.filas.find((f) => f.kind === "cuenta" && f.code === "300004");
+  assert.ok(dist && dist.kind === "cuenta", "debe estar la cuenta de distribución");
+  assert.equal(dist.valor.entreParentesis, false, "absorber una PÉRDIDA suma, no resta");
+  assertMoney(dist.valor.monto, 400, "la distribución absorbe la pérdida entera");
 
   assertMoney(er.totales.resultadoDelEjercicio, 0, "cierra en cero igual");
 });
@@ -271,12 +305,23 @@ test("con PÉRDIDA: no hay impuesto y la distribución la absorbe igual", () => 
 // 5) ISR como parámetro
 // ===========================================================================
 
-test("ISR: por defecto 0 y el renglón lo explica", () => {
+test("ISR: por defecto 0, y el renglón no se imprime porque no dice nada", () => {
   const er = buildEstadoResultadoNiif18(JOSUAR_ACCOUNTS);
   assertMoney(er.totales.impuesto, 0, "impuesto");
   assert.equal(er.isr.rate, 0);
+  // El dato sigue disponible en `er.isr` para quien lo necesite; lo que se
+  // saca de la PANTALLA es un renglón en 0.00 entre el resultado y su
+  // distribución. El porqué vive en la nota al pie del reporte.
+  assert.ok(
+    !labels(er.filas).includes("Impuesto sobre la renta"),
+    "un ISR de 0 en una sociedad civil no ocupa un renglón"
+  );
+});
+
+test("con tasa de ISR, el renglón vuelve y explica la tasa", () => {
+  const er = buildEstadoResultadoNiif18(JOSUAR_ACCOUNTS, { isrRate: 0.25 });
   const f = fila(er.filas, "Impuesto sobre la renta");
-  assert.ok("nota" in f && /sociedad civil/i.test(f.nota), "la nota debe explicar por qué es 0");
+  assert.ok("nota" in f && /tasa/i.test(f.nota), "la nota debe decir la tasa");
 });
 
 test("ISR: con tasa explícita se aplica sobre la utilidad ANTES de impuesto", () => {

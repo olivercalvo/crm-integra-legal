@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { fmtImporte } from "@/lib/utils/importe";
 import type { MayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
 import { CuerpoMayor } from "./cuerpo-mayor";
 
@@ -9,15 +10,11 @@ import { CuerpoMayor } from "./cuerpo-mayor";
  * General — ver `importeDeLinea()` para por qué, y cuál es la consulta abierta.
  */
 
-function money(n: number): string {
-  return n.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function Monto({ value, bold }: { value: number; bold?: boolean }) {
   const tone = value < 0 ? "text-red-600" : value === 0 ? "text-gray-400" : "text-gray-800";
   return (
     <span className={`font-mono text-sm tabular-nums ${tone} ${bold ? "font-bold" : ""}`}>
-      {money(value)}
+      {fmtImporte(value)}
     </span>
   );
 }
@@ -87,7 +84,16 @@ export function LibroMayorTable({
                 <th className="px-3 py-2 font-semibold">Nombre</th>
                 <th className="px-3 py-2 font-semibold">Descripción</th>
                 <th className="px-3 py-2 font-semibold">Cuenta de contrapartida</th>
-                <th className="px-3 py-2 text-right font-semibold">Importe</th>
+                {/* DÉBITO Y CRÉDITO EN COLUMNAS PROPIAS (09/09/2026).
+                    Antes había una sola columna «Importe», con el crédito en
+                    negativo. Josuarth: «debería decir débito y crédito… debe
+                    haber una columna de débito y una de crédito, y después
+                    sacas el saldo». Es la estructura estándar de un mayor y es
+                    lo primero que mira un contador.
+                    La exportación a Excel sigue con UNA columna con signo: no
+                    se toca el archivo que él ya usa. */}
+                <th className="px-3 py-2 text-right font-semibold">Débito</th>
+                <th className="px-3 py-2 text-right font-semibold">Crédito</th>
                 <th className="px-3 py-2 text-right font-semibold">Saldo</th>
               </tr>
             </thead>
@@ -109,15 +115,26 @@ export function LibroMayorTable({
               */}
               <tr className="border-t-2 border-integra-navy/20 bg-gray-50/60">
                 <td colSpan={7} className="px-3 py-2 text-right text-sm text-gray-600">
-                  Débitos {money(totales.totalDebitos)} · Créditos{" "}
-                  {money(totales.totalCreditos)}
+                  Neto del período
+                </td>
+                {/* Con las columnas separadas, los totales de débito y de
+                    crédito van cada uno bajo la suya: repetirlos en el texto de
+                    la izquierda sería decir dos veces lo mismo. */}
+                <td className="px-3 py-2 text-right">
+                  <span className="font-mono text-sm font-semibold tabular-nums text-gray-700">
+                    {fmtImporte(totales.totalDebitos)}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <span className="font-mono text-sm font-semibold tabular-nums text-gray-700">
+                    {fmtImporte(totales.totalCreditos)}
+                  </span>
                 </td>
                 <td className="px-3 py-2 text-right">
                   <span className="inline-block rounded border-2 border-integra-navy/40 px-2 py-1">
                     <Monto value={totales.netoDelPeriodo} bold />
                   </span>
                 </td>
-                <td className="px-3 py-2" />
               </tr>
             </tfoot>
           </table>

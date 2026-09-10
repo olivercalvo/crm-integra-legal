@@ -225,7 +225,25 @@ export interface FilaMayor {
   contrapartida: string;
   /** true si la contrapartida es ambigua (más de una cuenta del otro lado). */
   contrapartidaAmbigua: boolean;
+  /**
+   * El movimiento con signo, en convención de balanza (`débito − crédito`).
+   *
+   * Se conserva porque es lo que consume la exportación a Excel
+   * (`mayor-export.ts`), que sigue con UNA columna. La PANTALLA ya no lo usa:
+   * muestra `debito` y `credito` por separado.
+   */
   importe: number;
+  /**
+   * Débito y crédito en columnas propias — lo pidió Josuarth el 09/09/2026:
+   * «debería decir débito y crédito… y después sacas el saldo».
+   *
+   * Salen del movimiento, no del signo de `importe`. Derivarlos de ahí daría lo
+   * mismo hoy —una línea de asiento lleva débito O crédito, nunca los dos, y el
+   * RPC lo hace cumplir— pero ataría la presentación a una convención de signo
+   * que este mismo archivo documenta como revisable.
+   */
+  debito: number;
+  credito: number;
   saldo: number;
   // --- trazabilidad nivel 2 ---
   entryId: string | null;
@@ -350,6 +368,8 @@ export function buildMayorDeCuenta(
     contrapartida: "",
     contrapartidaAmbigua: false,
     importe: 0,
+    debito: 0,
+    credito: 0,
     saldo: round2(saldoArranque),
     entryId: null,
     sourceType: null,
@@ -391,6 +411,8 @@ export function buildMayorDeCuenta(
       contrapartida: contrapartidaDe(propia, m.hermanas),
       contrapartidaAmbigua: contrapartidaEsAmbigua(propia, m.hermanas),
       importe: importeDeLinea(m),
+      debito: round2(m.debit),
+      credito: round2(m.credit),
       saldo,
       entryId: m.entry_id,
       sourceType: m.source_type,

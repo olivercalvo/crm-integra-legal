@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChevronDown, ChevronRight, FileText, AlertTriangle } from "lucide-react";
 
 import type { FilaMayor } from "@/lib/finanzas/reports/libro-mayor";
+import { fmtImporte } from "@/lib/utils/importe";
 
 /**
  * Una fila de movimiento del Libro Mayor, que se abre para mostrar el ASIENTO
@@ -34,15 +35,11 @@ import type { FilaMayor } from "@/lib/finanzas/reports/libro-mayor";
  * si se excluyera la propia, TODOS los asientos mostrarían un descuadre falso.
  */
 
-function money(n: number): string {
-  return n.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 function Monto({ value, bold }: { value: number; bold?: boolean }) {
   const tone = value < 0 ? "text-red-600" : value === 0 ? "text-gray-400" : "text-gray-800";
   return (
     <span className={`font-mono text-sm tabular-nums ${tone} ${bold ? "font-bold" : ""}`}>
-      {money(value)}
+      {fmtImporte(value)}
     </span>
   );
 }
@@ -50,10 +47,40 @@ function Monto({ value, bold }: { value: number; bold?: boolean }) {
 /** Celda de un importe del asiento: el cero se muestra apagado, no en 0.00. */
 function ImporteAsiento({ value }: { value: number }) {
   if (Math.abs(value) < 0.005) return <span className="text-gray-300">—</span>;
-  return <span className="font-mono text-sm tabular-nums text-gray-800">{money(value)}</span>;
+  return <span className="font-mono text-sm tabular-nums text-gray-800">{fmtImporte(value)}</span>;
 }
 
-const COLUMNAS_DEL_MAYOR = 9;
+/**
+ * Celda de débito o de crédito, y **la puerta al asiento**.
+ *
+ * Josuarth el 09/09/2026: «yo quiero saber de dónde viene ese número, y le hago
+ * clic al número». Antes el indicador de que la fila se abría —el chevrón—
+ * estaba pegado al código de cuenta, o sea del lado opuesto de la tabla al
+ * número que uno está mirando. Se mudó acá.
+ *
+ * La fila entera sigue siendo clickeable, así que hacer clic en la cuenta
+ * también abre el asiento: mover el indicador no cerró esa puerta.
+ *
+ * Una línea lleva débito O crédito, nunca los dos, así que el chevrón aparece
+ * en la única celda que tiene número.
+ */
+function CeldaImporte({ value, abierta }: { value: number; abierta: boolean }) {
+  if (Math.abs(value) < 0.005) return <span className="text-gray-300">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1">
+      {abierta ? (
+        <ChevronDown size={14} className="shrink-0 text-integra-navy" />
+      ) : (
+        <ChevronRight size={14} className="shrink-0 text-gray-400" />
+      )}
+      <span className="font-mono text-sm tabular-nums text-gray-800 underline decoration-dotted decoration-gray-400 underline-offset-4">
+        {fmtImporte(value)}
+      </span>
+    </span>
+  );
+}
+
+const COLUMNAS_DEL_MAYOR = 10;
 
 export function FilaExpandible({
   fila,
@@ -81,17 +108,10 @@ export function FilaExpandible({
         }
         onClick={onToggle}
         aria-expanded={abierta}
-        title={abierta ? "Cerrar el asiento" : "Ver el asiento completo"}
+        title={abierta ? "Cerrar el asiento" : "Ver de dónde sale este número"}
       >
         <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
-          <span className="inline-flex items-center gap-1">
-            {abierta ? (
-              <ChevronDown size={14} className="shrink-0 text-integra-navy" />
-            ) : (
-              <ChevronRight size={14} className="shrink-0 text-gray-400" />
-            )}
-            {fila.cuentaDistribucion}
-          </span>
+          {fila.cuentaDistribucion}
         </td>
         <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-600">
           {fila.fecha}
@@ -112,7 +132,10 @@ export function FilaExpandible({
           )}
         </td>
         <td className="px-3 py-2 text-right">
-          <Monto value={fila.importe} />
+          <CeldaImporte value={fila.debito} abierta={abierta} />
+        </td>
+        <td className="px-3 py-2 text-right">
+          <CeldaImporte value={fila.credito} abierta={abierta} />
         </td>
         <td className="px-3 py-2 text-right">
           <Monto value={fila.saldo} />
@@ -213,7 +236,7 @@ export function FilaExpandible({
                         ) : (
                           <span className="inline-flex items-center gap-1.5 font-semibold text-red-700">
                             <AlertTriangle size={13} />
-                            El asiento NO cuadra · diferencia {money(diferencia)}
+                            El asiento NO cuadra · diferencia {fmtImporte(diferencia)}
                           </span>
                         )}
                       </td>
@@ -224,7 +247,7 @@ export function FilaExpandible({
                             (cuadra ? "text-gray-800" : "text-red-700")
                           }
                         >
-                          {money(totalDebitos)}
+                          {fmtImporte(totalDebitos)}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -234,7 +257,7 @@ export function FilaExpandible({
                             (cuadra ? "text-gray-800" : "text-red-700")
                           }
                         >
-                          {money(totalCreditos)}
+                          {fmtImporte(totalCreditos)}
                         </span>
                       </td>
                     </tr>

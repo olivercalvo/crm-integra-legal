@@ -29,6 +29,8 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     contrapartida: "Cuentas por pagar",
     contrapartidaAmbigua: false,
     importe: 246.4,
+    debito: 246.4,
+    credito: 0,
     saldo: 1346.96,
     entryId: "e1",
     sourceType: "gasto",

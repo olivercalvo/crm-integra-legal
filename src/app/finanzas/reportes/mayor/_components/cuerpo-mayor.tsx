@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import type { FilaMayor } from "@/lib/finanzas/reports/libro-mayor";
+import { fmtImporte } from "@/lib/utils/importe";
 import { FilaExpandible } from "./fila-expandible";
 
 /**
@@ -16,10 +17,6 @@ import { FilaExpandible } from "./fila-expandible";
  * `destinos` llega como objeto plano y no como `Map`: cruza el límite
  * servidor→cliente y un objeto se serializa sin sorpresas.
  */
-
-function money(n: number): string {
-  return n.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export function CuerpoMayor({
   filas,
@@ -49,10 +46,13 @@ export function CuerpoMayor({
               <td className="px-3 py-2 text-sm" colSpan={5}>
                 <span className="font-semibold text-integra-navy">{rotuloArranque}</span>
               </td>
+              {/* El saldo inicial no es un movimiento: no tiene débito ni
+                  crédito propios. */}
+              <td className="px-3 py-2 text-right text-gray-400">—</td>
               <td className="px-3 py-2 text-right text-gray-400">—</td>
               <td className="px-3 py-2 text-right">
                 <span className="font-mono text-sm font-bold tabular-nums text-gray-800">
-                  {money(f.saldo)}
+                  {fmtImporte(f.saldo)}
                 </span>
               </td>
             </tr>

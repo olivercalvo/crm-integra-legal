@@ -213,10 +213,12 @@ export function ExpenseLinesEditor({
               key={linea.key}
               className="rounded-lg border border-gray-200 bg-gray-50/50 p-3"
             >
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">
-                  Línea {i + 1}
-                </span>
+              <div className="mb-2 flex items-center justify-end">
+                {/* Sin rótulo "Línea N": lo pidió Josuarth el 09/09/2026 —«esa
+                línea 1, línea 2, yo eliminaría eso, y simplemente las líneas»—.
+                El número seguía en el `aria-label` del botón de borrar, que es
+                donde hace falta: sin él, un lector de pantalla anuncia varios
+                «Quitar» idénticos y no se sabe cuál fila se borra. */}
                 <button
                   type="button"
                   onClick={() => quitar(i)}

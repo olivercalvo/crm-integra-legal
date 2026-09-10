@@ -11,11 +11,17 @@
  *     ► Utilidad Operativa
  *   ACTIVIDAD DE INVERSIÓN          (solo si hay cuentas)
  *   ACTIVIDAD DE FINANCIAMIENTO     (solo si hay cuentas)
- *   ► Utilidad antes de impuesto sobre la renta
- *     Impuesto sobre la renta
- *   ► Utilidad Neta
+ *   ► Utilidad antes de impuesto sobre la renta   ⎫
+ *     Impuesto sobre la renta                     ⎬ solo si dicen algo (ver abajo)
+ *   ► Utilidad Neta                               ⎭
  *   DISTRIBUCIÓN A SOCIAS           (sociedad civil, Tarea 4)
  *   ► Resultado del ejercicio = 0
+ *
+ * ⚠️ Las tres líneas del medio se OCULTAN cuando son redundantes — sociedad
+ * civil, sin inversión ni financiamiento y con ISR en cero—, que es el caso de
+ * Integra: ahí son la Utilidad Operativa repetida dos veces con un 0.00 en el
+ * medio, entre el resultado y su distribución. Lo pidió Josuarth el 09/09/2026.
+ * Vuelven solas en cuanto aportan un dato; el detalle, en `mostrarPuenteAlNeto`.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * LAS DOS CONVENCIONES DE SIGNO — leer antes de tocar nada
@@ -377,12 +383,6 @@ export function buildEstadoResultadoNiif18(
       sumar(sinClasificar)
   );
 
-  filas.push({
-    kind: "resultado",
-    label: "► Utilidad antes de impuesto sobre la renta",
-    valor: presentar(utilidadAntesImpuesto),
-  });
-
   // Impuesto: en balanza, una ganancia es NEGATIVA. Solo se grava si la hubo.
   const hayUtilidad = utilidadAntesImpuesto < -0.005;
   const impuesto = hayUtilidad ? round2(-utilidadAntesImpuesto * isrRate) : 0;
@@ -391,20 +391,54 @@ export function buildEstadoResultadoNiif18(
   // criterio que el ER clásico: un `false` significaba "no se cobró" en un
   // reporte y "no hubo ganancia" en el otro.
   const isr: IsrLine = { rate: isrRate, amount: impuesto, huboUtilidad: hayUtilidad };
-
-  filas.push({
-    kind: "impuesto",
-    label: "Impuesto sobre la renta",
-    nota: notaImpuesto(isrRate, hayUtilidad),
-    valor: presentar(impuesto),
-  });
-
   const utilidadNeta = round2(utilidadAntesImpuesto + impuesto);
-  filas.push({
-    kind: "resultado",
-    label: "► Utilidad Neta",
-    valor: presentar(utilidadNeta),
-  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LAS TRES LÍNEAS DEL MEDIO SE OCULTAN CUANDO NO DICEN NADA
+  // ─────────────────────────────────────────────────────────────────────────
+  // Josuarth, 09/09/2026: «él tiene la utilidad operacional y después de la
+  // utilidad operacional debe ir distribución a socios».
+  //
+  // En Integra —sociedad civil, sin actividad de inversión ni de
+  // financiamiento— «Utilidad antes de impuesto», «Impuesto sobre la renta» y
+  // «Utilidad Neta» son el MISMO número de la Utilidad Operativa repetido dos
+  // veces, con un 0.00 en el medio. Tres renglones entre el resultado y su
+  // distribución que no agregan un dato.
+  //
+  // 🔴 No se borran: se ocultan SÓLO cuando son redundantes, y cada condición
+  //    dice exactamente qué información estaría perdiéndose:
+  //
+  //      · `difiereDeOperativa` → hay inversión, financiamiento o cuentas sin
+  //        categoría: entonces «antes de impuesto» NO es la operativa y hay que
+  //        mostrar el puente.
+  //      · `hayImpuesto` → el bufete tributa a nivel de empresa: la línea de
+  //        impuesto es un dato, no un cero.
+  //      · `conDistribucion` → si el ejercicio NO se reparte, la Utilidad Neta
+  //        es el cierre del reporte y no se toca nunca.
+  //
+  //    Con cualquiera de esas, la cadena completa vuelve sola.
+  const difiereDeOperativa = Math.abs(utilidadAntesImpuesto - utilidadOperativa) >= 0.005;
+  const hayImpuesto = isrRate > 0 || Math.abs(impuesto) >= 0.005;
+  const mostrarPuenteAlNeto = !conDistribucion || difiereDeOperativa || hayImpuesto;
+
+  if (mostrarPuenteAlNeto) {
+    filas.push({
+      kind: "resultado",
+      label: "► Utilidad antes de impuesto sobre la renta",
+      valor: presentar(utilidadAntesImpuesto),
+    });
+    filas.push({
+      kind: "impuesto",
+      label: "Impuesto sobre la renta",
+      nota: notaImpuesto(isrRate, hayUtilidad),
+      valor: presentar(impuesto),
+    });
+    filas.push({
+      kind: "resultado",
+      label: "► Utilidad Neta",
+      valor: presentar(utilidadNeta),
+    });
+  }
 
   // ---------------------------------------------------------------------------
   // Tarea 4 — distribución a socias (sociedad civil)
@@ -413,6 +447,7 @@ export function buildEstadoResultadoNiif18(
   // las socias y cada una paga su renta personal. El ejercicio cierra en CERO.
   let distribucionSocias = 0;
   let resultadoDelEjercicio = utilidadNeta;
+
 
   if (conDistribucion) {
     // La distribución es exactamente el opuesto de la utilidad neta: por eso el

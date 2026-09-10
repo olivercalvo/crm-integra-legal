@@ -6,10 +6,10 @@ import { ListFilter, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
+import { fmtImporte } from "@/lib/utils/importe";
 import { NumberInput } from "@/components/ui/number-input";
 import { Button } from "@/components/ui/button";
 import {
-  CUENTA_TRAMITE_DEFAULT,
   impuestoSugerido,
   totalesDeLineas,
   type ExpenseLineDraft,
@@ -76,25 +76,45 @@ interface Props {
   /** Cuentas del plan que se pueden elegir. */
   cuentas: CuentaOption[];
   /**
+   * 🔴 OBLIGATORIA, Y SIN VALOR POR DEFECTO A PROPÓSITO.
+   *
    * Cuenta precargada en una línea nueva. En gastos de trámite es `130003`
-   * (decisión del acta); en compras la define ese módulo.
+   * (decisión del acta del 25/08); en **compras es cadena vacía**: no hay una
+   * cuenta plausible para una compra del bufete, así que el selector arranca
+   * vacío y obliga a elegir.
+   *
+   * Tenía `= CUENTA_TRAMITE_DEFAULT` como default del componente, y compras
+   * —que no lo pasaba— heredó `130003 · Fondo Legales de Clientes` en cada
+   * línea agregada. Esa es la cuenta de lo que las licenciadas adelantan POR UN
+   * CLIENTE, no la de una compra del bufete: se guardaba mal, con apariencia de
+   * dato elegido, y sin que nadie viera un error. Se detectó el 10/09/2026.
+   *
+   * Sin default, un módulo nuevo no puede heredar el de otro por descuido:
+   * tiene que decir cuál quiere.
    */
-  cuentaPorDefecto?: string;
+  cuentaPorDefecto: string;
   /** Errores del validador, con clave `lineas.{i}.{campo}`. */
   errors?: Record<string, string>;
   disabled?: boolean;
   /** Símbolo de moneda para los encabezados. */
   moneda?: string;
+  /**
+   * Totales al pie del editor. En gastos de trámite es el único lugar donde se
+   * ven, así que van. En compras el formulario ya tiene su propio bloque al
+   * final y quedaban DOS, con nombres distintos para lo mismo.
+   */
+  mostrarTotales?: boolean;
 }
 
 export function ExpenseLinesEditor({
   lineas,
   onChange,
   cuentas,
-  cuentaPorDefecto = CUENTA_TRAMITE_DEFAULT,
+  cuentaPorDefecto,
   errors = {},
   disabled = false,
   moneda = "B/.",
+  mostrarTotales = true,
 }: Props) {
   /**
    * El selector arranca con las SIETE que tienen sentido para un gasto de
@@ -336,28 +356,30 @@ export function ExpenseLinesEditor({
       )}
 
       {/* Totales — los mismos que calcula el validador y la base */}
-      <div className="rounded-lg border border-integra-navy/20 bg-integra-navy/5 p-3">
-        <dl className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <dt className="text-gray-600">Base</dt>
-            <dd className="tabular-nums text-gray-900">
-              {moneda} {totales.base.toFixed(2)}
-            </dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-gray-600">ITBMS</dt>
-            <dd className="tabular-nums text-gray-900">
-              {moneda} {totales.impuesto.toFixed(2)}
-            </dd>
-          </div>
-          <div className="flex justify-between border-t border-integra-navy/15 pt-1 font-semibold">
-            <dt className="text-integra-navy">Total</dt>
-            <dd className="tabular-nums text-integra-navy">
-              {moneda} {totales.total.toFixed(2)}
-            </dd>
-          </div>
-        </dl>
-      </div>
+      {mostrarTotales && (
+        <div className="rounded-lg border border-integra-navy/20 bg-integra-navy/5 p-3">
+          <dl className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-gray-600">Base</dt>
+              <dd className="tabular-nums text-gray-900">
+                {moneda} {fmtImporte(totales.base)}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-gray-600">ITBMS</dt>
+              <dd className="tabular-nums text-gray-900">
+                {moneda} {fmtImporte(totales.impuesto)}
+              </dd>
+            </div>
+            <div className="flex justify-between border-t border-integra-navy/15 pt-1 font-semibold">
+              <dt className="text-integra-navy">Total</dt>
+              <dd className="tabular-nums text-integra-navy">
+                {moneda} {fmtImporte(totales.total)}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,62 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Compras: la cuenta por defecto, el orden del formulario y un solo bloque de totales] - 2026-09-10
+
+Las tres son de `/finanzas/gastos-bufete/nuevo` y las tres salieron de mirar la pantalla.
+
+### 🔴 Las líneas de una compra nacían en la cuenta de otro módulo
+
+`ExpenseLinesEditor` es el mismo editor para gastos de trámite y para compras del bufete, y tenía
+`cuentaPorDefecto = CUENTA_TRAMITE_DEFAULT` como valor por defecto del componente. Compras no lo
+pasaba, así que **cada línea agregada nacía en `130003 · Fondo Legales de Clientes`** — la cuenta
+de lo que las licenciadas adelantan POR UN CLIENTE, no la de una compra del bufete.
+
+Medido contra el deploy antes de tocar nada: la **línea 1 ya arrancaba vacía**; la que traía
+`130003` era cada línea agregada con "Agregar línea". El efecto es el mismo y es el peor de
+todos — se guardaba mal, con la apariencia de un dato elegido a mano, y sin ningún error.
+
+En compras el selector ahora **arranca vacío y obliga a elegir**. Es la regla de siempre: un NULL
+que obliga a decidir es mejor que un default plausible que se guarda mal en silencio.
+
+**`cuentaPorDefecto` dejó de tener valor por defecto** y pasó a ser obligatoria. Así el próximo
+módulo no puede heredar el default de otro por descuido, que es exactamente como entró esto.
+
+🔒 **`cuenta-por-defecto.test.ts`** fija las dos mitades: que compras precargue vacío y que
+**gastos de trámite conserve `130003`**, que ahí sí es correcto (acta del 25/08: *"Gasto de
+trámite al incurrirlo: DEBE 130003"*). Verificado: trámite no cambió.
+
+### El formulario estaba al revés de como lo pidió Josuarth
+
+Antes: fecha → líneas → totales → y recién abajo proveedor, número de factura, vencimiento, RUC y
+descripción. O sea, el encabezado del documento **después** de sus líneas.
+
+Josuarth lo pidió al revés el 25/08, con el ejemplo de Navision. Se copió la estructura de
+`invoice-form.tsx` en vez de inventar una, que es lo que él pidió explícitamente —compras tiene
+que verse igual que facturación—:
+
+1. **Datos del gasto** — proveedor, fecha, N.º de factura del proveedor, vence, (nombre y RUC si
+   no hay ficha), descripción. Mismo orden que factura: primero con quién es el documento,
+   después su número y sus fechas, y la descripción al final.
+2. **Líneas de la compra** — su propia sección, como en facturación.
+3. **Totales (estimados)**.
+4. Estado de pago y Notas, sin cambios.
+
+### Había dos bloques de totales, con nombres distintos para los mismos tres números
+
+Uno al pie del editor de líneas (Base / ITBMS / Total) y otro abajo (Montos: Subtotal / ITBMS /
+Total a pagar). Quedó **uno solo**, con los nombres de facturación: **Subtotal / Impuestos /
+Total**, bajo el título *"Totales (estimados)"*.
+
+El del editor se apaga con `mostrarTotales={false}`. En **gastos de trámite sigue**, que es su
+único lugar.
+
+De paso, los totales del editor pasaron a `fmtImporte()` —tenían `.toFixed(2)`, sin separador de
+miles— y el formulario dejó de tener su propia copia de `fmtMoney`.
+
+**No se tocó la lógica de guardado ni el cálculo:** esto es orden y defaults.
+
+898 tests, 898 pass.
+
 ## [Tres correcciones que salieron de mirar el deploy] - 2026-09-10
 
 Ninguna de las tres se detecta leyendo código: las tres se vieron abriendo la pantalla desplegada.

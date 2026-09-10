@@ -23,6 +23,7 @@ import {
 import type { ExpenseAccountOption } from "@/lib/finanzas/queries/business-expenses";
 import type { SupplierOption } from "@/lib/finanzas/queries/suppliers";
 import { ExpenseLinesEditor } from "@/components/finanzas/expense-lines-editor";
+import { fmtImporte } from "@/lib/utils/importe";
 import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
 import { paymentTermsLabel, vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
@@ -58,10 +59,6 @@ function todayIso(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function fmtMoney(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -263,53 +260,6 @@ export function BusinessExpenseForm(props: Props) {
         <h2 className="text-base font-semibold text-integra-navy">Datos del gasto</h2>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Fecha */}
-          <div data-error={!!errors.expense_date}>
-            <Label className="mb-1 block">Fecha del gasto *</Label>
-            <Input
-              type="date"
-              value={expenseDate}
-              onChange={(e) => {
-                setExpenseDate(e.target.value);
-                proponerVencimiento(e.target.value, proveedorElegido?.payment_terms_days ?? 0);
-              }}
-              disabled={isPending}
-              className={errors.expense_date ? "border-red-300" : ""}
-            />
-            {errors.expense_date && (
-              <p className="mt-1 text-xs text-red-600">{errors.expense_date}</p>
-            )}
-          </div>
-
-          {/* ───────────────────────────────────────────────────────────────
-              LÍNEAS. El mismo editor que usa el gasto de trámite — es la misma
-              tabla `expense_lines` desde la `036`, por arco exclusivo.
-              🔑 La cuenta es OBLIGATORIA en cada línea. El formulario guía; el
-              servidor garantiza (`createBusinessExpense` la exige y la valida
-              contra el plan vigente, línea por línea).
-              ─────────────────────────────────────────────────────────────── */}
-          <div className="sm:col-span-2">
-            <Label className="mb-1 block">Líneas de la compra</Label>
-            <ExpenseLinesEditor
-              lineas={lineas}
-              onChange={setLineas}
-              // `account_type` es opcional en `ExpenseAccountOption` y el editor
-              // lo pide siempre. Se completa con `expense`, que es lo que la
-              // opción representaba antes de que el tipo existiera: la lista ya
-              // viene filtrada a asset/cost/expense por
-              // `listExpenseAccountOptions`, así que el valor no cambia qué se
-              // ofrece — solo satisface el tipo.
-              cuentas={props.accounts.map((a) => ({
-                ...a,
-                account_type: a.account_type ?? "expense",
-              }))}
-              disabled={isPending}
-            />
-            {errors.lineas && (
-              <p className="mt-1 text-xs text-red-600">{errors.lineas}</p>
-            )}
-          </div>
-
           {/* ───────────────────────────────────────────────────────────────
               PROVEEDOR. Antes eran dos campos de texto libre que se
               reescribían en cada gasto, y por eso la antigüedad de cuentas por
@@ -363,6 +313,24 @@ export function BusinessExpenseForm(props: Props) {
                 </>
               )}
             </p>
+          </div>
+
+          {/* Fecha */}
+          <div data-error={!!errors.expense_date}>
+            <Label className="mb-1 block">Fecha del gasto *</Label>
+            <Input
+              type="date"
+              value={expenseDate}
+              onChange={(e) => {
+                setExpenseDate(e.target.value);
+                proponerVencimiento(e.target.value, proveedorElegido?.payment_terms_days ?? 0);
+              }}
+              disabled={isPending}
+              className={errors.expense_date ? "border-red-300" : ""}
+            />
+            {errors.expense_date && (
+              <p className="mt-1 text-xs text-red-600">{errors.expense_date}</p>
+            )}
           </div>
 
           {/* ───────────────────────────────────────────────────────────────
@@ -469,9 +437,61 @@ export function BusinessExpenseForm(props: Props) {
         </div>
       </section>
 
-      {/* ── Sección: Montos ─────────────────────────────────────────────── */}
+      {/* ── Sección: Líneas ───────────────────────────────────────────── */}
       <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-integra-navy">Montos</h2>
+        <h2 className="text-base font-semibold text-integra-navy">Líneas de la compra</h2>
+
+        {/* ───────────────────────────────────────────────────────────────
+            LÍNEAS. El mismo editor que usa el gasto de trámite — es la misma
+            tabla `expense_lines` desde la `036`, por arco exclusivo.
+            🔑 La cuenta es OBLIGATORIA en cada línea. El formulario guía; el
+            servidor garantiza (`createBusinessExpense` la exige y la valida
+            contra el plan vigente, línea por línea).
+            ─────────────────────────────────────────────────────────────── */}
+        <ExpenseLinesEditor
+          lineas={lineas}
+          onChange={setLineas}
+          // `account_type` es opcional en `ExpenseAccountOption` y el editor
+          // lo pide siempre. Se completa con `expense`, que es lo que la
+          // opción representaba antes de que el tipo existiera: la lista ya
+          // viene filtrada a asset/cost/expense por
+          // `listExpenseAccountOptions`, así que el valor no cambia qué se
+          // ofrece — solo satisface el tipo.
+          //
+          // 🔴 `cuentaPorDefecto=""`: en una compra del bufete NO hay cuenta
+          // plausible, así que el selector arranca vacío y obliga a elegir.
+          // Antes no se pasaba y el editor caía en su default, que es el de
+          // gastos de trámite: `130003 · Fondo Legales de Clientes`, la cuenta
+          // de lo que se adelanta POR UN CLIENTE. Se guardaba mal y en
+          // silencio. Un NULL que obliga a decidir es mejor que un default
+          // plausible mal puesto.
+          //
+          // `mostrarTotales={false}`: los totales van UNA sola vez, en la
+          // sección de abajo. El editor los muestra para el gasto de trámite,
+          // que no tiene otra.
+          cuentas={props.accounts.map((a) => ({
+            ...a,
+            account_type: a.account_type ?? "expense",
+          }))}
+          cuentaPorDefecto=""
+          mostrarTotales={false}
+          disabled={isPending}
+        />
+        {errors.lineas && (
+          <p className="mt-1 text-xs text-red-600">{errors.lineas}</p>
+        )}
+      </section>
+
+      {/* ── Sección: Totales ────────────────────────────────────────────
+          UN SOLO bloque de totales, con los mismos nombres que facturación
+          —Subtotal / Impuestos / Total—. Hasta el 10/09/2026 había DOS: éste y
+          el que el editor de líneas dibuja al pie, que decía Base / ITBMS /
+          Total. Dos bloques con nombres distintos para los mismos tres números.
+          El del editor se apaga acá con `mostrarTotales={false}`; en gastos de
+          trámite sigue, que es su único lugar.
+          ──────────────────────────────────────────────────────────────── */}
+      <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-integra-navy">Totales (estimados)</h2>
 
         {/* ─────────────────────────────────────────────────────────────────
             LOS IMPORTES SE DERIVAN DE LAS LÍNEAS, NO SE TIPEAN.
@@ -495,18 +515,18 @@ export function BusinessExpenseForm(props: Props) {
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Subtotal</span>
             <span className="font-mono font-medium text-gray-900">
-              B/. {fmtMoney(subtotalNum)}
+              B/. {fmtImporte(subtotalNum)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">
-              ITBMS{" "}
+              Impuestos{" "}
               <span className="text-xs text-gray-400">
-                (suma de las líneas gravadas)
+                (suma del ITBMS de las líneas)
               </span>
             </span>
             <span className="font-mono font-medium text-gray-900">
-              B/. {fmtMoney(taxNum)}
+              B/. {fmtImporte(taxNum)}
             </span>
           </div>
           {(errors.subtotal || errors.tax_amount || errors.tax_rate) && (
@@ -522,9 +542,9 @@ export function BusinessExpenseForm(props: Props) {
 
         {/* Total calculado (read-only) */}
         <div className="rounded-md border border-integra-navy/20 bg-integra-navy/5 px-4 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Total a pagar</span>
+          <span className="text-sm font-medium text-gray-700">Total</span>
           <span className="text-xl font-bold text-integra-navy">
-            B/. {fmtMoney(totalNum)}
+            B/. {fmtImporte(totalNum)}
           </span>
         </div>
       </section>

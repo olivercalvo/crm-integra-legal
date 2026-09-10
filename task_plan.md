@@ -6,6 +6,11 @@
 
 ### Hecho en esta tanda
 
+- [x] **La cuenta por defecto de compras ya no es la de trámite.** El selector arranca vacío y
+      obliga a elegir; `cuentaPorDefecto` pasó a ser obligatoria para que ningún módulo herede
+      el default de otro. Trámite conserva `130003`, verificado.
+- [x] **El formulario de compras sigue el orden de facturación**: encabezado, líneas, totales.
+- [x] **Un solo bloque de totales** en compras, con los nombres de facturación.
 - [x] **La diferencia del Aging dice de dónde sale de verdad.** Verificado contra staging:
       191,947.55 de apertura de la `100004` − 507.00 de dos facturas sin asiento + 150.00 de un
       cobro sin asiento = 191,590.55. Los tres son del 03 y 04/09, anteriores al cableado.

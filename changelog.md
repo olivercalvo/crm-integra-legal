@@ -83,6 +83,21 @@ que no es plata.
 
 887 tests, 887 pass. `tsc` limpio, `next build` OK.
 
+#### Corregido en la verificación contra el deploy — el seleccionar-todo al enfocar
+
+Verificando en el navegador contra staging: se tecleó `1500` sobre un campo que mostraba `0.00`
+y quedó **`15000`**. El cero viejo no se reemplazaba.
+
+La primera versión seleccionaba el contenido dentro de un `requestAnimationFrame`, esperando al
+repintado que convierte `1,234.56` en `1234.56`. **`rAF` no dispara en una pestaña oculta**
+(`document.visibilityState === "hidden"`), así que el seleccionar-todo no ocurría y lo tecleado se
+insertaba delante del valor anterior.
+
+Ahora se escribe el valor canónico en el input a mano y se selecciona **sincrónicamente**, en el
+mismo handler. Es la misma cadena que React pinta en el render siguiente, así que la
+reconciliación no toca el `value` y la selección sobrevive. La corrección de un importe dejó de
+depender de que corra un frame.
+
 ## [Correcciones de la reunión del 09/09 con RM] - 2026-09-09
 
 Tres fallos en vivo delante del cliente. La causa de dos de ellos era la misma y no era la que

@@ -113,13 +113,28 @@ export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(
         value={enFoco ? canonico : formatearMonto(canonico)}
         onChange={(e) => emitir(e.currentTarget, sanearMonto(e.currentTarget.value, allowNegative))}
         onFocus={(e: FocusEvent<HTMLInputElement>) => {
-          setEnFoco(true);
-          // Al enfocar, el texto pasa de `1,234.56` a `1234.56`. Si no se
-          // selecciona todo, el cursor queda en una posición que ya no
-          // corresponde a lo que la persona ve. Se hace en el frame siguiente,
-          // cuando el valor nuevo ya está pintado.
           const el = e.currentTarget;
-          requestAnimationFrame(() => el.select());
+          setEnFoco(true);
+
+          // ⚠️ SINCRÓNICO, Y NO ES UN DETALLE DE ESTILO.
+          //
+          // Al enfocar, el texto pasa de `1,234.56` a `1234.56`, así que hay
+          // que seleccionarlo todo: si no, quien escribe encima de un campo que
+          // dice `0.00` termina con el cero viejo pegado a lo que tecleó —un
+          // `1500` sobre un `0.00` se guardaba como `15000`—.
+          //
+          // La primera versión lo hacía en `requestAnimationFrame`, esperando al
+          // repintado. **rAF no dispara en una pestaña oculta**, así que el
+          // seleccionar-todo simplemente no ocurría y el importe quedaba mal.
+          // Se vio en la verificación del 10/09 contra el deploy.
+          //
+          // Acá se escribe el valor canónico a mano ANTES de seleccionar. Es la
+          // misma cadena que React va a pintar en el render siguiente, así que
+          // la reconciliación no toca el `value` y la selección sobrevive. Nada
+          // de esto depende de un frame.
+          el.value = canonico;
+          el.select();
+
           onFocus?.(e);
         }}
         onBlur={(e: FocusEvent<HTMLInputElement>) => {

@@ -8,6 +8,7 @@ import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
+import { fmtImporte } from "@/lib/utils/importe";
 import {
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABEL,
@@ -85,7 +86,7 @@ export function RegisterPaymentDialog({
     if (!isFinite(amountNum) || amountNum <= 0) {
       errors.amount = "El monto debe ser mayor a 0";
     } else if (amountNum > balanceDue + 0.001) {
-      errors.amount = `El monto no puede superar el saldo pendiente (B/. ${balanceDue.toFixed(2)})`;
+      errors.amount = `El monto no puede superar el saldo pendiente (B/. ${fmtImporte(balanceDue)})`;
     }
     setFieldErrors(errors);
     return { ok: Object.keys(errors).length === 0, amountNum };
@@ -164,7 +165,7 @@ export function RegisterPaymentDialog({
           <div className="rounded-md border bg-gray-50 p-3 text-sm flex justify-between">
             <span className="text-gray-600">Saldo pendiente</span>
             <span className="font-mono font-semibold text-amber-700">
-              ${balanceDue.toFixed(2)}
+              ${fmtImporte(balanceDue)}
             </span>
           </div>
 
@@ -224,7 +225,7 @@ export function RegisterPaymentDialog({
             )}
             {!fieldErrors.amount && (
               <p className="mt-1 text-xs text-gray-500">
-                Máximo permitido: B/. {balanceDue.toFixed(2)}
+                Máximo permitido: B/. {fmtImporte(balanceDue)}
               </p>
             )}
           </div>

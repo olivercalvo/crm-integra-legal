@@ -98,7 +98,7 @@ export default async function EstadoResultadoPage({
         </p>
       )}
 
-      {!hayPeriodo && <OpeningBalancesNotice />}
+      {!hayPeriodo && <OpeningBalancesNotice conFiltroDeFechas />}
 
       {er.sinClasificar.length > 0 && (
         <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900">

@@ -6,6 +6,7 @@ import {
 } from "@/lib/finanzas/types/payment";
 import { RegisterPaymentDialog } from "./register-payment-dialog";
 import { DeletePaymentButton } from "./delete-payment-button";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   invoiceId: string;
@@ -74,7 +75,7 @@ export function PaymentsSection({
             Total
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-integra-navy">
-            ${grandTotal.toFixed(2)}
+            ${fmtImporte(grandTotal)}
           </div>
         </div>
         <div className="rounded-md border bg-emerald-50 p-3">
@@ -82,7 +83,7 @@ export function PaymentsSection({
             Pagado
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-emerald-700">
-            ${amountPaid.toFixed(2)}
+            ${fmtImporte(amountPaid)}
           </div>
         </div>
         <div
@@ -104,7 +105,7 @@ export function PaymentsSection({
               balanceDue > 0.001 ? "text-amber-700" : "text-gray-700"
             }`}
           >
-            ${balanceDue.toFixed(2)}
+            ${fmtImporte(balanceDue)}
           </div>
         </div>
       </div>
@@ -133,7 +134,7 @@ export function PaymentsSection({
                       {formatDate(p.payment_date)}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono font-medium text-emerald-700">
-                      ${amount.toFixed(2)}
+                      ${fmtImporte(amount)}
                     </td>
                     <td className="py-2 pr-3">
                       <span className="inline-flex items-center gap-1 text-gray-700">
@@ -161,7 +162,7 @@ export function PaymentsSection({
                         {canDelete ? (
                           <DeletePaymentButton
                             paymentId={p.id}
-                            paymentLabel={`B/. ${amount.toFixed(2)} del ${formatDate(
+                            paymentLabel={`B/. ${fmtImporte(amount)} del ${formatDate(
                               p.payment_date
                             )}`}
                           />

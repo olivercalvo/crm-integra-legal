@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { QuoteLineEditorInput } from "./quote-lines-editor";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   lines: QuoteLineEditorInput[];
@@ -49,23 +50,23 @@ export function QuoteTotalsCard({ lines }: Props) {
         <div className="flex justify-between">
           <dt className="text-blue-700">Subtotal honorarios</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${totals.subtotal_hon.toFixed(2)}
+            ${fmtImporte(totals.subtotal_hon)}
           </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-orange-700">Subtotal reembolso</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${totals.subtotal_rei.toFixed(2)}
+            ${fmtImporte(totals.subtotal_rei)}
           </dd>
         </div>
         <div className="flex justify-between text-xs text-gray-500 pt-1">
           <dt>Impuestos</dt>
-          <dd className="font-mono">${totals.tax_total.toFixed(2)}</dd>
+          <dd className="font-mono">${fmtImporte(totals.tax_total)}</dd>
         </div>
         <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
           <dt className="font-semibold text-integra-navy">Total general</dt>
           <dd className="font-mono text-lg font-bold text-integra-navy">
-            ${totals.grand_total.toFixed(2)}
+            ${fmtImporte(totals.grand_total)}
           </dd>
         </div>
       </dl>

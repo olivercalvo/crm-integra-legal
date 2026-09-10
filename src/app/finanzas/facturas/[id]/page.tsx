@@ -34,6 +34,7 @@ import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { CreditNoteCard } from "../_components/credit-note-card";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
+import { fmtImporte } from "@/lib/utils/importe";
 
 
 /**
@@ -322,13 +323,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                           {Number(ln.quantity).toFixed(2)}
                         </td>
                         <td className="py-2 pr-3 text-right font-mono">
-                          ${Number(ln.unit_price).toFixed(2)}
+                          ${fmtImporte(Number(ln.unit_price))}
                         </td>
                         <td className="py-2 pr-3 text-gray-600">
                           {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                         </td>
                         <td className="py-2 text-right font-mono font-medium">
-                          ${Number(ln.line_total).toFixed(2)}
+                          ${fmtImporte(Number(ln.line_total))}
                         </td>
                       </tr>
                     ))}
@@ -457,31 +458,31 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <div className="flex justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${Number(invoice.subtotal_total).toFixed(2)}
+                  ${fmtImporte(Number(invoice.subtotal_total))}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-600">Impuestos</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${Number(invoice.tax_total).toFixed(2)}
+                  ${fmtImporte(Number(invoice.tax_total))}
                 </dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${Number(invoice.grand_total).toFixed(2)}
+                  ${fmtImporte(Number(invoice.grand_total))}
                 </dd>
               </div>
               {Number(invoice.amount_paid) > 0 && (
                 <>
                   <div className="flex justify-between text-xs text-gray-600 pt-2">
                     <dt>Pagado</dt>
-                    <dd className="font-mono">${Number(invoice.amount_paid).toFixed(2)}</dd>
+                    <dd className="font-mono">${fmtImporte(Number(invoice.amount_paid))}</dd>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <dt className="text-amber-700">Saldo</dt>
                     <dd className="font-mono text-amber-700">
-                      ${Number(invoice.balance_due).toFixed(2)}
+                      ${fmtImporte(Number(invoice.balance_due))}
                     </dd>
                   </div>
                 </>

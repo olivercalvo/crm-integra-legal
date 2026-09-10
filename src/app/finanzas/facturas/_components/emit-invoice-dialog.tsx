@@ -6,6 +6,7 @@ import { Send, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { INVOICE_KIND_LABEL, type InvoiceKind } from "@/lib/finanzas/types/invoice";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   invoiceId: string;
@@ -117,7 +118,7 @@ export function EmitInvoiceDialog({
             <div className="flex justify-between border-t pt-2">
               <span className="text-gray-500">Total</span>
               <span className="font-mono font-semibold text-gray-900">
-                ${grandTotal.toFixed(2)}
+                ${fmtImporte(grandTotal)}
               </span>
             </div>
           </div>

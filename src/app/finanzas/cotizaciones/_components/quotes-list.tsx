@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/utils/format-date";
 import { QuoteStatusBadge } from "@/components/finanzas/cotizaciones/quote-status-badge";
 import { DuplicateQuoteButton } from "./duplicate-quote-button";
 import type { QuoteListItem } from "@/lib/finanzas/types/quote";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   quotes: QuoteListItem[];
@@ -87,7 +88,7 @@ export function QuotesList({ quotes }: Props) {
                   {formatDate(q.valid_until)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                  ${Number(q.grand_total).toFixed(2)}
+                  ${fmtImporte(Number(q.grand_total))}
                 </td>
                 <td className="px-4 py-3">
                   <QuoteStatusBadge status={q.status} />
@@ -161,7 +162,7 @@ export function QuotesList({ quotes }: Props) {
             <div className="mt-3 flex items-center justify-between text-sm">
               <span className="text-gray-500">Emitida {formatDate(q.issue_date)}</span>
               <p className="font-semibold text-gray-900">
-                ${Number(q.grand_total).toFixed(2)}
+                ${fmtImporte(Number(q.grand_total))}
               </p>
             </div>
           </Link>

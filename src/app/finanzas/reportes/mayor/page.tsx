@@ -84,8 +84,10 @@ export default async function LibroMayorPage({
         <strong>Estado de Resultado</strong> leen la <strong>misma fuente</strong>: el saldo de
         apertura del Plan de Cuentas más todos los movimientos del libro de asientos. El saldo
         final de una cuenta acá es el mismo que muestra esa cuenta en el Balance.{" "}
-        <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
-        importar la fecha.
+        {/* Acá decía «Todavía no hay corte por período», con el filtro de fechas
+            renderizado inmediatamente abajo. Ver la nota de
+            `OpeningBalancesNotice` en `_components/financial-statement.tsx`. */}
+        El <strong>rango de fechas</strong> de abajo recorta los movimientos que se listan.
       </p>
 
       <MayorFiltros

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { calcTotalsClient } from "@/lib/finanzas/validators/invoice";
 import type { InvoiceLineInput } from "@/lib/finanzas/types/invoice";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   lines: Pick<InvoiceLineInput, "quantity" | "unit_price" | "tax_rate">[];
@@ -27,19 +28,19 @@ export function InvoiceTotalsCard({ lines }: Props) {
         <div className="flex justify-between">
           <dt className="text-gray-600">Subtotal</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${subtotal.toFixed(2)}
+            ${fmtImporte(subtotal)}
           </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-gray-600">Impuestos</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${taxTotal.toFixed(2)}
+            ${fmtImporte(taxTotal)}
           </dd>
         </div>
         <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
           <dt className="font-semibold text-integra-navy">Total</dt>
           <dd className="font-mono text-lg font-bold text-integra-navy">
-            ${grandTotal.toFixed(2)}
+            ${fmtImporte(grandTotal)}
           </dd>
         </div>
       </dl>

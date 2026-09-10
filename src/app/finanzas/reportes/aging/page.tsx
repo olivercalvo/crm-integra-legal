@@ -161,12 +161,23 @@ export default async function AntiguedadPage({
 
                   <div className="flex items-start justify-between gap-4">
                     <dt className="flex-1">
+                      {/* ⚠️ Esta frase decía que «los asientos todavía no se generan
+                          solos». Dejó de ser cierto el 09/09/2026, cuando se desplegó
+                          el cableado contable, y quedó contando lo contrario de lo que
+                          hace el sistema —en la pantalla que muestra la diferencia más
+                          grande del reporte—. Verificado contra staging el 10/09/2026:
+                          los tres documentos que quedan sin asiento se registraron el
+                          03 y el 04/09, y las facturas emitidas después SÍ tienen el
+                          suyo. */}
                       <strong>
-                        Documentos registrados que todavía no están en el libro mayor.
+                        Documentos anteriores al cableado contable, que nunca llegaron al
+                        mayor.
                       </strong>{" "}
-                      Los asientos <strong>todavía no se generan solos</strong> al emitir una
-                      factura o registrar un cobro: hoy se cargan aparte, así que un documento
-                      nuevo aparece acá hasta que su asiento se registre.
+                      Se registraron antes del <strong>09/09/2026</strong>, cuando emitir una
+                      factura o registrar un cobro todavía no generaba su asiento. Desde esa
+                      fecha el asiento se arma en el mismo acto, así que esta diferencia{" "}
+                      <strong>no crece con los documentos nuevos</strong>: se corrige cargando
+                      a mano los asientos que faltan.
                       {reporte.control.porCablearExplicado && (
                         <>
                           {" "}

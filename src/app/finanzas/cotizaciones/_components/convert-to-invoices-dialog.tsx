@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   quoteId: string;
@@ -139,7 +140,7 @@ export function ConvertToInvoicesDialog({
                   Factura de Honorarios
                 </span>
                 <span className="font-mono font-semibold text-gray-900">
-                  ${honTotal.toFixed(2)}
+                  ${fmtImporte(honTotal)}
                 </span>
               </li>
             )}
@@ -150,14 +151,14 @@ export function ConvertToInvoicesDialog({
                   Factura de Reembolso
                 </span>
                 <span className="font-mono font-semibold text-gray-900">
-                  ${reiTotal.toFixed(2)}
+                  ${fmtImporte(reiTotal)}
                 </span>
               </li>
             )}
             <li className="flex items-center justify-between gap-2 border-t pt-2 text-sm">
               <span className="font-semibold text-integra-navy">Total general</span>
               <span className="font-mono font-bold text-integra-navy">
-                ${grandTotal.toFixed(2)}
+                ${fmtImporte(grandTotal)}
               </span>
             </li>
           </ul>

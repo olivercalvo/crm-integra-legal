@@ -50,7 +50,7 @@ export default async function DiarioGeneralPage({
         generatedAt={formatGeneratedAt()}
       />
 
-      <JournalScopeNotice />
+      <JournalScopeNotice hayPeriodo={Boolean(desde || hasta)} />
 
       <DiarioFiltros desde={desde} hasta={hasta} />
 

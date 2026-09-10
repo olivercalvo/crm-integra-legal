@@ -6,6 +6,25 @@
 
 ### Hecho en esta tanda
 
+- [x] **La diferencia del Aging dice de dónde sale de verdad.** Verificado contra staging:
+      191,947.55 de apertura de la `100004` − 507.00 de dos facturas sin asiento + 150.00 de un
+      cobro sin asiento = 191,590.55. Los tres son del 03 y 04/09, anteriores al cableado.
+- [x] **Separador de miles en Facturación y Cotizaciones** — `fmtImporte()`, 46 importes en 14
+      archivos. Gastos del Bufete ya lo hacía bien.
+- [x] **La frase del corte por período** se declara por pantalla en vez de afirmarse igual para
+      todas.
+- [x] **El campo de dinero selecciona sincrónico**, no por `requestAnimationFrame` (que no
+      dispara en pestaña oculta). Se encontró tecleando 1500 sobre un 0.00 y obteniendo 15000.
+
+### Pendiente de la verificación del 10/09
+
+- [ ] **(b) Compra con dos líneas** y **(e) rechazo del servicio Familia**: no se pudieron
+      terminar en el navegador. Los clics no llegan a una pestaña con
+      `document.visibilityState === "hidden"`; hay que dejar la pestaña del grupo de Claude
+      ACTIVA y la ventana sin minimizar.
+
+### Hecho antes en esta tanda
+
 - [x] **El botón del asiento manual ya dice por qué está apagado.** La decisión se mudó a
       `estadoDelRegistro()` en `contabilidad/asiento-manual.ts`, que devuelve el MOTIVO además
       del booleano. Era lo que bloqueó la demo del 09/09: cuatro cláusulas y una sola con

@@ -70,7 +70,7 @@ export default async function BalanceGeneralPage({
 
       <PeriodoFiltros basePath="/finanzas/reportes/balance" modo="fecha" hasta={hasta} />
 
-      <OpeningBalancesNotice />
+      <OpeningBalancesNotice conFiltroDeFechas />
       <UnclassifiedWarning sections={[bg.activos, bg.pasivos, bg.patrimonio]} />
 
       {riesgoDobleConteo && (

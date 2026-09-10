@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/utils/format-date";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
 import { FeEstadoBadge } from "@/components/finanzas/fe-estado-badge";
 import { INVOICE_KIND_LABEL, type InvoiceListItem } from "@/lib/finanzas/types/invoice";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   invoices: InvoiceListItem[];
@@ -73,7 +74,7 @@ export function InvoicesList({ invoices }: Props) {
                   {formatDate(inv.due_date)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                  ${Number(inv.grand_total).toFixed(2)}
+                  ${fmtImporte(Number(inv.grand_total))}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <span
@@ -83,7 +84,7 @@ export function InvoicesList({ invoices }: Props) {
                         : "text-gray-400"
                     }
                   >
-                    ${Number(inv.balance_due).toFixed(2)}
+                    ${fmtImporte(Number(inv.balance_due))}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -136,11 +137,11 @@ export function InvoicesList({ invoices }: Props) {
               <span className="text-gray-500">Vence {formatDate(inv.due_date)}</span>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  ${Number(inv.grand_total).toFixed(2)}
+                  ${fmtImporte(Number(inv.grand_total))}
                 </p>
                 {Number(inv.balance_due) > 0 && (
                   <p className="text-xs text-amber-700">
-                    Saldo ${Number(inv.balance_due).toFixed(2)}
+                    Saldo ${fmtImporte(Number(inv.balance_due))}
                   </p>
                 )}
               </div>

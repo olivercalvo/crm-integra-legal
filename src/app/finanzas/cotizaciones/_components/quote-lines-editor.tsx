@@ -8,6 +8,7 @@ import { NumberInput } from "@/components/ui/number-input";
 import { ServiceCombobox, SERVICE_CUSTOM } from "@/components/finanzas/service-combobox";
 import { TaxCodeSelect } from "@/components/finanzas/tax-code-select";
 import { QuoteKindIndicator } from "@/components/finanzas/cotizaciones/quote-kind-indicator";
+import { fmtImporte } from "@/lib/utils/importe";
 import type {
   ServiceOption,
   TaxCodeOption,
@@ -348,7 +349,7 @@ export function QuoteLinesEditor({
                       Total línea
                     </label>
                     <div className="rounded-md bg-gray-50 px-3 py-2 min-h-[44px] flex items-center font-mono text-sm font-medium text-gray-900">
-                      ${lineTotal.toFixed(2)}
+                      ${fmtImporte(lineTotal)}
                     </div>
                   </div>
                 </div>

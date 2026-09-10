@@ -43,6 +43,7 @@ import { ConvertToInvoicesDialog } from "../_components/convert-to-invoices-dial
 import { PublicLinkDisplay } from "../_components/public-link-display";
 import { QuoteTermsCollapsible } from "../_components/quote-terms-collapsible";
 import { getPublicAppUrl } from "@/lib/utils/public-url";
+import { fmtImporte } from "@/lib/utils/importe";
 
 
 /**
@@ -269,7 +270,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                       <span key={kind} className="inline-flex items-center gap-2 text-sm">
                         <QuoteKindIndicator kind={kind} compact />
                         <span className="font-mono text-gray-700">
-                          ${subtotal.toFixed(2)}
+                          ${fmtImporte(subtotal)}
                         </span>
                       </span>
                     ))
@@ -490,13 +491,13 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                           {Number(ln.quantity).toFixed(2)}
                         </td>
                         <td className="py-2 pr-3 text-right font-mono">
-                          ${Number(ln.unit_price).toFixed(2)}
+                          ${fmtImporte(Number(ln.unit_price))}
                         </td>
                         <td className="py-2 pr-3 text-gray-600">
                           {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                         </td>
                         <td className="py-2 text-right font-mono font-medium">
-                          ${Number(ln.line_total ?? 0).toFixed(2)}
+                          ${fmtImporte(Number(ln.line_total ?? 0))}
                         </td>
                       </tr>
                     ))}
@@ -521,7 +522,7 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                 <div className="flex justify-between">
                   <dt className="text-blue-700">Subtotal honorarios</dt>
                   <dd className="font-mono font-medium text-gray-900">
-                    ${Number(quote.subtotal_hon).toFixed(2)}
+                    ${fmtImporte(Number(quote.subtotal_hon))}
                   </dd>
                 </div>
               )}
@@ -529,18 +530,18 @@ export default async function CotizacionDetallePage({ params }: PageProps) {
                 <div className="flex justify-between">
                   <dt className="text-orange-700">Subtotal reembolso</dt>
                   <dd className="font-mono font-medium text-gray-900">
-                    ${Number(quote.subtotal_rei).toFixed(2)}
+                    ${fmtImporte(Number(quote.subtotal_rei))}
                   </dd>
                 </div>
               )}
               <div className="flex justify-between text-xs text-gray-500 pt-1">
                 <dt>Impuestos</dt>
-                <dd className="font-mono">${Number(quote.tax_total).toFixed(2)}</dd>
+                <dd className="font-mono">${fmtImporte(Number(quote.tax_total))}</dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total general</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${Number(quote.grand_total).toFixed(2)}
+                  ${fmtImporte(Number(quote.grand_total))}
                 </dd>
               </div>
             </dl>

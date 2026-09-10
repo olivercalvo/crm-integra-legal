@@ -64,15 +64,39 @@ export function StatementHeader({
   );
 }
 
-/** Aviso de que la fuente de datos son los saldos de apertura (Paso 2). */
-export function OpeningBalancesNotice() {
+/**
+ * Aviso de que la fuente de datos son los saldos de apertura (Paso 2).
+ *
+ * ⚠️ ACÁ VIVÍA UNA FRASE QUE SE VOLVIÓ FALSA.
+ *
+ * Decía «Todavía no hay corte por período: se incluye todo lo registrado, sin
+ * importar la fecha» — y se renderizaba **justo encima del filtro de fechas**,
+ * que sí filtra. Un contador leía las dos cosas seguidas y no sabía a cuál
+ * creerle. Se detectó el 10/09/2026 mirando el deploy, no el código.
+ *
+ * Por eso el alcance ahora se declara por pantalla en vez de afirmarse igual
+ * para todas: `conFiltroDeFechas` lo pasa quien tiene el filtro arriba.
+ */
+export function OpeningBalancesNotice({
+  conFiltroDeFechas = false,
+}: {
+  /** true en las pantallas que muestran el filtro de fechas. */
+  conFiltroDeFechas?: boolean;
+}) {
   return (
     <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
       Este reporte suma los <strong>saldos de apertura</strong> del Plan de Cuentas{" "}
       <strong>más todos los movimientos registrados</strong> en el libro mayor. Los mismos
       números que muestra el mayor de cada cuenta.{" "}
-      <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
-      importar la fecha.
+      {conFiltroDeFechas ? (
+        <>
+          El <strong>rango de fechas</strong> de abajo recorta lo que se incluye.
+        </>
+      ) : (
+        <>
+          Esta pantalla <strong>no tiene corte por fechas</strong>: incluye todo lo registrado.
+        </>
+      )}
     </p>
   );
 }
@@ -84,15 +108,28 @@ export function OpeningBalancesNotice() {
  * más movimientos" no le aplica y confundía — un contador que lo lee espera ver
  * saldos y encuentra una lista cronológica.
  *
- * Lo que SÍ le aplica es que no hay corte por período, igual que a los demás.
+ * El alcance se declara según lo que se esté viendo: ver la nota de
+ * `OpeningBalancesNotice` sobre la frase que se volvió falsa.
  */
-export function JournalScopeNotice() {
+export function JournalScopeNotice({
+  hayPeriodo = false,
+}: {
+  /** true cuando la consulta trae `desde` y/o `hasta`. */
+  hayPeriodo?: boolean;
+}) {
   return (
     <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-      Este reporte lista <strong>todos los asientos registrados</strong> en el libro, en orden
+      Este reporte lista los <strong>asientos registrados</strong> en el libro, en orden
       cronológico y con sus líneas.{" "}
-      <strong>Todavía no hay corte por período:</strong> se incluye todo lo registrado, sin
-      importar la fecha.
+      {hayPeriodo ? (
+        <>
+          Se muestran <strong>sólo los del período consultado</strong>.
+        </>
+      ) : (
+        <>
+          Se muestran <strong>todos</strong>, sin corte por fecha.
+        </>
+      )}
     </p>
   );
 }

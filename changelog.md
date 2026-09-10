@@ -1,5 +1,65 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Tres correcciones que salieron de mirar el deploy] - 2026-09-10
+
+Ninguna de las tres se detecta leyendo código: las tres se vieron abriendo la pantalla desplegada.
+
+### La diferencia del Aging explicaba mal de dónde venía
+
+La pantalla de Antigüedad muestra una diferencia de **191,590.55** contra la cuenta control, y la
+explicaba diciendo que *"los asientos todavía no se generan solos al emitir una factura o
+registrar un cobro"*. **Eso dejó de ser cierto el 09/09/2026**, cuando se desplegó el cableado
+contable. El aviso contaba lo contrario de lo que hace el sistema, en la pantalla con el número
+más grande del reporte.
+
+Verificado contra staging antes de tocar el texto, no asumido:
+
+| Componente | Valor | De dónde sale |
+|---|---|---|
+| Saldo de apertura de la `100004` | **191,947.55** | `chart_of_accounts.saldo_inicial`, al 01/01/2026 |
+| − 2 facturas en el auxiliar sin asiento | −507.00 | FAC-REI-000002 (400.00) y FAC-HON-000007 (107.00) |
+| + 1 cobro descontado del auxiliar sin asiento | +150.00 | pago del 20/04/2026 |
+| **= Diferencia** | **191,590.55** | exactamente lo que muestra la pantalla |
+
+Y el dato que desmiente la frase vieja: los tres documentos se registraron el **03 y 04/09**,
+antes del cableado. Las facturas emitidas después —`FAC-HON-000008` y `FAC-HON-000009`— **sí**
+tienen su asiento. O sea que la causa no es que el sistema no postee: es que estos tres son
+anteriores a que posteara.
+
+El texto nuevo dice eso, y agrega lo que el contador necesita saber: **la diferencia no crece con
+los documentos nuevos**, se corrige cargando a mano los asientos que faltan.
+
+### El separador de miles llegó a Facturación y Cotizaciones — 46 importes, 14 archivos
+
+La misma factura se leía `1,605.00` en el Libro Mayor y **`$1605.00`** en su propio detalle.
+Convivían tres formas de escribir un monto: `es-PA` en los reportes, `en-US` en Gastos del
+Bufete, y **`.toFixed(2)` pelado —sin separador— en Facturación y Cotizaciones**.
+
+Ahora hay una sola: `fmtImporte()` en `lib/utils/importe.ts`. Sin símbolo de moneda —lo pone cada
+pantalla, que es la que sabe si va `$` o `B/.`— y tolerante al texto que devuelve Postgres para
+las columnas `numeric`.
+
+**Gastos del Bufete ya lo hacía bien**; se revisó y no se tocó. Las **cantidades** de factura y
+cotización siguen con `.toFixed(2)`: no son dinero.
+
+### La frase del corte por período contradecía al filtro que estaba abajo
+
+Mayor, Balance, Comprobación, Aging, Estado de Cuenta y Diario decían *"Todavía no hay corte por
+período: se incluye todo lo registrado, sin importar la fecha"* — y en varias de ellas el filtro
+de fechas estaba renderizado **inmediatamente debajo**, filtrando de verdad.
+
+El alcance ahora se declara por pantalla en vez de afirmarse igual para todas:
+
+- **Con filtro arriba** (Balance, Comprobación, Estado de Resultado, Mayor): *"El rango de fechas
+  de abajo recorta lo que se incluye"*.
+- **Sin filtro** (Aging, Estado de Cuenta): *"Esta pantalla no tiene corte por fechas"*, que es
+  verdad de esa pantalla y no una limitación del sistema.
+- **Diario**: la frase depende de si la consulta trae período.
+
+No se tocó el filtro de fechas del Aging —es otro bloque— ni las flechitas de "Cantidad".
+
+893 tests, 893 pass.
+
 ## [Botón del asiento manual + campo de dinero único] - 2026-09-10
 
 Dos cosas de la reunión del 09/09 con RM. La primera bloqueaba el módulo que más les gustó.

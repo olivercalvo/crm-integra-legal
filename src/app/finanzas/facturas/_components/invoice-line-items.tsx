@@ -14,6 +14,7 @@ import type {
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import type { ValidationErrors } from "@/lib/finanzas/validators/invoice";
+import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
   lines: InvoiceLineInput[];
@@ -266,7 +267,7 @@ export function InvoiceLineItems({
                       Total línea
                     </label>
                     <div className="rounded-md bg-gray-50 px-3 py-2 min-h-[44px] flex items-center font-mono text-sm font-medium text-gray-900">
-                      ${lineTotal.toFixed(2)}
+                      ${fmtImporte(lineTotal)}
                     </div>
                   </div>
                 </div>

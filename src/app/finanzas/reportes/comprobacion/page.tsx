@@ -74,7 +74,7 @@ export default async function BalanceComprobacionPage({
         </p>
       )}
 
-      <OpeningBalancesNotice />
+      <OpeningBalancesNotice conFiltroDeFechas />
 
       <p className="rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-600">
         Los <strong>saldos finales</strong> de esta tabla son exactamente los que muestran el{" "}

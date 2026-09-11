@@ -6,11 +6,19 @@
 
 ## Cierre del 10/09/2026
 
-**SHA vivo en staging: `48bbd74`** — deployment `dpl_F4jHuPVcqQhYh57qwieBJu6kZnC9`, estado READY,
-aliaseado a `https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app`.
+**El último SHA con cambios de aplicación es `48bbd74`**, y es el que se verificó en la pantalla
+desplegada — deployment `dpl_F4jHuPVcqQhYh57qwieBJu6kZnC9`, READY, aliaseado a
+`https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app`.
 
-**`origin/develop` = `48bbd74`.** Árbol limpio, nada sin commitear ni sin pushear (lo único sin
-trackear es `Claude outputs/`, un PDF ajeno al código).
+Encima va sólo este documento, que no toca código: el deploy vivo al cerrar el día corre el mismo
+build de la app. Para ver el SHA exacto que está arriba en cualquier momento:
+
+```
+npx vercel inspect crm-integra-legal-git-develop-olivercalvos-projects.vercel.app
+```
+
+Árbol limpio, nada sin commitear ni sin pushear (lo único sin trackear es `Claude outputs/`, un
+PDF ajeno al código).
 
 🔴 **`main` sigue en `d5ac249`. Producción NO se tocó en ningún momento.**
 

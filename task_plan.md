@@ -6,6 +6,14 @@
 
 ### Hecho en esta tanda
 
+- [x] **El rechazo mudo de compras**: faltaba el prop `errors` hacia el editor de líneas. Más
+      `motivoParaNoGuardar()` al lado del botón y `data-error` para el scroll.
+- [x] **Drill-down por el monto** en Estado de Resultado y Balance; **Comprobación no tenía
+      ninguno** y se le agregó.
+- [x] **Selector de impuesto** igual al de facturación en gastos de bufete y de trámite.
+- [x] **El filtro de cuentas se reemplazó por grupos** en el mismo desplegable.
+- [x] **El listado de gastos muestra el proveedor** usando `nombreProveedorDeGasto()`.
+
 - [x] **El saldo del Mayor se lee según la naturaleza de la cuenta**, no en balanza. Confirmado
       contra el modelo que Josuarth mandó el 26/08. El negativo queda para la cuenta al revés de
       su naturaleza. Cinco tests fijan las dos direcciones.
@@ -90,6 +98,10 @@ hacer.
 - [x] Bajado del inventario: el botón *"pasar a contabilidad"* **no se construye**.
 
 ### Pendiente, anotado y FUERA de esta tanda
+
+- [ ] **`tax_code_id` en `expense_lines`** — hoy la línea de gasto guarda `tax_rate` (decimal), así
+      que no puede distinguir `EXENTO` de `ITBMS_0` (los dos con tasa 0). Necesita migración,
+      backfill y revisar el resumen de ITBMS.
 
 - [ ] **20 líneas de gasto de trámite sin cuenta (B/. 7.600)** — el backfill de la `036`. Ninguna
       posteada; ninguna puede postearse hasta asignarles cuenta. Necesita asignación masiva.

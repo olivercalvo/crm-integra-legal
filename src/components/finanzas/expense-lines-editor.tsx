@@ -1,19 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ListFilter, Plus, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
 import { fmtImporte } from "@/lib/utils/importe";
-import { NumberInput } from "@/components/ui/number-input";
 import { Button } from "@/components/ui/button";
 import {
   impuestoSugerido,
   totalesDeLineas,
   type ExpenseLineDraft,
 } from "@/lib/finanzas/types/expense-line";
+import {
+  OPCIONES_DE_IMPUESTO,
+  opcionDeImpuestoDe,
+} from "@/lib/finanzas/types/business-expense";
 import { lineaVacia } from "@/lib/finanzas/validators/expense-line";
 import {
   cuentasClasificables,
@@ -117,23 +120,39 @@ export function ExpenseLinesEditor({
   mostrarTotales = true,
 }: Props) {
   /**
-   * El selector arranca con las SIETE que tienen sentido para un gasto de
-   * trámite, no con las 64 del plan.
+   * LAS HABITUALES ARRIBA, EL RESTO ABAJO — EN EL MISMO DESPLEGABLE.
    *
-   * El 03/09/2026 se clasificó un honorario de gestor externo contra
-   * `610002 Honorarios Profesionales` en vez de `500004 Honorarios Profesionales
-   * Externos` — se llaman casi igual y solo una es de costo. Lo hizo alguien que
-   * acababa de diseñar este modelo. Con 64 opciones el error es cuestión de
-   * tiempo; con siete, hay que buscarlo.
+   * ═════════════════════════════════════════════════════════════════════════
+   * POR QUÉ DEJÓ DE HABER UN FILTRO
+   * ═════════════════════════════════════════════════════════════════════════
+   * Hasta el 10/09/2026 el selector mostraba SOLO las siete habituales y el
+   * resto vivía detrás de un botón «Ver todas las cuentas», que estaba abajo
+   * del todo, al lado de «Agregar línea». Oliver estuvo buscando cuentas que
+   * existían y no las encontraba hasta que bajó de casualidad.
    *
-   * "Ver todas" existe porque el caso raro es REAL —una abogada que viaja a una
-   * audiencia va a `610018 Gastos de viajes`— pero cuesta un clic más que lo
-   * probable, que es como tiene que ser.
+   * El problema no era la lista corta: era que el control que la ampliaba
+   * estaba lejos del campo y no se veía. Un `<optgroup>` resuelve las dos
+   * cosas a la vez — las siete probables quedan primero, y las demás están
+   * ahí mismo, a un scroll del mismo desplegable.
+   *
+   * 🔴 La lista corta NO se abandonó, se reubicó. Existe por un error real: el
+   *    03/09/2026 se clasificó un honorario de gestor externo contra
+   *    `610002 Honorarios Profesionales` en vez de `500004 Honorarios
+   *    Profesionales Externos` —se llaman casi igual y sólo una es de costo—.
+   *    Con 64 opciones sueltas ese error es cuestión de tiempo; con siete
+   *    arriba y un encabezado que las separa, hay que ignorarlas para
+   *    equivocarse.
    */
-  const [verTodas, setVerTodas] = useState(false);
   const sugeridas = useMemo(() => cuentasSugeridasParaTramite(cuentas), [cuentas]);
   const todas = useMemo(() => cuentasClasificables(cuentas), [cuentas]);
-  const opciones = verTodas ? todas : sugeridas;
+  const codigosSugeridos = useMemo(
+    () => new Set(sugeridas.map((c) => c.code)),
+    [sugeridas]
+  );
+  const resto = useMemo(
+    () => todas.filter((c) => !codigosSugeridos.has(c.code)),
+    [todas, codigosSugeridos]
+  );
 
   const totales = useMemo(
     () =>
@@ -208,10 +227,20 @@ export function ExpenseLinesEditor({
       <div className="space-y-3">
         {lineas.map((linea, i) => {
           const e = (campo: string) => errors[`lineas.${i}.${campo}`];
+          // `data-error` es lo que busca el `scrollIntoView` del formulario al
+          // rechazar. Sin esto la pantalla no se movía y el borde rojo podía
+          // quedar fuera de la vista.
+          const hayErrorEnLinea = Object.keys(errors).some((k) =>
+            k.startsWith(`lineas.${i}.`)
+          );
           return (
             <div
               key={linea.key}
-              className="rounded-lg border border-gray-200 bg-gray-50/50 p-3"
+              data-error={hayErrorEnLinea || undefined}
+              className={
+                "rounded-lg border bg-gray-50/50 p-3 " +
+                (hayErrorEnLinea ? "border-red-300" : "border-gray-200")
+              }
             >
               <div className="mb-2 flex items-center justify-end">
                 {/* Sin rótulo "Línea N": lo pidió Josuarth el 09/09/2026 —«esa
@@ -262,11 +291,24 @@ export function ExpenseLinesEditor({
                     }
                   >
                     <option value="">— Elija una —</option>
-                    {opciones.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} · {c.name}
-                      </option>
-                    ))}
+                    {sugeridas.length > 0 && (
+                      <optgroup label="Habituales">
+                        {sugeridas.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.code} · {c.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {resto.length > 0 && (
+                      <optgroup label={`Todas las cuentas (${todas.length})`}>
+                        {resto.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.code} · {c.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   {e("chart_account_code") && (
                     <p className="mt-1 text-xs text-red-600">{e("chart_account_code")}</p>
@@ -274,7 +316,7 @@ export function ExpenseLinesEditor({
                 </div>
 
                 {/* Base */}
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-1">
                   <Label className="mb-1 block text-xs">Base ({moneda})</Label>
                   <MoneyInput
                     value={linea.amount}
@@ -286,18 +328,34 @@ export function ExpenseLinesEditor({
                   {e("amount") && <p className="mt-1 text-xs text-red-600">{e("amount")}</p>}
                 </div>
 
-                {/* Tasa */}
-                <div className="sm:col-span-1">
-                  <Label className="mb-1 block text-xs">Tasa</Label>
-                  <NumberInput
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={linea.tax_rate}
+                {/* Impuesto — el MISMO desplegable que facturación.
+                    Era un campo numérico que mostraba «0.07»: un número de
+                    programador. Josuarth pidió el 10/09/2026 que se vea igual
+                    que en una factura. Por qué las opciones no salen de
+                    `tax_codes`: ver `OPCIONES_DE_IMPUESTO`. */}
+                <div className="sm:col-span-2">
+                  <Label className="mb-1 block text-xs">Impuesto</Label>
+                  <select
+                    value={opcionDeImpuestoDe(linea.tax_rate)?.rate ?? ""}
                     onChange={(ev) => actualizar(i, { tax_rate: ev.target.value })}
                     disabled={disabled}
-                    className={"min-h-[44px] " + (e("tax_rate") ? "border-red-300" : "")}
-                  />
+                    className={
+                      "block w-full rounded-md border bg-white px-2 min-h-[44px] text-sm " +
+                      "focus:border-integra-navy focus:outline-none " +
+                      (e("tax_rate") ? "border-red-300" : "border-gray-300")
+                    }
+                  >
+                    {opcionDeImpuestoDe(linea.tax_rate) === null && (
+                      // Una tasa histórica que ya no está en la lista se muestra
+                      // tal cual en vez de desaparecer sin avisar.
+                      <option value="">{`Tasa ${linea.tax_rate}`}</option>
+                    )}
+                    {OPCIONES_DE_IMPUESTO.map((o) => (
+                      <option key={o.rate} value={o.rate}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
                   {e("tax_rate") && (
                     <p className="mt-1 text-xs text-red-600">{e("tax_rate")}</p>
                   )}
@@ -333,29 +391,7 @@ export function ExpenseLinesEditor({
           <Plus size={16} className="mr-1" />
           Agregar línea
         </Button>
-
-        {todas.length > sugeridas.length && (
-          <button
-            type="button"
-            onClick={() => setVerTodas((v) => !v)}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md px-3 text-xs font-medium text-gray-500 hover:text-integra-navy"
-          >
-            <ListFilter size={14} />
-            {verTodas
-              ? `Ver solo las ${sugeridas.length} habituales`
-              : `Ver todas las cuentas (${todas.length})`}
-          </button>
-        )}
       </div>
-
-      {verTodas && (
-        <p className="text-xs text-gray-500">
-          Las habituales de un gasto de trámite son el fondo del cliente y las cuentas de
-          costo. Las demás existen para casos puntuales —un viaje a una audiencia va a
-          <span className="font-medium"> Gastos de viajes</span>— pero si dudás, es una de
-          las habituales.
-        </p>
-      )}
 
       {/* Totales — los mismos que calcula el validador y la base */}
       {mostrarTotales && (

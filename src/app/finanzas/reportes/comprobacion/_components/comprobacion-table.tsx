@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 
 import {
@@ -80,12 +81,36 @@ function Saldo({ value, bold }: { value: number; bold?: boolean }) {
   );
 }
 
+/**
+ * TRAZABILIDAD — clic para abrir el Libro Mayor de la cuenta.
+ *
+ * La Comprobación era la única de las tres hermanas que **no tenía ninguna**:
+ * el Balance y el Estado de Resultado enlazaban desde el código y el nombre, y
+ * acá el código era texto plano. Se detectó en el smoke test del 10/09/2026.
+ *
+ * El enlace va en el código y en el SALDO FINAL, que es el número que uno mira
+ * en esta tabla: «yo quiero saber de dónde viene ese número, y le hago clic al
+ * número» (Josuarth). Los débitos y los créditos del período no enlazan — son
+ * sumas del rango, y su detalle es el mismo mayor al que ya se llega.
+ */
 function Fila({ fila }: { fila: FilaComprobacion }) {
+  const alMayor = `/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`;
+  const titulo = `Ver de dónde sale este número — Libro Mayor de ${fila.code} ${fila.name}`;
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50">
-      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">{fila.code}</td>
+      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
+        <Link
+          href={alMayor}
+          className="underline decoration-dotted underline-offset-2 hover:text-integra-navy"
+          title={titulo}
+        >
+          {fila.code}
+        </Link>
+      </td>
       <td className="px-3 py-2 text-sm text-gray-700">
-        {fila.name}
+        <Link href={alMayor} className="hover:text-integra-navy hover:underline" title={titulo}>
+          {fila.name}
+        </Link>
         {fila.inactivaConMovimiento && (
           <span
             className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200"
@@ -98,7 +123,15 @@ function Fila({ fila }: { fila: FilaComprobacion }) {
       <td className="px-3 py-2 text-right"><Saldo value={fila.saldoInicial} /></td>
       <td className="px-3 py-2 text-right"><Suma value={fila.debitos} /></td>
       <td className="px-3 py-2 text-right"><Suma value={fila.creditos} /></td>
-      <td className="px-3 py-2 text-right"><Saldo value={fila.saldoFinal} bold /></td>
+      <td className="px-3 py-2 text-right">
+        <Link
+          href={alMayor}
+          className="inline-block underline decoration-dotted decoration-gray-400 underline-offset-4 hover:decoration-integra-navy"
+          title={titulo}
+        >
+          <Saldo value={fila.saldoFinal} bold />
+        </Link>
+      </td>
     </tr>
   );
 }

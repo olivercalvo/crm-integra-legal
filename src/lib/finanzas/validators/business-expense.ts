@@ -394,3 +394,55 @@ export function validateMarkAsPaid(raw: {
     },
   };
 }
+
+/**
+ * POR QUÉ NO SE GUARDÓ, EN UNA FRASE.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * ESTO EXISTE POR UN RECHAZO MUDO
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El 10/09/2026 se vio en el smoke test: guardar una compra con una línea sin
+ * cuenta **no guardaba y no decía nada**. El validador SÍ producía el error
+ * (`lineas.0.chart_account_code`) y el editor de líneas SÍ sabe pintarlo — pero
+ * el formulario de compras nunca le pasaba `errors` al editor, así que el
+ * mensaje se calculaba y se tiraba. Gastos de trámite sí lo pasaba.
+ *
+ * Se arregló el prop, y además se agregó este resumen: es el mismo patrón que
+ * `estadoDelRegistro()` del asiento manual (SOP-027). Un error de campo puede
+ * quedar fuera de la pantalla —las líneas están abajo—; la frase al lado del
+ * botón dice qué pasó sin obligar a buscar el borde rojo.
+ *
+ * ⚠️ Devuelve UN motivo, el próximo paso, y **nombra la línea**. Los errores de
+ *    línea van primero porque son los que quedan lejos del botón.
+ */
+export function motivoParaNoGuardar(errors: ValidationErrors): string | null {
+  const claves = Object.keys(errors);
+  if (claves.length === 0) return null;
+
+  // — errores de línea, en orden de aparición en la pantalla —
+  const deLinea = claves
+    .map((k) => {
+      const m = k.match(/^lineas\.(\d+)\.(.+)$/);
+      return m ? { i: Number(m[1]), campo: m[2], clave: k } : null;
+    })
+    .filter((x): x is { i: number; campo: string; clave: string } => x !== null)
+    .sort((a, b) => a.i - b.i || a.campo.localeCompare(b.campo));
+
+  if (deLinea.length > 0) {
+    const primero = deLinea[0];
+    const linea = primero.i + 1;
+    const otras = new Set(deLinea.map((x) => x.i));
+    const sufijo =
+      otras.size > 1 ? ` (y ${otras.size - 1} línea(s) más con datos por revisar)` : "";
+
+    if (primero.campo === "chart_account_code") {
+      return `Elegí la cuenta contable de la línea ${linea}.${sufijo}`;
+    }
+    return `Revisá la línea ${linea}: ${errors[primero.clave]}${sufijo}`;
+  }
+
+  // — errores del encabezado: el mensaje del validador ya está redactado —
+  const general = errors["lineas"];
+  if (general) return general;
+  return errors[claves[0]] ?? "Revisá los campos marcados en rojo.";
+}

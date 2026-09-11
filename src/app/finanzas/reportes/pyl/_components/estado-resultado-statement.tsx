@@ -82,9 +82,11 @@ function Fila({ fila }: { fila: FilaER }) {
       );
 
     case "cuenta":
-      // TRAZABILIDAD NIVEL 1 — clic en la cuenta abre su Libro Mayor. Los
-      // renglones ESTRUCTURALES (la distribución a socias) no llevan enlace:
-      // no vienen del plan de cuentas y no tienen mayor que mostrar.
+      // TRAZABILIDAD NIVEL 1 — clic en la cuenta abre su Libro Mayor, y desde
+      // el 10/09/2026 también clic en el MONTO: «yo quiero saber de dónde viene
+      // ese número, y le hago clic al número» (Josuarth). Mismo criterio que el
+      // Libro Mayor. Los renglones ESTRUCTURALES —la distribución a socias— no
+      // llevan enlace: no vienen del plan de cuentas y no tienen mayor.
       return (
         <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
           <td className="w-24 py-1.5 pl-6 pr-2 font-mono text-xs text-gray-500">
@@ -114,7 +116,17 @@ function Fila({ fila }: { fila: FilaER }) {
             )}
           </td>
           <td className="w-40 py-1.5 pr-4 text-right">
-            <Monto valor={fila.valor} />
+            {fila.estructural ? (
+              <Monto valor={fila.valor} />
+            ) : (
+              <Link
+                href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`}
+                className="inline-block underline decoration-dotted decoration-gray-400 underline-offset-4 hover:decoration-integra-navy"
+                title={`Ver de dónde sale este número — Libro Mayor de ${fila.code} ${fila.name}`}
+              >
+                <Monto valor={fila.valor} />
+              </Link>
+            )}
           </td>
         </tr>
       );

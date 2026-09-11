@@ -24,6 +24,7 @@ import type { ExpenseAccountOption } from "@/lib/finanzas/queries/business-expen
 import type { SupplierOption } from "@/lib/finanzas/queries/suppliers";
 import { ExpenseLinesEditor } from "@/components/finanzas/expense-lines-editor";
 import { fmtImporte } from "@/lib/utils/importe";
+import { motivoParaNoGuardar } from "@/lib/finanzas/validators/business-expense";
 import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
 import { paymentTermsLabel, vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
@@ -168,6 +169,10 @@ export function BusinessExpenseForm(props: Props) {
   })();
 
   // ---- Submit -------------------------------------------------------------
+  // El resumen de por qué no se guardó. Se recalcula solo cuando cambian los
+  // errores: es una función pura sobre ellos, no un estado más que sincronizar.
+  const motivoDeRechazo = motivoParaNoGuardar(errors);
+
   async function handleSubmit() {
     setSubmitError(null);
 
@@ -475,6 +480,12 @@ export function BusinessExpenseForm(props: Props) {
           }))}
           cuentaPorDefecto=""
           mostrarTotales={false}
+          // 🔴 SIN ESTO EL RECHAZO ES MUDO. El validador produce
+          // `lineas.{i}.{campo}` y el editor sabe pintarlo, pero hasta el
+          // 10/09/2026 este formulario no se los pasaba: guardar una compra sin
+          // cuenta no guardaba y no mostraba nada. Gastos de trámite sí lo
+          // pasaba, y por eso ahí sí se veía.
+          errors={errors}
           disabled={isPending}
         />
         {errors.lineas && (
@@ -653,6 +664,19 @@ export function BusinessExpenseForm(props: Props) {
           </p>
         )}
       </section>
+
+      {/* POR QUÉ NO SE GUARDÓ. Los errores de campo se pintan arriba, en cada
+          línea; esta frase los resume al lado del botón, que es donde está
+          mirando quien acaba de apretar. Mismo patrón que el asiento manual
+          (SOP-027). */}
+      {motivoDeRechazo && !submitError && (
+        <p
+          role="status"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+        >
+          {motivoDeRechazo}
+        </p>
+      )}
 
       {/* Submit error */}
       {submitError && (

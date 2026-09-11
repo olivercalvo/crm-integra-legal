@@ -227,6 +227,58 @@ export const TAX_RATE_LABEL: Record<string, string> = {
   "0.15": "15%",
 };
 
+/**
+ * Las opciones del SELECTOR de impuesto de una línea de gasto.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * POR QUÉ NO SON LOS `tax_codes` DE FACTURACIÓN
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Josuarth pidió el 10/09/2026 que el campo se vea igual que en facturación:
+ * un desplegable con «ITBMS 7% (7.0%)», no un campo numérico con «0.07», que
+ * es un número de programador.
+ *
+ * El desplegable es el mismo. Lo que **no** se puede compartir es la fuente:
+ * `invoice_lines` guarda `tax_code_id` —una FK a `tax_codes`— y
+ * **`expense_lines` guarda `tax_rate`, un decimal**. No hay columna donde
+ * anotar CUÁL código se eligió.
+ *
+ * ⚠️ Consecuencia concreta: en `tax_codes` conviven `EXENTO` e `ITBMS_0`, los
+ *    dos con tasa 0. Un gasto no puede distinguirlos —los dos se guardarían
+ *    como `0`— así que acá se ofrece una sola opción para la tasa cero. Para
+ *    separar «exento» de «gravado al 0%» en compras hace falta agregarle
+ *    `tax_code_id` a `expense_lines`: es una migración con su backfill y toca
+ *    el resumen de ITBMS. Queda anotado, no escondido.
+ *
+ * Las tasas salen de `VALID_TAX_RATES`, que es lo que el validador acepta: el
+ * selector no puede ofrecer algo que después se rechace.
+ */
+export interface OpcionDeImpuesto {
+  /** El valor que se guarda en `expense_lines.tax_rate`. */
+  rate: number;
+  /** Lo que se lee en el desplegable, con el formato de facturación. */
+  label: string;
+}
+
+export const OPCIONES_DE_IMPUESTO: OpcionDeImpuesto[] = VALID_TAX_RATES.map((rate) => ({
+  rate,
+  label:
+    rate === 0
+      ? "Exento (0%)"
+      : `ITBMS ${+(rate * 100).toFixed(2)}% (${(rate * 100).toFixed(1)}%)`,
+}));
+
+/**
+ * La opción que corresponde a una tasa guardada.
+ *
+ * Compara por NÚMERO y no por texto: de la base la tasa vuelve como `"0.0700"`
+ * y del formulario como `"0.07"`. Son el mismo impuesto.
+ */
+export function opcionDeImpuestoDe(rate: string | number): OpcionDeImpuesto | null {
+  const n = typeof rate === "number" ? rate : Number(String(rate).replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  return OPCIONES_DE_IMPUESTO.find((o) => Math.abs(o.rate - n) < 1e-9) ?? null;
+}
+
 /** Convierte un tax_rate decimal a su label legible. */
 export function taxRateLabel(rate: number): string {
   // Normalizamos a string sin ceros finales (0.10 → "0.1") para matchear keys.

@@ -187,9 +187,14 @@ export function SectionTotalRow({ label, value }: { label: string; value: number
  *
  * TRAZABILIDAD NIVEL 1 — el requisito que Josuar repitió tres veces en la
  * reunión: desde un saldo del Balance o del Estado de Resultado, un clic tiene
- * que abrir el mayor de esa cuenta. El enlace va en el CÓDIGO y el NOMBRE, no
- * en el monto: el monto se lee y se compara, y volverlo clickeable invita a
- * seleccionarlo sin querer.
+ * que abrir el mayor de esa cuenta. El enlace va en el CÓDIGO y el NOMBRE.
+ *
+ * ⚠️ Y TAMBIÉN EN EL MONTO, desde el 10/09/2026. Acá decía que el enlace iba
+ * en el código y el nombre «no en el monto: el monto se lee y se compara, y
+ * volverlo clickeable invita a seleccionarlo sin querer». Josuarth pidió lo
+ * contrario, y su argumento gana: «yo quiero saber de dónde viene ese número, y
+ * le hago clic al número». Es el mismo criterio que ya se aplicó en el Libro
+ * Mayor. Los tres siguen enlazando, así que no se cerró ninguna puerta.
  */
 export function AccountRow({ code, name, amount }: { code: string; name: string; amount: number }) {
   return (
@@ -213,7 +218,13 @@ export function AccountRow({ code, name, amount }: { code: string; name: string;
         </Link>
       </td>
       <td className="w-40 py-1.5 pr-4 text-right">
-        <Amount value={amount} />
+        <Link
+          href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(code)}`}
+          className="inline-block underline decoration-dotted decoration-gray-400 underline-offset-4 hover:decoration-integra-navy"
+          title={`Ver de dónde sale este número — Libro Mayor de ${code} ${name}`}
+        >
+          <Amount value={amount} />
+        </Link>
       </td>
     </tr>
   );

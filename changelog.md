@@ -1,5 +1,80 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cinco hallazgos del smoke test] - 2026-09-10
+
+Dos de ellos son patrones que ya habíamos decidido y habían quedado aplicados a medias.
+
+### 🔴 Guardar una compra sin cuenta rechazaba en silencio
+
+Es el mismo defecto del asiento manual del 09/09, en otro formulario. Y la causa es **de
+presentación, no del servidor**: el rechazo lo hace el cliente —`validateCreateBusinessExpense()`
+corta antes del `fetch`—, el validador **sí** produce `lineas.0.chart_account_code` y el editor de
+líneas **sí** sabe pintarlo… pero el formulario de compras **nunca le pasaba `errors` al editor**.
+Gastos de trámite sí lo pasaba (`errors={fieldErrors}`), y por eso ahí el mensaje se veía.
+
+O sea que el error se calculaba y se tiraba. Y como las celdas de línea tampoco tenían
+`data-error`, el `scrollIntoView` del rechazo no encontraba a dónde ir: nada se marcaba, nada se
+movía, nada se decía.
+
+Tres arreglos:
+
+1. **El prop que faltaba** — los errores por campo vuelven a pintarse línea por línea.
+2. **`motivoParaNoGuardar()`**, función pura sobre los errores, mostrada al lado del botón y
+   nombrando la línea: *"Elegí la cuenta contable de la línea 2."* Mismo patrón que
+   `estadoDelRegistro()` (SOP-027).
+3. **`data-error` en la línea con error**, que es lo que el scroll busca.
+
+🔒 Siete tests, incluido el candado de que **si hay errores SIEMPRE hay motivo**.
+
+### 🔴 El drill-down del Estado de Resultado seguía en la cuenta
+
+Se había movido al monto en el Libro Mayor y no en las pantallas hermanas. Ahora el **monto
+también enlaza** al mayor de la cuenta, en Estado de Resultado y en Balance — el código y el
+nombre siguen enlazando, así que no se cerró ninguna puerta.
+
+El comentario de `AccountRow` argumentaba lo contrario (*"volverlo clickeable invita a
+seleccionarlo sin querer"*). Queda registrado que Josuarth lo revocó: *"yo quiero saber de dónde
+viene ese número, y le hago clic al número"*.
+
+**Y apareció algo más revisando las hermanas: la Comprobación no tenía drill-down en absoluto** —
+ni en el código ni en el monto, el único de los tres reportes sin trazabilidad. Se le agregó en el
+código, el nombre y el saldo final.
+
+### 🔴 El campo de tasa mostraba "0.07"
+
+Era un campo numérico con flechitas. Ahora es el **mismo desplegable que facturación**, con
+"ITBMS 7% (7.0%)" y "Exento (0%)", en gastos de bufete y en gastos de trámite.
+
+⚠️ **Lo que no se pudo compartir es la fuente, y conviene saberlo:** `invoice_lines` guarda
+`tax_code_id` (FK a `tax_codes`) y **`expense_lines` guarda `tax_rate`, un decimal**. No hay dónde
+anotar cuál código se eligió. En `tax_codes` conviven `EXENTO` e `ITBMS_0`, los dos con tasa 0: un
+gasto no puede distinguirlos, así que se ofrece **una sola opción para la tasa cero**. Separar
+«exento» de «gravado al 0%» en compras necesita `tax_code_id` en `expense_lines` — migración,
+backfill y toca el resumen de ITBMS. Queda anotado en el código, no escondido.
+
+### El filtro de cuentas escondía lo que uno buscaba
+
+El selector mostraba sólo siete cuentas y el resto vivía detrás de un botón «Ver todas» ubicado
+abajo del todo, al lado de «Agregar línea». Se buscaban cuentas que existían y no aparecían.
+
+Se eliminó el filtro y ahora hay **un solo desplegable con dos grupos**: `Habituales` arriba y
+`Todas las cuentas (N)` debajo. La lista corta no se abandonó —existe porque el 03/09 se clasificó
+un honorario contra `610002` en vez de `500004`, que se llaman casi igual— sino que se reubicó
+donde no puede esconder nada.
+
+### El nombre del proveedor no salía en el listado
+
+La consulta **sí** trae la ficha. El listado pintaba `e.supplier_name`, que es la columna de texto
+libre vieja y queda **NULL justo cuando se elige una ficha** — o sea que mostraba "—" exactamente
+en los gastos cargados bien. Verificado en staging: los tres gastos con `supplier_id` tienen
+`supplier_name` en NULL; los viejos sin ficha son los que se veían.
+
+El helper correcto, `nombreProveedorDeGasto()`, **existía desde la migración 033 y no lo usaba
+nadie**. Ahora el listado lo usa, y bajo el nombre muestra el número de proveedor (`PRV-001`)
+cuando hay ficha.
+
+912 tests, 912 pass.
+
 ## [El saldo del Mayor se lee según la naturaleza de la cuenta] - 2026-09-10
 
 ### El negativo dejó de ser el estado normal de media tabla

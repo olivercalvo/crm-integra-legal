@@ -2,7 +2,10 @@ import Link from "next/link";
 import { FileText, Paperclip } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { BusinessExpenseStatusBadge } from "./business-expense-status-badge";
-import type { BusinessExpenseListItem } from "@/lib/finanzas/types/business-expense";
+import {
+  nombreProveedorDeGasto,
+  type BusinessExpenseListItem,
+} from "@/lib/finanzas/types/business-expense";
 
 interface Props {
   expenses: BusinessExpenseListItem[];
@@ -73,11 +76,25 @@ export function BusinessExpenseList({ expenses }: Props) {
                   </td>
                   <td className="p-0">
                     <Link href={href} className={cell}>
-                      {e.supplier_name ? (
+                      {/* 🔴 `nombreProveedorDeGasto()` y NO `supplier_name`.
+                          `supplier_name` es el texto libre viejo, y queda NULL
+                          justo cuando se elige una ficha de proveedor: hasta el
+                          10/09/2026 la columna mostraba «—» exactamente en los
+                          gastos cargados bien. El helper existía desde la
+                          migración 033 y esta pantalla nunca lo adoptó. */}
+                      {nombreProveedorDeGasto(e) ? (
                         <div>
-                          <p className="text-gray-900 truncate max-w-[180px]">{e.supplier_name}</p>
-                          {e.supplier_ruc && (
-                            <p className="font-mono text-xs text-gray-500">{e.supplier_ruc}</p>
+                          <p className="text-gray-900 truncate max-w-[180px]">
+                            {nombreProveedorDeGasto(e)}
+                          </p>
+                          {e.supplier ? (
+                            <p className="font-mono text-xs text-gray-500">
+                              {e.supplier.supplier_number}
+                            </p>
+                          ) : (
+                            e.supplier_ruc && (
+                              <p className="font-mono text-xs text-gray-500">{e.supplier_ruc}</p>
+                            )
                           )}
                         </div>
                       ) : (
@@ -169,8 +186,8 @@ export function BusinessExpenseList({ expenses }: Props) {
                 <p className="mt-2 text-sm font-medium text-gray-900 truncate">
                   {e.description}
                 </p>
-                {e.supplier_name && (
-                  <p className="text-xs text-gray-500 truncate">{e.supplier_name}</p>
+                {nombreProveedorDeGasto(e) && (
+                  <p className="text-xs text-gray-500 truncate">{nombreProveedorDeGasto(e)}</p>
                 )}
                 {e.account && (
                   <p className="mt-1 text-[11px] text-gray-500">

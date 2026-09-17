@@ -1,5 +1,69 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Reversión de un cobro contabilizado — todo o nada, en la base] - 2026-09-17
+
+Desde el 04/09 un cobro que ya está en el libro no se puede borrar (`deletePayment` lo rechaza con
+409) y el mensaje prometía un remedio que no existía: *"se corrige con un asiento de reversión"*.
+Hoy existe, para cobros. Botón **Reversar** en la fila del cobro, en el detalle de la factura.
+
+### Tres escrituras, una transacción: el RPC `reverse_payment` (migración `046`)
+
+Reversar toca tres cosas: postear el asiento espejo, borrar las `payment_applications` del cobro
+(es lo que dispara T7a y devuelve la factura a `emitida`/`parcialmente_pagada`) y marcar el
+cobro `anulado`. Desde `supabase-js` serían tres requests con una ventana entre cada una, como
+en `emitInvoice`. Acá esa ventana **no se aceptó**: el estado a medias —espejo posteado (y los
+asientos no se borran) con la factura todavía "pagada"— es justo el que la reversión existe para
+impedir. Las tres van dentro de una función plpgsql `SECURITY DEFINER` con EXECUTE solo para
+`service_role`, igual que `post_journal_entry`, a la que llama por dentro.
+
+**Verificado que es atómica, no supuesto:** `sql/tests/verificacion-046-reversion-cobro.sql`
+instala un trigger que revienta DESPUÉS del posteo y comprueba que el espejo no quedó, que el
+correlativo no avanzó y que el cobro sigue `registrado`. En ROLLBACK, 10/10 contra staging.
+
+⚠️ **T7a cuelga de `payment_applications`, no de `payments.status`.** Si el bloque hubiera
+anulado el cobro sin tocar las aplicaciones, la factura habría quedado "pagada" con el banco ya
+acreditado en reversa. Por eso se borran.
+
+### `payment_reversals` — para que el cobro reversado no desaparezca
+
+Borrar las aplicaciones rompe el vínculo cobro → factura, y `getPaymentsForInvoice` leía por
+ahí: un cobro reversado se habría esfumado de la pantalla como si nunca hubiera existido. La
+tabla guarda, por aplicación borrada, la factura, el monto, los dos asientos y el motivo. La
+pantalla muestra el cobro **tachado**, con badge *"Reversado · asiento N"* y el motivo; y el
+Libro Mayor sigue enlazando tanto el asiento original como su espejo a la factura (los dos
+comparten `source_id`).
+
+### Una sola implementación del espejo
+
+`contabilidad/reversion.ts` (`construirAsientoDeReversion`, módulo puro) arma el espejo: mismas
+cuentas, mismo orden, débito y crédito intercambiados, fecha de HOY, `reverses_entry_id`, motivo.
+**El diálogo dibuja la vista previa con esa función y el servidor le manda al RPC lo que esa
+función devuelve.** El RPC no recalcula nada: compara lo recibido contra el original en los dos
+sentidos (`EXCEPT ALL`) y rechaza cualquier diferencia. `reversion-una-sola-implementacion.test.ts`
+lee el diálogo, el helper, la ruta y la migración, y falla si alguno reimplementa el cálculo.
+
+### El contador reversa
+
+`POST /api/finanzas/payments/[id]/reverse` es admin + abogada + **contador**; registrar y
+eliminar siguen siendo admin + abogada. En la pantalla son dos banderas: `canMutate` y
+`canReverse`. Movidos juntos: tabla de CLAUDE.md, guard de la ruta, `page.tsx`, y
+`reversar-cobro-roles.test.ts` los cruza.
+
+### Lo que NO cambió, a propósito
+
+- `cancelInvoice` sigue bloqueando por `amount_paid > 0` y por asiento de factura. Solo cambió
+  el texto: *"Elimine o reverse los pagos primero"*, y el modal de anulación dice cuál de los
+  dos aplica.
+- La reversión de asientos **manuales** y de **gastos de trámite** sigue sin existir. Los
+  cuatro avisos "todavía no está disponible" siguen siendo ciertos y no se tocaron.
+- El mapper de eFactura, congelado.
+
+### Tests
+
+23 nuevos: 9 del espejo puro, 6 del helper con RPC falso, 4 de una-sola-implementación, 4 de
+roles. **963/963.** `tsc` limpio, `next build` exit 0. Detalle en `sop.md` SOP-030.
+
+
 ## [Una factura de reembolso no puede llevar líneas de honorarios] - 2026-09-17
 
 Josuarth Torres, por correo el 17/09/2026: *"Las facturas de reembolso solo deben ser usadas

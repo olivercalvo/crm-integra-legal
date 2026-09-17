@@ -211,9 +211,10 @@ export function CancelInvoiceDialog({
                     registrados.
                   </p>
                   <p className="mt-1">
-                    Para anular esta factura, elimina primero los pagos uno
-                    por uno desde la sección &quot;Pagos registrados&quot;.
-                    Una vez que el saldo pagado vuelva a cero, vas a poder
+                    Para anular esta factura, deshace primero los pagos uno
+                    por uno desde la sección &quot;Pagos registrados&quot;:
+                    un cobro sin asiento se elimina, uno contabilizado se
+                    reversa. Una vez que el saldo pagado vuelva a cero, vas a poder
                     anular la factura y se generará una nota de crédito
                     automáticamente.
                   </p>

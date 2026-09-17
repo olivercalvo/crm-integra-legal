@@ -26,6 +26,8 @@ import {
   SOURCE_TYPE_COBRO,
 } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
 import { cargarCobroParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
+import { getAsientoDeCobro } from "@/lib/finanzas/queries/payments";
+import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
 
 type DB = SupabaseClient;
 
@@ -267,8 +269,8 @@ export async function deletePayment(
   // la plata al banco. Dos verdades opuestas, y solo una de las dos se puede
   // corregir.
   //
-  // Un cobro contabilizado se REVIERTE, no se borra. Que la reversión todavía
-  // no exista hace el bloqueo visible en vez de silencioso — es a propósito.
+  // Un cobro contabilizado se REVIERTE, no se borra: `reversePayment`, más
+  // abajo. El mensaje manda ahí.
   const { data: asiento } = await db
     .from("journal_entries")
     .select("entry_number")
@@ -282,7 +284,7 @@ export async function deletePayment(
     throw new MutationError(
       `Este cobro ya está registrado en el libro contable (asiento ${numero}), ` +
         `así que no se puede borrar. Los asientos son inmutables por ley: un cobro ` +
-        `contabilizado se corrige con un asiento de reversión, no borrándolo.`,
+        `contabilizado se corrige con una reversión (botón Reversar), no borrándolo.`,
       409
     );
   }
@@ -298,4 +300,143 @@ export async function deletePayment(
   }
 
   return { id: paymentId };
+}
+
+// ---------------------------------------------------------------------------
+// REVERSAR — el cobro contabilizado se deshace con un asiento espejo
+// ---------------------------------------------------------------------------
+
+export interface ReversePaymentResult {
+  entry_id: string;
+  /** El asiento espejo. */
+  entry_number: number;
+  /** El asiento del cobro, que ahora está reversado. */
+  reversed_entry_number: number;
+  /** ISO `YYYY-MM-DD`: la fecha con la que quedó el espejo. */
+  transaction_date: string;
+  /** Cómo quedó cada factura después de que T7a recalculó. */
+  invoices: { invoice_id: string; invoice_number: string; status: string; amount_paid: number }[];
+}
+
+/**
+ * Reversa un cobro que ya está en el libro. Es la contracara del gate de
+ * `deletePayment`: un cobro sin asiento se ELIMINA; uno con asiento se
+ * REVIERTE, y esta es la única forma de hacerlo.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * TRES ESCRITURAS, UNA TRANSACCIÓN: el RPC `reverse_payment` (migración `046`)
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Postear el espejo, borrar las `payment_applications` (dispara T7a, que
+ * devuelve la factura a `emitida` / `parcialmente_pagada`) y marcar el cobro
+ * `anulado` van DENTRO de una función de Postgres. No se hace desde acá con
+ * tres llamadas como en `emitInvoice`, porque acá el estado a medias es
+ * justamente el que la reversión existe para impedir: el espejo posteado (y
+ * los asientos no se borran) con la factura todavía "pagada". Si cualquier
+ * paso falla, la función deshace todo, incluido el asiento y el correlativo.
+ * `sql/tests/verificacion-046-reversion-cobro.sql` lo prueba forzando una
+ * falla después del posteo.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * LAS LÍNEAS LAS ARMA `construirAsientoDeReversion`, LA MISMA DE LA PANTALLA
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El diálogo dibuja la vista previa con esa función y este helper le manda al
+ * RPC lo que esa función devuelve. Una sola implementación: lo que se ve es lo
+ * que se postea. El RPC no la recalcula, la VERIFICA (rechaza cualquier línea
+ * que no sea el espejo exacto del original).
+ *
+ * 🔑 `ledgerDb` es el cliente de SERVICIO (SOP-014): el RPC tiene EXECUTE solo
+ * para service_role y confía en el `tenantId` que recibe, que sale del perfil
+ * del usuario autenticado y nunca del body.
+ */
+export async function reversePayment(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  paymentId: string,
+  reason: string
+): Promise<ReversePaymentResult> {
+  // 1. El cobro existe y es de este tenant. El RPC lo vuelve a chequear con
+  //    candado; acá es para contestar 404 en vez de un error opaco.
+  const { data: pay, error: errFetch } = await db
+    .from("payments")
+    .select("id, status")
+    .eq("tenant_id", tenantId)
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (errFetch) {
+    throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  }
+  if (!pay) {
+    throw new MutationError("Cobro no encontrado", 404);
+  }
+  if ((pay as { status: string }).status === "anulado") {
+    throw new MutationError("Este cobro ya está anulado.", 409);
+  }
+
+  // 2. Su asiento. Sin asiento no hay nada que reversar: se elimina.
+  const original = await getAsientoDeCobro(db, tenantId, paymentId);
+  if (!original) {
+    throw new MutationError(
+      "Este cobro no está en el libro contable, así que no hay nada que reversar. " +
+        "Un cobro sin asiento se elimina con el botón Eliminar.",
+      409
+    );
+  }
+
+  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
+  //    Misma fórmula de "hoy" que el resto del módulo (UTC), y la misma que el
+  //    RPC compara contra su `current_date`.
+  const hoy = new Date().toISOString().slice(0, 10);
+  const armado = construirAsientoDeReversion(original, {
+    hoy,
+    motivo: reason,
+    source_id: paymentId,
+  });
+  if (!armado.ok) {
+    throw new MutationError(armado.mensaje, 422);
+  }
+
+  // 4. El RPC: todo o nada.
+  const { data, error } = await ledgerDb.rpc("reverse_payment", {
+    p_tenant_id: tenantId,
+    p_payment_id: paymentId,
+    p_reason: armado.asiento.reversal_reason,
+    p_transaction_date: armado.asiento.transaction_date,
+    p_description: armado.asiento.description,
+    p_lines: armado.asiento.lines.map((l) => ({
+      account_code: l.account_code,
+      debit: l.debit,
+      credit: l.credit,
+      description: l.description ?? null,
+    })),
+    p_created_by: userId,
+  });
+
+  if (error) {
+    console.error("[finanzas/api] reverse_payment failed", error);
+    // 422 y no 500: el mensaje del RPC ya viene redactado para que lo lea un
+    // humano (período cerrado, ya reversado, líneas que no son el espejo).
+    throw new MutationError(error.message || "No se pudo reversar el cobro", 422, error);
+  }
+
+  const r = data as {
+    entry_id: string;
+    entry_number: number;
+    reversed_entry_number: number;
+    transaction_date: string;
+    invoices: { invoice_id: string; invoice_number: string; status: string; amount_paid: number | string }[];
+  } | null;
+  if (!r || !r.entry_id) {
+    throw new MutationError("El cobro se reversó pero no se pudo leer el asiento resultante", 500);
+  }
+
+  return {
+    entry_id: r.entry_id,
+    entry_number: Number(r.entry_number),
+    reversed_entry_number: Number(r.reversed_entry_number),
+    transaction_date: r.transaction_date,
+    invoices: (r.invoices ?? []).map((i) => ({ ...i, amount_paid: Number(i.amount_paid) })),
+  };
 }

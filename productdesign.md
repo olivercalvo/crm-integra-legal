@@ -464,7 +464,8 @@ porque no vienen del plan de cuentas.
 | Factura / nota de crédito | el detalle de la factura |
 | Gasto del bufete | el detalle del gasto |
 | Pago | **la factura que canceló** (los pagos no tienen pantalla propia: viven en el detalle) |
-| Asiento de diario, apertura, reversión | nada — no tienen documento de origen |
+| Reversión de un cobro | **la misma factura** — el espejo comparte `source_id` con el asiento del cobro y se resuelve por `payment_reversals` (17/09/2026) |
+| Asiento de diario, apertura, otras reversiones | nada — no tienen documento de origen |
 
 Un pago aplicado a varias facturas no tiene destino único, así que se queda sin enlace. Y
 antes de ofrecer un enlace se verifica que el documento **exista**: el asiento es inmutable y
@@ -630,6 +631,32 @@ asiento y, si el posteo falla, se deshace el registro. El nombre del módulo se 
 ---
 
 ---
+
+### REVERSAR UN COBRO — el libro no se borra, se refleja
+
+**Cuándo.** Un cheque rebota, el cobro se cargó a la factura equivocada, el monto estaba mal.
+Antes del 17/09/2026 la única respuesta era "avisale a Oliver": el cobro ya tenía asiento y los
+asientos no se borran.
+
+**Qué ve quien lo hace.** En el detalle de la factura, sección "Pagos registrados", la fila del
+cobro ofrece **Eliminar** si el cobro NO está en el libro, o **Reversar** si sí. Nunca los dos.
+El modal pide el motivo (obligatorio, mínimo 3 caracteres: es la ley, DE 34/1998 Art. 5.7) y
+muestra **el asiento que se va a postear**, línea por línea, con la fecha de hoy. Esa vista
+previa la calcula la misma función que el servidor postea: lo que se ve es lo que entra al
+libro.
+
+**Qué pasa al confirmar.** Se postea el espejo del asiento del cobro (mismas cuentas, débito y
+crédito intercambiados, fecha de hoy, apuntando al original), la factura vuelve a mostrar su
+saldo pendiente y el cobro queda anulado — los tres a la vez o ninguno. Después, la fila del
+cobro sigue en la pantalla **tachada**, con *"Reversado · asiento N"* y el motivo: la historia
+no se borra.
+
+**Quién.** Admin, abogada y **contador**. Es el único botón de mutación que el contador ve en
+una factura, por el mismo criterio que le da los asientos manuales: corregir el libro es su
+trabajo. Registrar y eliminar cobros siguen siendo de admin y abogada.
+
+**La fecha.** Siempre la de la reversión (acta del 09/09/2026). El mes del error queda como se
+reportó; la corrección aparece en el mes en que se hizo.
 
 ## REQUERIMIENTOS NO FUNCIONALES
 

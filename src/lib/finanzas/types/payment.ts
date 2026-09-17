@@ -86,8 +86,45 @@ export interface PaymentRow {
 }
 
 /**
+ * El asiento del cobro, si ya está en el libro. Es lo que se reversa, y lo que
+ * la vista previa de la reversión refleja línea por línea.
+ */
+export interface AsientoDeCobro {
+  id: string;
+  entry_number: number;
+  /** ISO `YYYY-MM-DD`. */
+  transaction_date: string;
+  description: string;
+  reference: string | null;
+  lines: {
+    account_code: string;
+    account_name: string;
+    debit: number;
+    credit: number;
+    description: string | null;
+  }[];
+}
+
+/** Cómo y por qué se reversó un cobro. Sale de `payment_reversals` (046). */
+export interface ReversionDeCobro {
+  /** El asiento espejo. */
+  entry_number: number;
+  /** El asiento del cobro que se revirtió. */
+  reversed_entry_number: number;
+  reason: string;
+  reversed_at: string;
+  reversed_by_name: string | null;
+}
+
+/**
  * Pago + datos del usuario que lo registró + monto aplicado a UNA factura
  * específica. Lo devuelve getPaymentsForInvoice.
+ *
+ * Desde el 17/09/2026 incluye también los cobros REVERSADOS (`status =
+ * 'anulado'` con `reversion` cargada): al reversar se borran sus
+ * `payment_applications`, así que ya no se los encuentra por ahí; se los
+ * encuentra por `payment_reversals`. Sin esto, un cobro reversado desaparecía
+ * de la pantalla como si nunca hubiera existido.
  */
 export interface PaymentForInvoice extends PaymentRow {
   /** Monto aplicado a esta factura (puede ser != amount si en el futuro
@@ -95,4 +132,8 @@ export interface PaymentForInvoice extends PaymentRow {
   amount_applied: string | number;
   /** Nombre completo del usuario que registró el pago, o null. */
   created_by_name: string | null;
+  /** El asiento del cobro, o null si todavía no está en el libro. */
+  asiento: AsientoDeCobro | null;
+  /** Si el cobro fue reversado, cómo. Null en los vigentes. */
+  reversion: ReversionDeCobro | null;
 }

@@ -2208,3 +2208,60 @@ nunca lo renderizaba, y la fila de la línea no tenía `data-error` — el scrol
 - La cuenta `130003` de los reembolsos y el Decreto 91 art. 7-H — dos definiciones de Josuarth
   sin código todavía, ver `task_plan.md`.
 
+
+## SOP-030: Reversar un cobro contabilizado — una función de Postgres, no tres llamadas
+
+**Por qué existe:** desde el gate del 04/09 un cobro con asiento no se puede borrar, y el mensaje
+prometía una reversión que no existía. Y porque reversar es la operación donde un estado a medias
+en los libros es inaceptable: el espejo posteado (inmutable) con la factura todavía "pagada".
+
+### Cuándo se reversa y cuándo se elimina
+
+| El cobro… | Botón | Camino |
+|---|---|---|
+| NO tiene asiento (anterior al cableado del 04/09) | Eliminar | `deletePayment` → DELETE, CASCADE, T7a |
+| tiene asiento (`journal_entries` con `source_type='pago'`) | Reversar | `reversePayment` → RPC `reverse_payment` |
+| ya está `anulado` | ninguno | fila tachada, con motivo y N° del espejo |
+
+Nunca los dos botones a la vez. La sección decide por `p.asiento`, y el servidor lo vuelve a
+decidir por su cuenta (409 en los dos sentidos).
+
+### Qué hace el RPC, en orden, y por qué en ese orden
+
+1. Candado sobre el cobro (`FOR UPDATE`), estado `registrado`.
+2. Busca el asiento original y rechaza si ya hay otro con `reverses_entry_id` apuntándole.
+3. **Verifica** que `p_lines` sea el espejo exacto del original (`EXCEPT ALL` en los dos
+   sentidos sobre cuenta/débito/crédito). No lo calcula: lo compara.
+4. `post_journal_entry(... 'reversion', p_lines, source_id = cobro, reverses_entry_id, motivo,
+   reference = la del original)`. Va primero porque es el paso con más motivos legítimos para
+   fallar (período cerrado). En una transacción el orden no cambia el resultado; cambia qué
+   queda en el log.
+5. `INSERT INTO payment_reversals` (la foto) y `DELETE FROM payment_applications` → T7a
+   recalcula `amount_paid` y el status de la factura.
+6. `UPDATE payments SET status = 'anulado'` (T3 lo permite desde `registrado`).
+
+Cualquier excepción en cualquier paso deshace TODO. `sql/tests/verificacion-046-reversion-cobro.sql`
+lo prueba con un trigger que revienta entre el paso 4 y el 5.
+
+### La fecha
+
+La de la reversión (`current_date` ±1 día de tolerancia entre el reloj del servidor y el de la
+base). Nunca la del original: acta del 09/09. El servidor y el diálogo calculan "hoy" con la misma
+fórmula del resto del módulo (`new Date().toISOString().slice(0, 10)`, UTC).
+
+### El espejo se arma UNA vez
+
+`construirAsientoDeReversion(original, { hoy, motivo, source_id })` en
+`contabilidad/reversion.ts`. Lo llama el diálogo para la vista previa y el helper para postear.
+Si la pantalla necesita mostrar algo distinto de lo que devuelve esa función, **la función está
+mal, no la pantalla**: se corrige ahí y cambia en los dos lados.
+
+### Qué mirar si algo falla
+
+- *"Las líneas recibidas no son el espejo exacto del asiento N"* → alguien cambió
+  `construirAsientoDeReversion` (o el RPC) sin el otro. Correr `reversion.test.ts` y la
+  verificación SQL.
+- *"El período AAAA-MM está CERRADO"* → la reversión cae en el mes actual; si está cerrado, el
+  contador lo reabre en `/finanzas/periodos` y vuelve a intentar. No se postea con otra fecha.
+- El cobro reversado no aparece en la factura → `payment_reversals` vacía para ese cobro. El
+  RPC es el único que escribe ahí; si la fila no está, la reversión no ocurrió.

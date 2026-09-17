@@ -1,6 +1,36 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — TANDA DEL 17/09/2026 <<<
+## >>> RETOMAR ACÁ — REVERSIÓN DE COBROS — 17/09/2026 (tarde) <<<
+
+**Estado:** construido, tests en verde, migración `046` aplicada en staging. Falta: deploy + clic
+real (o verificación por API si la extensión sigue caída). Ver `changelog.md` y `sop.md` SOP-030.
+
+### Hecho
+
+- [x] Migración `046`: tabla `payment_reversals` + RPC `reverse_payment` (SECURITY DEFINER,
+      service_role, **atómico**: espejo + borrado de aplicaciones + cobro anulado, o nada).
+      Verificación SQL en ROLLBACK 10/10, incluida una falla forzada después del posteo.
+- [x] `contabilidad/reversion.ts` — el espejo, módulo puro. **Una sola implementación**: la usa
+      el diálogo (vista previa) y el helper (posteo). Test estructural que lo vigila.
+- [x] `reversePayment()` + `POST /api/finanzas/payments/[id]/reverse` (admin, abogada, contador).
+- [x] `getPaymentsForInvoice` lee también `payment_reversals`: el cobro reversado sigue en
+      pantalla, tachado. Libro Mayor: original y espejo enlazan a la factura.
+- [x] `canReverse` separada de `canMutate` en el detalle de factura. Contador ve SOLO Reversar.
+- [x] CLAUDE.md (tabla de roles + regla), SOP-030, changelog, inventario de migraciones.
+- [ ] **Verificar en el deploy**: reversar un cobro real de staging y ver la fila tachada.
+
+### Fuera de este bloque, anotado
+
+- [ ] **Reversión de asientos MANUALES y de GASTOS DE TRÁMITE** — sigue pendiente (A-0-bis-2 más
+      abajo). Los cuatro avisos "todavía no está disponible" siguen vigentes. Cuando se haga:
+      el RPC de hoy es específico de cobros (borra aplicaciones); un manual no tiene documento
+      que deshacer, así que le alcanza con `post_journal_entry` + el mismo builder puro.
+- [ ] **`reversion` en el Diario General** sale con la columna Documento vacía (no está en el
+      mapa de rótulos por `source_type`). La `reference` sí trae el N° de factura.
+- [ ] **Un cobro `conciliado` no se puede reversar** (T3 no permite `conciliado → anulado`).
+      Conciliación bancaria es un sprint futuro; cuando exista, decidir si se desconcilia primero.
+
+## >>> TANDA DEL 17/09/2026 (mañana) <<<
 
 **Estado:** en construcción. Bloque: bloquear que una factura de reembolso lleve líneas de
 honorarios (y el caso espejo), a pedido de Josuarth Torres por correo el 17/09/2026.

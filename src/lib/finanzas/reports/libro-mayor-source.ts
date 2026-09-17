@@ -358,29 +358,58 @@ export async function loadDestinosDeOrigen(
   }
 
   // -- pagos: el destino es la factura que cancelaron ------------------------
-  const idsPago = idsPorTipo.get("pago");
-  if (idsPago && idsPago.size > 0) {
-    const { data, error } = await db
-      .from("payment_applications")
-      .select("payment_id, invoice_id")
-      .eq("tenant_id", tenantId)
-      .in("payment_id", Array.from(idsPago));
+  //
+  // Se mira en DOS tablas. Un cobro vigente está en `payment_applications`; un
+  // cobro REVERSADO ya no (la reversión las borra, es lo que dispara T7a) y su
+  // vínculo con la factura quedó fotografiado en `payment_reversals` (046).
+  // Sin la segunda, el asiento original de un cobro reversado perdería su
+  // enlace en el Mayor justo cuando el contador más lo necesita.
+  //
+  // Y entran también los ids de tipo `reversion`: el asiento espejo de un
+  // cobro lleva el MISMO `source_id` (el cobro), así que se resuelve por la
+  // misma tabla y lleva a la misma factura. Una reversión que no sea de un
+  // cobro (el día que existan) no aparece en `payment_reversals` y se queda
+  // sin enlace, que es lo correcto.
+  const idsPago = new Set<string>([
+    ...Array.from(idsPorTipo.get("pago") ?? []),
+    ...Array.from(idsPorTipo.get("reversion") ?? []),
+  ]);
+  if (idsPago.size > 0) {
+    const [apps, revs] = await Promise.all([
+      db
+        .from("payment_applications")
+        .select("payment_id, invoice_id")
+        .eq("tenant_id", tenantId)
+        .in("payment_id", Array.from(idsPago)),
+      db
+        .from("payment_reversals")
+        .select("payment_id, invoice_id")
+        .eq("tenant_id", tenantId)
+        .in("payment_id", Array.from(idsPago)),
+    ]);
 
-    if (error) {
-      console.error("[finanzas/mayor] loadDestinosDeOrigen(payment_applications) failed", error);
-    } else {
-      // Un pago aplicado a VARIAS facturas no tiene un destino único, así que
-      // se queda sin enlace en vez de elegir una arbitrariamente.
-      const facturasPorPago = new Map<string, Set<string>>();
-      for (const row of (data ?? []) as { payment_id: string; invoice_id: string }[]) {
-        const set = facturasPorPago.get(row.payment_id) ?? new Set<string>();
-        set.add(row.invoice_id);
-        facturasPorPago.set(row.payment_id, set);
-      }
-      for (const [pagoId, facturas] of Array.from(facturasPorPago.entries())) {
-        if (facturas.size !== 1) continue;
-        destinos.set(pagoId, RUTA_DEL_DOCUMENTO.pago(Array.from(facturas)[0]));
-      }
+    if (apps.error) {
+      console.error("[finanzas/mayor] loadDestinosDeOrigen(payment_applications) failed", apps.error);
+    }
+    if (revs.error) {
+      console.error("[finanzas/mayor] loadDestinosDeOrigen(payment_reversals) failed", revs.error);
+    }
+
+    // Un pago aplicado a VARIAS facturas no tiene un destino único, así que
+    // se queda sin enlace en vez de elegir una arbitrariamente.
+    const facturasPorPago = new Map<string, Set<string>>();
+    const filas = [
+      ...((apps.data ?? []) as { payment_id: string; invoice_id: string }[]),
+      ...((revs.data ?? []) as { payment_id: string; invoice_id: string }[]),
+    ];
+    for (const row of filas) {
+      const set = facturasPorPago.get(row.payment_id) ?? new Set<string>();
+      set.add(row.invoice_id);
+      facturasPorPago.set(row.payment_id, set);
+    }
+    for (const [pagoId, facturas] of Array.from(facturasPorPago.entries())) {
+      if (facturas.size !== 1) continue;
+      destinos.set(pagoId, RUTA_DEL_DOCUMENTO.pago(Array.from(facturas)[0]));
     }
   }
 

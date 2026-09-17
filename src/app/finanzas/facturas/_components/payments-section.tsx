@@ -1,11 +1,12 @@
-import { CircleDollarSign, Banknote, FileText } from "lucide-react";
-import { formatDate } from "@/lib/utils/format-date";
+import { CircleDollarSign, Banknote, FileText, Undo2 } from "lucide-react";
+import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import {
   PAYMENT_METHOD_LABEL,
   type PaymentForInvoice,
 } from "@/lib/finanzas/types/payment";
 import { RegisterPaymentDialog } from "./register-payment-dialog";
 import { DeletePaymentButton } from "./delete-payment-button";
+import { ReversePaymentDialog } from "./reverse-payment-dialog";
 import { fmtImporte } from "@/lib/utils/importe";
 
 interface Props {
@@ -19,6 +20,13 @@ interface Props {
   bancos: { code: string; name: string }[];
   /** True si el rol del usuario actual puede registrar/eliminar pagos. */
   canMutate: boolean;
+  /**
+   * True si puede REVERSAR un cobro contabilizado. Es una bandera aparte de
+   * `canMutate` a propósito: el contador reversa (corregir el libro es su
+   * trabajo, guía de RM) pero no registra ni elimina cobros. Ampliar una no
+   * amplía la otra.
+   */
+  canReverse: boolean;
 }
 
 /**
@@ -27,7 +35,10 @@ interface Props {
  *   - Resumen Total / Pagado / Saldo
  *   - Botón "Registrar pago" (visible solo si balance_due > 0 y canMutate)
  *   - Tabla con fila por pago (fecha, monto, método, referencia, registrado por)
- *   - Botón eliminar por fila (solo canMutate y status='registrado')
+ *   - Acción por fila, según el cobro:
+ *       · sin asiento en el libro → Eliminar (canMutate)
+ *       · con asiento             → Reversar (canReverse)
+ *       · reversado               → fila tachada, sin acción
  */
 export function PaymentsSection({
   bancos,
@@ -38,9 +49,21 @@ export function PaymentsSection({
   amountPaid,
   balanceDue,
   canMutate,
+  canReverse,
 }: Props) {
+  const vigentes = payments.filter((p) => !p.reversion);
+  const reversados = payments.length - vigentes.length;
   const hasPayments = payments.length > 0;
   const showRegisterButton = canMutate && balanceDue > 0.001;
+  const showActionColumn = canMutate || canReverse;
+
+  const resumen =
+    vigentes.length === 0
+      ? reversados > 0
+        ? `Sin pagos vigentes · ${reversados} reversado${reversados === 1 ? "" : "s"}`
+        : "Aún no hay pagos registrados."
+      : `${vigentes.length} pago${vigentes.length === 1 ? "" : "s"} aplicado${vigentes.length === 1 ? "" : "s"} a esta factura` +
+        (reversados > 0 ? ` · ${reversados} reversado${reversados === 1 ? "" : "s"}` : "");
 
   return (
     <section className="rounded-xl border bg-white p-5 shadow-sm">
@@ -51,11 +74,7 @@ export function PaymentsSection({
             <h2 className="text-base font-semibold text-integra-navy">
               Pagos registrados
             </h2>
-            <p className="text-xs text-gray-500">
-              {hasPayments
-                ? `${payments.length} pago${payments.length === 1 ? "" : "s"} aplicado${payments.length === 1 ? "" : "s"} a esta factura`
-                : "Aún no hay pagos registrados."}
-            </p>
+            <p className="text-xs text-gray-500">{resumen}</p>
           </div>
         </div>
         {showRegisterButton && (
@@ -121,29 +140,55 @@ export function PaymentsSection({
                 <th className="pb-2 pr-3 font-semibold">Método</th>
                 <th className="pb-2 pr-3 font-semibold">Referencia</th>
                 <th className="pb-2 pr-3 font-semibold">Registrado por</th>
-                {canMutate && <th className="pb-2 font-semibold w-10"></th>}
+                {showActionColumn && <th className="pb-2 font-semibold w-10"></th>}
               </tr>
             </thead>
             <tbody className="divide-y">
               {payments.map((p) => {
                 const amount = Number(p.amount_applied);
-                const canDelete = canMutate && p.status === "registrado";
+                const label = `B/. ${fmtImporte(amount)} del ${formatDate(p.payment_date)}`;
+                const reversado = !!p.reversion;
+                // Sin asiento se ELIMINA; con asiento se REVERSA. Nunca las dos.
+                const canDelete =
+                  !reversado && canMutate && p.status === "registrado" && !p.asiento;
+                const canReverseThis =
+                  !reversado && canReverse && p.status === "registrado" && !!p.asiento;
                 return (
-                  <tr key={p.id}>
-                    <td className="py-2 pr-3 text-gray-900">
+                  <tr key={p.id} className={reversado ? "bg-gray-50/70 text-gray-400" : ""}>
+                    <td className={`py-2 pr-3 ${reversado ? "line-through" : "text-gray-900"}`}>
                       {formatDate(p.payment_date)}
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono font-medium text-emerald-700">
+                    <td
+                      className={`py-2 pr-3 text-right font-mono font-medium ${
+                        reversado ? "line-through" : "text-emerald-700"
+                      }`}
+                    >
                       ${fmtImporte(amount)}
                     </td>
                     <td className="py-2 pr-3">
-                      <span className="inline-flex items-center gap-1 text-gray-700">
-                        <Banknote size={12} className="text-gray-400" />
-                        {PAYMENT_METHOD_LABEL[p.method]}
-                      </span>
+                      {reversado && p.reversion ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                          title={`${p.reversion.reason} — ${formatDateTime(p.reversion.reversed_at)}${
+                            p.reversion.reversed_by_name ? ` · ${p.reversion.reversed_by_name}` : ""
+                          }`}
+                        >
+                          <Undo2 size={12} />
+                          Reversado · asiento {p.reversion.entry_number}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-gray-700">
+                          <Banknote size={12} className="text-gray-400" />
+                          {PAYMENT_METHOD_LABEL[p.method]}
+                        </span>
+                      )}
                     </td>
-                    <td className="py-2 pr-3 text-gray-600">
-                      {p.reference ? (
+                    <td className={`py-2 pr-3 ${reversado ? "" : "text-gray-600"}`}>
+                      {reversado && p.reversion ? (
+                        <span className="text-xs italic" title={p.reversion.reason}>
+                          {p.reversion.reason}
+                        </span>
+                      ) : p.reference ? (
                         <span className="inline-flex items-center gap-1">
                           <FileText size={12} className="text-gray-400" />
                           {p.reference}
@@ -152,24 +197,30 @@ export function PaymentsSection({
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    <td className="py-2 pr-3 text-gray-600">
+                    <td className={`py-2 pr-3 ${reversado ? "" : "text-gray-600"}`}>
                       {p.created_by_name ?? (
                         <span className="text-gray-400">—</span>
                       )}
                     </td>
-                    {canMutate && (
+                    {showActionColumn && (
                       <td className="py-2 text-right">
-                        {canDelete ? (
-                          <DeletePaymentButton
+                        {canReverseThis && p.asiento ? (
+                          <ReversePaymentDialog
                             paymentId={p.id}
-                            paymentLabel={`B/. ${fmtImporte(amount)} del ${formatDate(
-                              p.payment_date
-                            )}`}
+                            paymentLabel={label}
+                            asiento={p.asiento}
+                            invoiceNumber={invoiceNumber}
                           />
-                        ) : (
+                        ) : canDelete ? (
+                          <DeletePaymentButton paymentId={p.id} paymentLabel={label} />
+                        ) : reversado ? null : (
                           <span
                             className="text-xs text-gray-400"
-                            title="Pago conciliado: solo eliminable desde conciliación bancaria"
+                            title={
+                              p.asiento
+                                ? `Cobro contabilizado (asiento ${p.asiento.entry_number}): se corrige con una reversión`
+                                : "Pago conciliado: solo eliminable desde conciliación bancaria"
+                            }
                           >
                             —
                           </span>

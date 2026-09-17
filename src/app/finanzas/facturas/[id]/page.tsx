@@ -81,6 +81,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // Sprint 2C, D4: solo admin + abogada pueden registrar/eliminar pagos
   // y anular facturas. Asistente y contador → READ-only.
   const canMutate = puedeAccionar;
+  // REVERSAR un cobro contabilizado es otra bandera, y el contador SÍ la tiene
+  // (17/09/2026): corregir el libro es su trabajo por la guía de RM, igual que
+  // los asientos manuales y los períodos. Es el ÚNICO botón de mutación que ve
+  // en esta pantalla. Se mueve junto con el guard de
+  // `/api/finanzas/payments/[id]/reverse` y la tabla de CLAUDE.md.
+  const canReverse = puedeAccionar || userRole === "contador";
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -351,6 +357,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               amountPaid={Number(invoice.amount_paid)}
               balanceDue={Number(invoice.balance_due)}
               canMutate={canMutate}
+              canReverse={canReverse}
             />
           )}
 

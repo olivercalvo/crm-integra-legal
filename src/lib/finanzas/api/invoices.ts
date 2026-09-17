@@ -823,12 +823,15 @@ export async function cancelInvoice(
   }
 
   // 2. Bloqueo D3.d/D3.e: si la factura tiene pagos aplicados, NO se anula.
-  //    El usuario debe eliminar los pagos primero (T7a revierte status a
-  //    'emitida' automáticamente al borrar el último pago).
+  //    El usuario debe deshacer los pagos primero (T7a revierte status a
+  //    'emitida' automáticamente al quitar el último): un cobro sin asiento se
+  //    ELIMINA, uno contabilizado se REVERSA (`reversePayment`, 17/09/2026).
+  //    Este gate NO cambia con la reversión: sigue mirando `amount_paid`, que
+  //    T7a deja en cero en los dos caminos.
   const amountPaid = Number(inv.amount_paid);
   if (amountPaid > 0) {
     throw new InvoiceMutationError(
-      `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Elimine los pagos primero antes de anular.`,
+      `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Elimine o reverse los pagos primero antes de anular.`,
       400
     );
   }

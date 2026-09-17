@@ -59,6 +59,13 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
 /**
  * Los `source_type` que NO tienen documento y por lo tanto no llevan a ninguna
  * pantalla. Un asiento de diario no tiene origen: su origen es él mismo.
+ *
+ * ⚠️ `reversion` es el caso a medias: el TIPO no tiene pantalla, pero el
+ * espejo de un COBRO (046) lleva el `source_id` del cobro y
+ * `loadDestinosDeOrigen` lo resuelve por `payment_reversals` a la misma
+ * factura que el asiento original. Una reversión de otra cosa se queda sin
+ * enlace. Por eso no está en `RUTA_DEL_DOCUMENTO`: no hay una ruta por tipo,
+ * hay una por tabla de origen, y solo una de esas tablas existe hoy.
  */
 export const SOURCE_TYPES_SIN_DOCUMENTO = ["manual", "apertura", "reversion"] as const;
 

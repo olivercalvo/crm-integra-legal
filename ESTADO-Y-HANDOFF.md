@@ -77,12 +77,12 @@ Insumos que ya existen y hay que consolidar, no reinventar: `MoneyInput` y `fmtI
 SOP-027 (un botón apagado dice por qué), el orden encabezado → líneas → totales, y el criterio de
 que nada que el usuario necesite quede detrás de un filtro que no ve.
 
-### 3. `tax_code_id` en `expense_lines`
+### 3. ~~`tax_code_id` en `expense_lines`~~ — HECHO el 16/09/2026
 
-Hoy la línea de gasto guarda `tax_rate`, un decimal, así que **no puede distinguir `EXENTO` de
-`ITBMS_0`** (los dos con tasa 0). Para compras esa diferencia importa en la declaración de ITBMS.
-
-Toca el modelo de datos: migración, backfill y revisar el resumen de ITBMS.
+Migración `045` + servidor que resuelve la tasa contra `tax_codes` + `TaxCodeSelect` en el editor +
+Línea 5 del Resumen de ITBMS desde las líneas + detalle de la compra con sus líneas. Commit
+`df3ec3a`, aplicada en staging, verificada con clic real (compra mixta → asiento #20). Ver
+`changelog.md` del 16/09 y `sop.md` SOP-028. Lo que quedó anotado: `task_plan.md`.
 
 ### 4. Los módulos de cobro y pago
 

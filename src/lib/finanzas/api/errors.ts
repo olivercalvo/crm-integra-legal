@@ -16,11 +16,30 @@ export class MutationError extends Error {
   status: number;
   /** Detalles internos para logging (NO mostrar al usuario). */
   detail?: unknown;
-  constructor(message: string, status = 400, detail?: unknown) {
+  /**
+   * Errores por campo, listos para `setErrors()` en el formulario — mismo mapa
+   * plano `lines.<idx>.<campo> → mensaje` que ya usan los validadores puros
+   * (`validateCreateInvoice`, etc.). Distinto de `detail`: esto SÍ se muestra
+   * al usuario, y por eso es un campo propio en vez de meterlo dentro de
+   * `detail`, que el comentario de arriba documenta como "NO mostrar".
+   *
+   * Lo usan las validaciones que necesitan la base para resolverse —no pueden
+   * vivir en el validador puro— pero igual quieren marcar el campo concreto en
+   * rojo, no solo un mensaje suelto. Ver `validarConsistenciaDeKind` en
+   * `api/invoices.ts`.
+   */
+  fieldErrors?: Record<string, string>;
+  constructor(
+    message: string,
+    status = 400,
+    detail?: unknown,
+    fieldErrors?: Record<string, string>
+  ) {
     super(message);
     this.name = "MutationError";
     this.status = status;
     this.detail = detail;
+    this.fieldErrors = fieldErrors;
   }
 }
 

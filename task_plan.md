@@ -1,6 +1,54 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — TANDA DEL 16/09/2026 <<<
+## >>> RETOMAR ACÁ — TANDA DEL 17/09/2026 <<<
+
+**Estado:** en construcción. Bloque: bloquear que una factura de reembolso lleve líneas de
+honorarios (y el caso espejo), a pedido de Josuarth Torres por correo el 17/09/2026.
+
+### Dos definiciones de Josuarth, por teléfono el 17/09/2026 — ANOTAR ANTES DE OLVIDAR
+
+1. **La cuenta contable del manejo de reembolsos es `130003 Fondos Legales de Clientes`** — la
+   misma que ya usan por defecto los gastos de trámite. Debe quedar **CONFIGURABLE, no fija en
+   el código**: si mañana las licenciadas deciden reconocer el remanente como ingreso, hay que
+   poder apuntarla a una cuenta de ingresos por reembolso sin tocar código. **La configuración en
+   sí NO es parte de ningún bloque construido hasta hoy — es un bloque aparte, sin fecha.** Hoy
+   solo queda anotada la decisión.
+
+2. **El remanente del gasto reembolsable y el Decreto Ejecutivo 91 del 25/08/2010, art. 7 literal
+   H — CERRADO COMO NO BLOQUEANTE.** Lo fiscalmente correcto es facturar el costo real como
+   reembolso exento y el margen aparte con ITBMS, pero esa decisión y ese riesgo son de las
+   licenciadas, no del sistema. 🔴 **El sistema NO debe:**
+   - calcular márgenes,
+   - partir documentos automáticamente,
+   - impedir que se facture un reembolso por un monto mayor al gasto real.
+   Queda anotado acá para que nadie lo reabra como requerimiento sin que las licenciadas lo pidan
+   explícitamente.
+
+### Hecho en esta tanda — factura de reembolso no lleva honorarios (y el caso espejo)
+
+- [x] **`validarConsistenciaDeKind()`** (módulo puro, `validators/invoice.ts`): compara
+      `service_type` de cada línea contra `invoice_kind`, en los dos sentidos. Corre en cliente
+      (feedback sin round-trip) y servidor (autoridad real).
+- [x] **`resolverServiciosPorId()`** en `api/invoices.ts`: resuelve `service_id → service_type`
+      contra `services_catalog`, filtrado por tenant. Cierra de paso que `service_id` no se
+      validaba contra el tenant en ningún lado (FK global).
+- [x] **El guard en `createInvoice` y `updateInvoice`**, antes de cualquier INSERT/UPDATE de
+      línea — cubre también la conversión de cotizaciones, gratis (`convertToInvoices` llama a
+      `createInvoice`).
+- [x] **`MutationError.fieldErrors`**, nuevo campo, reenviado por las dos rutas de facturas.
+- [x] **El slot muerto de `invoice-line-items.tsx`** (`lineErrors.service` se leía pero nunca se
+      pintaba) se conectó, con `data-error` en la fila.
+- [x] **16 tests nuevos** (10 del validador puro, 6 del gate con fake-db). 940/940, `tsc` limpio.
+- [ ] Verificación en pantalla, staging, clic real — pendiente al cerrar este bloque.
+
+### Fuera de este bloque, anotado y sin fecha
+
+- [ ] **El tax_code de una línea REIM se puede sobrescribir a gravado** (`onTaxChange` en
+      `invoice-line-items.tsx` no lo impide). Familia del mismo problema que reportó Josuarth,
+      pero es otra cosa: acá se valida QUÉ servicio va en qué factura, no la tasa de una línea de
+      reembolso. Decidir si entra en un bloque futuro.
+
+## >>> TANDA DEL 16/09/2026 <<<
 
 **Estado:** subido a `origin/develop` y desplegado en staging. **Producción no se tocó.**
 

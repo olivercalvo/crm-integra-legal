@@ -27,8 +27,93 @@ import { createCreditNoteFromInvoice } from "@/lib/finanzas/api/credit-notes";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
+import {
+  validarConsistenciaDeKind,
+  motivoDeInconsistenciaDeKind,
+  type ServicioParaConsistenciaDeKind,
+} from "@/lib/finanzas/validators/invoice";
 
 type DB = SupabaseClient;
+/**
+ * Resuelve `service_id → {code, name, service_type}` para las líneas de una
+ * factura, filtrado por TENANT. Es lo que le da a `validarConsistenciaDeKind()`
+ * (módulo puro, sin base) algo contra qué comparar, resuelto por el servidor y
+ * no por lo que mande el body — mismo criterio que `resolverCodigosDeImpuesto`
+ * en `api/tax-codes.ts` (migración `045`, la semana pasada).
+ *
+ * ⚠️ `services_catalog.id` NO tiene FK compuesta con tenant_id (es un FK
+ * global, igual que `expense_lines.tax_code_id` antes de esa migración). Sin
+ * el `.eq("tenant_id", tenantId)` de acá, un `service_id` de otro bufete
+ * pasaría la consulta igual — este helper cierra esa grieta de paso, aunque no
+ * sea el motivo por el que se escribió.
+ *
+ * Ids que no existen o no son de este tenant simplemente no aparecen en el
+ * Map — `validarConsistenciaDeKind()` los ignora (no hay contra qué comparar;
+ * si el `service_id` es inválido de otra forma, eso lo rechaza la FK de la
+ * base al insertar, con su propio mensaje).
+ */
+async function resolverServiciosPorId(
+  db: DB,
+  tenantId: string,
+  serviceIds: readonly (string | null)[]
+): Promise<Map<string, ServicioParaConsistenciaDeKind>> {
+  const unicos = Array.from(new Set(serviceIds.filter((id): id is string => !!id)));
+  const resueltos = new Map<string, ServicioParaConsistenciaDeKind>();
+  if (unicos.length === 0) return resueltos;
+
+  const { data, error } = await db
+    .from("services_catalog")
+    .select("id, code, name, service_type")
+    .eq("tenant_id", tenantId)
+    .in("id", unicos);
+
+  if (error) {
+    console.error("[finanzas] resolverServiciosPorId failed", error);
+    throw new MutationError("No se pudo leer el catálogo de servicios", 500, error);
+  }
+
+  for (const s of (data ?? []) as { id: string; code: string; name: string; service_type: string }[]) {
+    resueltos.set(s.id, { code: s.code, name: s.name, service_type: s.service_type });
+  }
+  return resueltos;
+}
+
+/**
+ * El guard: ninguna línea con `service_id` puede pertenecer a un
+ * `service_type` que no combine con el `invoice_kind` de la factura. Corre
+ * ANTES de cualquier INSERT/UPDATE de línea, en `createInvoice` y
+ * `updateInvoice` — son los DOS ÚNICOS lugares del código que escriben en
+ * `invoice_lines` (confirmado por grep sobre todo `src/`, 17/09/2026), así que
+ * ponerlo acá cubre también la conversión de cotizaciones (`convertToInvoices`
+ * llama a `createInvoice` directamente).
+ *
+ * Bloqueo duro, en los dos sentidos — decisión de Oliver, 17/09/2026: una
+ * advertencia dismissible es el mismo mecanismo por el que ya pasó tres veces
+ * en producción (tres facturas FAC-REI-* con líneas HON-COR, jul-ago/2026).
+ */
+async function validarLineasContraKind(
+  db: DB,
+  tenantId: string,
+  invoiceKind: InvoiceKind,
+  lineas: readonly { service_id: string | null; description: string }[]
+): Promise<void> {
+  const servicios = await resolverServiciosPorId(
+    db,
+    tenantId,
+    lineas.map((l) => l.service_id)
+  );
+  const fieldErrors = validarConsistenciaDeKind(lineas, servicios, invoiceKind);
+  if (Object.keys(fieldErrors).length === 0) return;
+
+  const motivo = motivoDeInconsistenciaDeKind(lineas, servicios, invoiceKind);
+  throw new MutationError(
+    motivo ?? "Alguna línea no combina con el tipo de documento.",
+    400,
+    undefined,
+    fieldErrors
+  );
+}
+
 
 /**
  * Alias mantenido por backwards compatibility con los route handlers de
@@ -91,6 +176,12 @@ export async function createInvoice(
       400
     );
   }
+
+  // 🔴 Ninguna línea puede pertenecer a un service_type que no combine con
+  //    este invoice_kind (17/09/2026). Corre ANTES de insertar nada: si
+  //    rechaza, no queda ni el encabezado ni las líneas — no hace falta
+  //    DELETE compensatorio para un documento que nunca llegó a existir.
+  await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
 
   // Slug único temporal para borradores. Al emitir se reemplaza por el
   // número real ("FAC-HON-000454"). Esto sortea el UNIQUE (tenant, number).
@@ -169,6 +260,12 @@ export async function updateInvoice(
   invoiceId: string,
   input: UpdateInvoiceInput
 ) {
+  // 0. Ninguna línea puede pertenecer a un service_type que no combine con el
+  //    invoice_kind que se está por guardar (17/09/2026). Corre ANTES del
+  //    UPDATE del encabezado: es exactamente el hueco reportado — cambiar el
+  //    "Tipo de documento" con líneas ya cargadas, sin que nada las revise.
+  await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
+
   // 1. UPDATE header. Si la factura no está en borrador, T4 rechaza con
   //    mensaje claro.
   const { error: errHeader } = await db

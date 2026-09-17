@@ -2132,3 +2132,79 @@ No lo hacía, a pesar del nombre: un código desactivado seguía apareciendo en 
 cotizaciones. Se corrigió al reusar el loader para compras, con los tres códigos activos, así que
 no cambió nada visible. Las líneas ya cargadas con un código inactivo conservan su snapshot.
 
+---
+
+## SOP-029: `invoice_kind` ↔ `service_type` — una factura de reembolso no lleva honorarios
+
+**Por qué existe:** Josuarth Torres, por correo el 17/09/2026: *"Las facturas de reembolso solo
+deben ser usadas para la facturación de lo que realmente representa un reembolso de gasto y es
+exenta del impuesto."* Un barrido de producción encontró tres facturas FAC-REI-* (jul-ago/2026)
+con líneas HON-COR adentro.
+
+### El hueco, exacto
+
+`ServiceCombobox` filtra por `invoice_kind` — pero solo decide qué se OFRECE para una línea
+NUEVA. Cambiar el "Tipo de documento" del encabezado (`invoice-form.tsx`) **después** de tener
+líneas cargadas no dispara nada: `setKind` no tiene ningún efecto que reaccione, así que la línea
+vieja queda huérfana. Confirmado con grep sobre `src/` entero: `createInvoice`/`updateInvoice` en
+`api/invoices.ts` son los DOS ÚNICOS lugares que escriben en `invoice_lines` — el guard ahí cubre
+el 100% de los caminos reales, incluida la conversión de cotizaciones (`convertToInvoices` llama
+a `createInvoice` directamente).
+
+🔎 Cotizaciones ya tenía la solución, un nivel más abajo: `quote-lines-editor.tsx` → `onKindChange()`
+limpia el `service_id` de una línea cuando deja de combinar con SU kind (ahí es por línea, no por
+encabezado). Este SOP es la misma idea, un nivel arriba.
+
+### La regla
+
+`services_catalog.service_type` (`'honorarios' | 'reembolso' | 'subcontratado' | 'otro'`) tiene
+que combinar con `invoices.invoice_kind` (`'HONORARIOS' | 'REEMBOLSO'`) en TODAS las líneas de la
+factura — en los dos sentidos: ni HON-COR en una REEMBOLSO, ni REIM-* en una HONORARIOS.
+
+    validarConsistenciaDeKind(lineas, serviciosPorId, invoiceKind)   // validators/invoice.ts
+
+Módulo PURO. El caller arma `serviciosPorId`:
+  - **Cliente** (`invoice-form.tsx`): desde `props.services`, ya en memoria — solo para no gastar
+    un round-trip; el servidor no le cree a esto.
+  - **Servidor** (`api/invoices.ts`): `resolverServiciosPorId()`, contra `services_catalog`
+    **filtrado por tenant**. `services_catalog.id` es una FK global (sin tenant_id compuesto,
+    igual que `expense_lines.tax_code_id` antes de la 045) — sin el filtro, un `service_id` de
+    otro bufete pasaría igual. Se cierra de paso, no era el objetivo de este bloque.
+
+Corre ANTES de cualquier INSERT/UPDATE de línea, en `createInvoice` y `updateInvoice`. Rechaza
+sin escribir nada: ni encabezado ni líneas.
+
+⚠️ **Una línea Personalizada (`service_id: null`) queda FUERA del control, a propósito.** No tiene
+`service_type` contra qué comparar — mismo límite que ya tiene el filtro del combobox hoy. No se
+puede clasificar texto libre.
+
+### Bloqueo duro, no advertencia (decisión de Oliver, 17/09/2026)
+
+Josuarth pidió "una alerta". Se decidió bloqueo duro: una advertencia dismissible es el mismo
+mecanismo por el que ya pasó tres veces — no cambia el resultado, solo agrega un clic que se
+puede saltear. La consecuencia es fiscal (la serie REI se declara exenta ante la DGI), no
+cosmética.
+
+Mensaje (SOP-027: un motivo, el elemento concreto nombrado, el próximo paso):
+
+> *"No se puede guardar: la línea 2 (HON-COR · Honorarios corporativos) es un servicio de
+> Honorarios, y esta factura es de Reembolso — una factura de reembolso solo puede llevar líneas
+> de reembolso. Cambie el servicio de esa línea, o cambie el Tipo de documento a Honorarios."*
+
+`MutationError` ganó un campo `fieldErrors?: Record<string,string>` — separado de `detail`
+(que el propio comentario de la clase documenta como "NO mostrar al usuario"). Las dos rutas
+(`POST` y `PATCH` de `/api/finanzas/invoices`) lo reenvían junto con `error`.
+
+### El slot muerto que se conectó de paso
+
+`invoice-line-items.tsx` ya leía `errors["lines.<idx>.service"]` en `lineErrors.service`, pero
+nunca lo renderizaba, y la fila de la línea no tenía `data-error` — el scroll-to-error de
+`invoice-form.tsx` no llegaba ahí. Los dos se agregaron.
+
+### Fuera de este SOP, anotado en `task_plan.md`
+
+- El tax_code de una línea REIM se puede sobrescribir a gravado (`onTaxChange` no lo impide) —
+  familia del mismo problema, distinto de lo que Josuarth reportó.
+- La cuenta `130003` de los reembolsos y el Decreto 91 art. 7-H — dos definiciones de Josuarth
+  sin código todavía, ver `task_plan.md`.
+

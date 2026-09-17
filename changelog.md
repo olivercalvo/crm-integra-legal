@@ -1,5 +1,62 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Una factura de reembolso no puede llevar líneas de honorarios] - 2026-09-17
+
+Josuarth Torres, por correo el 17/09/2026: *"Las facturas de reembolso solo deben ser usadas
+para la facturación de lo que realmente representa un reembolso de gasto y es exenta del
+impuesto."* En un barrido de producción aparecieron tres facturas FAC-REI-* (jul-ago/2026) con
+líneas HON-COR adentro — honorarios gravados, dentro de la serie que la DGI espera exenta.
+
+### El hueco: cambiar el "Tipo de documento" después de cargar las líneas
+
+El desplegable de servicio (`ServiceCombobox`) YA filtraba por `invoice_kind` — eso resuelve una
+línea NUEVA. Lo que no existía era ningún efecto que reaccionara cuando alguien cambiaba el
+"Tipo de documento" del encabezado **después**: la línea ya elegida quedaba huérfana, sin que
+nada la revisara, ni en el cliente ni en el servidor. Confirmado por grep: es el ÚNICO hueco —
+`createInvoice`/`updateInvoice` en `api/invoices.ts` son los dos únicos lugares del código que
+escriben en `invoice_lines`.
+
+🔎 Cotizaciones ya había resuelto el mismo problema, un nivel más abajo: `quote-lines-editor.tsx`
+limpia el `service_id` de una línea cuando deja de combinar con su kind (ahí, por línea). Este
+bloque es la misma idea, un nivel arriba (una decisión de encabezado, N líneas).
+
+### Bloqueo duro, en los dos sentidos
+
+Una advertencia dismissible es el mismo mecanismo por el que ya pasó tres veces. Ahora:
+`validarConsistenciaDeKind()` (módulo puro, `validators/invoice.ts`) compara el `service_type`
+de cada línea contra el `invoice_kind`, en los dos sentidos — HON-COR en REEMBOLSO, y también
+REIM-* en HONORARIOS. Corre en el cliente (con los `services` ya en memoria, para no gastar un
+round-trip) y en el servidor (`createInvoice`/`updateInvoice`, con `resolverServiciosPorId()`
+resuelto contra `services_catalog` **filtrado por tenant** — no le cree al `service_id` que
+manda el body). Rechaza ANTES de escribir nada: ni encabezado ni líneas.
+
+Mensaje, nombrando la línea y el servicio:
+
+> *"No se puede guardar: la línea 2 (HON-COR · Honorarios corporativos) es un servicio de
+> Honorarios, y esta factura es de Reembolso — una factura de reembolso solo puede llevar
+> líneas de reembolso. Cambie el servicio de esa línea, o cambie el Tipo de documento a
+> Honorarios."*
+
+### El slot muerto de `invoice-line-items.tsx`
+
+El componente ya leía `errors["lines.<idx>.service"]` en `lineErrors.service` desde antes — pero
+nunca lo renderizaba, y la fila de la línea no tenía `data-error`, así que el scroll-to-error
+tampoco llegaba ahí. Los dos se conectaron.
+
+### Fuera de este bloque, a propósito
+
+- **`service_id` no estaba validado contra el tenant** en ningún punto (FK global). Se cierra de
+  paso porque `resolverServiciosPorId()` filtra por tenant — no era el objetivo del bloque.
+- **El tax_code de una línea REIM se puede sobrescribir a gravado** — familia del mismo problema,
+  no lo que Josuarth reportó. Anotado en `task_plan.md`.
+- **Dos definiciones de Josuarth por teléfono**, sin código todavía: la cuenta `130003` de los
+  reembolsos debe quedar configurable (bloque aparte), y el remanente del gasto reembolsable
+  (Decreto 91 art. 7-H) queda cerrado como NO bloqueante — el sistema no calcula márgenes, no
+  parte documentos, no impide facturar un reembolso mayor al gasto real. Las dos, en
+  `task_plan.md`.
+
+Detalle en `sop.md` SOP-029.
+
 ## [tax_code_id en las líneas de compra] - 2026-09-16
 
 Bloque aprobado por Oliver sobre el requerimiento de Josuarth del 25/08: en una factura de

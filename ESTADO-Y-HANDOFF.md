@@ -4,6 +4,55 @@
 
 ---
 
+## Cierre del 17/09/2026 (noche) — eFactura descongelado: reembolsos como tipo 09
+
+**SHA de la app en staging: `780bda0`** — deployment `dpl_8QZdU5tR59nrsmnhaNVhpPwBm84j`, READY,
+aliaseado a `https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app` (log del
+build: `Commit: 780bda0`). Encima va sólo el commit de estos documentos.
+
+🔴 **`main` no se tocó. Producción no se tocó. No hay merge: Oliver decide cuándo va.**
+
+**966 tests, 966 pass.** `tsc` limpio.
+
+### Qué respondió el PAC en el sandbox (`EFACTURA_I_AMB=2`, `eic-api.ideati.net`)
+
+FAC-REI-000002 de staging, emitida con la orquestación real desde localhost (base de staging):
+
+- `request.datosGenerales.tipoDocumento = "09"` (guardado en `fe_emisiones.request_payload`).
+- **0260 — Autorizado el uso de la FE.**
+- Número: punto `001`, documento `1`.
+- CUFE: `FE0920000025046169-3-2021-4000002026091700000000010010121650905584` (el `09` del tipo
+  va codificado en el CUFE).
+- Protocolo: `00001528364-1-65300620260000000000059872`. Autorizada 2026-09-17T18:05:39.994Z.
+- Los dos intentos anteriores fallaron por el RUC del **receptor** (1601/1602: los clientes de
+  staging son ficticios y la DGI de pruebas no los conoce), no por el tipo 09 — el PAC ya
+  devolvía un CUFE `FE09…` en el intento 1. Se resolvió como en junio: emisor = receptor.
+
+**En la pantalla desplegada** (`780bda0`, como contador): la card "Facturación Electrónica" de
+FAC-REI-000002 dice *Autorizada DGI*, con ese CUFE, ese protocolo, `001 / 0000000001` y el
+enlace al portal DGI.
+
+### Lo que quedó sin verificar
+
+1. **Emitir DESDE el deploy de staging.** Imposible hoy: Vercel Preview no tiene ninguna
+   variable `EFACTURA_*` (las 19 están sólo en Production). El botón "Enviar al PAC" ahí
+   falla en `loadEmisorConfig()` antes de llegar al PAC. Cargar las del sandbox en Preview es
+   un cambio de env vars en la cuenta del cliente: decisión de Oliver.
+2. **El botón "Enviar al PAC" desde la UI** — el usuario de staging es contador (403). La
+   función detrás del botón es la misma que corrió hoy.
+3. **Una REI con varias líneas** en el sandbox (hoy: una línea exenta).
+4. `scripts/render-pantalla.mts` falló tres veces contra el deploy con *"No se pudo conectar"*
+   mientras un fetch idéntico desde otro script funcionaba. No se investigó; se verificó con el
+   otro script. Queda anotado.
+
+### Tres cosas que NO se tocan (en `task_plan.md`, arriba de todo)
+
+La validación de mezcla es de negocio (Josuarth), no del PAC. Las 34 REI ya emitidas como 01 no
+se corrigen (Josuarth). El CPBS `8012` de reembolsos sigue como placeholder.
+
+---
+
+
 ## Cierre del 17/09/2026 (tarde) — reversión de cobros
 
 **SHA de la app desplegado y verificado: `fd85a7b`** — deployment `dpl_7Phc1Ewr9zvQmakqeQ9N3AkougEH`,

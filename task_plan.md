@@ -17,7 +17,9 @@ real (o verificación por API si la extensión sigue caída). Ver `changelog.md`
       pantalla, tachado. Libro Mayor: original y espejo enlazan a la factura.
 - [x] `canReverse` separada de `canMutate` en el detalle de factura. Contador ve SOLO Reversar.
 - [x] CLAUDE.md (tabla de roles + regla), SOP-030, changelog, inventario de migraciones.
-- [ ] **Verificar en el deploy**: reversar un cobro real de staging y ver la fila tachada.
+- [x] **Verificado en el deploy** (`fd85a7b`, `dpl_7Phc1Ewr9zvQmakqeQ9N3AkougEH`): el cobro de B/. 1,000.00 de
+      FAC-HON-000002 reversado por API como contador → asiento 21, fila tachada, factura Emitida.
+      Sin ver: el modal abierto (clic real pendiente). Detalle en `ESTADO-Y-HANDOFF.md`.
 
 ### Fuera de este bloque, anotado
 

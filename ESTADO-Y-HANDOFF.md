@@ -4,6 +4,67 @@
 
 ---
 
+## Cierre del 17/09/2026 (tarde) — reversión de cobros
+
+**SHA de la app desplegado y verificado: `fd85a7b`** — deployment `dpl_7Phc1Ewr9zvQmakqeQ9N3AkougEH`,
+READY, aliaseado a `https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app`
+(el log del build dice `Commit: fd85a7b`). Encima va sólo el commit de estos documentos.
+
+🔴 **`main` no se tocó. Producción no se tocó.** La migración `046` está aplicada SOLO en staging.
+
+**963 tests, 963 pass.** `tsc --noEmit` limpio. `next build` exit 0.
+
+### Qué entró (`fd85a7b`)
+
+Reversar un cobro contabilizado, desde la fila del cobro en el detalle de la factura. Detalle en
+`changelog.md` y `sop.md` SOP-030. Los tres puntos que importan:
+
+1. **Es una función de Postgres (`reverse_payment`, 046)**: espejo + borrado de aplicaciones +
+   cobro anulado en UNA transacción. Probado con una falla forzada después del posteo: no queda
+   nada, ni el correlativo avanza.
+2. **El espejo tiene UNA implementación** (`contabilidad/reversion.ts`), la usan la vista previa
+   del diálogo y el servidor; el RPC la verifica, no la recalcula. Un test lee los archivos y lo
+   vigila.
+3. **El contador reversa** (`canReverse`), no registra ni elimina (`canMutate`).
+
+### Lo verificado contra el deploy, por API con la sesión del CONTADOR de staging
+
+La extensión de Chrome seguía caída. Se verificó con el mismo mecanismo de `render-pantalla.mts`
+(sesión de Supabase + cookie de `@supabase/ssr` + bypass de Vercel), leyendo el HTML servido
+antes y después, y disparando el POST real:
+
+- **Antes**, `/finanzas/facturas/{FAC-HON-000002}` como contador: 1 pago de B/. 1,000.00, botón
+  **Reversar** presente; "Registrar pago", "Eliminar pago" y "Anular factura" **ausentes**.
+- **`POST /api/finanzas/payments/{id}/reverse`** → 200: asiento **21** revierte al **10**, fecha
+  2026-09-17, FAC-HON-000002 → `emitida`, `amount_paid` 0.
+- **Después**, la misma pantalla: *"Sin pagos vigentes · 1 reversado"*, Pagado 0.00, Saldo
+  1,605.00, la fila del cobro con *"Reversado · asiento 21"* y el motivo, sin botón Reversar.
+  Badge de estado: **Emitida**.
+- **Diario General**: asiento 21, tipo Reversión, 100001 crédito 1,000.00 / 100004 débito
+  1,000.00, descripción *"Reversión del asiento 10 — …"*.
+- **Libro Mayor de 100004**: el payload trae el destino del cobro → `/finanzas/facturas/{id}`,
+  o sea que los asientos 10 y 21 ofrecen "Abrir el documento".
+- **Base**: cobro `anulado`, 0 aplicaciones, `payment_reversals` con la foto, cadena de hash
+  íntegra (0 eslabones rotos).
+
+**Lo que quedó SIN ver en pantalla** (no se puede desde un fetch): el modal abierto —textarea del
+motivo, la tabla de la vista previa y el botón de confirmar habilitándose con 3 caracteres— y el
+"Abrir el documento" del Mayor, que sólo se dibuja al expandir la fila (estado de cliente). La
+lógica de esas dos cosas está cubierta por tests; lo que no está mirado es el render.
+
+### Pendiente, en orden
+
+1. **Abrir el modal de Reversar con un clic real** cuando vuelva la extensión (o dejar la pestaña
+   activa, como dice el cierre del 10/09).
+2. Lo del 10/09 que sigue: verificar por pantalla una compra con dos líneas; revisión de
+   usabilidad del sitio completo; módulos de cobro y pago; las 20 líneas de trámite sin cuenta;
+   tres mejoras contables; `HON-FAM`/`HON-OTROS`; el bloque `022`.
+3. **Reversión de asientos manuales y de gastos de trámite** — sigue sin existir. Ver
+   `task_plan.md` (arriba de todo).
+
+---
+
+
 ## Cierre del 10/09/2026
 
 **El último SHA con cambios de aplicación es `48bbd74`**, y es el que se verificó en la pantalla

@@ -210,6 +210,12 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   cambia. **Un commit que solo toca el JSON esperado es una alarma.**
 - **Antes de dar por buena una diferencia en `datosRucReceptor`**, probarla contra el **sandbox**
   (`EFACTURA_I_AMB`). Nunca contra el ambiente real.
+- **`tipoDocumento` está FUERA del bloque congelado y se deriva de `invoice_kind`** (desde
+  2026-09-17, confirmado por ideati): HONORARIOS → `01`, REEMBOLSO → `09`, en
+  `tipoDocumentoDeKind()` (`mapper/map-invoice.ts`). Probado en sandbox: autorizada como 09.
+  🔒 La prohibición de líneas mixtas (SOP-029) es de **negocio**, no del PAC — el PAC las
+  acepta; Josuarth no. Las 34 REI ya emitidas como `01` no se corrigen (decisión de Josuarth).
+  El CPBS `8012` de reembolsos sigue sin confirmar. Detalle en `task_plan.md`.
 - ⚠️ **El DV de un cliente se llama `clients.digito_verificador`, no `dv`.** El de proveedores sí
   se llama `suppliers.dv`. Dos nombres para lo mismo; buscar por el concepto, no por el nombre.
 

@@ -1,5 +1,61 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [eFactura: la factura de reembolso sale como tipo 09] - 2026-09-17
+
+eFactura queda **descongelado** por la respuesta de ideati (Eduardo Méndez, PM, por correo el
+17/09): `tipoDocumento "09"` Factura de Reembolso está habilitado en todas las cuentas y
+ambientes incluido pruebas, no exige validación adicional, admite los mismos datos que una
+operación interna, no referencia documentos originales, no restringe tasas ni CPBS, admite
+líneas mixtas. Textual: *"cualquier factura de operación interna puede ser enviada como factura
+de reembolso solo cambiando el tipo de documento"*.
+
+### El cambio, exacto
+
+- `TIPO_DOCUMENTO.FACTURA_REEMBOLSO = "09"` en `efactura/types/catalogs.ts`.
+- `tipoDocumentoDeKind()` en `mapper/map-invoice.ts`: HONORARIOS → `01`, REEMBOLSO → `09`,
+  `switch` exhaustivo (un tercer kind no compila). Reemplaza el default fijo
+  `FACTURA_OPERACION_INTERNA` de `map-invoice.ts:83`. El mapper lo deriva del bundle, que ya
+  traía `invoice_kind` para el CPBS: no hizo falta tocar la orquestación.
+- `options.tipoDocumento` pasa de `string` a `TipoDocumento` y queda como override para
+  notas de crédito/débito.
+- **El payload congelado no se movió**: `receptor-payload-congelado` congela
+  `informacionReceptor`; `tipoDocumento` está afuera. En verde sin `ACTUALIZAR_PAYLOAD`.
+- Fixture de `emit-invoice-reuso-correlativo.test.ts` corregido: usaba `"REEMBOLSABLES"`, un
+  kind que no existe en el CHECK de la tabla. Antes nadie miraba el kind.
+
+### Probado en el SANDBOX del PAC antes que en ninguna factura real
+
+Desde localhost (base de staging), `EFACTURA_I_AMB=2` contra `eic-api.ideati.net`, con la
+orquestación real (`emitInvoiceToEfactura`), sobre **FAC-REI-000002** (B/. 400.00, una línea
+exenta):
+
+| Intento | Receptor | Resultado |
+|---|---|---|
+| 1 | RUC ficticio de staging | `request.tipoDocumento = "09"`, el PAC lo procesó (el CUFE devuelto ya empieza `FE09…`) pero la DGI de pruebas rechazó el receptor: 1601 *Regla de formación del RUC inválida* + 1602 *RUC inexistente* |
+| 2 | RUC del emisor en `ruc`/`dv` | Mismo rechazo: `map-receptor.ts:102` lee `tax_id ?? ruc`, y `tax_id` seguía ficticio |
+| 3 | RUC del emisor también en `tax_id` | **0260 Autorizado el uso de la FE**. Número `001-1`, CUFE `FE0920000025046169-3-2021-4000002026091700000000010010121650905584`, protocolo `00001528364-1-65300620260000000000059872`, autorizada 2026-09-17T18:05:39.994Z, `fe_emisiones.autorizada = true`, `i_amb = 2` |
+
+El tipo 09 se lee en el CUFE (`FE09…`) y en `fe_emisiones.request_payload`. Los tres intentos
+reusaron el número 1 (política D-3). El cliente de staging volvió a sus datos ficticios.
+
+### Lo que NO cambia, y por qué (también en `task_plan.md`)
+
+- **La validación de mezcla (SOP-029) es de negocio, no técnica.** El PAC acepta líneas
+  mixtas; Josuarth las prohibió por criterio contable y sigue vigente.
+- **Las 34 FAC-REI-* ya emitidas como tipo 01 no se corrigen.** ideati: sería NC + reemisión.
+  Josuarth: no hace falta, el ITBMS y la DJR se presentaron bien.
+- **CPBS `8012` para reembolsos sigue como placeholder.** Técnicamente funciona (el sandbox
+  autorizó con él); si es el código correcto es pregunta contable abierta.
+
+### Sin verificar
+
+Emitir desde el deploy de staging: **Vercel Preview no tiene ninguna `EFACTURA_*`** (las 19
+viven solo en Production), así que el botón ahí ni llega al PAC. Cargarlas es decisión de
+Oliver. Y el botón "Enviar al PAC" de la UI no se apretó (el usuario de staging es contador).
+
+**966/966.** `tsc` limpio. Producción sin tocar; sin merge a `main`.
+
+
 ## [Reversión de un cobro contabilizado — todo o nada, en la base] - 2026-09-17
 
 Desde el 04/09 un cobro que ya está en el libro no se puede borrar (`deletePayment` lo rechaza con

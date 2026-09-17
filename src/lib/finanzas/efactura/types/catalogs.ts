@@ -76,6 +76,18 @@ export const TIPO_DOCUMENTO = {
   EXPORTACION: "03",
   NOTA_CREDITO: "04",
   NOTA_DEBITO: "05",
+  /**
+   * Factura de Reembolso. Confirmado por ideati (Eduardo Méndez, PM) por correo
+   * el 17/09/2026: habilitado en todas las cuentas y ambientes, incluido el de
+   * pruebas; admite los mismos datos que una operación interna, sin validación
+   * adicional, sin referenciar documentos originales, sin restricción de tasas
+   * ni de CPBS. Textual: "cualquier factura de operación interna puede ser
+   * enviada como factura de reembolso solo cambiando el tipo de documento".
+   *
+   * Lo deriva `tipoDocumentoDeKind()` (mapper/map-invoice.ts) de
+   * `invoices.invoice_kind`.
+   */
+  FACTURA_REEMBOLSO: "09",
 } as const;
 
 export type TipoDocumento =

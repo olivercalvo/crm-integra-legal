@@ -1,6 +1,73 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — REVERSIÓN DE COBROS — 17/09/2026 (tarde) <<<
+## >>> RETOMAR ACÁ — eFACTURA DESCONGELADO: tipo 09 para reembolsos — 17/09/2026 <<<
+
+**Estado:** construido, probado en el SANDBOX del PAC (autorizada como tipo 09), en `develop`.
+**Producción NO se toca: no hay merge a `main`. Oliver decide cuándo va.**
+
+Respuesta de ideati (Eduardo Méndez, PM) por correo el 17/09/2026: `tipoDocumento "09"` es
+Factura de Reembolso, habilitado en todas las cuentas y ambientes incluido pruebas; sin
+validación adicional; mismos datos que una operación interna; no referencia documentos
+originales; sin restricción de tasas ni CPBS; admite líneas mixtas. Textual: *"cualquier
+factura de operación interna puede ser enviada como factura de reembolso solo cambiando el
+tipo de documento"*.
+
+### Hecho
+
+- [x] `TIPO_DOCUMENTO.FACTURA_REEMBOLSO = "09"` en `efactura/types/catalogs.ts`.
+- [x] `tipoDocumentoDeKind(invoice_kind)` en `mapper/map-invoice.ts`: HONORARIOS → 01,
+      REEMBOLSO → 09, `switch` exhaustivo. El mapper lo deriva del bundle (ya tenía el kind
+      para el CPBS); **no hizo falta pasarlo desde la orquestación** — habría sido un segundo
+      lugar donde equivocarse. `options.tipoDocumento` queda como override tipado para NC/ND.
+- [x] 3 tests nuevos en `map-invoice.test.ts`. `receptor-payload-congelado` sigue en verde: el
+      bloque congelado es `informacionReceptor`, y `tipoDocumento` está fuera.
+- [x] Fixture `emit-invoice-reuso-correlativo.test.ts` corregido: usaba `"REEMBOLSABLES"`, un
+      kind que no existe; antes nadie lo miraba, el `switch` exhaustivo lo agarró.
+- [x] **Sandbox (`EFACTURA_I_AMB=2`, `eic-api.ideati.net`), desde localhost contra la base de
+      staging, con la orquestación real:** FAC-REI-000002 (B/. 400.00, 1 línea exenta) →
+      **AUTORIZADA** como tipo 09. Ver `changelog.md` para número, CUFE y protocolo.
+
+### 🔒 Tres cosas que NO se tocan, y por qué (anotadas para que nadie las "arregle")
+
+1. **La validación de mezcla (`validarConsistenciaDeKind`, SOP-029) es de NEGOCIO, no
+   técnica.** El PAC acepta líneas mixtas sin restricción — ideati lo confirmó por escrito el
+   17/09. La prohibición de HON en una REI (y al revés) la puso **Josuarth por criterio
+   contable** (la serie REI se declara exenta) y sigue vigente. Nadie la borra pensando que
+   era un límite del PAC que ya no existe.
+2. **Las 34 facturas ya emitidas a la DGI como tipo 01 (FAC-REI-* de producción) NO se
+   corrigen.** ideati: técnicamente sería nota de crédito + reemisión. **Josuarth decidió que
+   no hace falta** porque el ITBMS y la DJR se presentaron bien. Queda en el registro; no es
+   un pendiente.
+3. **El CPBS `8012` para reembolsos sigue siendo un placeholder sin confirmar** (`.env.local`
+   lo tiene igual al de honorarios; `.env.example` lo marca como PLACEHOLDER). ideati dice que
+   el tipo 09 no restringe CPBS, así que **técnicamente funciona** — el sandbox autorizó con
+   8012 —, pero si es el código correcto para un reembolso es una **pregunta contable
+   abierta** para Josuarth. No se cambia hasta que la conteste.
+
+### Lo que quedó sin verificar
+
+- [ ] **Emitir desde el deploy de staging (Vercel Preview) — imposible hoy**: el entorno
+      Preview NO tiene ninguna variable `EFACTURA_*` (`vercel env ls`: las 19 están solo en
+      Production). `loadEmisorConfig()` tiraría "falta variable" antes de llegar al PAC.
+      Cargar las del sandbox en Preview es un cambio de env vars en la cuenta del cliente:
+      decisión de Oliver. Hasta entonces, la prueba de sandbox se corre desde localhost (que
+      ya apunta a la base de staging), como se hizo hoy.
+- [ ] **El botón "Enviar al PAC" desde la UI** no se apretó: el usuario de staging disponible
+      es contador (403 en esa ruta). La orquestación que corre detrás del botón es la misma
+      función que se ejecutó hoy.
+- [ ] **Una REI con más de una línea** en el sandbox (hoy fue una sola, exenta). ideati dice
+      que no hay restricción; no se midió.
+
+### Dato para reproducir la prueba de sandbox
+
+La DGI de pruebas rechaza con 1601/1602 cualquier RUC de receptor que no exista en su
+registro — o sea, todos los clientes ficticios de staging. Como en junio: se apunta un cliente
+al RUC/DV del emisor (emisor = receptor está aceptado en sandbox) **en las tres columnas:
+`tax_id`, `ruc` y `digito_verificador`** — `map-receptor.ts:102` lee `tax_id ?? ruc`, así que
+cambiar solo `ruc` no alcanza (se perdió un intento por eso). Al terminar, se restaura.
+
+
+## >>> Bloque anterior — REVERSIÓN DE COBROS — 17/09/2026 (tarde) <<<
 
 **Estado:** construido, tests en verde, migración `046` aplicada en staging. Falta: deploy + clic
 real (o verificación por API si la extensión sigue caída). Ver `changelog.md` y `sop.md` SOP-030.

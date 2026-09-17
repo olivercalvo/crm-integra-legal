@@ -9,6 +9,7 @@ import type {
   BusinessExpenseListItem,
   BusinessExpenseStatus,
   BusinessExpenseWithDetails,
+  LineaDeCompraDetalle,
   SupplierSnapshot,
 } from "@/lib/finanzas/types/business-expense";
 
@@ -265,17 +266,34 @@ export async function getBusinessExpenseById(
     return null;
   }
 
-  // Las cuentas salen de las LÍNEAS (migración `040`). Mismo criterio que el
-  // listado: una sola cuenta se nombra, varias dicen "Varios".
-  const { data: lineasCta } = await db
+  // Las LÍNEAS completas (migración `040` para la cuenta, `045` para el
+  // impuesto). El detalle las muestra una por una: en una compra mixta —la
+  // factura del internet— es la única forma de ver qué renglón fue exento. El
+  // nombre del código sale del join a `tax_codes`.
+  const { data: lineasRaw } = await db
     .from("expense_lines")
-    .select("chart_account_code")
+    .select(
+      `id, line_order, description, chart_account_code, amount, tax_code_id,
+       tax_rate, tax_amount, line_total, tax_codes:tax_code_id ( code, name )`
+    )
     .eq("tenant_id", tenantId)
-    .eq("business_expense_id", id);
+    .eq("business_expense_id", id)
+    .order("line_order", { ascending: true });
+  type LineaRaw = {
+    id: string;
+    line_order: number;
+    description: string;
+    chart_account_code: string | null;
+    amount: number | string;
+    tax_code_id: string | null;
+    tax_rate: number | string;
+    tax_amount: number | string;
+    line_total: number | string;
+    tax_codes: { code: string; name: string } | { code: string; name: string }[] | null;
+  };
+  const lineasCrudas = (lineasRaw ?? []) as unknown as LineaRaw[];
   const cuentas = new Set(
-    ((lineasCta ?? []) as { chart_account_code: string | null }[])
-      .map((l) => l.chart_account_code)
-      .filter((c): c is string => !!c)
+    lineasCrudas.map((l) => l.chart_account_code).filter((c): c is string => !!c)
   );
   const nombres: Record<string, string> = {};
   if (cuentas.size > 0) {
@@ -303,11 +321,29 @@ export async function getBusinessExpenseById(
     { supplier_id: (data.supplier_id as string | null) ?? null },
   ]);
 
+  const lineas: LineaDeCompraDetalle[] = lineasCrudas.map((l) => {
+    const tc = Array.isArray(l.tax_codes) ? l.tax_codes[0] ?? null : l.tax_codes;
+    return {
+      id: l.id,
+      line_order: l.line_order,
+      description: l.description,
+      chart_account_code: l.chart_account_code,
+      chart_account_name: l.chart_account_code ? nombres[l.chart_account_code] ?? null : null,
+      amount: Number(l.amount),
+      tax_code_id: l.tax_code_id,
+      tax_code_name: tc?.name ?? null,
+      tax_rate: Number(l.tax_rate),
+      tax_amount: Number(l.tax_amount),
+      line_total: Number(l.line_total),
+    };
+  });
+
   return {
     ...(data as unknown as BusinessExpenseWithDetails),
     account,
     supplier: data.supplier_id ? supplierMap[data.supplier_id as string] ?? null : null,
     created_by_name: createdByName,
+    lineas,
   };
 }
 

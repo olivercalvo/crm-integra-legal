@@ -26,12 +26,22 @@ import { ExpenseLinesEditor } from "@/components/finanzas/expense-lines-editor";
 import { fmtImporte } from "@/lib/utils/importe";
 import { motivoParaNoGuardar } from "@/lib/finanzas/validators/business-expense";
 import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
+import type { TaxCodeOption } from "@/lib/finanzas/types/invoice";
 import { paymentTermsLabel, vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 
 interface BaseProps {
   accounts: ExpenseAccountOption[];
   suppliers: SupplierOption[];
+  /** Códigos de `tax_codes` activos — los mismos que ve facturación. */
+  taxCodes: TaxCodeOption[];
 }
+
+/**
+ * Impuesto precargado en una línea nueva de compra. `ITBMS_7`, igual que
+ * `makeEmptyLine` en facturación: la mayoría de las compras del bufete lo
+ * llevan, y una exenta se cambia con un clic.
+ */
+const IMPUESTO_POR_DEFECTO_COMPRA = "ITBMS_7";
 
 interface CreateProps extends BaseProps {
   mode: "create";
@@ -112,18 +122,33 @@ export function BusinessExpenseForm(props: Props) {
   // 🔴 De UNA cuenta a N LÍNEAS (migración `040`). La cuenta dejó de vivir en el
   //    encabezado: cada línea dice contra qué cuenta se imputa su parte, que es
   //    lo que el acta pide y lo que el asiento necesita.
-  const [lineas, setLineas] = useState<ExpenseLineDraft[]>(
-    init?.lineas?.length
-      ? init.lineas.map((l, i) => ({
-          key: `l${i}`,
-          description: l.description,
-          chart_account_code: l.chart_account_code ?? "",
-          amount: String(l.amount),
-          tax_rate: String(l.tax_rate),
-          tax_amount: String(l.tax_amount),
-        }))
-      : [{ key: "l0", description: "", chart_account_code: "", amount: "", tax_rate: "0.07", tax_amount: "" }]
-  );
+  const [lineas, setLineas] = useState<ExpenseLineDraft[]>(() => {
+    if (init?.lineas?.length) {
+      return init.lineas.map((l, i) => ({
+        key: `l${i}`,
+        description: l.description,
+        chart_account_code: l.chart_account_code ?? "",
+        amount: String(l.amount),
+        tax_code_id: l.tax_code_id ?? "",
+        tax_rate: String(l.tax_rate),
+        tax_amount: String(l.tax_amount),
+      }));
+    }
+    // La primera línea nace con el impuesto por defecto YA elegido (id + tasa),
+    // no solo con la tasa: sin el id el validador la rechaza.
+    const tc = props.taxCodes.find((t) => t.code === IMPUESTO_POR_DEFECTO_COMPRA);
+    return [
+      {
+        key: "l0",
+        description: "",
+        chart_account_code: "",
+        amount: "",
+        tax_code_id: tc?.id ?? "",
+        tax_rate: String(tc?.rate ?? 0),
+        tax_amount: "",
+      },
+    ];
+  });
   const [description, setDescription] = useState<string>(init?.description ?? "");
   const [status, setStatus] = useState<BusinessExpenseStatus>(init?.status ?? "pagado");
   const [paymentDate, setPaymentDate] = useState<string>(
@@ -188,6 +213,10 @@ export function BusinessExpenseForm(props: Props) {
         description: l.description.trim(),
         chart_account_code: l.chart_account_code || null,
         amount: Number(l.amount) || 0,
+        // El id es lo que el servidor cree; `tax_rate` es el snapshot que la
+        // pantalla usó para el total, y el servidor lo reemplaza por el del
+        // catálogo.
+        tax_code_id: l.tax_code_id,
         tax_rate: Number(l.tax_rate) || 0,
         tax_amount: Number(l.tax_amount) || 0,
       })),
@@ -479,6 +508,8 @@ export function BusinessExpenseForm(props: Props) {
             account_type: a.account_type ?? "expense",
           }))}
           cuentaPorDefecto=""
+          taxCodes={props.taxCodes}
+          impuestoPorDefecto={IMPUESTO_POR_DEFECTO_COMPRA}
           mostrarTotales={false}
           // 🔴 SIN ESTO EL RECHAZO ES MUDO. El validador produce
           // `lineas.{i}.{campo}` y el editor sabe pintarlo, pero hasta el

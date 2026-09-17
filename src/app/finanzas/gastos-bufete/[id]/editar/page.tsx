@@ -6,6 +6,7 @@ import {
   listExpenseAccountOptions,
 } from "@/lib/finanzas/queries/business-expenses";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
+import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { BusinessExpenseForm } from "../../_components/business-expense-form";
 
 /**
@@ -32,19 +33,21 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
     redirect(`/finanzas/gastos-bufete/${params.id}`);
   }
 
-  const [expense, lineasRes, suppliers] = await Promise.all([
+  const [expense, lineasRes, suppliers, taxCodes] = await Promise.all([
     getBusinessExpenseById(ctx.db, ctx.tenantId, params.id),
     ctx.db
       .from("expense_lines")
-      .select("line_order, description, chart_account_code, amount, tax_rate, tax_amount")
+      .select("line_order, description, chart_account_code, amount, tax_code_id, tax_rate, tax_amount")
       .eq("tenant_id", ctx.tenantId)
       .eq("business_expense_id", params.id)
       .order("line_order", { ascending: true }),
     listSupplierOptions(ctx.db, ctx.tenantId),
+    listTaxCodesActive(ctx.db, ctx.tenantId),
   ]);
   const lineasDeLaCompra = lineasRes.data as
     | { line_order: number; description: string; chart_account_code: string | null;
-        amount: number | string; tax_rate: number | string; tax_amount: number | string }[]
+        amount: number | string; tax_code_id: string | null;
+        tax_rate: number | string; tax_amount: number | string }[]
     | null;
 
   // Una línea puede estar clasificada contra una cuenta que se desactivó
@@ -77,6 +80,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
         mode="edit"
         accounts={accounts}
         suppliers={suppliers}
+        taxCodes={taxCodes}
         initial={{
           id: expense.id,
           expense_date: expense.expense_date,
@@ -90,6 +94,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
             description: l.description as string,
             chart_account_code: l.chart_account_code as string | null,
             amount: Number(l.amount),
+            tax_code_id: l.tax_code_id ?? "",
             tax_rate: Number(l.tax_rate),
             tax_amount: Number(l.tax_amount),
           })),

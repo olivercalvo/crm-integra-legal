@@ -121,10 +121,35 @@ export function nombreProveedorDeGasto(
   return g.supplier_name;
 }
 
-/** Detalle completo. Hoy igual al list item; se separa por extensibilidad. */
+/**
+ * Una línea de compra tal como la muestra el DETALLE: la fila de
+ * `expense_lines` más el nombre de su cuenta y de su código de impuesto.
+ */
+export interface LineaDeCompraDetalle {
+  id: string;
+  line_order: number;
+  description: string;
+  chart_account_code: string | null;
+  chart_account_name: string | null;
+  amount: number;
+  /** FK a `tax_codes` (migración `045`). Nunca NULL en una línea de compra. */
+  tax_code_id: string | null;
+  /** `tax_codes.name`, p. ej. "ITBMS 7%" o "Exento". */
+  tax_code_name: string | null;
+  tax_rate: number;
+  tax_amount: number;
+  line_total: number;
+}
+
+/** Detalle completo: el list item más quién lo registró y sus líneas. */
 export interface BusinessExpenseWithDetails extends BusinessExpenseListItem {
   /** Nombre completo del usuario que registró el gasto (denormalizado). */
   created_by_name: string | null;
+  /**
+   * Las líneas, en orden. Es lo que permite ver, en una compra mixta, qué
+   * renglón fue gravado y cuál exento: el encabezado solo tiene la suma.
+   */
+  lineas: LineaDeCompraDetalle[];
 }
 
 // ---------- Input shapes --------------------------------------------------
@@ -143,6 +168,13 @@ export interface LineaDeCompraInput {
   chart_account_code: string | null;
   /** Base imponible de la línea. */
   amount: number;
+  /**
+   * 🔑 Obligatorio (migración `045`): el id del código de `tax_codes` elegido.
+   * El servidor lo resuelve contra el catálogo —tenant, activo— y escribe la
+   * tasa DEL CATÁLOGO. `tax_rate` viaja para que la pantalla muestre el total
+   * sin esperar la respuesta, pero el servidor no le cree.
+   */
+  tax_code_id: string;
   tax_rate: number;
   tax_amount: number;
 }
@@ -228,56 +260,20 @@ export const TAX_RATE_LABEL: Record<string, string> = {
 };
 
 /**
- * Las opciones del SELECTOR de impuesto de una línea de gasto.
+ * EL SELECTOR DE IMPUESTO DE UNA LÍNEA SALE DE `tax_codes`, COMO EN FACTURACIÓN.
  *
- * ═════════════════════════════════════════════════════════════════════════════
- * POR QUÉ NO SON LOS `tax_codes` DE FACTURACIÓN
- * ═════════════════════════════════════════════════════════════════════════════
- * Josuarth pidió el 10/09/2026 que el campo se vea igual que en facturación:
- * un desplegable con «ITBMS 7% (7.0%)», no un campo numérico con «0.07», que
- * es un número de programador.
+ * Hasta el 16/09/2026 acá vivía `OPCIONES_DE_IMPUESTO`, una lista fija armada
+ * desde `VALID_TAX_RATES`, porque `expense_lines` guardaba solo `tax_rate` (un
+ * decimal) y no había dónde anotar CUÁL código se eligió. Dos consecuencias:
+ * si Rose cambiaba la tasa en Configuración → Impuestos, compras no la seguía;
+ * y `EXENTO` e `ITBMS_0` (los dos con tasa 0) eran indistinguibles.
  *
- * El desplegable es el mismo. Lo que **no** se puede compartir es la fuente:
- * `invoice_lines` guarda `tax_code_id` —una FK a `tax_codes`— y
- * **`expense_lines` guarda `tax_rate`, un decimal**. No hay columna donde
- * anotar CUÁL código se eligió.
- *
- * ⚠️ Consecuencia concreta: en `tax_codes` conviven `EXENTO` e `ITBMS_0`, los
- *    dos con tasa 0. Un gasto no puede distinguirlos —los dos se guardarían
- *    como `0`— así que acá se ofrece una sola opción para la tasa cero. Para
- *    separar «exento» de «gravado al 0%» en compras hace falta agregarle
- *    `tax_code_id` a `expense_lines`: es una migración con su backfill y toca
- *    el resumen de ITBMS. Queda anotado, no escondido.
- *
- * Las tasas salen de `VALID_TAX_RATES`, que es lo que el validador acepta: el
- * selector no puede ofrecer algo que después se rechace.
+ * Desde la migración `045` la línea tiene `tax_code_id`, el editor usa el
+ * MISMO `TaxCodeSelect` que las facturas con los códigos cargados de la base
+ * (`listTaxCodesActive`), y el servidor resuelve la tasa contra el catálogo.
+ * `VALID_TAX_RATES` queda solo para normalizar la tasa del ENCABEZADO, que es
+ * un derivado (ver `derivarTasaDeCabecera` en `validators/business-expense.ts`).
  */
-export interface OpcionDeImpuesto {
-  /** El valor que se guarda en `expense_lines.tax_rate`. */
-  rate: number;
-  /** Lo que se lee en el desplegable, con el formato de facturación. */
-  label: string;
-}
-
-export const OPCIONES_DE_IMPUESTO: OpcionDeImpuesto[] = VALID_TAX_RATES.map((rate) => ({
-  rate,
-  label:
-    rate === 0
-      ? "Exento (0%)"
-      : `ITBMS ${+(rate * 100).toFixed(2)}% (${(rate * 100).toFixed(1)}%)`,
-}));
-
-/**
- * La opción que corresponde a una tasa guardada.
- *
- * Compara por NÚMERO y no por texto: de la base la tasa vuelve como `"0.0700"`
- * y del formulario como `"0.07"`. Son el mismo impuesto.
- */
-export function opcionDeImpuestoDe(rate: string | number): OpcionDeImpuesto | null {
-  const n = typeof rate === "number" ? rate : Number(String(rate).replace(",", "."));
-  if (!Number.isFinite(n)) return null;
-  return OPCIONES_DE_IMPUESTO.find((o) => Math.abs(o.rate - n) < 1e-9) ?? null;
-}
 
 /** Convierte un tax_rate decimal a su label legible. */
 export function taxRateLabel(rate: number): string {

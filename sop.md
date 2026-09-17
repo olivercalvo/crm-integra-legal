@@ -2055,3 +2055,80 @@ Buscar `disabled={` con más de una cláusula, o cualquier `disabled={!algo}` do
 de lo que la persona cargó. Por cada cláusula, preguntarse qué ve alguien que no puede apretar el
 botón. Si la respuesta es "nada", es el bug del 09/09 otra vez.
 
+---
+
+## SOP-028: El impuesto de una línea de compra es un código del catálogo, no un número
+
+**Por qué existe:** el ITBMS por línea en compras funcionaba desde la `036` (cada línea tiene
+`tax_rate` y `tax_amount`, el asiento suma línea por línea, el editor tiene el desplegable desde
+el 10/09). Lo que faltaba era **el vínculo al catálogo**: la línea guardaba un decimal y no sabía
+CUÁL código de `tax_codes` lo produjo. Tres consecuencias reales, todas cerradas el 16/09/2026
+con la migración `045`:
+
+| Consecuencia | Antes | Ahora |
+|---|---|---|
+| Fuente del desplegable | `OPCIONES_DE_IMPUESTO`, lista fija en el código. Si Rose cambiaba la tasa en Configuración → Impuestos, facturación la seguía y compras no | `listTaxCodesActive()` + `TaxCodeSelect`, **los mismos que facturación** |
+| `EXENTO` vs `ITBMS_0` | Indistinguibles: los dos son tasa 0 | `expense_lines.tax_code_id`, FK a `tax_codes` |
+| Confianza en el body | El servidor guardaba la tasa que mandaba la pantalla | El servidor **resuelve el id contra el catálogo** y escribe la tasa de ahí |
+
+### El modelo
+
+`expense_lines.tax_code_id uuid REFERENCES tax_codes(id)` + `tax_rate` como **snapshot** de
+`tax_codes.rate` al cargar la línea. Es el mismo modelo que `invoice_lines`: si el catálogo cambia
+después, la línea sigue diciendo la tasa con la que se cargó. No se copia el texto del código
+(`invoice_lines.tax_code`): ese texto es herencia del FK compuesto de `services_catalog`, no del
+patrón, y `updateTaxCode()` no permite renombrar `code`.
+
+### Compras: obligatorio. Trámite: opcional. Y no es una inconsistencia
+
+`CHECK (business_expense_id IS NULL OR tax_code_id IS NOT NULL)`, **validado** (no NOT VALID).
+Aplica solo a compras porque:
+
+- En compras el ITBMS es crédito fiscal y va a `200003`; el código importa para la declaración.
+- En trámite es pass-through al cliente y no toca `200003`. Las 20 líneas históricas quedaron en
+  NULL, y **un UPDATE sobre ellas fallaría** por dos guards ya aplicados: el CHECK NOT VALID de
+  la `037` (se hace cumplir en todo UPDATE, SOP-023) y el trigger de inmutabilidad de la `038`.
+
+El backfill de la `045` **no toca trámite** por eso. Si algún día se quiere obligatorio ahí, es
+otra migración, después de la limpieza de las 20.
+
+### El backfill de compras: tasa 0 → `EXENTO`
+
+Decidido por Oliver el 16/09/2026. No es inventar el dato: la única opción de cero que el
+formulario ofreció desde el 10/09 se llamaba "Exento (0%)", e `ITBMS_0` no tiene un solo uso en
+el sistema. Tasa > 0 → el **único** código activo del tenant con esa tasa; con cero o más de uno,
+la migración aborta nombrando las líneas.
+
+📋 **Pre-flight contra producción antes de aplicar** (la `045` corre después de 036→037→038→040
+en el mismo deploy):
+
+    SELECT tax_rate, COUNT(*) FROM business_expenses GROUP BY 1 ORDER BY 1;
+    SELECT code, rate, active FROM tax_codes ORDER BY code;
+
+### Lo que hace el servidor con una línea que llega (`createBusinessExpense`)
+
+1. `resolverCodigosDeImpuesto(db, tenant, ids)` — una consulta a `tax_codes` filtrando **tenant y
+   `active`**. La FK es global: sin el filtro de tenant, un id de otro bufete pasa la base.
+2. La tasa que se guarda es la del catálogo. Si el body trae `tax_rate: 0` con el id de ITBMS 7%,
+   se guarda 7%.
+3. El `tax_amount` tecleado se verifica contra `amount × tasa del catálogo` con ±0,02 (el mismo
+   margen que trámite). Elegir EXENTO y teclear 7,00 de ITBMS se rechaza nombrando la línea.
+   ⚠️ Hasta el 16/09 compras **no verificaba** el ITBMS de la línea: cualquier importe pasaba.
+
+Lo fijan `api/__tests__/business-expense-gate.test.ts` (los cuatro últimos) y
+`validators/__tests__/compra-impuesto-por-linea.test.ts`.
+
+### Lo que cambió en el Resumen de ITBMS
+
+**Línea 5 "Compras gravadas"** sale de las líneas con `tax_amount > 0`, no del subtotal del
+encabezado. Para la factura del internet (25,00 gravados + 10,00 exentos) reporta **25,00**, antes
+35,00. Línea 6 (crédito fiscal) no cambia: siempre fue una suma. Criterio "gravada = tasa > 0";
+la alternativa (todo lo que no es `EXENTO`, o sea `ITBMS_0` como gravada al 0%) da el mismo
+número mientras `ITBMS_0` no se use. Queda anotado en `task_plan.md`.
+
+### `listTaxCodesActive()` ahora filtra `active`
+
+No lo hacía, a pesar del nombre: un código desactivado seguía apareciendo en facturas y
+cotizaciones. Se corrigió al reusar el loader para compras, con los tres códigos activos, así que
+no cambió nada visible. Las líneas ya cargadas con un código inactivo conservan su snapshot.
+

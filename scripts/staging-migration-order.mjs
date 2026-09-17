@@ -124,6 +124,9 @@ export const BUNDLE_2 = [
 //   6. npm run seed:asientos                           ← crea las 3 compras y sus líneas
 //   7. node scripts/run-sql.mjs sql/pending/040_compras_con_lineas.sql
 //   8. npx tsx scripts/seed-gasto-tramite-demo.mts
+//   9. node scripts/run-sql.mjs sql/pending/045_expense_lines_tax_code_id.sql
+//      ← después de la 040: su backfill es sobre las líneas de compra que la
+//        040 crea, y aborta si alguna tasa no calza con `tax_codes`.
 //
 // ⚠️ La `041` (banco del cobro) y la `042` (source_type `pago_proveedor`) SÍ van
 // en BUNDLE_2: solo agregan una columna y un valor al CHECK, no dependen de

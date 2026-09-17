@@ -44,6 +44,7 @@ function linea(over: Partial<ExpenseLineRow> = {}): ExpenseLineRow {
     chart_account_code: "130003",
     chart_account_name: "Fondo Legales de Clientes",
     amount,
+    tax_code_id: null,
     tax_rate: 0,
     tax_amount: tax,
     line_total: amount + tax,

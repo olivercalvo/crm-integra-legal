@@ -132,7 +132,20 @@ export interface ExpenseLineRow {
   chart_account_name: string | null;
   /** Base, sin impuesto. */
   amount: number;
-  /** Decimal [0, 1] — 0.07 = 7%. */
+  /**
+   * Código de impuesto elegido (FK a `tax_codes`, migración `045`).
+   *
+   * NULL solo en líneas de trámite históricas: el backfill de la `045` no las
+   * tocó porque el CHECK NOT VALID de la `037` y el trigger de la `038`
+   * rechazarían el UPDATE. En una línea de COMPRA nunca es NULL — lo garantiza
+   * el CHECK `expense_lines_compra_con_impuesto`.
+   */
+  tax_code_id: string | null;
+  /**
+   * Decimal [0, 1] — 0.07 = 7%. Es el SNAPSHOT de `tax_codes.rate` al cargar
+   * la línea (igual que `invoice_lines.tax_rate`): si el catálogo cambia
+   * después, la línea sigue diciendo la tasa con la que se cargó.
+   */
   tax_rate: number;
   tax_amount: number;
   /** Columna generada: `amount + tax_amount`. */
@@ -149,6 +162,13 @@ export interface ExpenseLineDraft {
   description: string;
   chart_account_code: string;
   amount: string;
+  /**
+   * El id del código elegido en el desplegable. Cadena vacía = sin elegir. El
+   * editor lo escribe junto con `tax_rate` (su snapshot) al cambiar la opción;
+   * el servidor de compras lo resuelve contra `tax_codes` y NO confía en
+   * `tax_rate` del body.
+   */
+  tax_code_id: string;
   tax_rate: string;
   tax_amount: string;
 }

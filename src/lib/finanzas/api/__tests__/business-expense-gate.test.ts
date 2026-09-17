@@ -25,6 +25,9 @@ import {
 const TENANT = "a0000000-0000-0000-0000-000000000001";
 const COMPRA = "33333333-3333-3333-3333-333333333333";
 const USER = "22222222-2222-2222-2222-222222222222";
+/** Los dos códigos del catálogo que el fake conoce (migración `045`). */
+const ITBMS_7 = "44444444-4444-4444-4444-444444444444";
+const EXENTO = "55555555-5555-5555-5555-555555555555";
 
 interface Guion {
   /** ¿La compra ya tiene asiento? */
@@ -33,10 +36,18 @@ interface Guion {
   postea?: "ok" | { code: string; message: string };
   /** La cuenta de la línea es válida en el plan. */
   cuentaValida?: boolean;
+  /** Qué códigos de impuesto devuelve `tax_codes` (activos del tenant). */
+  taxCodes?: { id: string; code: string; rate: number }[];
 }
 
 function fake(g: Guion) {
-  const reg = { borrados: [] as string[], insertados: [] as string[], posteos: 0 };
+  const reg = {
+    borrados: [] as string[],
+    insertados: [] as string[],
+    posteos: 0,
+    /** El último payload insertado en cada tabla, para afirmar qué se guardó. */
+    payloads: {} as Record<string, unknown>,
+  };
 
   const tabla = (nombre: string) => {
     const q: Record<string, unknown> = {};
@@ -55,8 +66,9 @@ function fake(g: Guion) {
     // `.insert()` se usa de dos formas: encadenando `.select().single()` (la
     // compra, que necesita el id) y suelto (las líneas, el audit_log). El fake
     // devuelve un objeto que sirve para las dos.
-    q.insert = () => {
+    q.insert = (payload: unknown) => {
       reg.insertados.push(nombre);
+      reg.payloads[nombre] = payload;
       const res = resolverUno(nombre);
       return {
         select: () => ({ single: async () => res }),
@@ -121,6 +133,14 @@ function fake(g: Guion) {
               : [{ code: "610008", active: true, account_type: "expense", name: "Útiles" }],
           error: null,
         };
+      case "tax_codes":
+        return {
+          data: g.taxCodes ?? [
+            { id: ITBMS_7, code: "ITBMS_7", rate: 0.07 },
+            { id: EXENTO, code: "EXENTO", rate: 0 },
+          ],
+          error: null,
+        };
       default:
         return { data: null, error: null };
     }
@@ -154,6 +174,7 @@ const INPUT = {
       description: "Útiles",
       chart_account_code: "610008",
       amount: 100,
+      tax_code_id: ITBMS_7,
       tax_rate: 0.07,
       tax_amount: 7,
     },
@@ -280,4 +301,88 @@ test("una línea sin cuenta se rechaza en el SERVIDOR, no solo en el formulario"
       return true;
     }
   );
+});
+
+// ---------------------------------------------------------------------------
+// El código de impuesto se resuelve contra el catálogo (migración `045`)
+// ---------------------------------------------------------------------------
+
+type LineaGuardada = { tax_code_id: string; tax_rate: number; tax_amount: number };
+
+test("🔴 la tasa que se guarda es la del CATÁLOGO, aunque el body traiga otra", async () => {
+  const { db, reg } = fake({ postea: "ok" });
+  await createBusinessExpense(
+    db as never,
+    TENANT,
+    USER,
+    // El body dice 0 pero el id es el de ITBMS 7%: se le cree al id.
+    { ...INPUT, lineas: [{ ...INPUT.lineas[0], tax_rate: 0, tax_amount: 7 }] },
+    db as never
+  );
+  const lineas = reg.payloads["expense_lines"] as LineaGuardada[];
+  assert.equal(lineas[0].tax_code_id, ITBMS_7);
+  assert.equal(lineas[0].tax_rate, 0.07, "snapshot del catálogo, no del body");
+});
+
+test("🔴 un ITBMS que no calza con la tasa del código elegido se rechaza", async () => {
+  const { db, reg } = fake({ postea: "ok" });
+  await assert.rejects(
+    () =>
+      createBusinessExpense(
+        db as never,
+        TENANT,
+        USER,
+        // Eligió EXENTO pero tecleó 7,00 de ITBMS: la línea no puede decir las dos cosas.
+        { ...INPUT, lineas: [{ ...INPUT.lineas[0], tax_code_id: EXENTO, tax_rate: 0, tax_amount: 7 }] },
+        db as never
+      ),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 400);
+      assert.match(e.message, /EXENTO/);
+      assert.match(e.message, /0\.00/);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, [], "no se registró nada");
+});
+
+test("🔴 un código que no es de este bufete o está inactivo se rechaza antes de insertar", async () => {
+  // El catálogo del tenant no conoce el id que manda el body.
+  const { db, reg } = fake({ postea: "ok", taxCodes: [{ id: EXENTO, code: "EXENTO", rate: 0 }] });
+  await assert.rejects(
+    () => createBusinessExpense(db as never, TENANT, USER, INPUT, db as never),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 400);
+      assert.match(e.message, /no existe o está inactivo/);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, []);
+  assert.equal(reg.posteos, 0);
+});
+
+test("compra mixta: cada línea conserva SU código y el encabezado suma los dos", async () => {
+  const { db, reg } = fake({ postea: "ok" });
+  await createBusinessExpense(
+    db as never,
+    TENANT,
+    USER,
+    {
+      ...INPUT,
+      lineas: [
+        { description: "Internet de agosto", chart_account_code: "610008", amount: 25, tax_code_id: ITBMS_7, tax_rate: 0.07, tax_amount: 1.75 },
+        { description: "Tasa municipal (exenta)", chart_account_code: "610008", amount: 10, tax_code_id: EXENTO, tax_rate: 0, tax_amount: 0 },
+      ],
+    },
+    db as never
+  );
+  const lineas = reg.payloads["expense_lines"] as LineaGuardada[];
+  assert.deepEqual(
+    lineas.map((l) => [l.tax_code_id, l.tax_rate, l.tax_amount]),
+    [[ITBMS_7, 0.07, 1.75], [EXENTO, 0, 0]]
+  );
+  const enc = reg.payloads["business_expenses"] as { subtotal: number; tax_amount: number; tax_rate: number };
+  assert.equal(enc.subtotal, 35);
+  assert.equal(enc.tax_amount, 1.75);
+  assert.equal(enc.tax_rate, 0.07, "la tasa del encabezado es la más alta de las gravadas");
 });

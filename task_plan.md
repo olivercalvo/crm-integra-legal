@@ -1,10 +1,38 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — TANDA DEL 10/09/2026 <<<
+## >>> RETOMAR ACÁ — TANDA DEL 16/09/2026 <<<
 
 **Estado:** subido a `origin/develop` y desplegado en staging. **Producción no se tocó.**
 
-### Hecho en esta tanda
+### Hecho en esta tanda — `tax_code_id` en las líneas de compra
+
+- [x] **Migración `045`**: `expense_lines.tax_code_id` (FK a `tax_codes`), backfill solo de
+      compras (0 → `EXENTO`), CHECK validado solo para compras. Aplicada en staging, idempotente,
+      `sql/tests/verificacion-045-tax-code-id.sql` 5/5.
+- [x] **El servidor resuelve la tasa contra el catálogo** (tenant + activo), no confía en el body.
+      Y verifica el ITBMS de cada línea con ±0,02 — compras no lo hacía.
+- [x] **El editor usa `TaxCodeSelect`** con los códigos de `listTaxCodesActive()`, que **ahora
+      filtra `active`**. Compras arranca en `ITBMS_7`, trámite en `EXENTO`.
+- [x] **Resumen de ITBMS, Línea 5** desde las líneas gravadas: 25,00 para el internet, no 35,00.
+- [x] **El detalle de la compra muestra las líneas** con su impuesto; el rótulo del encabezado ya
+      no afirma una tasa única.
+
+### Decisiones anotadas, pendientes de confirmar
+
+- [ ] **Línea 5 del Resumen de ITBMS — criterio de "gravada".** Hoy es `tax_amount > 0`, el
+      comportamiento de siempre. La alternativa es "todo código que no sea `EXENTO`" (o sea,
+      `ITBMS_0` cuenta como gravada al 0%). **Dan el mismo número mientras `ITBMS_0` no se use**,
+      y hoy no lo usa nadie. Consultar con Josuarth el día que `ITBMS_0` entre en una compra.
+- [ ] **`updateBusinessExpense` no reescribe `expense_lines`** (preexistente; hoy inalcanzable
+      porque toda compra creada se postea y el gate devuelve 409). Se resuelve junto con la
+      reversión de compras, y ahí `tax_code_id` viaja con la línea.
+- [ ] **El fixture del 15/03 en `seed-asientos.ts`**: encabezado 7% / 105,00 pero líneas y
+      asiento con ITBMS 0. La Línea 6 del resumen reporta 105 que el libro no tiene. Fuera de
+      este bloque; se corrige aparte.
+
+## Tanda del 10/09/2026
+
+### Hecho en esa tanda
 
 - [x] **El rechazo mudo de compras**: faltaba el prop `errors` hacia el editor de líneas. Más
       `motivoParaNoGuardar()` al lado del botón y `data-error` para el scroll.
@@ -99,16 +127,14 @@ hacer.
 
 ### Pendiente, anotado y FUERA de esta tanda
 
-- [ ] **`tax_code_id` en `expense_lines`** — hoy la línea de gasto guarda `tax_rate` (decimal), así
-      que no puede distinguir `EXENTO` de `ITBMS_0` (los dos con tasa 0). Necesita migración,
-      backfill y revisar el resumen de ITBMS.
+- [x] ~~**`tax_code_id` en `expense_lines`**~~ — hecho el 16/09/2026 (migración `045`, ver arriba).
 
 - [ ] **20 líneas de gasto de trámite sin cuenta (B/. 7.600)** — el backfill de la `036`. Ninguna
       posteada; ninguna puede postearse hasta asignarles cuenta. Necesita asignación masiva.
 - [ ] **`HON-FAM` y `HON-OTROS`** siguen en `4101` y siguen rechazando. Falta la decisión del
       bufete sobre a qué cuenta de ingreso van.
-- [ ] **Selector de código de impuesto por línea** en compras (paridad con facturación). Hoy es
-      un campo numérico libre, que ya permite mezclar.
+- [x] ~~**Selector de código de impuesto por línea** en compras~~ — el desplegable se hizo el
+      10/09 y desde el 16/09 sale de `tax_codes` con el mismo `TaxCodeSelect` que facturación.
 - [ ] **UNIQUE de `supplier_invoice_number`** por proveedor — necesita decidir qué pasa con las
       compras sin proveedor y traducir el 23505 a español.
 - [ ] **`updateBusinessExpense` no reescribe `expense_lines`.** Hoy es inalcanzable (toda compra

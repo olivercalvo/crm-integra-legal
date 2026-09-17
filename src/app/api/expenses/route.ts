@@ -5,6 +5,8 @@ import { requireRole } from "@/lib/supabase/server-query";
 import { validarLineas } from "@/lib/finanzas/validators/expense-line";
 import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
 import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
+import { MutationError } from "@/lib/finanzas/api/errors";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -132,6 +134,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // EL CÓDIGO DE IMPUESTO, CONTRA EL CATÁLOGO (migración `045`)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Opcional en trámite, pero si viene tiene que ser de este bufete y estar
+    // activo: la FK de `expense_lines.tax_code_id` es global y por sí sola
+    // dejaría pasar el id de otro tenant. Y la tasa que se guarda es la del
+    // catálogo, no la del body — mismo criterio que en compras.
+    let lineasAInsertar = validadas.data.lineas;
+    try {
+      const codigosDeImpuesto = await resolverCodigosDeImpuesto(
+        admin,
+        profile.tenant_id,
+        validadas.data.lineas.flatMap((l) => (l.tax_code_id ? [l.tax_code_id] : []))
+      );
+      lineasAInsertar = validadas.data.lineas.map((l, i) => {
+        const codigo = l.tax_code_id ? codigosDeImpuesto.get(l.tax_code_id) : undefined;
+        if (!codigo) return l;
+        // `validarLineas()` ya verificó `tax_amount` contra la tasa del body.
+        // Si el catálogo dice otra tasa, reemplazarla en silencio dejaría una
+        // línea con tasa 7% e ITBMS 0: se rechaza y la persona vuelve a elegir.
+        if (Math.abs(codigo.rate - l.tax_rate) > 1e-6) {
+          throw new MutationError(
+            `Línea ${i + 1}: la tasa del impuesto ${codigo.code} cambió en el catálogo. ` +
+              `Vuelva a elegir el impuesto de la línea.`,
+            400
+          );
+        }
+        return { ...l, tax_rate: codigo.rate };
+      });
+    } catch (err) {
+      if (err instanceof MutationError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+
     // El monto del encabezado ES la suma de las líneas. Conviven hasta que
     // `amount` se vuelva derivado por trigger (commit posterior), y el que manda
     // es el detalle: nunca se toma un monto que venga del request.
@@ -159,13 +197,15 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: errLineas } = await admin.from("expense_lines").insert(
-      validadas.data.lineas.map((l) => ({
+      lineasAInsertar.map((l) => ({
         tenant_id: profile.tenant_id,
         expense_id: expense.id,
         line_order: l.line_order,
         description: l.description,
         chart_account_code: l.chart_account_code,
         amount: l.amount,
+        // Opcional en trámite (migración `045`); la FK de la base lo verifica.
+        tax_code_id: l.tax_code_id,
         tax_rate: l.tax_rate,
         tax_amount: l.tax_amount,
         created_by: user.id,

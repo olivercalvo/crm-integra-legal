@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
+import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { BusinessExpenseForm } from "../_components/business-expense-form";
 
 
@@ -21,9 +22,11 @@ export default async function NuevoGastoBufetePage() {
     redirect("/finanzas/gastos-bufete");
   }
 
-  const [accounts, suppliers] = await Promise.all([
+  const [accounts, suppliers, taxCodes] = await Promise.all([
     listExpenseAccountOptions(ctx.db, ctx.tenantId),
     listSupplierOptions(ctx.db, ctx.tenantId),
+    // Los mismos códigos que ve facturación (migración `045`).
+    listTaxCodesActive(ctx.db, ctx.tenantId),
   ]);
 
   return (
@@ -39,7 +42,12 @@ export default async function NuevoGastoBufetePage() {
         </div>
       </div>
 
-      <BusinessExpenseForm mode="create" accounts={accounts} suppliers={suppliers} />
+      <BusinessExpenseForm
+        mode="create"
+        accounts={accounts}
+        suppliers={suppliers}
+        taxCodes={taxCodes}
+      />
     </div>
   );
 }

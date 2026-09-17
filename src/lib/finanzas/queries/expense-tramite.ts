@@ -160,7 +160,7 @@ export async function getLineasDeGastoTramite(
     .from("expense_lines")
     .select(
       `id, line_order, description, chart_account_code,
-       amount, tax_rate, tax_amount, line_total`
+       amount, tax_code_id, tax_rate, tax_amount, line_total`
     )
     .eq("tenant_id", tenantId)
     .eq("expense_id", expenseId)
@@ -188,6 +188,8 @@ export async function getLineasDeGastoTramite(
       // Ver el comentario largo en `types/expense-line.ts`.
       chart_account_code: code,
       chart_account_name: code ? nombres.get(code) ?? null : null,
+      // NULL en las históricas (migración `045`): el backfill no tocó trámite.
+      tax_code_id: (f.tax_code_id as string | null) ?? null,
       amount: Number(f.amount ?? 0),
       tax_rate: Number(f.tax_rate ?? 0),
       tax_amount: Number(f.tax_amount ?? 0),

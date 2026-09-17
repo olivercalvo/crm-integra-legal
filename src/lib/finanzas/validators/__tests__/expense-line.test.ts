@@ -44,6 +44,7 @@ function draft(over: Partial<ExpenseLineDraft> = {}): ExpenseLineDraft {
     description: "Timbres fiscales",
     chart_account_code: CUENTA_TRAMITE_DEFAULT,
     amount: "100.00",
+    tax_code_id: "",
     tax_rate: "0",
     tax_amount: "0",
     ...over,

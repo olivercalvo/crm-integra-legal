@@ -13,10 +13,8 @@ import {
   totalesDeLineas,
   type ExpenseLineDraft,
 } from "@/lib/finanzas/types/expense-line";
-import {
-  OPCIONES_DE_IMPUESTO,
-  opcionDeImpuestoDe,
-} from "@/lib/finanzas/types/business-expense";
+import type { TaxCodeOption } from "@/lib/finanzas/types/invoice";
+import { TaxCodeSelect } from "@/components/finanzas/tax-code-select";
 import { lineaVacia } from "@/lib/finanzas/validators/expense-line";
 import {
   cuentasClasificables,
@@ -96,6 +94,24 @@ interface Props {
    * tiene que decir cuál quiere.
    */
   cuentaPorDefecto: string;
+  /**
+   * Los códigos de `tax_codes` activos del bufete, cargados server-side con
+   * `listTaxCodesActive` — los MISMOS que ve el formulario de facturación, en
+   * el MISMO `TaxCodeSelect`. Es lo que Josuarth pidió el 25/08 y el 10/09:
+   * que cada línea vaya gravada o exenta "igual que en una factura".
+   *
+   * Hasta el 16/09/2026 las opciones salían de una lista fija en el código
+   * (`OPCIONES_DE_IMPUESTO`), porque la línea no tenía dónde guardar cuál
+   * código eligió. Desde la migración `045` tiene `tax_code_id`.
+   */
+  taxCodes: TaxCodeOption[];
+  /**
+   * Código precargado en una línea nueva, por `code` de `tax_codes`. Trámite
+   * pasa `"EXENTO"` (el ITBMS de un adelanto es pass-through); compras pasa
+   * `"ITBMS_7"`, como `makeEmptyLine` en facturación. Si el código no está en
+   * `taxCodes` la línea arranca sin impuesto elegido y el validador lo pide.
+   */
+  impuestoPorDefecto: string;
   /** Errores del validador, con clave `lineas.{i}.{campo}`. */
   errors?: Record<string, string>;
   disabled?: boolean;
@@ -114,6 +130,8 @@ export function ExpenseLinesEditor({
   onChange,
   cuentas,
   cuentaPorDefecto,
+  taxCodes,
+  impuestoPorDefecto,
   errors = {},
   disabled = false,
   moneda = "B/.",
@@ -154,6 +172,11 @@ export function ExpenseLinesEditor({
     [todas, codigosSugeridos]
   );
 
+  const impuestoInicial = useMemo(() => {
+    const tc = taxCodes.find((t) => t.code === impuestoPorDefecto);
+    return tc ? { id: tc.id, rate: tc.rate } : null;
+  }, [taxCodes, impuestoPorDefecto]);
+
   const totales = useMemo(
     () =>
       totalesDeLineas(
@@ -183,13 +206,13 @@ export function ExpenseLinesEditor({
   }
 
   function agregar() {
-    onChange([...lineas, lineaVacia(`l${Date.now()}`, cuentaPorDefecto)]);
+    onChange([...lineas, lineaVacia(`l${Date.now()}`, cuentaPorDefecto, impuestoInicial)]);
   }
 
   function quitar(i: number) {
     // La última no se borra: se limpia. Un gasto sin líneas no es un estado útil.
     if (lineas.length === 1) {
-      onChange([lineaVacia(lineas[0].key, cuentaPorDefecto)]);
+      onChange([lineaVacia(lineas[0].key, cuentaPorDefecto, impuestoInicial)]);
       return;
     }
     onChange(lineas.filter((_, j) => j !== i));
@@ -328,37 +351,25 @@ export function ExpenseLinesEditor({
                   {e("amount") && <p className="mt-1 text-xs text-red-600">{e("amount")}</p>}
                 </div>
 
-                {/* Impuesto — el MISMO desplegable que facturación.
-                    Era un campo numérico que mostraba «0.07»: un número de
-                    programador. Josuarth pidió el 10/09/2026 que se vea igual
-                    que en una factura. Por qué las opciones no salen de
-                    `tax_codes`: ver `OPCIONES_DE_IMPUESTO`. */}
+                {/* Impuesto — el MISMO componente y los MISMOS códigos que
+                    facturación (`TaxCodeSelect` + `tax_codes`). Al elegir se
+                    guardan el id y el snapshot de la tasa; el ITBMS se
+                    recalcula desde `actualizar`. El servidor vuelve a
+                    resolver la tasa contra el catálogo: acá es para mostrar. */}
                 <div className="sm:col-span-2">
                   <Label className="mb-1 block text-xs">Impuesto</Label>
-                  <select
-                    value={opcionDeImpuestoDe(linea.tax_rate)?.rate ?? ""}
-                    onChange={(ev) => actualizar(i, { tax_rate: ev.target.value })}
-                    disabled={disabled}
-                    className={
-                      "block w-full rounded-md border bg-white px-2 min-h-[44px] text-sm " +
-                      "focus:border-integra-navy focus:outline-none " +
-                      (e("tax_rate") ? "border-red-300" : "border-gray-300")
+                  <TaxCodeSelect
+                    taxCodes={taxCodes}
+                    value={linea.tax_code_id}
+                    onChange={(id, tc) =>
+                      actualizar(i, {
+                        tax_code_id: id,
+                        tax_rate: tc ? String(tc.rate) : linea.tax_rate,
+                      })
                     }
-                  >
-                    {opcionDeImpuestoDe(linea.tax_rate) === null && (
-                      // Una tasa histórica que ya no está en la lista se muestra
-                      // tal cual en vez de desaparecer sin avisar.
-                      <option value="">{`Tasa ${linea.tax_rate}`}</option>
-                    )}
-                    {OPCIONES_DE_IMPUESTO.map((o) => (
-                      <option key={o.rate} value={o.rate}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  {e("tax_rate") && (
-                    <p className="mt-1 text-xs text-red-600">{e("tax_rate")}</p>
-                  )}
+                    error={e("tax_code_id") ?? e("tax_rate")}
+                    disabled={disabled}
+                  />
                 </div>
 
                 {/* ITBMS — autocompletado, editable */}

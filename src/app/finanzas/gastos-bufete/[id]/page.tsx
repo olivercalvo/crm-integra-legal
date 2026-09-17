@@ -10,6 +10,7 @@ import {
   BUSINESS_EXPENSE_PAYMENT_METHOD_LABEL,
   taxRateLabel,
 } from "@/lib/finanzas/types/business-expense";
+import { cuentaLabel } from "@/lib/finanzas/types/expense-line";
 import { BusinessExpenseStatusBadge } from "../_components/business-expense-status-badge";
 import { BusinessExpenseActions } from "../_components/business-expense-actions";
 import { ReceiptUploader } from "../_components/receipt-uploader";
@@ -177,13 +178,70 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             </dl>
           </section>
 
+          {/* Detalle — las líneas, una por una (migraciones `040` y `045`).
+              Es la única forma de ver, en una compra mixta como la factura
+              del internet, qué renglón fue gravado y cuál exento: el
+              encabezado solo tiene la suma. Hasta el 16/09/2026 el detalle no
+              las mostraba. */}
+          <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-integra-navy">Detalle contable</h2>
+            {expense.lineas.length === 0 ? (
+              <p className="text-sm text-gray-400">Esta compra no tiene líneas.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="py-2 pr-3 font-medium">Descripción</th>
+                      <th className="py-2 pr-3 font-medium">Cuenta</th>
+                      <th className="py-2 pr-3 text-right font-medium">Base</th>
+                      <th className="py-2 pr-3 font-medium">Impuesto</th>
+                      <th className="py-2 pr-3 text-right font-medium">ITBMS</th>
+                      <th className="py-2 text-right font-medium">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expense.lineas.map((l) => (
+                      <tr key={l.id} className="border-b last:border-0">
+                        <td className="py-2 pr-3 text-gray-900">{l.description}</td>
+                        <td className="py-2 pr-3 text-gray-600">
+                          {l.chart_account_code ? (
+                            <span>
+                              <span className="font-mono">{l.chart_account_code}</span>
+                              {l.chart_account_name && (
+                                <span className="ml-1 text-gray-500">— {l.chart_account_name}</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-amber-700">{cuentaLabel(l)}</span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{fmtMoney(l.amount)}</td>
+                        <td className="py-2 pr-3 text-gray-600">
+                          {l.tax_code_name ?? taxRateLabel(l.tax_rate)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{fmtMoney(l.tax_amount)}</td>
+                        <td className="py-2 text-right tabular-nums font-medium">{fmtMoney(l.line_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           {/* Montos */}
           <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
             <h2 className="text-base font-semibold text-integra-navy">Montos</h2>
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
               <Item label="Subtotal" value={`B/. ${fmtMoney(expense.subtotal)}`} />
               <Item
-                label={`ITBMS (${taxRateLabel(Number(expense.tax_rate))})`}
+                // El rótulo solo afirma una tasa cuando TODAS las líneas la
+                // comparten. `business_expenses.tax_rate` es un derivado —la
+                // más alta de las gravadas— y en una compra mixta decir
+                // "ITBMS (7%)" al lado de 1,75 sobre 35,00 es mentir: el 7% se
+                // aplicó a 25,00. El desglose real está en la tabla de arriba.
+                label={rotuloItbms(expense.lineas, Number(expense.tax_rate))}
                 value={`B/. ${fmtMoney(expense.tax_amount)}`}
               />
               <Item
@@ -275,6 +333,31 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
       </div>
     </div>
   );
+}
+
+/**
+ * El rótulo del ITBMS del encabezado, sin afirmar más de lo que las líneas dicen:
+ *   · todas gravadas a la misma tasa → "ITBMS (7%)"
+ *   · gravadas a una tasa + exentas  → "ITBMS (7% sobre B/. 25.00)"
+ *   · gravadas a varias tasas        → "ITBMS (varias tasas)"
+ *   · nada gravado                   → "ITBMS"
+ * Sin líneas (compra vieja sin detalle) cae a la tasa del encabezado.
+ */
+function rotuloItbms(
+  lineas: readonly { amount: number; tax_rate: number; tax_amount: number }[],
+  tasaEncabezado: number
+): string {
+  if (lineas.length === 0) {
+    return tasaEncabezado > 0 ? `ITBMS (${taxRateLabel(tasaEncabezado)})` : "ITBMS";
+  }
+  const gravadas = lineas.filter((l) => l.tax_amount > 0);
+  const tasas = new Set(gravadas.map((l) => l.tax_rate));
+  if (tasas.size === 0) return "ITBMS";
+  if (tasas.size > 1) return "ITBMS (varias tasas)";
+  const tasa = taxRateLabel(Array.from(tasas)[0]);
+  if (gravadas.length === lineas.length) return `ITBMS (${tasa})`;
+  const base = gravadas.reduce((s, l) => s + l.amount, 0);
+  return `ITBMS (${tasa} sobre B/. ${fmtMoney(base)})`;
 }
 
 function Item({ label, value }: { label: string; value: React.ReactNode }) {

@@ -384,16 +384,34 @@ export async function getVatSummary(
   //    detalle de ITBMS quedaría vacía para TODAS las compras — sin error, sin
   //    aviso, solo un reporte peor.
   const cuentasPorCompra = new Map<string, string[]>();
+  // 🔴 La BASE GRAVADA (Línea 5) también sale de las líneas, no del encabezado.
+  //    Hasta el 16/09/2026 se sumaba el `subtotal` entero de toda compra con
+  //    `tax_amount > 0`: en una compra mixta —la factura del internet, 25,00
+  //    gravados + 10,00 exentos— reportaba 35,00 gravados cuando son 25,00. El
+  //    encabezado no puede decir cuánto de su subtotal pagó impuesto; la línea
+  //    sí. Criterio de "gravada": `tax_amount > 0` (decisión de Oliver,
+  //    16/09/2026; ver `task_plan.md` — se revisa el día que `ITBMS_0` se use).
+  const baseGravadaPorCompra = new Map<string, number>();
+  const comprasConLineas = new Set<string>();
   if (expenses.length > 0) {
     const { data: lns } = await db
       .from("expense_lines")
-      .select("business_expense_id, chart_account_code")
+      .select("business_expense_id, chart_account_code, amount, tax_amount")
       .eq("tenant_id", tenantId)
       .in("business_expense_id", expenses.map((e) => e.id));
     for (const l of (lns ?? []) as {
       business_expense_id: string;
       chart_account_code: string | null;
+      amount: number | string;
+      tax_amount: number | string;
     }[]) {
+      comprasConLineas.add(l.business_expense_id);
+      if (Number(l.tax_amount) > 0) {
+        baseGravadaPorCompra.set(
+          l.business_expense_id,
+          (baseGravadaPorCompra.get(l.business_expense_id) ?? 0) + Number(l.amount)
+        );
+      }
       if (!l.chart_account_code) continue;
       const arr = cuentasPorCompra.get(l.business_expense_id) ?? [];
       if (!arr.includes(l.chart_account_code)) arr.push(l.chart_account_code);
@@ -453,7 +471,12 @@ export async function getVatSummary(
     const tax = Number(ex.tax_amount);
     purchasesSubtotal += sub;
     taxReclaimable += tax;
-    if (tax > 0) {
+    // Solo la parte del subtotal que pagó impuesto (líneas con ITBMS > 0). Una
+    // compra SIN líneas (anterior a la `040`; no debería existir) cae al
+    // criterio viejo para no desaparecer del reporte.
+    if (comprasConLineas.has(ex.id)) {
+      taxablePurchasesSubtotal += baseGravadaPorCompra.get(ex.id) ?? 0;
+    } else if (tax > 0) {
       taxablePurchasesSubtotal += sub;
     }
   }
@@ -481,7 +504,7 @@ export async function getVatSummary(
     { number: 2, label: "Ventas gravadas con ITBMS", value: line2, hint: "Solo las facturas con ITBMS > 0" },
     { number: 3, label: "ITBMS cobrado sobre ventas", value: line3, hint: "Débito fiscal del período" },
     { number: 4, label: "Total compras del período", value: line4, hint: "Compras del bufete a proveedores" },
-    { number: 5, label: "Compras gravadas con ITBMS", value: line5, hint: "Solo las compras con ITBMS > 0" },
+    { number: 5, label: "Compras gravadas con ITBMS", value: line5, hint: "Solo las líneas de compra con ITBMS > 0; en una compra mixta, la parte exenta no cuenta" },
     { number: 6, label: "ITBMS recuperable sobre compras", value: line6, hint: "Crédito fiscal del período" },
     { number: 7, label: "Saldo del período (débito − crédito)", value: line7, is_total: true, hint: "Línea 3 − Línea 6" },
     { number: 8, label: "ITBMS adeudado de períodos anteriores", value: line8, hint: "ITBMS que quedó debiéndose de meses anteriores. Está en cero porque todavía no se ha cerrado ningún período." },

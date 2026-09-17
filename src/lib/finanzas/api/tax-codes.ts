@@ -121,3 +121,72 @@ export async function updateTaxCode(
   const row = data as unknown as TaxCodeRow;
   return { ...row, rate: Number(row.rate) };
 }
+
+// ---------------------------------------------------------------------------
+// RESOLVER CÓDIGOS POR ID — lo que usa el servidor antes de escribir una línea
+// ---------------------------------------------------------------------------
+
+/** Un código resuelto: lo que la línea necesita para su snapshot. */
+export interface CodigoDeImpuestoResuelto {
+  id: string;
+  code: string;
+  rate: number;
+}
+
+/**
+ * Devuelve los códigos de impuesto ACTIVOS de este bufete para un conjunto de
+ * ids, o rechaza nombrando el problema.
+ *
+ * Existe porque la tasa de una línea de gasto (`expense_lines.tax_rate`) es un
+ * snapshot de `tax_codes.rate`, y el snapshot lo tiene que tomar el SERVIDOR,
+ * no la pantalla: un body puede mandar `tax_code_id` de ITBMS 7% con
+ * `tax_rate: 0` y, si se le creyera, la línea guardaría un impuesto que no es
+ * el del código que dice haber elegido. Es la doctrina de CLAUDE.md: el
+ * servidor es el permiso.
+ *
+ * ⚠️ Filtra por `tenant_id` aunque el id sea un uuid: la FK de
+ * `expense_lines.tax_code_id` es global, así que sin este filtro un id de otro
+ * bufete pasaría la base. Y filtra `active`: un código desactivado en
+ * Configuración → Impuestos no puede entrar en una línea nueva, aunque siga
+ * existiendo para las viejas.
+ *
+ * Devuelve un Map por id. Si falta alguno (no existe, no es de este tenant, o
+ * está inactivo) lanza `MutationError` 400 con los ids que faltaron.
+ */
+export async function resolverCodigosDeImpuesto(
+  db: SupabaseClient,
+  tenantId: string,
+  ids: readonly string[]
+): Promise<Map<string, CodigoDeImpuestoResuelto>> {
+  const unicos = Array.from(new Set(ids.filter((id) => id && id.trim() !== "")));
+  const resueltos = new Map<string, CodigoDeImpuestoResuelto>();
+  if (unicos.length === 0) return resueltos;
+
+  const { data, error } = await db
+    .from("tax_codes")
+    .select("id, code, rate")
+    .eq("tenant_id", tenantId)
+    .eq("active", true)
+    .in("id", unicos);
+
+  if (error) {
+    console.error("[finanzas] resolverCodigosDeImpuesto failed", error);
+    throw new MutationError("No se pudo leer el catálogo de impuestos", 500, error);
+  }
+
+  for (const t of (data ?? []) as { id: string; code: string; rate: number | string }[]) {
+    resueltos.set(t.id, { id: t.id, code: t.code, rate: Number(t.rate) });
+  }
+
+  const faltan = unicos.filter((id) => !resueltos.has(id));
+  if (faltan.length > 0) {
+    throw new MutationError(
+      "El impuesto elegido en alguna línea no existe o está inactivo en el catálogo " +
+        "de este bufete. Vuelva a elegirlo en el desplegable.",
+      400,
+      { ids: faltan }
+    );
+  }
+
+  return resueltos;
+}

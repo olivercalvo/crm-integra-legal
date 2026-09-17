@@ -39,6 +39,8 @@ export type ValidationResult<T> =
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const VALID_STATUSES: BusinessExpenseStatus[] = ["pendiente_pago", "pagado"];
+/** Tolerancia (B/.) del ITBMS de una línea contra `amount × tax_rate`. Espejo de trámite. */
+export const TOLERANCIA_IMPUESTO_LINEA = 0.02;
 const VALID_PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
   "efectivo",
   "transferencia",
@@ -199,23 +201,43 @@ export function validateCreateBusinessExpense(
     if (!Number.isFinite(amount) || amount <= 0) {
       errors[`lineas.${i}.amount`] = `Línea ${nro}: el monto tiene que ser mayor que cero.`;
     }
+    // El código de impuesto es OBLIGATORIO por línea (migración `045`), igual
+    // que en `validators/invoice.ts`. Acá solo la presencia y el formato: que
+    // exista, sea de este bufete y esté activo lo resuelve el servidor contra
+    // `tax_codes`, y de ahí saca la tasa que de verdad se guarda.
+    const taxCodeId = String(l.tax_code_id ?? "").trim();
+    if (!UUID_RE.test(taxCodeId)) {
+      errors[`lineas.${i}.tax_code_id`] = `Línea ${nro}: elija el impuesto.`;
+    }
     // La tasa de la línea se acota al rango que acepta la base
-    // (`business_expenses_tax_rate_range_check`: 0..1). NO se acota a la
-    // whitelist panameña {0, 7%, 10%, 15%}: el campo es numérico libre a
-    // propósito para que un comprobante con un redondeo distinto se pueda
-    // cargar tal como vino.
+    // (`expense_lines_tax_rate_rango`: 0..1). Es el snapshot que manda la
+    // pantalla para mostrar el total sin esperar; el servidor la reemplaza por
+    // la del catálogo.
     const lineaTaxRate = Number(l.tax_rate ?? 0);
     if (!Number.isFinite(lineaTaxRate) || lineaTaxRate < 0 || lineaTaxRate > 1) {
       errors[`lineas.${i}.tax_rate`] = `Línea ${nro}: la tasa de ITBMS va de 0 a 1 (0,07 = 7%).`;
     }
+    // El ITBMS se acepta como viene del comprobante —un proveedor puede
+    // redondear distinto— pero se verifica con tolerancia contra base × tasa,
+    // el mismo ±0,02 que `validators/expense-line.ts` aplica en trámite. Hasta
+    // el 16/09/2026 compras NO lo verificaba: cualquier importe pasaba.
     const lineaTaxAmount = Number(l.tax_amount ?? 0);
     if (!Number.isFinite(lineaTaxAmount) || lineaTaxAmount < 0) {
       errors[`lineas.${i}.tax_amount`] = `Línea ${nro}: el ITBMS no puede ser negativo.`;
+    } else if (Number.isFinite(amount) && amount > 0 && lineaTaxRate >= 0 && lineaTaxRate <= 1) {
+      const sugerido = round2(amount * lineaTaxRate);
+      // `+ 1e-9`: en coma flotante 1.77 − 1.75 da 0.020000000000000018.
+      if (Math.abs(lineaTaxAmount - sugerido) > TOLERANCIA_IMPUESTO_LINEA + 1e-9) {
+        errors[`lineas.${i}.tax_amount`] =
+          `Línea ${nro}: con esa tasa el ITBMS sería ${sugerido.toFixed(2)}. ` +
+          `Corríjalo o cambie el impuesto.`;
+      }
     }
     lineas.push({
       description: desc,
       chart_account_code: code === "" ? null : code,
       amount: round2(amount),
+      tax_code_id: taxCodeId,
       tax_rate: lineaTaxRate,
       tax_amount: round2(lineaTaxAmount),
     });

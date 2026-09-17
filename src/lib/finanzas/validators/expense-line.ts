@@ -46,6 +46,8 @@ export const MAX_LINEAS = 50;
 /** Tope por línea, el mismo orden de magnitud que el resto del módulo. */
 const MONTO_MAX = 9_999_999.99;
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 /** Largos de la descripción, espejo del CHECK de la base. */
 export const DESCRIPCION_MIN = 3;
 export const DESCRIPCION_MAX = 300;
@@ -55,6 +57,12 @@ export interface LineaValidada {
   line_order: number;
   description: string;
   chart_account_code: string;
+  /**
+   * OPCIONAL en trámite (migración `045`): las líneas históricas quedaron en
+   * NULL y el ITBMS de un gasto de trámite es pass-through, no crédito fiscal.
+   * En COMPRAS es obligatorio, y eso lo exige `validators/business-expense.ts`.
+   */
+  tax_code_id: string | null;
   amount: number;
   tax_rate: number;
   tax_amount: number;
@@ -65,14 +73,26 @@ export interface LineasValidadas {
   totales: TotalesDeGasto;
 }
 
-/** Una línea vacía para arrancar el editor. */
-export function lineaVacia(key: string, cuentaPorDefecto = CUENTA_TRAMITE_DEFAULT): ExpenseLineDraft {
+/**
+ * Una línea vacía para arrancar el editor.
+ *
+ * `impuestoPorDefecto` es el código de `tax_codes` precargado (id + tasa). En
+ * trámite es `EXENTO` (el ITBMS de un adelanto es pass-through); en compras es
+ * `ITBMS_7`, igual que `makeEmptyLine` en facturación. Sin él la línea arranca
+ * sin impuesto elegido y con tasa 0, que es lo que el editor mostraba antes.
+ */
+export function lineaVacia(
+  key: string,
+  cuentaPorDefecto = CUENTA_TRAMITE_DEFAULT,
+  impuestoPorDefecto: { id: string; rate: number } | null = null
+): ExpenseLineDraft {
   return {
     key,
     description: "",
     chart_account_code: cuentaPorDefecto,
     amount: "",
-    tax_rate: "0",
+    tax_code_id: impuestoPorDefecto?.id ?? "",
+    tax_rate: String(impuestoPorDefecto?.rate ?? 0),
     tax_amount: "0",
   };
 }
@@ -188,11 +208,18 @@ export function validarLineas(raw: readonly ExpenseLineDraft[]): ValidationResul
       }
     }
 
+    // — código de impuesto: opcional en trámite, pero si viene tiene forma de uuid —
+    const taxCodeId = l.tax_code_id?.trim() ?? "";
+    if (taxCodeId !== "" && !UUID_RE.test(taxCodeId)) {
+      errors[`${p}.tax_code_id`] = "Impuesto inválido";
+    }
+
     if (amount !== null && cuenta !== "") {
       lineas.push({
         line_order: i + 1,
         description: desc,
         chart_account_code: cuenta,
+        tax_code_id: taxCodeId === "" ? null : taxCodeId,
         amount: round2(amount),
         tax_rate: round2(tasa * 10000) / 10000,
         tax_amount: round2(impuesto),

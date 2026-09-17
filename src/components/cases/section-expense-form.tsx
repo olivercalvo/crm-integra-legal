@@ -18,6 +18,15 @@ import {
   totalesDeLineas,
   type ExpenseLineDraft,
 } from "@/lib/finanzas/types/expense-line";
+import type { TaxCodeOption } from "@/lib/finanzas/types/invoice";
+
+/**
+ * Impuesto precargado en una línea de gasto de trámite: `EXENTO`. El ITBMS de
+ * un adelanto por cuenta del cliente es pass-through —se refactura exento con
+ * los `REIM-*`— y no crédito fiscal, así que la línea nace sin impuesto y se
+ * cambia solo cuando el comprobante lo trae desglosado.
+ */
+const IMPUESTO_POR_DEFECTO_TRAMITE = "EXENTO";
 
 /** Un proveedor elegible, con su plazo para precargar el vencimiento. */
 export interface ProveedorOption {
@@ -33,6 +42,8 @@ interface SectionExpenseFormProps {
   cuentas?: CuentaOption[];
   /** Proveedores activos. El vencimiento sale de su `payment_terms_days`. */
   proveedores?: ProveedorOption[];
+  /** Códigos de `tax_codes` activos, los mismos que ve facturación (migración `045`). */
+  taxCodes?: TaxCodeOption[];
 }
 
 /**
@@ -55,7 +66,15 @@ export function SectionExpenseForm({
   sectionType,
   cuentas = [],
   proveedores = [],
+  taxCodes = [],
 }: SectionExpenseFormProps) {
+  // El default de impuesto resuelto contra el catálogo (id + tasa). Si el
+  // código no existe la línea arranca sin impuesto, que el servidor tolera en
+  // trámite.
+  const impuestoInicial = useMemo(() => {
+    const tc = taxCodes.find((t) => t.code === IMPUESTO_POR_DEFECTO_TRAMITE);
+    return tc ? { id: tc.id, rate: tc.rate } : null;
+  }, [taxCodes]);
   const router = useRouter();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -69,8 +88,8 @@ export function SectionExpenseForm({
   const expFileRef = useRef<HTMLInputElement>(null);
   const [expSupplier, setExpSupplier] = useState("");
   const [expDueDate, setExpDueDate] = useState("");
-  const [expLineas, setExpLineas] = useState<ExpenseLineDraft[]>([
-    lineaVacia("l0", CUENTA_TRAMITE_DEFAULT),
+  const [expLineas, setExpLineas] = useState<ExpenseLineDraft[]>(() => [
+    lineaVacia("l0", CUENTA_TRAMITE_DEFAULT, impuestoInicial),
   ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -113,7 +132,7 @@ export function SectionExpenseForm({
     if (expFileRef.current) expFileRef.current.value = "";
     setExpSupplier("");
     setExpDueDate("");
-    setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT)]);
+    setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial)]);
     setFieldErrors({});
     setShowExpenseForm(false);
     setError(null);
@@ -242,7 +261,7 @@ export function SectionExpenseForm({
               if (sectionType === "administrativo") {
                 setExpLineas([
                   {
-                    ...lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT),
+                    ...lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial),
                     amount: "21.50",
                   },
                 ]);
@@ -355,6 +374,8 @@ export function SectionExpenseForm({
             onChange={setExpLineas}
             cuentas={cuentas}
             cuentaPorDefecto={CUENTA_TRAMITE_DEFAULT}
+            taxCodes={taxCodes}
+            impuestoPorDefecto={IMPUESTO_POR_DEFECTO_TRAMITE}
             errors={fieldErrors}
             disabled={isPending}
           />

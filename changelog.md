@@ -1,5 +1,52 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [tax_code_id en las líneas de compra] - 2026-09-16
+
+Bloque aprobado por Oliver sobre el requerimiento de Josuarth del 25/08: en una factura de
+compra cada línea va gravada o exenta por separado, "igual que el formulario de facturación".
+
+**Lo primero que hay que decir es lo que la investigación encontró:** eso YA funcionaba.
+`expense_lines` nació en la `036` con `tax_rate` y `tax_amount` por línea, el editor tiene el
+desplegable desde el 10/09, el encabezado se deriva de las líneas desde el 09/09, el asiento suma
+línea por línea, y el caso exacto del internet estaba cargado en staging con su asiento #13
+correcto. El alcance se recortó a lo que faltaba de verdad: **el vínculo al catálogo**.
+
+### Migración `045` — `expense_lines.tax_code_id`
+
+FK real a `tax_codes`, como `invoice_lines`. Backfill **solo de líneas de compra** (tasa 0 →
+`EXENTO`, decisión de Oliver; tasa > 0 → el único código activo con esa tasa, o aborta) y
+`CHECK (business_expense_id IS NULL OR tax_code_id IS NOT NULL)` **validado**. Trámite no se toca:
+un UPDATE sobre sus 20 líneas históricas fallaría por el CHECK NOT VALID de la `037` y el trigger
+de la `038`. Staging: 10 líneas de compra (EXENTO ×7, ITBMS_7 ×3), 23 de trámite intactas, 19
+asientos intactos, idempotente. `sql/tests/verificacion-045-tax-code-id.sql` da 5/5 en ROLLBACK.
+
+### El servidor resuelve la tasa contra el catálogo
+
+`resolverCodigosDeImpuesto()` (`api/tax-codes.ts`) lee `tax_codes` por id + **tenant + activo** y
+la tasa que se guarda es la del catálogo, no la del body. El ITBMS tecleado se verifica contra
+`amount × tasa` con ±0,02 — **compras no lo verificaba** hasta hoy. Cuatro tests nuevos en
+`business-expense-gate.test.ts` y ocho en `compra-impuesto-por-linea.test.ts`.
+
+### El editor usa `TaxCodeSelect`, el de ventas
+
+`OPCIONES_DE_IMPUESTO` (lista fija) se retiró. Compras y trámite reciben `taxCodes` de
+`listTaxCodesActive()`; default `ITBMS_7` en compras, `EXENTO` en trámite. Y `listTaxCodesActive()`
+**ahora filtra `active`** — no lo hacía, con los tres códigos activos no cambia nada visible.
+
+### Resumen de ITBMS, Línea 5
+
+Sale de las líneas con `tax_amount > 0`, no del subtotal del encabezado. Para el internet: 25,00
+gravados, antes 35,00. Línea 6 no cambia.
+
+### El detalle de la compra muestra las líneas
+
+Tabla con descripción, cuenta, base, impuesto (nombre del código), ITBMS y total. Y el rótulo del
+encabezado deja de afirmar una tasa única: "ITBMS (7% sobre B/. 25.00)" en una mixta, "ITBMS
+(varias tasas)" si hay más de una.
+
+Detalle en `sop.md` SOP-028.
+
+
 ## [Cinco hallazgos del smoke test] - 2026-09-10
 
 Dos de ellos son patrones que ya habíamos decidido y habían quedado aplicados a medias.

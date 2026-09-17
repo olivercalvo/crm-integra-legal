@@ -15,6 +15,8 @@ import type {
   BusinessExpensePaymentMethod,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
+import { formatTaxRate } from "@/lib/finanzas/types/tax-code";
 import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
 import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 import type { AsientoInput } from "@/lib/finanzas/contabilidad/posting";
@@ -31,6 +33,13 @@ import { cargarPagoProveedorParaAsiento } from "@/lib/finanzas/queries/tesoreria
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+/**
+ * Tolerancia (B/.) del ITBMS de una línea contra `amount × tasa del catálogo`.
+ * El comprobante manda y un proveedor puede redondear distinto; ±0,02 es el
+ * mismo margen que el validador de trámite (`validators/expense-line.ts`).
+ */
+const TOLERANCIA_ITBMS = 0.02;
 
 type DB = SupabaseClient;
 
@@ -241,10 +250,41 @@ export async function createBusinessExpense(
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);
 
+  // 🔴 LA TASA DE CADA LÍNEA SALE DEL CATÁLOGO, NO DEL BODY (migración `045`).
+  //    El body trae `tax_code_id` (qué eligió la persona) y `tax_rate` (lo que
+  //    la pantalla usó para mostrar el total). Se le cree al id, nunca a la
+  //    tasa: se resuelve contra `tax_codes` —tenant, activo— y el snapshot que
+  //    se guarda es el del catálogo. Si el body trajera 7% con un id de EXENTO,
+  //    la línea se guarda exenta, y el ITBMS tecleado se rechaza abajo por no
+  //    calzar con la tasa real.
+  const codigos = await resolverCodigosDeImpuesto(
+    db,
+    tenantId,
+    input.lineas.map((l) => l.tax_code_id)
+  );
+  const lineas = input.lineas.map((l, i) => {
+    const codigo = codigos.get(l.tax_code_id);
+    if (!codigo) {
+      // `resolverCodigosDeImpuesto` ya rechazó los que faltan; esto es el tipo.
+      throw new MutationError(`Línea ${i + 1}: el impuesto elegido no está en el catálogo.`, 400);
+    }
+    const esperado = round2(l.amount * codigo.rate);
+    if (Math.abs(l.tax_amount - esperado) > TOLERANCIA_ITBMS + 1e-9) {
+      throw new MutationError(
+        `Línea ${i + 1} ("${l.description}"): el impuesto elegido es ${codigo.code} ` +
+          `(${formatTaxRate(codigo.rate)}), así que el ITBMS ` +
+          `sería ${esperado.toFixed(2)} y no ${l.tax_amount.toFixed(2)}. Corrija el ` +
+          `importe o cambie el impuesto.`,
+        400
+      );
+    }
+    return { ...l, tax_rate: codigo.rate };
+  });
+
   // Los totales del encabezado los calcula el SERVIDOR sumando las líneas, no
   // llegan del cliente: si llegaran, un cliente podría mandar un total que no
   // es la suma y el asiento no cuadraría contra su propio documento.
-  const { subtotal, taxAmount, taxRate } = importesDelEncabezado(input.lineas);
+  const { subtotal, taxAmount, taxRate } = importesDelEncabezado(lineas);
 
   const { data, error } = await db
     .from("business_expenses")
@@ -301,13 +341,15 @@ export async function createBusinessExpense(
 
   // ---- Las líneas -------------------------------------------------------
   const { error: errLineas } = await db.from("expense_lines").insert(
-    input.lineas.map((l, i) => ({
+    lineas.map((l, i) => ({
       tenant_id: tenantId,
       business_expense_id: compraId,
       line_order: i + 1,
       description: l.description,
       chart_account_code: l.chart_account_code,
       amount: l.amount,
+      tax_code_id: l.tax_code_id,
+      // Snapshot de `tax_codes.rate`, resuelto arriba. No es el del body.
       tax_rate: l.tax_rate,
       tax_amount: l.tax_amount,
     }))

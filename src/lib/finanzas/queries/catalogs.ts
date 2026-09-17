@@ -115,12 +115,23 @@ export async function listServicesActive(db: DB, tenantId: string): Promise<Serv
   }));
 }
 
-/** Tax codes activos. */
+/**
+ * Tax codes activos — los que se ofrecen al elegir el impuesto de una línea de
+ * factura, cotización, compra o gasto de trámite.
+ *
+ * ⚠️ Hasta el 16/09/2026 NO filtraba `active` a pesar del nombre: un código
+ * desactivado en Configuración → Impuestos seguía apareciendo en el
+ * desplegable de facturas. Se corrigió al reusar este loader para compras
+ * (migración `045`), y mientras los tres códigos estaban activos, así que no
+ * cambió nada visible. Las líneas YA cargadas con un código inactivo conservan
+ * su snapshot (`tax_code` + `tax_rate`); el filtro es solo para las nuevas.
+ */
 export async function listTaxCodesActive(db: DB, tenantId: string): Promise<TaxCodeOption[]> {
   const { data, error } = await db
     .from("tax_codes")
     .select("id, code, name, rate")
     .eq("tenant_id", tenantId)
+    .eq("active", true)
     .order("code");
 
   if (error) {

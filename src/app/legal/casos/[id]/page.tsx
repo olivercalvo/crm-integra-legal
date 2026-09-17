@@ -5,6 +5,7 @@ import { AddCommentForm } from "@/components/cases/add-comment-form";
 import { SectionExpenseForm } from "@/components/cases/section-expense-form";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
+import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { ExpenseRow } from "@/components/expenses/expense-actions";
 import { PaymentRow } from "@/components/expenses/payment-actions";
 import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
@@ -61,9 +62,11 @@ export default async function ExpedienteDetailPage({
   // Solo cuentas ACTIVAS: los reportes filtran por `active`, así que ofrecer una
   // inactiva sería ofrecer una clasificación que después no se ve en ningún lado.
   // La ruta de API lo vuelve a validar — el dropdown no es un permiso.
-  const [cuentasPlan, proveedores] = await Promise.all([
+  const [cuentasPlan, proveedores, taxCodes] = await Promise.all([
     listChartAccounts(db, tenantId),
     listSupplierOptions(db, tenantId),
+    // Los mismos códigos de impuesto que ve facturación (migración `045`).
+    listTaxCodesActive(db, tenantId),
   ]);
   const cuentasParaGastos = cuentasPlan
     .filter((c) => c.active)
@@ -655,6 +658,7 @@ export default async function ExpedienteDetailPage({
                   sectionType="tramite"
                   cuentas={cuentasParaGastos}
                   proveedores={proveedoresParaGastos}
+                  taxCodes={taxCodes}
                 />
               )}
 
@@ -752,6 +756,7 @@ export default async function ExpedienteDetailPage({
                   sectionType="administrativo"
                   cuentas={cuentasParaGastos}
                   proveedores={proveedoresParaGastos}
+                  taxCodes={taxCodes}
                 />
               )}
 

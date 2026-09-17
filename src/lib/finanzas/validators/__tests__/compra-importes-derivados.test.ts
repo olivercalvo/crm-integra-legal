@@ -35,14 +35,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { validateCreateBusinessExpense } from "@/lib/finanzas/validators/business-expense";
 
+/**
+ * Un id de código de impuesto plausible. Desde la migración `045` cada línea de
+ * compra lo lleva; acá el validador solo mira la forma (uuid) — que exista y
+ * qué tasa tiene lo resuelve el servidor contra `tax_codes`.
+ */
+const TAX_CODE_ID = "44444444-4444-4444-4444-444444444444";
+
 /** Una compra mínima válida. Los importes del encabezado NO se pasan a propósito. */
-function compra(lineas: {
+function compra(lineasSinCodigo: {
   description: string;
   chart_account_code: string;
   amount: number;
   tax_rate: number;
   tax_amount: number;
 }[]) {
+  const lineas = lineasSinCodigo.map((l) => ({ ...l, tax_code_id: TAX_CODE_ID }));
   return {
     expense_date: "2026-09-09",
     due_date: null,

@@ -19,7 +19,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { mapInvoiceToEfacturaRequest } from "@/lib/finanzas/efactura/mapper/map-invoice";
+import {
+  mapInvoiceToEfacturaRequest,
+  tipoDocumentoDeKind,
+} from "@/lib/finanzas/efactura/mapper/map-invoice";
 import type { EmisorConfig } from "@/lib/finanzas/efactura/config/emisor-config";
 import type {
   EfacturaBundleClient,
@@ -547,4 +550,51 @@ test("smoke: defaults DGI se inyectan desde EmisorConfig", () => {
   assert.equal(req.datosGenerales.tipoDocumento, "01");
   assert.equal(req.datosGenerales.puntoFacturacion, "001");
   assert.equal(req.datosGenerales.numeroDocumento, 1);
+});
+
+// ---------------------------------------------------------------------------
+// tipoDocumento se deriva de invoice_kind (17/09/2026)
+// ---------------------------------------------------------------------------
+// Confirmado por ideati (Eduardo Méndez, PM): "09" Factura de Reembolso está
+// habilitado en todas las cuentas y ambientes, sin validación adicional. Hasta
+// hoy TODO salía como "01": 34 FAC-REI-* llegaron a la DGI como operación
+// interna. Josuarth decidió no corregirlas.
+
+test("tipoDocumento: HONORARIOS → 01, REEMBOLSO → 09, derivado del invoice_kind", () => {
+  const hon = mapInvoiceToEfacturaRequest({
+    bundle: bundle(),
+    emisor: emisor(),
+    sequence,
+    options: { fechaEmision: fechaFija },
+  });
+  assert.equal(hon.datosGenerales.tipoDocumento, "01");
+
+  const rei = mapInvoiceToEfacturaRequest({
+    bundle: bundle({
+      invoice: { invoice_kind: "REEMBOLSO", invoice_number: "FAC-REI-000001" },
+    }),
+    emisor: emisor(),
+    sequence,
+    options: { fechaEmision: fechaFija },
+  });
+  assert.equal(rei.datosGenerales.tipoDocumento, "09");
+});
+
+test("tipoDocumento: el override explícito sigue mandando (notas de crédito/débito)", () => {
+  const req = mapInvoiceToEfacturaRequest({
+    bundle: bundle({ invoice: { invoice_kind: "REEMBOLSO" } }),
+    emisor: emisor(),
+    sequence,
+    options: { fechaEmision: fechaFija, tipoDocumento: "04" },
+  });
+  assert.equal(req.datosGenerales.tipoDocumento, "04");
+});
+
+test("tipoDocumentoDeKind es exhaustivo y no acepta un kind desconocido", () => {
+  assert.equal(tipoDocumentoDeKind("HONORARIOS"), "01");
+  assert.equal(tipoDocumentoDeKind("REEMBOLSO"), "09");
+  assert.throws(
+    () => tipoDocumentoDeKind("OTRO" as unknown as "HONORARIOS"),
+    /invoice_kind desconocido/
+  );
 });

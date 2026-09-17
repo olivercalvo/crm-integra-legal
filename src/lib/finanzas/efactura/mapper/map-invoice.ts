@@ -14,8 +14,10 @@ import type {
   InvoiceRequest,
 } from "@/lib/finanzas/efactura/types";
 import { TIPO_DOCUMENTO, TIPO_EMISION } from "@/lib/finanzas/efactura/types";
+import type { TipoDocumento } from "@/lib/finanzas/efactura/types";
 import type { EmisorConfig } from "@/lib/finanzas/efactura/config/emisor-config";
 import type { InvoiceEfacturaBundle } from "@/lib/finanzas/efactura/data/invoice-efactura-bundle";
+import type { InvoiceKind } from "@/lib/finanzas/types/invoice";
 import { mapEmisor } from "./map-emisor";
 import { mapReceptor } from "./map-receptor";
 import { mapItem } from "./map-item";
@@ -32,8 +34,39 @@ export interface MapInvoiceOptions {
    * o string `'YYYY-MM-DD'` que se interpreta como medianoche Panamá.
    */
   fechaEmision?: Date | string;
-  /** Override del tipoDocumento. Default '01' (factura operación interna). */
-  tipoDocumento?: string;
+  /**
+   * Override del tipoDocumento. Sin él se deriva de `invoice.invoice_kind`
+   * con `tipoDocumentoDeKind()`. Reservado para notas de crédito/débito, que
+   * no son un `invoice_kind`.
+   */
+  tipoDocumento?: TipoDocumento;
+}
+
+/**
+ * El tipo de documento DGI que corresponde a cada tipo de factura del CRM.
+ *
+ *   HONORARIOS → "01" Factura de operación interna
+ *   REEMBOLSO  → "09" Factura de reembolso
+ *
+ * Hasta el 17/09/2026 TODO salía como "01", incluidas las FAC-REI-*: 34
+ * facturas de reembolso llegaron a la DGI como operación interna. Josuarth
+ * decidió que NO se corrigen (ideati dice que técnicamente sería nota de
+ * crédito + reemisión) porque el ITBMS y la DJR se presentaron bien.
+ *
+ * Es una función y no un mapa suelto para que el `switch` exhaustivo falle en
+ * compilación el día que aparezca un tercer `invoice_kind`.
+ */
+export function tipoDocumentoDeKind(kind: InvoiceKind): TipoDocumento {
+  switch (kind) {
+    case "HONORARIOS":
+      return TIPO_DOCUMENTO.FACTURA_OPERACION_INTERNA;
+    case "REEMBOLSO":
+      return TIPO_DOCUMENTO.FACTURA_REEMBOLSO;
+    default: {
+      const nunca: never = kind;
+      throw new Error(`[efactura/mapper] invoice_kind desconocido: ${String(nunca)}`);
+    }
+  }
 }
 
 export interface MapInvoiceParams {
@@ -81,7 +114,7 @@ export function mapInvoiceToEfacturaRequest(
   const datosGenerales: DatosGenerales = {
     tipoEmision: options?.tipoEmision ?? TIPO_EMISION.NORMAL,
     tipoDocumento:
-      options?.tipoDocumento ?? TIPO_DOCUMENTO.FACTURA_OPERACION_INTERNA,
+      options?.tipoDocumento ?? tipoDocumentoDeKind(invoice.invoice_kind),
     numeroDocumento: sequence.numeroDocumento,
     puntoFacturacion: sequence.puntoFacturacion,
     fechaEmision,

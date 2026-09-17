@@ -16,6 +16,7 @@ import type {
   InvoiceLineInput,
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
+import { INVOICE_KIND_LABEL } from "@/lib/finanzas/types/invoice";
 
 export type ValidationErrors = Record<string, string>;
 
@@ -190,3 +191,122 @@ export function calcTotalsClient(lines: Pick<InvoiceLineInput, "quantity" | "uni
     grandTotal: round2(subtotal + taxTotal),
   };
 }
+
+// ---------------------------------------------------------------------------
+// CONSISTENCIA invoice_kind ↔ service_type (17/09/2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * `service_type` de `services_catalog`, tal como lo necesita esta comparación.
+ * No es el `ServiceOption` completo del catálogo: solo lo que hace falta para
+ * decidir si el servicio combina con el tipo de factura, para que el mismo
+ * objeto se pueda construir tanto desde `ServiceOption[]` en el cliente como
+ * desde el SELECT server-side (`resolverServiciosPorId`, en `queries/catalogs.ts`).
+ */
+export interface ServicioParaConsistenciaDeKind {
+  code: string;
+  name: string;
+  service_type: string;
+}
+
+/** El `service_type` que le corresponde a cada `invoice_kind`. */
+const SERVICE_TYPE_ESPERADO: Record<InvoiceKind, string> = {
+  HONORARIOS: "honorarios",
+  REEMBOLSO: "reembolso",
+};
+
+/**
+ * Josuarth Torres, por correo el 17/09/2026: *"Las facturas de reembolso solo
+ * deben ser usadas para la facturación de lo que realmente representa un
+ * reembolso de gasto y es exenta del impuesto."* En producción aparecieron
+ * tres facturas FAC-REI-* con líneas HON-COR adentro — julio y agosto de 2026.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * POR DÓNDE ENTRÓ, Y POR QUÉ ESTO SE VALIDA ACÁ Y NO SOLO EN EL PICKER
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El desplegable de servicio (`ServiceCombobox`, `filterKind`) YA filtra: si la
+ * factura es HONORARIOS solo ofrece `service_type='honorarios'`, y viceversa.
+ * Eso resuelve una línea NUEVA. No resuelve la línea que YA estaba elegida
+ * cuando alguien cambia el "Tipo de documento" del encabezado después: el
+ * `<select>` de `invoice-form.tsx` no tiene ningún efecto que reaccione a ese
+ * cambio, así que la línea vieja queda huérfana y nadie lo nota hasta que el
+ * documento ya se emitió. Ese es el hueco por el que entraron las tres.
+ *
+ * Cotizaciones YA resolvió el mismo problema, un nivel más abajo: en
+ * `quote-lines-editor.tsx`, `onKindChange()` limpia el `service_id` de una
+ * línea cuando su servicio deja de combinar con el kind (por-línea, ahí). Acá
+ * es la misma idea pero contra el encabezado (una decisión, N líneas).
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * BLOQUEO DURO, EN LOS DOS SENTIDOS
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Josuarth pidió "una alerta". Se decidió bloqueo duro (Oliver, 17/09/2026):
+ * una advertencia que se puede ignorar es el mismo mecanismo por el que ya
+ * pasó tres veces. La consecuencia es fiscal (la serie REI se declara exenta
+ * ante la DGI), no cosmética. Y el caso espejo —honorarios con una línea
+ * REIM-* adentro— se bloquea con la misma regla, sin costo aparte: es
+ * exactamente lo que el filtro del combobox ya intenta para líneas nuevas.
+ *
+ * ⚠️ Una línea "Personalizada" (`service_id: null`) no tiene `service_type`:
+ * queda FUERA de este control a propósito, igual que hoy queda fuera del
+ * filtro del combobox. No hay cómo clasificar texto libre.
+ *
+ * Función PURA: no toca la base. El caller arma `serviciosPorId` — en el
+ * cliente, desde el array `services` que ya tiene en memoria; en el servidor,
+ * con `resolverServiciosPorId()` contra `services_catalog`, filtrado por
+ * tenant. Así la MISMA regla corre en los dos lados sin duplicar lógica de
+ * negocio — lo único que cada lado repite es armar el Map.
+ */
+export function validarConsistenciaDeKind(
+  lineas: readonly Pick<InvoiceLineInput, "service_id">[],
+  serviciosPorId: ReadonlyMap<string, ServicioParaConsistenciaDeKind>,
+  invoiceKind: InvoiceKind
+): ValidationErrors {
+  const errors: ValidationErrors = {};
+  const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
+  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
+
+  lineas.forEach((ln, i) => {
+    if (!ln.service_id) return; // Personalizada: sin service_type, no se juzga.
+    const svc = serviciosPorId.get(ln.service_id);
+    if (!svc || svc.service_type === esperado) return;
+
+    const otroKind: InvoiceKind = invoiceKind === "HONORARIOS" ? "REEMBOLSO" : "HONORARIOS";
+    errors[`lines.${i}.service`] =
+      `Este servicio es de ${INVOICE_KIND_LABEL[otroKind]}; una factura de ${kindLabel} no puede llevarlo.`;
+  });
+
+  return errors;
+}
+
+/**
+ * El motivo único para el banner de arriba del formulario (SOP-027: un solo
+ * motivo, el próximo paso, con el elemento concreto nombrado). Nombra la
+ * PRIMERA línea con problema — no la lista completa — porque corregirla es lo
+ * que hay que hacer antes de mirar cualquier otra cosa.
+ */
+export function motivoDeInconsistenciaDeKind(
+  lineas: readonly Pick<InvoiceLineInput, "description" | "service_id">[],
+  serviciosPorId: ReadonlyMap<string, ServicioParaConsistenciaDeKind>,
+  invoiceKind: InvoiceKind
+): string | null {
+  const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
+  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
+  const otroKind: InvoiceKind = invoiceKind === "HONORARIOS" ? "REEMBOLSO" : "HONORARIOS";
+
+  for (let i = 0; i < lineas.length; i++) {
+    const ln = lineas[i];
+    if (!ln.service_id) continue;
+    const svc = serviciosPorId.get(ln.service_id);
+    if (!svc || svc.service_type === esperado) continue;
+
+    return (
+      `No se puede guardar: la línea ${i + 1} (${svc.code} · ${svc.name}) es un servicio de ` +
+      `${INVOICE_KIND_LABEL[otroKind]}, y esta factura es de ${kindLabel} — una factura de ` +
+      `${kindLabel.toLowerCase()} solo puede llevar líneas de ${kindLabel.toLowerCase()}. ` +
+      `Cambie el servicio de esa línea, o cambie el Tipo de documento a ${INVOICE_KIND_LABEL[otroKind]}.`
+    );
+  }
+  return null;
+}
+

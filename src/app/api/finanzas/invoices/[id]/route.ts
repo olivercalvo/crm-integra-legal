@@ -38,7 +38,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     if (err instanceof InvoiceMutationError) {
       console.error("[finanzas] updateInvoice failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json(
+        { error: err.message, ...(err.fieldErrors ? { fieldErrors: err.fieldErrors } : {}) },
+        { status: err.status }
+      );
     }
     console.error("[finanzas] updateInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

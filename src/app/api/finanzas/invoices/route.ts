@@ -37,7 +37,10 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof InvoiceMutationError) {
       console.error("[finanzas] createInvoice failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json(
+        { error: err.message, ...(err.fieldErrors ? { fieldErrors: err.fieldErrors } : {}) },
+        { status: err.status }
+      );
     }
     console.error("[finanzas] createInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

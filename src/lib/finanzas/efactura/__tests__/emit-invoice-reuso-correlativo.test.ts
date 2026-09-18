@@ -275,7 +275,7 @@ function makeBackend(overrides?: Partial<Backend>): Backend {
     invoice: {
       id: INVOICE_ID,
       invoice_number: "FAC-REI-000039",
-      invoice_kind: "REEMBOLSABLES",
+      invoice_kind: "REEMBOLSO",
       status: "emitida",
       fe_estado: "no_emitida",
       punto_facturacion: null,
@@ -346,7 +346,7 @@ test("el siguiente intento REUSA el mismo número (D-3) sin volver a allocar", a
     invoice: {
       id: INVOICE_ID,
       invoice_number: "FAC-REI-000039",
-      invoice_kind: "REEMBOLSABLES",
+      invoice_kind: "REEMBOLSO",
       status: "emitida",
       fe_estado: "no_emitida",
       punto_facturacion: null,
@@ -386,7 +386,7 @@ test("un número YA autorizado (con CUFE) NUNCA se re-emite ni se re-allocatea (
     invoice: {
       id: INVOICE_ID,
       invoice_number: "FAC-REI-000006",
-      invoice_kind: "REEMBOLSABLES",
+      invoice_kind: "REEMBOLSO",
       status: "emitida",
       fe_estado: "authorized",
       punto_facturacion: "051",

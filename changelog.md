@@ -1,5 +1,28 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [HOTFIX] - 2026-09-18 - Tipo 09 para reembolsos + gate invoice_kind ↔ service_type
+
+Branch `hotfix/tipo-09-y-gate-de-mezcla`, desde `main` (`d5ac249`). Tres commits de `develop`
+traídos con `cherry-pick -x`, sin el resto del trabajo de contabilidad que todavía no sale:
+
+| Origen en `develop` | Qué trae |
+|---|---|
+| `5e695ff` | Una factura de REEMBOLSO no puede llevar líneas de honorarios, ni al revés. Bloqueo duro en `createInvoice`/`updateInvoice` (`validarConsistenciaDeKind`, SOP-029), con el selector de servicios filtrado por `invoice_kind` en el formulario |
+| `780bda0` | La factura de reembolso sale a la DGI como `tipoDocumento` `09` (antes salía como `01`, igual que honorarios). Confirmado por ideati y autorizado en sandbox |
+| `30deedf` | El mismo gate también al EMITIR, releyendo las líneas desde la base y antes de consumir el correlativo. Cubre los borradores guardados antes de que existiera la validación |
+
+**Pre-flight en producción (18/09, Oliver, dos `SELECT` puros):** un solo borrador quedará
+bloqueado al emitir — `DRAFT-e5385c80985e` del 14/07/2026 (CLI-117), marcado REEMBOLSO con una
+línea HON-COR. Se da por abandonado; se le avisa a Milena, no se corrige por script. El catálogo
+solo tiene `honorarios` y `reembolso`, así que ningún servicio queda fuera de los dos tipos.
+
+**Resolución del cherry-pick:** en `invoices.ts` solo entra el import de `validators/invoice`
+(los de `contabilidad/*` no existen en `main`); `emit-invoice-asiento.test.ts` no viene porque
+prueba el asiento al emitir (`722eaed`), que no forma parte de este hotfix. Los `.md` quedan
+como en `main` salvo esta entrada.
+
+**Rollback:** Instant Rollback de Vercel al deploy anterior. No hay migración de base.
+
 ## [FEAT] - 2026-08-24 (2) - El asistente tampoco crea tareas + guard de propiedad al cumplirlas
 
 Branch `develop`. Cierra el pendiente que había quedado abierto en la entrada anterior de hoy.

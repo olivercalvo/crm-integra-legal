@@ -12,7 +12,10 @@ import { InvoiceLineItems, makeEmptyLine } from "./invoice-line-items";
 import { InvoiceTotalsCard } from "./invoice-totals-card";
 import {
   validateCreateInvoice,
+  validarConsistenciaDeKind,
+  motivoDeInconsistenciaDeKind,
   type ValidationErrors,
+  type ServicioParaConsistenciaDeKind,
 } from "@/lib/finanzas/validators/invoice";
 import {
   INVOICE_KIND_LABEL,
@@ -158,8 +161,22 @@ export function InvoiceForm(props: Props) {
     };
 
     const validation = validateCreateInvoice(payload);
-    if (!validation.ok) {
-      setErrors(validation.errors);
+
+    // 🔴 invoice_kind ↔ service_type, en el CLIENTE (17/09/2026). Misma
+    // función pura que corre en el servidor (`validarConsistenciaDeKind`,
+    // `api/invoices.ts`) — acá arma el Map desde `props.services`, que ya
+    // está en memoria, en vez de resolverlo contra la base. El servidor no le
+    // cree a este chequeo: es solo para no gastar un round-trip.
+    const serviciosPorId = new Map<string, ServicioParaConsistenciaDeKind>(
+      props.services.map((s) => [s.id, { code: s.code, name: s.name, service_type: s.service_type }])
+    );
+    const kindErrors = validarConsistenciaDeKind(payload.lines, serviciosPorId, kind);
+
+    if (!validation.ok || Object.keys(kindErrors).length > 0) {
+      setErrors({ ...(validation.ok ? {} : validation.errors), ...kindErrors });
+      if (Object.keys(kindErrors).length > 0) {
+        setSubmitError(motivoDeInconsistenciaDeKind(payload.lines, serviciosPorId, kind));
+      }
       // Scrollear al primer error visible
       requestAnimationFrame(() => {
         document.querySelector("[data-error='true']")?.scrollIntoView({

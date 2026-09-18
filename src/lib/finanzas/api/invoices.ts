@@ -441,20 +441,45 @@ export async function emitInvoice(
   // 2. Validación de líneas: el trigger T8b mantiene los totales pero NO
   //    obliga a que existan líneas al emitir. Acá la app lo hace cumplir
   //    para evitar facturas emitidas con grand_total=0.
-  const { count: lineCount, error: errCount } = await db
+  //
+  //    Se leen las líneas enteras (no solo el count) porque el paso 2b las
+  //    necesita: `service_id` y `description`, en el orden de la factura.
+  const { data: lineasRaw, error: errLineas } = await db
     .from("invoice_lines")
-    .select("id", { count: "exact", head: true })
+    .select("service_id, description, line_order")
     .eq("tenant_id", tenantId)
-    .eq("invoice_id", invoiceId);
-  if (errCount) {
-    throw new InvoiceMutationError(pgErrorToMessage(errCount), 500, errCount);
+    .eq("invoice_id", invoiceId)
+    .order("line_order", { ascending: true });
+  if (errLineas) {
+    throw new InvoiceMutationError(pgErrorToMessage(errLineas), 500, errLineas);
   }
-  if (!lineCount || lineCount === 0) {
+  const lineas = (lineasRaw ?? []) as { service_id: string | null; description: string }[];
+  if (lineas.length === 0) {
     throw new InvoiceMutationError(
       "La factura no tiene líneas. Agregue al menos una antes de emitir.",
       400
     );
   }
+
+  // 2b. 🔴 invoice_kind ↔ service_type TAMBIÉN AL EMITIR (18/09/2026).
+  //
+  //     `createInvoice` y `updateInvoice` ya lo validan (SOP-029), pero un
+  //     borrador guardado ANTES de que existiera esa validación —o escrito por
+  //     otro camino— llegaba acá sin que nadie lo mirara, y emitir es el último
+  //     punto antes de que el documento sea irreversible: el número se consume
+  //     en el paso 3 y, con el tipo 09 en el mapper, una REI con una línea de
+  //     honorarios saldría a la DGI rotulada como reembolso exento con ITBMS
+  //     adentro.
+  //
+  //     Misma función pura que el resto (`validarLineasContraKind` →
+  //     `validarConsistenciaDeKind`), releyendo las líneas desde la base. Va
+  //     ANTES del correlativo para que un rechazo no queme un número.
+  await validarLineasContraKind(
+    db,
+    tenantId,
+    inv.invoice_kind as InvoiceKind,
+    lineas
+  );
 
   // 3. Llamar a la RPC SECURITY DEFINER del schema. Devuelve el INT del
   //    siguiente número en la secuencia.

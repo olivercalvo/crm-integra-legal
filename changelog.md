@@ -1,5 +1,27 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El gate invoice_kind ↔ service_type también al EMITIR] - 2026-09-18
+
+Cierra el hueco que apareció al evaluar llevar el tipo 09 a producción: `validarLineasContraKind`
+corría en `createInvoice` y `updateInvoice` (SOP-029), pero **no en `emitInvoice`**. Un borrador
+guardado antes de que existiera la validación —o escrito por otro camino— llegaba a emitirse sin
+que nadie lo mirara, y emitir es el último punto antes de que el documento sea irreversible ante
+la DGI: con el tipo 09 en el mapper, una REI con una línea de honorarios saldría rotulada como
+reembolso exento con ITBMS adentro.
+
+- `emitInvoice` relee las líneas (`service_id`, `description`, en orden) y llama a **la misma**
+  `validarLineasContraKind` → `validarConsistenciaDeKind`. No hay variante para emitir; hay un
+  test estructural que cuenta las llamadas.
+- Va **antes** de `get_next_sequence_number`: un rechazo no quema un correlativo. El test lo
+  verifica (el RPC no se llama).
+- 5 tests nuevos en `invoice-kind-gate-al-emitir.test.ts`. El fixture de
+  `emit-invoice-asiento.test.ts` se completó con `name` y `service_type` (NOT NULL en la tabla
+  real; faltaban).
+
+**971/971.** Es el tercer commit del hotfix a `main` que está en evaluación (con `5e695ff` y
+`780bda0`); acá entra a `develop` porque no toca producción.
+
+
 ## [eFactura: la factura de reembolso sale como tipo 09] - 2026-09-17
 
 eFactura queda **descongelado** por la respuesta de ideati (Eduardo Méndez, PM, por correo el

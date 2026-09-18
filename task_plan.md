@@ -5,6 +5,10 @@
 **Estado:** construido, probado en el SANDBOX del PAC (autorizada como tipo 09), en `develop`.
 **Producción NO se toca: no hay merge a `main`. Oliver decide cuándo va.**
 
+**18/09:** el gate invoice_kind ↔ service_type se agregó también a `emitInvoice` (commit propio en
+develop, va en el hotfix). Análisis de portabilidad a `main` aprobado por Oliver; pendiente el
+pre-flight en producción (dos SELECT) y su decisión. Ver el changelog del 18/09.
+
 Respuesta de ideati (Eduardo Méndez, PM) por correo el 17/09/2026: `tipoDocumento "09"` es
 Factura de Reembolso, habilitado en todas las cuentas y ambientes incluido pruebas; sin
 validación adicional; mismos datos que una operación interna; no referencia documentos

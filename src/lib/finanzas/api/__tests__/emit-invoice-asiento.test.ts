@@ -89,7 +89,11 @@ function fake(g: Guion) {
         };
       case "services_catalog":
         return {
-          data: [{ id: "svc-1", code: "HON-COR", revenue_account: "400001" }],
+          // `name` y `service_type` son NOT NULL en la tabla real; el gate
+          // invoice_kind ↔ service_type de emitInvoice (18/09) los lee.
+          data: [
+            { id: "svc-1", code: "HON-COR", name: "Honorarios corporativos", service_type: "honorarios", revenue_account: "400001" },
+          ],
           error: null,
         };
       case "chart_of_accounts":

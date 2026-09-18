@@ -28,7 +28,6 @@ import { MutationError } from "@/lib/finanzas/api/errors";
 
 const TENANT = "a0000000-0000-0000-0000-000000000001";
 const INVOICE = "11111111-1111-1111-1111-111111111111";
-const USER = "22222222-2222-2222-2222-222222222222";
 
 const CATALOGO = [
   { id: "hon-cor", code: "HON-COR", name: "Honorarios corporativos", service_type: "honorarios" },
@@ -89,9 +88,9 @@ function fake(g: Guion) {
     from: (n: string) => tabla(n),
     rpc: async (fn: string) => {
       reg.rpcs.push(fn);
-      // Si el gate deja pasar, el flujo sigue hacia el asiento; para estos tests
+      // Si el gate deja pasar, el flujo sigue hacia el UPDATE a emitida; para estos tests
       // alcanza con que el correlativo NO se pida. Se corta acá con un error
-      // reconocible para no simular todo el posteo.
+      // reconocible para no simular la emisión completa.
       return { data: null, error: { message: "corte-de-test", code: "TEST" } };
     },
   };
@@ -116,7 +115,7 @@ test("🔴 borrador REEMBOLSO con una línea HON-COR: 400 al emitir, y NO consum
       { service_id: "hon-cor", description: "Honorarios corporativos", line_order: 1 },
     ],
   });
-  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE, db as never, USER));
+  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE));
   assert.equal(e.status, 400);
   assert.match(e.message, /línea 2 \(HON-COR · Honorarios corporativos\) es un servicio de Honorarios/);
   assert.match(e.message, /esta factura es de Reembolso/);
@@ -132,7 +131,7 @@ test("el caso espejo: borrador HONORARIOS con una línea REIM-JUD también se re
     kind: "HONORARIOS",
     lineas: [{ service_id: "reim-jud", description: "Tasa judicial", line_order: 0 }],
   });
-  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE, db as never, USER));
+  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE));
   assert.equal(e.status, 400);
   assert.match(e.message, /línea 1 \(REIM-JUD · Reembolso de gastos judiciales\) es un servicio de Reembolso/);
   assert.deepEqual(reg.rpcs, []);
@@ -146,7 +145,7 @@ test("todo combina (o la línea es Personalizada): el gate deja pasar y recién 
       { service_id: null, description: "Personalizada sin servicio", line_order: 1 },
     ],
   });
-  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE, db as never, USER));
+  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE));
   // Llegó al RPC del correlativo (el fake lo corta a propósito): el gate no lo frenó.
   assert.deepEqual(reg.rpcs, ["get_next_sequence_number"]);
   assert.doesNotMatch(e.message, /solo puede llevar líneas/);
@@ -154,7 +153,7 @@ test("todo combina (o la línea es Personalizada): el gate deja pasar y recién 
 
 test("sin líneas sigue siendo el rechazo de siempre, antes del gate y del correlativo", async () => {
   const { db, reg } = fake({ kind: "REEMBOLSO", lineas: [] });
-  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE, db as never, USER));
+  const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE));
   assert.equal(e.status, 400);
   assert.match(e.message, /no tiene líneas/);
   assert.deepEqual(reg.rpcs, []);

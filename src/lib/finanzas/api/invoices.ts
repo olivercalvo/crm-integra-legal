@@ -39,7 +39,9 @@ type DB = SupabaseClient;
  * factura, filtrado por TENANT. Es lo que le da a `validarConsistenciaDeKind()`
  * (módulo puro, sin base) algo contra qué comparar, resuelto por el servidor y
  * no por lo que mande el body — mismo criterio que `resolverCodigosDeImpuesto`
- * en `api/tax-codes.ts` (migración `045`, la semana pasada).
+ * en `api/tax-codes.ts` (migración `045`, 16/09/2026, en `develop`; este helper
+ * viajó solo a `main` en el hotfix del 18/09, así que ahí esa referencia no
+ * existe todavía).
  *
  * ⚠️ `services_catalog.id` NO tiene FK compuesta con tenant_id (es un FK
  * global, igual que `expense_lines.tax_code_id` antes de esa migración). Sin

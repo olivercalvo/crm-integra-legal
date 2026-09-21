@@ -1,5 +1,17 @@
 # FINDINGS.MD — CRM INTEGRA LEGAL
 
+## FND-005: El seed de staging "resucitaba" un cobro reversado
+**Fecha:** 2026-09-21
+**Contexto:** Bloque 2 (recibo de caja). Se corrió `npm run seed:staging` para probar la llamada a `backfill_payment_numbers` y, al abrir el listado de facturas en el deploy, FAC-HON-000002 aparecía "Pago parcial · saldo 605" — el 17/09 su cobro de B/. 1,000.00 se había reversado (asiento 21) y la factura había quedado *Emitida*, saldo 1,605.
+**Hallazgo:**
+- `seedPayments()` decide por existencia de filas con id determinista: si falta la `payment_application`, la inserta. Desde la migración `046` reversar un cobro **borra sus aplicaciones** y deja el cobro `anulado`, así que para el seed un cobro reversado se ve como "cobro con la aplicación perdida" y la vuelve a crear.
+- T7a hizo el resto: `amount_paid` 0 → 1,000, `emitida` → `parcialmente_pagada`. El libro seguía diciendo que la plata se devolvió (asiento 21). Dos verdades opuestas, la clase de divergencia que la reversión existe para impedir.
+- Verificado en la base: `REC-000003 anulado apps=1 revs=1`, con la aplicación creada a las 15:59 del 21/09 (la hora del seed).
+**Impacto:** Solo staging (el seed no corre contra producción). Pero cualquier corrida del seed después de una reversión deshacía la reversión sin avisar, y era el paso previo a verificar la reversión en pantalla.
+**Decisión:** El estado del cobro manda. `seedPayments()` lee `payments.status` del cobro existente y si es `anulado` no toca ni la aplicación ni nada (`reversadosRespetados`, se cuenta en el resumen). Staging se restauró borrando SOLO esa aplicación (T7a devolvió la factura a *Emitida*, 0.00 / 1,605.00) y el seed corrido de nuevo reportó "1 reversado en staging, sin tocar". Anotado en SOP-030.
+
+---
+
 ## FND-001: Datos del Excel con inconsistencias
 **Fecha:** 2026-04-02
 **Contexto:** Análisis del archivo REGISTRO_DE_EXPEDIENTES_OFICINA_INTEGRA_LEGAL-2026.xlsx

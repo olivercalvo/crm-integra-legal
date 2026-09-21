@@ -2265,3 +2265,7 @@ mal, no la pantalla**: se corrige ahí y cambia en los dos lados.
   contador lo reabre en `/finanzas/periodos` y vuelve a intentar. No se postea con otra fecha.
 - El cobro reversado no aparece en la factura → `payment_reversals` vacía para ese cobro. El
   RPC es el único que escribe ahí; si la fila no está, la reversión no ocurrió.
+- *En staging, una factura reversada vuelve a "Pago parcial" después de correr el seed* → es
+  FND-005 (21/09/2026): el seed veía la aplicación borrada por la reversión y la volvía a crear.
+  Desde ese día `seedPayments()` respeta los cobros `anulado` y lo dice en el resumen ("N
+  reversados en staging, sin tocar"). Si vuelve a pasar, revisar que ese guard siga ahí.

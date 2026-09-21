@@ -1045,6 +1045,7 @@ async function seedFinanzas(): Promise<void> {
  */
 async function seedPayments(): Promise<void> {
   let nuevos = 0;
+  let reversadosRespetados = 0;
   const facturaPorNumero = new Map(SEED_INVOICES.map((i) => [numeroDeFactura(i), i]));
 
   for (const p of SEED_PAYMENTS) {
@@ -1119,6 +1120,25 @@ async function seedPayments(): Promise<void> {
       if (errBanco) throw new Error(`banco del pago ${p.clave}: ${errBanco.message}`);
     }
 
+    // 🔴 UN COBRO REVERSADO SE QUEDA REVERSADO. Desde la 046 reversar borra las
+    //    `payment_applications` y deja el cobro `anulado`; si el seed viera
+    //    "falta la aplicación" y la volviera a crear, T7a marcaría la factura
+    //    como cobrada otra vez mientras el libro dice que la plata se devolvió.
+    //    Pasó el 21/09/2026 con REC-000003 / FAC-HON-000002. El estado del
+    //    cobro manda: `anulado` → ni aplicación ni nada.
+    if (existe) {
+      const { data: estado, error: errEstado } = await db
+        .from("payments")
+        .select("status")
+        .eq("id", pagoId)
+        .single();
+      if (errEstado) throw new Error(`pago ${p.clave} — status: ${errEstado.message}`);
+      if (estado.status === "anulado") {
+        reversadosRespetados++;
+        continue;
+      }
+    }
+
     // La aplicación. ACÁ es donde T7a recalcula `amount_paid` y transiciona el
     // status de la factura.
     const aplicacionId = id(`payment_application:${p.clave}`);
@@ -1144,7 +1164,10 @@ async function seedPayments(): Promise<void> {
 
   console.log(
     `✅ Pagos — ${nuevos} nuevos, ${SEED_PAYMENTS.length - nuevos} ya existían` +
-      ` (T7a derivó \`amount_paid\` y el status de cada factura cobrada)`
+      ` (T7a derivó \`amount_paid\` y el status de cada factura cobrada)` +
+      (reversadosRespetados > 0
+        ? ` · ${reversadosRespetados} reversado${reversadosRespetados === 1 ? "" : "s"} en staging, sin tocar`
+        : "")
   );
 
   // 🔑 EL NÚMERO DE RECIBO (migración `047`). Los INSERT de arriba no lo

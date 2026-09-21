@@ -9,6 +9,19 @@
 
 ---
 
+## FND-009: "Marcar como pagada" escribe una columna que `business_expenses` no tiene — y lo hace DESPUÉS de postear
+**Fecha:** 2026-09-21
+**Contexto:** Plan del Bloque 3 (pagos a proveedores). Al verificar contra el código y contra staging lo que se iba a afirmar.
+**Hallazgo:**
+- `markBusinessExpenseAsPaid` (`api/business-expenses.ts`, cableado el 04/09) hace `UPDATE business_expenses SET status='pagado', payment_date, payment_method, payment_account_code`. **`business_expenses` no tiene `payment_account_code`**: la 036 se la agregó a `expenses` (gastos de trámite) y la 041 a `payments` (cobros). El tipo `PagoProveedorParaAsiento` dice textual "`business_expenses.payment_account_code`, que existe desde la `036`" — es el origen de la confusión. Verificado con `information_schema.columns` en staging: la columna no está.
+- PostgREST rechaza el UPDATE con columna desconocida, así que el botón **falla siempre**. Y falla en el peor orden: el asiento del pago ya se posteó (es inmutable) y la compra sigue `pendiente_pago`. Un clic deja el libro diciendo que se pagó y el documento diciendo que no — exactamente la divergencia que el orden "asiento antes del UPDATE" quería evitar en la compra, invertida acá.
+- Evidencia de que nadie lo apretó nunca: el libro de staging tiene **cero** asientos `pago_proveedor` (7 `factura`, 7 `gasto`, 1 `gasto_tramite`, 3 `manual`, 6 `pago`, 3 `reversion`), y las tres compras `pagado` de staging tienen `payment_date` pero ningún asiento de pago (son del seed o de antes del cableado). `scripts/verificar-asiento-tesoreria.ts` (04/09) probó SOLO el lado del cobro; el changelog de ese día lo dice ("cinco pasos, con un cobro nuevo").
+- En producción (`main`) `markBusinessExpenseAsPaid` no postea nada ni escribe esa columna: es un UPDATE de `status`/`payment_date`/`payment_method`. Allá el botón funciona, sin libro.
+**Impacto:** Solo `develop`/staging, y solo ese botón. Ninguna compra quedó a medias porque nadie lo usó. Pero es un botón vivo en el deploy de staging que, apretado, postea un asiento huérfano.
+**Decisión:** No se parchea suelto: el Bloque 3 reemplaza `markBusinessExpenseAsPaid` por un pago como entidad (`supplier_payments`), con el banco en el PAGO y no en la compra, y con el orden del cobro (INSERT del pago → asiento → DELETE compensatorio). Hasta que llegue, el botón queda como está y se anota acá. El comentario del tipo se corrige en ese bloque.
+
+---
+
 ## FND-008: `render-pantalla.mts` "no se podía conectar" al deploy — era Git Bash
 **Fecha:** 2026-09-21
 **Contexto:** Verificación de roles contra el deploy (contador y asistente). El 17/09 el script había fallado tres veces con *"No se pudo conectar"* mientras un fetch idéntico desde otro script funcionaba, y quedó anotado sin investigar.

@@ -1,5 +1,175 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> RETOMAR ACÁ — BLOQUE 3: PAGOS A PROVEEDORES — PLAN — 21/09/2026 <<<
+
+**Estado:** PLAN, no código. Cada afirmación verificada contra `develop` (`8bfefdc`) y contra la base
+de staging el 21/09. Reglas de Josuarth (21/09): **pago parcial SÍ; un pago cubre UNA compra, no
+varias.** O sea: varios pagos por compra, cada pago apunta a una sola compra. Sin tabla N:M.
+
+### 🔴 Lo que no calza con el código, ANTES del plan (FND-009)
+
+`markBusinessExpenseAsPaid` escribe `business_expenses.payment_account_code`, **columna que no
+existe** (la 036 la puso en `expenses`, la 041 en `payments`). El botón "Marcar como pagada" de
+staging falla siempre, y falla DESPUÉS de postear el asiento del pago. Nadie lo apretó: cero
+asientos `pago_proveedor` en el libro. Detalle en `findings.md`. Este bloque lo reemplaza; no se
+parchea aparte.
+
+### 1. El estado de la compra y `amount_paid`
+
+- **Tabla nueva `supplier_payments`** (el pago como entidad): `id`, `tenant_id`,
+  `business_expense_id` (FK, NO ACTION: no se borra una compra con pagos), `payment_number`
+  (`CE-000001`, ver §2), `payment_date`, `amount > 0`, `method` (mismo CHECK que `payments`),
+  `payment_account_code` (**el banco vive en el PAGO**, que es lo que FND-009 pedía), `reference`,
+  `notes`, `status` (`registrado` | `anulado`), `created_by`, timestamps. Índices por tenant, compra
+  y fecha; RLS por tenant. UNIQUE parcial `(tenant_id, payment_number)`.
+- **`business_expenses.amount_paid`** nueva, **derivada por trigger** — el mismo criterio que T7a en
+  facturas (`amount_paid` no se escribe, se escribe el PAGO): `AFTER INSERT/UPDATE/DELETE` en
+  `supplier_payments` recalcula `amount_paid = SUM(amount) WHERE status = 'registrado'` y deriva el
+  estado: `0 → pendiente_pago`, `0 < x < total → parcialmente_pagado`, `≥ total → pagado`. Y un
+  guard como T4b que rechaza escribir `amount_paid` desde fuera del trigger (con la misma válvula
+  de escape de SOP-017 para restauraciones).
+- **CHECK de `status`** re-declarado con los tres valores. **`payment_date_consistency`** se
+  reescribe: hoy obliga `payment_date NULL` en `pendiente_pago`; pasa a ser
+  `payment_date` = la fecha del ÚLTIMO pago registrado (la escribe el trigger) o NULL sin pagos, y
+  `parcialmente_pagado` la admite. `payment_method` en la compra queda como legado (el método
+  vive en el pago); no se dropea en este bloque.
+- **Por qué trigger y no cálculo en la app:** es la lección de `invoices.amount_paid` (CLAUDE.md
+  §5): un `status` escrito a mano y un `amount_paid` sumado en la app divergen el día que dos
+  caminos escriben distinto. Con el trigger, la reversión (que marca el pago `anulado`) devuelve
+  la compra sola, igual que T7a al borrar las aplicaciones.
+- **Backfill (migración `048`)**: por cada compra `pagado` que hoy no tiene pagos, se crea UN
+  `supplier_payment` por el `total`, con `payment_date` (o `expense_date` si es NULL),
+  `payment_method` de la compra, `payment_account_code` NULL y **sin asiento** — exactamente como
+  quedaron los cobros anteriores al cableado del 04/09 (se ven, se eliminan, no se reversan). Así
+  `amount_paid` cierra y nada cambia de estado. En staging son 3; en producción, la mayoría (el
+  default de `status` en la 010 era `'pagado'`), y allá tampoco tienen asiento porque `main` no
+  postea compras. Pre-flight de prod en el encabezado de la 048.
+
+### 2. Qué se reusa del módulo de cobros, y qué NO
+
+| | Se reusa | Cómo / por qué no |
+|---|---|---|
+| **Numeración** | ✅ el patrón | Secuencia `'supplier_payment'` en `numbering_sequences` (CHECK re-declarado con OCHO valores: los siete de la 047 + este), `numbering/supplier-payment-numbering.ts` calcando `receipt-numbering.ts`, formato **`CE-000001`** (comprobante de egreso). ⚠️ El prefijo es propuesta: si Josuarth usa otro nombre, es cambiar una constante. Backfill numerado por `payment_date, created_at, id`, función `backfill_supplier_payment_numbers(tenant)` que el seed también llama |
+| **"El número antes del INSERT" y el hueco** | ✅ tal cual | `createSupplierPayment`: validaciones → correlativo → INSERT del pago (con número) → asiento → DELETE compensatorio si falla. Sin aplicaciones que borrar: más simple que el cobro. Mismo hueco aceptado, misma frase en SOP-031 (se le agrega el lado pago) |
+| **Formulario compartido** | ✅ el componente, con etiquetas | `PaymentFormFields` con una prop `direccion: "cobro" \| "pago"` que cambia tres rótulos ("Banco donde entró el cobro" → "Banco de donde salió el pago", "Fecha del pago", "Monto"). Los campos son los mismos seis. El test estructural gana una lista `PUERTAS_PAGO` |
+| **Reparto / multi** | ❌ | Regla 4 de Josuarth: un pago = una compra. `repartirPorAntiguedad` no se toca ni se importa |
+| **PDF** | ✅ el patrón, ❌ el documento | `ensure-supplier-payment-pdf.ts` calca `ensure-receipt-pdf.ts` (documents `entity_type='supplier_payment'`, `source='auto_supplier_payment_pdf'` — la 048 extiende los dos CHECK), hash con la misma serialización. El documento es otro: **"COMPROBANTE DE EGRESO"**, proveedor con **RUC y DV separados de `suppliers`** (ahí sí se llama `dv`), la compra con su `supplier_invoice_number`, fecha, método, banco, asiento, "Pagado en este comprobante / Saldo de la compra después", banda REVERSADO. Ruta `GET /api/finanzas/supplier-payments/[id]/pdf`, roles = PDF de compra (admin, abogada, contador; el contador tiene CRUD en Gastos del Bufete) |
+| **Asiento** | ✅ el builder, con el input cambiado | Ver §5 |
+| **Reversión** | ✅ el helper puro y el diálogo; ❌ el RPC | Ver §3 |
+| **Listado propio** | ❌ en este bloque | No hay `/finanzas/pagos`. Los pagos se ven y se registran en el detalle de la compra (sección "Pagos", espejo de "Pagos registrados" de la factura). Un listado de egresos es un bloque aparte, cuando el bufete lo pida — el módulo de cobros nació igual, desde la factura |
+| **`client_payments`** | ❌ | No se cruza. Es Legal |
+
+### 3. La reversión
+
+- **`construirAsientoDeReversion` (`contabilidad/reversion.ts`) sirve TAL CUAL.** Es genérico:
+  recibe cualquier `AsientoAReversar` (líneas, fecha, descripción, referencia) y un `source_id`, y
+  devuelve el espejo con `source_type='reversion'` y `reverses_entry_id`. No sabe qué es un cobro.
+  Verificado el 21/09.
+- **Lo que NO sirve es el RPC `reverse_payment` (046):** es específico de cobros — lee
+  `payments`, fotografía y borra `payment_applications`, exige `source_type='pago'`. Hace falta
+  **`reverse_supplier_payment`** (migración `048`), más corto que el de cobros porque no hay
+  aplicaciones: candado sobre el pago, verificar el espejo contra las dos líneas del original
+  (mismo bloque `EXCEPT ALL`), postear con `post_journal_entry`, `UPDATE supplier_payments SET
+  status='anulado'` (el trigger de §1 recalcula la compra). Todo en una transacción, con la
+  verificación SQL en ROLLBACK incluida la falla forzada tras el posteo, como la 046. Sin tabla de
+  fotos: no hay nada que se borre.
+- **El diálogo `reverse-payment-dialog.tsx` se reusa** con una prop `endpoint` (hoy tiene la URL
+  del cobro fija) — el test `reversion-una-sola-implementacion.test.ts` sigue leyendo el mismo
+  archivo. La vista previa es la misma función.
+- **`deleteSupplierPayment`**: sin asiento se elimina, con asiento 409 → reversar. Mismo gate.
+
+### 4. `markBusinessExpenseAsPaid`: se REEMPLAZA
+
+- El botón "Marcar como pagada" pasa a ser **"Registrar pago"**, en el mismo lugar del detalle de
+  la compra, con el mismo modal (hoy es un modal propio, no `ConfirmationModal`; se migra a
+  `PaymentFormFields` dentro de `ConfirmationModal` como el diálogo del cobro) **más el campo
+  monto, precargado con el saldo**. Pagar todo sigue siendo un clic: el monto ya viene puesto.
+  Pagar una parte es cambiar el número. "Máximo permitido: el saldo".
+- `POST /api/finanzas/business-expenses/[id]/mark-paid` **se elimina** y nace
+  `POST /api/finanzas/business-expenses/[id]/payments` (+ `DELETE` y `/reverse` en
+  `/api/finanzas/supplier-payments/[id]`). No se mantiene atajo: la ruta vieja está rota (FND-009)
+  y ningún otro código la llama (verificado: solo `business-expense-actions.tsx`).
+- **Compras ya `pagado`:** en staging y en producción, el backfill de §1 les crea su pago sin
+  asiento. No cambian de estado ni de fecha. Si un día hay que reversar una de esas, primero se le
+  registra el pago de verdad (con banco y asiento) y se elimina el sintético — es el mismo camino
+  que tienen los cobros viejos.
+- El comentario de `PagoProveedorParaAsiento` ("existe desde la 036") se corrige.
+
+### 5. El asiento
+
+`construirAsientoDePagoProveedor` ya arma lo correcto (DEBE 200001 / HABER banco) pero parte de la
+COMPRA: `compra_id`, `total`, `source_id = compra`, `idempotency_key = pago-proveedor:<compra>`.
+Con varios pagos por compra eso rompe dos cosas: el UNIQUE de la 034 `(source_type, source_id)`
+impediría el segundo pago, y `total` no es el monto pagado. Cambia a partir del PAGO:
+- input `PagoProveedorParaAsiento` → `{ pago_id, payment_number, compra: {id, description,
+  supplier_name, supplier_invoice_number}, amount, payment_date, payment_account_code,
+  banco_valido }`; `source_id = pago_id`; `idempotency_key = pago-proveedor:<pago_id>`;
+  **`reference = payment_number`** (`CE-…`, el mismo criterio que el cobro); monto = `amount` del
+  pago, no `total`.
+- `cargarPagoProveedorParaAsiento` deja de recibir fecha y banco por parámetro: relee el pago
+  insertado, como `cargarCobroParaAsiento`.
+- `source_type` sigue `pago_proveedor` (042). **El Libro Mayor** (`loadDestinosDeOrigen`) hoy manda
+  `pago_proveedor` a `/finanzas/gastos-bufete/<source_id>` asumiendo que es la compra: pasa a
+  resolver pago → compra (un lookup en `supplier_payments`), y el espejo por `reverses_entry_id`.
+  **El Diario General** no tiene rótulo para `pago_proveedor` (`DOCUMENTO_DE` solo conoce
+  `factura`, `nota_credito`, `gasto`, `pago`): se agrega `supplier_payments.payment_number`.
+- Los tests de `asiento-tesoreria.test.ts` del lado pago se reescriben con el input nuevo.
+
+### 6. La antigüedad de cuentas por pagar — qué se vuelve simétrico
+
+- `gastosPendientes` deja de filtrar `status = 'pendiente_pago'` y pasa a `status <> 'pagado'`
+  con saldo `total − amount_paid` (hoy muestra el total entero; con pago parcial mentiría).
+- `sinAsientoPagar` gana el lado **"pagos sin asiento"** que hoy es `{0, 0}` a mano: pagos
+  `registrado` sin asiento `pago_proveedor`, contados una vez, igual que `sinAsientoCobrar` con
+  `payment_applications` — más simple porque acá no hay N:M. El texto de la diferencia del Aging
+  ("apertura − documentos sin asiento + cobros sin asiento") gana el término de pagos del lado
+  pagar. Después del backfill, los pagos sintéticos SON "pagos sin asiento" y la diferencia los
+  explica, como hoy explica los 150.00 del cobro sin asiento del 04/09.
+- El Estado de Cuenta por proveedor lista movimientos por `supplier_payments` (fecha, referencia,
+  método) en vez de la `payment_date` de la compra, simétrico al cliente.
+- El comentario "el pago de un gasto no es una entidad propia" se borra: ya lo es.
+
+### 7. Commits y verificación
+
+1. `048_pagos_a_proveedores.sql`: `supplier_payments` + RLS, `amount_paid` + trigger + guard,
+   CHECK de `status` y `payment_date_consistency`, secuencia `'supplier_payment'` (ocho valores),
+   backfill (compras pagadas → un pago sintético; numeración), `documents` CHECK, RPC
+   `reverse_supplier_payment`. `sql/tests/verificacion-048-*.sql` en ROLLBACK (trigger en los tres
+   estados, guard, backfill idempotente, RPC con falla forzada). Inventario + orden de staging.
+2. Servidor: `createSupplierPayment` / `deleteSupplierPayment` / `reverseSupplierPayment`, el
+   asiento desde el pago (§5), numeración, validador, rutas nuevas, `mark-paid` eliminado. Tests
+   del gate (fake-db, calcados de `payments-gate`), del asiento, de roles.
+3. Reportes: antigüedad (§6), Mayor, Diario, Estado de Cuenta. Tests.
+4. Pantalla: sección "Pagos" en el detalle de la compra (número, fecha, monto, método, banco,
+   asiento, Comprobante PDF, Eliminar/Reversar), "Registrar pago" con `PaymentFormFields`
+   (`direccion="pago"`), badges del estado nuevo en listado y detalle. **← primer commit de
+   interfaz: parar y preguntar por la extensión.**
+5. PDF del comprobante de egreso + ruta + botón.
+6. Docs: changelog, SOP-032 (pagos a proveedores: parcial sí, uno por compra, banco en el pago,
+   hueco), productdesign, CLAUDE.md (regla + fila del contador), handoff.
+
+**Verificación en pantalla, clic real, como abogada y como contador (el contador tiene CRUD en
+compras):**
+- Compra pendiente de 1,000: pago de 400 → `CE-000004`, asiento DEBE 200001 / HABER banco 400,
+  compra *Parcialmente pagada*, saldo 600 en el detalle y en la antigüedad.
+- Segundo pago por el saldo precargado (600, un clic) → *Pagada*, `amount_paid` 1,000.
+- Pago mayor al saldo → rechazado en pantalla nombrando el saldo.
+- Comprobante PDF: RUC y DV del proveedor separados, N° de factura del proveedor, saldo después.
+- Reversar el de 400 con clic real: espejo, pago tachado, compra vuelve a *Parcialmente pagada*
+  (600 pagados), antigüedad la lista con saldo 400.
+- Eliminar uno de los pagos sintéticos del backfill (sin asiento) → 200; reversarlo → no se ofrece.
+- Mayor: el asiento del pago abre la compra; Diario: columna Documento con `CE-…`.
+- Aging por pagar: la diferencia explica los pagos sintéticos sin asiento.
+
+**Sin migración a producción. `main` no se toca.**
+
+### 📌 Para Josuarth (no bloquea el arranque)
+
+- ¿Cómo llama el bufete al documento del pago a proveedor: "comprobante de egreso" (`CE-`) u otro?
+  Es una constante.
+- Sigue abierta la del excedente del cliente (anticipos), de la Parte B.
+
+
 ## >>> RESPUESTAS DE JOSUARTH — 21/09/2026 — ANOTADAS TEXTUALES ANTES DE TOCAR NADA <<<
 
 Transmitidas por Oliver el 21/09/2026. Definen dos bloques. Se copian tal cual llegaron:

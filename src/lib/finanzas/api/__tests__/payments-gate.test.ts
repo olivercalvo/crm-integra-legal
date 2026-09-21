@@ -27,10 +27,20 @@ interface Guion {
   postea?: "ok" | { code: string; message: string };
   bancoValido?: boolean;
   fallaApp?: boolean;
+  /** La secuencia 'payment' no existe (047 sin aplicar). */
+  sinSecuencia?: boolean;
 }
 
 function fake(g: Guion) {
-  const reg = { borrados: [] as string[], insertados: [] as string[], posteos: 0 };
+  const reg = {
+    borrados: [] as string[],
+    insertados: [] as string[],
+    posteos: 0,
+    /** Cada `get_next_sequence_number`, con su tipo de secuencia. */
+    correlativos: [] as string[],
+    /** Lo que se insertó en `payments`, para mirar el `payment_number`. */
+    payloadPago: null as Record<string, unknown> | null,
+  };
 
   const tabla = (nombre: string) => {
     const q: Record<string, unknown> = {};
@@ -41,8 +51,9 @@ function fake(g: Guion) {
     q.order = () => resolver(nombre);
     q.maybeSingle = async () => resolverUno(nombre);
     q.single = async () => resolverUno(nombre);
-    q.insert = () => {
+    q.insert = (payload?: Record<string, unknown>) => {
       reg.insertados.push(nombre);
+      if (nombre === "payments" && payload) reg.payloadPago = payload;
       if (nombre === "payment_applications" && g.fallaApp) {
         const res = { data: null, error: { message: "boom", code: "23514" } };
         return {
@@ -118,11 +129,21 @@ function fake(g: Guion) {
 
   const db = {
     from: (n: string) => tabla(n),
-    rpc: async (fn: string) => {
+    rpc: async (fn: string, args?: Record<string, unknown>) => {
       if (fn === "post_journal_entry") {
         reg.posteos++;
         if (!g.postea || g.postea === "ok") return { data: "je-1", error: null };
         return { data: null, error: g.postea };
+      }
+      if (fn === "get_next_sequence_number") {
+        reg.correlativos.push(String(args?.p_sequence_type));
+        if (g.sinSecuencia) {
+          return {
+            data: null,
+            error: { code: "P0002", message: "Secuencia payment no existe para tenant" },
+          };
+        }
+        return { data: 12, error: null };
       }
       return { data: null, error: null };
     },
@@ -204,8 +225,64 @@ test("caso feliz: se registra, se aplica, se postea, y no se deshace nada", asyn
   const { db, reg } = fake({ postea: "ok" });
   const r = await createPayment(db as never, TENANT, USER, INPUT, db as never);
   assert.equal(r.id, PAGO);
+  assert.equal(r.payment_number, "REC-000012");
   assert.equal(reg.posteos, 1);
   assert.deepEqual(reg.borrados, []);
+});
+
+// ---------------------------------------------------------------------------
+// El número de recibo (047)
+// ---------------------------------------------------------------------------
+
+test("el correlativo sale de la secuencia 'payment' y va DENTRO del INSERT del cobro", async () => {
+  const { db, reg } = fake({ postea: "ok" });
+  await createPayment(db as never, TENANT, USER, INPUT, db as never);
+  assert.deepEqual(reg.correlativos, ["payment"], "una sola vez, de la secuencia correcta");
+  assert.equal(reg.payloadPago?.payment_number, "REC-000012");
+  // No hay un UPDATE posterior que lo escriba: si el INSERT falla, el número no
+  // queda colgado de ninguna fila.
+  assert.equal(reg.insertados.indexOf("payments"), 0);
+});
+
+test("un pedido rechazado en validación NO consume número (sin banco)", async () => {
+  const { db, reg } = fake({});
+  await assert.rejects(() =>
+    createPayment(db as never, TENANT, USER, { ...INPUT, payment_account_code: null }, db as never)
+  );
+  assert.deepEqual(reg.correlativos, [], "se corta antes del correlativo");
+});
+
+test("un monto sobre el saldo NO consume número", async () => {
+  const { db, reg } = fake({});
+  await assert.rejects(() =>
+    createPayment(db as never, TENANT, USER, { ...INPUT, amount: 99999 }, db as never)
+  );
+  assert.deepEqual(reg.correlativos, []);
+  assert.deepEqual(reg.insertados, []);
+});
+
+test("🔴 si el asiento falla, el cobro se deshace pero el número YA se consumió: queda un HUECO (decisión consciente, SOP-031)", async () => {
+  const { db, reg } = fake({ postea: { code: "P0001", message: "cerrado" } });
+  await assert.rejects(() => createPayment(db as never, TENANT, USER, INPUT, db as never));
+  assert.deepEqual(reg.correlativos, ["payment"], "el número se tomó antes del INSERT");
+  assert.deepEqual(reg.borrados, ["payments"], "y el cobro se borró igual");
+  // No hay forma de devolver el número: la secuencia no tiene rollback. Es el
+  // mismo criterio que emitInvoice. Este test existe para que el hueco sea un
+  // hecho documentado y no una sorpresa.
+});
+
+test("sin la secuencia 'payment' (047 sin aplicar) → 500 que nombra la migración, y no se inserta nada", async () => {
+  const { db, reg } = fake({ sinSecuencia: true });
+  await assert.rejects(
+    () => createPayment(db as never, TENANT, USER, INPUT, db as never),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 500);
+      assert.match(e.message, /047/);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, []);
+  assert.equal(reg.posteos, 0);
 });
 
 test("🔴 si el posteo falla, el cobro se BORRA y el error sube", async () => {

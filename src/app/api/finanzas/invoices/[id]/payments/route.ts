@@ -60,7 +60,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       //    contexto autenticado, nunca del body.
       createAdminClient()
     );
-    return NextResponse.json({ id: result.id }, { status: 201 });
+    // El número de recibo viaja en la respuesta para el toast ("Recibo REC-000012
+    // registrado") y para el enlace al PDF.
+    return NextResponse.json(
+      { id: result.id, payment_number: result.payment_number },
+      { status: 201 }
+    );
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] createPayment failed:", err.message, err.detail);

@@ -28,6 +28,7 @@ import {
 import { cargarCobroParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { getAsientoDeCobro } from "@/lib/finanzas/queries/payments";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { allocateReceiptNumber } from "@/lib/finanzas/numbering/receipt-numbering";
 
 type DB = SupabaseClient;
 
@@ -37,7 +38,13 @@ type DB = SupabaseClient;
  * Flujo (compensating delete pattern):
  *   1. Lookup invoice: validar que existe, mismo tenant, está en estado
  *      facturable (emitida / parc_pagada). Validar amount ≤ balance_due.
- *   2. INSERT payment (status='registrado', amount_unapplied=amount via T7c).
+ *   1b. EL NÚMERO DE RECIBO: `get_next_sequence_number(tenant, 'payment')` →
+ *      `REC-000012`. Va DESPUÉS de todas las validaciones (un pedido mal
+ *      formado no consume número) y ANTES del INSERT (va dentro del mismo
+ *      INSERT). Si algo falla de acá en adelante, el número queda consumido y
+ *      hay un HUECO: decisión consciente, ver `numbering/receipt-numbering.ts`
+ *      y SOP-031.
+ *   2. INSERT payment (status='registrado', payment_number, amount_unapplied=amount via T7c).
  *   3. INSERT payment_application (amount_applied=amount). T7a recalcula
  *      invoice.amount_paid + transiciona status. T7b deja amount_unapplied=0.
  *   4. Si paso 3 falla → DELETE payment compensatorio (T6 lo permite porque
@@ -91,7 +98,7 @@ export async function createPayment(
    * libro sin que nadie se entere. Al ser obligatorio, lo impide el compilador.
    */
   ledgerDb: DB
-): Promise<{ id: string }> {
+): Promise<{ id: string; payment_number: string }> {
   // 🔴 EL BANCO, ANTES DE TOCAR LA BASE. Se valida acá y no solo al armar el
   //    asiento para no llegar a insertar un cobro que después habría que
   //    deshacer: si falta el dato, el pedido está mal formado y se corta.
@@ -137,11 +144,26 @@ export async function createPayment(
     );
   }
 
+  // 1b. EL NÚMERO DE RECIBO. Última cosa antes de escribir: todo lo que podía
+  //     rechazar el pedido ya pasó, así que un 400 no quema un correlativo.
+  //     De acá en adelante, una falla deja un hueco (ver el encabezado).
+  let paymentNumber: string;
+  try {
+    paymentNumber = await allocateReceiptNumber(db, tenantId);
+  } catch (err) {
+    throw new MutationError(
+      "No se pudo asignar el número de recibo. ¿Está aplicada la migración 047 en esta base?",
+      500,
+      err
+    );
+  }
+
   // 2. INSERT payment
   const { data: payment, error: errPay } = await db
     .from("payments")
     .insert({
       tenant_id: tenantId,
+      payment_number: paymentNumber,
       client_id: inv.client_id,
       payment_date: input.payment_date,
       amount: input.amount,
@@ -229,7 +251,7 @@ export async function createPayment(
     );
   }
 
-  return { id: paymentId };
+  return { id: paymentId, payment_number: paymentNumber };
 }
 
 /**

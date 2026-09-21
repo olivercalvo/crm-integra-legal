@@ -4,6 +4,17 @@
 
 ---
 
+## Nota del 21/09/2026 — FND-009 y producción
+
+**Producción NO está afectada por FND-009.** El "Marcar como pagada" roto es el de `develop`
+(cableado el 04/09 con el asiento del pago). `main` (`24b227a`) tiene la versión anterior: un
+UPDATE de `status`/`payment_date`/`payment_method`, sin `postJournalEntry` y sin la columna
+inexistente. Allá el botón funciona, sin libro. Verificado con `git show origin/main`. El Bloque 3
+lo reemplaza en `develop`; plan en `task_plan.md`.
+
+---
+
+
 ## Cierre del 21/09/2026 (noche) — Parte B construida: un recibo aplicado a varias facturas
 
 **SHA de la app en staging: `57a6592`** — deployment `dpl_2aDTa19h9rephTQZq6UbVsmn8tRW`, READY.

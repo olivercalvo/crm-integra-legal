@@ -37,13 +37,36 @@ parchea aparte.
   §5): un `status` escrito a mano y un `amount_paid` sumado en la app divergen el día que dos
   caminos escriben distinto. Con el trigger, la reversión (que marca el pago `anulado`) devuelve
   la compra sola, igual que T7a al borrar las aplicaciones.
-- **Backfill (migración `048`)**: por cada compra `pagado` que hoy no tiene pagos, se crea UN
-  `supplier_payment` por el `total`, con `payment_date` (o `expense_date` si es NULL),
-  `payment_method` de la compra, `payment_account_code` NULL y **sin asiento** — exactamente como
-  quedaron los cobros anteriores al cableado del 04/09 (se ven, se eliminan, no se reversan). Así
-  `amount_paid` cierra y nada cambia de estado. En staging son 3; en producción, la mayoría (el
-  default de `status` en la 010 era `'pagado'`), y allá tampoco tienen asiento porque `main` no
-  postea compras. Pre-flight de prod en el encabezado de la 048.
+- **Backfill (migración `048`) — OBJECIÓN DE OLIVER APLICADA (21/09):** por cada compra `pagado`
+  sin pagos se crea UN `supplier_payment` por el `total`, pero **NO es un pago: es un SALDO
+  HEREDADO**. Sin número, sin banco, sin método, sin comprobante. Motivo (Oliver): en cobros los
+  cobros existentes eran reales y numerarlos era darle su recibo a algo que pasó; acá la mayoría
+  de las compras están en `pagado` por el default de la 010 (y en staging, las tres nacieron
+  `pagado` en el alta, sin pago detrás — verificado en `audit_log`). Un `CE-000001` para eso es un
+  documento inventado que terminaría impreso frente a un proveedor o a la DGI.
+  **Cómo se identifica: una columna `kind`** en `supplier_payments`, `'payment'` |
+  `'migrated_balance'`, con CHECK que ata las dos cosas: `migrated_balance` ⇒ `payment_number`,
+  `payment_account_code` y `method` en NULL; `payment` ⇒ `payment_number` NOT NULL. Por qué una
+  columna y no un valor especial: (a) el CHECK lo hace imposible de violar —un saldo heredado no
+  puede tener número ni banco ni por error—; (b) `payment_number IS NULL` solo no alcanza para
+  distinguirlo, porque un cobro anterior a la 047 también lo tenía en NULL; (c) las consultas son
+  `WHERE kind = 'payment'` y no una adivinanza; (d) es lo que ya hace `documents.source`
+  (`manual` vs `auto_*_pdf`) para decir de dónde salió una fila. Consecuencias, todas en el plan:
+  el PDF responde 409 *"Este movimiento es un saldo heredado de la migración, no un pago
+  registrado: no hay comprobante"*; la pantalla lo muestra como **"Saldo heredado de la migración"**
+  con la fecha y sin botón de comprobante ni de reversar; **se puede ELIMINAR** (es la corrección
+  honesta si la compra en realidad nunca se pagó: la compra vuelve a `pendiente_pago`); la
+  antigüedad los cuenta aparte como "saldos heredados", no como "pagos sin asiento". El backfill de
+  numeración ignora los `migrated_balance`. En staging son 3; en producción, la mayoría, y allá
+  tampoco tienen asiento porque `main` no postea compras. Pre-flight de prod en la 048.
+- **Compras que nacen pagadas en el alta** (hoy el formulario lo permite y así nacieron las tres
+  de staging): con el modelo nuevo, "ya está pagada" en el alta significa **registrar el pago al
+  crear** —fecha, método y BANCO obligatorio— y el servidor crea la compra y después el pago con su
+  asiento (si el pago falla, la compra queda `pendiente_pago`: es la verdad). Ya no existe una
+  compra `pagado` sin un `supplier_payment` detrás.
+- **Regla de trabajo de este bloque (Oliver, 21/09, por FND-009):** cada columna que se toque se
+  verifica contra `information_schema.columns`, no contra un comentario. Un comentario que mienta
+  sobre el esquema se corrige al pasar.
 
 ### 2. Qué se reusa del módulo de cobros, y qué NO
 

@@ -16,6 +16,7 @@ import {
 } from "@/lib/finanzas/pdf/supplier-payment-pdf-data";
 
 const BUNDLE: SupplierPaymentPdfBundle = {
+  documento_kind: "compra",
   payment: {
     id: "sp1",
     payment_number: "CE-000001",
@@ -77,6 +78,19 @@ test("un proveedor sin ficha (texto libre, sin DV) también se renderiza", async
     asiento: null,
   };
   const props = buildSupplierPaymentDocumentProps(sinFicha, { generated_at: new Date(), generated_by_name: null });
+  const buf = await generateSupplierPaymentPdfBuffer(props);
+  assert.equal(buf.subarray(0, 4).toString("latin1"), "%PDF");
+});
+
+test("el comprobante de un pago de GASTO DE TRÁMITE (049) se renderiza con sus rótulos y el proveedor ausente nombrado", async () => {
+  const tramite: SupplierPaymentPdfBundle = {
+    ...BUNDLE,
+    documento_kind: "tramite",
+    proveedor: { name: "(sin proveedor — cargue la ficha para los anexos de renta)", supplier_number: null, ruc: null, dv: null, email: null, phone: null },
+    compra: { ...BUNDLE.compra, description: "Trámite Registro Público — CIV-014", supplier_invoice_number: null },
+  };
+  const props = buildSupplierPaymentDocumentProps(tramite, { generated_at: new Date(), generated_by_name: null });
+  assert.equal(props.documento_kind, "tramite");
   const buf = await generateSupplierPaymentPdfBuffer(props);
   assert.equal(buf.subarray(0, 4).toString("latin1"), "%PDF");
 });

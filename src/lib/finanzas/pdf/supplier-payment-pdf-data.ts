@@ -58,6 +58,8 @@ export interface SupplierPaymentPdfBundle {
     email: string | null;
     phone: string | null;
   };
+  /** A qué documento va el pago (049). Cambia los rótulos del comprobante. */
+  documento_kind: "compra" | "tramite";
   compra: {
     id: string;
     description: string;
@@ -198,6 +200,7 @@ export async function fetchSupplierPaymentPdfBundle(
   return {
     ok: true,
     bundle: {
+      documento_kind: compraRaw ? "compra" : "tramite",
       payment: {
         id: p.id as string,
         payment_number: p.payment_number,
@@ -220,7 +223,9 @@ export async function fetchSupplierPaymentPdfBundle(
             phone: prov.phone,
           }
         : {
-            name: compra.supplier_name ?? "",
+            // Sin ficha ni texto libre: se dice, no se deja en blanco (D2 de
+            // Oliver: el aviso de que falta la ficha tiene que ser visible).
+            name: compra.supplier_name ?? "(sin proveedor — cargue la ficha para los anexos de renta)",
             supplier_number: null,
             ruc: compra.supplier_ruc,
             dv: null,
@@ -254,6 +259,7 @@ export function buildSupplierPaymentPdfPayload(b: SupplierPaymentPdfBundle): Sup
     reference: b.payment.reference,
     notes: b.payment.notes,
     status: b.payment.status,
+    documento_kind: b.documento_kind,
     proveedor: {
       name: b.proveedor.name,
       supplier_number: b.proveedor.supplier_number,
@@ -288,6 +294,7 @@ export function buildSupplierPaymentDocumentProps(
     reference: b.payment.reference,
     notes: b.payment.notes,
     reversado: b.payment.status === "anulado" || !!b.reversion,
+    documento_kind: b.documento_kind,
     proveedor: b.proveedor,
     compra: {
       description: b.compra.description,

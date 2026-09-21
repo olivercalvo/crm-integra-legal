@@ -40,6 +40,8 @@ export interface SupplierPaymentDocumentProps {
   reference: string | null;
   notes: string | null;
   reversado: boolean;
+  /** Cambia "COMPRA" ↔ "GASTO DE TRÁMITE" en la tabla y el subtítulo. */
+  documento_kind: "compra" | "tramite";
   proveedor: {
     name: string;
     supplier_number: string | null;
@@ -156,9 +158,10 @@ function InfoLine({ label, value, bold }: { label: string; value: string | null 
 
 export function SupplierPaymentDocument(props: SupplierPaymentDocumentProps) {
   const {
-    payment_number, payment_date, amount, method_label, reference, notes, reversado,
+    payment_number, payment_date, amount, method_label, reference, notes, reversado, documento_kind,
     proveedor, compra, banco, asiento, reversion, registrado_por, generated_at_label, generated_by_label,
   } = props;
+  const esTramite = documento_kind === "tramite";
 
   return (
     <Document
@@ -178,7 +181,7 @@ export function SupplierPaymentDocument(props: SupplierPaymentDocumentProps) {
           <View style={styles.docHeader}>
             <Text style={styles.docHeaderTitle}>COMPROBANTE DE EGRESO</Text>
             <Text style={styles.docHeaderNumber}>{payment_number}</Text>
-            <Text style={styles.docHeaderKind}>PAGO A PROVEEDOR</Text>
+            <Text style={styles.docHeaderKind}>{esTramite ? "PAGO DE GASTO DE TRÁMITE" : "PAGO A PROVEEDOR"}</Text>
             <Text style={[styles.statusBadge, ...(reversado ? [styles.statusBadgeDanger] : [])]}>
               {reversado ? "REVERSADO" : "REGISTRADO"}
             </Text>
@@ -213,10 +216,10 @@ export function SupplierPaymentDocument(props: SupplierPaymentDocumentProps) {
         <Text style={styles.sectionHeading}>APLICADO A</Text>
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colDesc]}>COMPRA</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDesc]}>{esTramite ? "GASTO DE TRÁMITE" : "COMPRA"}</Text>
             <Text style={[styles.tableHeaderCell, styles.colDate]}>FECHA</Text>
             <Text style={[styles.tableHeaderCell, styles.colInv]}>FACT. PROVEEDOR</Text>
-            <Text style={[styles.tableHeaderCell, styles.colTotal]}>TOTAL COMPRA</Text>
+            <Text style={[styles.tableHeaderCell, styles.colTotal]}>{esTramite ? "TOTAL GASTO" : "TOTAL COMPRA"}</Text>
             <Text style={[styles.tableHeaderCell, styles.colPaid]}>MONTO PAGADO</Text>
           </View>
           <View style={styles.tableRow}>

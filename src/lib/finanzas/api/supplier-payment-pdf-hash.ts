@@ -29,6 +29,8 @@ export interface SupplierPaymentPdfPayload {
     ruc: string | null;
     dv: string | null;
   };
+  /** `compra` (business_expenses) o `tramite` (gasto de trámite, 049). Cambia los rótulos. */
+  documento_kind: "compra" | "tramite";
   compra: {
     description: string;
     expense_date: string;

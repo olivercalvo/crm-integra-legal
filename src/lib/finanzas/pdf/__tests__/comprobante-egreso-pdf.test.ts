@@ -47,6 +47,7 @@ function bundle(
   rev: SupplierPaymentPdfBundle["reversion"] = null
 ): SupplierPaymentPdfBundle {
   return {
+    documento_kind: "compra",
     payment: {
       id: "sp1",
       payment_number: "CE-000001",

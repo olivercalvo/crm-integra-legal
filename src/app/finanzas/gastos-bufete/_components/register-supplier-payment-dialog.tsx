@@ -130,7 +130,7 @@ export function RegisterSupplierPaymentDialog({ expenseId, destino = "compra", e
       >
         <div className="space-y-4">
           <div className="rounded-md border bg-gray-50 p-3 text-sm flex justify-between">
-            <span className="text-gray-600">Saldo pendiente de la compra</span>
+            <span className="text-gray-600">Saldo pendiente {destino === "tramite" ? "del gasto" : "de la compra"}</span>
             <span className="font-mono font-semibold text-amber-700">B/. {fmtImporte(saldo)}</span>
           </div>
 

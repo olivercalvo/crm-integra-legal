@@ -43,6 +43,9 @@ function compra(lineas: Record<string, unknown>[]) {
     lineas,
     status: "pagado",
     payment_date: "2026-09-16",
+    // Desde la 048 "pagado" en el alta = registrar el pago al crear, y el
+    // banco es obligatorio (vive en el pago, no en la compra).
+    payment_account_code: "100001",
     payment_method: "transferencia",
     notes: null,
   } as unknown as Parameters<typeof validateCreateBusinessExpense>[0];

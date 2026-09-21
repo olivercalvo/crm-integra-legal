@@ -12,7 +12,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateBusinessExpenseInput,
   UpdateBusinessExpenseInput,
-  BusinessExpensePaymentMethod,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
@@ -26,8 +25,7 @@ import {
   SOURCE_TYPE_COMPRA,
 } from "@/lib/finanzas/contabilidad/asiento-compra";
 import { cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asiento";
-import { construirAsientoDePagoProveedor } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
-import { cargarPagoProveedorParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
+import { createSupplierPayment } from "@/lib/finanzas/api/supplier-payments";
 
 /** Centavos, y una sola vez. */
 function round2(n: number): number {
@@ -304,8 +302,12 @@ export async function createBusinessExpense(
       subtotal,
       tax_rate: taxRate,
       tax_amount: taxAmount,
-      status: input.status,
-      payment_date: input.payment_date,
+      // 🔴 Una compra NACE pendiente: `status`, `amount_paid` y `payment_date`
+      //    los deriva el trigger de la 048 desde `supplier_payments`, y el
+      //    guard rechaza otra cosa. "Ya está pagada" en el alta significa
+      //    registrar el PAGO después de crearla (abajo), no nacer pagada.
+      status: "pendiente_pago",
+      payment_date: null,
       payment_method: input.payment_method,
       notes: input.notes,
       created_by: userId,
@@ -411,7 +413,41 @@ export async function createBusinessExpense(
     }),
   });
 
-  return { id: compraId, total: Number(data.total) };
+  // ---- "YA ESTÁ PAGADA": el pago, DESPUÉS de la compra --------------------
+  // Si el alta dice `status: "pagado"`, se registra un pago por el total con
+  // los datos del alta (fecha, método, banco). Si el pago falla, la compra
+  // queda registrada y PENDIENTE —que es la verdad— y el error lo dice, con el
+  // id, para que la pantalla lleve al detalle y se registre desde ahí.
+  let pago: { id: string; payment_number: string } | null = null;
+  if (input.status === "pagado") {
+    try {
+      pago = await createSupplierPayment(
+        db,
+        tenantId,
+        userId,
+        {
+          business_expense_id: compraId,
+          payment_date: input.payment_date ?? input.expense_date,
+          amount: Number(data.total),
+          method: input.payment_method ?? "transferencia",
+          payment_account_code: input.payment_account_code ?? null,
+          reference: null,
+          notes: null,
+        },
+        ledgerDb
+      );
+    } catch (err) {
+      const motivo = err instanceof MutationError ? err.message : String(err);
+      throw new MutationError(
+        `La compra se registró y quedó PENDIENTE DE PAGO, pero el pago no se pudo registrar: ${motivo} ` +
+          `Regístrelo desde el detalle de la compra.`,
+        err instanceof MutationError ? err.status : 500,
+        { compra_id: compraId, sin_pago: true }
+      );
+    }
+  }
+
+  return { id: compraId, total: Number(data.total), pago };
 }
 
 // ---------------------------------------------------------------------------
@@ -474,8 +510,9 @@ export async function updateBusinessExpense(
       subtotal: importesEditados.subtotal,
       tax_rate: importesEditados.taxRate,
       tax_amount: importesEditados.taxAmount,
-      status: input.status,
-      payment_date: input.payment_date,
+      // `status` y `payment_date` NO se escriben: los deriva el trigger de la
+      // 048 desde los pagos, y el guard rechaza cambiarlos a mano. Para pagar,
+      // se registra un pago; para "despagar", se elimina o reversa.
       payment_method: input.payment_method,
       notes: input.notes,
     })
@@ -554,6 +591,22 @@ export async function deleteBusinessExpense(
   // que haber borrado ya el comprobante.
   await gateContable(db, tenantId, id, "borrar");
 
+  // Y una compra CON PAGOS no se borra (la FK es NO ACTION y fallaría igual,
+  // pero con un mensaje opaco): primero se eliminan (sin asiento) o se
+  // reversan (con asiento) los pagos.
+  const { count: pagos } = await db
+    .from("supplier_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("business_expense_id", id);
+  if ((pagos ?? 0) > 0) {
+    throw new MutationError(
+      `Esta compra tiene ${pagos} pago${pagos === 1 ? "" : "s"} registrado${pagos === 1 ? "" : "s"}. ` +
+        `Elimine o reverse los pagos antes de borrar la compra.`,
+      409
+    );
+  }
+
   // Borrar receipt del storage si existe (consistente con expenses legacy).
   if (existing.receipt_url) {
     await db.storage.from("documents").remove([existing.receipt_url as string]);
@@ -590,127 +643,10 @@ export async function deleteBusinessExpense(
 }
 
 // ---------------------------------------------------------------------------
-// MARK AS PAID (atajo para cambiar status)
+// MARK AS PAID — ELIMINADO (Bloque 3, 21/09/2026)
 // ---------------------------------------------------------------------------
-
-/**
- * Marca una compra como pagada **y postea el asiento del pago**.
- *
- *   DEBE  200001 Cuentas por pagar  (baja lo que debíamos)
- *   HABER el banco elegido          (sale plata)
- *
- * ═════════════════════════════════════════════════════════════════════════════
- * NO HAY TABLA DE PAGOS A PROVEEDOR, Y ES UNA DECISIÓN DE ALCANCE
- * ═════════════════════════════════════════════════════════════════════════════
- * El pago se modela como un cambio de estado de la COMPRA, no como un documento
- * propio. Consecuencias, todas asumidas:
- *
- *   · Solo existe el pago TOTAL de una compra. No hay pago parcial, ni un pago
- *     que salde tres compras, ni anticipos a proveedor.
- *   · El `source_id` del asiento es el id de la COMPRA.
- *
- * El acta no pide ninguna de las tres: la fila 15 pide el módulo de *recibir*
- * pago y la 16 los cobros parciales, las dos del lado del CLIENTE. El día que
- * haga falta, esto se migra a una tabla propia igual que la cuenta de la compra
- * se migró a `expense_lines`.
- *
- * 🔴 `source_type` es `pago_proveedor`, NO `pago`. Ver la migración `042`: con
- * `pago`, el enlace del Libro Mayor mandaría a `/finanzas/facturas/<id-de-una-
- * compra>`.
- *
- * ⚠️ ORDEN: se postea ANTES del UPDATE a 'pagado'. Acá SÍ se puede —al revés que
- * al crear una compra— porque la compra YA existe y su id también: no hace falta
- * DELETE compensatorio, alcanza con no hacer el UPDATE.
- */
-export async function markBusinessExpenseAsPaid(
-  db: DB,
-  tenantId: string,
-  id: string,
-  userId: string,
-  paymentDate: string,
-  paymentMethod: BusinessExpensePaymentMethod | null,
-  /** La cuenta de donde SALIÓ la plata. Obligatoria: la elige quien registra. */
-  paymentAccountCode: string | null,
-  /** 🔑 Obligatorio (SOP-014). Ver `createBusinessExpense`. */
-  ledgerDb: DB
-) {
-  if (!paymentAccountCode) {
-    throw new MutationError(
-      "Falta la cuenta bancaria de donde salió el pago. La elige quien registra: " +
-        "es lo que el asiento acredita y no se puede deducir.",
-      400
-    );
-  }
-  const { data: existing, error: errExisting } = await db
-    .from("business_expenses")
-    .select("id, status, payment_date, payment_method")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .maybeSingle();
-
-  if (errExisting) {
-    throw new MutationError(pgErrorToMessage(errExisting), 500, errExisting);
-  }
-  if (!existing) {
-    throw new MutationError("Gasto no encontrado", 404);
-  }
-  if (existing.status === "pagado") {
-    throw new MutationError("La compra ya está marcada como pagada.", 409);
-  }
-
-  // ---- EL ASIENTO, ANTES DEL UPDATE --------------------------------------
-  const pago = await cargarPagoProveedorParaAsiento(
-    ledgerDb,
-    tenantId,
-    id,
-    paymentDate,
-    paymentAccountCode
-  );
-  if (!pago) {
-    throw new MutationError("Compra no encontrada", 404);
-  }
-
-  const armadoPago = construirAsientoDePagoProveedor(pago);
-  if (!armadoPago.ok) {
-    throw new MutationError(armadoPago.mensaje, 422);
-  }
-
-  await postJournalEntry(ledgerDb, tenantId, armadoPago.asiento, userId);
-
-  const { error: errUpdate } = await db
-    .from("business_expenses")
-    .update({
-      status: "pagado",
-      payment_date: paymentDate,
-      payment_method: paymentMethod,
-      payment_account_code: paymentAccountCode,
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (errUpdate) {
-    console.error("[finanzas/api] markBusinessExpenseAsPaid failed", errUpdate);
-    throw new MutationError(pgErrorToMessage(errUpdate), 500, errUpdate);
-  }
-
-  await db.from("audit_log").insert({
-    tenant_id: tenantId,
-    user_id: userId,
-    entity: ENTITY,
-    entity_id: id,
-    action: "update",
-    field: "status,payment_date,payment_method",
-    old_value: JSON.stringify({
-      status: existing.status,
-      payment_date: existing.payment_date,
-      payment_method: existing.payment_method,
-    }),
-    new_value: JSON.stringify({
-      status: "pagado",
-      payment_date: paymentDate,
-      payment_method: paymentMethod,
-    }),
-  });
-
-  return { id };
-}
+// `markBusinessExpenseAsPaid` modelaba el pago como un cambio de estado de la
+// compra y escribía `business_expenses.payment_account_code`, columna que la
+// tabla no tiene (FND-009). Desde la 048 el pago es una entidad:
+// `createSupplierPayment` en `api/supplier-payments.ts`, con el banco en el
+// pago, pago parcial, y el trigger derivando `status` y `amount_paid`.

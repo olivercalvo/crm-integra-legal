@@ -125,8 +125,9 @@ export function claveIdempotenteDeCobro(paymentId: string): string {
   return `cobro:${paymentId}`;
 }
 
-export function claveIdempotenteDePagoProveedor(compraId: string): string {
-  return `pago-proveedor:${compraId}`;
+/** Desde la 048 recibe el id del PAGO, no el de la compra: un pago, un asiento. */
+export function claveIdempotenteDePagoProveedor(pagoId: string): string {
+  return `pago-proveedor:${pagoId}`;
 }
 
 /**
@@ -210,35 +211,44 @@ export function construirAsientoDeCobro(
 // ---------------------------------------------------------------------------
 
 export interface PagoProveedorParaAsiento {
-  /** El id de la COMPRA. No hay tabla de pagos a proveedor — ver el encabezado. */
+  /** El id del PAGO (`supplier_payments`, 048). Es el `source_id` del asiento. */
+  pago_id: string;
+  /** `CE-000012`. Es la referencia del asiento. */
+  payment_number: string | null;
+  /** La compra que se paga, para la descripción. */
   compra_id: string;
-  payment_date: string;
-  total: number;
-  description: string;
+  compra_description: string;
   supplier_name: string | null;
-  /** `business_expenses.payment_account_code`, que existe desde la `036`. */
+  supplier_invoice_number: string | null;
+  payment_date: string;
+  /** Lo pagado EN ESTE pago, no el total de la compra (pago parcial, Josuarth 21/09). */
+  amount: number;
+  /**
+   * `supplier_payments.payment_account_code` — el banco vive en el PAGO.
+   * ⚠️ `business_expenses` NO tiene esta columna (FND-009): la 036 se la dio a
+   * `expenses` y la 041 a `payments`. Verificado contra information_schema el
+   * 21/09/2026.
+   */
   payment_account_code: string | null;
   banco_valido: boolean;
 }
 
 /**
- * Arma el asiento de un pago a proveedor.
+ * Arma el asiento de UN pago a proveedor.
  *
- *   DEBE  200001 Cuentas por pagar  (baja lo que debíamos)
+ *   DEBE  200001 Cuentas por pagar  (baja lo que debíamos, por lo pagado)
  *   HABER el banco elegido          (sale plata)
  *
- * ⚠️ **No hay tabla de pagos a proveedor**, y es una decisión de alcance, no un
- * olvido. El pago se modela como un cambio de estado de la COMPRA
- * (`markBusinessExpenseAsPaid`), así que:
+ * Desde la 048 el pago es una entidad (`supplier_payments`): varios pagos por
+ * compra, cada uno con su asiento. Por eso el `source_id` es el id del PAGO y
+ * no el de la compra —con el de la compra, el UNIQUE de la 034 (un documento,
+ * un asiento) impediría el segundo pago— y el monto es `amount`, lo pagado en
+ * este pago, no `total`. La referencia es el número del comprobante (`CE-`),
+ * el mismo criterio que el recibo de caja.
  *
- *   · Solo existe el pago TOTAL de una compra. No hay pago parcial, ni un pago
- *     que salde tres compras, ni anticipos a proveedor.
- *   · El `source_id` del asiento es el id de la COMPRA, no de un pago.
- *
- * El acta no pide ninguna de las tres cosas que faltan (pide el módulo de
- * *recibir* pago y los cobros parciales, los dos del lado del cliente). El día
- * que haga falta, esto se migra a una tabla propia igual que la cuenta de la
- * compra se migró a `expense_lines`.
+ * ⚠️ El asiento NO toca la compra ni su `amount_paid`: eso lo deriva el
+ * trigger de la 048 desde `supplier_payments`, y escribirlo a mano está
+ * prohibido (guard). Acá solo se registra el hecho contable.
  */
 export function construirAsientoDePagoProveedor(
   p: PagoProveedorParaAsiento
@@ -263,7 +273,7 @@ export function construirAsientoDePagoProveedor(
     };
   }
 
-  const monto = round2(p.total);
+  const monto = round2(p.amount);
   if (monto <= 0) {
     return {
       ok: false,
@@ -285,7 +295,7 @@ export function construirAsientoDePagoProveedor(
       account_code: p.payment_account_code,
       debit: 0,
       credit: monto,
-      description: `Pago ${p.description}`,
+      description: `Pago ${p.compra_description}`,
     },
   ];
 
@@ -293,11 +303,12 @@ export function construirAsientoDePagoProveedor(
     ok: true,
     asiento: {
       transaction_date: p.payment_date,
-      description: `Pago a proveedor: ${p.description}${quien}`,
+      description: `Pago a proveedor: ${p.compra_description}${quien}${p.supplier_invoice_number ? ` (fact. ${p.supplier_invoice_number})` : ""}`,
       source_type: SOURCE_TYPE_PAGO_PROVEEDOR,
       lines,
-      source_id: p.compra_id,
-      idempotency_key: claveIdempotenteDePagoProveedor(p.compra_id),
+      source_id: p.pago_id,
+      reference: p.payment_number ?? null,
+      idempotency_key: claveIdempotenteDePagoProveedor(p.pago_id),
     },
   };
 }

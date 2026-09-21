@@ -20,7 +20,12 @@
 // ---------- Status / payment_method / tax_rate ----------------------------
 
 /** Valores válidos de business_expenses.status. */
-export type BusinessExpenseStatus = "pendiente_pago" | "pagado";
+/**
+ * Desde la 048 lo DERIVA el trigger de `supplier_payments`; no se escribe a
+ * mano. En el alta, `status: "pagado"` es la intención "registrar el pago al
+ * crear", no un valor que se inserte.
+ */
+export type BusinessExpenseStatus = "pendiente_pago" | "parcialmente_pagado" | "pagado";
 
 /** Valores válidos de business_expenses.payment_method (cuando no es NULL). */
 export type BusinessExpensePaymentMethod =
@@ -222,25 +227,27 @@ export interface CreateBusinessExpenseInput {
   tax_rate: number;                // decimal (0.07 = 7%)
   /** Σ de `lineas[].tax_amount`. Lo calcula el SERVIDOR. */
   tax_amount: number;
+  /**
+   * En el ALTA: `"pagado"` = "registrar el pago al crear" (exige
+   * `payment_account_code`); `"pendiente_pago"` = solo la compra. En el UPDATE
+   * se ignora: el estado lo derivan los pagos (048).
+   */
   status: BusinessExpenseStatus;
   payment_date: string | null;
   payment_method: BusinessExpensePaymentMethod | null;
+  /** El banco de donde salió el pago, cuando el alta dice "pagado". Bloque 3. */
+  payment_account_code?: string | null;
   notes: string | null;
 }
 
 /** Payload de actualización. Mismos campos que create. */
 export type UpdateBusinessExpenseInput = CreateBusinessExpenseInput;
 
-/** Payload para markAsPaid (atajo de status). */
-export interface MarkAsPaidInput {
-  payment_date: string;            // YYYY-MM-DD, requerido
-  payment_method: BusinessExpensePaymentMethod | null;
-}
-
 // ---------- UI labels -----------------------------------------------------
 
 export const BUSINESS_EXPENSE_STATUS_LABEL: Record<BusinessExpenseStatus, string> = {
   pendiente_pago: "Pendiente de pago",
+  parcialmente_pagado: "Parcialmente pagado",
   pagado: "Pagado",
 };
 

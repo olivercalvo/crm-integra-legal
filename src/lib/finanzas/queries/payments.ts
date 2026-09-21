@@ -82,15 +82,30 @@ async function cargarAsientosDeCobros(
   tenantId: string,
   paymentIds: string[]
 ): Promise<Map<string, AsientoDeCobro>> {
+  return cargarAsientosPorOrigen(db, tenantId, SOURCE_TYPE_COBRO, paymentIds);
+}
+
+/**
+ * Los asientos de varios documentos del MISMO `source_type`, por `source_id`,
+ * con sus líneas y cuentas. Lo usan los cobros (`pago`) y, desde el Bloque 3,
+ * los pagos a proveedor (`pago_proveedor`): es la misma forma de asiento y la
+ * misma vista previa de reversión.
+ */
+export async function cargarAsientosPorOrigen(
+  db: DB,
+  tenantId: string,
+  sourceType: string,
+  sourceIds: string[]
+): Promise<Map<string, AsientoDeCobro>> {
   const resultado = new Map<string, AsientoDeCobro>();
-  if (paymentIds.length === 0) return resultado;
+  if (sourceIds.length === 0) return resultado;
 
   const { data: asientos, error } = await db
     .from("journal_entries")
     .select("id, entry_number, transaction_date, description, reference, source_id")
     .eq("tenant_id", tenantId)
-    .eq("source_type", SOURCE_TYPE_COBRO)
-    .in("source_id", paymentIds);
+    .eq("source_type", sourceType)
+    .in("source_id", sourceIds);
 
   if (error) {
     console.error("[finanzas/queries] cargarAsientosDeCobros failed", error);

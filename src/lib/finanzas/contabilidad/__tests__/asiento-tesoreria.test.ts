@@ -46,13 +46,18 @@ function cobro(p: Partial<CobroParaAsiento> = {}): CobroParaAsiento {
   };
 }
 
+const PAGO_ID = "66666666-6666-6666-6666-666666666666";
+
 function pago(p: Partial<PagoProveedorParaAsiento> = {}): PagoProveedorParaAsiento {
   return {
+    pago_id: PAGO_ID,
+    payment_number: "CE-000004",
     compra_id: COMPRA_ID,
-    payment_date: "2026-09-04",
-    total: 321,
-    description: "Insumos de septiembre",
+    compra_description: "Insumos de septiembre",
     supplier_name: "PROVEEDOR, S.A.",
+    supplier_invoice_number: "F-1001",
+    payment_date: "2026-09-04",
+    amount: 321,
     payment_account_code: "100001",
     banco_valido: true,
     ...p,
@@ -179,11 +184,17 @@ test("🔴 pago_proveedor es un source_type DISTINTO de pago", () => {
   );
 });
 
-test("el source_id del pago es la COMPRA (no hay tabla de pagos a proveedor)", () => {
-  const r = construirAsientoDePagoProveedor(pago());
+test("el source_id del pago es el PAGO, la referencia el CE-, y el monto es lo pagado (048)", () => {
+  // Con el id de la COMPRA, el UNIQUE de la 034 impediría el segundo pago de
+  // una compra: pago parcial (Josuarth, 21/09) = varios asientos por compra.
+  const r = construirAsientoDePagoProveedor(pago({ amount: 100 }));
   assert.equal(r.ok, true);
   if (!r.ok) return;
-  assert.equal(r.asiento.source_id, COMPRA_ID);
+  assert.equal(r.asiento.source_id, PAGO_ID);
+  assert.equal(r.asiento.reference, "CE-000004");
+  assert.equal(r.asiento.lines[0].debit, 100, "lo pagado en ESTE pago, no el total de la compra");
+  assert.match(r.asiento.description, /F-1001/, "nombra la factura del proveedor");
+  assert.equal(r.asiento.idempotency_key, `pago-proveedor:${PAGO_ID}`);
 });
 
 // ---------------------------------------------------------------------------
@@ -218,7 +229,7 @@ test("el guard NO se limita a los tres bancos conocidos por código", () => {
 
 test("las claves salen del id del documento y no se pisan entre sí", () => {
   assert.equal(claveIdempotenteDeCobro(COBRO_ID), `cobro:${COBRO_ID}`);
-  assert.equal(claveIdempotenteDePagoProveedor(COMPRA_ID), `pago-proveedor:${COMPRA_ID}`);
+  assert.equal(claveIdempotenteDePagoProveedor(PAGO_ID), `pago-proveedor:${PAGO_ID}`);
   // Aunque el uuid fuera el mismo, los prefijos las separan.
   assert.notEqual(claveIdempotenteDeCobro(COBRO_ID), claveIdempotenteDePagoProveedor(COBRO_ID));
 });

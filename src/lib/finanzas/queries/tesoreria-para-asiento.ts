@@ -111,44 +111,55 @@ export async function cargarCobroParaAsiento(
 }
 
 /**
- * La compra que se está marcando como pagada.
+ * El pago a proveedor YA INSERTADO (`supplier_payments`, 048), releído con su
+ * compra, para armar su asiento. Simétrico de `cargarCobroParaAsiento`: se
+ * llama después del INSERT y antes del posteo; si el posteo falla,
+ * `createSupplierPayment` hace el DELETE compensatorio.
  *
- * El `payment_date` NO sale de la fila: llega por parámetro, porque cuando esto
- * se llama desde `markBusinessExpenseAsPaid` el UPDATE todavía no ocurrió —y es
- * justamente el que no queremos hacer si el posteo falla.
+ * El banco sale del PAGO (`supplier_payments.payment_account_code`).
+ * `business_expenses` no tiene esa columna (FND-009).
  */
 export async function cargarPagoProveedorParaAsiento(
   db: DB,
   tenantId: string,
-  compraId: string,
-  paymentDate: string,
-  paymentAccountCode: string | null
+  pagoId: string
 ): Promise<PagoProveedorParaAsiento | null> {
-  const { data: be, error } = await db
-    .from("business_expenses")
-    .select("id, description, total, supplier_name")
+  const { data: pago, error } = await db
+    .from("supplier_payments")
+    .select(
+      "id, payment_number, payment_date, amount, payment_account_code, business_expense_id, " +
+        "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number)"
+    )
     .eq("tenant_id", tenantId)
-    .eq("id", compraId)
+    .eq("id", pagoId)
     .maybeSingle();
 
   if (error) throw error;
-  if (!be) return null;
+  if (!pago) return null;
 
-  const row = be as unknown as {
+  type Compra = { id: string; description: string; supplier_name: string | null; supplier_invoice_number: string | null };
+  const row = pago as unknown as {
     id: string;
-    description: string;
-    total: number | string;
-    supplier_name: string | null;
+    payment_number: string | null;
+    payment_date: string;
+    amount: number | string;
+    payment_account_code: string | null;
+    business_expense_id: string;
+    compra?: Compra | Compra[] | null;
   };
+  const compra = Array.isArray(row.compra) ? row.compra[0] : row.compra;
 
   return {
-    compra_id: row.id,
-    payment_date: paymentDate,
-    total: num(row.total),
-    description: row.description,
-    supplier_name: row.supplier_name,
-    payment_account_code: paymentAccountCode,
-    banco_valido: await bancoValido(db, tenantId, paymentAccountCode),
+    pago_id: row.id,
+    payment_number: row.payment_number ?? null,
+    compra_id: row.business_expense_id,
+    compra_description: compra?.description ?? "",
+    supplier_name: compra?.supplier_name ?? null,
+    supplier_invoice_number: compra?.supplier_invoice_number ?? null,
+    payment_date: row.payment_date,
+    amount: num(row.amount),
+    payment_account_code: row.payment_account_code,
+    banco_valido: await bancoValido(db, tenantId, row.payment_account_code),
   };
 }
 

@@ -280,10 +280,23 @@ export function validateCreateBusinessExpense(
       "Hay ITBMS cargado pero ninguna línea tiene tasa. Revise la tasa de las líneas gravadas.";
   }
 
-  // status
+  // status. En el alta es la INTENCIÓN: 'pagado' = registrar el pago al crear,
+  // y entonces el banco es obligatorio (048: el banco vive en el pago).
+  // 'parcialmente_pagado' lo deriva el trigger; no se manda.
   const status = raw.status as BusinessExpenseStatus | undefined;
-  if (!status || !VALID_STATUSES.includes(status)) {
+  if (!status || !VALID_STATUSES.includes(status) || status === "parcialmente_pagado") {
     errors.status = "Estado inválido";
+  }
+  let paymentAccountCode: string | null = null;
+  if (status === "pagado") {
+    const rawCta = (raw as { payment_account_code?: unknown }).payment_account_code;
+    if (rawCta == null || String(rawCta).trim() === "") {
+      errors.payment_account_code = "Elija la cuenta bancaria de donde salió el pago.";
+    } else if (String(rawCta).trim().length > 20) {
+      errors.payment_account_code = "Código de cuenta muy largo";
+    } else {
+      paymentAccountCode = String(rawCta).trim();
+    }
   }
 
   // payment_date — si llega, validar formato; coherencia con status
@@ -349,6 +362,7 @@ export function validateCreateBusinessExpense(
       status: status as BusinessExpenseStatus,
       payment_date: paymentDate,
       payment_method: paymentMethod,
+      payment_account_code: paymentAccountCode,
       notes,
     },
   };
@@ -359,62 +373,6 @@ export function validateUpdateBusinessExpense(
   raw: Partial<CreateBusinessExpenseInput>
 ) {
   return validateCreateBusinessExpense(raw);
-}
-
-/** Valida un payload de markAsPaid. */
-export function validateMarkAsPaid(raw: {
-  payment_date?: unknown;
-  payment_method?: unknown;
-  payment_account_code?: unknown;
-}): ValidationResult<{
-  payment_date: string;
-  payment_method: BusinessExpensePaymentMethod | null;
-  payment_account_code: string | null;
-}> {
-  const errors: ValidationErrors = {};
-
-  // 🔴 El banco es OBLIGATORIO. Sin él no se puede armar el asiento del pago, y
-  //    sin asiento la compra no se marca como pagada. Lo elige quien registra,
-  //    sin default (Rose, 25/08).
-  let paymentAccountCode: string | null = null;
-  if (raw.payment_account_code == null || String(raw.payment_account_code).trim() === "") {
-    errors.payment_account_code = "Elija la cuenta bancaria de donde salió el pago.";
-  } else {
-    const code = String(raw.payment_account_code).trim();
-    if (code.length > 20) {
-      errors.payment_account_code = "Código de cuenta muy largo";
-    } else {
-      paymentAccountCode = code;
-    }
-  }
-
-  if (!raw.payment_date || !DATE_RE.test(String(raw.payment_date))) {
-    errors.payment_date = "Fecha de pago inválida (esperado YYYY-MM-DD)";
-  }
-
-  let paymentMethod: BusinessExpensePaymentMethod | null = null;
-  if (raw.payment_method != null && String(raw.payment_method).trim() !== "") {
-    const pm = raw.payment_method as BusinessExpensePaymentMethod;
-    if (!VALID_PAYMENT_METHODS.includes(pm)) {
-      errors.payment_method = "Método de pago inválido";
-    } else {
-      paymentMethod = pm;
-    }
-  }
-
-  if (Object.keys(errors).length > 0) {
-    return { ok: false, data: null, errors };
-  }
-
-  return {
-    ok: true,
-    errors: null,
-    data: {
-      payment_date: raw.payment_date as string,
-      payment_method: paymentMethod,
-      payment_account_code: paymentAccountCode,
-    },
-  };
 }
 
 /**

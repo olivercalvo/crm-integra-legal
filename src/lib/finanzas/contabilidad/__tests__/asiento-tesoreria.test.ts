@@ -52,8 +52,9 @@ function pago(p: Partial<PagoProveedorParaAsiento> = {}): PagoProveedorParaAsien
   return {
     pago_id: PAGO_ID,
     payment_number: "CE-000004",
-    compra_id: COMPRA_ID,
-    compra_description: "Insumos de septiembre",
+    documento_kind: "compra",
+    documento_id: COMPRA_ID,
+    documento_description: "Insumos de septiembre",
     supplier_name: "PROVEEDOR, S.A.",
     supplier_invoice_number: "F-1001",
     payment_date: "2026-09-04",

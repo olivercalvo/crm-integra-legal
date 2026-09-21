@@ -19,6 +19,7 @@ import {
   type ExpenseLineDraft,
 } from "@/lib/finanzas/types/expense-line";
 import type { TaxCodeOption } from "@/lib/finanzas/types/invoice";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABEL, type PaymentMethod } from "@/lib/finanzas/types/payment";
 
 /**
  * Impuesto precargado en una línea de gasto de trámite: `EXENTO`. El ITBMS de
@@ -44,6 +45,12 @@ interface SectionExpenseFormProps {
   proveedores?: ProveedorOption[];
   /** Códigos de `tax_codes` activos, los mismos que ve facturación (migración `045`). */
   taxCodes?: TaxCodeOption[];
+  /**
+   * Cuentas de banco para "Ya se pagó" (Bloque 4, entrada (a) de Oliver): el
+   * pago del gasto de trámite es una SEGUNDA transacción (Josuarth), que acá
+   * se dispara en el mismo acto, después del alta, con su propio asiento.
+   */
+  bancos?: { code: string; name: string }[];
 }
 
 /**
@@ -67,6 +74,7 @@ export function SectionExpenseForm({
   cuentas = [],
   proveedores = [],
   taxCodes = [],
+  bancos = [],
 }: SectionExpenseFormProps) {
   // El default de impuesto resuelto contra el catálogo (id + tasa). Si el
   // código no existe la línea arranca sin impuesto, que el servidor tolera en
@@ -92,6 +100,14 @@ export function SectionExpenseForm({
     lineaVacia("l0", CUENTA_TRAMITE_DEFAULT, impuestoInicial),
   ]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // "Ya se pagó": opcional. Sin banco elegido no se manda nada.
+  const [yaPagado, setYaPagado] = useState(false);
+  const [pagoBanco, setPagoBanco] = useState("");
+  const [pagoMetodo, setPagoMetodo] = useState<PaymentMethod>("transferencia");
+  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [pagoReferencia, setPagoReferencia] = useState("");
+  // Aviso que sobrevive al reset del formulario: el gasto quedó, el pago no.
+  const [avisoPago, setAvisoPago] = useState<string | null>(null);
 
   // El monto del encabezado ES la suma de las líneas. No hay campo de monto: si
   // lo hubiera, habría dos verdades y el asiento se arma con una sola.
@@ -134,8 +150,17 @@ export function SectionExpenseForm({
     setExpDueDate("");
     setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial)]);
     setFieldErrors({});
+    resetPago();
     setShowExpenseForm(false);
     setError(null);
+  };
+
+  const resetPago = () => {
+    setYaPagado(false);
+    setPagoBanco("");
+    setPagoMetodo("transferencia");
+    setPagoFecha(new Date().toISOString().split("T")[0]);
+    setPagoReferencia("");
   };
 
   const resetPayment = () => {
@@ -150,6 +175,14 @@ export function SectionExpenseForm({
     setFieldErrors({});
     if (!expConcept.trim() || !expDate) {
       setError("Complete el concepto y la fecha del gasto");
+      return;
+    }
+    if (yaPagado && !pagoBanco) {
+      setError("Eligió \"Ya se pagó\": indique de qué cuenta bancaria salió el pago.");
+      return;
+    }
+    if (yaPagado && !pagoFecha) {
+      setError("Eligió \"Ya se pagó\": indique la fecha del pago.");
       return;
     }
     if (expFile) {
@@ -202,6 +235,34 @@ export function SectionExpenseForm({
             });
           } catch {
             // Expense created but receipt failed — user can retry via edit
+          }
+        }
+
+        // ── La segunda transacción: el pago (Bloque 4) ─────────────────────
+        // El gasto ya está registrado y en el libro. Si el pago falla, el gasto
+        // QUEDA (pendiente de pago) y se avisa dónde registrarlo: no se deshace
+        // el gasto por un pago que no entró — son dos transacciones (Josuarth).
+        setAvisoPago(null);
+        if (yaPagado && json.id) {
+          const rp = await fetch(`/api/expenses/${json.id}/payments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              payment_date: pagoFecha,
+              amount: totalLineas,
+              method: pagoMetodo,
+              payment_account_code: pagoBanco,
+              reference: pagoReferencia.trim() || null,
+              notes: null,
+            }),
+          });
+          if (!rp.ok) {
+            const jp = await rp.json().catch(() => ({}));
+            setAvisoPago(
+              `El gasto quedó registrado${json.asiento?.entry_number ? ` (asiento ${json.asiento.entry_number})` : ""}, ` +
+                `pero el pago NO: ${jp.error ?? `error ${rp.status}`}. Queda pendiente de pago; ` +
+                `se registra desde Finanzas → el detalle contable del gasto.`
+            );
           }
         }
 
@@ -294,6 +355,15 @@ export function SectionExpenseForm({
         </div>
       )}
 
+      {avisoPago && (
+        <div className="flex items-start justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <span>{avisoPago}</span>
+          <button type="button" onClick={() => setAvisoPago(null)} className="text-amber-700 hover:text-amber-900" aria-label="Cerrar aviso">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Expense form */}
       {showExpenseForm && (
         <div className="rounded-xl border p-4 space-y-3"
@@ -379,6 +449,76 @@ export function SectionExpenseForm({
             errors={fieldErrors}
             disabled={isPending}
           />
+          {/* Ya se pagó (Bloque 4, entrada (a)). Opcional: el gasto queda
+              pendiente de pago y se paga después desde Finanzas si no se marca. */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-integra-navy cursor-pointer">
+              <input
+                type="checkbox"
+                checked={yaPagado}
+                onChange={(e) => setYaPagado(e.target.checked)}
+                disabled={isPending}
+                className="h-4 w-4"
+              />
+              Ya se pagó (registrar el pago junto con el gasto)
+            </label>
+            <p className="text-xs text-gray-500">
+              Registrar el gasto y pagarlo son dos transacciones, aunque ocurran el mismo día:
+              el gasto acredita la cuenta por pagar y el pago la salda contra el banco. Si no se
+              marca, el gasto queda pendiente y se paga después desde Finanzas.
+            </p>
+            {yaPagado && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Banco de donde salió el pago *</Label>
+                  <select
+                    value={pagoBanco}
+                    onChange={(e) => setPagoBanco(e.target.value)}
+                    disabled={isPending}
+                    className="block w-full rounded-md border border-gray-300 bg-white px-3 min-h-[44px] text-sm"
+                  >
+                    <option value="">Elija la cuenta…</option>
+                    {bancos.map((b) => (
+                      <option key={b.code} value={b.code}>
+                        {b.code} — {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  {bancos.length === 0 && (
+                    <p className="text-xs text-amber-700">No hay cuentas de banco activas en el plan.</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Método</Label>
+                  <select
+                    value={pagoMetodo}
+                    onChange={(e) => setPagoMetodo(e.target.value as PaymentMethod)}
+                    disabled={isPending}
+                    className="block w-full rounded-md border border-gray-300 bg-white px-3 min-h-[44px] text-sm"
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m}>
+                        {PAYMENT_METHOD_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Fecha del pago *</Label>
+                  <Input type="date" value={pagoFecha} onChange={(e) => setPagoFecha(e.target.value)} disabled={isPending} className="min-h-[44px]" />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Referencia (opcional)</Label>
+                  <Input value={pagoReferencia} onChange={(e) => setPagoReferencia(e.target.value)} placeholder="N° de cheque, ID de transferencia…" disabled={isPending} className="min-h-[44px]" />
+                </div>
+                <p className="text-xs text-gray-500 sm:col-span-2">
+                  Monto del pago: el total del gasto (B/. {totalLineas.toFixed(2)}). Un pago parcial se
+                  registra después desde Finanzas.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-sm flex items-center gap-1">
               <Paperclip size={14} /> Adjuntar recibo (opcional)

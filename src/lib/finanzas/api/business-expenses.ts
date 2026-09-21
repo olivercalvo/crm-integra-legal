@@ -427,6 +427,7 @@ export async function createBusinessExpense(
         userId,
         {
           business_expense_id: compraId,
+        expense_id: null,
           payment_date: input.payment_date ?? input.expense_date,
           amount: Number(data.total),
           method: input.payment_method ?? "transferencia",

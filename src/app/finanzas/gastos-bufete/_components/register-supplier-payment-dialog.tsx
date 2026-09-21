@@ -17,6 +17,13 @@ import {
 
 interface Props {
   expenseId: string;
+  /**
+   * A qué documento va el pago (049, arco exclusivo). `"compra"` (default) →
+   * `POST /api/finanzas/business-expenses/[id]/payments`; `"tramite"` (gasto de
+   * trámite, Bloque 4) → `POST /api/expenses/[id]/payments`. Mismo formulario,
+   * mismo motor, misma serie CE-.
+   */
+  destino?: "compra" | "tramite";
   expenseLabel: string;
   /** Saldo de la compra: `total − amount_paid`. Es el máximo y el valor precargado. */
   saldo: number;
@@ -34,7 +41,12 @@ interface Props {
  * POST /api/finanzas/business-expenses/[id]/payments → `createSupplierPayment`.
  * Al terminar, `?pago=CE-000004` en la URL para el toast y `router.refresh`.
  */
-export function RegisterSupplierPaymentDialog({ expenseId, expenseLabel, saldo, bancos, disabled }: Props) {
+const ENDPOINT = {
+  compra: (id: string) => `/api/finanzas/business-expenses/${id}/payments`,
+  tramite: (id: string) => `/api/expenses/${id}/payments`,
+} as const;
+
+export function RegisterSupplierPaymentDialog({ expenseId, destino = "compra", expenseLabel, saldo, bancos, disabled }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -64,7 +76,7 @@ export function RegisterSupplierPaymentDialog({ expenseId, expenseLabel, saldo, 
 
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/finanzas/business-expenses/${expenseId}/payments`, {
+        const res = await fetch(ENDPOINT[destino](expenseId), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(toPaymentPayload(values, amountNum)),

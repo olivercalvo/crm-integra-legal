@@ -124,11 +124,13 @@ export async function cargarPagoProveedorParaAsiento(
   tenantId: string,
   pagoId: string
 ): Promise<PagoProveedorParaAsiento | null> {
+  // Los DOS destinos del arco (049): el que no aplica llega null.
   const { data: pago, error } = await db
     .from("supplier_payments")
     .select(
-      "id, payment_number, payment_date, amount, payment_account_code, business_expense_id, " +
-        "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number)"
+      "id, payment_number, payment_date, amount, payment_account_code, business_expense_id, expense_id, " +
+        "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number), " +
+        "tramite:expenses!supplier_payments_expense_id_fkey(id, concept, suppliers(legal_name), cases(case_code))"
     )
     .eq("tenant_id", tenantId)
     .eq("id", pagoId)
@@ -138,24 +140,48 @@ export async function cargarPagoProveedorParaAsiento(
   if (!pago) return null;
 
   type Compra = { id: string; description: string; supplier_name: string | null; supplier_invoice_number: string | null };
+  type Tramite = {
+    id: string;
+    concept: string;
+    suppliers: { legal_name: string } | { legal_name: string }[] | null;
+    cases: { case_code: string } | { case_code: string }[] | null;
+  };
   const row = pago as unknown as {
     id: string;
     payment_number: string | null;
     payment_date: string;
     amount: number | string;
     payment_account_code: string | null;
-    business_expense_id: string;
+    business_expense_id: string | null;
+    expense_id: string | null;
     compra?: Compra | Compra[] | null;
+    tramite?: Tramite | Tramite[] | null;
   };
-  const compra = Array.isArray(row.compra) ? row.compra[0] : row.compra;
+  const uno = <T,>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? x[0] ?? null : x ?? null);
+  const compra = uno(row.compra);
+  const tramite = uno(row.tramite);
+
+  const documento =
+    row.expense_id && tramite
+      ? {
+          documento_kind: "tramite" as const,
+          documento_id: row.expense_id,
+          documento_description: `${tramite.concept}${uno(tramite.cases)?.case_code ? ` — ${uno(tramite.cases)?.case_code}` : ""}`,
+          supplier_name: uno(tramite.suppliers)?.legal_name ?? null,
+          supplier_invoice_number: null,
+        }
+      : {
+          documento_kind: "compra" as const,
+          documento_id: row.business_expense_id ?? "",
+          documento_description: compra?.description ?? "",
+          supplier_name: compra?.supplier_name ?? null,
+          supplier_invoice_number: compra?.supplier_invoice_number ?? null,
+        };
 
   return {
     pago_id: row.id,
     payment_number: row.payment_number ?? null,
-    compra_id: row.business_expense_id,
-    compra_description: compra?.description ?? "",
-    supplier_name: compra?.supplier_name ?? null,
-    supplier_invoice_number: compra?.supplier_invoice_number ?? null,
+    ...documento,
     payment_date: row.payment_date,
     amount: num(row.amount),
     payment_account_code: row.payment_account_code,

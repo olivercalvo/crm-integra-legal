@@ -86,11 +86,17 @@ export async function fetchSupplierPaymentPdfBundle(
     .select(
       `
         id, kind, payment_number, payment_date, amount, method, reference, notes, status,
-        payment_account_code, created_by,
+        payment_account_code, created_by, business_expense_id, expense_id,
         compra:business_expenses!supplier_payments_business_expense_id_fkey(
           id, description, expense_date, supplier_invoice_number, total, amount_paid,
           supplier_name, supplier_ruc,
           supplier:suppliers!business_expenses_supplier_id_fkey(
+            supplier_number, legal_name, trade_name, ruc, dv, email, phone
+          )
+        ),
+        tramite:expenses!supplier_payments_expense_id_fkey(
+          id, concept, date, amount, amount_paid,
+          supplier:suppliers!expenses_supplier_id_fkey(
             supplier_number, legal_name, trade_name, ruc, dv, email, phone
           )
         )
@@ -119,7 +125,29 @@ export async function fetchSupplierPaymentPdfBundle(
     total: string | number; amount_paid: string | number | null;
     supplier_name: string | null; supplier_ruc: string | null; supplier: Uno<Proveedor>;
   };
-  const compra = uno(p.compra as Uno<Compra>);
+  // Arco exclusivo (049): el pago es de una compra O de un gasto de trámite.
+  // Para el comprobante los dos se presentan igual: descripción, fecha, total.
+  type Tramite = {
+    id: string; concept: string; date: string; amount: string | number; amount_paid: string | number | null;
+    supplier: Uno<Proveedor>;
+  };
+  const compraRaw = uno(p.compra as Uno<Compra>);
+  const tramiteRaw = uno(p.tramite as Uno<Tramite>);
+  const compra: Compra | null = compraRaw
+    ? compraRaw
+    : tramiteRaw
+      ? {
+          id: tramiteRaw.id,
+          description: tramiteRaw.concept,
+          expense_date: tramiteRaw.date,
+          supplier_invoice_number: null,
+          total: tramiteRaw.amount,
+          amount_paid: tramiteRaw.amount_paid,
+          supplier_name: null,
+          supplier_ruc: null,
+          supplier: tramiteRaw.supplier,
+        }
+      : null;
   if (!compra) return { ok: false, motivo: "no-existe" };
   const prov = uno(compra.supplier);
 

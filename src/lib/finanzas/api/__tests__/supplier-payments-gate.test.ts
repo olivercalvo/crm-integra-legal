@@ -24,6 +24,7 @@ import {
 const TENANT = "a0000000-0000-0000-0000-000000000001";
 const COMPRA = "55555555-5555-5555-5555-555555555555";
 const PAGO = "66666666-6666-6666-6666-666666666666";
+const TRAMITE = "77777777-7777-7777-7777-777777777777";
 const USER = "22222222-2222-2222-2222-222222222222";
 
 interface Guion {
@@ -32,6 +33,8 @@ interface Guion {
   postea?: "ok" | { code: string; message: string };
   bancoValido?: boolean;
   pagoExistente?: { kind: string; status: string } | null;
+  /** El gasto de TRÁMITE (049) que se paga, cuando el input trae `expense_id`. */
+  tramite?: { status: string; amount: number; amount_paid: number; posted_entry_id: string | null } | null;
 }
 
 function fake(g: Guion) {
@@ -75,6 +78,11 @@ function fake(g: Guion) {
 
   function resolver(nombre: string) {
     switch (nombre) {
+      case "expenses":
+        return {
+          data: g.tramite === null ? null : { id: TRAMITE, concept: "Timbres", ...(g.tramite ?? { status: "pendiente_pago", amount: 300, amount_paid: 0, posted_entry_id: "je-gasto" }) },
+          error: null,
+        };
       case "business_expenses":
         return {
           data: g.compra === null ? null : { id: COMPRA, description: "Insumos", ...(g.compra ?? { status: "pendiente_pago", total: 1000, amount_paid: 0 }) },
@@ -97,6 +105,7 @@ function fake(g: Guion) {
           data: {
             id: PAGO,
             business_expense_id: COMPRA,
+            expense_id: null,
             kind: g.pagoExistente?.kind ?? "payment",
             payment_number: "CE-000004",
             payment_date: "2026-09-21",
@@ -146,6 +155,7 @@ function fake(g: Guion) {
 
 const INPUT = {
   business_expense_id: COMPRA,
+  expense_id: null,
   payment_date: "2026-09-21",
   amount: 400,
   method: "transferencia" as const,
@@ -262,4 +272,43 @@ test("reversar un pago sin asiento → 409: se elimina", async () => {
     () => reverseSupplierPayment(db as never, db as never, TENANT, USER, PAGO, "motivo largo"),
     /no está en el libro/
   );
+});
+
+// ---------------------------------------------------------------------------
+// El pago de un GASTO DE TRÁMITE (049, Bloque 4): mismo motor, otro destino
+// ---------------------------------------------------------------------------
+
+const INPUT_TRAMITE = { ...INPUT, business_expense_id: null, expense_id: TRAMITE, amount: 300 };
+
+test("pago de un gasto de trámite: INSERT con expense_id (y business_expense_id null), un asiento", async () => {
+  const { db, reg } = fake({ postea: "ok" });
+  const r = await createSupplierPayment(db as never, TENANT, USER, INPUT_TRAMITE, db as never);
+  assert.equal(r.payment_number, "CE-000004", "la MISMA serie CE- que las compras");
+  assert.equal(reg.payloadPago?.expense_id, TRAMITE);
+  assert.equal(reg.payloadPago?.business_expense_id, null, "arco exclusivo: el otro destino va null");
+  assert.equal(reg.posteos, 1);
+});
+
+test("🔒 un gasto de trámite SIN asiento no se paga → 409 (no hay cuenta por pagar en el libro)", async () => {
+  const { db, reg } = fake({ tramite: { status: "pendiente_pago", amount: 300, amount_paid: 0, posted_entry_id: null } });
+  const err = await createSupplierPayment(db as never, TENANT, USER, INPUT_TRAMITE, db as never).catch((e) => e);
+  assert.equal(err.status, 409);
+  assert.match(err.message, /todavía no está registrado en el libro/);
+  assert.deepEqual(reg.correlativos, [], "no quema correlativo");
+  assert.equal(reg.posteos, 0);
+});
+
+test("un gasto de trámite anulado → 409", async () => {
+  const { db } = fake({ tramite: { status: "anulado", amount: 300, amount_paid: 0, posted_entry_id: "je-gasto" } });
+  const err = await createSupplierPayment(db as never, TENANT, USER, INPUT_TRAMITE, db as never).catch((e) => e);
+  assert.equal(err.status, 409);
+  assert.match(err.message, /anulado/);
+});
+
+test("el cap del trámite es por su saldo (amount − amount_paid), nombrando 'gasto de trámite'", async () => {
+  const { db } = fake({ tramite: { status: "parcialmente_pagado", amount: 300, amount_paid: 250, posted_entry_id: "je-gasto" } });
+  const err = await createSupplierPayment(db as never, TENANT, USER, { ...INPUT_TRAMITE, amount: 100 }, db as never).catch((e) => e);
+  assert.equal(err.status, 400);
+  assert.match(err.message, /gasto de trámite/);
+  assert.match(err.message, /50\.00/);
 });

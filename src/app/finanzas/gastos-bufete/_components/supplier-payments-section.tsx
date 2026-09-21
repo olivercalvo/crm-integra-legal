@@ -10,6 +10,8 @@ import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-
 
 interface Props {
   expenseId: string;
+  /** Compra (default) o gasto de trámite (Bloque 4): cambia el endpoint del alta. */
+  destino?: "compra" | "tramite";
   expenseLabel: string;
   total: number;
   amountPaid: number;
@@ -36,7 +38,7 @@ interface Props {
  *     documentar algo que no pasó.
  *   - Un pago reversado sigue en la lista, tachado, con "Reversado · asiento N".
  */
-export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amountPaid, payments, bancos, canMutate }: Props) {
+export function SupplierPaymentsSection({ expenseId, destino = "compra", expenseLabel, total, amountPaid, payments, bancos, canMutate }: Props) {
   const saldo = Math.round((total - amountPaid) * 100) / 100;
   const vigentes = payments.filter((p) => p.status === "registrado");
   const reversados = payments.filter((p) => p.status === "anulado").length;
@@ -62,7 +64,7 @@ export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amount
           </div>
         </div>
         {canMutate && saldo > 0.001 && (
-          <RegisterSupplierPaymentDialog expenseId={expenseId} expenseLabel={expenseLabel} saldo={saldo} bancos={bancos} />
+          <RegisterSupplierPaymentDialog expenseId={expenseId} destino={destino} expenseLabel={expenseLabel} saldo={saldo} bancos={bancos} />
         )}
       </div>
 
@@ -86,7 +88,7 @@ export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amount
 
       {payments.length === 0 ? (
         <div className="rounded-md border border-dashed bg-gray-50/40 p-6 text-center text-sm text-gray-500">
-          {canMutate ? 'Use el botón "Registrar pago" para asentar el primer pago.' : "Esta compra aún no tiene pagos."}
+          {canMutate ? 'Use el botón "Registrar pago" para asentar el primer pago.' : destino === "tramite" ? "Este gasto aún no tiene pagos." : "Esta compra aún no tiene pagos."}
         </div>
       ) : (
         <div className="overflow-x-auto">

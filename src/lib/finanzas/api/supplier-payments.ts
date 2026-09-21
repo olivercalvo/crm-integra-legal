@@ -27,7 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CreateSupplierPaymentInput } from "@/lib/finanzas/types/supplier-payment";
+import { destinoDePago, type CreateSupplierPaymentInput } from "@/lib/finanzas/types/supplier-payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import {
@@ -67,28 +67,67 @@ export async function createSupplierPayment(
     );
   }
 
-  // 1. La compra y su saldo
-  const { data: compra, error: errCompra } = await db
-    .from("business_expenses")
-    .select("id, description, status, total, amount_paid")
-    .eq("tenant_id", tenantId)
-    .eq("id", input.business_expense_id)
-    .maybeSingle();
-  if (errCompra) {
-    throw new MutationError(pgErrorToMessage(errCompra), 500, errCompra);
+  // 1. El documento y su saldo (049: una compra O un gasto de trámite)
+  const destino = destinoDePago(input);
+  // Para los mensajes: "Esta compra … pagada" / "Este gasto de trámite … pagado".
+  const docLabel = destino.kind === "compra" ? "compra" : "gasto de trámite";
+  const docFrase = destino.kind === "compra" ? "Esta compra ya está completamente pagada." : "Este gasto de trámite ya está completamente pagado.";
+  let total: number;
+  let pagado: number;
+  let status: string;
+  if (destino.kind === "compra") {
+    const { data: compra, error: errCompra } = await db
+      .from("business_expenses")
+      .select("id, description, status, total, amount_paid")
+      .eq("tenant_id", tenantId)
+      .eq("id", destino.id)
+      .maybeSingle();
+    if (errCompra) {
+      throw new MutationError(pgErrorToMessage(errCompra), 500, errCompra);
+    }
+    if (!compra) {
+      throw new MutationError("Compra no encontrada", 404);
+    }
+    total = Number(compra.total);
+    pagado = Number(compra.amount_paid);
+    status = String(compra.status);
+  } else {
+    const { data: gasto, error: errGasto } = await db
+      .from("expenses")
+      .select("id, concept, status, amount, amount_paid, posted_entry_id")
+      .eq("tenant_id", tenantId)
+      .eq("id", destino.id)
+      .maybeSingle();
+    if (errGasto) {
+      throw new MutationError(pgErrorToMessage(errGasto), 500, errGasto);
+    }
+    if (!gasto) {
+      throw new MutationError("Gasto de trámite no encontrado", 404);
+    }
+    if (gasto.status === "anulado") {
+      throw new MutationError("Este gasto está anulado: no se le registran pagos.", 409);
+    }
+    // 🔴 Sin el asiento del gasto no hay cuenta por pagar en el libro: pagar
+    //    ahora debitaría 200001 por una deuda que el mayor no tiene. Los gastos
+    //    anteriores al posteo automático primero se registran en el libro.
+    if (!gasto.posted_entry_id) {
+      throw new MutationError(
+        "Este gasto todavía no está registrado en el libro contable: regístrelo primero " +
+          '(botón "Registrar en el libro contable") y después registre su pago.',
+        409
+      );
+    }
+    total = Number(gasto.amount);
+    pagado = Number(gasto.amount_paid);
+    status = String(gasto.status);
   }
-  if (!compra) {
-    throw new MutationError("Compra no encontrada", 404);
-  }
-  const total = Number(compra.total);
-  const pagado = Number(compra.amount_paid);
   const saldo = Math.round((total - pagado) * 100) / 100;
-  if (compra.status === "pagado" || saldo <= 0.001) {
-    throw new MutationError("Esta compra ya está completamente pagada.", 400);
+  if (status === "pagado" || saldo <= 0.001) {
+    throw new MutationError(docFrase, 400);
   }
   if (input.amount > saldo + 0.001) {
     throw new MutationError(
-      `El monto del pago (B/. ${input.amount.toFixed(2)}) excede el saldo pendiente de la compra ` +
+      `El monto del pago (B/. ${input.amount.toFixed(2)}) excede el saldo pendiente del ${docLabel} ` +
         `(B/. ${saldo.toFixed(2)}).`,
       400
     );
@@ -111,7 +150,9 @@ export async function createSupplierPayment(
     .from("supplier_payments")
     .insert({
       tenant_id: tenantId,
-      business_expense_id: input.business_expense_id,
+      // Arco exclusivo (049): uno de los dos, el otro null.
+      business_expense_id: destino.kind === "compra" ? destino.id : null,
+      expense_id: destino.kind === "tramite" ? destino.id : null,
       kind: "payment",
       payment_number: paymentNumber,
       payment_date: input.payment_date,
@@ -131,7 +172,7 @@ export async function createSupplierPayment(
   }
   const pagoId = pago.id as string;
 
-  /** Deshace el pago. El trigger de la 048 devuelve la compra a como estaba. */
+  /** Deshace el pago. El trigger (048/049) devuelve el documento a como estaba. */
   async function deshacerPago(causa: MutationError): Promise<never> {
     const { error: errDel } = await db
       .from("supplier_payments")

@@ -215,9 +215,15 @@ export interface PagoProveedorParaAsiento {
   pago_id: string;
   /** `CE-000012`. Es la referencia del asiento. */
   payment_number: string | null;
-  /** La compra que se paga, para la descripción. */
-  compra_id: string;
-  compra_description: string;
+  /**
+   * El documento que se paga, para la descripción (049): una COMPRA
+   * (`business_expenses`) o un GASTO DE TRÁMITE (`expenses`). El asiento es el
+   * mismo en los dos casos —DEBE 200001 / HABER banco— porque los dos
+   * acreditaron 200001 al registrarse.
+   */
+  documento_kind: "compra" | "tramite";
+  documento_id: string;
+  documento_description: string;
   supplier_name: string | null;
   supplier_invoice_number: string | null;
   payment_date: string;
@@ -295,7 +301,7 @@ export function construirAsientoDePagoProveedor(
       account_code: p.payment_account_code,
       debit: 0,
       credit: monto,
-      description: `Pago ${p.compra_description}`,
+      description: `Pago ${p.documento_description}`,
     },
   ];
 
@@ -303,7 +309,9 @@ export function construirAsientoDePagoProveedor(
     ok: true,
     asiento: {
       transaction_date: p.payment_date,
-      description: `Pago a proveedor: ${p.compra_description}${quien}${p.supplier_invoice_number ? ` (fact. ${p.supplier_invoice_number})` : ""}`,
+      description:
+        (p.documento_kind === "tramite" ? "Pago de gasto de trámite: " : "Pago a proveedor: ") +
+        `${p.documento_description}${quien}${p.supplier_invoice_number ? ` (fact. ${p.supplier_invoice_number})` : ""}`,
       source_type: SOURCE_TYPE_PAGO_PROVEEDOR,
       lines,
       source_id: p.pago_id,

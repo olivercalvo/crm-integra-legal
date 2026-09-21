@@ -17,7 +17,7 @@ function num(v: number | string | null | undefined): number {
 }
 
 const COLS =
-  "id, business_expense_id, kind, payment_number, payment_date, amount, method, " +
+  "id, business_expense_id, expense_id, kind, payment_number, payment_date, amount, method, " +
   "payment_account_code, reference, notes, status, created_at, created_by";
 
 type Raw = Omit<SupplierPaymentRow, "amount"> & { amount: number | string };
@@ -62,11 +62,29 @@ export async function getSupplierPaymentsForExpense(
   tenantId: string,
   expenseId: string
 ): Promise<SupplierPaymentForExpense[]> {
+  return pagosDeDocumento(db, tenantId, "business_expense_id", expenseId);
+}
+
+/** Los pagos de un GASTO DE TRÁMITE (049), con la misma forma que los de una compra. */
+export async function getSupplierPaymentsForTramite(
+  db: DB,
+  tenantId: string,
+  expenseId: string
+): Promise<SupplierPaymentForExpense[]> {
+  return pagosDeDocumento(db, tenantId, "expense_id", expenseId);
+}
+
+async function pagosDeDocumento(
+  db: DB,
+  tenantId: string,
+  columna: "business_expense_id" | "expense_id",
+  documentoId: string
+): Promise<SupplierPaymentForExpense[]> {
   const { data, error } = await db
     .from("supplier_payments")
     .select(COLS)
     .eq("tenant_id", tenantId)
-    .eq("business_expense_id", expenseId)
+    .eq(columna, documentoId)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (error) {

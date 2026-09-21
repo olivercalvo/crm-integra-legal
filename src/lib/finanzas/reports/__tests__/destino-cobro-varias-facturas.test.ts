@@ -70,3 +70,22 @@ test("un pago a PROVEEDOR (048) enlaza a su COMPRA, y su espejo también", async
   assert.equal(destinos.get("sp1"), "/finanzas/gastos-bufete/compra-1");
 });
 
+
+test("un pago de un GASTO DE TRÁMITE (049) enlaza al gasto de trámite, no a una compra", async () => {
+  const db = fakeDb({
+    payment_applications: [],
+    payment_reversals: [],
+    payments: [],
+    supplier_payments: [
+      { id: "sp1", business_expense_id: "compra-1", expense_id: null },
+      { id: "sp2", business_expense_id: null, expense_id: "tramite-9" },
+    ],
+  });
+  const destinos = await loadDestinosDeOrigen(db as never, TENANT, [
+    { source_type: "pago_proveedor", source_id: "sp1" },
+    { source_type: "pago_proveedor", source_id: "sp2" },
+    { source_type: "reversion", source_id: "sp2" },
+  ] as never);
+  assert.equal(destinos.get("sp1"), "/finanzas/gastos-bufete/compra-1");
+  assert.equal(destinos.get("sp2"), "/finanzas/gastos-tramite/tramite-9");
+});

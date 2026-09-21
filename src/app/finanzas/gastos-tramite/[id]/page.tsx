@@ -18,6 +18,10 @@ import { formatDate } from "@/lib/utils/format-date";
 import { getGastoTramiteContable } from "@/lib/finanzas/queries/expense-tramite";
 import { PostToLedgerButton } from "./_components/post-to-ledger-button";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { SupplierPaymentsSection } from "@/app/finanzas/gastos-bufete/_components/supplier-payments-section";
+import { SupplierPaymentSuccessToast } from "@/app/finanzas/gastos-bufete/_components/supplier-payment-success-toast";
+import { getSupplierPaymentsForTramite } from "@/lib/finanzas/queries/supplier-payments";
+import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { formatDateTime } from "@/lib/utils/format-date";
 import {
   cuentaLabel,
@@ -102,6 +106,13 @@ const POSTING_ROLES = ["admin", "abogada"];
  */
 const REVERSING_ROLES = ["admin", "abogada", "contador"];
 
+/**
+ * Quién registra el PAGO del gasto desde ESTA pantalla (entrada (b) de Oliver,
+ * 21/09): admin y contador. La abogada lo registra en el alta, desde el caso
+ * (entrada (a)). La ruta `POST /api/expenses/[id]/payments` admite a los tres.
+ */
+const PAYING_ROLES = ["admin", "contador"];
+
 interface PageProps {
   params: { id: string };
 }
@@ -121,6 +132,14 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
 
   const gasto = await getGastoTramiteContable(ctx.db, ctx.tenantId, params.id);
   if (!gasto) notFound();
+
+  // Los pagos del gasto (049) y los bancos para registrar uno. Solo se ofrece
+  // registrar si el gasto está en el libro: sin asiento no hay cuenta por pagar
+  // que debitar (createSupplierPayment lo rechaza igual con 409).
+  const [pagos, bancos] = await Promise.all([
+    getSupplierPaymentsForTramite(ctx.db, ctx.tenantId, params.id),
+    listarCuentasDeBanco(ctx.db, ctx.tenantId),
+  ]);
 
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
@@ -252,6 +271,22 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           </dl>
         )}
       </div>
+
+      <SupplierPaymentSuccessToast />
+
+      {/* ── Pagos (049): la segunda transacción ─────────────────────── */}
+      {posteado && !anulado && (
+        <SupplierPaymentsSection
+          expenseId={gasto.id}
+          destino="tramite"
+          expenseLabel={`${gasto.concept}${gasto.case_code ? ` — ${gasto.case_code}` : ""}`}
+          total={gasto.amount}
+          amountPaid={gasto.amount_paid}
+          payments={pagos}
+          bancos={bancos}
+          canMutate={PAYING_ROLES.includes(ctx.userRole)}
+        />
+      )}
 
       {/* ── Reversión (050) ────────────────────────────────────────── */}
       {anulado && gasto.reversion && (

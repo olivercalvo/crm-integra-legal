@@ -1,3 +1,22 @@
+/**
+ * POST /api/expenses/[id]/payments — registrar el PAGO de un gasto de trámite
+ * (Bloque 4, 049). Es la segunda transacción de Josuarth: el gasto ya acreditó
+ * 200001 al registrarse; el pago la debita contra el banco. Mismo motor que el
+ * pago de una compra (`createSupplierPayment`, serie `CE-`, comprobante de
+ * egreso, reversión por `reverse_supplier_payment`), con `expense_id` en vez
+ * de `business_expense_id` (arco exclusivo).
+ *
+ * Body: { payment_date, amount, method, payment_account_code, reference?, notes? }
+ *
+ * Roles: admin, abogada y contador. Son la UNIÓN de las dos entradas que
+ * decidió Oliver (21/09): (a) "ya se pagó" en el formulario del caso — admin y
+ * abogada — y (b) "Registrar pago" en /finanzas/gastos-tramite/{id} — admin y
+ * contador. Cada pantalla ofrece el botón a su rol; el servidor admite a los
+ * tres porque los tres tienen una puerta legítima. El asistente no.
+ *
+ * El tenant sale del contexto autenticado, nunca del request.
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
@@ -11,17 +30,6 @@ interface RouteParams {
   params: { id: string };
 }
 
-/**
- * POST /api/finanzas/business-expenses/[id]/payments — registrar un pago a
- * proveedor contra la compra del path (Bloque 3, 048). Reemplaza a
- * `/mark-paid` (FND-009). Pago parcial permitido; un pago = una compra.
- *
- * Body: { payment_date, amount, method, payment_account_code, reference?, notes? }
- *
- * Permisos: los MISMOS que mutar compras (admin, abogada, contador — el
- * contador tiene CRUD en Gastos del Bufete desde el 24/08). El tenant sale del
- * contexto autenticado, nunca del body.
- */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
@@ -37,11 +45,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
+  // El destino sale del PATH: un body con `business_expense_id` no puede
+  // convertir esto en un pago de compra.
   const validation = validateCreateSupplierPayment({
     ...((body ?? {}) as Record<string, unknown>),
-    // El destino sale del PATH (arco exclusivo, 049): el body no lo cambia.
-    business_expense_id: params.id,
-    expense_id: null,
+    business_expense_id: null,
+    expense_id: params.id,
   });
   if (!validation.ok) {
     return NextResponse.json(
@@ -65,10 +74,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   } catch (err) {
     if (err instanceof MutationError) {
-      console.error("[finanzas] createSupplierPayment failed:", err.message, err.detail);
+      console.error("[finanzas] createSupplierPayment (trámite) failed:", err.message, err.detail);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    console.error("[finanzas] createSupplierPayment unexpected error:", err);
+    console.error("[finanzas] createSupplierPayment (trámite) unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

@@ -20,9 +20,18 @@ export function validateCreateSupplierPayment(
 ): ValidationResult<CreateSupplierPaymentInput> {
   const errors: ValidationErrors = {};
 
-  const expenseId = String(raw?.business_expense_id ?? "").trim();
-  if (!expenseId || !UUID_RE.test(expenseId)) {
-    errors.business_expense_id = "Compra inválida";
+  // 🔴 Arco exclusivo (049): UNA compra o UN gasto de trámite, nunca los dos
+  //    ni ninguno. Cada ruta pone el suyo desde el path; el otro llega null.
+  const compraId = String(raw?.business_expense_id ?? "").trim();
+  const tramiteId = String(raw?.expense_id ?? "").trim();
+  if (compraId && tramiteId) {
+    errors.destino = "Un pago es de una compra O de un gasto de trámite, no de los dos";
+  } else if (compraId) {
+    if (!UUID_RE.test(compraId)) errors.business_expense_id = "Compra inválida";
+  } else if (tramiteId) {
+    if (!UUID_RE.test(tramiteId)) errors.expense_id = "Gasto de trámite inválido";
+  } else {
+    errors.destino = "Falta el documento que se paga";
   }
 
   const paymentDate = String(raw?.payment_date ?? "").trim();
@@ -75,7 +84,8 @@ export function validateCreateSupplierPayment(
     ok: true,
     errors: null,
     data: {
-      business_expense_id: expenseId,
+      business_expense_id: compraId || null,
+      expense_id: tramiteId || null,
       payment_date: paymentDate,
       amount: round2(amount),
       method,

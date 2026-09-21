@@ -16,8 +16,29 @@ import type { AsientoDeCobro, ReversionDeCobro } from "@/lib/finanzas/types/paym
 export type SupplierPaymentKind = "payment" | "migrated_balance";
 export type SupplierPaymentStatus = "registrado" | "anulado";
 
+/**
+ * A qué documento va el pago (049: arco exclusivo). Exactamente uno de los dos
+ * ids; el CHECK de la base lo hace imposible de violar.
+ *   · `compra`  → `business_expenses` (Gastos del Bufete)
+ *   · `tramite` → `expenses` (gasto de trámite, módulo Legal)
+ */
+export type SupplierPaymentDestino =
+  | { kind: "compra"; id: string }
+  | { kind: "tramite"; id: string };
+
+export function destinoDePago(p: {
+  business_expense_id: string | null;
+  expense_id: string | null;
+}): SupplierPaymentDestino {
+  if (p.business_expense_id) return { kind: "compra", id: p.business_expense_id };
+  if (p.expense_id) return { kind: "tramite", id: p.expense_id };
+  throw new Error("Pago sin destino: viola el arco exclusivo de la 049");
+}
+
 export interface CreateSupplierPaymentInput {
-  business_expense_id: string;
+  /** UNO de los dos (arco exclusivo, 049). El validador lo exige. */
+  business_expense_id: string | null;
+  expense_id: string | null;
   payment_date: string; // YYYY-MM-DD
   amount: number;
   method: PaymentMethod;
@@ -29,7 +50,10 @@ export interface CreateSupplierPaymentInput {
 
 export interface SupplierPaymentRow {
   id: string;
-  business_expense_id: string;
+  /** NULL cuando el pago es de un gasto de trámite (049). */
+  business_expense_id: string | null;
+  /** NULL cuando el pago es de una compra. */
+  expense_id: string | null;
   kind: SupplierPaymentKind;
   /** `CE-000012`; NULL en los saldos heredados. */
   payment_number: string | null;

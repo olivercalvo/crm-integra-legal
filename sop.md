@@ -2309,6 +2309,34 @@ Se acepta a conciencia (Oliver, 21/09/2026), con el criterio de `emitInvoice`:
 Hay un test en `payments-gate.test.ts` que fija el hueco como hecho documentado: si alguien lo
 "arregla" moviendo el número después del asiento, el test lo nombra.
 
+### 3. Dos puertas, un formulario, dos rutas a la misma función
+
+Se registra desde el detalle de la factura (diálogo, UNA factura) o desde `/finanzas/cobros/nuevo`
+(una o VARIAS, desde la Parte B del 21/09/2026). Las dos usan
+`components/finanzas/cobros/payment-form-fields.tsx` y llegan a la misma `createPayment`: el
+diálogo por el atajo `POST /api/finanzas/invoices/[id]/payments` (envuelve el body en una
+aplicación) y el alta por `POST /api/finanzas/payments` con `applications[]`. **No hay una segunda
+validación.** `payment-form-una-sola-implementacion.test.ts` lee las puertas y falla si alguna
+vuelve a declarar sus campos.
+
+**Varias facturas, cómo:** un recibo es de UN cliente (400 si se mezclan); el total de la
+transferencia tiene que ser IGUAL a la suma de lo aplicado; cada monto ≤ el saldo de su factura;
+ninguno en 0 (el CHECK de `payment_applications` lo prohíbe: la fila en 0 se saca). El reparto lo
+propone la pantalla por antigüedad (`lib/finanzas/cobros/repartir-por-antiguedad.ts`, de la más
+vieja a la más nueva) y la persona lo corrige; el servidor no reparte, valida.
+
+🔴 **El excedente se rechaza**, no se guarda como `amount_unapplied`: sin saber si va a 100004 o a
+una cuenta de anticipos, el asiento no se puede postear bien, y una cuenta por cobrar con saldo
+acreedor no es una cuenta por cobrar (Oliver, 21/09). El mensaje dice los dos montos, la
+diferencia y la salida (otra factura del mismo cliente o ajustar el monto). La pregunta que lo
+desbloquea está en `task_plan.md` para Josuarth.
+
+**El asiento sigue siendo UNO de DOS líneas** (banco / 100004 por el total): 100004 es cuenta
+control y su auxiliar es por cliente; el detalle por factura vive en `payment_applications` y en
+el PDF. Su `reference` es el número de recibo. La reversión (046) no cambió: fotografía y borra
+TODAS las aplicaciones y T7a devuelve cada factura.
+
+#### (texto original del 21/09, mañana)
 ### 3. Dos puertas, un formulario, una ruta
 
 Se registra desde el detalle de la factura (diálogo) o desde `/finanzas/cobros/nuevo` (dos

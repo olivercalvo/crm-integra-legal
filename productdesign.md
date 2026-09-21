@@ -707,10 +707,22 @@ cobro" no se le muestra y `/finanzas/cobros/nuevo` le rebota). Registrar un cobr
 de la abogada: es quien recibe la plata del cliente y quien responde por la factura. El
 asistente no llega a nada de esto.
 
-**Fuera de alcance, a propósito.** Un recibo aplicado a varias facturas (el modelo lo soporta
-desde el día uno; la pantalla se hace cuando el bufete lo pida). Un detalle de cobro propio:
-el Libro Mayor sigue llevando al detalle de la factura, que es donde vive el cobro. Los cobros
-del caso (`client_payments`, módulo Legal) son otra cosa y no se cruzan con esto.
+**Varias facturas con una transferencia (desde el 21/09/2026, Josuarth).** En el alta se marcan
+las facturas con casillas; se teclea el total de la transferencia y el sistema lo reparte de la
+más vieja a la más nueva, fila por fila, con el saldo de cada una a la vista. Cada monto se puede
+corregir a mano y un renglón dice en vivo "Aplicado / Diferencia"; "Repartir por antigüedad"
+vuelve al automático. **Con una sola factura marcada no aparece nada de esto**: el paso 2 es el
+de siempre. Si la transferencia es mayor que lo que suman las facturas, se rechaza con la salida
+escrita (otra factura del mismo cliente o ajustar el monto): un recibo tiene que coincidir con la
+transferencia para que el banco concilie, y dónde va un excedente es una pregunta abierta para
+Josuarth. El recibo sale con una fila por factura, el asiento es uno solo, y reversarlo devuelve
+todas las facturas a la vez. En el Libro Mayor, un cobro de varias facturas lleva al listado de
+cobros filtrado por su número.
+
+**Fuera de alcance, a propósito.** Un detalle de cobro propio: el Libro Mayor lleva a la
+factura (una) o al listado filtrado (varias). Los cobros del caso (`client_payments`, módulo
+Legal) son otra cosa y no se cruzan con esto. El excedente (anticipo) espera la definición de
+Josuarth.
 
 ## REQUERIMIENTOS NO FUNCIONALES
 

@@ -4,6 +4,48 @@
 
 ---
 
+## Cierre del 21/09/2026 (noche) — Parte B construida: un recibo aplicado a varias facturas
+
+**SHA de la app en staging: `57a6592`** — deployment `dpl_2aDTa19h9rephTQZq6UbVsmn8tRW`, READY.
+Encima van solo commits de docs. **`main` sigue en `24b227a`. Producción no se tocó. Sin migración.**
+
+**1036/1036.** `tsc` y lint limpios.
+
+### Qué entró (detalle en `changelog.md`, reglas en SOP-031 §3 y CLAUDE.md)
+
+`createPayment` con `applications[]` (mismo cliente, cap por factura, un asiento de dos líneas,
+`reference = REC-`), validador con suma == total y el mensaje del excedente acordado, ruta vieja
+como atajo + `POST /api/finanzas/payments`, `repartirPorAntiguedad` puro, Libro Mayor →
+`/finanzas/cobros?q=REC-…` para el multi-factura, alta con casillas y reparto editable — y el caso
+de una factura sin cambios (una casilla marcada = paso 2 de siempre).
+
+### Verificado con clic real en el deploy (extensión conectada con el perfil de Oliver)
+
+Los cinco puntos que pidió Oliver, más la reversión del multi-factura y el PDF de dos filas. Lista
+en el changelog. Estado de staging al cerrar: REC-000001/2/5/7 registrados, REC-000003/4/6
+reversados, `last_number` = 7.
+
+### Lo que la extensión enseñó hoy (para la próxima)
+
+- Con la ventana por debajo de `lg`, el listado tiene DOS botones Reversar por fila (tabla oculta
+  + card): `find` los devuelve los dos y el de la tabla no hace nada. Clic al segundo.
+- Los clics por coordenadas fallan cuando la ventana cambia de tamaño entre capturas (pasó dos
+  veces); los clics por `ref` sobre el TEXTO del label (no sobre la casilla) marcan bien.
+- `Start-Process chrome.exe` abre un perfil sin la extensión: Chrome lo abre Oliver.
+
+### Pendiente
+
+1. **Josuarth:** ¿dónde va el excedente cuando un cliente transfiere más que sus facturas? (saldo
+   acreedor en 100004 o cuenta de anticipos). Desbloquea `amount_unapplied`.
+2. Bloque 3 — pagos a proveedores, con las reglas 3 y 4 de Josuarth ya anotadas (parcial SÍ; un
+   pago por factura).
+3. Un celular real para el wizard (hoy se vio el breakpoint de cards, no un teléfono).
+4. Lo anterior (compra con dos líneas por pantalla, usabilidad, trámite sin cuenta, mejoras
+   contables, `HON-FAM`/`HON-OTROS`, bloque `022`, reversión de manuales y trámite).
+
+---
+
+
 ## Cierre del 21/09/2026 (tarde) — Parte A: el contador ve Cobros; Parte B: plan multi-factura
 
 **SHA de la app en staging: `1fed5f1`** — deployment `dpl_Atui5PWuwesvCqVK2tDobUC634At`, READY,

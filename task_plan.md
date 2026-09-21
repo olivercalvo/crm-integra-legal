@@ -21,9 +21,10 @@ Transmitidas por Oliver el 21/09/2026. Definen dos bloques. Se copian tal cual l
 
 ## >>> PARTE B — PLAN: UN RECIBO APLICADO A VARIAS FACTURAS — 21/09/2026 <<<
 
-**Estado:** PLAN, no código. Pedido por Josuarth ("SÍ hace falta poder pagar varias facturas con una
-sola transferencia"). Cada afirmación de abajo se verificó contra el código el 21/09; donde dice
-"hoy" es lo que está en `1fed5f1`.
+**Estado:** CONSTRUIDO y verificado en el deploy `57a6592` (`dpl_2aDTa19h9rephTQZq6UbVsmn8tRW`),
+con clic real como abogada y como contador. Commits `0e8413f`, `578e7f2`, `879141e`, `57a6592`.
+Sin migración. Detalle en `changelog.md`; reglas en `sop.md` SOP-031 §3 y CLAUDE.md. Lo de abajo es
+el plan aprobado, que se cumplió tal cual salvo lo anotado en "Precisiones".
 
 ### Lo que el modelo ya tiene (verificado)
 
@@ -141,6 +142,17 @@ FAC-HON-000007"), que ya es lo que hace `cobros-list.tsx`.
 
 Hasta que conteste, el alta rechaza el excedente con el mensaje de la precisión 1. Y una cuenta
 por cobrar con saldo acreedor no es una cuenta por cobrar (Oliver, 21/09).
+
+### Verificado en pantalla al cerrar (21/09/2026, deploy `57a6592`)
+
+- [x] Dos facturas con reparto por antigüedad, clic real (REC-000006, asiento 25 de dos líneas).
+- [x] Corregir un monto a mano: el renglón de diferencia responde (157.00 de 191.53 · 34.53).
+- [x] Rechazo del excedente con el mensaje acordado, textual.
+- [x] Reversar el multi-factura desde el listado: las dos facturas vuelven a Emitida (asiento 26).
+- [x] PDF con dos filas.
+- [x] Una factura sola: marcada sola, paso 2 idéntico, REC-000007, asiento 27. No empeoró.
+- [x] **Modal de Reversar abierto como contador** (pendiente de la Parte A): alineado, con vista previa.
+- [x] Listado y alta en layout de cards (ventana bajo `lg`).
 
 ### Orden de commits propuesto (cuando Oliver diga)
 

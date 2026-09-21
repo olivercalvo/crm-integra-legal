@@ -1,5 +1,73 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Un recibo aplicado a varias facturas — Bloque 2, Parte B] - 2026-09-21
+
+Josuarth: *"SÍ hace falta poder pagar varias facturas con una sola transferencia."* Cuatro commits
+en `develop`: `0e8413f` servidor, `578e7f2` reparto, `879141e` Libro Mayor, `57a6592` alta.
+Staging `dpl_2aDTa19h9rephTQZq6UbVsmn8tRW`. **Sin migración. Producción no se tocó.**
+
+### Servidor (`0e8413f`)
+
+- `CreatePaymentInput.invoice_id` → `applications: [{ invoice_id, amount }]`. `createPayment` busca
+  las N facturas en una consulta, exige **mismo cliente** (400 si mezcla), estado cobrable y cap por
+  saldo **por factura** (nombra la factura), y hace un INSERT en `payments` y un INSERT multi-fila en
+  `payment_applications`. DELETE compensatorio, numeración y hueco: sin cambios.
+- Validador: una o varias sin repetir, cada monto > 0 (el CHECK prohíbe 0), y **`amount` == suma**.
+  El excedente se rechaza con el mensaje acordado con Oliver: *"La transferencia es de B/. X y las
+  facturas seleccionadas suman B/. Y. Un recibo tiene que coincidir con la transferencia para que el
+  banco concilie. Seleccione otra factura pendiente del mismo cliente por el resto (B/. Z) o ajuste
+  el monto."* El faltante también se rechaza.
+- Rutas: `POST /api/finanzas/invoices/[id]/payments` sigue como **atajo** de una aplicación (el
+  diálogo del detalle no cambió); nace `POST /api/finanzas/payments` para N. Mismo guard (admin,
+  abogada), cruzado en el test de roles.
+- **`reference` del asiento de cobro = `payment_number`**, siempre (con una o varias facturas; los
+  cobros sin número caen a la factura). Antes era "la primera factura", que con varias es arbitrario.
+  Verificado antes que ningún reporte lo leía como factura (task_plan, precisión 2).
+
+### Reparto (`578e7f2`) y Libro Mayor (`879141e`)
+
+- `lib/finanzas/cobros/repartir-por-antiguedad.ts`: de la más vieja a la más nueva, llenando cada
+  saldo; `validarReparto` aplica la misma regla que el servidor y devuelve el mensaje del excedente.
+  Módulo puro, 9 tests.
+- El cobro aplicado a varias facturas, que quedaba **sin enlace** en el Mayor, ahora va a
+  `/finanzas/cobros?q=REC-000012` (`RUTA_DEL_DOCUMENTO.cobro_varias_facturas`). Una factura → la
+  factura; sin número → sin enlace.
+
+### Alta (`57a6592`)
+
+- Paso 1: casillas por factura; con una sola cobrable queda **marcada sola**.
+- **Con UNA marcada, el paso 2 es exactamente el de antes** (sin tabla ni renglón): el caso común no
+  cambió — era la condición de Oliver.
+- Con varias: total → reparto automático (editable), renglón "Aplicado / Diferencia" en vivo,
+  "Repartir por antigüedad" para volver al automático, "Reparto corregido a mano" cuando se tocó,
+  cambiar el total vuelve a repartir. `PaymentFormFields` gana `afterAmount` y `amountHint`.
+- El detalle de factura muestra "de B/. X del recibo" cuando lo aplicado a esa factura es parte de
+  un recibo mayor.
+
+### Verificado en el deploy con clic real (abogada y contador)
+
+- **Dos facturas** (Aurelio Barría, 000007 = 107.00 y 000011 = 84.53): total 191.53 tecleado → el
+  reparto se llenó solo (107.00 / 84.53), diferencia 0.00.
+- **Corrección a mano**: 000011 a 50 → "Aplicado B/. 157.00 de B/. 191.53 · Diferencia B/. 34.53" en
+  ámbar + "Reparto corregido a mano".
+- **Excedente rechazado** con el mensaje acordado, textual, y nada registrado.
+- "Repartir por antigüedad" → diferencia 0.00 → **REC-000006**: dos aplicaciones, `amount_unapplied`
+  0, **un asiento (25) de dos líneas** por 191.53, `reference = REC-000006`, las dos facturas
+  *Pagada*. PDF con **dos filas** en "Aplicado a".
+- **Reversar el multi-factura desde el listado** (filtrado por `?q=REC-000006`, el destino del
+  Mayor): anulado, dos fotos en `payment_reversals`, asiento 26 espejo del 25, **las dos facturas
+  de vuelta a *Emitida***.
+- **Una factura sola** (Vallarino): marcada sola, paso 2 idéntico al de hoy ("Máximo permitido"),
+  `300` → REC-000007, asiento 27, factura *Pago parcial*. No empeoró: un clic menos que el radio.
+- **Como contador**: el listado sin "Registrar cobro", con Recibo y Reversar; **el modal de Reversar
+  abierto** (lo pendiente de la Parte A), alineado a la izquierda, con la vista previa del espejo.
+  Cerrado sin confirmar.
+- De paso: el listado y el alta se vieron en **layout de cards** (la ventana de Chrome quedó por
+  debajo de `lg`), que era lo que faltaba del ancho angosto — no es un celular, pero es el mismo
+  breakpoint.
+
+**1036/1036.** `tsc` y lint limpios.
+
 ## [El contador ve el listado de cobros, en solo lectura — Bloque 2, Parte A] - 2026-09-21
 
 Josuarth (21/09): *"El contador SÍ debe ver la pantalla de Cobros."* Commit `1fed5f1` en

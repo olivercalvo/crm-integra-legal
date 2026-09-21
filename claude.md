@@ -172,9 +172,16 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   decisión consciente con el criterio de `emitInvoice` (SOP-031), no algo que se pasó por alto.
   No mover el número después del asiento: dejaría un cobro contabilizado sin recibo, que no se
   puede compensar. Hay un test que lo fija.
-- **Dos puertas, un formulario, una ruta:** el diálogo del detalle de la factura y
-  `/finanzas/cobros/nuevo` usan `payment-form-fields.tsx` y `POST /api/finanzas/invoices/[id]/payments`.
+- **Dos puertas, un formulario, una `createPayment`:** el diálogo del detalle de la factura (atajo
+  `POST /api/finanzas/invoices/[id]/payments`, una factura) y `/finanzas/cobros/nuevo`
+  (`POST /api/finanzas/payments` con `applications[]`, una o varias) usan `payment-form-fields.tsx`.
   🔒 `payment-form-una-sola-implementacion.test.ts` falla si una puerta declara sus propios campos.
+- **Un recibo puede aplicarse a VARIAS facturas del mismo cliente** (Parte B, 21/09/2026). El total
+  tiene que ser IGUAL a la suma de lo aplicado: 🔴 **el excedente se RECHAZA** (no se guarda en
+  `amount_unapplied`) hasta que Josuarth defina si va a 100004 o a anticipos — la pregunta está en
+  `task_plan.md`. El asiento sigue siendo UNO de dos líneas por el total, con `reference` =
+  `payment_number`; la reversión (046) devuelve todas las facturas. El reparto por antigüedad es de
+  la pantalla (`lib/finanzas/cobros/repartir-por-antiguedad.ts`); el servidor valida, no reparte.
 - **`/finanzas/cobros` lo ven admin, abogada y contador; registran solo admin y abogada.** El
   contador entró el 21/09/2026 por respuesta de Josuarth, en solo lectura (PDF + Reversar). El
   listado es un patrón EXACTO en `route-access.ts` (`/nuevo` sigue cerrado); el rol está en

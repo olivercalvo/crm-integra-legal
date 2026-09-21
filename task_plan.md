@@ -1,5 +1,24 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> RESPUESTAS DE JOSUARTH — 21/09/2026 — ANOTADAS TEXTUALES ANTES DE TOCAR NADA <<<
+
+Transmitidas por Oliver el 21/09/2026. Definen dos bloques. Se copian tal cual llegaron:
+
+> 1. El contador SÍ debe ver la pantalla de Cobros.
+> 2. SÍ hace falta poder pagar varias facturas con una sola transferencia.
+> 3. A un proveedor SÍ se le puede pagar por partes (pago parcial).
+> 4. NO hace falta que un pago cubra varias facturas de proveedor. Un pago por
+>    factura.
+
+**Reparto (Oliver):**
+- **La 1 se cierra en este bloque** (Bloque 2, Parte A): el contador entra a `/finanzas/cobros`.
+  Ver abajo la decisión de solo lectura.
+- **La 2 se PLANEA en este bloque** (Bloque 2, Parte B): aplicar un recibo a varias facturas.
+  Plan, no código. El modelo lo soporta (`payment_applications` es N:M desde el día uno).
+- **La 3 y la 4 son del Bloque 3** (pagos a proveedores), que todavía no arranca. Quedan acá
+  anotadas para que ese bloque nazca con las dos reglas puestas: **pago parcial SÍ; un pago por
+  factura de proveedor, NO varias.**
+
 ## >>> RETOMAR ACÁ — BLOQUE 2: RECIBO DE CAJA COMO MÓDULO REAL — 21/09/2026 <<<
 
 **Estado:** CONSTRUIDO y verificado en el deploy de staging `a1a8c50`

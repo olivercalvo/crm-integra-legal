@@ -418,11 +418,11 @@ export function motivoParaNoGuardar(errors: ValidationErrors): string | null {
     if (primero.campo === "chart_account_code") {
       return `Elegí la cuenta contable de la línea ${linea}.${sufijo}`;
     }
-    return `Revisá la línea ${linea}: ${errors[primero.clave]}${sufijo}`;
+    return `Revise la línea ${linea}: ${errors[primero.clave]}${sufijo}`;
   }
 
   // — errores del encabezado: el mensaje del validador ya está redactado —
   const general = errors["lineas"];
   if (general) return general;
-  return errors[claves[0]] ?? "Revisá los campos marcados en rojo.";
+  return errors[claves[0]] ?? "Revise los campos marcados en rojo.";
 }

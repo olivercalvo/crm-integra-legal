@@ -93,7 +93,7 @@ export default async function AsientosPage() {
 
       {cuentas.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          No hay cuentas activas en el plan. Cargá el plan de cuentas antes de registrar
+          No hay cuentas activas en el plan. Cargue el plan de cuentas antes de registrar
           asientos.
         </div>
       ) : (

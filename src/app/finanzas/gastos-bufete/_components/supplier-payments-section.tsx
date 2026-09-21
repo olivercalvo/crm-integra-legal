@@ -101,7 +101,7 @@ export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amount
               {payments.map((p) => {
                 const reversado = p.status === "anulado";
                 const heredado = p.kind === "migrated_balance";
-                const label = `${p.payment_number ?? "Pago"} · B/. ${fmtImporte(p.amount)} del ${formatDate(p.payment_date)}`;
+                const label = `${heredado ? "Saldo heredado" : p.payment_number ?? "Pago"} · B/. ${fmtImporte(p.amount)} del ${formatDate(p.payment_date)}`;
                 const canDelete = !reversado && canMutate && !p.asiento;
                 const canReverse = !reversado && canMutate && !!p.asiento && !heredado;
                 return (

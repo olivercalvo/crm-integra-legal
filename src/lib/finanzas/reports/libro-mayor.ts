@@ -329,7 +329,8 @@ export interface MayorDeCuenta {
 const TIPO_TRANSACCION_ES: Record<string, string> = {
   factura: "Factura",
   gasto: "Gasto / compra",
-  pago: "Pago",
+  pago: "Cobro",
+  pago_proveedor: "Pago a proveedor",
   nota_credito: "Nota de crédito",
   manual: "Asiento de diario",
   reversion: "Reversión",

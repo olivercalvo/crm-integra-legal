@@ -5,7 +5,7 @@
  * cuenta a lo largo del tiempo, el Diario mira TODOS los asientos uno por uno:
  * es el registro tal como se escribió.
  *
- * Se lee con el mismo vocabulario que el mayor —"Factura", "Pago", "Asiento de
+ * Se lee con el mismo vocabulario que el mayor —"Factura", "Cobro", "Asiento de
  * diario"— y enlaza al documento de respaldo con las mismas rutas, importadas de
  * `destino-documento.ts`. Tiene que sentirse el mismo sistema, no otro.
  *
@@ -56,7 +56,7 @@ export interface AsientoDiario {
   /** Correlativo sin huecos que asigna el ledger. */
   numero: number;
   fecha: string;
-  /** "Factura", "Pago", "Asiento de diario"… el mismo texto que el mayor. */
+  /** "Factura", "Cobro", "Pago a proveedor", "Asiento de diario"… el mismo texto que el mayor. */
   tipoTransaccion: string;
   /** El documento de respaldo (número de factura, proveedor, referencia). */
   documento: string;

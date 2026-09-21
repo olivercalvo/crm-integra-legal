@@ -42,6 +42,42 @@ export default async function AntiguedadPage({
   // existe. Se compara con tolerancia de centavo, no con === 0.
   const hayQueCablear = Math.abs(reporte.control.porCablear) >= 0.005;
 
+  // Lo que el sistema SÍ encontró sin asiento. Se nombra tanto cuando cuadra con
+  // el residuo como cuando no: en el segundo caso es justamente lo que el
+  // contador necesita para descartar causas, y ocultarlo lo dejaba a ciegas.
+  const sa = reporte.control.sinAsiento;
+  const loEncontrado = (
+    <>
+      <strong>
+        {sa.documentos.cantidad} {esCobrar ? "factura(s)" : "gasto(s)"} por{" "}
+        {money(sa.documentos.monto)}
+      </strong>{" "}
+      que están en el auxiliar y no en el mayor
+      {sa.cobros.cantidad > 0 && (
+        <>
+          , y{" "}
+          <strong>
+            {sa.cobros.cantidad} {esCobrar ? "cobro(s)" : "pago(s)"} por {money(sa.cobros.monto)}
+          </strong>{" "}
+          ya descontados del auxiliar y todavía no del mayor
+          {/* Los saldos heredados de la 048 no son pagos que falte cablear: son
+              compras que ya estaban pagadas antes de que existieran los pagos a
+              proveedor. Se nombran como lo que son. */}
+          {(sa.heredados?.cantidad ?? 0) > 0 && (
+            <>
+              {" "}
+              (de los cuales{" "}
+              <strong>
+                {sa.heredados!.cantidad} por {money(sa.heredados!.monto)}
+              </strong>{" "}
+              son saldos heredados de la migración, no pagos registrados)
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+
   // Las rutas salen del MISMO resolvedor que el Libro Mayor y el Diario, así que
   // respetan el permiso del rol que las abre. Acá el id del documento ES el
   // destino: no hace falta resolver contra el ledger.
@@ -178,44 +214,7 @@ export default async function AntiguedadPage({
                       fecha el asiento se arma en el mismo acto, así que esta diferencia{" "}
                       <strong>no crece con los documentos nuevos</strong>: se corrige cargando
                       a mano los asientos que faltan.
-                      {reporte.control.porCablearExplicado && (
-                        <>
-                          {" "}
-                          Son{" "}
-                          <strong>
-                            {reporte.control.sinAsiento.documentos.cantidad}{" "}
-                            {esCobrar ? "factura(s)" : "gasto(s)"} por{" "}
-                            {money(reporte.control.sinAsiento.documentos.monto)}
-                          </strong>{" "}
-                          que están en el auxiliar y no en el mayor
-                          {reporte.control.sinAsiento.cobros.cantidad > 0 && (
-                            <>
-                              , y{" "}
-                              <strong>
-                                {reporte.control.sinAsiento.cobros.cantidad}{" "}
-                                {esCobrar ? "cobro(s)" : "pago(s)"} por{" "}
-                                {money(reporte.control.sinAsiento.cobros.monto)}
-                              </strong>{" "}
-                              ya descontados del auxiliar y todavía no del mayor
-                              {/* Los saldos heredados de la 048 no son pagos que
-                                  falte cablear: son compras que ya estaban pagadas
-                                  antes de que existieran los pagos. Se nombran. */}
-                              {(reporte.control.sinAsiento.heredados?.cantidad ?? 0) > 0 && (
-                                <>
-                                  {" "}
-                                  (de los cuales{" "}
-                                  <strong>
-                                    {reporte.control.sinAsiento.heredados!.cantidad} por{" "}
-                                    {money(reporte.control.sinAsiento.heredados!.monto)}
-                                  </strong>{" "}
-                                  son saldos heredados de la migración, no pagos registrados)
-                                </>
-                              )}
-                            </>
-                          )}
-                          .
-                        </>
-                      )}
+                      {reporte.control.porCablearExplicado && <> Son {loEncontrado}.</>}
                     </dt>
                     <dd className="shrink-0 font-mono font-bold tabular-nums">
                       {money(reporte.control.porCablear)}
@@ -237,7 +236,7 @@ export default async function AntiguedadPage({
                       Los documentos sin asiento que el sistema encuentra{" "}
                       <strong>no reconstruyen esos {money(reporte.control.porCablear)}</strong>.
                       Hay una tercera causa que este reporte no sabe explicar, y se dice acá en
-                      vez de atribuirla a las dos de arriba.
+                      vez de atribuirla a las dos de arriba. Lo que sí encontró: {loEncontrado}.
                     </span>
                   </p>
                 )}

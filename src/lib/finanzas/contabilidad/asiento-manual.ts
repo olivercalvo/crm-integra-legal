@@ -193,7 +193,7 @@ export function estadoDelRegistro(
   if (totales.debitos === 0 && totales.creditos === 0) {
     return {
       puede: false,
-      motivo: "Cargá los importes: cada línea lleva un débito o un crédito.",
+      motivo: "Cargue los importes: cada línea lleva un débito o un crédito.",
     };
   }
 

@@ -1,5 +1,14 @@
 # FINDINGS.MD — CRM INTEGRA LEGAL
 
+## FND-006: El modal de confirmación no scrolleaba — el botón quedaba fuera de la pantalla
+**Fecha:** 2026-09-21
+**Contexto:** Verificación en el deploy `6021dc6` del diálogo "Registrar pago" refactorizado, desde una ventana de 1568×710.
+**Hallazgo:** `ConfirmationModal` (`src/components/ui/confirmation-modal.tsx`, lo usan 22 pantallas) era `fixed` sin `max-h` ni `overflow`. Con siete campos el panel medía más que el viewport y los botones "Cancelar" / "Registrar pago" quedaban abajo del borde, sin forma de llegar: la rueda del mouse scrolleaba la página de atrás, no el modal. En un celular —el target del proyecto— pasa lo mismo con menos campos. Los clics de la extensión sobre el botón "se ejecutaban" sin efecto, y no quedó ningún cobro en la base.
+**Impacto:** Preexistente, no de este bloque; afecta a todo modal alto (el de reversar, con textarea + vista previa, entra en la misma categoría). No lo detecta ningún test.
+**Decisión:** `max-h-full overflow-y-auto` en el panel. El modal scrollea por dentro y los botones siempre están al alcance. Verificado en el deploy siguiente.
+
+---
+
 ## FND-005: El seed de staging "resucitaba" un cobro reversado
 **Fecha:** 2026-09-21
 **Contexto:** Bloque 2 (recibo de caja). Se corrió `npm run seed:staging` para probar la llamada a `backfill_payment_numbers` y, al abrir el listado de facturas en el deploy, FAC-HON-000002 aparecía "Pago parcial · saldo 605" — el 17/09 su cobro de B/. 1,000.00 se había reversado (asiento 21) y la factura había quedado *Emitida*, saldo 1,605.

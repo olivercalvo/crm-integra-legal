@@ -47,7 +47,12 @@ export function ConfirmationModal({
         className="absolute inset-0 bg-black/50"
         onClick={loading ? undefined : onClose}
       />
-      <div className="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+      {/* `max-h` + `overflow-y-auto`: un modal más alto que la pantalla scrollea
+          por dentro. Sin esto, en una ventana baja o en un celular los botones
+          de confirmar quedaban fuera de la vista y no había forma de apretarlos
+          (encontrado el 21/09/2026 registrando un cobro desde un viewport de
+          710 px: siete campos, y "Registrar pago" abajo del borde). */}
+      <div className="relative w-full max-w-md max-h-full overflow-y-auto rounded-lg bg-white shadow-xl">
         <button
           onClick={onClose}
           disabled={loading}

@@ -160,7 +160,7 @@ export function PaymentsSection({
                         existió, y el número no se reusa. Vacío solo si el cobro es
                         anterior al backfill en una base donde la 047 no corrió. */}
                     <td
-                      className={`py-2 pr-3 font-mono text-xs ${
+                      className={`py-2 pr-3 font-mono text-xs whitespace-nowrap ${
                         reversado ? "line-through" : "text-integra-navy font-semibold"
                       }`}
                     >

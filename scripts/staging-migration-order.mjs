@@ -118,6 +118,12 @@ export const BUNDLE_2 = [
   // después siembra `seed-staging.ts` los numera el propio seed llamando a la
   // misma función. Ver el encabezado de la 047.
   "sql/pending/047_recibo_de_caja.sql",
+  // 048: supplier_payments, amount_paid derivado en compras (trigger + guard),
+  // secuencia 'supplier_payment', RPC reverse_supplier_payment y el backfill de
+  // saldos heredados. En un --reset no hay compras 'pagado' (el seed las crea
+  // pendientes), así que el backfill crea 0. Va después de la 047 (re-declara
+  // los mismos CHECK con un valor más).
+  "sql/pending/048_pagos_a_proveedores.sql",
 ];
 
 // ---------------------------------------------------------------------------

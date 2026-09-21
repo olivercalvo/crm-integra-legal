@@ -19,6 +19,115 @@ Transmitidas por Oliver el 21/09/2026. Definen dos bloques. Se copian tal cual l
   anotadas para que ese bloque nazca con las dos reglas puestas: **pago parcial SÍ; un pago por
   factura de proveedor, NO varias.**
 
+## >>> PARTE B — PLAN: UN RECIBO APLICADO A VARIAS FACTURAS — 21/09/2026 <<<
+
+**Estado:** PLAN, no código. Pedido por Josuarth ("SÍ hace falta poder pagar varias facturas con una
+sola transferencia"). Cada afirmación de abajo se verificó contra el código el 21/09; donde dice
+"hoy" es lo que está en `1fed5f1`.
+
+### Lo que el modelo ya tiene (verificado)
+
+- `payment_applications` es N:M con `UNIQUE (payment_id, invoice_id)` y `CHECK (amount_applied > 0)`.
+  T7a recalcula `amount_paid` **por fila**, T7b recalcula `payments.amount_unapplied = amount −
+  SUM(applied)` y el CHECK lo acota a `[0, amount]`.
+- `construirAsientoDeCobro` ya recibe `facturas: string[]` (el loader `cargarCobroParaAsiento` lee
+  TODAS las aplicaciones del cobro) y arma **un solo asiento de dos líneas**: DEBE banco por el total,
+  HABER 100004 por el total; la descripción concatena los números y `reference` es el primero.
+- `reverse_payment` (046) fotografía **todas** las aplicaciones en `payment_reversals` (`INSERT …
+  SELECT … WHERE payment_id`), las borra todas (T7a devuelve cada factura a su estado) y verifica el
+  espejo contra las **dos líneas** del asiento original, no contra las aplicaciones. Devuelve
+  `invoices[]`. **Funciona igual con N aplicaciones sin tocar el RPC.** La vista previa del diálogo
+  (`construirAsientoDeReversion`) refleja esas dos líneas: tampoco cambia.
+- El PDF del recibo (`ReceiptDocument`) itera `aplicaciones.map(...)` en la tabla "Aplicado a"
+  (factura, emisión, total, monto aplicado) y el total es `payment.amount`; el bundle ordena por
+  número. **Confirmado: N filas salen sin cambios.**
+- `listPayments`, `getPaymentsForInvoice`, Estado de Cuenta y Antigüedad ya iteran aplicaciones
+  (la antigüedad incluso cuenta "un pago aplicado a varias facturas, una vez").
+- El Libro Mayor (`loadDestinosDeOrigen`) **ya contempla el caso**: un cobro con varias facturas
+  queda **sin enlace** en vez de elegir una arbitrariamente.
+
+### Decisiones recomendadas
+
+**1. Cómo se eligen las facturas y cómo se reparte — recomendación: el sistema reparte por
+antigüedad y deja corregir.** En el paso 1 del alta, el cliente → una lista con casilla por factura
+cobrable (hoy es radio). En el paso 2, primero el **monto total de la transferencia**, y el sistema
+lo reparte **de la más vieja a la más nueva** (`issue_date`, después `invoice_number`), llenando
+cada saldo hasta agotar el monto; cada fila queda editable y un renglón vivo muestra "Repartido /
+Total / Diferencia". Por qué esa y no "teclea cuánto va a cada una":
+   - Es lo que hace QuickBooks (de donde viene Daveiva) y lo que hace una persona con lápiz: paga
+     lo más viejo primero. El caso típico —el cliente manda la suma exacta de dos o tres facturas—
+     sale con cero tecleo.
+   - Tecleo mínimo = menos errores de centavos; y la corrección manual cubre la excepción ("esta
+     transferencia es de la factura de julio, no de la de mayo").
+   - La validación es la misma en los dos casos: cada monto ≤ saldo de su factura, ninguno en
+     cero (el CHECK lo prohíbe: una fila en 0 se elimina, no se manda), y la suma == el total.
+   Vive en `payment-form-fields.tsx` (módulo puro `repartirPorAntiguedad(total, facturas)`, con
+   tests) para que el diálogo y el alta sigan con UNA implementación.
+
+**2. Transferencia mayor que la suma — recomendación: impedirlo en este bloque, con mensaje claro,
+y dejar `amount_unapplied` para un bloque de "anticipos" que Josuarth tiene que definir.** Motivos:
+   - `amount_unapplied > 0` es un **saldo a favor del cliente**: el asiento acredita 100004 por el
+     total, así que la cuenta corriente del cliente queda con crédito. Eso es contablemente
+     correcto, pero hoy **no hay pantalla que lo muestre ni acción que lo aplique después** a una
+     factura nueva: quedaría plata "en el aire" que solo se ve en el Estado de Cuenta como saldo
+     negativo, y la antigüedad no sabe qué hacer con él.
+   - Es una definición del bufete, no de diseño: ¿un anticipo va a 100004 o a una cuenta de
+     "anticipos de clientes" (pasivo)? Josuarth no lo dijo y la 4 (proveedores) sugiere que
+     piensa en un pago por documento.
+   - Impedirlo hoy no cierra la puerta: la columna y T7b siguen; el día que se defina, es quitar
+     una validación y agregar la pantalla de "aplicar saldo a favor".
+   - Lo mismo para "menor que la suma": es un pago parcial, ya existe; simplemente la última
+     factura queda parcialmente pagada. Eso SÍ se permite.
+
+**3. El asiento — un solo asiento, dos líneas, igual que hoy.** El detalle por factura vive en
+`payment_applications` y en el PDF, no en el libro: 100004 es cuenta control y su auxiliar es por
+cliente, no por factura (el Estado de Cuenta ya lo lee así). Abrir una línea de 100004 por factura
+solo repetiría en el mayor lo que `payment_applications` ya dice. Lo único que cambia: `reference`
+pasa de "el primer número" a `null` cuando hay más de una factura (o el número del recibo, mejor:
+`REC-000012`, que es el documento real del asiento; **propuesta**: `reference = payment_number`
+siempre, también con una factura — es un cambio de un campo en `construirAsientoDeCobro` y un test).
+
+**4. La reversión — sigue igual, verificado contra el RPC de la 046** (arriba). Lo único de pantalla:
+el diálogo recibe `invoiceNumber` como texto; con varias se le pasa la lista unida ("FAC-HON-000002,
+FAC-HON-000007"), que ya es lo que hace `cobros-list.tsx`.
+
+**5. El PDF — confirmado**, N filas sin cambios.
+
+**6. Qué se rompe del alta de una factura (y cómo no se rompe):**
+   - `CreatePaymentInput.invoice_id` + `amount` → `applications: {invoice_id, amount}[]`. La ruta
+     de hoy `POST /api/finanzas/invoices/[id]/payments` **se mantiene** como atajo: envuelve el body
+     en una aplicación y llama a la misma `createPayment`. Nace `POST /api/finanzas/payments` para
+     N. Una sola `createPayment`; el diálogo del detalle no cambia de ruta.
+   - `createPayment`: el lookup pasa a ser de N facturas del **mismo cliente** (rechazar mezcla de
+     clientes: un recibo es de un cliente), estado cobrable y cap por saldo **por factura**; un solo
+     INSERT en `payments` (número, monto total) y un INSERT multi-fila en `payment_applications`; el
+     DELETE compensatorio no cambia (CASCADE se lleva todas). El hueco de numeración, igual.
+   - `validateCreatePayment` valida el array (no vacío, sin repetidos, montos > 0, suma == total).
+   - Tests que cambian: `payments-gate.test.ts` (el fake inserta filas múltiples; sumar "dos
+     facturas de clientes distintos → 400", "suma ≠ total → 400", "una factura no cobrable en el
+     medio → nada se inserta"), `listado-de-cobros.test.ts` (dos aplicaciones en una fila),
+     `recibo-pdf-render.test.ts` (render con 3 filas), y uno nuevo para `repartirPorAntiguedad`.
+   - El listado de cobros y el detalle de factura ya muestran N; `payments-section` muestra el
+     `amount_applied` a ESA factura (correcto) — hay que sumar el total del recibo en el `title`.
+   - El Libro Mayor: hoy deja el cobro multi-factura sin enlace. Con `/finanzas/cobros` existiendo,
+     el destino natural es `/finanzas/cobros?q=REC-000012` (una línea en `destino-documento.ts` +
+     `libro-mayor-source.ts`), o un detalle de cobro si algún día se hace.
+   - La verificación del 21/09 (REC-000004/000005, una factura) tiene que repetirse tal cual al
+     cerrar: el atajo tiene que dar el mismo resultado.
+
+### Orden de commits propuesto (cuando Oliver diga)
+
+1. `createPayment` + validador con `applications[]` + ruta nueva + la ruta vieja como atajo + tests.
+2. `repartirPorAntiguedad` puro + tests.
+3. Alta con casillas y reparto (paso 1 y 2) en `nuevo-cobro-form.tsx` y `payment-form-fields.tsx`.
+4. `reference = payment_number` en el asiento + enlace del Mayor al listado.
+5. Docs + verificación en pantalla: dos facturas con la suma exacta (cero tecleo), tres con
+   reparto corregido a mano, suma mayor rechazada, reversar el multi-factura desde el listado (las
+   dos facturas vuelven), PDF con N filas, y el alta de UNA factura desde el diálogo igual que hoy.
+
+**Sin migración.** Nada de esto toca la base.
+
+
 ## >>> RETOMAR ACÁ — BLOQUE 2: RECIBO DE CAJA COMO MÓDULO REAL — 21/09/2026 <<<
 
 **Estado:** CONSTRUIDO y verificado en el deploy de staging `a1a8c50`

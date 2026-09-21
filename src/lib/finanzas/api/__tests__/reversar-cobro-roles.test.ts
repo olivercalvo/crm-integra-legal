@@ -20,6 +20,7 @@ const leer = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 const RUTA_REVERSAR = "src/app/api/finanzas/payments/[id]/reverse/route.ts";
 const RUTA_ELIMINAR = "src/app/api/finanzas/payments/[id]/route.ts";
+const RUTA_REGISTRAR = "src/app/api/finanzas/invoices/[id]/payments/route.ts";
 const PAGINA = "src/app/finanzas/facturas/[id]/page.tsx";
 const SECCION = "src/app/finanzas/facturas/_components/payments-section.tsx";
 
@@ -31,6 +32,10 @@ function rolesDelGuard(src: string): string[] {
 
 test("reversar: admin, abogada y contador. Asistente no", () => {
   assert.deepEqual(rolesDelGuard(leer(RUTA_REVERSAR)), ["admin", "abogada", "contador"]);
+});
+
+test("registrar un cobro es admin y abogada: el contador NO, aunque desde el 21/09 vea el listado", () => {
+  assert.deepEqual(rolesDelGuard(leer(RUTA_REGISTRAR)), ["admin", "abogada"]);
 });
 
 test("eliminar un cobro sigue siendo admin y abogada: el contador NO", () => {

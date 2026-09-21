@@ -1,5 +1,27 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El contador ve el listado de cobros, en solo lectura — Bloque 2, Parte A] - 2026-09-21
+
+Josuarth (21/09): *"El contador SÍ debe ver la pantalla de Cobros."* Commit `1fed5f1` en
+`develop`; staging `dpl_Atui5PWuwesvCqVK2tDobUC634At`. **Producción no se tocó.**
+
+- `route-access.ts`: patrón **exacto** `^/finanzas/cobros$` en `CONTADOR_FINANZAS_ALLOWED_PATTERNS`
+  — no un prefijo, para que `/finanzas/cobros/nuevo` siga cerrado en el middleware (la página además
+  redirige y `POST /api/finanzas/invoices/[id]/payments` responde 403).
+- `nav-config.ts`: `"contador"` en el ítem Cobros. `nav-guard-ok` en el enlace a `/nuevo` (está
+  dentro de `canMutate`). Test nuevo en `nav-guard.test.ts` (listado sí, alta no) y guard del POST
+  de registrar cruzado en `reversar-cobro-roles.test.ts`. 1009/1009.
+- **Solo lectura, decidido así:** registrar un cobro es del lado de la abogada —es quien recibe la
+  plata del cliente y responde por la factura—; el contador corrige el libro (Reversar) y audita
+  (PDF), no lo alimenta. Es el mismo reparto que el detalle de la factura desde el 17/09
+  (`canMutate` vs `canReverse`), y darle el botón acá y no allá sería dos reglas para una cosa.
+- Verificado contra el deploy por API como contador (`render-pantalla`, `MSYS_NO_PATHCONV=1`):
+  `/finanzas/cobros` → 200 con los 5 recibos, botones Recibo y Reversar, **sin "Registrar cobro"**;
+  `/finanzas/cobros/nuevo` → 307 a `/finanzas/reportes`. **Sin clic real:** la extensión de Chrome
+  se desconectó (Chrome cerrado) al momento de verificar; el modal de Reversar como contador queda
+  sin abrir en pantalla.
+- CLAUDE.md (fila del contador + regla del recibo), productdesign, task_plan.
+
 ## [Recibo de caja como módulo real — Bloque 2] - 2026-09-21
 
 Un cobro es ahora un **recibo de caja** con número correlativo, pantalla propia y PDF. Siete

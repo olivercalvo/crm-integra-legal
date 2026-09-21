@@ -4,6 +4,32 @@
 
 ---
 
+## Cierre del 21/09/2026 (tarde) — Parte A: el contador ve Cobros; Parte B: plan multi-factura
+
+**SHA de la app en staging: `1fed5f1`** — deployment `dpl_Atui5PWuwesvCqVK2tDobUC634At`, READY,
+aliaseado al dominio de develop. Encima van solo commits de docs. **`main` sigue en `24b227a`.**
+
+**1009/1009.** `tsc` y lint limpios.
+
+Las cuatro respuestas de Josuarth están **textuales** arriba de todo en `task_plan.md`. La 1 se
+hizo (Parte A); la 2 está planeada, no construida (Parte B, en `task_plan.md`); la 3 y la 4 son
+del Bloque 3 (pagos a proveedores: parcial SÍ, un pago por factura).
+
+### Parte A — verificado por API como contador contra el deploy
+
+`/finanzas/cobros` → 200, 5 recibos, Recibo + Reversar, sin "Registrar cobro". `/nuevo` → 307.
+**Sin clic real:** Chrome se cerró y la extensión no reconectó. Falta abrir el modal de Reversar
+como contador en pantalla (la lógica es la misma que la abogada usó con clic real más temprano).
+
+### Pendiente
+
+1. Oliver decide si arranca la Parte B (construcción) con el plan de `task_plan.md`.
+2. Lo que quedó sin ver: ancho de teléfono; el modal de Reversar como contador.
+3. Lo anterior sigue igual (ver el cierre de abajo).
+
+---
+
+
 ## Cierre del 21/09/2026 — Bloque 2: recibo de caja como módulo real
 
 **SHA de la app en staging: `a1a8c50`** — deployment `dpl_AR71ni3hzxMsmNLFNz7dycm8q4S8`, READY,

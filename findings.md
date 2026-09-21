@@ -9,6 +9,19 @@
 
 ---
 
+## FND-010: La antigüedad por pagar no lee los gastos de trámite, que SÍ acreditan 200001
+**Fecha:** 2026-09-21
+**Contexto:** Verificación en pantalla del commit 4 del Bloque 3. La "Antigüedad de Cuentas por Pagar" de staging mostraba una diferencia contra el mayor de 1.464,20 que el propio reporte declaraba no poder explicar ("hay una tercera causa"). Se descompuso contra la base para descartar que fuera del bloque.
+**Hallazgo:**
+- Un gasto de trámite (`expenses`, módulo Legal) se contabiliza por decisión de RM del 25/08 como `DEBE 130003 / HABER 200001 Cuentas por pagar` (`asiento-gasto-tramite.ts`, origen `gasto_tramite`). Es decir, **crea una cuenta por pagar real** en la misma cuenta control que las compras del bufete.
+- `sinAsientoPagar` y `loadAntiguedad("pagar")` (`antiguedad-source.ts`) leen **solo `business_expenses`**. El gasto de trámite no entra al auxiliar, así que la cuenta control lo tiene y el reporte no.
+- Y no es solo el reporte: `expenses` **no tiene estado de pago** (`information_schema`: `amount`, `due_date`, `payment_account_code`, y nada de `status`/`amount_paid`), y ningún origen del ledger postea la salida de esa deuda (`SourceType` no tiene un "pago de gasto de trámite"). Un gasto de trámite contabilizado **queda en 200001 para siempre**, aunque el bufete lo haya pagado el mismo día.
+- La cuenta cierra al centavo: 1.464,20 = **1.497,85 (el único gasto de trámite con asiento en staging, #4 del 15/03)** − 107,15 (el seed posteó el asiento #3 por 1.497,85 para una compra de 1.605,00; dato de prueba) + 73,50 (los dos saldos heredados de la 048, que el reporte sí nombra).
+**Impacto:** Josuarth pidió el 25/08 que la antigüedad cuadre contra el mayor. En producción todavía no hay gastos de trámite contabilizados (`post-to-ledger` es de `develop`), pero el primero que se postee va a producir exactamente este descuadre, y va a crecer con cada uno. No lo detecta ningún test: el residuo se atribuye a "tercera causa" y se sigue.
+**Decisión:** Fuera de alcance del Bloque 3 (Oliver, 21/09). **No es chico: es un bloque propio**, el espejo de este para el gasto de trámite: (1) un pago del gasto de trámite como entidad, con banco y asiento `HABER banco / DEBE 200001` (hoy `expenses.payment_account_code` existe desde la `036` pero no lo lee nadie que postee), (2) `amount_paid`/estado derivados en `expenses` con el mismo patrón de trigger y guard que la 048, y (3) la antigüedad por pagar leyendo las dos tablas con el mismo tercero. Hasta entonces, el reporte ya dice qué encontró (`2af7ee8`) y este finding dice qué no puede encontrar.
+
+---
+
 ## FND-009: "Marcar como pagada" escribe una columna que `business_expenses` no tiene — y lo hace DESPUÉS de postear
 **Fecha:** 2026-09-21
 **Contexto:** Plan del Bloque 3 (pagos a proveedores). Al verificar contra el código y contra staging lo que se iba a afirmar.

@@ -70,9 +70,12 @@ export type SourceType =
   /** Cobro de una FACTURA (tabla `payments`). Ver `asiento-tesoreria.ts`. */
   | "pago"
   /**
-   * Pago a un PROVEEDOR (el `source_id` es el id de la compra). Migración `042`.
-   * Es un tipo aparte de `pago` porque `destino-documento.ts` manda cada uno a
-   * una pantalla distinta; compartirlo repetiría el bug del 01/09.
+   * Pago a un PROVEEDOR. Migración `042`. Desde la `048` (Bloque 3) el
+   * `source_id` es el id del PAGO (`supplier_payments`), no el de la compra:
+   * una compra puede tener varios pagos y cada uno lleva su asiento.
+   * `loadDestinosDeOrigen` resuelve pago → compra para enlazar. Es un tipo
+   * aparte de `pago` porque `destino-documento.ts` manda cada uno a una
+   * pantalla distinta; compartirlo repetiría el bug del 01/09.
    */
   | "pago_proveedor"
   | "nota_credito"

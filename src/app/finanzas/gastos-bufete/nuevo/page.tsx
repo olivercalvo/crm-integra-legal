@@ -5,6 +5,7 @@ import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expen
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { BusinessExpenseForm } from "../_components/business-expense-form";
+import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 
 
 /**
@@ -22,11 +23,13 @@ export default async function NuevoGastoBufetePage() {
     redirect("/finanzas/gastos-bufete");
   }
 
-  const [accounts, suppliers, taxCodes] = await Promise.all([
+  const [accounts, suppliers, taxCodes, bancos] = await Promise.all([
     listExpenseAccountOptions(ctx.db, ctx.tenantId),
     listSupplierOptions(ctx.db, ctx.tenantId),
     // Los mismos códigos que ve facturación (migración `045`).
     listTaxCodesActive(ctx.db, ctx.tenantId),
+    // Para el banco del pago cuando la compra se carga ya pagada (048).
+    listarCuentasDeBanco(ctx.db, ctx.tenantId),
   ]);
 
   return (
@@ -47,6 +50,7 @@ export default async function NuevoGastoBufetePage() {
         accounts={accounts}
         suppliers={suppliers}
         taxCodes={taxCodes}
+        bancos={bancos}
       />
     </div>
   );

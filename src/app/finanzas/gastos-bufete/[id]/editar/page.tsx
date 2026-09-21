@@ -78,6 +78,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
 
       <BusinessExpenseForm
         mode="edit"
+        bancos={[]}
         accounts={accounts}
         suppliers={suppliers}
         taxCodes={taxCodes}

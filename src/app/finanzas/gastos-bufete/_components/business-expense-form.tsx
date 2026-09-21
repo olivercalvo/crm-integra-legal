@@ -34,6 +34,8 @@ interface BaseProps {
   suppliers: SupplierOption[];
   /** Códigos de `tax_codes` activos — los mismos que ve facturación. */
   taxCodes: TaxCodeOption[];
+  /** Cuentas ofrecidas como banco cuando la compra se carga YA PAGADA (048). De `listarCuentasDeBanco()`. */
+  bancos: { code: string; name: string }[];
 }
 
 /**
@@ -155,8 +157,12 @@ export function BusinessExpenseForm(props: Props) {
     init?.payment_date ?? todayIso()
   );
   const [paymentMethod, setPaymentMethod] = useState<BusinessExpensePaymentMethod | "">(
-    init?.payment_method ?? ""
+    init?.payment_method ?? "transferencia"
   );
+  // 🔴 El banco de donde salió la plata, cuando la compra se carga YA PAGADA.
+  //    Sin default: lo elige quien registra. Va al PAGO, no a la compra (048).
+  const [bankAccount, setBankAccount] = useState<string>("");
+  const esEdicion = props.mode === "edit";
   const [notes, setNotes] = useState<string>(init?.notes ?? "");
 
   // ---- Errors / submit state ----------------------------------------------
@@ -227,11 +233,15 @@ export function BusinessExpenseForm(props: Props) {
       subtotal: subtotalNum,
       tax_rate: taxRateDerivada as BusinessExpenseTaxRate,
       tax_amount: taxNum,
-      status,
-      payment_date: status === "pagado" ? (paymentDate || null) : null,
-      payment_method: status === "pagado"
+      // En EDICIÓN el estado lo derivan los pagos (048): se manda el que tiene y
+      // el servidor no lo escribe. En el ALTA, 'pagado' = registrar el pago al
+      // crear, con su banco.
+      status: esEdicion ? (init?.status ?? "pendiente_pago") : status,
+      payment_date: !esEdicion && status === "pagado" ? (paymentDate || null) : null,
+      payment_method: !esEdicion && status === "pagado"
         ? ((paymentMethod || null) as BusinessExpensePaymentMethod | null)
         : null,
+      payment_account_code: !esEdicion && status === "pagado" ? (bankAccount || null) : null,
       notes: notes.trim() || null,
     };
 
@@ -265,6 +275,14 @@ export function BusinessExpenseForm(props: Props) {
         if (!res.ok) {
           if (data.fieldErrors) {
             setErrors(data.fieldErrors);
+          }
+          // La compra se creó pero el pago del alta falló (048): se va al
+          // detalle igual —la compra existe, pendiente— y el error se muestra
+          // ahí, donde está el botón para registrar el pago.
+          if (data.sin_pago && data.compra_id) {
+            router.push(`/finanzas/gastos-bufete/${data.compra_id}?pago_error=${encodeURIComponent(String(data.error ?? ""))}`);
+            router.refresh();
+            return;
           }
           setSubmitError(data.error ?? "Error al guardar");
           return;
@@ -592,8 +610,21 @@ export function BusinessExpenseForm(props: Props) {
       </section>
 
       {/* ── Sección: Pago ───────────────────────────────────────────────── */}
+      {esEdicion ? (
+        <section className="space-y-2 rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-integra-navy">Pagos</h2>
+          <p className="text-sm text-gray-600">
+            El estado de pago de la compra lo dan sus pagos. Se registran, eliminan o reversan desde la
+            sección <span className="font-semibold">Pagos</span> del detalle de la compra, no desde acá.
+          </p>
+        </section>
+      ) : (
       <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-integra-navy">Estado de pago</h2>
+        <h2 className="text-base font-semibold text-integra-navy">Pago</h2>
+        <p className="text-xs text-gray-500">
+          Si ya está pagada, el pago se registra junto con la compra: fecha, método y el banco de donde
+          salió la plata. Si no, queda pendiente y se paga después desde el detalle (también por partes).
+        </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Status */}
@@ -666,8 +697,44 @@ export function BusinessExpenseForm(props: Props) {
               )}
             </div>
           )}
+
+          {/* Banco (solo si pagado). OBLIGATORIO y sin preselección: es lo que el
+              asiento del pago acredita, y no se puede deducir. */}
+          {status === "pagado" && (
+            <div data-error={!!errors.payment_account_code} className="sm:col-span-2">
+              <Label className="mb-1 block">
+                Banco de donde salió el pago{" "}
+                <span className="text-red-600" aria-hidden="true">
+                  *
+                </span>
+              </Label>
+              <select
+                value={bankAccount}
+                onChange={(e) => {
+                  setBankAccount(e.target.value);
+                  if (errors.payment_account_code) setErrors({ ...errors, payment_account_code: "" });
+                }}
+                disabled={isPending}
+                className={
+                  "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                  (errors.payment_account_code ? "border-red-300" : "border-gray-300")
+                }
+              >
+                <option value="">Elija la cuenta…</option>
+                {props.bancos.map((b) => (
+                  <option key={b.code} value={b.code}>
+                    {b.code} — {b.name}
+                  </option>
+                ))}
+              </select>
+              {errors.payment_account_code && (
+                <p className="mt-1 text-xs text-red-600">{errors.payment_account_code}</p>
+              )}
+            </div>
+          )}
         </div>
       </section>
+      )}
 
       {/* ── Sección: Notas ──────────────────────────────────────────────── */}
       <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">

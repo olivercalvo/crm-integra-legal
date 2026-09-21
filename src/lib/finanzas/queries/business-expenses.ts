@@ -128,7 +128,7 @@ export async function listBusinessExpenses(
         id, tenant_id, expense_date, due_date, supplier_id,
         supplier_name, supplier_ruc, supplier_invoice_number,
         chart_account_code, description,
-        subtotal, tax_rate, tax_amount, total,
+        subtotal, tax_rate, tax_amount, total, amount_paid,
         status, payment_date, payment_method,
         receipt_url, receipt_filename, notes,
         created_by, created_at, updated_at
@@ -251,7 +251,7 @@ export async function getBusinessExpenseById(
         id, tenant_id, expense_date, due_date, supplier_id,
         supplier_name, supplier_ruc, supplier_invoice_number,
         chart_account_code, description,
-        subtotal, tax_rate, tax_amount, total,
+        subtotal, tax_rate, tax_amount, total, amount_paid,
         status, payment_date, payment_method,
         receipt_url, receipt_filename, notes,
         created_by, created_at, updated_at

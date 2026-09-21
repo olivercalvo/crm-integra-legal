@@ -78,6 +78,8 @@ export interface BusinessExpenseRow {
   tax_rate: string | number;       // NUMERIC(5,4)
   tax_amount: string | number;
   total: string | number;          // GENERATED ALWAYS AS (subtotal + tax_amount)
+  /** Derivado por el trigger de la 048 desde `supplier_payments`. No se escribe. */
+  amount_paid: string | number;
   status: BusinessExpenseStatus;
   payment_date: string | null;
   payment_method: BusinessExpensePaymentMethod | null;

@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
 import {
-  BUSINESS_EXPENSE_PAYMENT_METHOD_LABEL,
   taxRateLabel,
 } from "@/lib/finanzas/types/business-expense";
 import { cuentaLabel } from "@/lib/finanzas/types/expense-line";
 import { BusinessExpenseStatusBadge } from "../_components/business-expense-status-badge";
 import { BusinessExpenseActions } from "../_components/business-expense-actions";
+import { SupplierPaymentsSection } from "../_components/supplier-payments-section";
+import { SupplierPaymentSuccessToast } from "../_components/supplier-payment-success-toast";
+import { getSupplierPaymentsForExpense } from "@/lib/finanzas/queries/supplier-payments";
 import { ReceiptUploader } from "../_components/receipt-uploader";
 
 
@@ -25,7 +27,7 @@ export const metadata = {
 };
 interface PageProps {
   params: { id: string };
-  searchParams: { saved?: string };
+  searchParams: { saved?: string; pago_error?: string };
 }
 
 const READING_ROLES = ["admin", "abogada", "contador"];
@@ -49,6 +51,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
 
   const expense = await getBusinessExpenseById(ctx.db, ctx.tenantId, params.id);
   if (!expense) notFound();
+  const pagos = await getSupplierPaymentsForExpense(ctx.db, ctx.tenantId, params.id);
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
 
@@ -71,6 +74,15 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
       {savedFlag && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Gasto guardado correctamente.
+        </div>
+      )}
+      <SupplierPaymentSuccessToast />
+      {/* La compra se creó pero el pago del alta falló (048): la compra existe,
+          pendiente, y el pago se registra desde la sección Pagos de abajo. */}
+      {searchParams.pago_error && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span className="font-semibold">La compra quedó registrada, pero pendiente de pago.</span>{" "}
+          {searchParams.pago_error}
         </div>
       )}
 
@@ -119,12 +131,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               </Button>
             </Link>
           )}
-          <BusinessExpenseActions
-            bancos={bancos}
-            id={expense.id}
-            status={expense.status}
-            canMutate={canMutate}
-          />
+          <BusinessExpenseActions id={expense.id} canMutate={canMutate} />
         </div>
       </div>
 
@@ -255,30 +262,16 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             </dl>
           </section>
 
-          {/* Pago */}
-          <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
-            <h2 className="text-base font-semibold text-integra-navy">Estado de pago</h2>
-            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-sm">
-              <Item
-                label="Estado"
-                value={<BusinessExpenseStatusBadge status={expense.status} />}
-              />
-              <Item
-                label="Fecha de pago"
-                value={
-                  expense.payment_date ? formatDate(expense.payment_date) : "—"
-                }
-              />
-              <Item
-                label="Método"
-                value={
-                  expense.payment_method
-                    ? BUSINESS_EXPENSE_PAYMENT_METHOD_LABEL[expense.payment_method]
-                    : "—"
-                }
-              />
-            </dl>
-          </section>
+          {/* Pagos (Bloque 3): el estado, el saldo y cada pago, con Registrar / Reversar / Eliminar */}
+          <SupplierPaymentsSection
+            expenseId={expense.id}
+            expenseLabel={expense.description}
+            total={Number(expense.total)}
+            amountPaid={Number(expense.amount_paid)}
+            payments={pagos}
+            bancos={bancos}
+            canMutate={canMutate}
+          />
 
           {/* Notas */}
           {expense.notes && (

@@ -11,6 +11,7 @@ import type { BusinessExpenseStatus } from "@/lib/finanzas/types/business-expens
 
 const ALLOWED_STATUSES = new Set<BusinessExpenseStatus>([
   "pendiente_pago",
+  "parcialmente_pagado",
   "pagado",
 ]);
 
@@ -102,7 +103,13 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] createBusinessExpense failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      // La compra se creó pero el pago del alta falló (048): la respuesta lleva
+      // el id para que la pantalla lleve al detalle, donde se registra el pago.
+      const d = err.detail as { compra_id?: string; sin_pago?: boolean } | undefined;
+      return NextResponse.json(
+        d?.sin_pago && d.compra_id ? { error: err.message, compra_id: d.compra_id, sin_pago: true } : { error: err.message },
+        { status: err.status }
+      );
     }
     console.error("[finanzas] createBusinessExpense unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

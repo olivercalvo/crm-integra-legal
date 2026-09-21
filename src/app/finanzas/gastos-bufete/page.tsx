@@ -36,6 +36,7 @@ interface PageProps {
 
 const ALLOWED_STATUSES = new Set<BusinessExpenseStatus>([
   "pendiente_pago",
+  "parcialmente_pagado",
   "pagado",
 ]);
 const ALLOWED_HAS_ITBMS = new Set(["true", "false"]);

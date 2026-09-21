@@ -23,7 +23,7 @@ interface Props {
   };
 }
 
-const STATUSES: BusinessExpenseStatus[] = ["pendiente_pago", "pagado"];
+const STATUSES: BusinessExpenseStatus[] = ["pendiente_pago", "parcialmente_pagado", "pagado"];
 
 /**
  * Filtros del listado de gastos del bufete. Cada cambio reescribe los

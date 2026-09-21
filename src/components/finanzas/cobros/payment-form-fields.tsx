@@ -83,7 +83,7 @@ export function validatePaymentForm(
     errors.payment_date = "Fecha requerida";
   }
   if (!v.payment_account_code) {
-    errors.payment_account_code = "Elija la cuenta bancaria donde entró el cobro.";
+    errors.payment_account_code = "Elija la cuenta bancaria.";
   }
   if (!isFinite(amountNum) || amountNum <= 0) {
     errors.amount = "El monto debe ser mayor a 0";
@@ -127,6 +127,12 @@ interface Props {
   afterAmount?: ReactNode;
   /** Sustituye la ayuda "Máximo permitido" (el alta multi-factura la reemplaza por el renglón de diferencia). */
   amountHint?: ReactNode;
+  /**
+   * `"cobro"` (default): la plata ENTRA (recibo de caja). `"pago"`: la plata
+   * SALE (pago a proveedor, Bloque 3). Cambia tres rótulos; los campos son los
+   * mismos seis, y por eso el pago a proveedor no tiene su propio formulario.
+   */
+  direccion?: "cobro" | "pago";
 }
 
 export function PaymentFormFields({
@@ -140,7 +146,9 @@ export function PaymentFormFields({
   amountInputRef,
   afterAmount,
   amountHint,
+  direccion = "cobro",
 }: Props) {
+  const esPago = direccion === "pago";
   function set<K extends keyof PaymentFormValues>(field: K, value: PaymentFormValues[K]) {
     onChange({ ...values, [field]: value });
     if (errors[field]) onClearError(field);
@@ -229,7 +237,7 @@ export function PaymentFormFields({
           ─────────────────────────────────────────────────────────────── */}
       <div>
         <Label htmlFor="payment_account_code" className="text-sm">
-          Banco donde entró el cobro{" "}
+          {esPago ? "Banco de donde salió el pago" : "Banco donde entró el cobro"}{" "}
           <span className="text-red-600" aria-hidden="true">
             *
           </span>

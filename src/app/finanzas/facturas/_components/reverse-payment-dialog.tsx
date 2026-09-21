@@ -22,7 +22,36 @@ interface Props {
   asiento: AsientoDeCobro;
   invoiceNumber: string;
   disabled?: boolean;
+  /**
+   * `"cobro"` (default): recibo de caja → `/api/finanzas/payments/[id]/reverse`.
+   * `"pago"`: pago a PROVEEDOR (Bloque 3) → `/api/finanzas/supplier-payments/[id]/reverse`.
+   * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra). La vista
+   * previa es la MISMA función para los dos: `reversion-una-sola-implementacion`
+   * lo vigila leyendo este archivo.
+   */
+  variante?: "cobro" | "pago";
 }
+
+const TEXTOS = {
+  cobro: {
+    endpoint: (id: string) => `/api/finanzas/payments/${id}/reverse`,
+    cosa: "cobro",
+    documento: "factura",
+    titulo: "Reversar cobro",
+    placeholder: "Ej: Cheque devuelto por el banco, cobro registrado a la factura equivocada…",
+    error: "No se pudo reversar el cobro.",
+    enCurso: "Posteando el espejo y liberando la factura…",
+  },
+  pago: {
+    endpoint: (id: string) => `/api/finanzas/supplier-payments/${id}/reverse`,
+    cosa: "pago",
+    documento: "compra",
+    titulo: "Reversar pago",
+    placeholder: "Ej: Transferencia rechazada, pago registrado a la compra equivocada…",
+    error: "No se pudo reversar el pago.",
+    enCurso: "Posteando el espejo y devolviendo el saldo a la compra…",
+  },
+} as const;
 
 /**
  * Botón "Reversar" + modal con motivo y VISTA PREVIA del asiento espejo.
@@ -46,7 +75,9 @@ export function ReversePaymentDialog({
   asiento,
   invoiceNumber,
   disabled,
+  variante = "cobro",
 }: Props) {
+  const t = TEXTOS[variante];
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -100,7 +131,7 @@ export function ReversePaymentDialog({
 
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/finanzas/payments/${paymentId}/reverse`, {
+        const res = await fetch(t.endpoint(paymentId), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason: trimmed }),
@@ -108,7 +139,7 @@ export function ReversePaymentDialog({
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (data.fieldErrors?.reason) setReasonError(data.fieldErrors.reason);
-          setSubmitError(data.error ?? "No se pudo reversar el cobro.");
+          setSubmitError(data.error ?? t.error);
           return;
         }
         setOpen(false);
@@ -130,8 +161,8 @@ export function ReversePaymentDialog({
         }}
         disabled={disabled || isPending}
         className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-        aria-label={`Reversar cobro de ${paymentLabel}`}
-        title={`Reversar este cobro (asiento ${asiento.entry_number})`}
+        aria-label={`Reversar ${t.cosa} de ${paymentLabel}`}
+        title={`Reversar este ${t.cosa} (asiento ${asiento.entry_number})`}
       >
         <Undo2 size={14} />
         Reversar
@@ -148,7 +179,7 @@ export function ReversePaymentDialog({
         onConfirm={submit}
         loading={isPending}
         confirmDisabled={!meetsMinimum || !preview.ok}
-        title="Reversar cobro"
+        title={t.titulo}
         confirmButtonText={isPending ? "Reversando…" : "Sí, reversar y postear el espejo"}
         cancelButtonText="Cancelar"
       >
@@ -160,16 +191,16 @@ export function ReversePaymentDialog({
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
             <div className="space-y-1">
               <p>
-                Vas a reversar el cobro de{" "}
+                Vas a reversar el {t.cosa} de{" "}
                 <span className="font-semibold text-integra-navy">{paymentLabel}</span>{" "}
                 aplicado a <span className="font-mono font-semibold">{invoiceNumber}</span>.
               </p>
               <p>
                 El asiento <span className="font-mono">{asiento.entry_number}</span> no se
                 borra: se postea su <span className="font-semibold">espejo</span> con la
-                fecha de hoy, el cobro queda anulado y la factura vuelve a mostrar el saldo
-                pendiente. Es irreversible: si el cobro sí ocurrió, hay que registrarlo de
-                nuevo.
+                fecha de hoy, el {t.cosa} queda anulado y la {t.documento} vuelve a mostrar el
+                saldo pendiente. Es irreversible: si el {t.cosa} sí ocurrió, hay que
+                registrarlo de nuevo.
               </p>
             </div>
           </div>
@@ -193,7 +224,7 @@ export function ReversePaymentDialog({
               disabled={isPending}
               rows={2}
               maxLength={MOTIVO_MAX}
-              placeholder="Ej: Cheque devuelto por el banco, cobro registrado a la factura equivocada…"
+              placeholder={t.placeholder}
               className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm bg-white focus:outline-none focus:border-integra-navy ${
                 reasonError ? "border-red-300" : "border-gray-300 hover:border-integra-navy"
               }`}
@@ -276,7 +307,7 @@ export function ReversePaymentDialog({
           {isPending && (
             <p className="inline-flex items-center gap-1 text-xs text-gray-500">
               <Loader2 size={12} className="animate-spin" />
-              Posteando el espejo y liberando la factura…
+              {t.enCurso}
             </p>
           )}
         </div>

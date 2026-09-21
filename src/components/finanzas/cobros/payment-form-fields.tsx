@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/ui/money-input";
@@ -17,9 +17,12 @@ import {
  * Desde el Bloque 2 (21/09/2026) un cobro se registra desde DOS puertas: el
  * diálogo "Registrar pago" del detalle de la factura
  * (`facturas/_components/register-payment-dialog.tsx`) y el alta de
- * `/finanzas/cobros/nuevo`. Las dos pegan a la misma ruta
- * (`POST /api/finanzas/invoices/[id]/payments`) y a la misma `createPayment`,
- * así que tienen que pedir lo mismo, validarlo igual y mandarlo igual.
+ * `/finanzas/cobros/nuevo`. Las dos llegan a la misma `createPayment` —el
+ * diálogo por el atajo `POST /api/finanzas/invoices/[id]/payments` (una
+ * factura) y el alta por `POST /api/finanzas/payments` (una o varias, con
+ * `applications[]`)— así que tienen que pedir lo mismo, validarlo igual y
+ * mandarlo igual. El reparto entre varias facturas es del alta
+ * (`lib/finanzas/cobros/repartir-por-antiguedad.ts`) y entra por `afterAmount`.
  *
  * Por eso los campos, la validación de cliente y el armado del body viven acá
  * y no en cada pantalla. Hay un test estructural que lee los dos archivos y
@@ -90,7 +93,10 @@ export function validatePaymentForm(
   return { ok: Object.keys(errors).length === 0, errors, amountNum };
 }
 
-/** El body de `POST /api/finanzas/invoices/[id]/payments`. `invoice_id` va en el path. */
+/**
+ * El body común de las dos rutas. El diálogo lo manda tal cual (la factura va
+ * en el path); el alta le suma `applications[]`.
+ */
 export function toPaymentPayload(v: PaymentFormValues, amountNum: number) {
   return {
     payment_date: v.payment_date,
@@ -114,6 +120,13 @@ interface Props {
   bancos: { code: string; name: string }[];
   disabled?: boolean;
   amountInputRef?: RefObject<HTMLInputElement>;
+  /**
+   * Se dibuja DEBAJO del monto. El alta multi-factura mete acá la tabla de
+   * reparto entre facturas (Parte B); el diálogo de una factura no manda nada.
+   */
+  afterAmount?: ReactNode;
+  /** Sustituye la ayuda "Máximo permitido" (el alta multi-factura la reemplaza por el renglón de diferencia). */
+  amountHint?: ReactNode;
 }
 
 export function PaymentFormFields({
@@ -125,6 +138,8 @@ export function PaymentFormFields({
   bancos,
   disabled,
   amountInputRef,
+  afterAmount,
+  amountHint,
 }: Props) {
   function set<K extends keyof PaymentFormValues>(field: K, value: PaymentFormValues[K]) {
     onChange({ ...values, [field]: value });
@@ -173,12 +188,15 @@ export function PaymentFormFields({
           className="mt-1 font-mono"
         />
         {errors.amount && <p className="mt-1 text-xs text-red-600">{errors.amount}</p>}
-        {!errors.amount && (
-          <p className="mt-1 text-xs text-gray-500">
-            Máximo permitido: B/. {fmtImporte(balanceDue)}
-          </p>
-        )}
+        {!errors.amount &&
+          (amountHint ?? (
+            <p className="mt-1 text-xs text-gray-500">
+              Máximo permitido: B/. {fmtImporte(balanceDue)}
+            </p>
+          ))}
       </div>
+
+      {afterAmount}
 
       {/* Método */}
       <div>

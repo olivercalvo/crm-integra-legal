@@ -179,6 +179,16 @@ export function PaymentsSection({
                       }`}
                     >
                       ${fmtImporte(amount)}
+                      {/* Un recibo aplicado a varias facturas (Parte B): acá se ve
+                          lo aplicado a ESTA, y abajo el total del recibo. */}
+                      {Number(p.amount) > amount + 0.001 && (
+                        <span
+                          className="block text-xs font-normal text-gray-400 whitespace-nowrap"
+                          title="El recibo se aplicó a varias facturas"
+                        >
+                          de {fmtImporte(Number(p.amount))} del recibo
+                        </span>
+                      )}
                     </td>
                     <td className="py-2 pr-3">
                       {reversado && p.reversion ? (

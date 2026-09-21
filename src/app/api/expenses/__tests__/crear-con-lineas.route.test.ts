@@ -34,17 +34,22 @@ const state: {
   fallanLineas: boolean;
   /** El plan de cuentas que "ve" la ruta al validar las líneas. */
   plan: { code: string; name: string; active: boolean; account_type: string }[];
+  /** Error que devuelve el RPC del posteo (período cerrado, etc.), si hay. */
+  rpcError: { code?: string; message?: string } | null;
   capturado: {
     expenseInsert: Record<string, unknown> | null;
     lineasInsert: Record<string, unknown>[] | null;
     borroElGasto: boolean;
+    rpcArgs: Record<string, unknown> | null;
+    cacheEscrito: Record<string, unknown> | null;
   };
 } = {
   user: null,
   profile: null,
   fallanLineas: false,
   plan: [],
-  capturado: { expenseInsert: null, lineasInsert: null, borroElGasto: false },
+  rpcError: null,
+  capturado: { expenseInsert: null, lineasInsert: null, borroElGasto: false, rpcArgs: null, cacheEscrito: null },
 };
 
 /** El recorte del plan real que usan estos tests. */
@@ -64,7 +69,8 @@ function reset(over: Partial<typeof state> = {}) {
   state.profile = { role: "abogada", tenant_id: "t-real" };
   state.fallanLineas = false;
   state.plan = PLAN_POR_DEFECTO;
-  state.capturado = { expenseInsert: null, lineasInsert: null, borroElGasto: false };
+  state.rpcError = null;
+  state.capturado = { expenseInsert: null, lineasInsert: null, borroElGasto: false, rpcArgs: null, cacheEscrito: null };
   Object.assign(state, over);
 }
 
@@ -84,7 +90,29 @@ function makeAdmin() {
           state.capturado.borroElGasto = true;
           return { data: null, error: null };
         }
-        return { data: null, error: null };
+        if (s.op === "update") {
+          state.capturado.cacheEscrito = s.payload as Record<string, unknown>;
+          return { data: null, error: null };
+        }
+        // El SELECT del posteo: el gasto recién insertado, sin asiento todavía.
+        const ins = state.capturado.expenseInsert;
+        if (!ins) return { data: null, error: null };
+        return {
+          data: {
+            id: "nuevo-gasto",
+            date: ins.date,
+            concept: ins.concept,
+            posted_entry_id: null,
+            cases: { case_code: "CIV-014" },
+            suppliers: null,
+          },
+          error: null,
+        };
+      }
+
+      // El posteo: la capa 2 no encuentra asiento previo; el creado tiene número.
+      if (table === "journal_entries") {
+        return { data: state.capturado.rpcArgs ? { entry_number: 41 } : null, error: null };
       }
 
       if (table === "chart_of_accounts") {
@@ -98,6 +126,15 @@ function makeAdmin() {
         return state.fallanLineas
           ? { data: null, error: { message: "boom" } }
           : { data: null, error: null };
+      }
+      if (table === "expense_lines") {
+        // Las líneas que el posteo relee: las que se insertaron, con su total.
+        const filas = (state.capturado.lineasInsert ?? []).map((l, i) => ({
+          id: `l${i + 1}`,
+          ...l,
+          line_total: Number(l.amount) + Number(l.tax_amount ?? 0),
+        }));
+        return { data: filas, error: null };
       }
 
       return { data: null, error: null };
@@ -117,6 +154,12 @@ function makeAdmin() {
         s.op = "delete";
         return b;
       },
+      update: (payload: unknown) => {
+        s.op = "update";
+        s.payload = payload;
+        return b;
+      },
+      order: () => b,
       single: async () => resolve(),
       maybeSingle: async () => resolve(),
       then: (onOk: (v: unknown) => unknown, onErr?: (e: unknown) => unknown) =>
@@ -124,7 +167,14 @@ function makeAdmin() {
     };
     return b;
   }
-  return { from: (t: string) => builder(t) };
+  return {
+    from: (t: string) => builder(t),
+    rpc: async (_fn: string, args: Record<string, unknown>) => {
+      state.capturado.rpcArgs = args;
+      if (state.rpcError) return { data: null, error: state.rpcError };
+      return { data: "entry-uuid-1", error: null };
+    },
+  };
 }
 
 if (MOCKS_ENABLED) {
@@ -419,4 +469,47 @@ test("610002 se ACEPTA: es improbable, no imposible", { skip: skipNoMocks }, asy
   reset();
   const res = await POST(req({ ...BASE, lines: [linea({ chart_account_code: "610002" })] }));
   assert.equal(res.status, 201);
+});
+
+// ===========================================================================
+// 5. EL ASIENTO SE POSTEA EN EL MISMO ACTO (Bloque 4, 21/09/2026)
+// ===========================================================================
+
+test("🔴 el gasto se postea al crearse: DEBE la cuenta de cada línea / HABER 200001, con el gasto como origen", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(
+    req({
+      ...BASE,
+      lines: [
+        linea({ description: "Timbres", amount: "412.35" }),
+        linea({ description: "Gestor", chart_account_code: "500004", amount: "900.00" }),
+      ],
+    })
+  );
+  assert.equal(res.status, 201);
+  const body = await res.json();
+  assert.equal(body.asiento?.entry_number, 41, "la respuesta trae el número del asiento");
+
+  const a = state.capturado.rpcArgs;
+  assert.ok(a, "se llamó al RPC de posteo");
+  assert.equal(a.p_source_type, "gasto_tramite");
+  assert.equal(a.p_source_id, "nuevo-gasto");
+  assert.equal(a.p_tenant_id, "t-real", "el tenant del perfil, no del body");
+  const lines = a.p_lines as { account_code: string; debit: number; credit: number }[];
+  assert.equal(lines.length, 3, "2 débitos + 1 crédito");
+  assert.equal(lines.find((l) => l.credit > 0)?.account_code, "200001");
+  assert.equal(lines.find((l) => l.credit > 0)?.credit, 1312.35);
+  assert.equal(state.capturado.cacheEscrito?.posted_entry_id, "entry-uuid-1", "posted_entry_id se escribe");
+  assert.equal(state.capturado.borroElGasto, false);
+});
+
+test("🔴 si el posteo falla (período cerrado), el gasto se DESHACE y el error llega con su motivo", { skip: skipNoMocks }, async () => {
+  reset({ rpcError: { message: "El período 2026-03 está cerrado: no se admiten asientos con esa fecha." } });
+  const res = await POST(req({ ...BASE, lines: [linea()] }));
+  assert.equal(res.status, 422);
+  const body = await res.json();
+  assert.match(body.error, /El gasto no se registró: /);
+  assert.match(body.error, /período 2026-03 está cerrado/);
+  assert.equal(state.capturado.borroElGasto, true, "DELETE compensatorio del gasto (las líneas caen por CASCADE)");
+  assert.equal(state.capturado.cacheEscrito, null, "no se escribió posted_entry_id");
 });

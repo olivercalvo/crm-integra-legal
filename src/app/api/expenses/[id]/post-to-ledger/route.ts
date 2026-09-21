@@ -1,4 +1,12 @@
 /**
+ * ⚠️ DESDE EL BLOQUE 4 (21/09/2026) ESTA RUTA ES UN REINTENTO, NO EL CAMINO.
+ * El gasto se postea AUTOMÁTICAMENTE al crearse (`POST /api/expenses`): registrar
+ * el gasto YA es la transacción (Josuarth: débito 130003 / crédito cuentas por
+ * pagar). Esta ruta queda para los gastos ANTERIORES al cambio, que nacieron sin
+ * asiento y cuyas líneas hay que clasificar primero. Un gasto nuevo nunca llega
+ * acá: nace con `posted_entry_id` y la capa 1 lo rechaza con 409.
+ * La lógica es UNA (`postearGastoTramite`), compartida con el alta.
+ *
  * POST /api/expenses/[id]/post-to-ledger
  *
  * Registra un gasto de trámite en el libro contable.
@@ -60,25 +68,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
-import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { MutationError } from "@/lib/finanzas/api/errors";
-import {
-  construirAsientoDeGastoTramite,
-  SOURCE_TYPE_GASTO_TRAMITE,
-} from "@/lib/finanzas/contabilidad/asiento-gasto-tramite";
-import { getLineasDeGastoTramite } from "@/lib/finanzas/queries/expense-tramite";
+import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
 
-export const runtime = "nodejs";
-
-/** Mismo gate que `/legal/gastos` y que `POST /api/expenses`. */
+/**
+ * Quién puede REGISTRAR el gasto en el libro. Coincide con `EXPENSE_WRITE_ROLES`
+ * de `POST /api/expenses`: el que crea gastos es el que puede reintentar su
+ * posteo. El contador lee la pantalla, no la registra.
+ */
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
-
-/** El mensaje de "ya está posteado", en UN solo lugar: lo usan las capas 2 y 3. */
-function yaPosteado(numero: number | null): string {
-  return numero === null
-    ? "Este gasto ya está registrado en el libro contable."
-    : `Este gasto ya está registrado en el libro contable (asiento ${numero}).`;
-}
 
 export async function POST(
   _request: NextRequest,
@@ -88,10 +86,9 @@ export async function POST(
     const supabase = createClient();
     const {
       data: { user },
-      error: authError,
     } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
     const admin = createAdminClient();
@@ -112,170 +109,21 @@ export async function POST(
     // dato del request que entre al asiento.
     const tenantId = profile.tenant_id as string;
 
-    // ── El gasto ────────────────────────────────────────────────────────────
-    const { data: gasto, error: errGasto } = await admin
-      .from("expenses")
-      .select(
-        `id, date, concept, posted_entry_id,
-         cases(case_code),
-         suppliers(legal_name)`
-      )
-      .eq("id", params.id)
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
-
-    if (errGasto) {
-      console.error("[expenses/post-to-ledger] lookup failed", errGasto);
-      return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
-    }
-    if (!gasto) {
-      return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
-    }
-
-    // ── CAPA 1: el cache ────────────────────────────────────────────────────
-    if (gasto.posted_entry_id) {
-      const { data: ya } = await admin
-        .from("journal_entries")
-        .select("entry_number")
-        .eq("id", gasto.posted_entry_id)
-        .maybeSingle();
-      return NextResponse.json(
-        { error: yaPosteado((ya as { entry_number: number } | null)?.entry_number ?? null) },
-        { status: 409 }
-      );
-    }
-
-    // ── CAPA 2: la verdad ───────────────────────────────────────────────────
-    const { data: asientoPrevio, error: errPrevio } = await admin
-      .from("journal_entries")
-      .select("entry_number")
-      .eq("tenant_id", tenantId)
-      .eq("source_type", SOURCE_TYPE_GASTO_TRAMITE)
-      .eq("source_id", params.id)
-      .maybeSingle();
-
-    if (errPrevio) {
-      // Ante la duda NO se asume que no hay asiento: postear de más es lo único
-      // que no se puede deshacer. Mismo criterio que `contarMovimientos()`.
-      console.error("[expenses/post-to-ledger] asiento lookup failed", errPrevio);
-      return NextResponse.json(
-        { error: "No se pudo verificar si el gasto ya está en el libro. No se registró nada." },
-        { status: 500 }
-      );
-    }
-    if (asientoPrevio) {
-      return NextResponse.json(
-        { error: yaPosteado((asientoPrevio as { entry_number: number }).entry_number) },
-        { status: 409 }
-      );
-    }
-
-    // ── Las líneas y el armado ──────────────────────────────────────────────
-    const lineas = await getLineasDeGastoTramite(admin, tenantId, params.id);
-
-    const caso = (gasto as unknown as { cases: { case_code: string } | null }).cases;
-    const prov = (gasto as unknown as { suppliers: { legal_name: string } | null }).suppliers;
-
-    const armado = construirAsientoDeGastoTramite(
-      {
-        id: String(gasto.id),
-        date: String(gasto.date),
-        concept: String(gasto.concept ?? ""),
-        case_code: caso?.case_code ?? null,
-        supplier_legal_name: prov?.legal_name ?? null,
-      },
-      lineas
-    );
-
-    if (!armado.ok) {
-      // 🔴 Acá cae el rechazo por líneas sin clasificar, con su mensaje ya
-      // redactado y los números de línea adentro. 422 y no 400: el request está
-      // bien formado, lo que falta es que alguien clasifique.
-      return NextResponse.json(
-        { error: armado.mensaje, motivo: armado.motivo, lineas: armado.lineasSinCuenta },
-        { status: 422 }
-      );
-    }
-
-    // ── EL POSTEO ───────────────────────────────────────────────────────────
-    let entryId: string;
     try {
-      entryId = await postJournalEntry(admin, tenantId, armado.asiento, user.id);
+      const posteo = await postearGastoTramite(admin, tenantId, params.id, user.id);
+      return NextResponse.json(posteo, { status: 201 });
     } catch (err) {
-      // ── CAPA 3: el UNIQUE de la 034 ──────────────────────────────────────
-      // Es el caso del doble clic: dos requests pasaron la capa 2 a la vez y el
-      // índice frenó al segundo. Se traduce al MISMO mensaje, no a un error de
-      // constraint.
-      //
-      // ⚠️ El código de Postgres viaja en `MutationError.detail`, NO en `cause`.
-      // `postJournalEntry()` hace `new MutationError(msg, 422, error)` y el
-      // tercer argumento del constructor es `detail` (ver `api/errors.ts`).
-      // La primera versión de este bloque miraba `cause` y devolvía 422 en vez
-      // de 409: el doble clic contestaba "el asiento está mal armado" cuando en
-      // realidad ya estaba posteado. Lo encontró el test de la capa 3.
-      const codigo =
-        (err as MutationError)?.detail &&
-        typeof (err as MutationError).detail === "object"
-          ? ((err as MutationError).detail as { code?: string }).code
-          : (err as { code?: string })?.code;
-
-      if (codigo === "23505") {
-        const { data: ganador } = await admin
-          .from("journal_entries")
-          .select("entry_number")
-          .eq("tenant_id", tenantId)
-          .eq("source_type", SOURCE_TYPE_GASTO_TRAMITE)
-          .eq("source_id", params.id)
-          .maybeSingle();
-        return NextResponse.json(
-          { error: yaPosteado((ganador as { entry_number: number } | null)?.entry_number ?? null) },
-          { status: 409 }
-        );
-      }
       if (err instanceof MutationError) {
-        // Los mensajes del RPC ya vienen redactados en español desde la `028`
-        // (período cerrado, cuenta inexistente, asiento descuadrado).
-        return NextResponse.json({ error: err.message }, { status: err.status });
+        const extra =
+          err.detail && typeof err.detail === "object" && "motivo" in (err.detail as object)
+            ? (err.detail as { motivo: string; lineas: number[] })
+            : {};
+        return NextResponse.json({ error: err.message, ...extra }, { status: err.status });
       }
       throw err;
     }
-
-    // ── El cache. Si falla, NO se falla el request ───────────────────────────
-    // El asiento ya está en el libro y eso es lo irreversible. `posted_entry_id`
-    // es una optimización de lectura: la verdad la lee `getNumeroDeAsiento()`
-    // contra `journal_entries`, así que la pantalla sigue estando bien. Devolver
-    // un error acá haría que alguien reintente un posteo que YA se hizo.
-    const { data: creado } = await admin
-      .from("journal_entries")
-      .select("entry_number")
-      .eq("id", entryId)
-      .maybeSingle();
-
-    const { error: errCache } = await admin
-      .from("expenses")
-      .update({ posted_entry_id: entryId })
-      .eq("id", params.id)
-      .eq("tenant_id", tenantId);
-
-    if (errCache) {
-      // El trigger de la `038` deja pasar este UPDATE a propósito:
-      // `posted_entry_id` no está en su lista de columnas protegidas.
-      console.error(
-        "[expenses/post-to-ledger] el asiento se posteó pero el cache no se pudo escribir",
-        { expenseId: params.id, entryId, error: errCache }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        entry_id: entryId,
-        entry_number: (creado as { entry_number: number } | null)?.entry_number ?? null,
-        lineas: armado.asiento.lines.length,
-      },
-      { status: 201 }
-    );
   } catch (err) {
-    console.error("[expenses/post-to-ledger] error", err);
+    console.error("[expenses/post-to-ledger] unexpected", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

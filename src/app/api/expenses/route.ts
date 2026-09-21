@@ -7,6 +7,7 @@ import type { ExpenseLineDraft } from "@/lib/finanzas/types/expense-line";
 import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -224,7 +225,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ ...expense, lineas: validadas.data.lineas.length }, { status: 201 });
+    // ─────────────────────────────────────────────────────────────────────────
+    // EL ASIENTO, EN EL MISMO ACTO (Bloque 4, 21/09/2026)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Registrar el gasto YA es la transacción (Josuarth: débito 130003 / crédito
+    // cuentas por pagar). Antes esto era un botón aparte que el contador no podía
+    // apretar y 20 de 21 gastos de staging nunca llegaron al libro. La misma
+    // función que usa el reintento manual (`post-to-ledger`).
+    //
+    // Orden obligatorio (D1): insert gasto + líneas → posteo → posted_entry_id.
+    // Si el posteo falla (período cerrado, cuenta inválida, RPC caído), el
+    // gasto NO queda registrado: DELETE compensatorio del gasto (las líneas
+    // caen por el CASCADE de la 036; el trigger de la 038 lo deja pasar porque
+    // todavía no hay asiento). Es el mismo criterio que las compras: "una
+    // compra que no se puede contabilizar no queda registrada".
+    let posteo;
+    try {
+      posteo = await postearGastoTramite(admin, profile.tenant_id, expense.id, user.id);
+    } catch (err) {
+      const { error: errUndo } = await admin.from("expenses").delete().eq("id", expense.id);
+      if (errUndo) {
+        // El gasto quedó sin asiento: no es un estado corrupto (se puede
+        // reintentar desde /finanzas/gastos-tramite/{id}), pero hay que decirlo.
+        console.error("[expenses] el posteo falló y el DELETE compensatorio también", {
+          expenseId: expense.id,
+          errUndo,
+        });
+      }
+      const mensaje = err instanceof MutationError ? err.message : "No se pudo registrar el asiento";
+      const status = err instanceof MutationError ? err.status : 500;
+      console.error("[expenses] posteo del alta falló; gasto deshecho:", mensaje);
+      return NextResponse.json(
+        { error: `El gasto no se registró: ${mensaje}` },
+        { status: status === 404 || status === 409 ? 500 : status }
+      );
+    }
+
+    return NextResponse.json(
+      { ...expense, lineas: validadas.data.lineas.length, asiento: posteo },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("Unexpected error in POST /api/expenses:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });

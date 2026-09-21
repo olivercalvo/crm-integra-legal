@@ -24,7 +24,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { SEED_USERS } from "./seed-data/staging-fixtures";
+import { createRequire } from "node:module";
+
+// Los fixtures son un .ts que tsx compila como CommonJS (package.json sin
+// "type": "module"); desde este .mts (ESM) el import con nombre no ve el
+// export. createRequire sí.
+const { SEED_USERS } = createRequire(import.meta.url)("./seed-data/staging-fixtures.ts") as {
+  SEED_USERS: { key: string; email: string; password: string }[];
+};
 
 const PROD_REF = "uqmmkklbhzxqybljiecs";
 const STAGING_REF = "xtyenhakplrkyifbcaow";

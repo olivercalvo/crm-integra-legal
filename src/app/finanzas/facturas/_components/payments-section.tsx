@@ -1,5 +1,6 @@
 import { CircleDollarSign, Banknote, FileText, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
+import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
 import {
   PAYMENT_METHOD_LABEL,
   type PaymentForInvoice,
@@ -55,7 +56,10 @@ export function PaymentsSection({
   const reversados = payments.length - vigentes.length;
   const hasPayments = payments.length > 0;
   const showRegisterButton = canMutate && balanceDue > 0.001;
-  const showActionColumn = canMutate || canReverse;
+  // La columna de acciones siempre existe: el recibo en PDF lo baja cualquiera
+  // que vea esta pantalla (admin, abogada, contador). Reversar/Eliminar siguen
+  // gateados por canReverse / canMutate.
+  const showActionColumn = true;
 
   const resumen =
     vigentes.length === 0
@@ -141,7 +145,7 @@ export function PaymentsSection({
                 <th className="pb-2 pr-3 font-semibold">Método</th>
                 <th className="pb-2 pr-3 font-semibold">Referencia</th>
                 <th className="pb-2 pr-3 font-semibold">Registrado por</th>
-                {showActionColumn && <th className="pb-2 font-semibold w-10"></th>}
+                {showActionColumn && <th className="pb-2 font-semibold text-right">Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -215,6 +219,10 @@ export function PaymentsSection({
                     </td>
                     {showActionColumn && (
                       <td className="py-2 text-right">
+                        <div className="inline-flex items-center justify-end gap-2">
+                        {p.payment_number && (
+                          <DownloadReceiptPdfButton paymentId={p.id} receiptLabel={p.payment_number} compact />
+                        )}
                         {canReverseThis && p.asiento ? (
                           <ReversePaymentDialog
                             paymentId={p.id}
@@ -236,6 +244,7 @@ export function PaymentsSection({
                             —
                           </span>
                         )}
+                        </div>
                       </td>
                     )}
                   </tr>

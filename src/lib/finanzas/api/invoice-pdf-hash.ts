@@ -81,7 +81,8 @@ export interface InvoicePdfPayload {
 // Canonical JSON
 // ---------------------------------------------------------------------------
 
-function canonicalStringify(value: unknown): string {
+/** Exportada para que el hash del recibo (`receipt-pdf-hash.ts`) use la MISMA serialización. */
+export function canonicalStringify(value: unknown): string {
   if (value === null || value === undefined) {
     return JSON.stringify(value ?? null);
   }

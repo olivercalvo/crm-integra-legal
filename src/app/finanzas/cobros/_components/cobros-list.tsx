@@ -4,6 +4,7 @@ import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { fmtImporte } from "@/lib/utils/importe";
 import { PAYMENT_METHOD_LABEL, type PaymentListItem } from "@/lib/finanzas/types/payment";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
 
 interface Props {
   payments: PaymentListItem[];
@@ -39,7 +40,7 @@ export function CobrosList({ payments, canReverse }: Props) {
               <th className="px-4 py-3 font-semibold">Método</th>
               <th className="px-4 py-3 font-semibold">Referencia</th>
               <th className="px-4 py-3 font-semibold">Registrado por</th>
-              {canReverse && <th className="px-4 py-3 font-semibold w-10"></th>}
+              <th className="px-4 py-3 font-semibold text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -71,11 +72,14 @@ export function CobrosList({ payments, canReverse }: Props) {
                     <Referencia p={p} reversado={reversado} />
                   </td>
                   <td className={`px-4 py-3 ${reversado ? "" : "text-gray-600"}`}>{p.created_by_name ?? ""}</td>
-                  {canReverse && (
-                    <td className="px-4 py-3 text-right">
-                      <Accion p={p} reversado={reversado} />
-                    </td>
-                  )}
+                  <td className="px-4 py-3 text-right">
+                    <div className="inline-flex items-center justify-end gap-2">
+                      {p.payment_number && (
+                        <DownloadReceiptPdfButton paymentId={p.id} receiptLabel={p.payment_number} compact />
+                      )}
+                      {canReverse && <Accion p={p} reversado={reversado} />}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
@@ -109,7 +113,12 @@ export function CobrosList({ payments, canReverse }: Props) {
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
                 <Estado p={p} reversado={reversado} />
-                {canReverse && <Accion p={p} reversado={reversado} />}
+                <div className="inline-flex items-center gap-2">
+                  {p.payment_number && (
+                    <DownloadReceiptPdfButton paymentId={p.id} receiptLabel={p.payment_number} compact />
+                  )}
+                  {canReverse && <Accion p={p} reversado={reversado} />}
+                </div>
               </div>
               <div className={`mt-1 text-xs ${reversado ? "" : "text-gray-500"}`}>
                 <Referencia p={p} reversado={reversado} />

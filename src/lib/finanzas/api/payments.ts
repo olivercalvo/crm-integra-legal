@@ -2,14 +2,15 @@
  * Helpers server-side para mutaciones de pagos. Llamados desde route
  * handlers `/api/finanzas/invoices/[id]/payments` y `/api/finanzas/payments/[id]`.
  *
- * MVP del Sprint 2C: 1 pago = 1 application contra UNA factura. La
- * estructura DB (payments + payment_applications N:M) soporta multi-factura
- * pero la UI no la expone. Si en el futuro se necesita, se construye una
- * pantalla específica sin tocar schema.
+ * Desde la Parte B del Bloque 2 (21/09/2026) un cobro se aplica a UNA O
+ * VARIAS facturas del mismo cliente (`applications[]`); la ruta vieja
+ * `/invoices/[id]/payments` sigue como atajo de una aplicación. Josuarth: "sí
+ * hace falta poder pagar varias facturas con una sola transferencia".
  *
  * Cap de monto: createPayment hace lookup de invoices.balance_due y rechaza
- * si amount > balance_due. Defensa server-side complementaria al cap
- * client-side (D9 del sprint).
+ * si el monto aplicado a CADA factura supera su saldo. Defensa server-side
+ * complementaria al cap client-side (D9 del sprint). La suma == total la
+ * verifica el validador antes de llegar acá.
  *
  * Eliminación: deletePayment borra el payment entero. T6 (no_delete) valida
  * que status='registrado'. CASCADE de payment_applications limpia la fila
@@ -33,11 +34,12 @@ import { allocateReceiptNumber } from "@/lib/finanzas/numbering/receipt-numberin
 type DB = SupabaseClient;
 
 /**
- * Crea un pago + lo aplica al 100% contra la factura indicada.
+ * Crea un pago y lo aplica a las facturas indicadas (una o varias).
  *
  * Flujo (compensating delete pattern):
- *   1. Lookup invoice: validar que existe, mismo tenant, está en estado
- *      facturable (emitida / parc_pagada). Validar amount ≤ balance_due.
+ *   1. Lookup de las facturas EN UNA consulta: todas existen, mismo tenant,
+ *      MISMO cliente (un recibo es de un cliente), estado cobrable
+ *      (emitida / parc_pagada), y cada monto aplicado ≤ su balance_due.
  *   1b. EL NÚMERO DE RECIBO: `get_next_sequence_number(tenant, 'payment')` →
  *      `REC-000012`. Va DESPUÉS de todas las validaciones (un pedido mal
  *      formado no consume número) y ANTES del INSERT (va dentro del mismo
@@ -45,8 +47,9 @@ type DB = SupabaseClient;
  *      hay un HUECO: decisión consciente, ver `numbering/receipt-numbering.ts`
  *      y SOP-031.
  *   2. INSERT payment (status='registrado', payment_number, amount_unapplied=amount via T7c).
- *   3. INSERT payment_application (amount_applied=amount). T7a recalcula
- *      invoice.amount_paid + transiciona status. T7b deja amount_unapplied=0.
+ *   3. INSERT payment_applications, una fila por factura. T7a recalcula
+ *      invoice.amount_paid + transiciona status POR FILA. T7b deja
+ *      amount_unapplied=0 porque la suma == amount (lo garantiza el validador).
  *   4. Si paso 3 falla → DELETE payment compensatorio (T6 lo permite porque
  *      status='registrado' y no hay applications colgadas).
  *   5. POSTEAR EL ASIENTO. Si falla → mismo DELETE compensatorio.
@@ -111,37 +114,66 @@ export async function createPayment(
     );
   }
 
-  // 1. Lookup invoice + validar estado + cap por balance_due
-  const { data: inv, error: errInv } = await db
+  if (!input.applications || input.applications.length === 0) {
+    throw new MutationError("Elija al menos una factura a la que aplicar el cobro.", 400);
+  }
+
+  // 1. Lookup de las facturas + estado + cap por balance_due, POR factura
+  const ids = input.applications.map((a) => a.invoice_id);
+  const { data: invs, error: errInv } = await db
     .from("invoices")
-    .select("id, client_id, status, grand_total, amount_paid, balance_due")
+    .select("id, invoice_number, client_id, status, grand_total, amount_paid, balance_due")
     .eq("tenant_id", tenantId)
-    .eq("id", input.invoice_id)
-    .maybeSingle();
+    .in("id", ids);
 
   if (errInv) {
     throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
   }
-  if (!inv) {
-    throw new MutationError("Factura no encontrada", 404);
-  }
-
-  const status = inv.status as string;
-  if (!["emitida", "parcialmente_pagada"].includes(status)) {
+  type Inv = {
+    id: string;
+    invoice_number: string;
+    client_id: string;
+    status: string;
+    balance_due: number | string;
+  };
+  const porId = new Map(((invs ?? []) as Inv[]).map((i) => [i.id, i]));
+  if (porId.size !== ids.length) {
     throw new MutationError(
-      status === "pagada"
-        ? "Esta factura ya está completamente pagada."
-        : `No se pueden registrar pagos a una factura en estado '${status}'.`,
-      400
+      ids.length === 1 ? "Factura no encontrada" : "Alguna de las facturas seleccionadas no existe.",
+      404
     );
   }
 
-  const balanceDue = Number(inv.balance_due);
-  if (input.amount > balanceDue + 0.001) {
+  // Un recibo es de UN cliente: la plata la manda alguien.
+  const clientes = new Set(Array.from(porId.values()).map((i) => i.client_id));
+  if (clientes.size > 1) {
     throw new MutationError(
-      `El monto del pago (B/. ${input.amount.toFixed(2)}) excede el saldo pendiente (B/. ${balanceDue.toFixed(2)}).`,
+      "Las facturas seleccionadas son de clientes distintos. Un recibo de caja es de un solo cliente: " +
+        "registre un cobro por cada cliente.",
       400
     );
+  }
+  const clientId = Array.from(clientes)[0];
+
+  for (const app of input.applications) {
+    const inv = porId.get(app.invoice_id)!;
+    const status = inv.status;
+    if (!["emitida", "parcialmente_pagada"].includes(status)) {
+      throw new MutationError(
+        status === "pagada"
+          ? `La factura ${inv.invoice_number} ya está completamente pagada.`
+          : `No se pueden registrar pagos a la factura ${inv.invoice_number} en estado '${status}'.`,
+        400
+      );
+    }
+    const balanceDue = Number(inv.balance_due);
+    if (app.amount > balanceDue + 0.001) {
+      throw new MutationError(
+        `El monto aplicado a ${inv.invoice_number} (B/. ${app.amount.toFixed(2)}) excede su saldo pendiente ` +
+          `(B/. ${balanceDue.toFixed(2)}).`,
+        400
+      );
+    }
   }
 
   // 1b. EL NÚMERO DE RECIBO. Última cosa antes de escribir: todo lo que podía
@@ -164,7 +196,7 @@ export async function createPayment(
     .insert({
       tenant_id: tenantId,
       payment_number: paymentNumber,
-      client_id: inv.client_id,
+      client_id: clientId,
       payment_date: input.payment_date,
       amount: input.amount,
       currency: "USD",
@@ -184,15 +216,18 @@ export async function createPayment(
 
   const paymentId = payment.id as string;
 
-  // 3. INSERT payment_application
-  const { error: errApp } = await db.from("payment_applications").insert({
-    tenant_id: tenantId,
-    payment_id: paymentId,
-    invoice_id: input.invoice_id,
-    amount_applied: input.amount,
-    applied_by: userId,
-    created_by: userId,
-  });
+  // 3. INSERT payment_applications — una fila por factura, en UN insert.
+  //    Si alguna falla (por ejemplo, el UNIQUE payment/factura), no entra ninguna.
+  const { error: errApp } = await db.from("payment_applications").insert(
+    input.applications.map((a) => ({
+      tenant_id: tenantId,
+      payment_id: paymentId,
+      invoice_id: a.invoice_id,
+      amount_applied: a.amount,
+      applied_by: userId,
+      created_by: userId,
+    }))
+  );
 
   /**
    * Deshace el cobro entero. Ver el encabezado: se borra SOLO el payment y el

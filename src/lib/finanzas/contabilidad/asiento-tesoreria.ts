@@ -100,6 +100,8 @@ export function esCuentaDeBancoValida(c: CuentaDeBanco | null | undefined): bool
 
 export interface CobroParaAsiento {
   id: string;
+  /** `REC-000012`. Es la referencia del asiento (Parte B, 21/09/2026). */
+  payment_number: string | null;
   payment_date: string;
   amount: number;
   client_name: string | null;
@@ -192,7 +194,12 @@ export function construirAsientoDeCobro(
       source_type: SOURCE_TYPE_COBRO,
       lines,
       source_id: c.id,
-      reference: c.facturas[0] ?? null,
+      // La referencia es el RECIBO, no "la primera factura": con varias
+      // facturas la primera es arbitraria y el recibo es el documento real del
+      // asiento. Verificado el 21/09/2026 que ningún reporte leía acá un
+      // número de factura (task_plan.md, Parte B, precisión 2). Los cobros de
+      // antes de la 047 (sin número) caen a la factura, como siempre.
+      reference: c.payment_number ?? c.facturas[0] ?? null,
       idempotency_key: claveIdempotenteDeCobro(c.id),
     },
   };

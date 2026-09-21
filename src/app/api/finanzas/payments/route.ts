@@ -1,33 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreatePayment } from "@/lib/finanzas/validators/payment";
 import { createPayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
 
-interface RouteParams {
-  params: { id: string };
-}
+export const runtime = "nodejs";
 
 /**
- * POST /api/finanzas/invoices/[id]/payments
+ * POST /api/finanzas/payments — registrar un recibo de caja aplicado a UNA O
+ * VARIAS facturas del mismo cliente (Parte B del Bloque 2, 21/09/2026).
  *
- * Registra un pago aplicado al 100% contra la factura indicada. Crea el
- * payment + la payment_application en la misma operación lógica
- * (compensating delete si la application falla).
+ * Body: { payment_date, amount, method, payment_account_code, reference?, notes?,
+ *         applications: [{ invoice_id, amount }, …] }
  *
- * Permisos: admin + abogada (D4). Asistente y contador → 403.
+ * `amount` == suma de `applications`; el validador rechaza el excedente con un
+ * mensaje que dice qué hacer. Es la MISMA `createPayment` que usa
+ * `POST /api/finanzas/invoices/[id]/payments` (el atajo de una factura del
+ * diálogo del detalle): un solo helper, un solo correlativo, un solo asiento.
  *
- * Body esperado: { payment_date, amount, method, payment_account_code, reference?, notes? }
- *
- * Desde la Parte B (21/09/2026) es el ATAJO de una sola aplicación: envuelve
- * el body en `applications: [{ invoice_id: <path>, amount }]` y llama a la
- * MISMA `createPayment` que `POST /api/finanzas/payments`. Es lo que usa el
- * diálogo "Registrar pago" del detalle de la factura, que no cambió.
+ * Permisos: admin + abogada. Contador y asistente → 403 (el contador ve el
+ * listado de cobros pero no registra). El tenant sale del contexto
+ * autenticado, nunca del body.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -40,14 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  // La factura del path + el monto del body = la única aplicación.
-  const b = (body ?? {}) as Record<string, unknown>;
-  const payload = {
-    ...b,
-    applications: [{ invoice_id: params.id, amount: Number(b.amount) }],
-  };
-
-  const validation = validateCreatePayment(payload);
+  const validation = validateCreatePayment(body as Record<string, unknown>);
   if (!validation.ok) {
     return NextResponse.json(
       { error: "Validación fallida", fieldErrors: validation.errors },
@@ -65,18 +54,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       //    contexto autenticado, nunca del body.
       createAdminClient()
     );
-    // El número de recibo viaja en la respuesta para el toast ("Recibo REC-000012
-    // registrado") y para el enlace al PDF.
     return NextResponse.json(
       { id: result.id, payment_number: result.payment_number },
       { status: 201 }
     );
   } catch (err) {
     if (err instanceof MutationError) {
-      console.error("[finanzas] createPayment failed:", err.message, err.detail);
+      console.error("[finanzas] createPayment (multi) failed:", err.message, err.detail);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    console.error("[finanzas] createPayment unexpected error:", err);
+    console.error("[finanzas] createPayment (multi) unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

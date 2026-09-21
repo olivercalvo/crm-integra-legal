@@ -11,7 +11,11 @@
  * formato y rangos básicos.
  */
 
-import type { CreatePaymentInput, PaymentMethod } from "@/lib/finanzas/types/payment";
+import type {
+  CreatePaymentInput,
+  PaymentApplicationInput,
+  PaymentMethod,
+} from "@/lib/finanzas/types/payment";
 import { PAYMENT_METHODS } from "@/lib/finanzas/types/payment";
 
 export type ValidationErrors = Record<string, string>;
@@ -28,16 +32,61 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Un recibo con más facturas que esto es un error de carga, no un caso real. */
+export const MAX_APPLICATIONS = 50;
+
+function fmt(n: number): string {
+  return `B/. ${round2(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Las aplicaciones: una o varias facturas, sin repetir, cada monto > 0.
+ * Devuelve la lista limpia (montos redondeados) o los errores.
+ */
+function validateApplications(
+  raw: unknown,
+  errors: ValidationErrors
+): PaymentApplicationInput[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    errors.applications = "Elija al menos una factura a la que aplicar el cobro.";
+    return [];
+  }
+  if (raw.length > MAX_APPLICATIONS) {
+    errors.applications = `Un recibo no puede aplicarse a más de ${MAX_APPLICATIONS} facturas.`;
+    return [];
+  }
+  const vistas = new Set<string>();
+  const limpias: PaymentApplicationInput[] = [];
+  (raw as Partial<PaymentApplicationInput>[]).forEach((a, i) => {
+    const invoiceId = String(a?.invoice_id ?? "").trim();
+    if (!invoiceId || !UUID_RE.test(invoiceId)) {
+      errors.applications = `Factura inválida en la línea ${i + 1}.`;
+      return;
+    }
+    if (vistas.has(invoiceId)) {
+      errors.applications = "Una factura no puede aparecer dos veces en el mismo recibo.";
+      return;
+    }
+    vistas.add(invoiceId);
+    const amount = Number(a?.amount);
+    if (!isFinite(amount) || amount <= 0) {
+      // El CHECK de payment_applications prohíbe montos en cero: una fila
+      // en 0 no se manda, se saca.
+      errors.applications = `El monto aplicado a la factura de la línea ${i + 1} debe ser mayor a 0.`;
+      return;
+    }
+    limpias.push({ invoice_id: invoiceId, amount: round2(amount) });
+  });
+  return limpias;
+}
+
 export function validateCreatePayment(
   raw: Partial<CreatePaymentInput> | null | undefined
 ): ValidationResult<CreatePaymentInput> {
   const errors: ValidationErrors = {};
 
-  // invoice_id (viene del path param, pero defensa)
-  const invoiceId = String(raw?.invoice_id ?? "").trim();
-  if (!invoiceId || !UUID_RE.test(invoiceId)) {
-    errors.invoice_id = "Factura inválida";
-  }
+  // applications: una o varias facturas
+  const applications = validateApplications(raw?.applications, errors);
 
   // payment_date
   const paymentDate = String(raw?.payment_date ?? "").trim();
@@ -45,12 +94,27 @@ export function validateCreatePayment(
     errors.payment_date = "Fecha del pago inválida (esperado YYYY-MM-DD)";
   }
 
-  // amount > 0
+  // amount > 0, y == la suma de lo aplicado. El excedente se RECHAZA (no hay
+  // dónde ponerlo hasta que el bufete defina anticipos) y el faltante también
+  // (un recibo que no coincide con la transferencia rompe la conciliación).
+  // El mensaje dice los dos montos y la salida (SOP-027).
   const amount = Number(raw?.amount);
   if (!isFinite(amount) || amount <= 0) {
     errors.amount = "El monto debe ser mayor a 0";
   } else if (amount > 9_999_999.99) {
     errors.amount = "Monto fuera de rango";
+  } else if (!errors.applications && applications.length > 0) {
+    const aplicado = round2(applications.reduce((acc, a) => acc + a.amount, 0));
+    const diferencia = round2(amount - aplicado);
+    if (Math.abs(diferencia) > 0.005) {
+      errors.amount =
+        diferencia > 0
+          ? `La transferencia es de ${fmt(amount)} y las facturas seleccionadas suman ${fmt(aplicado)}. ` +
+            `Un recibo tiene que coincidir con la transferencia para que el banco concilie. ` +
+            `Seleccione otra factura pendiente del mismo cliente por el resto (${fmt(diferencia)}) o ajuste el monto.`
+          : `El monto del recibo es ${fmt(amount)} pero lo aplicado a las facturas suma ${fmt(aplicado)}: ` +
+            `sobran ${fmt(-diferencia)} aplicados. Baje lo aplicado o suba el monto del recibo.`;
+    }
   }
 
   // method (whitelist)
@@ -106,7 +170,7 @@ export function validateCreatePayment(
     ok: true,
     errors: null,
     data: {
-      invoice_id: invoiceId,
+      applications,
       payment_date: paymentDate,
       amount: round2(amount),
       method,

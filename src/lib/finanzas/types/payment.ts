@@ -44,10 +44,20 @@ export const PAYMENT_METHODS: PaymentMethod[] = [
 
 // ---------- Inputs --------------------------------------------------------
 
+/** Cuánto del cobro se aplica a UNA factura. */
+export interface PaymentApplicationInput {
+  invoice_id: string;
+  amount: number;
+}
+
 /**
- * Payload para registrar un pago contra UNA factura específica. El monto
- * se aplica completo (createPayment crea el payment + la application en la
- * misma operación lógica).
+ * Payload para registrar un cobro (recibo de caja) aplicado a una o varias
+ * facturas del MISMO cliente (Parte B, 21/09/2026 — Josuarth: "sí hace falta
+ * poder pagar varias facturas con una sola transferencia").
+ *
+ * `amount` es el total de la transferencia y tiene que ser IGUAL a la suma de
+ * `applications`: un excedente sin aplicar se rechaza hasta que el bufete
+ * defina dónde va (`amount_unapplied` queda para ese día, ver task_plan.md).
  */
 export interface CreatePaymentInput {
   /**
@@ -58,8 +68,10 @@ export interface CreatePaymentInput {
    * nuevo, `createPayment` la exige y el formulario también.
    */
   payment_account_code: string | null;
-  invoice_id: string;
+  /** Una o varias, sin repetir. Cada monto > 0 y ≤ al saldo de su factura. */
+  applications: PaymentApplicationInput[];
   payment_date: string; // YYYY-MM-DD
+  /** Total del cobro = suma de `applications`. */
   amount: number;
   method: PaymentMethod;
   reference: string | null;

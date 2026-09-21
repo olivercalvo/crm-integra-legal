@@ -29,7 +29,41 @@ interface Guion {
   fallaApp?: boolean;
   /** La secuencia 'payment' no existe (047 sin aplicar). */
   sinSecuencia?: boolean;
+  /** Las facturas que "existen". Por defecto, la de siempre. */
+  facturas?: FacturaFake[];
 }
+
+interface FacturaFake {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  status: string;
+  grand_total: number;
+  amount_paid: number;
+  balance_due: number;
+}
+
+const CLIENTE = "33333333-3333-3333-3333-333333333333";
+const INVOICE_2 = "11111111-1111-1111-1111-222222222222";
+
+const FACTURA_1: FacturaFake = {
+  id: INVOICE,
+  invoice_number: "FAC-HON-000001",
+  client_id: CLIENTE,
+  status: "emitida",
+  grand_total: 1070,
+  amount_paid: 0,
+  balance_due: 1070,
+};
+const FACTURA_2: FacturaFake = {
+  id: INVOICE_2,
+  invoice_number: "FAC-HON-000002",
+  client_id: CLIENTE,
+  status: "parcialmente_pagada",
+  grand_total: 1605,
+  amount_paid: 250,
+  balance_due: 1355,
+};
 
 function fake(g: Guion) {
   const reg = {
@@ -40,6 +74,8 @@ function fake(g: Guion) {
     correlativos: [] as string[],
     /** Lo que se insertó en `payments`, para mirar el `payment_number`. */
     payloadPago: null as Record<string, unknown> | null,
+    /** Las filas insertadas en `payment_applications`. */
+    aplicaciones: [] as Record<string, unknown>[],
   };
 
   const tabla = (nombre: string) => {
@@ -51,9 +87,10 @@ function fake(g: Guion) {
     q.order = () => resolver(nombre);
     q.maybeSingle = async () => resolverUno(nombre);
     q.single = async () => resolverUno(nombre);
-    q.insert = (payload?: Record<string, unknown>) => {
+    q.insert = (payload?: Record<string, unknown> | Record<string, unknown>[]) => {
       reg.insertados.push(nombre);
-      if (nombre === "payments" && payload) reg.payloadPago = payload;
+      if (nombre === "payments" && payload && !Array.isArray(payload)) reg.payloadPago = payload;
+      if (nombre === "payment_applications" && Array.isArray(payload)) reg.aplicaciones = payload;
       if (nombre === "payment_applications" && g.fallaApp) {
         const res = { data: null, error: { message: "boom", code: "23514" } };
         return {
@@ -89,17 +126,7 @@ function fake(g: Guion) {
       case "journal_entries":
         return { data: g.tieneAsiento ? { entry_number: 7 } : null, error: null };
       case "invoices":
-        return {
-          data: {
-            id: INVOICE,
-            invoice_number: "FAC-HON-000001",
-            status: "emitida",
-            grand_total: 1070,
-            amount_paid: 0,
-            balance_due: 1070,
-          },
-          error: null,
-        };
+        return { data: g.facturas ?? [FACTURA_1], error: null };
       case "payments":
         return {
           data: {
@@ -153,7 +180,7 @@ function fake(g: Guion) {
 }
 
 const INPUT = {
-  invoice_id: INVOICE,
+  applications: [{ invoice_id: INVOICE, amount: 500 }],
   payment_date: "2026-09-04",
   amount: 500,
   method: "transferencia" as const,
@@ -255,9 +282,101 @@ test("un pedido rechazado en validación NO consume número (sin banco)", async 
 test("un monto sobre el saldo NO consume número", async () => {
   const { db, reg } = fake({});
   await assert.rejects(() =>
-    createPayment(db as never, TENANT, USER, { ...INPUT, amount: 99999 }, db as never)
+    createPayment(
+      db as never,
+      TENANT,
+      USER,
+      { ...INPUT, amount: 99999, applications: [{ invoice_id: INVOICE, amount: 99999 }] },
+      db as never
+    )
   );
   assert.deepEqual(reg.correlativos, []);
+  assert.deepEqual(reg.insertados, []);
+});
+
+// ---------------------------------------------------------------------------
+// Varias facturas en un recibo (Parte B, 21/09/2026)
+// ---------------------------------------------------------------------------
+
+const DOS = {
+  ...INPUT,
+  amount: 1500,
+  applications: [
+    { invoice_id: INVOICE, amount: 1070 },
+    { invoice_id: INVOICE_2, amount: 430 },
+  ],
+};
+
+test("dos facturas del mismo cliente: UN cobro, DOS aplicaciones en un solo insert, UN asiento", async () => {
+  const { db, reg } = fake({ postea: "ok", facturas: [FACTURA_1, FACTURA_2] });
+  const r = await createPayment(db as never, TENANT, USER, DOS, db as never);
+  assert.equal(r.payment_number, "REC-000012");
+  assert.equal(reg.payloadPago?.amount, 1500);
+  assert.equal(reg.payloadPago?.client_id, CLIENTE);
+  assert.deepEqual(
+    reg.aplicaciones.map((a) => [a.invoice_id, a.amount_applied]),
+    [
+      [INVOICE, 1070],
+      [INVOICE_2, 430],
+    ]
+  );
+  assert.equal(reg.insertados.filter((t) => t === "payment_applications").length, 1, "un solo insert");
+  assert.equal(reg.posteos, 1, "un solo asiento");
+  assert.deepEqual(reg.correlativos, ["payment"], "un solo número");
+});
+
+test("🔴 facturas de clientes DISTINTOS → 400, y no se toca la base", async () => {
+  const { db, reg } = fake({
+    facturas: [FACTURA_1, { ...FACTURA_2, client_id: "99999999-9999-9999-9999-999999999999" }],
+  });
+  await assert.rejects(
+    () => createPayment(db as never, TENANT, USER, DOS, db as never),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 400);
+      assert.match(e.message, /clientes distintos/);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, []);
+  assert.deepEqual(reg.correlativos, []);
+});
+
+test("una factura del lote no existe → 404 antes de insertar nada", async () => {
+  const { db, reg } = fake({ facturas: [FACTURA_1] });
+  await assert.rejects(
+    () => createPayment(db as never, TENANT, USER, DOS, db as never),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 404);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, []);
+});
+
+test("el cap es POR factura: 430 a una factura con saldo 300 → 400 nombrando la factura", async () => {
+  const { db, reg } = fake({ facturas: [FACTURA_1, { ...FACTURA_2, balance_due: 300 }] });
+  await assert.rejects(
+    () => createPayment(db as never, TENANT, USER, DOS, db as never),
+    (e: Error & { status?: number }) => {
+      assert.equal(e.status, 400);
+      assert.match(e.message, /FAC-HON-000002/);
+      assert.match(e.message, /300\.00/);
+      return true;
+    }
+  );
+  assert.deepEqual(reg.insertados, []);
+  assert.deepEqual(reg.correlativos, [], "un rechazo no consume número");
+});
+
+test("una factura del lote ya está pagada → 400 nombrándola, nada se inserta", async () => {
+  const { db, reg } = fake({ facturas: [FACTURA_1, { ...FACTURA_2, status: "pagada" }] });
+  await assert.rejects(
+    () => createPayment(db as never, TENANT, USER, DOS, db as never),
+    (e: Error) => {
+      assert.match(e.message, /FAC-HON-000002 ya está completamente pagada/);
+      return true;
+    }
+  );
   assert.deepEqual(reg.insertados, []);
 });
 

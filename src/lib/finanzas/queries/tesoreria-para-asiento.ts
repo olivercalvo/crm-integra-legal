@@ -62,7 +62,7 @@ export async function cargarCobroParaAsiento(
   const { data: pay, error } = await db
     .from("payments")
     .select(
-      "id, payment_date, amount, payment_account_code, client:clients!payments_client_id_fkey(name)"
+      "id, payment_number, payment_date, amount, payment_account_code, client:clients!payments_client_id_fkey(name)"
     )
     .eq("tenant_id", tenantId)
     .eq("id", paymentId)
@@ -73,6 +73,7 @@ export async function cargarCobroParaAsiento(
 
   const row = pay as unknown as {
     id: string;
+    payment_number: string | null;
     payment_date: string;
     amount: number | string;
     payment_account_code: string | null;
@@ -99,6 +100,7 @@ export async function cargarCobroParaAsiento(
 
   return {
     id: row.id,
+    payment_number: row.payment_number ?? null,
     payment_date: row.payment_date,
     amount: num(row.amount),
     client_name: cli?.name ?? null,

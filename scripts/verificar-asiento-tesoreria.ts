@@ -75,7 +75,7 @@ async function intento<T>(fn: () => Promise<T>): Promise<{ ok: true; v: T } | { 
 async function cargar(paymentId: string): Promise<CobroParaAsiento> {
   const p = (
     await c.query(
-      `SELECT p.id, p.payment_date, p.amount, p.payment_account_code, cl.name AS client_name,
+      `SELECT p.id, p.payment_number, p.payment_date, p.amount, p.payment_account_code, cl.name AS client_name,
               a.code, a.name AS cta_nombre, a.account_type, a.active
          FROM payments p
          JOIN clients cl ON cl.id = p.client_id
@@ -97,6 +97,7 @@ async function cargar(paymentId: string): Promise<CobroParaAsiento> {
 
   return {
     id: p.id,
+    payment_number: p.payment_number ?? null,
     payment_date: new Date(p.payment_date).toISOString().slice(0, 10),
     amount: Number(p.amount),
     client_name: p.client_name,

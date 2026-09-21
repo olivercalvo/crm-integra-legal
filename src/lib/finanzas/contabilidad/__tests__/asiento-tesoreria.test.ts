@@ -35,6 +35,7 @@ const COMPRA_ID = "55555555-5555-5555-5555-555555555555";
 function cobro(p: Partial<CobroParaAsiento> = {}): CobroParaAsiento {
   return {
     id: COBRO_ID,
+    payment_number: "REC-000004",
     payment_date: "2026-09-04",
     amount: 1070,
     client_name: "Cliente S.A.",
@@ -116,6 +117,22 @@ test("cobro de varias facturas: la descripción las nombra a todas", () => {
   if (!r.ok) return;
   assert.match(r.asiento.description, /FAC-HON-000001/);
   assert.match(r.asiento.description, /FAC-HON-000002/);
+  // UN asiento de DOS líneas por el total, no una línea de 100004 por factura:
+  // 100004 es cuenta control y su auxiliar es por cliente; el detalle por
+  // factura vive en payment_applications y en el PDF del recibo.
+  assert.equal(r.asiento.lines.length, 2);
+  assert.equal(r.asiento.lines[0].debit, 1070);
+  assert.equal(r.asiento.lines[1].credit, 1070);
+});
+
+test("la referencia del asiento es el RECIBO (REC-), no la primera factura — también con una sola", () => {
+  const una = construirAsientoDeCobro(cobro());
+  const varias = construirAsientoDeCobro(cobro({ facturas: ["FAC-HON-000001", "FAC-HON-000002"] }));
+  assert.equal(una.ok && una.asiento.reference, "REC-000004");
+  assert.equal(varias.ok && varias.asiento.reference, "REC-000004");
+  // Los cobros anteriores a la 047 (sin número) caen a la factura, como siempre.
+  const viejo = construirAsientoDeCobro(cobro({ payment_number: null }));
+  assert.equal(viejo.ok && viejo.asiento.reference, "FAC-HON-000001");
 });
 
 test("cobro con monto cero o negativo → RECHAZA", () => {

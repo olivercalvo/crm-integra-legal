@@ -6,6 +6,7 @@ import type { SupplierPaymentForExpense } from "@/lib/finanzas/types/supplier-pa
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
 import { RegisterSupplierPaymentDialog } from "./register-supplier-payment-dialog";
 import { DeleteSupplierPaymentButton } from "./delete-supplier-payment-button";
+import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
 
 interface Props {
   expenseId: string;
@@ -24,11 +25,15 @@ interface Props {
  *   - Botón "Registrar pago" (si hay saldo y canMutate): monto precargado con
  *     el saldo; menos = pago parcial.
  *   - Cada pago: comprobante CE-, fecha, monto, método y banco, referencia,
- *     quién. Acciones: sin asiento → Eliminar; con asiento → Reversar. Nunca
- *     los dos. (El comprobante en PDF llega en el commit 5.)
+ *     quién. Acciones: "Comprobante" (el PDF del comprobante de egreso, también
+ *     para un pago reversado: sale con la banda roja) y, sin asiento →
+ *     Eliminar; con asiento → Reversar. Nunca los dos últimos.
  *   - Un SALDO HEREDADO de la migración 048 se muestra como lo que es: "Saldo
- *     heredado de la migración — no es un pago registrado", sin comprobante ni
+ *     heredado de la migración — no es un pago registrado", SIN comprobante ni
  *     Reversar, con Eliminar (la corrección honesta si la compra nunca se pagó).
+ *     El botón del PDF no se renderiza y la ruta le responde 409: emitir un
+ *     comprobante de egreso por una salida de plata que el sistema no vio sería
+ *     documentar algo que no pasó.
  *   - Un pago reversado sigue en la lista, tachado, con "Reversado · asiento N".
  */
 export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amountPaid, payments, bancos, canMutate }: Props) {
@@ -104,6 +109,8 @@ export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amount
                 const label = `${heredado ? "Saldo heredado" : p.payment_number ?? "Pago"} · B/. ${fmtImporte(p.amount)} del ${formatDate(p.payment_date)}`;
                 const canDelete = !reversado && canMutate && !p.asiento;
                 const canReverse = !reversado && canMutate && !!p.asiento && !heredado;
+                // Solo un PAGO tiene comprobante; el heredado no (ver arriba).
+                const tieneComprobante = !heredado && !!p.payment_number;
                 return (
                   <tr key={p.id} className={reversado ? "bg-gray-50/70 text-gray-400" : heredado ? "bg-amber-50/40" : ""}>
                     <td className={`py-2 pr-3 font-mono text-xs whitespace-nowrap ${reversado ? "line-through" : "font-semibold text-integra-navy"}`}>
@@ -160,6 +167,14 @@ export function SupplierPaymentsSection({ expenseId, expenseLabel, total, amount
                     <td className={`py-2 pr-3 ${reversado ? "" : "text-gray-600"}`}>{p.created_by_name ?? ""}</td>
                     <td className="py-2 text-right">
                       <div className="inline-flex items-center justify-end gap-2">
+                        {tieneComprobante && (
+                          <DownloadReceiptPdfButton
+                            variante="egreso"
+                            paymentId={p.id}
+                            receiptLabel={p.payment_number ?? ""}
+                            compact
+                          />
+                        )}
                         {canReverse && p.asiento ? (
                           <ReversePaymentDialog
                             variante="pago"

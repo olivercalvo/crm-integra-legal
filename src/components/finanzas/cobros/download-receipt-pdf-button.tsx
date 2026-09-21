@@ -10,6 +10,11 @@
  * para no cambiar de pestaña.
  *
  * Lo ve también el contador (misma lista de roles que el PDF de la factura).
+ *
+ * Con `variante="egreso"` es el mismo botón para el COMPROBANTE DE EGRESO de
+ * un pago a proveedor (Bloque 3): cambia la ruta (`/api/finanzas/
+ * supplier-payments/[id]/pdf`) y las palabras, nada más. Un saldo heredado no
+ * lo ofrece (la sección no lo renderiza y la ruta responde 409).
  */
 
 import { useState } from "react";
@@ -24,7 +29,30 @@ interface Props {
   disabled?: boolean;
   /** Compacto para filas de tabla (icono + "Recibo"); por defecto el botón completo. */
   compact?: boolean;
+  /** `"recibo"` (default): recibo de caja REC-. `"egreso"`: comprobante de egreso CE-. */
+  variante?: "recibo" | "egreso";
 }
+
+const TEXTOS = {
+  recibo: {
+    endpoint: (id: string) => `/api/finanzas/payments/${id}/pdf`,
+    title: (label: string) => `Descargar el recibo ${label} en PDF`,
+    corto: "Recibo",
+    largo: "Descargar recibo",
+    actualizado: "Recibo actualizado",
+    errorGenerar: "No se pudo generar el recibo",
+    errorRed: "Error de red al solicitar el recibo",
+  },
+  egreso: {
+    endpoint: (id: string) => `/api/finanzas/supplier-payments/${id}/pdf`,
+    title: (label: string) => `Descargar el comprobante de egreso ${label} en PDF`,
+    corto: "Comprobante",
+    largo: "Descargar comprobante",
+    actualizado: "Comprobante actualizado",
+    errorGenerar: "No se pudo generar el comprobante",
+    errorRed: "Error de red al solicitar el comprobante",
+  },
+} as const;
 
 type Status =
   | { kind: "idle" }
@@ -32,16 +60,17 @@ type Status =
   | { kind: "regenerated" }
   | { kind: "error"; message: string };
 
-export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, compact }: Props) {
+export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, compact, variante = "recibo" }: Props) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const t = TEXTOS[variante];
 
   async function handleClick() {
     if (status.kind === "loading") return;
     setStatus({ kind: "loading" });
     try {
-      const r = await abrirArchivo(`/api/finanzas/payments/${paymentId}/pdf`);
+      const r = await abrirArchivo(t.endpoint(paymentId));
       if (!r.ok) {
-        setStatus({ kind: "error", message: r.error ?? "No se pudo generar el recibo" });
+        setStatus({ kind: "error", message: r.error ?? t.errorGenerar });
         setTimeout(() => setStatus({ kind: "idle" }), 4000);
         return;
       }
@@ -52,7 +81,7 @@ export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, co
         setStatus({ kind: "idle" });
       }
     } catch {
-      setStatus({ kind: "error", message: "Error de red al solicitar el recibo" });
+      setStatus({ kind: "error", message: t.errorRed });
       setTimeout(() => setStatus({ kind: "idle" }), 4000);
     }
   }
@@ -67,7 +96,7 @@ export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, co
         disabled={disabled || loading}
         variant="outline"
         size={compact ? "sm" : "default"}
-        title={`Descargar el recibo ${receiptLabel} en PDF`}
+        title={t.title(receiptLabel)}
         className={compact ? "min-h-[40px] whitespace-nowrap" : "min-h-[48px]"}
       >
         {loading ? (
@@ -75,7 +104,7 @@ export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, co
         ) : (
           <FileDown size={compact ? 14 : 16} className={compact ? "mr-1" : "mr-2"} />
         )}
-        {loading ? "Generando…" : compact ? "Recibo" : "Descargar recibo"}
+        {loading ? "Generando…" : compact ? t.corto : t.largo}
       </Button>
 
       {status.kind === "regenerated" && (
@@ -84,7 +113,7 @@ export function DownloadReceiptPdfButton({ paymentId, receiptLabel, disabled, co
           className="absolute top-full z-10 mt-1 right-0 flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 shadow-sm whitespace-nowrap"
         >
           <CheckCircle size={12} />
-          Recibo actualizado
+          {t.actualizado}
         </div>
       )}
 

@@ -11,6 +11,7 @@ import {
   Settings,
   ClipboardList,
   UserPlus,
+  HandCoins,
   Receipt,
   BarChart3,
   ShoppingBag,
@@ -80,6 +81,10 @@ export const TABS: TabDef[] = [
       { label: "Cotizaciones",      href: "/finanzas/cotizaciones",               icon: FileText,    roles: ["admin", "abogada"] },
       { label: "Plantilla T&C",     href: "/finanzas/cotizaciones/configuracion", icon: Settings,    roles: ["admin"] },
       { label: "Facturas",          href: "/finanzas/facturas",                   icon: Receipt,     roles: ["admin", "abogada"] },
+      // Cobros (recibos de caja, Bloque 2 — 21/09/2026): mismo reparto que
+      // Facturas. El contador queda pendiente de preguntar a Josuarth; si
+      // entra, sumar el rol ACÁ y el prefijo en CONTADOR_FINANZAS_PREFIXES.
+      { label: "Cobros",            href: "/finanzas/cobros",                     icon: HandCoins,   roles: ["admin", "abogada"] },
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
       { label: "Proveedores",       href: "/finanzas/proveedores",                icon: Truck,          roles: ["admin", "abogada", "contador"] },
       { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },

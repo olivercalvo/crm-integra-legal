@@ -137,3 +137,35 @@ export interface PaymentForInvoice extends PaymentRow {
   /** Si el cobro fue reversado, cómo. Null en los vigentes. */
   reversion: ReversionDeCobro | null;
 }
+
+/**
+ * Una fila del LISTADO de cobros (`/finanzas/cobros`, Bloque 2). A diferencia
+ * de `PaymentForInvoice` no está parada sobre una factura: trae al cliente y a
+ * la(s) factura(s) a las que se aplicó — hoy una, el modelo admite varias.
+ */
+export interface PaymentListItem extends PaymentRow {
+  client_name: string;
+  client_number: string | null;
+  /** Las facturas aplicadas (o, si está reversado, las que tenía aplicadas). */
+  facturas: { invoice_id: string; invoice_number: string; amount_applied: number }[];
+  created_by_name: string | null;
+  asiento: AsientoDeCobro | null;
+  reversion: ReversionDeCobro | null;
+}
+
+/** Una factura a la que se le puede registrar un cobro (alta de `/finanzas/cobros/nuevo`). */
+export interface InvoiceCobrable {
+  id: string;
+  invoice_number: string;
+  invoice_kind: string;
+  client_id: string;
+  client_name: string;
+  client_number: string | null;
+  issue_date: string;
+  due_date: string | null;
+  status: "emitida" | "parcialmente_pagada";
+  grand_total: number;
+  amount_paid: number;
+  balance_due: number;
+}
+

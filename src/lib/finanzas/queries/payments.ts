@@ -26,7 +26,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AsientoDeCobro,
+  InvoiceCobrable,
   PaymentForInvoice,
+  PaymentListItem,
   ReversionDeCobro,
 } from "@/lib/finanzas/types/payment";
 import { SOURCE_TYPE_COBRO } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
@@ -293,3 +295,250 @@ export async function getPaymentsForInvoice(
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// El LISTADO de cobros (`/finanzas/cobros`, Bloque 2 — 21/09/2026)
+// ---------------------------------------------------------------------------
+
+export interface ListPaymentsParams {
+  /** Búsqueda por número de recibo (parcial, ilike). */
+  search?: string | null;
+  client_id?: string | null;
+  /** `YYYY-MM-DD`, inclusive, sobre `payment_date`. */
+  from?: string | null;
+  to?: string | null;
+  /** `vigentes` = registrado + conciliado; `reversados` = anulado. Vacío = todos. */
+  estado?: "vigentes" | "reversados" | null;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ListPaymentsResult {
+  rows: PaymentListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const DEFAULT_PAGE_SIZE = 20;
+
+type Uno<T> = T | T[] | null | undefined;
+function uno<T>(x: Uno<T>): T | null {
+  return Array.isArray(x) ? x[0] ?? null : x ?? null;
+}
+
+/**
+ * Todos los cobros del bufete, más nuevos primero (`payment_date`, después
+ * `payment_number`). Cada fila trae el cliente, las facturas a las que se
+ * aplicó, el asiento (para ofrecer Reversar) y, si está reversado, cómo.
+ *
+ * La factura de un cobro reversado ya no está en `payment_applications` (la
+ * 046 las borra): sale de `payment_reversals`, la foto de lo que se deshizo.
+ * Es la misma regla que `getPaymentsForInvoice`, vista desde el otro lado.
+ */
+export async function listPayments(
+  db: DB,
+  tenantId: string,
+  params: ListPaymentsParams = {}
+): Promise<ListPaymentsResult> {
+  const page = Math.max(1, params.page ?? 1);
+  const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = db
+    .from("payments")
+    .select(
+      `${PAYMENT_COLS}, client:clients!payments_client_id_fkey(name, client_number)`,
+      { count: "exact" }
+    )
+    .eq("tenant_id", tenantId)
+    .order("payment_date", { ascending: false })
+    .order("payment_number", { ascending: false, nullsFirst: false })
+    .range(from, to);
+
+  if (params.client_id) q = q.eq("client_id", params.client_id);
+  if (params.from) q = q.gte("payment_date", params.from);
+  if (params.to) q = q.lte("payment_date", params.to);
+  if (params.estado === "vigentes") q = q.neq("status", "anulado");
+  if (params.estado === "reversados") q = q.eq("status", "anulado");
+  if (params.search?.trim()) q = q.ilike("payment_number", `%${params.search.trim()}%`);
+
+  const { data, count, error } = await q;
+  if (error) {
+    console.error("[finanzas/queries] listPayments failed", error);
+    return { rows: [], total: 0, page, pageSize, totalPages: 1 };
+  }
+
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / pageSize));
+  type Row = PaymentRaw & { client: Uno<{ name: string; client_number: string | null }> };
+  const rows = (data ?? []) as unknown as Row[];
+  const ids = rows.map((r) => r.id);
+  if (ids.length === 0) {
+    return { rows: [], total: count ?? 0, page, pageSize, totalPages };
+  }
+
+  // ---- Facturas: aplicaciones vigentes + foto de las reversadas -------------
+  type App = {
+    payment_id: string;
+    invoice_id: string;
+    amount_applied: string | number;
+    invoice: Uno<{ invoice_number: string }>;
+  };
+  type Rev = App & {
+    reason: string;
+    reversed_at: string;
+    reversed_by: string | null;
+    reversal: Uno<{ entry_number: number }>;
+    reversed: Uno<{ entry_number: number }>;
+  };
+  const [{ data: apps }, { data: revs }, asientos] = await Promise.all([
+    db
+      .from("payment_applications")
+      .select(
+        "payment_id, invoice_id, amount_applied, invoice:invoices!payment_applications_invoice_id_fkey(invoice_number)"
+      )
+      .eq("tenant_id", tenantId)
+      .in("payment_id", ids),
+    db
+      .from("payment_reversals")
+      .select(
+        `payment_id, invoice_id, amount_applied, reason, reversed_at, reversed_by,
+         invoice:invoices!payment_reversals_invoice_id_fkey(invoice_number),
+         reversal:journal_entries!payment_reversals_reversal_entry_id_fkey(entry_number),
+         reversed:journal_entries!payment_reversals_reversed_entry_id_fkey(entry_number)`
+      )
+      .eq("tenant_id", tenantId)
+      .in("payment_id", ids),
+    cargarAsientosDeCobros(db, tenantId, ids),
+  ]);
+
+  const facturasPorCobro = new Map<string, PaymentListItem["facturas"]>();
+  const agregarFactura = (a: App) => {
+    const lista = facturasPorCobro.get(a.payment_id) ?? [];
+    lista.push({
+      invoice_id: a.invoice_id,
+      invoice_number: uno(a.invoice)?.invoice_number ?? "",
+      amount_applied: num(a.amount_applied),
+    });
+    facturasPorCobro.set(a.payment_id, lista);
+  };
+  for (const a of (apps ?? []) as unknown as App[]) agregarFactura(a);
+
+  type RevCruda = Omit<ReversionDeCobro, "reversed_by_name"> & { reversed_by: string | null };
+  const reversionPorCobro = new Map<string, RevCruda>();
+  for (const r of (revs ?? []) as unknown as Rev[]) {
+    agregarFactura(r);
+    if (!reversionPorCobro.has(r.payment_id)) {
+      reversionPorCobro.set(r.payment_id, {
+        entry_number: Number(uno(r.reversal)?.entry_number ?? 0),
+        reversed_entry_number: Number(uno(r.reversed)?.entry_number ?? 0),
+        reason: r.reason,
+        reversed_at: r.reversed_at,
+        reversed_by: r.reversed_by,
+      });
+    }
+  }
+
+  // ---- Nombres de usuario, un solo lookup -----------------------------------
+  const userIds = Array.from(
+    new Set(
+      [
+        ...rows.map((r) => r.created_by),
+        ...Array.from(reversionPorCobro.values()).map((v) => v.reversed_by),
+      ].filter((id): id is string => !!id)
+    )
+  );
+  const userMap: Record<string, string> = {};
+  if (userIds.length > 0) {
+    const { data: users } = await db.from("users").select("id, full_name").in("id", userIds);
+    for (const u of users ?? []) userMap[u.id as string] = (u.full_name as string) ?? "";
+  }
+
+  const items: PaymentListItem[] = rows.map((p) => {
+    const cliente = uno(p.client);
+    const rev = reversionPorCobro.get(p.id) ?? null;
+    return {
+      id: p.id,
+      payment_number: p.payment_number,
+      client_id: p.client_id,
+      payment_date: p.payment_date,
+      amount: p.amount,
+      amount_unapplied: p.amount_unapplied,
+      currency: p.currency,
+      method: p.method as PaymentListItem["method"],
+      reference: p.reference,
+      status: p.status as PaymentListItem["status"],
+      notes: p.notes,
+      created_at: p.created_at,
+      created_by: p.created_by,
+      client_name: cliente?.name ?? "",
+      client_number: cliente?.client_number ?? null,
+      facturas: facturasPorCobro.get(p.id) ?? [],
+      created_by_name: p.created_by ? userMap[p.created_by] ?? null : null,
+      // Un cobro reversado ya no se reversa: su asiento no se ofrece.
+      asiento: p.status === "anulado" ? null : asientos.get(p.id) ?? null,
+      reversion: rev
+        ? {
+            entry_number: rev.entry_number,
+            reversed_entry_number: rev.reversed_entry_number,
+            reason: rev.reason,
+            reversed_at: rev.reversed_at,
+            reversed_by_name: rev.reversed_by ? userMap[rev.reversed_by] ?? null : null,
+          }
+        : null,
+    };
+  });
+
+  return { rows: items, total: count ?? 0, page, pageSize, totalPages };
+}
+
+/**
+ * Las facturas a las que se les puede registrar un cobro: `emitida` o
+ * `parcialmente_pagada` con saldo, con su cliente. Es el mismo criterio que
+ * `createPayment` impone en el servidor (status + cap por `balance_due`);
+ * acá es para que el alta no ofrezca lo que después va a rechazar.
+ *
+ * Sin `clientId` trae las de todo el bufete: el alta las carga de una vez y
+ * filtra en el cliente, así el selector de clientes solo ofrece a quienes
+ * tienen algo que cobrar. Son decenas, no miles.
+ */
+export async function listInvoicesCobrables(
+  db: DB,
+  tenantId: string,
+  clientId?: string | null
+): Promise<InvoiceCobrable[]> {
+  let q = db
+    .from("invoices")
+    .select(
+      "id, invoice_number, invoice_kind, client_id, issue_date, due_date, status, grand_total, amount_paid, balance_due, " +
+        "client:clients!invoices_client_id_fkey(name, client_number)"
+    )
+    .eq("tenant_id", tenantId)
+    .in("status", ["emitida", "parcialmente_pagada"])
+    .gt("balance_due", 0)
+    .order("issue_date", { ascending: true });
+  if (clientId) q = q.eq("client_id", clientId);
+
+  const { data, error } = await q;
+  if (error) {
+    console.error("[finanzas/queries] listInvoicesCobrables failed", error);
+    return [];
+  }
+  type Raw = Omit<InvoiceCobrable, "grand_total" | "amount_paid" | "balance_due" | "client_name" | "client_number"> & {
+    grand_total: string | number;
+    amount_paid: string | number;
+    balance_due: string | number;
+    client: Uno<{ name: string; client_number: string | null }>;
+  };
+  return ((data ?? []) as unknown as Raw[]).map(({ client, ...i }) => ({
+    ...i,
+    client_name: uno(client)?.name ?? "",
+    client_number: uno(client)?.client_number ?? null,
+    grand_total: num(i.grand_total),
+    amount_paid: num(i.amount_paid),
+    balance_due: num(i.balance_due),
+  }));
+}
+

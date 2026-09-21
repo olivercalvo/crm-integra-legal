@@ -1,5 +1,91 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Pagos a proveedores — Bloque 3] - 2026-09-21
+
+**Staging (`develop`):** `bab6d14` → `85fa3d0` → `d831b5b` → `e440021` → `2af7ee8` → `f817659` →
+`5ac5c58` → `358f934`. Deploy `dpl_5p2eAQybXh96N35cHjgodjEwWbAf`. **Sin migración a producción.
+`main` sigue en `24b227a`.** Migración `048` aplicada SOLO en staging.
+
+Reglas de Josuarth (21/09): pago parcial a proveedor SÍ; un pago cubre UNA compra. Reemplaza
+"Marcar como pagada" (FND-009: escribía una columna inexistente, después de postear).
+
+### Migración `048` (`bab6d14`)
+
+- `supplier_payments`: el pago como entidad, con `kind` (`payment` | `migrated_balance`) y el
+  CHECK que ata las dos cosas (heredado ⇒ sin número, banco ni método; pago ⇒ los tres).
+- `business_expenses.amount_paid` derivada por trigger (T7a'), con `status` y `payment_date`; guard
+  (T4b') en UPDATE e INSERT con la válvula de SOP-017. CHECK de `status` con tres valores.
+- Secuencia `'supplier_payment'` (`CE-`), `documents` CHECK con `supplier_payment` /
+  `auto_supplier_payment_pdf`, backfill (3 saldos heredados en staging, sin número: objeción de
+  Oliver aplicada), `backfill_supplier_payment_numbers`, RPC `reverse_supplier_payment`.
+- `sql/tests/verificacion-048-pagos-a-proveedores.sql`: 13/13 en ROLLBACK, con falla forzada.
+
+### Servidor (`85fa3d0`)
+
+`createSupplierPayment` (cap por saldo; número antes del INSERT; asiento desde el PAGO con
+`source_id = pago_id` y `reference = CE-`; DELETE compensatorio), `deleteSupplierPayment` (409 con
+asiento), `reverseSupplierPayment` (409 al heredado). `createBusinessExpense` inserta pendiente y,
+si el alta dice "pagada", registra el pago después (si falla, la compra queda pendiente y la ruta
+devuelve `compra_id` + `sin_pago`). `markBusinessExpenseAsPaid` y `mark-paid` eliminados. Rutas
+`POST …/business-expenses/[id]/payments`, `DELETE` y `POST …/reverse` en
+`…/supplier-payments/[id]`. Comentarios que mentían sobre el esquema corregidos.
+
+### Reportes (`d831b5b`)
+
+Antigüedad por pagar con saldo `total − amount_paid` y pagos sin asiento (heredados aparte);
+Mayor y Diario resuelven pago → compra; Diario con Documento `CE-`; Estado de Cuenta del proveedor
+por `supplier_payments`.
+
+### Pantalla (`e440021`)
+
+Sección "Pagos" en el detalle de la compra (Total / Pagado / Saldo; por fila comprobante, fecha,
+monto, método · banco · asiento, referencia, quién; Eliminar o Reversar, nunca los dos; heredado
+como "Saldo heredado de la migración — no es un pago registrado"), "Registrar pago" con
+`PaymentFormFields direccion="pago"` y el monto precargado con el saldo, badges de tres estados,
+alta con Pendiente / Ya pagada + banco obligatorio, edición con la sección como nota,
+`reverse-payment-dialog` con `variante="pago"`.
+
+### Lo que dejó la verificación (`2af7ee8`)
+
+`pago_proveedor` salía crudo en Diario/Mayor → "Pago a proveedor"; **`pago` pasa de "Pago" a
+"Cobro"** (decisión de Oliver: vocabulario de Josuarth). La antigüedad nombra lo que sí encontró
+también cuando el residuo no cuadra. Label del heredado. Voseo preexistente corregido.
+
+### PDF del comprobante de egreso (`5ac5c58`, `358f934`)
+
+"COMPROBANTE DE EGRESO · PAGO A PROVEEDOR", proveedor con RUC y DV separados, la compra con N° de
+factura del proveedor, banco, asiento, banda REVERSADO; cache por hash en `documents`; ruta
+`GET /api/finanzas/supplier-payments/[id]/pdf` (admin, abogada, contador); **409 al heredado** y
+el botón no se renderiza. Sin silabar la descripción de la compra.
+
+### Verificado en el deploy como contador (`contador@staging.test`), con clic real
+
+Compra de 1,605: CE-000001 por 400 (asiento 28 DEBE 200001 / HABER 100001, `reference`
+CE-000001, "Parcialmente pagado", saldo 1,205) · 1,500 rechazado nombrando el saldo · CE-000002
+por el saldo precargado (asiento 29, "Pagado", saldo 0, referencia TRF-778899 visible) · Reversar
+CE-000001 (vista previa con 200001 al crédito, asiento 30, fila tachada, "Parcialmente pagado",
+saldo 400) · saldo heredado: solo Eliminar, eliminado → "Pendiente de pago" y a la antigüedad ·
+Mayor 200001 abre la compra desde el asiento 28 · Diario con `CE-000001/2/3` y "Cobro" / "Pago a
+proveedor" · antigüedad OFIPLUS 400 y "2 pago(s) por 73.50 … saldos heredados" · alta "Ya
+pagada" con banco 100002 → compra 53.50 + CE-000003 + asientos 31 y 32 (enviado con
+`requestSubmit()`: los inputs de React no tomaban el tipeo por coordenadas) · edición con la nota
+· PDF CE-000002 (200, `documents` v1) y CE-000001 reversado con banda y asiento 30 · heredado:
+sin botón y `GET …/pdf` 409.
+
+**No se hizo la pasada como abogada** (Oliver, 21/09): la pantalla es la misma para los tres roles
+que mutan y los 403 los cubren los tests.
+
+### Hallazgos
+
+- **FND-010:** la antigüedad por pagar no lee los gastos de trámite, que SÍ acreditan 200001
+  (1,497.85 en staging). Bloque propio, fuera de alcance.
+- Lint: errores preexistentes en Legal e `import-parser.ts`; ninguno en los archivos del bloque.
+
+**Tests:** 1072/1072 (`supplier-payments-gate` 10, validador 4, numeración 2, roles, destinos,
+`comprobante-egreso-pdf` 13, render 3).
+
+---
+
 ## [Un recibo aplicado a varias facturas — Bloque 2, Parte B] - 2026-09-21
 
 Josuarth: *"SÍ hace falta poder pagar varias facturas con una sola transferencia."* Cuatro commits

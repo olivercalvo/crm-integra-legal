@@ -15,6 +15,58 @@ lo reemplaza en `develop`; plan en `task_plan.md`.
 ---
 
 
+## Cierre del 21/09/2026 (noche) — Bloque 3: pagos a proveedores, construido y verificado
+
+**SHA de la app en staging: `358f934`** — deployment `dpl_5p2eAQybXh96N35cHjgodjEwWbAf`, READY.
+Encima va solo este commit de docs. **`main` sigue en `24b227a`. Producción no se tocó.
+Migración `048` aplicada SOLO en staging** (en producción, cuando llegue, la mayoría de las compras
+van a nacer como saldos heredados: pre-flight en la 048).
+
+**1072/1072.** `tsc` limpio. Lint: errores preexistentes en Legal e `import-parser.ts`, ninguno
+en los archivos del bloque.
+
+### Qué entró (detalle en `changelog.md`, reglas en SOP-032 y CLAUDE.md)
+
+`supplier_payments` con `kind` (pago | saldo heredado), `amount_paid`/`status`/`payment_date`
+derivados por trigger + guard, secuencia `CE-`, RPC `reverse_supplier_payment`;
+`createSupplierPayment` / delete / reverse con el asiento desde el PAGO; alta "ya pagada" = compra
++ pago; `mark-paid` eliminado (FND-009 cerrado por reemplazo); antigüedad/Mayor/Diario/Estado de
+Cuenta; sección "Pagos" en el detalle de la compra; PDF del comprobante de egreso (409 al heredado).
+Diario: `pago` = "Cobro", `pago_proveedor` = "Pago a proveedor" (decisión de Oliver).
+
+### Verificado con clic real en el deploy (contador `contador@staging.test`)
+
+Toda la lista del §7 del plan: parcial, rechazo por encima del saldo, saldo precargado, reversar
+(vista previa + espejo + compra devuelta), eliminar heredado, Mayor → compra, Diario con `CE-`,
+antigüedad, alta "ya pagada" (enviada con `requestSubmit()`), edición como nota, PDF vigente y
+reversado, heredado sin botón y 409 por API. Estado de staging al cerrar: CE-000001 reversado
+(asiento 30), CE-000002 y CE-000003 vigentes, 2 saldos heredados (el tercero se eliminó),
+`documents` con dos `auto_supplier_payment_pdf`.
+
+### Lo que la extensión enseñó hoy
+
+- Los inputs controlados de React no toman `type` por coordenadas cuando la ventana cambió de
+  tamaño; el setter nativo + `dispatchEvent('input')` por `javascript_tool` sí. `requestSubmit()`
+  dispara el `onSubmit` de React igual que el clic.
+- Un clic por `ref` a veces solo enfoca el botón (pasó tres veces): repetirlo, o clic por JS.
+- `read_network_requests` empieza a grabar en la primera llamada: llamarlo ANTES del clic.
+
+### Pendiente
+
+1. **Josuarth** (paquete en `task_plan.md`): nombre del documento (`CE-`), excedente de cobros,
+   columna Documento del Diario.
+2. **FND-010 — bloque propio:** pago del gasto de trámite como entidad (banco + asiento HABER
+   banco / DEBE 200001), `amount_paid`/estado en `expenses` con trigger y guard como la 048, y la
+   antigüedad por pagar leyendo las dos tablas. Hasta entonces la antigüedad por pagar no cuadra
+   contra el mayor en cuanto haya un gasto de trámite contabilizado.
+3. Un celular real para el wizard.
+4. Lo anterior (compra con dos líneas por pantalla, usabilidad, trámite sin cuenta, mejoras
+   contables, `HON-FAM`/`HON-OTROS`, bloque `022`, reversión de manuales y trámite, listado de
+   egresos si el bufete lo pide).
+
+---
+
+
 ## Cierre del 21/09/2026 (noche) — Parte B construida: un recibo aplicado a varias facturas
 
 **SHA de la app en staging: `57a6592`** — deployment `dpl_2aDTa19h9rephTQZq6UbVsmn8tRW`, READY.

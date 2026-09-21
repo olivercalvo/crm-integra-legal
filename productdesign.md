@@ -724,6 +724,59 @@ factura (una) o al listado filtrado (varias). Los cobros del caso (`client_payme
 Legal) son otra cosa y no se cruzan con esto. El excedente (anticipo) espera la definición de
 Josuarth.
 
+### PAGO A PROVEEDOR — la compra se paga por partes, y cada pago tiene documento
+
+**Qué es (desde el 21/09/2026).** El pago de una compra del bufete es un movimiento propio, con
+número `CE-000001` (comprobante de egreso; el nombre espera la confirmación de Josuarth), fecha,
+monto, método, **el banco de donde salió la plata**, referencia bancaria, asiento y PDF. Antes era
+un botón "Marcar como pagada" que cambiaba un estado y no decía de qué banco salió.
+
+**Las dos reglas de Josuarth (21/09/2026).** *"A un proveedor SÍ se le puede pagar por partes"* y
+*"un pago por factura"*: una compra puede tener varios pagos; cada pago es de una sola compra. No
+hay reparto entre compras como sí lo hay entre facturas en los cobros.
+
+**Dónde se ve.** En el detalle de la compra, sección **Pagos**: Total / Pagado / Saldo, y una
+fila por pago con su comprobante, fecha, monto, método y banco, asiento, referencia y quién lo
+registró. Cada fila ofrece **Comprobante** (el PDF) y **Eliminar** (sin asiento) o **Reversar**
+(con asiento), nunca los dos. El estado de la compra —Pendiente de pago, Parcialmente pagado,
+Pagado— lo dan sus pagos; no se edita a mano (la pantalla de edición lo dice).
+
+**Cómo se registra.** Botón "Registrar pago" en la sección, con el monto **precargado con el
+saldo**: pagar todo es un clic; pagar una parte es cambiar el número (el máximo es el saldo, y si
+se pasa, la pantalla lo dice con el saldo). Mismo formulario que el cobro, con los rótulos del
+lado pago ("Banco de donde salió el pago"). Al terminar, "Pago CE-000012 registrado". En el alta
+de una compra, "Ya está pagada" registra la compra Y el pago en el mismo acto, con el banco
+obligatorio; si el pago no puede registrarse, la compra queda pendiente y se paga desde el detalle.
+
+**El PDF.** "COMPROBANTE DE EGRESO · PAGO A PROVEEDOR", mismo diseño que el recibo: el proveedor
+con **RUC y DV en líneas separadas**, la compra con su fecha y N° de factura del proveedor, banco,
+referencia, asiento, el total pagado, y el pie *"No es factura ni documento fiscal; el documento
+fiscal es la factura del proveedor"*. Si el pago se reversa, se regenera con la banda REVERSADO.
+
+**Reversar.** Igual que un cobro: el asiento no se borra, se postea su espejo con la fecha de hoy,
+el pago queda tachado y la compra vuelve a mostrar el saldo. Un pago sin asiento se elimina.
+
+**Los "pagados" de antes: saldos heredados.** Las compras que ya estaban en "Pagado" antes de que
+existieran los pagos no recibieron un `CE-`: se muestran como **"Saldo heredado de la migración —
+no es un pago registrado"**, sin comprobante ni Reversar. Se pueden **eliminar** —es la corrección
+honesta si la compra nunca se pagó: vuelve a pendiente y a la antigüedad— y si sí se pagó, se
+registra el pago real y después se elimina el heredado. Inventarles un comprobante sería
+documentar una salida de plata que el sistema no vio (Oliver, 21/09/2026).
+
+**En los reportes.** La antigüedad de cuentas por pagar muestra el saldo real (total menos lo
+pagado) y cuenta los saldos heredados aparte; el Diario dice "Cobro" para un recibo de caja y
+"Pago a proveedor" para un `CE-`, con el número en la columna Documento; el Libro Mayor abre la
+compra desde el asiento del pago; el Estado de Cuenta del proveedor lista cada pago.
+
+**Quién.** Admin, abogada y contador (los tres tienen CRUD en Gastos del Bufete) registran,
+eliminan, reversan y bajan el comprobante. El asistente no llega a Finanzas.
+
+**Fuera de alcance, a propósito.** Un listado propio de egresos (`/finanzas/pagos`): los pagos se
+ven desde la compra, como los cobros nacieron desde la factura. El pago de un **gasto de trámite**
+(módulo Legal) es un bloque aparte (FND-010).
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

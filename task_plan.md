@@ -1,8 +1,25 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — BLOQUE 3: PAGOS A PROVEEDORES — PLAN — 21/09/2026 <<<
+## >>> BLOQUE 3: PAGOS A PROVEEDORES — CONSTRUIDO Y VERIFICADO — 21/09/2026 <<<
 
-**Estado:** PLAN, no código. Cada afirmación verificada contra `develop` (`8bfefdc`) y contra la base
+**Estado:** CONSTRUIDO. Seis commits (`bab6d14`, `85fa3d0`, `d831b5b`, `e440021`, `5ac5c58`,
+`358f934`, más `2af7ee8` y `f817659` de la verificación) en staging, deploy
+`dpl_5p2eAQybXh96N35cHjgodjEwWbAf`. Migración `048` SOLO en staging; `main` en `24b227a`.
+Verificado con clic real como contador (lista del §7, todos los puntos; el alta "ya pagada" se
+envió con `requestSubmit()`). **La pasada como abogada no se hizo** (Oliver: la pantalla es la
+misma para los tres roles que mutan y los 403 los cubren los tests). Detalle en `changelog.md`;
+reglas en `sop.md` SOP-032 y CLAUDE.md.
+
+**Desvíos del plan, a propósito:**
+- El PDF no lleva "saldo de la compra después de este pago": cambiaría al reversar un pago
+  anterior y el comprobante es una foto del pago (SOP-032 §7).
+- `pago` pasó de "Pago" a "Cobro" en Diario/Mayor (decisión de Oliver, no estaba en el plan).
+- FND-010 (gastos de trámite en 200001 sin entrar a la antigüedad): fuera de alcance, bloque
+  propio.
+
+**Lo de abajo es el plan aprobado, que se cumplió salvo lo anotado.**
+
+**Estado original:** PLAN, no código. Cada afirmación verificada contra `develop` (`8bfefdc`) y contra la base
 de staging el 21/09. Reglas de Josuarth (21/09): **pago parcial SÍ; un pago cubre UNA compra, no
 varias.** O sea: varios pagos por compra, cada pago apunta a una sola compra. Sin tabla N:M.
 

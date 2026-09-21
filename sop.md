@@ -2388,3 +2388,112 @@ que la reversión había borrado y la factura volvía a "pagada" (FND-005).
   `SELECT backfill_payment_numbers('<tenant>')`.
 - El PDF de un cobro reversado sale sin la banda → el hash no cambió: revisar que
   `buildReceiptPdfPayload` siga incluyendo `status` y `reversion`.
+
+
+## SOP-032: Pagos a proveedores — parcial sí, uno por compra, el banco en el PAGO, saldos heredados
+
+**Por qué existe:** desde el 21/09/2026 (Bloque 3, migración `048`, aplicada SOLO en staging) el
+pago de una compra del bufete es una entidad (`supplier_payments`) con número `CE-000001`,
+asiento propio y PDF, y ya no un botón que escribía tres columnas de la compra. Este SOP fija lo
+que no se deduce del código.
+
+### 1. Las dos reglas de Josuarth (21/09/2026), textuales
+
+> 3. A un proveedor SÍ se le puede pagar por partes (pago parcial).
+> 4. NO hace falta que un pago cubra varias facturas de proveedor. Un pago por factura.
+
+O sea: **varios pagos por compra; cada pago apunta a UNA compra.** Sin tabla N:M. Es la
+diferencia estructural con los cobros (Parte B): acá `repartirPorAntiguedad` no se importa.
+
+### 2. 🔴 `amount_paid` y `status` de la compra NO se escriben: se escribe el PAGO
+
+Es el mismo criterio que `invoices.amount_paid` (SOP-017): `business_expenses.amount_paid` la
+deriva el trigger `finanzas_recalc_one_expense_amount_paid` como `SUM(amount)` de los pagos
+`registrado`, y con ella el `status` (`0 → pendiente_pago`, `0 < x < total → parcialmente_pagado`,
+`≥ total → pagado`) y `payment_date` (la del último pago). El guard
+`finanzas_guard_expense_amount_paid` rechaza cualquier otra escritura de las tres, en UPDATE y en
+INSERT (una compra NACE `pendiente_pago` con 0). La válvula de escape es la misma de SOP-017
+(`finanzas.amount_paid_override`) y tiene los mismos "cuándo NO".
+
+**"Ya está pagada" en el alta** significa registrar el pago al crear: fecha, método y BANCO
+obligatorio. El servidor crea la compra (pendiente) y después el pago con su asiento. Si el pago
+falla, la compra queda `pendiente_pago` —es la verdad— y la pantalla lleva al detalle con el
+error, donde está "Registrar pago". `updateBusinessExpense` ya no escribe estado ni fecha de pago.
+
+### 3. 🔴 El banco vive en el PAGO, y el asiento sale del PAGO
+
+FND-009: el botón viejo escribía `business_expenses.payment_account_code`, columna que la tabla
+no tiene. Ahora `supplier_payments.payment_account_code` es NOT NULL para un pago, y
+`construirAsientoDePagoProveedor` parte del pago: `source_id = pago_id` (el UNIQUE de la 034
+permite el segundo pago de la misma compra), monto = `amount` del pago, `reference =
+payment_number`. DEBE 200001 / HABER banco. `loadDestinosDeOrigen` resuelve pago → compra para
+que el Mayor y el Diario abran la compra.
+
+### 4. Numeración `CE-`, y el hueco
+
+Secuencia `'supplier_payment'` de `numbering_sequences` (048), formato en
+`numbering/supplier-payment-numbering.ts`. **"CE-" (comprobante de egreso) es una propuesta**
+hasta que Josuarth confirme el nombre (`task_plan.md`); cambiarlo es una constante.
+`createSupplierPayment` toma el número después de las validaciones y antes del INSERT; si el
+asiento falla, el DELETE compensatorio deshace el pago y **queda un hueco**, con el mismo criterio
+y la misma justificación de SOP-031 §2. Un test lo fija.
+
+### 5. 🔴 Un SALDO HEREDADO no es un pago
+
+La 048 crea, por cada compra `pagado` sin pagos, UN `supplier_payment` con `kind =
+'migrated_balance'` por el total: **sin número, sin banco, sin método, sin asiento, sin
+comprobante** (el CHECK `supplier_payments_kind_consistency` lo hace imposible de violar). Motivo
+(Oliver, 21/09): en cobros los cobros existentes eran reales; acá la mayoría de las compras están
+en `pagado` por el default de la 010 y un `CE-000001` para eso es un documento inventado que
+terminaría impreso frente a un proveedor o a la DGI.
+
+Qué hace cada pantalla con él:
+- El detalle de la compra lo muestra como **"Saldo heredado de la migración — no es un pago
+  registrado"**, con Eliminar y SIN Reversar ni Comprobante.
+- **Eliminarlo es la corrección honesta** si la compra nunca se pagó: vuelve a `pendiente_pago`
+  y a la antigüedad. Si SÍ se pagó, primero se registra el pago real (con banco y asiento) y
+  después se elimina el heredado.
+- `reverseSupplierPayment` le responde 409; `GET …/supplier-payments/[id]/pdf` también.
+- La antigüedad por pagar los cuenta aparte ("saldos heredados"), no como pagos sin asiento.
+- El backfill de numeración (`backfill_supplier_payment_numbers`) los ignora.
+
+### 6. Reversar: el RPC `reverse_supplier_payment` (048)
+
+Igual que `reverse_payment` (SOP-030) pero sin aplicaciones que fotografiar: candado sobre el
+pago, verificación del espejo contra el original (`EXCEPT ALL`), `post_journal_entry` del espejo
+con la fecha de HOY, `UPDATE supplier_payments SET status='anulado'` (el trigger de §2 devuelve
+la compra). Una transacción; `sql/tests/verificacion-048-pagos-a-proveedores.sql` fuerza una falla
+después del posteo. El diálogo es `reverse-payment-dialog.tsx` con `variante="pago"`: la vista
+previa es la MISMA función (`reversion-una-sola-implementacion.test.ts` sigue leyendo ese archivo).
+Un pago SIN asiento se elimina (`DELETE …/supplier-payments/[id]`); con asiento, 409 → reversar.
+
+### 7. El PDF: comprobante de egreso
+
+`ensure-supplier-payment-pdf.ts` es el espejo de `ensure-receipt-pdf.ts`: `documents` con
+`entity_type='supplier_payment'` y `source='auto_supplier_payment_pdf'` (048), blob en
+`{tenant}/supplier_payment_pdf/{id}/current.pdf`, hash con la misma serialización. Entran
+`status` y la reversión (se regenera con la banda roja); **NO entra el saldo actual de la compra**
+—y a propósito tampoco un "saldo después de este pago": cambiaría al reversar un pago anterior, y
+el comprobante es una foto del pago, no de la cuenta corriente. Proveedor con **RUC y DV en dos
+líneas** (`suppliers.ruc`, `suppliers.dv`); sin ficha vale el texto libre y el DV va vacío.
+Ruta `GET /api/finanzas/supplier-payments/[id]/pdf`, roles = compras (admin, abogada, contador),
+devuelve el archivo. El botón es `DownloadReceiptPdfButton` con `variante="egreso"`.
+
+### 8. Vocabulario del Diario y del Mayor
+
+Desde el 21/09 `pago` se rotula **"Cobro"** y `pago_proveedor` **"Pago a proveedor"**
+(`TIPO_TRANSACCION_ES`, `libro-mayor.ts`). Con los dos orígenes en el mismo Diario, "Pago" para un
+recibo de caja se leía al revés. Es el vocabulario de Josuarth: vender, cobrar, comprar, pagar.
+
+### Qué mirar si algo falla
+
+- *"No se pudo asignar el número del comprobante…"* → falta la secuencia `'supplier_payment'`.
+  Aplicar la 048.
+- Un `CE-` salteado → un alta que falló después del correlativo (§4). No es un bug.
+- Una compra "Pagado" cuyo único pago es un saldo heredado → es la 048, no un error. Ver §5.
+- *"no puede escribirse directamente"* al tocar `status`/`amount_paid`/`payment_date` de una
+  compra → el guard de §2. Se escribe el pago, no la compra.
+- El comprobante de un pago reversado sale sin la banda → revisar que
+  `buildSupplierPaymentPdfPayload` siga incluyendo `status` y `reversion`.
+- La antigüedad por pagar no cuadra contra el mayor y nombra una "tercera causa" → FND-010:
+  los gastos de trámite acreditan 200001 y el reporte no los lee. Bloque propio.

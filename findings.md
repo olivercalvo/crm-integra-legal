@@ -1,5 +1,23 @@
 # FINDINGS.MD — CRM INTEGRA LEGAL
 
+## FND-007: El modal heredaba la alineación de la celda que lo abría
+**Fecha:** 2026-09-21
+**Contexto:** Punto 5 de la verificación del Bloque 2 — reversar un cobro con clic real desde el listado de cobros (deploy `6d0f621`). Era la verificación que había quedado pendiente del bloque de reversión del 17/09 (el modal nunca se había visto abierto).
+**Hallazgo:** `ConfirmationModal` no fija su propia alineación de texto. Como se renderiza donde lo monta el botón que lo abre —en los listados, dentro de un `<td class="text-right">`—, toda la advertencia ámbar, el rótulo "Motivo de la reversión" y la descripción del asiento salían alineados a la derecha. En el detalle de la factura pasa exactamente igual (el botón Reversar está en la columna de acciones). La lógica funcionaba (textarea, contador 2/1000 en ámbar, botón apagado hasta 3 caracteres, vista previa con el espejo, POST → asiento 23); lo roto era el render, que es lo único que un fetch no ve.
+**Impacto:** Preexistente, visual, en cualquier modal abierto desde una celda alineada a la derecha.
+**Decisión:** `text-left` en el panel del modal, junto con el `max-h`/`overflow` de FND-006. Verificado en el deploy siguiente.
+
+---
+
+## FND-008: `render-pantalla.mts` "no se podía conectar" al deploy — era Git Bash
+**Fecha:** 2026-09-21
+**Contexto:** Verificación de roles contra el deploy (contador y asistente). El 17/09 el script había fallado tres veces con *"No se pudo conectar"* mientras un fetch idéntico desde otro script funcionaba, y quedó anotado sin investigar.
+**Hallazgo:** El `catch` se tragaba el error. Al imprimirlo: `getaddrinfo ENOTFOUND …vercel.appc`. Git Bash en Windows aplica conversión de rutas de MSYS a los argumentos que empiezan con `/`: `/finanzas/cobros` llega al script como `C:/Program Files/Git/finanzas/cobros`, la URL queda `https://…vercel.appC:/Program Files/…` y el host `…appc` no resuelve. Desde PowerShell no pasa; contra `localhost` tampoco se notaba porque el error decía "¿está corriendo npm run dev?" y se asumía que sí era eso.
+**Impacto:** Solo herramienta de verificación; ninguna pantalla afectada. Pero costó una verificación el 17/09 y habría costado otra hoy.
+**Decisión:** El `catch` ahora imprime la causa real (`err.message` + `cause`). El encabezado del script dice `MSYS_NO_PATHCONV=1` o PowerShell. Con eso, contra el deploy: contador → 307 en `/finanzas/cobros`, 200 en el PDF del recibo; asistente → 403 en el PDF, 307 a `/legal`.
+
+---
+
 ## FND-006: El modal de confirmación no scrolleaba — el botón quedaba fuera de la pantalla
 **Fecha:** 2026-09-21
 **Contexto:** Verificación en el deploy `6021dc6` del diálogo "Registrar pago" refactorizado, desde una ventana de 1568×710.

@@ -52,7 +52,11 @@ export function ConfirmationModal({
           de confirmar quedaban fuera de la vista y no había forma de apretarlos
           (encontrado el 21/09/2026 registrando un cobro desde un viewport de
           710 px: siete campos, y "Registrar pago" abajo del borde). */}
-      <div className="relative w-full max-w-md max-h-full overflow-y-auto rounded-lg bg-white shadow-xl">
+      {/* `text-left`: el modal se renderiza donde lo monta el botón que lo abre —
+          a veces dentro de un <td class="text-right">— y sin esto hereda esa
+          alineación. Se vio el 21/09/2026 al abrir "Reversar cobro" desde la
+          columna de acciones: toda la advertencia salía alineada a la derecha. */}
+      <div className="relative w-full max-w-md max-h-full overflow-y-auto rounded-lg bg-white shadow-xl text-left">
         <button
           onClick={onClose}
           disabled={loading}

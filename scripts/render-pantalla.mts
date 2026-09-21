@@ -41,6 +41,13 @@
  *   # contra un deploy de Vercel (necesita el bypass de Deployment Protection)
  *   RENDER_BASE_URL=https://...vercel.app npx tsx scripts/render-pantalla.mts /finanzas/reportes
  *
+ *   🔴 DESDE GIT BASH EN WINDOWS: MSYS_NO_PATHCONV=1 adelante, o correrlo desde
+ *   PowerShell. Git Bash convierte el argumento `/finanzas/reportes` en
+ *   `C:/Program Files/Git/finanzas/reportes` (conversión de rutas de MSYS) y la
+ *   URL termina en `…vercel.appC:/Program Files/…`: el host `…appc` no existe y
+ *   el script decía "No se pudo conectar". Fue el "misterio" del 17/09 (tres
+ *   fallas contra el deploy mientras otro fetch funcionaba). FND-008.
+ *
  *   --html   imprime el HTML crudo en vez del texto visible
  */
 
@@ -162,8 +169,19 @@ try {
     headers: cabeceras,
     redirect: "manual",
   });
-} catch {
-  console.error(`\n🛑 No se pudo conectar a ${BASE}. ¿Está corriendo \`npm run dev\`?\n`);
+} catch (err) {
+  // La causa real, no solo la sospecha: el 17/09 falló tres veces contra el
+  // deploy con este mensaje y nadie supo por qué, porque el error se tragaba.
+  const causa =
+    err instanceof Error
+      ? `${err.message}${
+          (err as { cause?: { message?: string } }).cause?.message
+            ? ` — ${(err as { cause?: { message?: string } }).cause?.message}`
+            : ""
+        }`
+      : String(err);
+  console.error(`\n🛑 No se pudo conectar a ${BASE}: ${causa}`);
+  console.error(`   Contra localhost: ¿está corriendo \`npm run dev\`?\n`);
   process.exit(1);
 }
 

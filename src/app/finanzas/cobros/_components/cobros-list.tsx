@@ -139,7 +139,7 @@ function Facturas({ facturas, reversado }: { facturas: PaymentListItem["facturas
         <Link
           key={f.invoice_id}
           href={`/finanzas/facturas/${f.invoice_id}`}
-          className={`block font-mono text-xs hover:underline ${reversado ? "line-through" : "text-integra-navy"}`}
+          className={`block font-mono text-xs whitespace-nowrap hover:underline ${reversado ? "line-through" : "text-integra-navy"}`}
         >
           {f.invoice_number}
           {facturas.length > 1 && (
@@ -166,7 +166,7 @@ function Estado({ p, reversado }: { p: PaymentListItem; reversado: boolean }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 text-gray-700">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap text-gray-700">
       <Banknote size={12} className="text-gray-400" />
       {PAYMENT_METHOD_LABEL[p.method]}
       {p.asiento && (

@@ -81,10 +81,12 @@ export const TABS: TabDef[] = [
       { label: "Cotizaciones",      href: "/finanzas/cotizaciones",               icon: FileText,    roles: ["admin", "abogada"] },
       { label: "Plantilla T&C",     href: "/finanzas/cotizaciones/configuracion", icon: Settings,    roles: ["admin"] },
       { label: "Facturas",          href: "/finanzas/facturas",                   icon: Receipt,     roles: ["admin", "abogada"] },
-      // Cobros (recibos de caja, Bloque 2 — 21/09/2026): mismo reparto que
-      // Facturas. El contador queda pendiente de preguntar a Josuarth; si
-      // entra, sumar el rol ACÁ y el prefijo en CONTADOR_FINANZAS_PREFIXES.
-      { label: "Cobros",            href: "/finanzas/cobros",                     icon: HandCoins,   roles: ["admin", "abogada"] },
+      // Cobros (recibos de caja, Bloque 2 — 21/09/2026). El contador entra
+      // desde el mismo día por respuesta de Josuarth ("SÍ debe ver la pantalla
+      // de Cobros"), en solo lectura: el patrón exacto está en
+      // CONTADOR_FINANZAS_ALLOWED_PATTERNS de route-access.ts (el listado sí,
+      // /nuevo no). Los dos se mueven juntos o nav-guard.test.ts falla.
+      { label: "Cobros",            href: "/finanzas/cobros",                     icon: HandCoins,   roles: ["admin", "abogada", "contador"] },
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
       { label: "Proveedores",       href: "/finanzas/proveedores",                icon: Truck,          roles: ["admin", "abogada", "contador"] },
       { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },

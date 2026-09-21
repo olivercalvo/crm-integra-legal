@@ -30,11 +30,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * `/finanzas/cobros` — el listado de recibos de caja (Bloque 2, 21/09/2026).
  *
- * Roles: admin y abogada (mismo reparto que Facturas). El contador NO entra:
- * ve el número, baja el PDF y reversa desde el detalle de la factura. Queda
- * pendiente preguntarle a Josuarth si lo quiere ver (`task_plan.md`); si dice
- * que sí, es sumar "contador" al ítem de `nav-config.ts` Y el prefijo a
- * `CONTADOR_FINANZAS_PREFIXES`, los dos juntos.
+ * Roles: admin, abogada y —desde el 21/09/2026, por respuesta de Josuarth—
+ * el CONTADOR, en solo lectura: ve el listado, baja el PDF y reversa
+ * (`canReverse`), pero no registra (`canMutate`) y no llega a `/nuevo` (el
+ * middleware lo rebota: patrón exacto en `route-access.ts`).
  *
  * Los permisos por operación siguen en la API: registrar (admin/abogada) y
  * reversar (admin/abogada/contador) tienen su `requireRole` en cada ruta.
@@ -59,8 +58,7 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
 
   const hasFilters = !!(search || clientId || from || to || estado);
   // Misma regla que el detalle de la factura: admin y abogada registran; el
-  // contador reversa. Acá el contador no llega (middleware), pero la bandera
-  // se calcula igual para que la tabla no dependa de quién puede entrar.
+  // contador reversa.
   const canMutate = userRole === "admin" || userRole === "abogada";
   const canReverse = canMutate || userRole === "contador";
 
@@ -84,6 +82,7 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
           </div>
         </div>
         {canMutate && (
+          /* nav-guard-ok: dentro de canMutate — el contador ve esta pantalla pero no /nuevo */
           <Link href="/finanzas/cobros/nuevo">
             <Button className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px]">
               <Plus size={18} className="mr-1" />
@@ -104,7 +103,9 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
           emptyMessage={
             hasFilters
               ? "No hay cobros que coincidan con los filtros aplicados."
-              : "Aún no hay cobros. El primero se registra con el botón de arriba, o desde el detalle de una factura."
+              : canMutate
+                ? "Aún no hay cobros. El primero se registra con el botón de arriba, o desde el detalle de una factura."
+                : "Aún no hay cobros registrados."
           }
         />
       ) : (

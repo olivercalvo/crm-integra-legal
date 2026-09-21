@@ -418,6 +418,15 @@ test("el contador puede abrir el detalle de una factura, pero no el módulo de v
   );
 });
 
+test("el contador abre el listado de cobros (21/09/2026, Josuarth), pero no el alta", () => {
+  assert.equal(puedeAccederA("contador", "/finanzas/cobros"), true, "el listado sí");
+  assert.equal(puedeAccederA("contador", "/finanzas/cobros/nuevo"), false, "registrar no");
+  // Y el menú se lo ofrece: si alguien saca el rol de nav-config sin sacar el
+  // patrón (o al revés), el test de arriba que cruza sidebar contra rutas grita.
+  assert.equal(puedeAccederA("abogada", "/finanzas/cobros/nuevo"), true);
+  assert.equal(puedeAccederA("asistente", "/finanzas/cobros"), false);
+});
+
 // ===========================================================================
 // LAS RUTAS DE EXPORTACIÓN  (02/09/2026)
 // ===========================================================================

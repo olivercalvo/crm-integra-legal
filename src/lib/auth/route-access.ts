@@ -176,6 +176,22 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   //   ❌ /finanzas/gastos-tramite        (no existe, y si existiera: no)
   //   ❌ /finanzas/gastos-tramite/{id}/editar   (es solo lectura)
   /^\/finanzas\/gastos-tramite\/(?!nuevo$)[^/]+$/,
+  // ───────────────────────────────────────────────────────────────────────────
+  // El LISTADO de cobros (21/09/2026) — Josuarth: "El contador SÍ debe ver la
+  // pantalla de Cobros". Es material de conciliación: el 25/08 pidió que la
+  // antigüedad cuadre contra el mayor, y los recibos son la otra mitad de esa
+  // cuenta.
+  //
+  // SOLO LECTURA: registrar un cobro sigue siendo de admin y abogada
+  // (`canMutate`), por el mismo reparto del detalle de factura. Lo que el
+  // contador hace ahí es lo que ya hacía desde la factura —bajar el recibo en
+  // PDF y REVERSAR (`canReverse`)— pero viendo todos los cobros juntos.
+  //
+  // Es un PATRÓN exacto y no un prefijo, a propósito:
+  //   ✅ /finanzas/cobros          (el listado)
+  //   ❌ /finanzas/cobros/nuevo    (el alta es de admin y abogada; la página
+  //                                 además redirige, y la API responde 403)
+  /^\/finanzas\/cobros$/,
 ];
 
 /**

@@ -700,10 +700,12 @@ período contable está cerrado), el cobro se deshace pero el número ya se cons
 hueco. Es una decisión consciente, la misma que en facturas (`sop.md` SOP-031): un hueco se
 explica; un cobro contabilizado sin recibo no se podría corregir porque el asiento es inmutable.
 
-**Quién.** Admin y abogada ven Cobros y registran. El **contador** no entra al listado (mismo
-reparto que Facturas) pero descarga el recibo y reversa desde el detalle de la factura. Queda
-pendiente preguntarle a Josuarth si quiere ver el listado: es material de conciliación, y si
-dice que sí es un cambio de un rol en dos listas. El asistente no llega a nada de esto.
+**Quién.** Admin y abogada ven Cobros y registran. El **contador** también ve el listado
+—Josuarth, 21/09/2026: "el contador SÍ debe ver la pantalla de Cobros"; es material de
+conciliación— pero en **solo lectura**: baja el recibo y reversa, no registra ("Registrar
+cobro" no se le muestra y `/finanzas/cobros/nuevo` le rebota). Registrar un cobro es del lado
+de la abogada: es quien recibe la plata del cliente y quien responde por la factura. El
+asistente no llega a nada de esto.
 
 **Fuera de alcance, a propósito.** Un recibo aplicado a varias facturas (el modelo lo soporta
 desde el día uno; la pantalla se hace cuando el bufete lo pida). Un detalle de cobro propio:

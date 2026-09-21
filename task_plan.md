@@ -50,7 +50,16 @@ staging, producción no se toca, no hay merge a `main`.** Detalle en `changelog.
    `reversion-una-sola-implementacion.test.ts` lo lee por ruta literal). El recibo reversado conserva
    su número.
 
-### 📌 Pendiente de preguntar a Josuarth — el contador y `/finanzas/cobros`
+### ✅ Resuelto el 21/09/2026 — el contador y `/finanzas/cobros` (Parte A)
+
+Josuarth: "El contador SÍ debe ver la pantalla de Cobros". Hecho, **en solo lectura**: patrón
+exacto `^/finanzas/cobros$` en `CONTADOR_FINANZAS_ALLOWED_PATTERNS` (no prefijo: `/nuevo` sigue
+cerrado), `"contador"` en el ítem de `nav-config.ts`, `nav-guard-ok` en el enlace a `/nuevo`
+(está dentro de `canMutate`), test nuevo en `nav-guard.test.ts`, fila del contador en CLAUDE.md.
+Ve el listado, baja el PDF y reversa; no registra. Lo de abajo es el texto original, que queda
+como registro de por qué se preguntó.
+
+#### (texto original) 📌 Pendiente de preguntar a Josuarth — el contador y `/finanzas/cobros`
 
 `/finanzas/cobros` se construye para **admin y abogada** solamente (mismo reparto que Facturas). El
 contador no entra al listado; ve el N° de recibo, descarga el PDF y reversa desde el detalle de la

@@ -24,6 +24,11 @@ import path from "node:path";
 import fs from "node:fs";
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 
+// Sin silabación en la descripción de la compra: react-pdf parte "marzo" en
+// "mar-" / "zo" cuando no entra en su columna. Por `<Text>`, no global
+// (`Font.registerHyphenationCallback` afectaría a los otros PDF del proceso).
+const sinSilabar = (word: string) => [word];
+
 const LOGO_PNG_BUFFER: Buffer = fs.readFileSync(path.join(process.cwd(), "public", "integra-logo.png"));
 const LOGO_SRC = { data: LOGO_PNG_BUFFER, format: "png" as const };
 
@@ -215,7 +220,9 @@ export function SupplierPaymentDocument(props: SupplierPaymentDocumentProps) {
             <Text style={[styles.tableHeaderCell, styles.colPaid]}>MONTO PAGADO</Text>
           </View>
           <View style={styles.tableRow}>
-            <Text style={[styles.tableCell, styles.colDesc, styles.infoLineValueBold]}>{compra.description}</Text>
+            <Text style={[styles.tableCell, styles.colDesc, styles.infoLineValueBold]} hyphenationCallback={sinSilabar}>
+              {compra.description}
+            </Text>
             <Text style={[styles.tableCell, styles.colDate]}>{formatDateEs(compra.expense_date)}</Text>
             <Text style={[styles.tableCell, styles.colInv]}>{compra.supplier_invoice_number ?? ""}</Text>
             <Text style={[styles.tableCell, styles.colTotal]}>{formatUSD(compra.total)}</Text>
@@ -258,7 +265,7 @@ export function SupplierPaymentDocument(props: SupplierPaymentDocumentProps) {
         {/* ===== Footer ===== */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerNote}>
-            Documento interno de control. No es factura ni documento fiscal; el documento fiscal es la factura del proveedor indicada arriba.
+            Documento interno de control. No es factura ni documento fiscal; el documento fiscal es la factura del proveedor.
           </Text>
           <View style={styles.footerRow}>
             <Text style={styles.footerText}>

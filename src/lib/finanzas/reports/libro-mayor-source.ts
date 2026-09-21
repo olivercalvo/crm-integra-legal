@@ -395,8 +395,9 @@ export async function loadDestinosDeOrigen(
       console.error("[finanzas/mayor] loadDestinosDeOrigen(payment_reversals) failed", revs.error);
     }
 
-    // Un pago aplicado a VARIAS facturas no tiene un destino único, así que
-    // se queda sin enlace en vez de elegir una arbitrariamente.
+    // Un pago aplicado a VARIAS facturas no tiene una factura única: va al
+    // listado de cobros filtrado por su número de recibo (Parte B, 21/09/2026).
+    // Antes quedaba sin enlace en vez de elegir una factura arbitraria.
     const facturasPorPago = new Map<string, Set<string>>();
     const filas = [
       ...((apps.data ?? []) as { payment_id: string; invoice_id: string }[]),
@@ -407,9 +408,30 @@ export async function loadDestinosDeOrigen(
       set.add(row.invoice_id);
       facturasPorPago.set(row.payment_id, set);
     }
+    const multiples: string[] = [];
     for (const [pagoId, facturas] of Array.from(facturasPorPago.entries())) {
-      if (facturas.size !== 1) continue;
-      destinos.set(pagoId, RUTA_DEL_DOCUMENTO.pago(Array.from(facturas)[0]));
+      if (facturas.size === 1) {
+        destinos.set(pagoId, RUTA_DEL_DOCUMENTO.pago(Array.from(facturas)[0]));
+      } else if (facturas.size > 1) {
+        multiples.push(pagoId);
+      }
+    }
+    if (multiples.length > 0) {
+      const { data: recibos, error: errRecibos } = await db
+        .from("payments")
+        .select("id, payment_number")
+        .eq("tenant_id", tenantId)
+        .in("id", multiples);
+      if (errRecibos) {
+        console.error("[finanzas/mayor] loadDestinosDeOrigen(payments) failed", errRecibos);
+      }
+      for (const r of (recibos ?? []) as { id: string; payment_number: string | null }[]) {
+        // Sin número (cobro anterior a la 047 en una base sin backfill) no hay
+        // qué filtrar: se queda sin enlace, como antes.
+        if (r.payment_number) {
+          destinos.set(r.id, RUTA_DEL_DOCUMENTO.cobro_varias_facturas(r.payment_number));
+        }
+      }
     }
   }
 

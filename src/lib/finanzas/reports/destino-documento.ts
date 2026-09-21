@@ -44,10 +44,15 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
   // Elegir un valor nuevo tiene además una ventaja de migración: cero backfill.
   // `gasto` sigue significando exactamente lo que significa hoy.
   gasto_tramite: (id) => `/finanzas/gastos-tramite/${id}`,
-  // El pago no tiene pantalla propia: vive en el detalle de la factura que
-  // canceló, así que su destino se resuelve mirando `payment_applications` y
-  // termina en la misma ruta que `factura`. Ver `loadDestinosDeOrigen`.
+  // El pago de UNA factura vive en el detalle de esa factura: su destino se
+  // resuelve mirando `payment_applications` y termina en la misma ruta que
+  // `factura`. Ver `loadDestinosDeOrigen`.
   pago: (id) => `/finanzas/facturas/${id}`,
+  // Un pago aplicado a VARIAS facturas (Parte B, 21/09/2026) no tiene una
+  // factura única: va al listado de cobros filtrado por su número de recibo,
+  // que existe desde el Bloque 2 y el contador ya puede abrir. Recibe el
+  // NÚMERO (`REC-000012`), no el id. Antes de esto el cobro quedaba sin enlace.
+  cobro_varias_facturas: (numero) => `/finanzas/cobros?q=${encodeURIComponent(numero)}`,
   // Un pago a PROVEEDOR es la otra punta y tiene su propio `source_type` desde
   // la migración `042`, exactamente por el motivo del bloque de arriba: con
   // `pago` habría mandado a `/finanzas/facturas/<id-de-una-compra>`. Su
@@ -78,6 +83,8 @@ export function rutasDeEjemplo(): { sourceType: string; ruta: string }[] {
   const ID = "00000000-0000-0000-0000-000000000001";
   return Object.entries(RUTA_DEL_DOCUMENTO).map(([sourceType, f]) => ({
     sourceType,
-    ruta: f(ID),
+    // Sin el query string: el middleware decide por `pathname`, y es contra
+    // eso que `puedeAccederA` se cruza en nav-guard.test.ts.
+    ruta: f(ID).split("?")[0],
   }));
 }

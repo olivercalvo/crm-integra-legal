@@ -439,9 +439,11 @@ export async function getReversionDeGastoTramite(
   tenantId: string,
   expenseId: string
 ): Promise<ReversionDeCobro | null> {
+  // Sin embed: PostgREST no resuelve el self-join por el nombre de la FK
+  // (PGRST200, verificado el 21/09). El original se lee aparte por su id.
   const { data, error } = await db
     .from("journal_entries")
-    .select("entry_number, reversal_reason, created_by, created_at, reverses:journal_entries!journal_entries_reverses_entry_id_fkey(entry_number)")
+    .select("entry_number, reversal_reason, created_by, created_at, reverses_entry_id")
     .eq("tenant_id", tenantId)
     .eq("source_type", "reversion")
     .eq("source_id", expenseId)
@@ -456,10 +458,18 @@ export async function getReversionDeGastoTramite(
     reversal_reason: string | null;
     created_by: string | null;
     created_at: string;
-    reverses: { entry_number: number } | { entry_number: number }[] | null;
+    reverses_entry_id: string | null;
   };
   const f = data as unknown as Fila;
-  const orig = Array.isArray(f.reverses) ? f.reverses[0] : f.reverses;
+  let orig: { entry_number: number } | null = null;
+  if (f.reverses_entry_id) {
+    const { data: o } = await db
+      .from("journal_entries")
+      .select("entry_number")
+      .eq("id", f.reverses_entry_id)
+      .maybeSingle();
+    orig = (o as { entry_number: number } | null) ?? null;
+  }
   let nombre: string | null = null;
   if (f.created_by) {
     const { data: u } = await db.from("users").select("full_name").eq("id", f.created_by).maybeSingle();

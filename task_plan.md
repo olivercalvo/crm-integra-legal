@@ -1,13 +1,97 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> RETOMAR ACÁ — eFACTURA DESCONGELADO: tipo 09 para reembolsos — 17/09/2026 <<<
+## >>> RETOMAR ACÁ — BLOQUE 2: RECIBO DE CAJA COMO MÓDULO REAL — 21/09/2026 <<<
+
+**Estado:** plan aprobado por Oliver el 21/09/2026. En construcción en `develop`. **Staging
+solamente: producción no se toca, no hay merge a `main`.**
+
+### Decisiones cerradas (no se reabren)
+
+1. **Numeración:** correlativo interno `REC-000001`, secuencia `'payment'` en `numbering_sequences`.
+   Un recibo de caja no es documento fiscal en Panamá; no pasa por la DGI.
+2. **Backfill:** los cobros existentes se numeran por `payment_date, created_at` y `last_number` queda
+   en el último asignado. Motivo (Oliver): un listado donde unos cobros tienen recibo y otros no es lo
+   primero que el contador reporta como error. Idempotente y verificable en ROLLBACK.
+3. **Huecos de numeración: aceptados a conciencia.** El número se toma ANTES del INSERT del cobro y si
+   el asiento falla, el DELETE compensatorio deshace el cobro pero el número ya se consumió. Es el
+   mismo criterio de `emitInvoice`: un hueco se explica, un cobro contabilizado sin recibo (numerar
+   después del asiento) no se puede compensar porque el asiento es inmutable. Se descartó un RPC
+   atómico porque `construirAsientoDeCobro` arma el asiento releyendo el cobro ya insertado.
+4. **Un recibo = una factura.** El modelo es N:M desde el día uno (`payment_applications`); la UI de
+   varias facturas se construye cuando el bufete lo pida. La ruta de alta sigue siendo
+   `POST /api/finanzas/invoices/[id]/payments`; el día del N:M nace `POST /api/finanzas/payments`.
+5. **`client_payments` (cobros del caso, módulo Legal) NO se cruza con `payments`.** `/api/payments/*`
+   es de Legal; lo nuevo va bajo `/api/finanzas/payments/`. La ruta del PDF se llama `pdf`, no
+   `receipt` (ese nombre ya es el comprobante de un cobro de caso).
+6. **El diálogo del detalle de factura CONVIVE** con la pantalla nueva: las dos puertas llaman a la
+   misma `createPayment` por la misma ruta. Los campos del formulario se extraen a
+   `payment-form-fields.tsx` y lo usan las dos.
+7. **La reversión se reusa tal cual** (`reverse-payment-dialog.tsx` no se mueve de archivo:
+   `reversion-una-sola-implementacion.test.ts` lo lee por ruta literal). El recibo reversado conserva
+   su número.
+
+### 📌 Pendiente de preguntar a Josuarth — el contador y `/finanzas/cobros`
+
+`/finanzas/cobros` se construye para **admin y abogada** solamente (mismo reparto que Facturas). El
+contador no entra al listado; ve el N° de recibo, descarga el PDF y reversa desde el detalle de la
+factura, como hoy. **Oliver anota el 21/09:** el contador sí entra a Gastos del Bufete con CRUD
+completo, y un listado de cobros es material de conciliación (Josuarth pidió el 25/08 que la
+antigüedad cuadre contra el mayor). **Queda pendiente preguntarle a Josuarth si quiere verlo.** Si
+dice que sí, es agregar `"contador"` a la lista de roles del ítem en `nav-config.ts` y el prefijo
+`/finanzas/cobros` a `CONTADOR_FINANZAS_PREFIXES` en `route-access.ts` — los dos juntos, o
+`nav-guard.test.ts` falla.
+
+### Orden de commits (C.8 del plan)
+
+- [x] 1. Cierre del 18/09 en `ESTADO-Y-HANDOFF.md` y `task_plan.md`.
+- [ ] 2. Migración `047_recibo_de_caja.sql` + `sql/tests/verificacion-047-recibo-de-caja.sql` +
+      inventario → aplicar en staging.
+- [ ] 3. `createPayment` numera + `formatReceiptNumber` + tests del gate.
+- [ ] 4. `payment-form-fields.tsx` extraído + diálogo usándolo + test estructural. **Verificar en el
+      deploy antes de seguir.**
+- [ ] 5. Queries + `/finanzas/cobros` listado y alta + nav.
+- [ ] 6. PDF completo (`ReceiptDocument`, `ensure-receipt-pdf`, ruta, hash) + botones en las dos
+      pantallas. **Verificar en el deploy antes de seguir.**
+- [ ] 7. Docs (changelog, SOP-031, productdesign, CLAUDE.md) + cierre con el SHA vivo en staging.
+
+### Verificación en pantalla (C.7 del plan) — contra el deploy de staging
+
+Como admin o abogada (el usuario de staging es contador; hace falta el otro):
+- [ ] `/finanzas/cobros` en el menú; listado con los cobros existentes ya numerados.
+- [ ] Alta desde `/finanzas/cobros/nuevo`: cliente → facturas cobrables con saldo → monto sobre el
+      saldo rechazado → guardar → toast con `REC-`, fila nueva, asiento nuevo, `amount_paid` derivado.
+- [ ] Otro cobro desde el diálogo del detalle de factura → el número es el siguiente correlativo.
+- [ ] PDF desde el listado y desde la fila del detalle: RUC y DV separados, leyenda de no fiscal,
+      nombre `REC-000012.pdf`, descarga sin cambiar de pestaña.
+- [ ] **Reversar desde el listado con CLIC REAL** — cierra la verificación pendiente del bloque de
+      reversión (modal, textarea, vista previa, botón a los 3 caracteres) → fila tachada → PDF con
+      la banda roja.
+- [ ] `MoneyInput` del alta tecleado a mano; selector de factura al cambiar de cliente; wizard en
+      ancho de teléfono.
+
+Como contador: `/finanzas/cobros` rebota a `/finanzas/reportes`; en el detalle de factura ve N° +
+PDF + Reversar y no ve Registrar. Como asistente: 403 en el PDF.
+
+### Lo que NO entra en este bloque, anotado
+
+- [ ] Detalle de cobro (`/finanzas/cobros/{id}`): no hay. El Mayor sigue enlazando el asiento del
+      cobro y su espejo al detalle de la factura (`destino-documento.ts` sin cambios).
+- [ ] `ensure-invoice-pdf.ts` no tiene test propio. El del recibo sí lo tendrá; el de factura queda
+      anotado.
+- [ ] RPC atómico de registro de cobro (cero huecos): descartado, ver decisión 3. Un día de trabajo
+      si algún día se quiere.
+
+
+## Bloque anterior — eFACTURA DESCONGELADO: tipo 09 para reembolsos — 17/09/2026
 
 **Estado:** construido, probado en el SANDBOX del PAC (autorizada como tipo 09), en `develop`.
 **Producción NO se toca: no hay merge a `main`. Oliver decide cuándo va.**
 
-**18/09:** el gate invoice_kind ↔ service_type se agregó también a `emitInvoice` (commit propio en
-develop, va en el hotfix). Análisis de portabilidad a `main` aprobado por Oliver; pendiente el
-pre-flight en producción (dos SELECT) y su decisión. Ver el changelog del 18/09.
+**18/09: SALIÓ A PRODUCCIÓN.** Rama `hotfix/tipo-09-y-gate-de-mezcla` (tres cherry-picks: gate de
+mezcla, tipo 09, gate al emitir) mergeada a `main` = `24b227a`, deploy `2yf7q4gyc`. Pre-flight hecho
+(un solo borrador afectado, `DRAFT-e5385c80985e`, se da por abandonado). `main` mergeado de vuelta en
+`develop` = `4c01360`, que es lo que corre en staging. La rama hotfix sigue en origin, contenida al
+100%. Ver el changelog del 18/09 y `ESTADO-Y-HANDOFF.md`.
 
 Respuesta de ideati (Eduardo Méndez, PM) por correo el 17/09/2026: `tipoDocumento "09"` es
 Factura de Reembolso, habilitado en todas las cuentas y ambientes incluido pruebas; sin

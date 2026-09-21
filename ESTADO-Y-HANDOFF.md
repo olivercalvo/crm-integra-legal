@@ -4,6 +4,49 @@
 
 ---
 
+## Cierre del 18/09/2026 — el hotfix del tipo 09 salió a producción
+
+**SHA de la app en staging: `4c01360`** — deployment `dpl_D82X93ttB8pRNGm3EKuVQzRjmezQ`, READY, 18/09
+12:05, aliaseado a `https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app` (log del
+build: `Commit: 4c01360`). Es el merge de `main` en `develop`; `develop` y `origin/develop` están ahí.
+
+🔴 **`main` está en `24b227a` y ES producción.** Deploy `2yf7q4gyc` Ready, alias
+`crm-integra-legal.vercel.app`. Deploy anterior (destino del Instant Rollback): `4jogydgyk`.
+Detalle del hotfix en `changelog.md` (entrada `[HOTFIX] - 2026-09-18`).
+
+**Lo que entró a producción** (rama `hotfix/tipo-09-y-gate-de-mezcla`, tres cherry-picks de
+`develop`): el gate de mezcla al crear/editar (`5e695ff`), el tipo 09 para reembolsos (`780bda0`) y
+el gate al emitir (`30deedf`). **No hay migración de base en el hotfix.** Las `045` y `046` siguen
+SOLO en staging.
+
+**La rama `hotfix/tipo-09-y-gate-de-mezcla` sigue en `origin` y en local** (`3ba9d4b`), contenida al
+100% en `main` y en `develop`. Borrarla es seguro; es decisión de Oliver.
+
+### Lo que quedó sin verificar (arrastra lo del 17/09)
+
+- **Producción:** la primera factura de reembolso real la emite el bufete; se confirma que el CUFE
+  empiece con `FE09` y el estado sea "Autorizada DGI". No se probó contra producción.
+- **Bloque de mezcla, en pantalla con clic real:** nunca se vio el `data-error` de la fila ni el
+  mensaje del selector al cambiar el tipo de documento con líneas cargadas. El gate al EMITIR
+  (`30deedf`) tampoco tiene verificación en pantalla, solo tests.
+- **Reversión de cobros:** el modal de Reversar abierto con un clic real (textarea, vista previa,
+  botón a los 3 caracteres) y "Abrir el documento" del Mayor al expandir la fila. **Se cierra en el
+  Bloque 2 (recibo de caja), punto 5 de su verificación.**
+- Lo del tipo 09 del 17/09: emitir desde el deploy de staging, el botón "Enviar al PAC" desde la
+  UI, una REI con varias líneas en sandbox.
+
+### Siguiente: Bloque 2 — recibo de caja como módulo real
+
+Plan aprobado el 21/09/2026 (Oliver). Decisiones cerradas: correlativo interno `REC-000001` (no es
+documento fiscal, no pasa por la DGI), **backfill** de los cobros existentes por `payment_date,
+created_at`, un recibo = una factura (el N:M queda abierto, sin UI), `client_payments` no se cruza
+con `payments`, huecos de numeración aceptados con el criterio de `emitInvoice`. `/finanzas/cobros`
+solo admin y abogada; el contador queda pendiente de preguntar a Josuarth. Plan completo en
+`task_plan.md`, arriba de todo.
+
+---
+
+
 ## Cierre del 17/09/2026 (noche) — eFactura descongelado: reembolsos como tipo 09
 
 **SHA de la app en staging: `780bda0`** — deployment `dpl_8QZdU5tR59nrsmnhaNVhpPwBm84j`, READY,

@@ -1146,6 +1146,23 @@ async function seedPayments(): Promise<void> {
     `✅ Pagos — ${nuevos} nuevos, ${SEED_PAYMENTS.length - nuevos} ya existían` +
       ` (T7a derivó \`amount_paid\` y el status de cada factura cobrada)`
   );
+
+  // 🔑 EL NÚMERO DE RECIBO (migración `047`). Los INSERT de arriba no lo
+  // escriben a propósito: lo asigna `backfill_payment_numbers`, que numera SOLO
+  // los cobros en NULL por `payment_date, created_at, id` y deja `last_number`
+  // en el último. Es la misma función que corre la 047 sobre una base que ya
+  // existe; acá se llama porque en un `--reset` la migración corre ANTES de que
+  // haya cobros. Dos caminos para la misma regla (ver el encabezado de la 047).
+  // Idempotente: con todo numerado devuelve 0 y no toca nada.
+  const { data: numerados, error: errNum } = await db.rpc("backfill_payment_numbers", {
+    p_tenant_id: TENANT_ID,
+  });
+  if (errNum) {
+    throw new Error(
+      `backfill_payment_numbers: ${errNum.message}. ¿Está aplicada la 047 en esta base?`
+    );
+  }
+  console.log(`✅ Recibos — ${numerados ?? 0} cobros numerados (REC-######)`);
 }
 
 // ===========================================================================

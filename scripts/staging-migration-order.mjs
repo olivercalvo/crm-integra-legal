@@ -107,6 +107,17 @@ export const BUNDLE_2 = [
   // 042 agrega `pago_proveedor` al CHECK de source_type. Va DESPUÉS de la 038,
   // que fue la última en tocar ese CHECK.
   "sql/pending/042_pago_proveedor_source_type.sql",
+  // 046 crea `payment_reversals` y el RPC `reverse_payment`. Usa la firma de 13
+  // parámetros de `post_journal_entry` (039) y el source_type de la 042: va
+  // después de las dos. No depende de datos del seed. (Faltaba en esta lista
+  // desde el 17/09; se agregó el 21/09 junto con la 047.)
+  "sql/pending/046_reversion_de_cobro.sql",
+  // 047 suma la secuencia 'payment', el índice único de `payment_number`, los
+  // CHECK de `documents` para el PDF del recibo y `backfill_payment_numbers()`.
+  // En un --reset corre sobre `payments` vacía y numera 0; los cobros que
+  // después siembra `seed-staging.ts` los numera el propio seed llamando a la
+  // misma función. Ver el encabezado de la 047.
+  "sql/pending/047_recibo_de_caja.sql",
 ];
 
 // ---------------------------------------------------------------------------

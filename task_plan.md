@@ -186,11 +186,17 @@ compras):**
 
 **Sin migración a producción. `main` no se toca.**
 
-### 📌 Para Josuarth (no bloquea el arranque)
+### 📌 Para Josuarth — el próximo paquete de preguntas (no bloquea)
 
-- ¿Cómo llama el bufete al documento del pago a proveedor: "comprobante de egreso" (`CE-`) u otro?
-  Es una constante.
-- Sigue abierta la del excedente del cliente (anticipos), de la Parte B.
+1. ¿Cómo llama el bufete al documento del pago a proveedor: "comprobante de egreso" (`CE-`) u
+   otro? Es una constante (`supplier-payment-numbering.ts` + backfill de la 048).
+2. ¿Dónde va el excedente cuando un cliente transfiere más que sus facturas pendientes? ¿Saldo
+   acreedor en 100004 o cuenta de anticipos de clientes? (Parte B; desbloquea `amount_unapplied`.)
+3. En el Diario General, la columna Documento de un cobro ahora dice el número de recibo (`REC-`)
+   en vez de la referencia bancaria. ¿Te sirve así o necesitás la referencia del banco ahí para
+   conciliar? (Verificado el 21/09: la referencia bancaria sigue visible al abrir el cobro desde
+   el Diario —detalle de la factura, listado de cobros— y en el Estado de Cuenta del cliente. Solo
+   se movió de esa columna.)
 
 
 ## >>> RESPUESTAS DE JOSUARTH — 21/09/2026 — ANOTADAS TEXTUALES ANTES DE TOCAR NADA <<<

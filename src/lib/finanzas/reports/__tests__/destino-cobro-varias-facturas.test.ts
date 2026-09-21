@@ -55,3 +55,18 @@ test("la ruta del cobro multi-factura codifica el número y nav-guard la cruza s
   const ejemplo = rutasDeEjemplo().find((r) => r.sourceType === "cobro_varias_facturas");
   assert.equal(ejemplo?.ruta, "/finanzas/cobros", "el middleware decide por pathname");
 });
+
+test("un pago a PROVEEDOR (048) enlaza a su COMPRA, y su espejo también", async () => {
+  const db = fakeDb({
+    payment_applications: [],
+    payment_reversals: [],
+    payments: [],
+    supplier_payments: [{ id: "sp1", business_expense_id: "compra-1" }],
+  });
+  const destinos = await loadDestinosDeOrigen(db as never, TENANT, [
+    { source_type: "pago_proveedor", source_id: "sp1" },
+    { source_type: "reversion", source_id: "sp1" },
+  ] as never);
+  assert.equal(destinos.get("sp1"), "/finanzas/gastos-bufete/compra-1");
+});
+

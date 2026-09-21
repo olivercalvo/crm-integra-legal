@@ -21,7 +21,9 @@ const DOCUMENTO_DE: Record<string, { tabla: string; campo: string }> = {
   factura: { tabla: "invoices", campo: "invoice_number" },
   nota_credito: { tabla: "invoices", campo: "invoice_number" },
   gasto: { tabla: "business_expenses", campo: "supplier_name" },
-  pago: { tabla: "payments", campo: "reference" },
+  pago: { tabla: "payments", campo: "payment_number" },
+  // El pago a proveedor (048) se rotula con su comprobante (CE-…).
+  pago_proveedor: { tabla: "supplier_payments", campo: "payment_number" },
 };
 
 /**

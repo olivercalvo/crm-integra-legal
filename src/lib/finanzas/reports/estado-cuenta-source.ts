@@ -194,7 +194,7 @@ export async function loadMovimientosDeProveedor(
 
   let q = db
     .from("business_expenses")
-    .select("id, description, expense_date, payment_date, total, status")
+    .select("id, description, expense_date, total, status")
     .eq("tenant_id", tenantId);
 
   // Con ficha se busca por id; sin ficha, por el texto y SOLO entre los que no
@@ -212,13 +212,32 @@ export async function loadMovimientosDeProveedor(
     id: string;
     description: string | null;
     expense_date: string;
-    payment_date: string | null;
     total: number | string;
     status: string;
   };
+  const gastos = (data ?? []) as unknown as Gasto[];
+
+  // Los pagos de esos gastos (048): cada uno entra como crédito en SU fecha,
+  // por SU monto (pago parcial), simétrico al cliente con `payment_applications`.
+  // Los reversados (`anulado`) no cancelan nada; los saldos heredados sí (la
+  // compra estaba pagada), y se nombran.
+  const pagosPorGasto = new Map<string, { id: string; payment_date: string; amount: number | string; kind: string; payment_number: string | null; method: string | null }[]>();
+  if (gastos.length > 0) {
+    const { data: pagos } = await db
+      .from("supplier_payments")
+      .select("id, business_expense_id, payment_date, amount, kind, payment_number, method")
+      .eq("tenant_id", tenantId)
+      .eq("status", "registrado")
+      .in("business_expense_id", gastos.map((g) => g.id));
+    for (const p of (pagos ?? []) as { id: string; business_expense_id: string; payment_date: string; amount: number | string; kind: string; payment_number: string | null; method: string | null }[]) {
+      const lista = pagosPorGasto.get(p.business_expense_id) ?? [];
+      lista.push(p);
+      pagosPorGasto.set(p.business_expense_id, lista);
+    }
+  }
 
   const movimientos: MovimientoTercero[] = [];
-  for (const g of (data ?? []) as unknown as Gasto[]) {
+  for (const g of gastos) {
     const monto = round2(Number(g.total));
     movimientos.push({
       fecha: String(g.expense_date).slice(0, 10),
@@ -230,15 +249,17 @@ export async function loadMovimientosDeProveedor(
       documentoId: g.id,
       sourceType: "gasto",
     });
-    // Si ya se pagó, el pago cancela la deuda: entra como crédito en su fecha.
-    if (g.payment_date) {
+    for (const p of pagosPorGasto.get(g.id) ?? []) {
       movimientos.push({
-        fecha: String(g.payment_date).slice(0, 10),
+        fecha: String(p.payment_date).slice(0, 10),
         tipo: "Pago",
-        documento: g.description?.trim() || "(sin descripción)",
-        descripcion: "Pago del gasto",
+        documento: p.payment_number ?? (p.kind === "migrated_balance" ? "Saldo heredado" : p.method ?? "Pago"),
+        descripcion:
+          p.kind === "migrated_balance"
+            ? "Saldo heredado de la migración: la compra ya estaba pagada"
+            : `Pago de ${g.description?.trim() || "(sin descripción)"}`,
         debito: 0,
-        credito: monto,
+        credito: round2(Number(p.amount)),
         documentoId: g.id,
         sourceType: "gasto",
       });

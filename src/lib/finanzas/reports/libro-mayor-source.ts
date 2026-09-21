@@ -370,6 +370,27 @@ export async function loadDestinosDeOrigen(
   // misma tabla y lleva a la misma factura. Una reversión que no sea de un
   // cobro (el día que existan) no aparece en `payment_reversals` y se queda
   // sin enlace, que es lo correcto.
+  // -- pago a PROVEEDOR (048): el source_id es el PAGO; su documento es la
+  //    compra. Y el espejo de una reversión de ese pago lleva el mismo
+  //    source_id, así que se resuelve por la misma tabla.
+  const idsPagoProv = new Set<string>([
+    ...Array.from(idsPorTipo.get("pago_proveedor") ?? []),
+    ...Array.from(idsPorTipo.get("reversion") ?? []),
+  ]);
+  if (idsPagoProv.size > 0) {
+    const { data: sp, error: errSp } = await db
+      .from("supplier_payments")
+      .select("id, business_expense_id")
+      .eq("tenant_id", tenantId)
+      .in("id", Array.from(idsPagoProv));
+    if (errSp) {
+      console.error("[finanzas/mayor] loadDestinosDeOrigen(supplier_payments) failed", errSp);
+    }
+    for (const row of (sp ?? []) as { id: string; business_expense_id: string }[]) {
+      destinos.set(row.id, RUTA_DEL_DOCUMENTO.gasto(row.business_expense_id));
+    }
+  }
+
   const idsPago = new Set<string>([
     ...Array.from(idsPorTipo.get("pago") ?? []),
     ...Array.from(idsPorTipo.get("reversion") ?? []),

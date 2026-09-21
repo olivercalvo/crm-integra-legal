@@ -116,6 +116,12 @@ export interface SinAsiento {
   documentos: Conteo;
   /** Cobros (o pagos) sin asiento. Están descontados del auxiliar, no del mayor. */
   cobros: Conteo;
+  /**
+   * Solo del lado PAGAR: de los pagos sin asiento, cuántos son SALDOS HEREDADOS
+   * de la migración 048 (compras que ya estaban `pagado`). Están incluidos en
+   * `cobros`; se cuentan aparte para nombrarlos, no para sumarlos dos veces.
+   */
+  heredados?: Conteo;
 }
 
 /**

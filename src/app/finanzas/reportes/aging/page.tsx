@@ -192,10 +192,25 @@ export default async function AntiguedadPage({
                             <>
                               , y{" "}
                               <strong>
-                                {reporte.control.sinAsiento.cobros.cantidad} cobro(s) por{" "}
+                                {reporte.control.sinAsiento.cobros.cantidad}{" "}
+                                {esCobrar ? "cobro(s)" : "pago(s)"} por{" "}
                                 {money(reporte.control.sinAsiento.cobros.monto)}
                               </strong>{" "}
                               ya descontados del auxiliar y todavía no del mayor
+                              {/* Los saldos heredados de la 048 no son pagos que
+                                  falte cablear: son compras que ya estaban pagadas
+                                  antes de que existieran los pagos. Se nombran. */}
+                              {(reporte.control.sinAsiento.heredados?.cantidad ?? 0) > 0 && (
+                                <>
+                                  {" "}
+                                  (de los cuales{" "}
+                                  <strong>
+                                    {reporte.control.sinAsiento.heredados!.cantidad} por{" "}
+                                    {money(reporte.control.sinAsiento.heredados!.monto)}
+                                  </strong>{" "}
+                                  son saldos heredados de la migración, no pagos registrados)
+                                </>
+                              )}
                             </>
                           )}
                           .

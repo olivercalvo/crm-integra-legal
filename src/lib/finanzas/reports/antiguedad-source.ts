@@ -154,11 +154,13 @@ async function facturasPendientes(db: DB, tenantId: string): Promise<DocumentoPe
  * `due_date`. Los dos campos llegaron con la migración 033; ver el encabezado.
  */
 async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPendiente[]> {
+  // Desde la 048 una compra puede estar PARCIALMENTE pagada: el saldo es
+  // `total − amount_paid`, no el total, y entran las dos que no están `pagado`.
   const { data, error } = await db
     .from("business_expenses")
-    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total")
+    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total, amount_paid")
     .eq("tenant_id", tenantId)
-    .eq("status", "pendiente_pago")
+    .neq("status", "pagado")
     .order("due_date");
 
   if (error) {
@@ -174,9 +176,11 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
     expense_date: string;
     due_date: string | null;
     total: number | string;
+    amount_paid: number | string;
   };
 
-  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => Number(g.total) > 0.005);
+  const saldoDe = (g: Fila) => round2(Number(g.total) - Number(g.amount_paid ?? 0));
+  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => saldoDe(g) > 0.005);
 
   // El nombre sale de la ficha, en una query aparte. Así dos gastos del mismo
   // proveedor muestran el MISMO nombre aunque se hayan tipeado distinto.
@@ -214,7 +218,7 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
       terceroId: g.supplier_id,
       fechaReferencia: referencia,
       diasVencido: diasDesde(referencia),
-      saldo: round2(Number(g.total)),
+      saldo: saldoDe(g),
       sourceType: "gasto",
     };
   });
@@ -298,33 +302,63 @@ async function sinAsientoCobrar(db: DB, tenantId: string): Promise<SinAsiento> {
 }
 
 /**
- * CxP: gastos del auxiliar sin asiento.
+ * CxP: gastos del auxiliar sin asiento, y PAGOS sin asiento.
  *
- * No hay lado de "pagos sin asiento": el pago de un gasto no es una entidad
- * propia, es una fecha en el gasto. Cuando exista el módulo de compras esto se
- * vuelve simétrico con el de cobrar.
+ * Desde la 048 el pago a proveedor es una entidad (`supplier_payments`), así
+ * que esto es simétrico con `sinAsientoCobrar`: un pago `registrado` sin
+ * asiento `pago_proveedor` ya se descontó del auxiliar y no del mayor. Más
+ * simple que el lado cobrar porque no hay N:M: un pago es de UNA compra.
+ *
+ * Los SALDOS HEREDADOS (`kind = 'migrated_balance'`) son, por definición,
+ * pagos sin asiento: la compra estaba `pagado` antes de que existieran los
+ * pagos, y en el mayor nunca hubo asiento de pago. Entran en el mismo término
+ * (bajan el auxiliar, no el mayor) pero se cuentan aparte para que la pantalla
+ * los nombre como lo que son y no como "pagos que faltan cablear".
  */
 async function sinAsientoPagar(db: DB, tenantId: string): Promise<SinAsiento> {
-  const conAsiento = await idsConAsiento(db, tenantId, "gasto");
+  const [conAsientoGasto, conAsientoPago] = await Promise.all([
+    idsConAsiento(db, tenantId, "gasto"),
+    idsConAsiento(db, tenantId, "pago_proveedor"),
+  ]);
 
   const { data } = await db
     .from("business_expenses")
-    .select("id, total")
+    .select("id, total, amount_paid")
     .eq("tenant_id", tenantId)
-    .eq("status", "pendiente_pago");
+    .neq("status", "pagado");
 
   const documentos = { cantidad: 0, monto: 0 };
-  for (const g of (data ?? []) as { id: string; total: number | string }[]) {
-    const monto = Number(g.total);
-    if (monto > 0.005 && !conAsiento.has(g.id)) {
+  for (const g of (data ?? []) as { id: string; total: number | string; amount_paid: number | string }[]) {
+    const saldo = Number(g.total) - Number(g.amount_paid ?? 0);
+    if (saldo > 0.005 && !conAsientoGasto.has(g.id)) {
       documentos.cantidad += 1;
-      documentos.monto += monto;
+      documentos.monto += saldo;
+    }
+  }
+
+  const { data: pagos } = await db
+    .from("supplier_payments")
+    .select("id, amount, kind")
+    .eq("tenant_id", tenantId)
+    .eq("status", "registrado");
+
+  const cobros = { cantidad: 0, monto: 0 };
+  const heredados = { cantidad: 0, monto: 0 };
+  for (const p of (pagos ?? []) as { id: string; amount: number | string; kind: string }[]) {
+    if (conAsientoPago.has(p.id)) continue;
+    const monto = Number(p.amount);
+    cobros.cantidad += 1;
+    cobros.monto += monto;
+    if (p.kind === "migrated_balance") {
+      heredados.cantidad += 1;
+      heredados.monto += monto;
     }
   }
 
   return {
     documentos: { cantidad: documentos.cantidad, monto: round2(documentos.monto) },
-    cobros: { cantidad: 0, monto: 0 },
+    cobros: { cantidad: cobros.cantidad, monto: round2(cobros.monto) },
+    heredados: { cantidad: heredados.cantidad, monto: round2(heredados.monto) },
   };
 }
 

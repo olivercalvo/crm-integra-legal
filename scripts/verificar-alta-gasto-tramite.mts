@@ -164,5 +164,29 @@ const r3 = await post(cookieAbogada, { ...base, concept: "Verificación B4: fech
 const { count: despues } = await db.from("expenses").select("*", { count: "exact", head: true }).eq("case_id", caso.id);
 marca(r3.status >= 400 && antes === despues, `[3] fecha 2025-12-15 → ${r3.status} "${String(r3.json.error ?? "").slice(0, 110)}" · gastos del caso antes ${antes} / después ${despues}`);
 
+// 4. entrada (a): "Ya se pagó" = alta + pago, como abogada
+const r4 = await post(cookieAbogada, { ...base, concept: "Verificación B4: ya se pagó (entrada a)", date: hoy });
+if (r4.status === 201) {
+  const id4 = r4.json.id as string;
+  const h: Record<string, string> = { cookie: cookieAbogada, "Content-Type": "application/json" };
+  if (BYPASS) h["x-vercel-protection-bypass"] = BYPASS;
+  const rp = await fetch(`${BASE}/api/expenses/${id4}/payments`, {
+    method: "POST",
+    headers: h,
+    body: JSON.stringify({ payment_date: hoy, amount: 32.34, method: "transferencia", payment_account_code: "100001", reference: "TRF-B4", notes: null }),
+    redirect: "manual",
+  });
+  const jp = (await rp.json().catch(() => ({}))) as Record<string, unknown>;
+  const { data: g4 } = await db.from("expenses").select("status, amount_paid").eq("id", id4).maybeSingle();
+  const { data: sp } = await db.from("supplier_payments").select("payment_number, expense_id, business_expense_id").eq("payment_number", String(jp.payment_number ?? "")).maybeSingle();
+  const { data: jePago } = await db.from("journal_entries").select("entry_number").eq("source_type", "pago_proveedor").eq("source_id", String(jp.id ?? "")).maybeSingle();
+  marca(
+    rp.status === 201 && g4?.status === "pagado" && Number(g4?.amount_paid) === 32.34 && sp?.expense_id === id4 && sp?.business_expense_id === null && !!jePago,
+    `[4] "Ya se pagó" (abogada): alta 201 + pago ${rp.status} ${String(jp.payment_number ?? jp.error ?? "")} → gasto ${g4?.status} (${g4?.amount_paid}), expense_id ${sp?.expense_id === id4 ? "ok" : "NO"}, asiento del pago ${jePago?.entry_number ?? "—"}`
+  );
+} else {
+  marca(false, `[4] el alta para la entrada (a) devolvió ${r4.status}: ${JSON.stringify(r4.json).slice(0, 150)}`);
+}
+
 console.log(`\n════════ alta con posteo automático: ${ok} ✅ · ${fail} ❌ ════════`);
 process.exit(fail === 0 ? 0 : 1);

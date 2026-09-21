@@ -115,6 +115,33 @@ FAC-HON-000007"), que ya es lo que hace `cobros-list.tsx`.
    - La verificación del 21/09 (REC-000004/000005, una factura) tiene que repetirse tal cual al
      cerrar: el atajo tiene que dar el mismo resultado.
 
+### Precisiones de Oliver al aprobar (21/09/2026)
+
+1. **El excedente se impide, pero el rechazo tiene que decir qué hacer** (SOP-027, lenguaje de
+   contador): nombrar los dos montos y proponer la salida. Texto acordado como base:
+   *"La transferencia es de B/. 1,500.00 y las facturas seleccionadas suman B/. 1,355.00. Un recibo
+   tiene que coincidir con la transferencia para que el banco concilie. Seleccione otra factura
+   pendiente del mismo cliente por el resto (B/. 145.00) o ajuste el monto."* Registrar solo la parte
+   aplicada rompe la conciliación; por eso no se ofrece.
+2. **`reference` del asiento → número de recibo: nadie depende de que sea un número de factura.**
+   Verificado el 21/09: `journal_entries.reference` de un cobro lo escribe `construirAsientoDeCobro`
+   (`facturas[0]`), lo copia `reversion.ts` al espejo y el RPC de la 046 lo copia igual
+   (`v_orig_ref`). **Ningún reporte ni pantalla lo lee:** el Diario General saca la columna
+   Documento de `payments.reference` (la referencia bancaria), no del asiento; el Libro Mayor no
+   selecciona `reference`; el Estado de Cuenta lee `payments.reference`; el Resumen de ITBMS usa
+   `tax_payments.reference_number`; la exportación XLSX no lo toca. En tests solo aparece como
+   valor de fixture (`reversion.test.ts`, `payments-reversal.test.ts`), nunca como afirmación de
+   que sea una factura. Adelante: `reference = payment_number`, siempre (también con una factura).
+   Hace falta que `cargarCobroParaAsiento` lea `payment_number`.
+
+### 📌 Para preguntarle a Josuarth (desbloquea `amount_unapplied`)
+
+> ¿Dónde va el excedente cuando un cliente transfiere más que sus facturas pendientes? ¿Queda como
+> saldo acreedor en 100004 o se crea una cuenta de anticipos de clientes?
+
+Hasta que conteste, el alta rechaza el excedente con el mensaje de la precisión 1. Y una cuenta
+por cobrar con saldo acreedor no es una cuenta por cobrar (Oliver, 21/09).
+
 ### Orden de commits propuesto (cuando Oliver diga)
 
 1. `createPayment` + validador con `applications[]` + ruta nueva + la ruta vieja como atajo + tests.

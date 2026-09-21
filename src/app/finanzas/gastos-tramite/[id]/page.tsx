@@ -10,12 +10,15 @@ import {
   History,
   Scale,
   Truck,
+  Undo2,
 } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { formatDate } from "@/lib/utils/format-date";
 import { getGastoTramiteContable } from "@/lib/finanzas/queries/expense-tramite";
 import { PostToLedgerButton } from "./_components/post-to-ledger-button";
+import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { formatDateTime } from "@/lib/utils/format-date";
 import {
   cuentaLabel,
   haySinClasificar,
@@ -91,6 +94,14 @@ const READING_ROLES = ["admin", "abogada", "contador"];
  */
 const POSTING_ROLES = ["admin", "abogada"];
 
+/**
+ * Quién puede REVERSAR un gasto ya asentado (Bloque 4, 050). Los mismos que
+ * reversan un cobro o un pago a proveedor: admin, abogada y contador. El
+ * contador no postea (Legal), pero corregir el libro es su trabajo. Tiene que
+ * coincidir con `MUTATING_ROLES` de `POST /api/expenses/[id]/reverse`.
+ */
+const REVERSING_ROLES = ["admin", "abogada", "contador"];
+
 interface PageProps {
   params: { id: string };
 }
@@ -113,6 +124,17 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
 
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
+  const anulado = gasto.status === "anulado";
+
+  // Reversar: con asiento, no anulado, sin pagos registrados (primero los
+  // pagos, 050) y con rol. El botón se oculta cuando no se puede apretar; el
+  // RPC rechaza igual.
+  const puedeReversar =
+    REVERSING_ROLES.includes(ctx.userRole) &&
+    posteado &&
+    !anulado &&
+    gasto.asiento !== null &&
+    gasto.amount_paid <= 0;
 
   // El botón aparece solo cuando la acción se puede ejecutar de verdad. Si falta
   // clasificar, el aviso ámbar de más abajo ya explica qué hacer y un botón
@@ -146,7 +168,12 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           </div>
 
           <div className="flex flex-col items-end gap-2">
-            {posteado ? (
+            {anulado ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                <Undo2 size={14} />
+                Anulado{gasto.reversion ? ` · asiento ${gasto.reversion.entry_number}` : ""}
+              </span>
+            ) : posteado ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                 <BookOpenCheck size={14} />
                 Asiento {gasto.entry_number}
@@ -225,6 +252,47 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           </dl>
         )}
       </div>
+
+      {/* ── Reversión (050) ────────────────────────────────────────── */}
+      {anulado && gasto.reversion && (
+        <div className="flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+          <Undo2 size={18} className="mt-0.5 shrink-0 text-red-600" />
+          <div className="text-sm text-red-800">
+            <p className="font-semibold">
+              Gasto reversado el {formatDateTime(gasto.reversion.reversed_at)}
+              {gasto.reversion.reversed_by_name ? ` por ${gasto.reversion.reversed_by_name}` : ""}.
+            </p>
+            <p className="mt-1">
+              El asiento {gasto.reversion.reversed_entry_number} sigue en el libro; el asiento{" "}
+              {gasto.reversion.entry_number} es su espejo. Motivo: {gasto.reversion.reason}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {puedeReversar && gasto.asiento && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+          <p className="text-sm text-amber-900">
+            Este gasto está en el libro (asiento {gasto.entry_number}) y no se puede editar ni
+            borrar. Si está mal, se <strong>reversa</strong>: el asiento queda y se postea su
+            espejo con la fecha de hoy.
+          </p>
+          <ReversePaymentDialog
+            variante="gasto"
+            paymentId={gasto.id}
+            paymentLabel={`B/. ${fmtMoney(gasto.totales.total)} del ${formatDate(gasto.date)}`}
+            asiento={gasto.asiento}
+            invoiceNumber={gasto.case_code ?? "—"}
+          />
+        </div>
+      )}
+
+      {posteado && !anulado && REVERSING_ROLES.includes(ctx.userRole) && gasto.amount_paid > 0 && (
+        <p className="text-xs text-gray-500">
+          Este gasto tiene pagos registrados por B/. {fmtMoney(gasto.amount_paid)}. Para reversarlo,
+          primero hay que eliminar o reversar sus pagos.
+        </p>
+      )}
 
       {/* ── Avisos ─────────────────────────────────────────────────── */}
       {/* Aviso de gasto histórico.

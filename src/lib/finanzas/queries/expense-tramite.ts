@@ -35,6 +35,9 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AsientoDeCobro, ReversionDeCobro } from "@/lib/finanzas/types/payment";
+import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
+import { SOURCE_TYPE_GASTO_TRAMITE } from "@/lib/finanzas/contabilidad/asiento-gasto-tramite";
 
 import {
   totalesDeLineas,
@@ -77,6 +80,17 @@ export interface GastoTramiteContable {
   receipt_filename: string | null;
   /** Número del asiento que lo registró, si ya está posteado. */
   entry_number: number | null;
+  /**
+   * Estado del gasto (049): pendiente_pago / parcialmente_pagado / pagado los
+   * derivan los pagos; anulado lo escribe la reversión (050).
+   */
+  status: GastoTramiteStatus;
+  /** DERIVADA (049): suma de los pagos registrados. No se escribe. */
+  amount_paid: number;
+  /** El asiento original con sus líneas, para reversar. null si no está posteado. */
+  asiento: AsientoDeCobro | null;
+  /** Si el gasto fue reversado (050), cómo. */
+  reversion: ReversionDeCobro | null;
   lineas: ExpenseLineRow[];
   totales: TotalesDeGasto;
 }
@@ -98,7 +112,7 @@ export async function getGastoTramiteContable(
     .select(
       `id, date, concept, expense_type, amount, due_date,
        receipt_url, receipt_filename,
-       supplier_id,
+       supplier_id, status, amount_paid,
        cases!inner(case_code),
        suppliers(legal_name, ruc, dv)`
     )
@@ -118,7 +132,11 @@ export async function getGastoTramiteContable(
     | { legal_name: string; ruc: string | null; dv: string | null }
     | null;
 
-  const lineas = await getLineasDeGastoTramite(db, tenantId, id);
+  const [lineas, asiento, reversion] = await Promise.all([
+    getLineasDeGastoTramite(db, tenantId, id),
+    getAsientoDeGastoTramite(db, tenantId, id),
+    getReversionDeGastoTramite(db, tenantId, id),
+  ]);
 
   return {
     id: String(fila.id),
@@ -135,7 +153,11 @@ export async function getGastoTramiteContable(
     supplier_dv: prov?.dv ?? null,
     tiene_comprobante: Boolean(fila.receipt_url),
     receipt_filename: (fila.receipt_filename as string | null) ?? null,
-    entry_number: await getNumeroDeAsiento(db, tenantId, id),
+    entry_number: asiento ? asiento.entry_number : await getNumeroDeAsiento(db, tenantId, id),
+    status: statusDeGasto(fila.status),
+    amount_paid: Number(fila.amount_paid ?? 0),
+    asiento,
+    reversion,
     lineas,
     totales: totalesDeLineas(lineas),
   };
@@ -386,4 +408,68 @@ export async function contarLineasSinClasificar(
   ]);
 
   return { sinClasificar: sin ?? 0, total: total ?? 0 };
+}
+
+export type GastoTramiteStatus = "pendiente_pago" | "parcialmente_pagado" | "pagado" | "anulado";
+
+function statusDeGasto(v: unknown): GastoTramiteStatus {
+  return v === "parcialmente_pagado" || v === "pagado" || v === "anulado" ? v : "pendiente_pago";
+}
+
+/**
+ * El asiento original (`gasto_tramite`) de un gasto, con sus líneas, o null.
+ * Es lo que `construirAsientoDeReversion` espeja; el RPC de la 050 lo verifica.
+ */
+export async function getAsientoDeGastoTramite(
+  db: DB,
+  tenantId: string,
+  expenseId: string
+): Promise<AsientoDeCobro | null> {
+  const mapa = await cargarAsientosPorOrigen(db, tenantId, SOURCE_TYPE_GASTO_TRAMITE, [expenseId]);
+  return mapa.get(expenseId) ?? null;
+}
+
+/**
+ * La reversión de un gasto (050), si la hay: el asiento espejo lleva
+ * `source_type = 'reversion'` y el MISMO `source_id` (el gasto), igual que en
+ * cobros y pagos a proveedor.
+ */
+export async function getReversionDeGastoTramite(
+  db: DB,
+  tenantId: string,
+  expenseId: string
+): Promise<ReversionDeCobro | null> {
+  const { data, error } = await db
+    .from("journal_entries")
+    .select("entry_number, reversal_reason, created_by, created_at, reverses:journal_entries!journal_entries_reverses_entry_id_fkey(entry_number)")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", "reversion")
+    .eq("source_id", expenseId)
+    .maybeSingle();
+  if (error) {
+    console.error("[finanzas/queries] getReversionDeGastoTramite failed", error);
+    return null;
+  }
+  if (!data) return null;
+  type Fila = {
+    entry_number: number;
+    reversal_reason: string | null;
+    created_by: string | null;
+    created_at: string;
+    reverses: { entry_number: number } | { entry_number: number }[] | null;
+  };
+  const f = data as unknown as Fila;
+  const orig = Array.isArray(f.reverses) ? f.reverses[0] : f.reverses;
+  let nombre: string | null = null;
+  if (f.created_by) {
+    const { data: u } = await db.from("users").select("full_name").eq("id", f.created_by).maybeSingle();
+    nombre = (u?.full_name as string | null) ?? null;
+  }
+  return {
+    entry_number: Number(f.entry_number),
+    reversed_entry_number: Number(orig?.entry_number ?? 0),
+    reason: f.reversal_reason ?? "",
+    reversed_at: f.created_at,
+    reversed_by_name: nombre,
+  };
 }

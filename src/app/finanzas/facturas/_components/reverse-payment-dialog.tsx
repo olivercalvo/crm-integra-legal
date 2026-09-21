@@ -25,18 +25,21 @@ interface Props {
   /**
    * `"cobro"` (default): recibo de caja → `/api/finanzas/payments/[id]/reverse`.
    * `"pago"`: pago a PROVEEDOR (Bloque 3) → `/api/finanzas/supplier-payments/[id]/reverse`.
-   * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra). La vista
-   * previa es la MISMA función para los dos: `reversion-una-sola-implementacion`
-   * lo vigila leyendo este archivo.
+   * `"gasto"`: GASTO DE TRÁMITE contabilizado (Bloque 4) → `/api/expenses/[id]/reverse`.
+   * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra ↔ gasto/caso).
+   * La vista previa es la MISMA función para los tres:
+   * `reversion-una-sola-implementacion` lo vigila leyendo este archivo.
    */
-  variante?: "cobro" | "pago";
+  variante?: "cobro" | "pago" | "gasto";
 }
 
 const TEXTOS = {
   cobro: {
     endpoint: (id: string) => `/api/finanzas/payments/${id}/reverse`,
     cosa: "cobro",
-    documento: "factura",
+    aplicadoA: "aplicado a",
+    consecuencia: "el cobro queda anulado y la factura vuelve a mostrar el saldo pendiente",
+    siOcurrio: "si el cobro sí ocurrió, hay que registrarlo de nuevo",
     titulo: "Reversar cobro",
     placeholder: "Ej: Cheque devuelto por el banco, cobro registrado a la factura equivocada…",
     error: "No se pudo reversar el cobro.",
@@ -45,11 +48,24 @@ const TEXTOS = {
   pago: {
     endpoint: (id: string) => `/api/finanzas/supplier-payments/${id}/reverse`,
     cosa: "pago",
-    documento: "compra",
+    aplicadoA: "aplicado a",
+    consecuencia: "el pago queda anulado y la compra vuelve a mostrar el saldo pendiente",
+    siOcurrio: "si el pago sí ocurrió, hay que registrarlo de nuevo",
     titulo: "Reversar pago",
     placeholder: "Ej: Transferencia rechazada, pago registrado a la compra equivocada…",
     error: "No se pudo reversar el pago.",
     enCurso: "Posteando el espejo y devolviendo el saldo a la compra…",
+  },
+  gasto: {
+    endpoint: (id: string) => `/api/expenses/${id}/reverse`,
+    cosa: "gasto de trámite",
+    aplicadoA: "del caso",
+    consecuencia: "el gasto queda anulado y sale de la cuenta por pagar",
+    siOcurrio: "si el gasto sí ocurrió, hay que registrarlo de nuevo desde el caso",
+    titulo: "Reversar gasto de trámite",
+    placeholder: "Ej: Gasto cargado al caso equivocado, monto mal tipeado…",
+    error: "No se pudo reversar el gasto.",
+    enCurso: "Posteando el espejo y anulando el gasto…",
   },
 } as const;
 
@@ -193,14 +209,12 @@ export function ReversePaymentDialog({
               <p>
                 Vas a reversar el {t.cosa} de{" "}
                 <span className="font-semibold text-integra-navy">{paymentLabel}</span>{" "}
-                aplicado a <span className="font-mono font-semibold">{invoiceNumber}</span>.
+                {t.aplicadoA} <span className="font-mono font-semibold">{invoiceNumber}</span>.
               </p>
               <p>
                 El asiento <span className="font-mono">{asiento.entry_number}</span> no se
                 borra: se postea su <span className="font-semibold">espejo</span> con la
-                fecha de hoy, el {t.cosa} queda anulado y la {t.documento} vuelve a mostrar el
-                saldo pendiente. Es irreversible: si el {t.cosa} sí ocurrió, hay que
-                registrarlo de nuevo.
+                fecha de hoy, {t.consecuencia}. Es irreversible: {t.siOcurrio}.
               </p>
             </div>
           </div>

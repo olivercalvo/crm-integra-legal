@@ -45,14 +45,15 @@ BEGIN
   END IF;
   RAISE NOTICE 'Compra % · total %', v_compra, v_total;
 
-  -- [1] Backfill: toda compra 'pagado' tiene exactamente un saldo heredado por su total.
+  -- [1] Ninguna compra 'pagado' sin pagos detrás: o un saldo heredado del backfill
+  --     o pagos reales (desde el 21/09 conviven) que sumen su total.
   SELECT COUNT(*) INTO v_n FROM business_expenses b
    WHERE b.tenant_id = v_tenant AND b.status = 'pagado'
-     AND NOT EXISTS (SELECT 1 FROM supplier_payments sp WHERE sp.business_expense_id = b.id
-                       AND sp.kind = 'migrated_balance' AND sp.amount = b.total AND sp.status = 'registrado');
+     AND b.total > (SELECT COALESCE(SUM(sp.amount), 0) FROM supplier_payments sp
+                     WHERE sp.business_expense_id = b.id AND sp.status = 'registrado');
   SELECT COUNT(*) INTO v_heredados FROM supplier_payments WHERE tenant_id = v_tenant AND kind = 'migrated_balance';
   IF v_n = 0 THEN
-    RAISE NOTICE '[1] saldos heredados .......................... ✅ % compras pagadas, cada una con su saldo por el total', v_heredados;
+    RAISE NOTICE '[1] saldos heredados .......................... ✅ % saldos heredados; toda compra pagada tiene pagos por su total', v_heredados;
     v_ok := v_ok + 1;
   ELSE
     RAISE NOTICE '[1] saldos heredados .......................... ❌ % compras pagadas sin saldo heredado', v_n;

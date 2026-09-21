@@ -1,5 +1,96 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Recibo de caja como módulo real — Bloque 2] - 2026-09-21
+
+Un cobro es ahora un **recibo de caja** con número correlativo, pantalla propia y PDF. Siete
+commits en `develop` (plan aprobado por Oliver el 21/09; orden C.8): `bb7e902` docs del 18/09,
+`d45e63e` migración 047, `1e4e2ce` numeración, `6021dc6` formulario compartido, `e33583d`
+listado y alta, `6d0f621` PDF, más `8450bc7` (seed), `6355251` y `a1a8c50` (dos hallazgos de
+modal). **Staging solamente: la 047 está aplicada SOLO en staging, `main` no se tocó.**
+
+### Numeración `REC-000001` (migración `047`)
+
+- Secuencia `'payment'` en `numbering_sequences` (CHECK re-declarado con los SIETE valores: 021 y
+  033 ya habían sumado `client` y `supplier`), índice único parcial sobre `payment_number`, y
+  `documents` acepta `entity_type='payment'` + `source='auto_receipt_pdf'`.
+- **Backfill** (decisión de Oliver): los cobros existentes se numeran por `payment_date,
+  created_at, id` y `last_number` queda en el último. `backfill_payment_numbers(tenant)` es
+  idempotente; `seed-staging.ts` la vuelve a llamar después de sembrar pagos (dos caminos, como la
+  035). Staging: 3 cobros numerados; segunda aplicación numeró 0; verificación SQL 10/10.
+- `createPayment` toma el número con `get_next_sequence_number` **después de todas las
+  validaciones y antes del INSERT**, y lo escribe en el mismo INSERT
+  (`numbering/receipt-numbering.ts`, calco de `supplier-numbering`). 🔴 **Si el asiento falla, el
+  cobro se deshace pero el número ya se consumió: HUECO, decisión consciente** con el criterio de
+  `emitInvoice` (SOP-031). Un test lo fija como hecho documentado. La ruta devuelve
+  `payment_number` para el toast.
+
+### Dos puertas, un formulario
+
+- `components/finanzas/cobros/payment-form-fields.tsx`: campos, validación de cliente y body,
+  extraídos del diálogo "Registrar pago". Lo usan el diálogo y el alta nuevo; las dos pegan a
+  `POST /api/finanzas/invoices/[id]/payments`. Test estructural
+  (`payment-form-una-sola-implementacion.test.ts`) que falla si una puerta redeclara campos.
+- Detalle de factura: columna **Recibo** en "Pagos registrados" (tachado si está reversado), botón
+  **Recibo** (PDF) en cada fila, toast "Recibo REC-000012 registrado".
+
+### `/finanzas/cobros` — listado y alta (admin y abogada)
+
+- Listado: recibo, fecha, cliente, factura(s), monto, método + asiento, referencia, quién; filtros
+  por REC-, cliente, rango de fechas y vigentes/reversados; paginado. El reversado sale tachado con
+  motivo y asiento espejo — su factura la trae `payment_reversals`, porque la 046 borra las
+  aplicaciones. **Reversar reusa `reverse-payment-dialog.tsx`** sin moverlo de archivo.
+- Alta en dos pasos: 1) cliente (solo los que tienen facturas con saldo, cargadas de una vez) →
+  factura con su saldo; 2) los mismos campos del diálogo. "Próximo recibo: REC-000005" en el
+  encabezado. Redirige al listado con el toast.
+- Menú "Cobros" para admin y abogada. **El contador no entra** (mismo reparto que Facturas): baja
+  el PDF y reversa desde el detalle de la factura. Pendiente preguntarle a Josuarth si quiere el
+  listado (es material de conciliación); si sí, mover `nav-config.ts` y `route-access.ts` juntos.
+  `nav-guard.test.ts` en verde sin tocar `route-access`.
+
+### PDF del recibo
+
+- `ReceiptDocument.tsx` (react-pdf, navy/gold): "RECIBO DE CAJA" + número, cliente con **RUC y
+  DV en líneas separadas**, datos del cobro (fecha, método, banco, referencia, asiento, quién),
+  tabla "Aplicado a" (una fila por factura; el modelo admite varias), total cobrado, banda roja
+  **REVERSADO** con fecha/motivo/asiento espejo, pie "Documento interno de control. No es factura
+  ni documento fiscal".
+- `ensure-receipt-pdf.ts` calca `ensure-invoice-pdf`: cache por hash (misma serialización
+  canónica; entra `status` y la reversión, NO el saldo actual de la factura), blob en
+  `{tenant}/receipt_pdf/{id}/current.pdf`. `GET /api/finanzas/payments/[id]/pdf` con los mismos
+  roles que el PDF de factura (admin, abogada, contador), devuelve el archivo.
+
+### Hallazgos corregidos en el camino (`findings.md`)
+
+- **FND-005** — el seed "resucitaba" un cobro reversado: veía la aplicación borrada por la 046 y
+  la recreaba; T7a volvía a marcar la factura como cobrada. Ahora respeta los `anulado`. Staging
+  restaurado.
+- **FND-006** — `ConfirmationModal` sin `max-h`/`overflow`: con siete campos el botón de confirmar
+  quedaba fuera del viewport (710 px; en un celular, igual). Ahora scrollea por dentro. Lo usan 22
+  pantallas.
+- **FND-007** — el modal heredaba `text-right` de la celda que lo abría: la advertencia de
+  "Reversar cobro" salía alineada a la derecha. Era la verificación pendiente del 17/09. `text-left`.
+- **FND-008** — `render-pantalla.mts` "no se podía conectar" al deploy (el misterio del 17/09): Git
+  Bash convierte `/finanzas/...` en `C:/Program Files/Git/finanzas/...` (MSYS). Ahora imprime la
+  causa real; `MSYS_NO_PATHCONV=1` o PowerShell.
+
+### Verificado en el deploy de staging (`a1a8c50`, `dpl_AR71ni3hzxMsmNLFNz7dycm8q4S8`), con clic real como abogada
+
+- Diálogo del detalle de factura: `250` tecleado sobre `0.00` → `250.00`; REC-000004, asiento 22,
+  FAC-HON-000002 a *Pago parcial*, toast.
+- `/finanzas/cobros`: los 5 recibos, filtro "Solo vigentes" = 3, Reversar solo donde hay asiento.
+- **Reversar desde el listado con clic real** (cierra la verificación pendiente del 17/09): modal,
+  contador 2/1000 en ámbar y botón apagado con 2 caracteres, vista previa del espejo, POST →
+  asiento 23, fila tachada, factura *Emitida*.
+- PDF: REC-000004 vigente y REC-000003/REC-000004 reversados (banda roja), RUC y DV separados,
+  abre en pestaña nueva sin mover la del listado; regenerado a v2 al reversar.
+- Alta: solo 5 clientes con saldo, dos facturas de Vallarino con su saldo, `500` sobre saldo 107
+  rechazado en pantalla, `107` → REC-000005, asiento 24, FAC-HON-000008 *Pagada*, toast.
+- Roles por API: contador → 307 en `/finanzas/cobros`, 200 en el PDF, sin "Registrar pago" en el
+  detalle; asistente → 403 en el PDF, 307 a `/legal`.
+- **Sin ver:** el ancho de teléfono (el resize de la ventana no aplicó) — anotado.
+
+**1007/1007.** `tsc` y lint limpios. Producción no se tocó.
+
 ## [HOTFIX] - 2026-09-18 - Tipo 09 para reembolsos + gate invoice_kind ↔ service_type
 
 Branch `hotfix/tipo-09-y-gate-de-mezcla`, desde `main` (`d5ac249`). Tres commits de `develop`

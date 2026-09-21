@@ -2,8 +2,9 @@
 
 ## >>> RETOMAR ACÁ — BLOQUE 2: RECIBO DE CAJA COMO MÓDULO REAL — 21/09/2026 <<<
 
-**Estado:** plan aprobado por Oliver el 21/09/2026. En construcción en `develop`. **Staging
-solamente: producción no se toca, no hay merge a `main`.**
+**Estado:** CONSTRUIDO y verificado en el deploy de staging `a1a8c50`
+(`dpl_AR71ni3hzxMsmNLFNz7dycm8q4S8`). 1007/1007. **Staging solamente: la 047 está aplicada SOLO en
+staging, producción no se toca, no hay merge a `main`.** Detalle en `changelog.md` y `sop.md` SOP-031.
 
 ### Decisiones cerradas (no se reabren)
 
@@ -44,33 +45,39 @@ dice que sí, es agregar `"contador"` a la lista de roles del ítem en `nav-conf
 ### Orden de commits (C.8 del plan)
 
 - [x] 1. Cierre del 18/09 en `ESTADO-Y-HANDOFF.md` y `task_plan.md`.
-- [ ] 2. Migración `047_recibo_de_caja.sql` + `sql/tests/verificacion-047-recibo-de-caja.sql` +
+- [x] 2. Migración `047_recibo_de_caja.sql` + `sql/tests/verificacion-047-recibo-de-caja.sql` +
       inventario → aplicar en staging.
-- [ ] 3. `createPayment` numera + `formatReceiptNumber` + tests del gate.
-- [ ] 4. `payment-form-fields.tsx` extraído + diálogo usándolo + test estructural. **Verificar en el
+- [x] 3. `createPayment` numera + `formatReceiptNumber` + tests del gate.
+- [x] 4. `payment-form-fields.tsx` extraído + diálogo usándolo + test estructural. **Verificar en el
       deploy antes de seguir.**
-- [ ] 5. Queries + `/finanzas/cobros` listado y alta + nav.
-- [ ] 6. PDF completo (`ReceiptDocument`, `ensure-receipt-pdf`, ruta, hash) + botones en las dos
+- [x] 5. Queries + `/finanzas/cobros` listado y alta + nav.
+- [x] 6. PDF completo (`ReceiptDocument`, `ensure-receipt-pdf`, ruta, hash) + botones en las dos
       pantallas. **Verificar en el deploy antes de seguir.**
-- [ ] 7. Docs (changelog, SOP-031, productdesign, CLAUDE.md) + cierre con el SHA vivo en staging.
+- [x] 7. Docs (changelog, SOP-031, productdesign, CLAUDE.md) + cierre con el SHA vivo en staging.
 
 ### Verificación en pantalla (C.7 del plan) — contra el deploy de staging
 
 Como admin o abogada (el usuario de staging es contador; hace falta el otro):
-- [ ] `/finanzas/cobros` en el menú; listado con los cobros existentes ya numerados.
-- [ ] Alta desde `/finanzas/cobros/nuevo`: cliente → facturas cobrables con saldo → monto sobre el
+- [x] `/finanzas/cobros` en el menú; listado con los cobros existentes ya numerados (5, filtro vigentes = 3).
+- [x] Alta desde `/finanzas/cobros/nuevo` (REC-000005, asiento 24): cliente → facturas cobrables con saldo → monto sobre el
       saldo rechazado → guardar → toast con `REC-`, fila nueva, asiento nuevo, `amount_paid` derivado.
-- [ ] Otro cobro desde el diálogo del detalle de factura → el número es el siguiente correlativo.
-- [ ] PDF desde el listado y desde la fila del detalle: RUC y DV separados, leyenda de no fiscal,
+- [x] Otro cobro desde el diálogo del detalle de factura (REC-000004, asiento 22) → el número es el siguiente correlativo.
+- [x] PDF desde el listado y desde la fila del detalle: RUC y DV separados, leyenda de no fiscal,
       nombre `REC-000012.pdf`, descarga sin cambiar de pestaña.
-- [ ] **Reversar desde el listado con CLIC REAL** — cierra la verificación pendiente del bloque de
+- [x] **Reversar desde el listado con CLIC REAL** (asiento 23; encontró FND-007) — cierra la verificación pendiente del bloque de
       reversión (modal, textarea, vista previa, botón a los 3 caracteres) → fila tachada → PDF con
       la banda roja.
-- [ ] `MoneyInput` del alta tecleado a mano; selector de factura al cambiar de cliente; wizard en
-      ancho de teléfono.
+- [x] `MoneyInput` del alta tecleado a mano (`107` → `107.00`); selector de factura al cambiar de cliente.
+- [ ] **Wizard en ancho de teléfono — SIN VER**: el resize de la ventana de Chrome no aplicó. Queda para
+      la próxima sesión con la extensión (o en un celular real).
 
 Como contador: `/finanzas/cobros` rebota a `/finanzas/reportes`; en el detalle de factura ve N° +
 PDF + Reversar y no ve Registrar. Como asistente: 403 en el PDF.
+
+### Hallazgos del bloque (todos corregidos, ver `findings.md`)
+
+- FND-005 el seed resucitaba cobros reversados · FND-006 el modal no scrolleaba · FND-007 el modal
+  heredaba `text-right` de la celda · FND-008 `render-pantalla` y Git Bash (`MSYS_NO_PATHCONV=1`).
 
 ### Lo que NO entra en este bloque, anotado
 

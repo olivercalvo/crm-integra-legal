@@ -4,6 +4,72 @@
 
 ---
 
+## Cierre del 21/09/2026 — Bloque 2: recibo de caja como módulo real
+
+**SHA de la app en staging: `a1a8c50`** — deployment `dpl_AR71ni3hzxMsmNLFNz7dycm8q4S8`, READY,
+aliaseado a `https://crm-integra-legal-git-develop-olivercalvos-projects.vercel.app` (log del
+build: `Commit: a1a8c50`). Encima va sólo el commit de estos documentos.
+
+🔴 **`main` sigue en `24b227a`. Producción NO se tocó.** La migración `047` está aplicada SOLO en
+staging (igual que la `045` y la `046`).
+
+**1007 tests, 1007 pass.** `tsc` limpio. Lint limpio en lo tocado (los 4 warnings de `alt` en los
+PDF viejos son preexistentes).
+
+### Qué entró (`changelog.md`, entrada del 21/09; reglas en `sop.md` SOP-031 y CLAUDE.md)
+
+Un cobro es un recibo de caja `REC-000001`: migración `047` con backfill, `createPayment` numera
+antes del INSERT (huecos aceptados a conciencia), formulario compartido entre el diálogo y
+`/finanzas/cobros/nuevo`, listado `/finanzas/cobros` (admin y abogada) con Reversar reusando el
+diálogo del 17/09, y PDF con cache por hash que se regenera al reversar. Más cuatro hallazgos
+corregidos (FND-005 a 008), dos de ellos en `ConfirmationModal`, que usan 22 pantallas.
+
+### Verificado en el deploy con clic real (abogada `abogada@staging.test`) y por API (contador, asistente)
+
+Todo el C.7 del plan menos el ancho de teléfono: alta desde el diálogo (REC-000004 → asiento 22),
+**reversar desde el listado con clic real** (asiento 23 — la verificación que quedó pendiente
+del 17/09, ya cerrada), PDF vigente y reversado, alta desde `/finanzas/cobros/nuevo` con rechazo
+por saldo y después REC-000005 → asiento 24 → FAC-HON-000008 *Pagada*, contador 307/200/sin
+"Registrar", asistente 403/307. Lista completa en el changelog.
+
+**Estado de staging al cerrar:** REC-000001 y REC-000002 registrados (del seed), REC-000003 y
+REC-000004 reversados (asientos 21 y 23), REC-000005 registrado (asiento 24). `last_number` = 5.
+
+### Lo que quedó sin verificar
+
+1. **El wizard y el listado en ancho de teléfono.** `resize_window` de la extensión no aplicó (la
+   captura siguió a 1425 px). La estructura es la misma que `invoices-list` (cards bajo `lg:`),
+   pero no está mirada.
+2. **El diálogo del detalle de factura como contador** solo se vio por API (HTML servido): botón
+   Recibo presente, "Registrar pago" ausente. El modal de Reversar abierto como contador, no.
+
+### Cómo se verificó (para repetirlo)
+
+- Extensión de Chrome: conecta, pero se cae cada tantas acciones y las capturas a veces salen
+  recortadas o "renderer frozen"; reintentar una vez alcanza. Los clics por `ref` de `find` son
+  más confiables que por coordenadas. `form_input` no llena inputs controlados por React: hay
+  que teclear.
+- Login del deploy: la URL con `?x-vercel-protection-bypass=<secreto>&x-vercel-set-bypass-cookie=true`
+  deja la cookie y después se entra normal. Usuarios del seed en `docs`/salida de `seed:staging`.
+- `render-pantalla.mts` contra el deploy: **`MSYS_NO_PATHCONV=1`** adelante si es Git Bash
+  (FND-008). Con `STAGING_UI_EMAIL`/`PASSWORD` por env se puede probar cualquier rol del seed.
+
+### Pendiente, en orden
+
+1. **Preguntarle a Josuarth si el contador quiere ver `/finanzas/cobros`** (material de
+   conciliación). Si sí: `"contador"` en el ítem de `nav-config.ts` + `/finanzas/cobros` en
+   `CONTADOR_FINANZAS_PREFIXES`, juntos.
+2. El ancho de teléfono del punto anterior.
+3. Lo que ya estaba: compra con dos líneas por pantalla; revisión de usabilidad; el módulo de
+   PAGO a proveedores (el de cobro ya está); las 20 líneas de trámite sin cuenta; tres mejoras
+   contables; `HON-FAM`/`HON-OTROS`; el bloque `022`; reversión de asientos manuales y de
+   gastos de trámite.
+4. Cuando la `047` vaya a producción: pre-flight del encabezado del archivo (ningún
+   `payment_number` con formato distinto de `REC-######`), y la `045`/`046` van antes.
+
+---
+
+
 ## Cierre del 18/09/2026 — el hotfix del tipo 09 salió a producción
 
 **SHA de la app en staging: `4c01360`** — deployment `dpl_D82X93ttB8pRNGm3EKuVQzRjmezQ`, READY, 18/09

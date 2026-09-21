@@ -2269,3 +2269,94 @@ mal, no la pantalla**: se corrige ahí y cambia en los dos lados.
   FND-005 (21/09/2026): el seed veía la aplicación borrada por la reversión y la volvía a crear.
   Desde ese día `seedPayments()` respeta los cobros `anulado` y lo dice en el resumen ("N
   reversados en staging, sin tocar"). Si vuelve a pasar, revisar que ese guard siga ahí.
+
+## SOP-031: Recibo de caja — numeración `REC-`, huecos aceptados, PDF y dos puertas
+
+**Por qué existe:** desde el 21/09/2026 un cobro es un recibo de caja con número propio,
+pantalla propia (`/finanzas/cobros`) y PDF. Este SOP fija las decisiones que no se deducen del
+código y que alguien podría "arreglar" sin saber por qué están así.
+
+### 1. El número: correlativo interno, no fiscal
+
+`payments.payment_number` = `REC-` + seis dígitos, de la secuencia `'payment'` de
+`numbering_sequences` (migración `047`), por la MISMA RPC `get_next_sequence_number` que
+facturas, cotizaciones, clientes y proveedores. Un recibo de caja **no es documento fiscal en
+Panamá**: no pasa por la DGI, no lleva CUFE, y por eso el correlativo lo lleva el bufete.
+
+Formato en `numbering/receipt-numbering.ts` (`formatReceiptNumber`). Es el mismo que escribe
+el backfill de la 047 (`'REC-' || lpad(n, 6, '0')`); un test lo fija. Índice único parcial
+sobre `(tenant_id, payment_number)`.
+
+### 2. 🔴 Los huecos en la numeración son una decisión, no un descuido
+
+`createPayment` toma el número **después de todas las validaciones y antes del INSERT**, y lo
+escribe en el mismo INSERT. Si después falla la aplicación o el asiento (período cerrado, banco
+inválido), el DELETE compensatorio deshace el cobro, pero **el número ya se consumió**: la
+secuencia no tiene rollback, y no puede tenerlo sin que dos altas concurrentes compartan un
+número. Queda un HUECO.
+
+Se acepta a conciencia (Oliver, 21/09/2026), con el criterio de `emitInvoice`:
+
+- Un hueco se explica. Un recibo no es fiscal, así que no tiene consecuencia ante la DGI.
+- La alternativa —numerar DESPUÉS del asiento— dejaría, si el UPDATE final falla, **un cobro
+  contabilizado sin recibo**, y ese estado no se puede compensar porque el asiento es inmutable.
+- Un RPC atómico (número + INSERT + aplicación + `post_journal_entry` en una transacción, como
+  `reverse_payment`) daría cero huecos. Se descartó para este bloque porque
+  `construirAsientoDeCobro` arma el asiento releyendo el cobro **ya insertado**
+  (`cargarCobroParaAsiento`); harían falta un loader desde el input y un RPC nuevo. Es un
+  bloque aparte, de un día, si algún día el bufete lo pide.
+
+Hay un test en `payments-gate.test.ts` que fija el hueco como hecho documentado: si alguien lo
+"arregla" moviendo el número después del asiento, el test lo nombra.
+
+### 3. Dos puertas, un formulario, una ruta
+
+Se registra desde el detalle de la factura (diálogo) o desde `/finanzas/cobros/nuevo` (dos
+pasos). Las dos usan `components/finanzas/cobros/payment-form-fields.tsx` (campos, validación
+de cliente, armado del body) y pegan a `POST /api/finanzas/invoices/[id]/payments` →
+`createPayment`. **No hay una segunda ruta ni una segunda validación.**
+`payment-form-una-sola-implementacion.test.ts` lee las dos puertas y falla si alguna vuelve a
+declarar sus campos. Cuando se agregue una puerta nueva, se suma a la lista `PUERTAS` de ese
+test.
+
+El día que entre "un recibo aplicado a varias facturas", nace `POST /api/finanzas/payments`
+con `applications[]`; hasta entonces `invoice_id` va en el path.
+
+### 4. El PDF: cache por hash, y se regenera al reversar
+
+`ensure-receipt-pdf.ts` es el espejo de `ensure-invoice-pdf.ts`: fila en `documents` con
+`entity_type='payment'` y `source='auto_receipt_pdf'` (047), blob en
+`{tenant}/receipt_pdf/{payment_id}/current.pdf` (la primera carpeta es el tenant, SOP-015),
+hash SHA-256 con la misma serialización canónica que factura y cotización
+(`receipt-pdf-hash.ts`).
+
+- **Entran al hash** `status` y la reversión: al reversar, el PDF cambia (banda roja, motivo,
+  asiento espejo) y se regenera solo en la próxima descarga.
+- **NO entra** el saldo actual de la factura: cambia con cada cobro posterior y el recibo es
+  una foto del cobro, no de la cuenta corriente.
+- **RUC y DV en dos campos** también en el PDF (`clients.digito_verificador`); un test busca
+  la concatenación.
+- La ruta `GET /api/finanzas/payments/[id]/pdf` devuelve el ARCHIVO (`serveStorageFile`), con
+  los mismos roles que el PDF de la factura (admin, abogada, contador). Un test cruza las dos
+  listas.
+
+### 5. El backfill y el seed
+
+La 047 numera todos los cobros existentes por `payment_date, created_at, id` y deja
+`last_number` en el último. Es idempotente (numera solo los NULL). `seed-staging.ts` llama a la
+misma función después de sembrar pagos, porque en un `--reset` la migración corre sobre
+`payments` vacía. **Un cobro reversado conserva su número.**
+
+⚠️ Y desde el mismo día el seed **respeta los cobros `anulado`**: antes recreaba la aplicación
+que la reversión había borrado y la factura volvía a "pagada" (FND-005).
+
+### Qué mirar si algo falla
+
+- *"No se pudo asignar el número de recibo. ¿Está aplicada la migración 047…?"* → la secuencia
+  `'payment'` no existe en esa base. Aplicar la 047.
+- Un `REC-` salteado en el listado → un alta que falló después del correlativo. Buscar en los
+  logs el `DELETE compensatorio`; no es un bug, ver el punto 2.
+- Un cobro sin número en el listado → base sin backfill. Correr la 047 (es idempotente) o
+  `SELECT backfill_payment_numbers('<tenant>')`.
+- El PDF de un cobro reversado sale sin la banda → el hash no cambió: revisar que
+  `buildReceiptPdfPayload` siga incluyendo `status` y `reversion`.

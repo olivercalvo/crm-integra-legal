@@ -658,6 +658,58 @@ trabajo. Registrar y eliminar cobros siguen siendo de admin y abogada.
 **La fecha.** Siempre la de la reversión (acta del 09/09/2026). El mes del error queda como se
 reportó; la corrección aparece en el mes en que se hizo.
 
+**Desde el 21/09/2026 también se reversa desde `/finanzas/cobros`**, con el mismo modal. Y el
+recibo en PDF de un cobro reversado se regenera solo, con la banda roja y el asiento espejo.
+
+---
+
+### RECIBO DE CAJA — el cobro tiene documento propio
+
+**Qué es.** Cada cobro registrado es un recibo de caja numerado `REC-000001`, `REC-000002`… Es
+un correlativo interno del bufete: un recibo de caja **no es documento fiscal en Panamá**, no
+pasa por la DGI ni lleva CUFE. La factura fiscal sigue siendo la factura.
+
+**Dónde se ve.** Módulo Finanzas → **Cobros** (`/finanzas/cobros`): el listado de todos los
+recibos, más nuevos primero, con cliente, factura, monto, método, si tiene asiento, quién lo
+registró; filtros por número, cliente, rango de fechas y vigentes/reversados. Cada fila ofrece
+**Recibo** (el PDF) y **Reversar** (si tiene asiento). Y en el detalle de la factura, la
+columna "Recibo" de "Pagos registrados" muestra el número y ofrece el PDF.
+
+**Cómo se registra.** Dos puertas, un solo formulario:
+- Desde la factura, como siempre: botón "Registrar pago".
+- Desde **Cobros → Registrar cobro**, en dos pasos: 1) el cliente (solo aparecen los que
+  tienen facturas con saldo) y la factura (con su saldo a la vista); 2) fecha, monto, método,
+  banco, referencia, notas — exactamente los mismos campos del diálogo. El encabezado dice
+  cuál va a ser el próximo número.
+
+Al terminar, "Recibo REC-000012 registrado". El cobro sigue generando su asiento como hoy.
+
+**El PDF.** Mismo diseño que la factura (navy/gold): "RECIBO DE CAJA" + número, el cliente con
+**RUC y DV en líneas separadas**, fecha, método, banco, referencia, asiento, quién lo registró,
+la tabla "Aplicado a" con la factura (una hoy; el modelo admite varias), el total cobrado y el
+pie *"Documento interno de control. No es factura ni documento fiscal"*. Se genera al pedirlo
+y se guarda; si el cobro cambia (se reversa), se regenera con la banda **REVERSADO**, la fecha,
+el motivo y el asiento espejo. Se descarga sin cambiar de pestaña.
+
+**Los cobros de antes.** Todos los cobros existentes recibieron su número en orden
+cronológico (`payment_date`), de una vez, para que el listado no tenga unos con recibo y otros
+sin. Un cobro reversado conserva su número: existió, y el número no se reusa.
+
+**Huecos en la numeración.** Si un alta falla después de tomar el número (por ejemplo, el
+período contable está cerrado), el cobro se deshace pero el número ya se consumió y queda un
+hueco. Es una decisión consciente, la misma que en facturas (`sop.md` SOP-031): un hueco se
+explica; un cobro contabilizado sin recibo no se podría corregir porque el asiento es inmutable.
+
+**Quién.** Admin y abogada ven Cobros y registran. El **contador** no entra al listado (mismo
+reparto que Facturas) pero descarga el recibo y reversa desde el detalle de la factura. Queda
+pendiente preguntarle a Josuarth si quiere ver el listado: es material de conciliación, y si
+dice que sí es un cambio de un rol en dos listas. El asistente no llega a nada de esto.
+
+**Fuera de alcance, a propósito.** Un recibo aplicado a varias facturas (el modelo lo soporta
+desde el día uno; la pantalla se hace cuando el bufete lo pida). Un detalle de cobro propio:
+el Libro Mayor sigue llevando al detalle de la factura, que es donde vive el cobro. Los cobros
+del caso (`client_payments`, módulo Legal) son otra cosa y no se cruzan con esto.
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

@@ -135,6 +135,7 @@ export function PaymentsSection({
           <table className="w-full text-sm">
             <thead className="border-b text-left text-xs uppercase tracking-wider text-gray-500">
               <tr>
+                <th className="pb-2 pr-3 font-semibold">Recibo</th>
                 <th className="pb-2 pr-3 font-semibold">Fecha</th>
                 <th className="pb-2 pr-3 font-semibold text-right">Monto</th>
                 <th className="pb-2 pr-3 font-semibold">Método</th>
@@ -155,6 +156,16 @@ export function PaymentsSection({
                   !reversado && canReverse && p.status === "registrado" && !!p.asiento;
                 return (
                   <tr key={p.id} className={reversado ? "bg-gray-50/70 text-gray-400" : ""}>
+                    {/* El número de recibo (047). Un cobro reversado conserva el suyo:
+                        existió, y el número no se reusa. Vacío solo si el cobro es
+                        anterior al backfill en una base donde la 047 no corrió. */}
+                    <td
+                      className={`py-2 pr-3 font-mono text-xs ${
+                        reversado ? "line-through" : "text-integra-navy font-semibold"
+                      }`}
+                    >
+                      {p.payment_number ?? ""}
+                    </td>
                     <td className={`py-2 pr-3 ${reversado ? "line-through" : "text-gray-900"}`}>
                       {formatDate(p.payment_date)}
                     </td>

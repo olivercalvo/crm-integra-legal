@@ -11,6 +11,7 @@ import {
   Zap,
   Loader2,
   AlertCircle,
+  CircleDollarSign,
 } from "lucide-react";
 
 /**
@@ -38,9 +39,11 @@ export function InvoiceSuccessToast() {
   const cancelled = searchParams.get("cancelled");
   const converted = searchParams.get("converted");
   const fe = searchParams.get("fe");
+  // `?recibo=REC-000012`: lo pone RegisterPaymentDialog al registrar un cobro.
+  const recibo = searchParams.get("recibo");
   const [visible, setVisible] = useState(false);
 
-  const anyParam = !!(saved || emitted || dgi || cancelled || converted || fe);
+  const anyParam = !!(saved || emitted || dgi || cancelled || converted || fe || recibo);
 
   useEffect(() => {
     if (!anyParam) return;
@@ -54,6 +57,7 @@ export function InvoiceSuccessToast() {
       url.searchParams.delete("cancelled");
       url.searchParams.delete("converted");
       url.searchParams.delete("fe");
+      url.searchParams.delete("recibo");
       router.replace(url.pathname + url.search, { scroll: false });
     }, 4000);
     return () => clearTimeout(timer);
@@ -68,7 +72,10 @@ export function InvoiceSuccessToast() {
   let icon: React.ReactNode;
   let message: string;
   let palette: "success" | "danger" | "info" | "warning" = "success";
-  if (fe === "sent") {
+  if (recibo) {
+    icon = <CircleDollarSign size={18} className="text-green-600 shrink-0" />;
+    message = `Recibo ${recibo} registrado`;
+  } else if (fe === "sent") {
     icon = <Zap size={18} className="text-green-600 shrink-0" />;
     message = "Factura autorizada por la DGI";
   } else if (fe === "pending") {

@@ -406,6 +406,31 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Vercel:** cuenta del CLIENTE (Integra Legal). El deploy se hace desde la cuenta del cliente. Oliver NO debe usar su propia cuenta de Vercel para este proyecto.
 - **Implicación:** las env vars de Supabase (URL, ANON_KEY, SERVICE_ROLE_KEY) y el proyecto de Vercel serán proporcionadas por el cliente. No asumir valores propios. Solicitar credenciales antes de configurar.
 
+### 🔴 El archivo de credenciales de producción — existe, y ningún agente lo toca
+
+`.env.produccion.local` guarda el `SUPABASE_SERVICE_ROLE_KEY` de **producción**
+(la clave que salta RLS). Existe por una sola razón: `scripts/backup-supabase.mjs`
+necesita leer producción para respaldarla, y **a propósito no usa `.env.local`** —
+desde Fase 0 `.env.local` apunta a staging, y un respaldo que guarda datos de
+prueba rotulándolos como producción es peor que no tener respaldo.
+
+**Lo corre la tarea programada de Windows «Respaldo Base Integra»**
+(`OneDrive\Backups\Respaldar-Base-Integra.bat`), fuera de Claude Code. El script
+es de **solo lectura** contra producción: descarga las tablas a JSON y los
+archivos del bucket, y aborta si el project ref no es el de producción.
+
+🔒 **Ningún agente lo lee, lo carga ni lo nombra.** Lo hacen cumplir
+`.claude/settings.json` (reglas `deny`) y el hook
+`.claude/hooks/bloquear-env-produccion.mjs`, que rechaza cualquier comando que
+mencione el archivo — `cat`, `type`, `Get-Content`, `source`, `python -c open(…)`
+y las demás formas que una regla de permisos por ruta no alcanza. El bloqueo es
+**grueso a propósito**: también rechaza mirar si el archivo existe, y también
+rechaza invocar `backup-supabase.mjs`. Si hace falta un chequeo así, lo corre una
+persona con `! <comando>`.
+
+Nunca estuvo en git: lo cubre `.gitignore` (`.env*.local`) y se verificó contra
+todo el historial de todas las ramas el 22/09/2026.
+
 ## 9. ENTORNO
 
 Desde **Fase 0 (2026-08-25)** hay dos bases de datos separadas. Antes de esa fecha

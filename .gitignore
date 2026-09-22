@@ -36,7 +36,11 @@ yarn-error.log*
 next-env.d.ts
 
 # claude code
-.claude/
+# Claude Code: la config del proyecto SI se versiona (reglas de permisos y hooks
+# que valen para todo el equipo); lo personal y los locks, no.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 supabase/.temp/
 
 # brand-assets — el archivo original que el cliente pasó mal-nombrado (.jpg

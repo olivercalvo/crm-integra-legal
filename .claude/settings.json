@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "permissions": {
+    "deny": [
+      "Read(.env.produccion.local)",
+      "Read(./.env.produccion.local)",
+      "Read(**/.env.produccion.local)",
+      "Edit(.env.produccion.local)",
+      "Edit(./.env.produccion.local)",
+      "Edit(**/.env.produccion.local)",
+      "Bash(cat .env.produccion.local)",
+      "Bash(cat ./.env.produccion.local)",
+      "Bash(source .env.produccion.local)",
+      "Bash(source ./.env.produccion.local)",
+      "Bash(node scripts/backup-supabase.mjs)",
+      "PowerShell(Get-Content .env.produccion.local)",
+      "PowerShell(Get-Content ./.env.produccion.local)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/bloquear-env-produccion.mjs",
+            "statusMessage": "Verificando credenciales de producción",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

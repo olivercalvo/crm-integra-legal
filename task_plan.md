@@ -1,5 +1,35 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 4: GASTO DE TRÁMITE COMPLETO — CONSTRUIDO Y VERIFICADO — 21/09/2026 <<<
+
+**Estado:** CONSTRUIDO. Cierra 1.5, 1.6, 1.7 de la auditoría y FND-010. Commits `d53bd5d` (049) → `9d1641a` + `80cc65f` (reversión, 050) → `31fc711` + `0884921` (posteo automático) → `a340f71` + `521e26a` + `bdda37e` (el pago) → `1fc59ec` (drill-down + FND-010)
+en staging; deploy `dpl_HwP1tbWzjaE7ndoLGBzH1MeaQfxT`. Migraciones `049` y `050` SOLO en staging;
+`main` en `24b227a`. Detalle en `changelog.md`; reglas en `sop.md` SOP-033 y CLAUDE.md.
+
+**Diseño aprobado (P1–P5, D1–D6 de Oliver) y cómo se cumplió:**
+- D1 posteo en `POST /api/expenses` con `postearGastoTramite` común; botón manual = reintento. ✅
+- D2 sin proveedor no se bloquea; "(sin proveedor)" visible; `supplier_id` fuera de la lista
+  congelada de la 038. ✅
+- D3 opción (b), arco exclusivo; una serie `CE-`; `payment_account_code` intacto y congelado. ✅
+- D4 drill-down en Mayor y Diario (concepto truncado). ✅
+- D5 sin backfill, nada contra producción. ✅ (el count de producción lo corre Oliver en el SQL
+  Editor: `select count(*) from public.expenses`)
+- D6 la reversión (050) entró ANTES del posteo automático. ✅
+- Entradas del pago: (a) "Ya se pagó" en el caso (admin, abogada); (b) "Registrar pago" en el
+  detalle contable (admin, contador). La ruta admite a los tres. (a) no complicó el DELETE
+  compensatorio: el pago es una segunda llamada después de que el gasto quedó; si falla, el gasto
+  queda y se avisa.
+
+**Desvíos y pendientes:**
+- La verificación con clic del formulario del CASO no se hizo (módulo Legal; la sesión del
+  navegador es el contador). Las dos llamadas de esa pantalla se verificaron por API como abogada
+  (`scripts/verificar-alta-gasto-tramite.mts`, 7/7).
+- Estado de Cuenta del proveedor sigue sin listar gastos de trámite (solo compras).
+- El pago de un gasto de trámite ANTERIOR al 21/09 exige registrarlo en el libro primero (409).
+- Producción, cuando vaya: 034, 036, 037, 038, 039, 045, 047, 048, 049, 050 en ese orden, con sus
+  pre-flights; los 128 gastos viejos quedan sin asiento hasta clasificarlos y reintentar uno a uno
+  (o un backfill posterior, solo para los posteriores a la apertura).
+
 ## >>> BLOQUE 3: PAGOS A PROVEEDORES — CONSTRUIDO Y VERIFICADO — 21/09/2026 <<<
 
 **Estado:** CONSTRUIDO. Seis commits (`bab6d14`, `85fa3d0`, `d831b5b`, `e440021`, `5ac5c58`,

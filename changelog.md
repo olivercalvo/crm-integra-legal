@@ -1,5 +1,79 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Gasto de trámite completo — Bloque 4] - 2026-09-21
+
+**Staging (`develop`):** `d53bd5d` (049) → `9d1641a` + `80cc65f` (reversión, 050) → `31fc711` + `0884921` (posteo automático) → `a340f71` + `521e26a` + `bdda37e` (el pago) → `1fc59ec` (drill-down + FND-010). Deploy `dpl_HwP1tbWzjaE7ndoLGBzH1MeaQfxT`. **Sin
+migración a producción. `main` sigue en `24b227a`.** Migraciones `049` y `050` SOLO en staging.
+Cierra 1.5, 1.6, 1.7 de la auditoría del 21/09 y FND-010. Diseño aprobado por Oliver (P1–P5, D1–D6).
+
+### `049` (`d53bd5d`) — arco exclusivo, derivados en `expenses`, 038 reabierta
+
+`supplier_payments.expense_id` (FK a `expenses`), `business_expense_id` pasa a NULL, `CHECK
+num_nonnulls = 1`; `expenses.amount_paid` y `status` (4 valores) derivados por trigger con guard
+(llaves `finanzas.recalc`, `amount_paid_override`, `tramite_anular`); trigger de `supplier_payments`
+y `reverse_supplier_payment` ramificados (respuesta con `expense.kind`); la 038 deja de congelar
+`supplier_id` y **sigue congelando `payment_account_code`**. `verificacion-049` 13/13 con falla
+forzada. La `verificacion-048` [1] asumía que toda compra pagada tenía saldo heredado: corregida.
+
+### `050` (`9d1641a`, `80cc65f`) — reversión del gasto de trámite
+
+RPC `reverse_expense_tramite` (espejo verificado, fecha de hoy, `anulado` con la llave, una
+transacción, rechaza gastos con pagos). `reverseExpenseTramite`, `POST /api/expenses/[id]/reverse`
+(admin, abogada, contador), diálogo con `variante="gasto"`, badge y banner "Anulado · asiento N".
+Fix: el self-join de `journal_entries` por nombre de FK da PGRST200; el original se lee aparte.
+`verificacion-050` 9/9 con falla forzada.
+
+### Posteo automático (`31fc711`, `0884921`)
+
+`postearGastoTramite` común al alta y al reintento; `POST /api/expenses` postea en el mismo acto
+con DELETE compensatorio si falla; la respuesta trae `asiento`. `post-to-ledger` queda como
+reintento para los gastos viejos y su cabecera lo dice. `scripts/verificar-alta-gasto-tramite.mts`
+contra el deploy (sesión de la abogada de los fixtures + contador para el 403).
+
+### El pago (`a340f71`, `521e26a`, `bdda37e`)
+
+Tipos con `SupplierPaymentDestino`, validador con un destino exacto, `createSupplierPayment`
+ramificado (gasto sin asiento 409, anulado 409, cap por saldo), asiento "Pago de gasto de
+trámite: …", loader y PDF con los dos embeds, `getSupplierPaymentsForTramite`, Mayor pago →
+gasto o compra, ruta `POST /api/expenses/[id]/payments`. Pantallas: "Ya se pagó" en el
+formulario del caso (entrada a) y sección "Pagos" en `/finanzas/gastos-tramite/[id]` (entrada b,
+admin y contador). Comprobante con "GASTO DE TRÁMITE" y proveedor ausente nombrado.
+
+### Drill-down y FND-010 (`1fc59ec`)
+
+`gasto_tramite` en `DIRECTOS` del Mayor y en `TIPO_TRANSACCION_ES`; en `DOCUMENTO_DE` del Diario
+con el concepto truncado (40, por palabra); la antigüedad por pagar lee los gastos de trámite en
+el libro (saldo `amount − amount_paid`, tercero por ficha o "(sin proveedor)").
+
+### Verificado en el deploy
+
+Con clic real como contador: reversión del gasto #11 (asiento 33, badge y banner, Mayor 200001
+con el espejo); el gasto nuevo nace con "Asiento 34", sin botón de reintento, con Reversar;
+"Registrar pago" en el detalle del trámite → CE-000004 (asiento 35, DEBE 200001 / HABER 100001,
+descripción "Pago de gasto de trámite: … — CORP-001", gasto `pagado`), comprobante PDF 200 (bajado y
+leído), reversión del pago (asiento 36, gasto vuelve a pendiente); Mayor 130003 con rótulo y "Abrir
+el documento" al gasto; Diario con Documento "Verificación B4: posteo automático en…";
+antigüedad por pagar con "(sin proveedor) (3 docs) 97.02" y **la diferencia ahora cierra al
+centavo**: 3,366.83 − 3,400.48 apertura = −33.65 = +73.50 heredados − 107.15 del seed.
+Por API contra el deploy (`verificar-alta-gasto-tramite.mts`, 7/7): contador 403; abogada 201 con
+asiento; líneas D130003/D500004/H200001; fecha sin período → 422 y el gasto no queda; "Ya se
+pagó" (alta + pago como abogada) → gasto `pagado`, CE-000005 con `expense_id`, asiento del pago.
+**El formulario del caso no se abrió con clic**: es del módulo Legal y la sesión del navegador es
+el contador; las dos llamadas que hace la pantalla se verificaron por API.
+
+### Lo que no calza / quedó
+
+- Un clic por `ref` de la extensión suele solo enfocar el botón; se repitió o se disparó por JS.
+  El tipeo en un textarea perdió caracteres ("á"): setter nativo + `input`.
+- Estado de Cuenta del proveedor sigue listando solo compras; los gastos de trámite con ficha no
+  entran ahí todavía.
+- Lint: errores preexistentes en Legal (`casos/[id]/page.tsx`, `expense-list.tsx`,
+  `import-parser.ts`); ninguno en los archivos del bloque.
+
+**Tests:** 1104/1104.
+
+---
+
 ## [Pagos a proveedores — Bloque 3] - 2026-09-21
 
 **Staging (`develop`):** `bab6d14` → `85fa3d0` → `d831b5b` → `e440021` → `2af7ee8` → `f817659` →

@@ -191,6 +191,25 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **`client_payments` (cobros del caso, Legal) no se cruza con `payments`.** `/api/payments/*` es
   de Legal; lo de Finanzas va bajo `/api/finanzas/payments/`.
 
+### Gasto de trámite (desde 2026-09-21, migraciones `049` y `050` SOLO en staging)
+- 🔴 **El gasto de trámite se POSTEA AL CREARSE** (`POST /api/expenses` → `postearGastoTramite`):
+  insert → asiento → `posted_entry_id`; si el asiento falla, DELETE compensatorio y el gasto no
+  queda. El botón "Registrar en el libro contable" es un **reintento para los gastos anteriores**,
+  no el camino: no lo saquen, es la única puerta de los 128 de producción. SOP-033 §1.
+- **Nace inmutable (038) y por eso existe su reversión** (`reverse_expense_tramite`, 050): fecha de
+  hoy, `anulado`, rechaza gastos con pagos. Roles = reversar un cobro.
+- 🔴 **El pago del gasto es la SEGUNDA transacción**, por `supplier_payments` con `expense_id`
+  (arco exclusivo con `business_expense_id`, 049), misma serie `CE-`, mismo RPC de reversión.
+  `expenses.amount_paid`/`status` se DERIVAN (trigger + guard); un gasto sin asiento no se paga
+  (409). 🔒 Toda lectura que embeba la compra embebe también el gasto de trámite
+  (`supplier-payments-dos-destinos.test.ts`).
+- 🔴 **`expenses.payment_account_code` NO se escribe.** Resto de la 036, congelado por la 038 a
+  propósito; el banco va en el pago. Se dropea después.
+- **Sin proveedor no se bloquea**: 200001 sin auxiliar, "(sin proveedor)" en la antigüedad;
+  `supplier_id` se asigna después (la 049 lo sacó de la lista congelada).
+- La antigüedad por pagar lee los gastos de trámite **en el libro** (FND-010 cerrado); los sin
+  asiento no entran hasta registrarse.
+
 ### Pagos a proveedores (desde 2026-09-21, migración `048` SOLO en staging)
 - **Un pago a proveedor es una entidad (`supplier_payments`) con número `CE-000001`** (propuesta
   hasta que Josuarth confirme el nombre), banco, asiento y PDF. Reglas de Josuarth (21/09): **pago
@@ -210,8 +229,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   diálogo es el de cobros con `variante="pago"`. Un pago sin asiento se elimina; con asiento, 409.
 - **Huecos en `CE-`:** mismo criterio que SOP-031 §2. Detalle en `sop.md` SOP-032.
 - **Vocabulario del Diario/Mayor:** `pago` = "Cobro", `pago_proveedor` = "Pago a proveedor".
-- ⚠️ **FND-010:** los gastos de trámite acreditan 200001 y la antigüedad por pagar no los lee;
-  `expenses` no tiene estado de pago. Bloque propio, no de este.
+- FND-010 (los gastos de trámite en la antigüedad por pagar) se cerró el mismo día con el Bloque 4.
 
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`

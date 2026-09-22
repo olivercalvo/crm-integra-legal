@@ -2497,3 +2497,82 @@ recibo de caja se leía al revés. Es el vocabulario de Josuarth: vender, cobrar
   `buildSupplierPaymentPdfPayload` siga incluyendo `status` y `reversion`.
 - La antigüedad por pagar no cuadra contra el mayor y nombra una "tercera causa" → FND-010:
   los gastos de trámite acreditan 200001 y el reporte no los lee. Bloque propio.
+
+
+## SOP-033: Gasto de trámite completo — nace en el libro, se paga aparte, se reversa
+
+**Por qué existe:** desde el 21/09/2026 (Bloque 4, migraciones `049` y `050`, SOLO en staging) el
+gasto de trámite (`expenses`, módulo Legal) cierra su ciclo contable: se postea al crearse, se
+paga con un `CE-` por el mismo motor que las compras, se reversa, y la antigüedad por pagar lo
+lee. Cuatro cosas dejaron de ser como eran y alguien podría "devolverlas" sin saber por qué.
+
+### 1. 🔴 El posteo dejó de ser manual, y el botón NO hacía falta
+
+Josuarth: registrar el gasto YA es la transacción (DEBE la cuenta de cada línea / HABER 200001,
+acta del 25/08). Hasta el 21/09 el asiento dependía de "Registrar en el libro contable" en
+`/finanzas/gastos-tramite/{id}`, que el contador no podía apretar; 20 de 21 gastos de staging
+nunca llegaron al libro. Ahora `POST /api/expenses` postea en el mismo acto, con el orden de
+D1: insert gasto + líneas → posteo → `posted_entry_id`; **si el posteo falla, DELETE
+compensatorio del gasto** (las líneas caen por el CASCADE de la 036; el trigger de la 038 lo
+deja pasar porque todavía no hay asiento) y el error vuelve como *"El gasto no se registró:
+<motivo>"* (período cerrado, cuenta inválida). Una implementación (`postearGastoTramite`,
+`lib/finanzas/api/expense-tramite.ts`) para las dos puertas.
+
+**El botón sigue existiendo como REINTENTO**, no como camino: es para los gastos anteriores al
+cambio, que nacieron sin asiento y cuyas líneas hay que clasificar primero. Un gasto nuevo nunca
+llega a él (nace con `posted_entry_id`; la capa 1 responde 409). Si alguien lo saca, los gastos
+viejos de producción (128 según el pre-flight del 03/09) no tienen forma de entrar al libro.
+
+Consecuencias: el gasto **nace inmutable** (038) —por eso la reversión va ANTES (D6)—, y un
+mes cerrado rechaza el alta con fecha en ese mes, igual que compras y facturas.
+
+### 2. La reversión (`reverse_expense_tramite`, 050)
+
+Espejo de la 046/048: motivo, fecha de HOY, líneas verificadas con `EXCEPT ALL` (el RPC no
+construye), `post_journal_entry` con `reverses_entry_id`, `expenses.status = 'anulado'` con la
+llave `finanzas.tramite_anular` (049). UNA transacción. 🔴 **Un gasto con pagos registrados no se
+reversa**: primero se eliminan o reversan sus pagos. `posted_entry_id` queda (trazabilidad); el
+gasto se muestra "Anulado · asiento N" con su espejo. Roles = reversar un cobro (admin, abogada,
+contador). Diálogo: `reverse-payment-dialog.tsx` con `variante="gasto"` (misma vista previa).
+
+### 3. 🔴 El pago es la SEGUNDA transacción, y va por el arco de la 049
+
+`supplier_payments` tiene `business_expense_id` O `expense_id` (`CHECK num_nonnulls = 1`, el
+patrón de `expense_lines`). Una sola serie `CE-`, un solo comprobante de egreso, un solo RPC de
+reversión ramificado. `expenses.amount_paid` y `status` (`pendiente_pago` /
+`parcialmente_pagado` / `pagado` / `anulado`) los deriva el trigger de la 049 con su guard: NO se
+escriben. **Un gasto sin asiento no se paga (409)**: no hay cuenta por pagar en el libro que
+debitar. Dos entradas (Oliver, 21/09): (a) "Ya se pagó" en el formulario del caso — admin y
+abogada — dispara el pago en el mismo acto pero como asiento separado; si el pago falla, **el
+gasto QUEDA** pendiente y se avisa (no se deshace un gasto por un pago que no entró). (b)
+"Registrar pago" en `/finanzas/gastos-tramite/{id}` — admin y contador. La ruta
+`POST /api/expenses/[id]/payments` admite a los tres.
+🔒 `supplier-payments-dos-destinos.test.ts`: toda lectura que embeba la compra embebe también el
+gasto de trámite; si no, el otro destino sale vacío sin que nada falle.
+
+### 4. 🔴 `expenses.payment_account_code` sigue ahí y NO se escribe
+
+Es un resto de la 036: nadie lo escribe, la 038 lo congela en cuanto hay asiento, y el banco es
+del PAGO (FND-009: un documento puede tener varios pagos de bancos distintos). La 049 lo dejó
+congelado a propósito; si alguien le "arregla" el banco escribiéndolo ahí, el trigger lo rechaza y
+el pago no sale de igual manera. Se dropea en una migración posterior (D3).
+
+### 5. `supplier_id` sí se reabrió; la antigüedad y el drill-down
+
+La 049 saca `supplier_id` de la lista congelada de la 038: un gasto asentado recibe su ficha
+después (los anexos de renta la necesitan; el asiento no cambia, 200001 no tiene auxiliar). Sin
+proveedor no se bloquea (D2): el auxiliar lo agrupa como "(sin proveedor)" y el comprobante lo
+dice. La antigüedad por pagar lee los gastos de trámite **en el libro** (FND-010 cerrado); los que
+no tienen asiento no están en 200001 y no entran hasta que se registren. Mayor y Diario abren el
+gasto (`DIRECTOS`, `DOCUMENTO_DE` con el concepto truncado).
+
+### Qué mirar si algo falla
+
+- *"El gasto no se registró: …"* al crear un gasto → el posteo falló y el gasto se deshizo. El
+  motivo es el del RPC (período cerrado es el común). No hay nada que limpiar.
+- *"Este gasto todavía no está registrado en el libro contable"* al pagar → gasto anterior al
+  21/09: clasificar las líneas y apretar "Registrar en el libro contable" primero.
+- *"Este gasto tiene N pago(s) registrado(s)"* al reversar → primero los pagos.
+- `PGRST200` al leer una reversión → PostgREST no resuelve el self-join de `journal_entries` por
+  nombre de FK; `getReversionDeGastoTramite` lee el original aparte a propósito.
+- Un gasto viejo que no aparece en la antigüedad por pagar → no está en el libro (punto 5).

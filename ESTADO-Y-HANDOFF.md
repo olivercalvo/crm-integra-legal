@@ -15,6 +15,62 @@ lo reemplaza en `develop`; plan en `task_plan.md`.
 ---
 
 
+## Cierre del 21/09/2026 (noche, tarde) — Bloque 4: gasto de trámite completo
+
+**SHA de la app en staging: `1fc59ec`** — deployment `dpl_HwP1tbWzjaE7ndoLGBzH1MeaQfxT`, READY.
+Encima va solo este commit de docs. **`main` sigue en `24b227a`. Producción no se tocó, ni
+lectura ni escritura.** Migraciones `049` y `050` aplicadas SOLO en staging.
+
+**1104/1104.** `tsc` limpio. Lint: errores preexistentes en Legal e `import-parser.ts`, ninguno en
+los archivos del bloque.
+
+### Qué entró (detalle en `changelog.md`, reglas en SOP-033 y CLAUDE.md)
+
+Arco exclusivo en `supplier_payments` + `expenses.amount_paid/status` derivados (049); reversión
+del gasto de trámite (050, antes del posteo automático por D6); posteo automático en el alta con
+DELETE compensatorio y el botón manual como reintento; el pago del gasto por el mismo motor que
+las compras, con dos entradas; Mayor/Diario abren el gasto; la antigüedad por pagar lo lee
+(FND-010 cerrado).
+
+### 🔴 Dos cosas que nadie debe "arreglar"
+
+1. **El botón "Registrar en el libro contable" NO hacía falta para los gastos nuevos y SÍ hace falta
+   para los viejos.** Es un reintento; no lo saquen ni lo vuelvan a hacer el camino (SOP-033 §1).
+2. **`expenses.payment_account_code` sigue ahí sin usarse.** Nadie le escribe el banco: la 038 lo
+   congela y el banco va en el pago. Se dropea en otra migración.
+
+### Verificado en el deploy
+
+Con clic como contador (reversión del gasto, alta que nace con asiento, Registrar pago → CE-000004,
+comprobante, reversión del pago, Mayor con "Abrir el documento", Diario, antigüedad). Por API como
+abogada (`verificar-alta-gasto-tramite.mts`, 7/7): 403 del contador, alta 201 con asiento y líneas,
+fecha sin período → 422 y el gasto no queda, "Ya se pagó" → gasto pagado con CE-000005. La
+antigüedad por pagar cierra al centavo: −33.65 = +73.50 heredados − 107.15 del seed.
+
+### Estado de staging al cerrar
+
+Gasto #11 anulado (asiento 33); 3 gastos "Verificación B4" pendientes (asientos 34, 37, 38+) y uno
+pagado (CE-000005); CE-000004 reversado (asiento 36); 2 saldos heredados; `last_number`
+supplier_payment = 5.
+
+### Lo que la extensión enseñó hoy
+
+- Un clic por `ref` muchas veces solo enfoca; repetir o disparar por JS (`button.click()`).
+- `type` en un textarea perdió los caracteres acentuados: setter nativo + `dispatchEvent('input')`.
+- Un `.mts` no ve los exports con nombre de un `.ts` (CJS bajo tsx): `createRequire`.
+
+### Pendiente
+
+1. **Josuarth** (paquete en `task_plan.md`): nombre `CE-`, excedente de cobros, columna Documento.
+2. Estado de Cuenta del proveedor con gastos de trámite.
+3. Dropear `expenses.payment_account_code` (migración propia, después).
+4. Producción: la cola de migraciones 034…050 con sus pre-flights; los 128 gastos viejos.
+5. Lo anterior (celular real, compra con dos líneas por pantalla, `HON-FAM`/`HON-OTROS`, bloque
+   `022`, reversión de manuales, listado de egresos).
+
+---
+
+
 ## Cierre del 21/09/2026 (noche) — Bloque 3: pagos a proveedores, construido y verificado
 
 **SHA de la app en staging: `358f934`** — deployment `dpl_5p2eAQybXh96N35cHjgodjEwWbAf`, READY.

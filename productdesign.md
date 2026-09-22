@@ -724,6 +724,39 @@ factura (una) o al listado filtrado (varias). Los cobros del caso (`client_payme
 Legal) son otra cosa y no se cruzan con esto. El excedente (anticipo) espera la definición de
 Josuarth.
 
+### GASTO DE TRÁMITE — nace en el libro, se paga aparte, se reversa
+
+**Qué cambió (21/09/2026, Bloque 4).** Registrar un gasto de trámite desde el caso **ya es la
+transacción contable**: el asiento (la cuenta de cada línea contra Cuentas por pagar) se postea en
+el mismo acto. Antes dependía de un botón en Finanzas que el contador no podía apretar, y la
+mayoría de los gastos nunca llegaban al libro. Si el asiento no se puede registrar (mes cerrado,
+cuenta inválida), el gasto tampoco queda: la pantalla dice por qué.
+
+**Pagarlo es otra transacción** (Josuarth), aunque sea el mismo día. Dos lugares: en el formulario
+del caso, la casilla **"Ya se pagó"** (banco, método, fecha, referencia) registra el pago junto
+con el gasto; y en Finanzas → el detalle contable del gasto, la sección **Pagos** con "Registrar
+pago" (monto precargado con el saldo, pago parcial permitido) para los que quedaron pendientes.
+El pago tiene comprobante de egreso `CE-` como el de una compra, misma serie, y se reversa igual.
+Un gasto que no está en el libro no se puede pagar: primero se registra.
+
+**Corregir.** Un gasto en el libro no se edita ni se borra: se **reversa** (botón en el detalle
+contable; admin, abogada y contador), con motivo, espejo con fecha de hoy, y queda "Anulado ·
+asiento N". Si tiene pagos, primero se reversan o eliminan los pagos.
+
+**Sin proveedor.** No se bloquea: el gasto se registra igual, el crédito va a Cuentas por pagar,
+la antigüedad lo agrupa como "(sin proveedor)" y el comprobante lo dice. La ficha se puede
+asignar después, aunque el gasto ya esté en el libro.
+
+**Los gastos de antes.** Los que se cargaron antes del 21/09 no tienen asiento: para que entren al
+libro (y a la antigüedad por pagar) hay que clasificar sus líneas y usar "Registrar en el libro
+contable" en su detalle. Es un reintento, no el camino normal.
+
+**Reportes.** El Libro Mayor y el Diario abren el gasto desde su asiento (Documento = el concepto);
+la antigüedad de cuentas por pagar lo lista con su saldo, por proveedor, y vuelve a cuadrar
+contra el mayor.
+
+---
+
 ### PAGO A PROVEEDOR — la compra se paga por partes, y cada pago tiene documento
 
 **Qué es (desde el 21/09/2026).** El pago de una compra del bufete es un movimiento propio, con

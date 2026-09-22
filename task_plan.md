@@ -32,6 +32,47 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
   (asiento 48) y la antigüedad por cobrar ya cierra sin "tercera causa". Detalle en `changelog.md`
   y SOP-031 §2b.
 - Todavía NO existe la reversión de una NC ni el envío de la NC a la DGI.
+- **ANULACIÓN FISCAL (no construido). ideati, 17/09/2026: la anulación ante la DGI solo es posible
+  dentro de los 7 días de emitida; después corresponde nota de crédito. Hoy `cancelInvoice` anula
+  solo de nuestro lado y el documento sigue vivo ante la DGI. Esto además acorta la frontera que se
+  fijó en el Bloque 5: para una factura autorizada manda el plazo de 7 días, no el cierre del mes.**
+  Lo que el swagger del PAC (`docs/efactura/swagger-v1.json`) SÍ tiene y lo que no, revisado el
+  22/09/2026 antes de escribirle a ideati:
+  - ✅ El endpoint existe: `POST /api/v1/InvoiceEvents/CreateCancellation`, header
+    `Accept-Language` (requerido, default `es-PA`), body `CancellationRequest { cufe,
+    cancellationReason }`, respuesta `200` con un **array** de `{ codigo, mensaje }`.
+  - ❌ El swagger **no dice nada del plazo** ni desde cuándo se cuenta. Y nuestras propias notas
+    dicen **182 horas** (claude.md, sop.md, este archivo, `emisor-config.ts`), que son 7,58 días,
+    no 7: el número viene del Sprint Camino 1 (`a2e617c`, 07/05/2026) sin fuente citada. **Hay que
+    preguntarle a ideati cuál rige y desde qué momento** — ¿`fechaEmision` del documento o
+    `dgi_fecha_autorizacion`?— y corregir los cuatro lugares con la respuesta.
+  - Referenciar el documento original: `GDGenRequest.documentosFiscalesReferenciados[]` →
+    `GDFRefRequest { rucEmisorDocumentoReferenciado{tipoRuc,ruc,digitoVerificador},
+    nombreRazonSocialEmisor, fechaEmisionDocumentoReferenciado, informacionReferencia }`, y ahí
+    conviven **tres hermanos**: `informacionReferencia.cufeReferenciado` (electrónico),
+    `informacionReferenciaFacturaPapel.numeroFacturaPapel` y
+    `informacionReferenciaImpresoraFiscal.numeroFeImpresoraFiscal`. O sea que **una factura
+    anterior a eFactura, sin CUFE, es referenciable por número de factura en papel** — eso
+    desbloquea la NC fiscal sobre las viejas, y hay que confirmarle a ideati que la DGI lo acepta
+    para el tipo 04.
+  - ⚠️ **La obligatoriedad no se puede leer del swagger**: no tiene ni un `required` (0 de 101
+    schemas) ni un solo `enum`, y todo es `nullable: true`, `cufeReferenciado` incluido. Quien
+    valida es la DGI. Tampoco hay descripciones: de 24 en todo el archivo, 22 son de catálogos y 2
+    del DTO de anulación.
+  - ❌ El swagger **no dice nada de serie ni punto de facturación para el tipo 04**: `GDGenRequest`
+    tiene `tipoDocumento`, `numeroDocumento` y `puntoFacturacion` sin más. De nuestro lado,
+    `fe_secuencias` es `(tenant_id, punto_facturacion)` — **sin `tipo_documento`**— así que hoy una
+    NC tomaría número del MISMO correlativo que las facturas 01/09. Preguntar si la DGI exige
+    serie separada; si la exige, es una migración de `fe_secuencias` (`020`).
+  - `tipoDocumento` en `types/catalogs.ts`: declarados `01` interna, `02` importación, `03`
+    exportación, **`04` nota de crédito**, **`05` nota de débito**, `09` reembolso. **Usados de
+    verdad solo `01` y `09`** (`tipoDocumentoDeKind`); `04` y `05` están declarados y nadie los
+    emite — `MapInvoiceOptions.tipoDocumento` existe justamente como override para ellos. Y el
+    mapper **nunca arma `documentosFiscalesReferenciados`**: no hay código que referencie un
+    documento original. Para Integra el que falta de verdad es el `05` (nota de débito: recargos
+    o intereses sobre una factura ya emitida) — preguntarle a Josuarth si lo va a necesitar. La
+    lista completa de la DGI puede tener tipos genéricos sin CUFE de referencia (06/07): **no
+    están en el swagger ni en el repo**, confirmarlo con ideati junto con lo anterior.
 - Producción, cuando vaya: 034, 036, 037, 038, 039, 045, 047, 048, 049, 050, **051, 052, 053** en
   ese orden, con sus pre-flights (`docs/staging/inventario-migraciones.md`).
 

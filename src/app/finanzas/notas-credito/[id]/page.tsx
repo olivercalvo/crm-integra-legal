@@ -293,7 +293,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                 <tbody className="divide-y">
                   {nc.lines.map((ln) => (
                     <tr key={ln.id}>
-                      <td className="py-2 pr-3 text-gray-500">{ln.line_order}</td>
+                      <td className="py-2 pr-3 text-gray-500">{ln.line_order + 1}</td>
                       <td className="py-2 pr-3 text-gray-900">{ln.description}</td>
                       <td className="py-2 pr-3 text-right font-mono">{Number(ln.quantity).toFixed(2)}</td>
                       <td className="py-2 pr-3 text-right font-mono">${fmtImporte(Number(ln.unit_price))}</td>

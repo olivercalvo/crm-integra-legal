@@ -18,7 +18,14 @@
  *      `fe_estado = no_emitida`.
  *   4. Una NC que supera balance_due → 409 con "reverse el cobro primero".
  *
- * 🛑 Solo staging. Deja una factura anulada y una NC parcial en staging.
+ * Si no quedan facturas candidatas (las corridas anteriores las consumen),
+ * el script CREA y EMITE las que faltan por la API, como la abogada: dos
+ * facturas de honorarios de 3 × 100 al 7% sobre el primer cliente activo con
+ * un servicio cuya cuenta de ingreso esté activa. Así se puede correr las
+ * veces que haga falta.
+ *
+ * 🛑 Solo staging. Deja una factura anulada, una NC parcial y las facturas
+ * que haya tenido que emitir.
  */
 
 import { readFileSync } from "node:fs";
@@ -102,7 +109,54 @@ const marca = (b: boolean, msg: string) => {
 };
 const hoy = new Date().toISOString().slice(0, 10);
 
+const abogada = SEED_USERS.find((u) => u.key === "abogada")!;
+const cookieContador = await sesionCookie(req("STAGING_UI_EMAIL"), req("STAGING_UI_PASSWORD"));
+const cookieAbogada = await sesionCookie(abogada.email, abogada.password);
+
+/** Crea y emite una factura de honorarios por la API, como la abogada. */
+async function crearYEmitirFactura(n: number): Promise<string | null> {
+  const { data: cliente } = await db
+    .from("clients").select("id, name").eq("tenant_id", TENANT).eq("client_status", "active")
+    .not("tax_id", "is", null).order("created_at").limit(1).maybeSingle();
+  const { data: servicios } = await db
+    .from("services_catalog").select("id, code, name, revenue_account").eq("tenant_id", TENANT).eq("active", true);
+  const { data: activas } = await db.from("chart_of_accounts").select("code").eq("tenant_id", TENANT).eq("active", true);
+  const codes = new Set((activas ?? []).map((a) => (a as { code: string }).code));
+  const servicio = (servicios ?? []).find((sv) => {
+    const x = sv as { code: string; revenue_account: string | null };
+    return x.code.startsWith("HON") && x.revenue_account && codes.has(x.revenue_account);
+  }) as { id: string; code: string; name: string } | undefined;
+  const { data: tax } = await db.from("tax_codes").select("id, code, rate").eq("tenant_id", TENANT).eq("code", "ITBMS_7").maybeSingle();
+  if (!cliente || !servicio || !tax) {
+    console.error("🛑 No hay cliente activo, servicio HON con cuenta activa o tax ITBMS_7 para preparar facturas");
+    return null;
+  }
+  const venc = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const cr = await post(cookieAbogada, "/api/finanzas/invoices", {
+    invoice_kind: "HONORARIOS",
+    client_id: cliente.id,
+    case_id: null,
+    issue_date: hoy,
+    due_date: venc,
+    notes: `Verificación B5 · factura preparada ${n}`,
+    lines: [{ service_id: servicio.id, description: `${servicio.name} (verificación B5)`, quantity: 3, unit_price: 100, tax_code_id: tax.id, tax_code: tax.code, tax_rate: Number(tax.rate) }],
+  });
+  const id = String(cr.json.id ?? "");
+  if (cr.status !== 201 || !id) {
+    console.error(`🛑 No se pudo crear la factura (${cr.status}): ${String(cr.json.error ?? "")}`);
+    return null;
+  }
+  const em = await post(cookieAbogada, `/api/finanzas/invoices/${id}/emit`, {});
+  if (em.status !== 200) {
+    console.error(`🛑 No se pudo emitir la factura (${em.status}): ${String(em.json.error ?? "")}`);
+    return null;
+  }
+  console.log(`   preparada y emitida: ${String(em.json.invoice_number ?? id)} (${cliente.name}, ${servicio.code})`);
+  return id;
+}
+
 // Candidatas: emitidas, sin pagos, sin NC, CON asiento y sin reversión.
+async function buscarCandidatas() {
 const { data: candidatas } = await db
   .from("invoices")
   .select("id, invoice_number, grand_total, balance_due, issue_date")
@@ -128,6 +182,16 @@ for (const c of (candidatas ?? []) as { id: string; invoice_number: string; gran
   if (svcIds.length !== (ls ?? []).length || codes.length !== (activas ?? []).length) continue;
   conAsiento.push(c);
 }
+return conAsiento;
+}
+let conAsiento = await buscarCandidatas();
+if (conAsiento.length < 2) {
+  console.log(`   ${conAsiento.length} candidata(s): se preparan ${2 - conAsiento.length} factura(s) nueva(s) por la API`);
+  for (let i = conAsiento.length; i < 2; i += 1) {
+    if (!(await crearYEmitirFactura(i + 1))) process.exit(1);
+  }
+  conAsiento = await buscarCandidatas();
+}
 if (conAsiento.length < 1) {
   console.error("🛑 Hace falta al menos una factura emitida con asiento, sin pagos ni NC");
   process.exit(1);
@@ -138,10 +202,6 @@ if (conAsiento.length < 1) {
 const paraAnular = conAsiento.length >= 2 ? conAsiento[0] : null;
 const paraNc = conAsiento.length >= 2 ? conAsiento[1] : conAsiento[0];
 console.log(`Anular: ${paraAnular?.invoice_number ?? "(se omite: una sola candidata)"} · NC parcial: ${paraNc.invoice_number} (${paraNc.grand_total})`);
-
-const abogada = SEED_USERS.find((u) => u.key === "abogada")!;
-const cookieContador = await sesionCookie(req("STAGING_UI_EMAIL"), req("STAGING_UI_PASSWORD"));
-const cookieAbogada = await sesionCookie(abogada.email, abogada.password);
 
 // 1. contador → 403 en las dos
 const c1 = await post(cookieContador, `/api/finanzas/invoices/${paraNc.id}/cancel`, { reason: "Verificación B5 (contador)" });
@@ -194,6 +254,15 @@ const demasiado = await post(cookieAbogada, `/api/finanzas/credit-notes`, {
 marca(
   demasiado.status === 409 || demasiado.status === 400,
   `[4] NC por todas las líneas completas (ya hay ${esperado} acreditado) → ${demasiado.status} "${String(demasiado.json.error ?? "").slice(0, 120)}"`
+);
+
+// 5. 053: la factura con NC parcial ya no se anula
+const an = await post(cookieAbogada, `/api/finanzas/invoices/${paraNc.id}/cancel`, { reason: "Verificación B5: anular con NC parcial (debe rebotar)" });
+const { data: inv5 } = await db.from("invoices").select("status").eq("id", paraNc.id).maybeSingle();
+const { count: rev5 } = await db.from("journal_entries").select("*", { count: "exact", head: true }).eq("source_type", "reversion").eq("source_id", paraNc.id);
+marca(
+  an.status === 409 && /acreditados por nota de crédito/.test(String(an.json.error ?? "")) && inv5?.status === "emitida" && (rev5 ?? 0) === 0,
+  `[5] anular ${paraNc.invoice_number} con NC parcial → ${an.status} "${String(an.json.error ?? "").slice(0, 100)}" · ${inv5?.status} · reversiones ${rev5 ?? "?"} (053: 409, emitida, 0)`
 );
 
 console.log(`\n════════ nota de crédito contable: ${ok} ✅ · ${fail} ❌ ════════`);

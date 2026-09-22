@@ -1015,18 +1015,34 @@ async function seedFinanzas(): Promise<void> {
   // --- Secuencias ---
   // Se dejan justo por encima del último número usado, para que el próximo
   // documento creado desde la UI no choque con el UNIQUE (tenant, number).
+  //
+  // 🔴 NUNCA HACIA ATRÁS. El seed es idempotente y se vuelve a correr sobre una
+  //    base que ya tiene documentos emitidos DESPUÉS del seed (FAC-HON-000008 en
+  //    adelante, cobros, NC): si pisara la secuencia con el máximo sembrado, la
+  //    siguiente emisión chocaría con el UNIQUE. Pasó el 22/09/2026: la
+  //    secuencia decía 7 y en la base había hasta FAC-HON-000011. Se toma el
+  //    MÁXIMO entre lo sembrado y lo que la secuencia ya tiene.
+  const { data: secuenciasActuales, error: errSec } = await db
+    .from("numbering_sequences")
+    .select("sequence_type, last_number")
+    .eq("tenant_id", TENANT_ID);
+  if (errSec) throw new Error(`numbering_sequences: ${errSec.message}`);
+  const actual = new Map(
+    (secuenciasActuales ?? []).map((r) => [r.sequence_type as string, Number(r.last_number)])
+  );
+  const alMenos = (tipo: string, sembrado: number) => Math.max(sembrado, actual.get(tipo) ?? 0);
   await upsert(
     "numbering_sequences",
     [
-      { tenant_id: TENANT_ID, sequence_type: "quote", last_number: Math.max(...SEED_QUOTES.map((q) => q.n)) },
-      { tenant_id: TENANT_ID, sequence_type: "invoice_hon", last_number: Math.max(...SEED_INVOICES.filter((i) => i.kind === "HONORARIOS").map((i) => i.n)) },
-      { tenant_id: TENANT_ID, sequence_type: "invoice_reim", last_number: Math.max(...SEED_INVOICES.filter((i) => i.kind === "REEMBOLSO").map((i) => i.n)) },
-      { tenant_id: TENANT_ID, sequence_type: "credit_note", last_number: 0 },
-      { tenant_id: TENANT_ID, sequence_type: "client", last_number: SEED_CLIENTS.length },
+      { tenant_id: TENANT_ID, sequence_type: "quote", last_number: alMenos("quote", Math.max(...SEED_QUOTES.map((q) => q.n))) },
+      { tenant_id: TENANT_ID, sequence_type: "invoice_hon", last_number: alMenos("invoice_hon", Math.max(...SEED_INVOICES.filter((i) => i.kind === "HONORARIOS").map((i) => i.n))) },
+      { tenant_id: TENANT_ID, sequence_type: "invoice_reim", last_number: alMenos("invoice_reim", Math.max(...SEED_INVOICES.filter((i) => i.kind === "REEMBOLSO").map((i) => i.n))) },
+      { tenant_id: TENANT_ID, sequence_type: "credit_note", last_number: alMenos("credit_note", 0) },
+      { tenant_id: TENANT_ID, sequence_type: "client", last_number: alMenos("client", SEED_CLIENTS.length) },
     ],
     "tenant_id,sequence_type"
   );
-  console.log("✅ Secuencias de numeración alineadas con los datos sembrados");
+  console.log("✅ Secuencias de numeración alineadas con los datos sembrados (nunca hacia atrás)");
 }
 
 // ===========================================================================

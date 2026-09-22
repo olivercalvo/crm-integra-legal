@@ -23,16 +23,42 @@ function Importe({ value }: { value: number }) {
   return <span className="font-mono text-sm tabular-nums text-gray-700">{money(value)}</span>;
 }
 
-function Asiento({ asiento, destino }: { asiento: AsientoDiario; destino: string | null }) {
+function Asiento({
+  asiento,
+  destino,
+  puedeAbrirElAsiento,
+}: {
+  asiento: AsientoDiario;
+  destino: string | null;
+  /**
+   * 🔒 El detalle del asiento es de admin y contador
+   * (`ADMIN_CONTADOR_ONLY_PREFIXES`), y este reporte lo ve también la abogada.
+   * Sin esta bandera el enlace le rebotaría, que es exactamente lo que
+   * `nav-guard.test.ts` existe para impedir.
+   */
+  puedeAbrirElAsiento: boolean;
+}) {
   return (
     <div className="rounded-xl border bg-white">
       {/* Cabecera del asiento */}
       <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-integra-navy/5 px-4 py-2.5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-sm font-bold text-integra-navy">
-              N.º {asiento.numero}
-            </span>
+            {/* nav-guard-ok: `puedeAbrirElAsiento` es admin|contador, los mismos
+                del prefijo /finanzas/asientos en route-access.ts. */}
+            {puedeAbrirElAsiento ? (
+              <Link
+                href={`/finanzas/asientos/${asiento.entryId}`}
+                className="font-mono text-sm font-bold text-integra-navy underline decoration-dotted underline-offset-2 hover:text-integra-gold"
+                title="Abrir el asiento"
+              >
+                N.º {asiento.numero}
+              </Link>
+            ) : (
+              <span className="font-mono text-sm font-bold text-integra-navy">
+                N.º {asiento.numero}
+              </span>
+            )}
             <span className="font-mono text-xs text-gray-600">{asiento.fecha}</span>
             <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-integra-navy ring-1 ring-integra-navy/15">
               {asiento.tipoTransaccion}
@@ -115,10 +141,13 @@ function Asiento({ asiento, destino }: { asiento: AsientoDiario; destino: string
 export function DiarioTable({
   diario,
   destinos,
+  puedeAbrirElAsiento = false,
 }: {
   diario: DiarioGeneral;
   /** source_id → ruta del documento. Lo que no está acá no se enlaza. */
   destinos: Map<string, string>;
+  /** admin y contador: los que pueden abrir `/finanzas/asientos/[id]`. */
+  puedeAbrirElAsiento?: boolean;
 }) {
   if (diario.asientos.length === 0) {
     return (
@@ -163,6 +192,7 @@ export function DiarioTable({
           key={a.entryId}
           asiento={a}
           destino={a.sourceId ? (destinos.get(a.sourceId) ?? null) : null}
+          puedeAbrirElAsiento={puedeAbrirElAsiento}
         />
       ))}
     </div>

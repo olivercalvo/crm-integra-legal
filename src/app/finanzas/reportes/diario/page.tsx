@@ -54,7 +54,13 @@ export default async function DiarioGeneralPage({
 
       <DiarioFiltros desde={desde} hasta={hasta} />
 
-      <DiarioTable diario={diario} destinos={destinos} />
+      <DiarioTable
+        diario={diario}
+        destinos={destinos}
+        /* El detalle del asiento es de admin y contador; la abogada ve el
+           reporte y no el enlace (route-access.ts). */
+        puedeAbrirElAsiento={ctx.userRole === "admin" || ctx.userRole === "contador"}
+      />
     </div>
   );
 }

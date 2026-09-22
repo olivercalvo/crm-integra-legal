@@ -1,5 +1,69 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Preparación del despliegue a producción: runbook + inventario generado] - 2026-09-22
+
+**Sin migración a producción. Sin merge. `main` sigue en `24b227a`.** Trabajo de análisis y
+herramientas para el despliegue de las 31 migraciones pendientes (`025` → `055`).
+
+### El hallazgo: la cola no empezaba en la 034
+
+Un pre-flight de solo lectura sobre producción mostró que **producción se detuvo entre la `024`
+y la `025`**, no en la `033`. Marcador decisivo: `chart_of_accounts.cuenta_control` no existe.
+La cola real es de **31 migraciones**, no 20.
+
+🔴 **Causa raíz:** a `docs/staging/inventario-migraciones.md` le faltaban **catorce filas**
+(`025`–`033` y `040`–`044`). El documento que decía ser la fuente de verdad saltaba de la `022`
+a la `034`, y el análisis de despliegue heredó ese hueco.
+
+### `scripts/inventario-migraciones.mjs` (nuevo)
+
+El inventario se **genera** desde el esquema, ya no se escribe a mano. Un mapa `MARCADORES`
+declara qué objeto prueba que cada migración corrió (tabla, columna, función, índice,
+constraint, cuerpo de función, privilegio, bucket, política o —cuando no deja rastro
+estructural— un `SELECT` de dato).
+
+🔒 **La propiedad que importa es el aborto:** un archivo en `sql/pending/` sin entrada en
+`MARCADORES` hace fallar el script con código 1 y lo nombra. Una migración nueva ya no puede
+desaparecer del inventario en silencio.
+
+Tres modos, porque **las credenciales de producción no van a una máquina** (`CLAUDE.md` §5):
+`--staging` se conecta con `STAGING_DATABASE_URL`; `--sql` imprime **un único SELECT** —ni
+`CREATE`, ni `DROP`, ni temporales— para pegar en el SQL Editor; `--desde` ingiere el JSON que
+ese SELECT devuelve. También `--solo-verificar` para correr el aborto de cobertura en CI.
+
+Dos marcadores que no salen por nombre y fue necesario declarar aparte: la **`030`** no se
+distingue de la `028` (redefine sus funciones) y se detecta por el **privilegio** —que
+`authenticated` ya no pueda ejecutar `post_journal_entry`—; la **`053`** es un
+`CREATE OR REPLACE` de la función de la `052` y se detecta por una cadena de su **cuerpo**.
+
+### `docs/runbooks/despliegue-025-055.md` (nuevo)
+
+El runbook del día, en texto plano: pre-flight listo para pegar, los dos bloques, los `NOTICE`
+que hay que leer en cada migración y qué resultado es motivo de parar, el punto exacto donde el
+backup es bloqueante, y el rollback de compras. Respaldo de la versión en página.
+
+### Los tres hallazgos del análisis
+
+- 🔴 **La `025` no falla, miente.** Termina OK y desde ese segundo el Estado de Resultado de
+  producción está mal: las cuentas de costo pasan a `account_type = 'cost'` y el filtro de
+  `accounting-reports.ts:268` las deja fuera. Va última, pegada al merge.
+- 🔴 **El guard de la `040` es incondicional.** Aborta con compras sin `chart_account_code`
+  tenga o no puesto el CHECK de la `037`, así que reordenar las dos nunca fue un remedio.
+- 🔴 **La `049` y la `050` dependen de la `048`** (`ALTER TABLE supplier_payments`): van en el
+  mismo bloque, no en el anterior.
+
+### Recalibrado con los números reales de producción
+
+`business_expenses` tiene **0 filas** —el módulo de compras nunca se usó—, así que los backfills
+de la `033`, `040`, `045` y `048` corren sobre cero filas y la "ventana larga" no la sufre nadie.
+`expenses` 137 (no 128), `payments` 8, `invoices` 102, `credit_notes` 6,
+`chart_of_accounts` **97** (no 62), `journal_entries` 0, un solo tenant y **coincide** con el
+uuid hardcodeado en seis migraciones.
+
+⚠️ **Los `esperado 6 / 9 / 30 / 6` del POST-CHECK de la `025` son de staging** y no abortan la
+migración. El runbook trae una consulta que simula los tres UPDATE y calcula los cuatro números
+**contra el plan real**, para correr en el pre-flight y comparar el día D contra eso.
+
 ## [Asientos de diario: tercero, detalle, clonar y reversión — Bloque 7] - 2026-09-22
 
 **Staging (`develop`):** `858aba5` (054) → `d115c41` (tercero en el formulario, D2) → `32d262b`

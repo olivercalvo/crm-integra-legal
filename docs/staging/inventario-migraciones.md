@@ -1,5 +1,19 @@
 # Inventario de migraciones — estado real vs. producción
 
+> 🔴 **ESTE ARCHIVO ESTÁ DESACTUALIZADO Y NO SE DEBE USAR COMO FUENTE DE VERDAD.**
+> Le faltan catorce filas (`025`–`033` y `040`–`044`), y por ese hueco el análisis de
+> despliegue del 22/09/2026 arrancó la cola en la `034` cuando producción se había
+> detenido en la `024`.
+>
+> **Lo reemplaza un archivo generado.** Para producirlo:
+> ```bash
+> node scripts/inventario-migraciones.mjs --staging
+> # o, para producción (sus credenciales no van a una máquina):
+> node scripts/inventario-migraciones.mjs --sql > introspeccion.sql
+> node scripts/inventario-migraciones.mjs --desde salida.json --base produccion
+> ```
+> El script sobrescribe este archivo. Hasta que se corra, lo de abajo es histórico.
+
 **Fecha del relevamiento:** 2026-08-25
 **Para qué sirve:** saber exactamente qué correr, y en qué orden, al levantar la base de
 staging (Fase 0, Tarea 3), y dejar de tratar a `sql/pending/` como si fuera una cola.

@@ -64,7 +64,13 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     client_name: nc.client_name,
     lineas: nc.lineas,
   });
-  if (!comoFactura.ok) return comoFactura;
+  if (!comoFactura.ok) {
+    // Los mensajes de la factura nombran "la factura NC-…": se dicen para la NC.
+    return {
+      ...comoFactura,
+      mensaje: comoFactura.mensaje.replace(/registrar la factura/g, "registrar la nota de crédito"),
+    };
+  }
 
   // Al revés: lo que la factura acreditó (ingreso, ITBMS) la NC lo debita;
   // lo que debitó (100004) la NC lo acredita.

@@ -133,3 +133,12 @@ test("ledger VACÍO: el diario no revienta, devuelve la estructura en cero", () 
   assert.equal(d.totalCredito, 0);
   assert.deepEqual(d.descuadrados, []);
 });
+
+test("🔒 Bloque 5: el Diario rotula la NC con SU número (credit_notes), no con el de la factura", () => {
+  // Leído del código: DOCUMENTO_DE es una constante local. Si volviera a
+  // apuntar a `invoices`, el source_id de una NC no encontraría fila y el
+  // renglón saldría sin documento.
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const src = readFileSync(require("node:path").join(process.cwd(), "src/lib/finanzas/reports/diario-general-source.ts"), "utf8");
+  assert.match(src, /nota_credito: \{ tabla: "credit_notes", campo: "credit_note_number" \}/);
+});

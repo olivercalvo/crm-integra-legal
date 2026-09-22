@@ -133,6 +133,9 @@ async function facturasPendientes(db: DB, tenantId: string): Promise<DocumentoPe
     clients: { id: string; name: string };
   };
 
+  // Por SALDO, no solo por status (D3, Bloque 5): una factura acreditada al
+  // 100% por nota de crédito sigue `emitida` con `balance_due = 0` — desde la
+  // 051 `balance_due` ya resta `credited_total`— y no es una cuenta por cobrar.
   return ((data ?? []) as unknown as Fila[])
     .filter((f) => Number(f.balance_due) > 0.005)
     .map((f) => ({

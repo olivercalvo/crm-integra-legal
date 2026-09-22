@@ -326,7 +326,10 @@ export async function loadDestinosDeOrigen(
    */
   const DIRECTOS: Record<string, { tabla: string; ruta: (id: string) => string }> = {
     factura: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.factura },
-    nota_credito: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.nota_credito },
+    // Bloque 5 (D5): el asiento de una NC lleva `source_id = la NC`, y la NC
+    // tiene pantalla propia. Antes se comprobaba en `invoices`, lo que con el
+    // source_id de una NC no encontraba nada y dejaba el renglón sin enlace.
+    nota_credito: { tabla: "credit_notes", ruta: RUTA_DEL_DOCUMENTO.nota_credito },
     gasto: { tabla: "business_expenses", ruta: RUTA_DEL_DOCUMENTO.gasto },
     // Bloque 4 (D4): el gasto de trámite se abre desde el Mayor. Faltaba desde
     // el 03/09 y salía sin "Abrir el documento" (1.7 de la auditoría).
@@ -394,6 +397,21 @@ export async function loadDestinosDeOrigen(
       if (row.business_expense_id) destinos.set(row.id, RUTA_DEL_DOCUMENTO.gasto(row.business_expense_id));
       else if (row.expense_id) destinos.set(row.id, RUTA_DEL_DOCUMENTO.gasto_tramite(row.expense_id));
     }
+  }
+
+  // -- la reversión de una FACTURA (052) y de un GASTO DE TRÁMITE (050) ------
+  //    El espejo lleva el `source_id` del documento revertido: se comprueba
+  //    que exista y se enlaza a su pantalla, igual que el asiento original.
+  const idsReversion = Array.from(idsPorTipo.get("reversion") ?? []).filter((id) => !destinos.has(id));
+  if (idsReversion.length > 0) {
+    const [facs, tramites] = await Promise.all([
+      db.from("invoices").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
+      db.from("expenses").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
+    ]);
+    if (facs.error) console.error("[finanzas/mayor] loadDestinosDeOrigen(invoices/reversion) failed", facs.error);
+    if (tramites.error) console.error("[finanzas/mayor] loadDestinosDeOrigen(expenses/reversion) failed", tramites.error);
+    for (const row of (facs.data ?? []) as { id: string }[]) destinos.set(row.id, RUTA_DEL_DOCUMENTO.factura(row.id));
+    for (const row of (tramites.data ?? []) as { id: string }[]) destinos.set(row.id, RUTA_DEL_DOCUMENTO.gasto_tramite(row.id));
   }
 
   const idsPago = new Set<string>([

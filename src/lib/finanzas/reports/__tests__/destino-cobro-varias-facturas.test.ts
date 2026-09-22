@@ -89,3 +89,24 @@ test("un pago de un GASTO DE TRÁMITE (049) enlaza al gasto de trámite, no a un
   assert.equal(destinos.get("sp1"), "/finanzas/gastos-bufete/compra-1");
   assert.equal(destinos.get("sp2"), "/finanzas/gastos-tramite/tramite-9");
 });
+
+test("Bloque 5: la NC enlaza a SU pantalla (source_id = la NC), y la reversión de una factura o de un gasto de trámite a su documento", async () => {
+  const db = fakeDb({
+    credit_notes: [{ id: "nc-1" }],
+    invoices: [{ id: "i1" }],
+    expenses: [{ id: "tr-1" }],
+    payment_applications: [],
+    payment_reversals: [],
+    payments: [],
+    supplier_payments: [],
+  });
+  const destinos = await loadDestinosDeOrigen(db as never, TENANT, [
+    { source_type: "nota_credito", source_id: "nc-1" },
+    { source_type: "reversion", source_id: "i1" },
+    { source_type: "reversion", source_id: "tr-1" },
+  ] as never);
+  assert.equal(destinos.get("nc-1"), "/finanzas/notas-credito/nc-1", "la NC tiene pantalla propia desde el Bloque 5");
+  assert.equal(destinos.get("i1"), "/finanzas/facturas/i1", "la anulación (052) lleva a la factura");
+  assert.equal(destinos.get("tr-1"), "/finanzas/gastos-tramite/tr-1", "la reversión del gasto de trámite (050) lleva al gasto");
+  assert.equal(RUTA_DEL_DOCUMENTO.nota_credito("x"), "/finanzas/notas-credito/x");
+});

@@ -23,7 +23,8 @@ type DB = SupabaseClient;
  */
 const DOCUMENTO_DE: Record<string, { tabla: string; campo: string; truncar?: number }> = {
   factura: { tabla: "invoices", campo: "invoice_number" },
-  nota_credito: { tabla: "invoices", campo: "invoice_number" },
+  // Bloque 5 (D5): el source_id del asiento es la NC; se rotula NC-000001.
+  nota_credito: { tabla: "credit_notes", campo: "credit_note_number" },
   gasto: { tabla: "business_expenses", campo: "supplier_name" },
   gasto_tramite: { tabla: "expenses", campo: "concept", truncar: 40 },
   pago: { tabla: "payments", campo: "payment_number" },

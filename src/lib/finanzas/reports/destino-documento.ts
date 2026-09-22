@@ -27,9 +27,12 @@
 /** `source_type` del asiento → ruta del documento que lo originó. */
 export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
   factura: (id) => `/finanzas/facturas/${id}`,
-  // La nota de crédito se muestra DENTRO del detalle de su factura, no tiene
-  // pantalla propia.
-  nota_credito: (id) => `/finanzas/facturas/${id}`,
+  // Desde el Bloque 5 (22/09/2026) la NC tiene pantalla propia y su asiento
+  // lleva `source_id = la NC` (D5), no la factura: una factura puede tener
+  // varias NC parciales y el drill-down tiene que caer en LA que originó el
+  // movimiento. Antes apuntaba a `/finanzas/facturas/{id}` asumiendo que el
+  // source_id era la factura — con la NC parcial habría sido un 404.
+  nota_credito: (id) => `/finanzas/notas-credito/${id}`,
   gasto: (id) => `/finanzas/gastos-bufete/${id}`,
   // ───────────────────────────────────────────────────────────────────────────
   // `gasto_tramite` es un source_type APARTE de `gasto`, y no por prolijidad
@@ -67,12 +70,13 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
  * Los `source_type` que NO tienen documento y por lo tanto no llevan a ninguna
  * pantalla. Un asiento de diario no tiene origen: su origen es él mismo.
  *
- * ⚠️ `reversion` es el caso a medias: el TIPO no tiene pantalla, pero el
- * espejo de un COBRO (046) lleva el `source_id` del cobro y
- * `loadDestinosDeOrigen` lo resuelve por `payment_reversals` a la misma
- * factura que el asiento original. Una reversión de otra cosa se queda sin
- * enlace. Por eso no está en `RUTA_DEL_DOCUMENTO`: no hay una ruta por tipo,
- * hay una por tabla de origen, y solo una de esas tablas existe hoy.
+ * ⚠️ `reversion` es el caso a medias: el TIPO no tiene pantalla, pero cada
+ * espejo lleva el `source_id` de lo que revierte y `loadDestinosDeOrigen` lo
+ * resuelve por su tabla de origen: un cobro por `payment_reversals` (046), un
+ * pago a proveedor por `supplier_payments` (048/049), la anulación de una
+ * factura por `invoices` (052) y un gasto de trámite por `expenses` (050) —
+ * los cuatro a la misma pantalla que el asiento original. Por eso no está en
+ * `RUTA_DEL_DOCUMENTO`: no hay una ruta por tipo, hay una por tabla de origen.
  */
 export const SOURCE_TYPES_SIN_DOCUMENTO = ["manual", "apertura", "reversion"] as const;
 

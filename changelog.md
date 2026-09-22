@@ -1,5 +1,79 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Asientos de diario: tercero, detalle, clonar y reversión — Bloque 7] - 2026-09-22
+
+**Staging (`develop`):** `858aba5` (054) → `d115c41` (tercero en el formulario, D2) → `32d262b`
+(reportes y D5) → `3c8a413` (detalle) → `64ce879` (clonar) → `c2ba35d` (055) → `4bcc5c2`
+(reversión). Deploy `dpl_C41FXL9EQHpbopxn3SyMa3nQ8WcZ`. **Sin migración a producción. `main`
+sigue en `24b227a`.** Migraciones `054` y `055` SOLO en staging. Cierra 7.3, 7.4, 7.5 no (va en
+su bloque) y 7.6, y con ella **A-0-bis-2**. Diseño aprobado (P1–P5, D1–D9).
+
+### `054` (`858aba5`) — el tercero de cada línea
+
+`journal_entry_lines` gana `client_id` y `supplier_id`: **dos FK reales**, no un discriminador
+—`documents` usa `entity_type`/`entity_id` y no tiene ninguna FK a lo que nombra, y una línea del
+libro es inmutable y eterna—, con `CHECK num_nonnulls(...) <= 1` e índices parciales.
+🔴 `ON DELETE NO ACTION`: un `SET NULL` intentaría modificar la línea y fallaría contra
+`trg_jel_no_update`, con un error sobre el ledger disparado desde la pantalla de Clientes.
+`post_journal_entry` se re-declara con la **misma firma de 13 parámetros** —el tercero viaja
+dentro de `p_lines`, así que ningún llamador se toca— validando que no vengan los dos y que el
+tercero sea del tenant, y sumándolo al `content_hash`. `verificacion-054` 9/9 con falla forzada.
+
+### El formulario y el borrado (`d115c41`)
+
+Un `<select>` por línea con dos `optgroup`; **un solo campo y no dos**, así es imposible cargar
+cliente y proveedor a la vez. El catálogo no filtra por `active`: un ajuste contra la cuenta de
+un cliente inactivo es un caso típico. **D2:** eliminar un cliente o proveedor que aparece en el
+libro devuelve *"aparece en N línea(s) de asiento del libro contable… el libro es inmutable"*,
+nunca el texto de la FK; en clientes va junto a los otros conteos y ANTES de borrar documentos.
+
+### Reportes (`32d262b`)
+
+Mayor: la columna Nombre resuelve en **tres escalones** —tercero de la línea, tercero de la línea
+de cuenta control, y recién después el heurístico de texto, que sostiene todo lo anterior a la
+`054`—. Excel con el tercero de la línea, su RUC y su DV en columnas separadas. Diario con
+columna Tercero. **D5:** la antigüedad mide los asientos MANUALES contra la cuenta control y los
+nombra en "de dónde sale esa diferencia": dejaron de caer en el residuo anónimo de *"hay una
+tercera causa"*. **No** alimentan los tramos — un asiento manual no tiene vencimiento.
+
+### Detalle y clonar (`3c8a413`, `64ce879`)
+
+`/finanzas/asientos/[id]` (admin y contador, ya cubierto por el prefijo): líneas con tercero,
+documento de origen, y **los dos lados de la reversión** (D6). Enlace desde el Diario gateado por
+rol, porque ese reporte lo ve la abogada. **Clonar** (D7) arrastra montos, descripciones,
+referencia y terceros; la fecha es la de HOY y la banda lo dice. Solo asientos `manual`, y no más
+de `MAX_LINEAS_MANUALES` (D9: el tope es del formulario, no del libro).
+
+### `055` y la reversión (`c2ba35d`, `4bcc5c2`)
+
+RPC `reverse_journal_entry`: genérico en la firma, **filtrado a `source_type = 'manual'`
+adentro** —reversar desde ahí una factura se saltaría `cancelInvoice` y la nota de crédito—, con
+el espejo verificado por `EXCEPT ALL` y la fecha de hoy. Más el **índice único parcial
+`(tenant_id, reverses_entry_id)`**, que saca de las tres funciones de reversión la regla de "una
+sola vez" y la pone en la base. `verificacion-055` 9/9, incluido el índice atajando un espejo
+posteado por el motor. La UI reusa el MISMO diálogo con su cuarta variante.
+
+### Tres avisos que decían lo contrario de lo que el sistema hace
+
+El formulario de asientos prometía que la reversión "todavía no está disponible"; el alta de
+gasto de trámite y el 409 de editar la cuenta de una línea decían lo mismo del gasto, cuando su
+reversión existe **desde la `050`** (Bloque 4) y el botón está en esa misma pantalla — uno de
+ellos mandaba a "avisarle a Oliver". Los tres corregidos.
+
+### Verificado en el deploy
+
+Con clic real como contador: asiento 50 cargado con tercero por línea (Aníbal Serracín / CABLE
+ONDA) y verificado en la base; Mayor 100004 con el nombre en su columna; Diario con la columna
+Tercero; antigüedad nombrando el asiento manual y **sin el párrafo de la tercera causa**;
+detalle del 50 y del 48 (que muestra "reversa al asiento 43"); Clonar → formulario precargado con
+montos, terceros, descripción y fecha de hoy; Reversar → vista previa del espejo, motivo, asiento
+51, banda "fue reversado por el 51" y el neto en cero sobre las dos cuentas, con la cadena de
+hash intacta. Por API como abogada: el borrado de un cliente del libro → 400 con el mensaje del
+libro, sin borrar nada.
+
+**Tests:** 1167/1167.
+
+---
 ## [FND-011 — el asiento nunca lleva un número ajeno] - 2026-09-22
 
 **Staging (`develop`):** `c74cb7f`. Deploy `dpl_85XLSPWn15VLmcJRVfuUMb6sTPst`. **Sin migración.

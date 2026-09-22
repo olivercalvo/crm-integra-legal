@@ -1,5 +1,43 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 7: MÓDULO DE ASIENTOS DE DIARIO — CONSTRUIDO Y VERIFICADO — 22/09/2026 <<<
+
+**Estado:** CONSTRUIDO. Cierra 7.3 (tercero por línea), 7.4 (clonar) y 7.6 (reversión), y con
+ella **A-0-bis-2**. 7.2 (los rótulos "Línea N") ya estaba. **7.5 (importar desde Excel) NO entró:
+va en el bloque siguiente, con la plantilla definitiva incluyendo la columna Tercero.**
+
+Commits `858aba5` (054) → `d115c41` (formulario + D2) → `32d262b` (reportes + D5) → `3c8a413`
+(detalle) → `64ce879` (clonar) → `c2ba35d` (055) → `4bcc5c2` (reversión) en staging; deploy
+`dpl_C41FXL9EQHpbopxn3SyMa3nQ8WcZ`. Migraciones `054` y `055` SOLO en staging; `main` en
+`24b227a`. Detalle en `changelog.md`; reglas en `sop.md` SOP-035 y CLAUDE.md.
+
+**Diseño aprobado (D1–D9) y cómo se cumplió:**
+- D1 dos FK opcionales + `CHECK num_nonnulls <= 1` + `ON DELETE NO ACTION`. ✅
+- D2 el error de FK se atrapa y se traduce en Clientes y en Proveedores; el conteo va antes de
+  borrar documentos. ✅
+- D3 el tercero se puede poner en cualquier línea. ✅ (sin restricción por cuenta de control)
+- D4 el tercero entra al `content_hash`; las tres versiones de la fórmula quedaron listadas con
+  fecha en SOP-014 —el encabezado de la `039` está aplicado y no se corrige en su sitio—. ✅
+- D5 no alimenta las antigüedades, pero sí la línea de "de dónde sale esa diferencia", con monto,
+  cantidad y tercero. ✅
+- D6 detalle en `/finanzas/asientos/[id]`, admin y contador, enlace gateado desde el Diario, con
+  los dos lados de la reversión. ✅
+- D7 clonar arrastra montos y descripción, fecha de hoy, todo editable. ✅
+- D8 `reverse_journal_entry` genérico y filtrado a `manual`, con el índice único parcial. El
+  pre-check pedido dio **9 reversiones sobre 9 asientos distintos, ninguno dos veces**. ✅
+- D9 `MAX_LINEAS_MANUALES` se queda en 100 y está dicho en los dos lados, con test. ✅
+
+**Lo que apareció y se corrigió de paso:** tres avisos que decían que la reversión "todavía no
+está disponible" —el formulario de asientos, el alta de gasto de trámite y el 409 de editar la
+cuenta de una línea—. Los dos últimos eran falsos **desde la `050`** (Bloque 4) y uno mandaba a
+avisarle a Oliver con el botón a la vista.
+
+**Pendiente del bloque siguiente (7.5):** importar asientos desde Excel. Formato de la plantilla,
+validaciones y el envoltorio transaccional `post_journal_entries_batch` están descritos en la
+Fase 0 de este bloque; la plantilla ya puede llevar la columna Tercero.
+
+---
+
 ## >>> BLOQUE 5: NOTA DE CRÉDITO CONTABLE — CONSTRUIDO Y VERIFICADO — 22/09/2026 <<<
 
 **Estado:** CONSTRUIDO. Cierra 2.5, 2.6 y 3.5 de la auditoría y la regla del acta del 09/09.
@@ -697,10 +735,11 @@ real (o verificación por API si la extensión sigue caída). Ver `changelog.md`
 
 ### Fuera de este bloque, anotado
 
-- [ ] **Reversión de asientos MANUALES y de GASTOS DE TRÁMITE** — sigue pendiente (A-0-bis-2 más
-      abajo). Los cuatro avisos "todavía no está disponible" siguen vigentes. Cuando se haga:
-      el RPC de hoy es específico de cobros (borra aplicaciones); un manual no tiene documento
-      que deshacer, así que le alcanza con `post_journal_entry` + el mismo builder puro.
+- [x] **Reversión de asientos MANUALES y de GASTOS DE TRÁMITE** — ✅ las dos. El gasto de
+      trámite en el Bloque 4 (`050`, 21/09) y el asiento manual en el Bloque 7 (`055`, 22/09),
+      que además cerró A-0-bis-2. Se cumplió lo previsto: un manual no tiene documento que
+      deshacer, así que le alcanzó con `post_journal_entry` + el mismo builder puro. Los avisos
+      "todavía no está disponible" se corrigieron los tres.
 - [ ] **`reversion` en el Diario General** sale con la columna Documento vacía (no está en el
       mapa de rótulos por `source_type`). La `reference` sí trae el N° de factura.
 - [ ] **Un cobro `conciliado` no se puede reversar** (T3 no permite `conciliado → anulado`).
@@ -2347,7 +2386,7 @@ cae en "otros" sin que nadie se entere. Conviene el campo.
 
 ---
 
-### A-0-bis-2. 🔴 LA REVERSIÓN DE ASIENTOS — pasa a ser el bloque INMEDIATAMENTE siguiente
+### A-0-bis-2. ✅ CERRADO el 22/09/2026 (Bloque 7, `055`) — LA REVERSIÓN DE ASIENTOS
 
 **Por qué cambió de prioridad.** Era "algún día". Dejó de serlo el 03/09/2026, y el motivo es
 una consecuencia directa de la pantalla de asientos manuales:

@@ -837,6 +837,40 @@ compra; acreditar una factura ya cobrada (saldo acreedor) — pregunta a Josuart
 
 ---
 
+### ASIENTOS DE DIARIO — de quién es cada línea, copiar uno viejo y deshacer
+
+**El tercero, por línea.** Cada línea de un asiento puede decir de qué cliente o de qué proveedor
+se trata —uno de los dos, o ninguno— y se elige de una lista con los dos grupos. Un movimiento
+contra cuentas por cobrar o por pagar sin tercero no le sirve al auxiliar, y ese era el pedido.
+El nombre aparece después en el Libro Mayor, en el Diario y en el Excel, que además lleva el RUC
+y el DV del tercero en columnas separadas.
+
+**Lo que eso trae de la mano:** un cliente o un proveedor nombrado en un asiento **ya no se puede
+eliminar**. El libro es inmutable, así que la ficha tiene que seguir existiendo para que el
+asiento siga significando algo. La pantalla lo dice con esas palabras y ofrece desactivarlo.
+
+**En la antigüedad de saldos** los asientos manuales no aparecen como documentos —no tienen
+vencimiento, así que no entran en los tramos— pero **explican la diferencia** contra el mayor:
+el bloque "de dónde sale esa diferencia" los nombra, con su monto y su tercero.
+
+**Abrir un asiento.** Ahora cada asiento tiene su pantalla, con sus líneas, su documento de
+origen si lo tiene, y los dos lados de una reversión: a cuál reversa y cuál lo reversó.
+
+**Copiar uno viejo.** En un asiento cargado a mano, el botón Clonar abre el formulario con todo
+puesto: cuentas, importes, descripciones y terceros. **La fecha es la de hoy**, no la del
+original, y la pantalla lo avisa. Todo queda editable.
+
+**Deshacer.** Un asiento no se borra ni se edita: se **reversa**. Se ve la vista previa del
+espejo antes de confirmar, se escribe el motivo, y quedan los dos en el libro — el original y su
+reflejo. Solo asientos cargados a mano: los que salieron de una factura, un cobro o un gasto se
+corrigen desde su documento, que además actualiza el estado de ese documento. Y un asiento se
+reversa una sola vez.
+
+**Quién.** Admin y contador, los mismos que cargan asientos. La abogada no carga ni reversa
+asientos de diario; sí ve el Diario General.
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

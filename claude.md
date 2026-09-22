@@ -173,8 +173,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   reimplementa el cálculo (`reversion-una-sola-implementacion.test.ts`). Es la lección de
   `validarConsistenciaDeKind`: si el cliente reimplementa, algún día la vista previa miente.
 - **La fecha es la de la reversión, nunca la del original** (acta del 09/09). El RPC la exige.
-- **Todavía NO existe** la reversión de asientos manuales ni de gastos de trámite. Los avisos
-  "todavía no está disponible" de esas pantallas siguen siendo ciertos.
+- ✅ **Ya existen las otras dos reversiones**, y los avisos que decían lo contrario se
+  corrigieron el 22/09/2026: el **gasto de trámite** desde la `050` (Bloque 4) y el **asiento
+  manual** desde la `055` (Bloque 7). Tres pantallas seguían prometiendo que "todavía no está
+  disponible" —una mandaba a avisarle a Oliver con el botón a la vista—. Lo que sigue sin existir
+  es la reversión de una **nota de crédito**.
 
 ### Recibo de caja (desde 2026-09-21)
 - **Un cobro es un recibo de caja `REC-000001`**, correlativo interno de la secuencia `'payment'`
@@ -285,6 +288,35 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **NC de COMPRA no va (D6).** Preguntas abiertas en `task_plan.md`: (i) ideati — ¿la DGI acepta
   una NC enviada semanas después de su fecha contable?; (ii) Josuarth — acreditar una factura ya
   cobrada (saldo acreedor) y el excedente del recibo.
+
+### Asientos de diario — tercero, clon y reversión (desde 2026-09-22, Bloque 7 — SOLO staging)
+- 🔴 **El tercero de una línea son DOS FK reales** (`journal_entry_lines.client_id` /
+  `.supplier_id`, `CHECK num_nonnulls(...) <= 1`), **no** un discriminador tipo `documents`: una
+  línea del libro es inmutable y eterna, y un puntero colgado ahí no se arregla nunca.
+- 🔴 **`ON DELETE NO ACTION`, jamás `SET NULL`.** Los triggers de la `023` rechazan todo UPDATE
+  sobre esas líneas, así que un `SET NULL` fallaría dentro del DELETE del cliente con un error
+  sobre el ledger. Consecuencia buscada: **un cliente o proveedor nombrado en el libro no se
+  elimina más**; la app lo explica con ese texto y nunca con el de la FK.
+- **El tercero entra al `content_hash`** (tercera versión de la fórmula; las tres están listadas
+  con fecha en `sop.md` SOP-014) y **viaja dentro de `p_lines`**: la firma de
+  `post_journal_entry` sigue teniendo 13 parámetros y ningún llamador se tocó.
+- **Se puede poner en cualquier línea**, no solo en cuentas de control.
+- **El Mayor resuelve el nombre en tres escalones**: tercero de la línea → tercero de la línea de
+  cuenta control → el heurístico de texto viejo, que sostiene TODO lo anterior a la `054`.
+- **Los asientos manuales NO alimentan la antigüedad** (no tienen vencimiento) pero **sí la
+  explican**: la línea de "de dónde sale esa diferencia" los nombra con monto y tercero. Antes
+  caían en el residuo anónimo de "hay una tercera causa".
+- **Clonar arrastra montos, descripciones y terceros; la fecha es la de HOY.** Solo asientos
+  `manual`. `borradoresDesdeAsiento()` ni siquiera recibe la fecha.
+- 🔴 **`reverse_journal_entry` es genérico en la firma y `source_type = 'manual'` adentro.**
+  Reversar desde ahí el asiento de una factura se saltaría `cancelInvoice` y la nota de crédito;
+  el de un cobro dejaría la factura pagada con la plata devuelta. El filtro está en el RPC (que es
+  el permiso), en la ruta (admin y contador, **los mismos que cargan**) y en la pantalla.
+- 🔒 **Un asiento se reversa UNA vez, y ahora lo sostiene la base**: índice único parcial
+  `(tenant_id, reverses_entry_id)`. Antes vivía solo dentro de cada RPC, repetido tres veces.
+  📋 Pre-flight obligatorio antes de producción (está al pie de la `055`).
+- **`MAX_LINEAS_MANUALES = 100` es tope del FORMULARIO, no del libro.** El RPC no tiene tope y el
+  importador de Excel no pasa por ahí. No unificarlos.
 
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`

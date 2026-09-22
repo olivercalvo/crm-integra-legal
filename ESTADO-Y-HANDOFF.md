@@ -15,6 +15,55 @@ lo reemplaza en `develop`; plan en `task_plan.md`.
 ---
 
 
+## Cierre del 22/09/2026 — Bloque 7: módulo de asientos de diario
+
+**SHA de la app en staging: `4bcc5c2`** — deployment `dpl_C41FXL9EQHpbopxn3SyMa3nQ8WcZ`, READY.
+Encima va solo este commit de docs. **`main` sigue en `24b227a`. Producción no se tocó, ni
+lectura ni escritura.** Migraciones `054` y `055` aplicadas SOLO en staging.
+
+**1167/1167.** `tsc` limpio. Lint: los 20 preexistentes de Legal.
+
+### Qué entró (detalle en `changelog.md`, reglas en SOP-035 y CLAUDE.md)
+
+Tercero por línea con dos FK reales y `ON DELETE NO ACTION` (054), en el formulario, en el Mayor,
+en el Diario y en el Excel; el borrado de un cliente o proveedor del libro se explica en vez de
+filtrar la FK; los asientos manuales explican la diferencia de la antigüedad (D5); detalle del
+asiento con los dos lados de la reversión; clonar; y la reversión de asientos manuales (055) con
+el índice que impone una sola reversión por asiento.
+
+### 🔴 Cuatro cosas que nadie debe "arreglar"
+
+1. **`ON DELETE NO ACTION` en el tercero.** Un `SET NULL` fallaría contra el trigger de
+   inmutabilidad, desde la pantalla de Clientes y con un error sobre el ledger.
+2. **`reverse_journal_entry` filtra `manual`.** Reversar una factura desde ahí se saltaría
+   `cancelInvoice` y la nota de crédito.
+3. **El tercero entra al hash.** Es la tercera versión de la fórmula; las tres están listadas en
+   SOP-014 con fecha, y un verificador que recalcule el contenido las necesita.
+4. **`MAX_LINEAS_MANUALES` es del formulario.** El importador (7.5) no lo aplica.
+
+### Verificado en el deploy
+
+Con clic real como contador: asiento 50 con tercero por línea; Mayor con el nombre; Diario con la
+columna Tercero; antigüedad nombrando el asiento manual y sin "tercera causa"; detalle del 50 y
+del 48; Clonar con todo precargado y fecha de hoy; Reversar → asiento 51, banda "fue reversado",
+neto cero en las dos cuentas y cadena de hash intacta. Por API como abogada: borrar un cliente
+del libro → 400 con el mensaje del libro y sin borrar nada.
+
+### Estado de staging al cerrar
+
+Asiento 50 (manual, con tercero) reversado por el 51; `journal_entry` = 51. CLI-015 (Aníbal
+Serracín) y el proveedor CABLE ONDA quedaron **no eliminables** por aparecer en el libro — es el
+comportamiento nuevo, no un problema.
+
+### Lo que sigue
+
+- **7.5, importar asientos desde Excel**: su propio bloque. La plantilla ya puede llevar la
+  columna Tercero, y hace falta `post_journal_entries_batch` para que un archivo entre entero o
+  no entre (el correlativo y la cadena no se deshacen entre llamadas).
+- Reversión de una **nota de crédito**: sigue sin existir.
+
+---
+
 ## Cierre del 22/09/2026 (mañana) — FND-011
 
 **SHA de la app en staging: `c74cb7f`** — deployment `dpl_85XLSPWn15VLmcJRVfuUMb6sTPst`, READY.

@@ -2734,3 +2734,85 @@ al cliente.
 `credit-note.test.ts`, `nota-de-credito-un-solo-creador.test.ts`, `asiento-nota-credito.test.ts`,
 `nota-de-credito-pantalla.test.ts`; `scripts/verificar-nota-de-credito.mts` contra el deploy
 (prepara facturas por la API si no quedan candidatas).
+
+## SOP-035: Asientos de diario — el tercero, el clon y la reversión
+
+**Por qué existe:** desde el 22/09/2026 (Bloque 7, migraciones `054` y `055`, SOLO en staging) un
+asiento de diario tiene tercero por línea, pantalla propia, botón de clonar y reversión. Son
+cuatro decisiones que alguien podría deshacer creyendo que simplifica.
+
+### 1. 🔴 El tercero son DOS FK reales, y `ON DELETE NO ACTION`
+
+`journal_entry_lines.client_id` / `.supplier_id`, con `CHECK num_nonnulls(...) <= 1`. En el repo
+conviven los dos patrones —arco exclusivo con FK (`expense_lines`, `supplier_payments`) y
+discriminador suelto (`documents`, que **no tiene ninguna FK** a lo que nombra)— y para el libro
+decide solo: una línea es inmutable y eterna, así que un puntero colgado ahí no se arregla nunca.
+
+**`SET NULL` sería una bomba de tiempo**: los triggers `trg_jel_no_update` / `trg_jel_no_delete`
+(023) rechazan todo UPDATE sobre esas líneas, así que el `SET NULL` fallaría *dentro* del DELETE
+del cliente, con un error sobre el ledger disparado desde la pantalla de Clientes. Con NO ACTION
+el rechazo es de la FK, claro y atrapable, y la app lo traduce (§2).
+
+Consecuencia buscada y hay que decirla en voz alta: **un cliente o un proveedor nombrado en el
+libro ya no se puede eliminar.** Nunca. Se desactiva.
+
+El tercero se puede poner en CUALQUIER línea, no solo en las de control (D3): acotarlo sería una
+regla contable que nadie pidió.
+
+### 2. El borrado bloqueado se EXPLICA, no se filtra
+
+`buildLedgerBlockMessage()` (clientes) y el conteo equivalente en `deleteSupplier` (proveedores).
+El mensaje dice *"aparece en N línea(s) de asiento del libro contable… el libro es inmutable"* y
+**no promete que se destrabe borrando otra cosa**, porque no se destraba. En clientes el conteo va
+junto a los otros y **antes de borrar un solo documento**: el orden inverso fue un bug real que
+`delete-guards.ts` documenta en su encabezado.
+
+### 3. Clonar arrastra los montos; la fecha es la de HOY
+
+Josuarth: «abrís un asiento viejo, le das copiar, y te queda uno igual donde solo cambiás los
+montos». Si el clon llegara en cero habría que teclearlo entero y el botón no ahorraría nada.
+`borradoresDesdeAsiento()` es puro y **ni siquiera recibe la fecha**: la pone la pantalla, y es la
+de hoy. La del original puede caer en un mes cerrado, y entonces el rechazo del RPC parecería un
+bug del botón; además es el criterio del acta del 09/09 para todo lo que se registra de nuevo. La
+banda del clon lo dice en vez de dejarlo como sorpresa.
+
+Solo se clonan asientos `manual`: clonar el de una factura fabricaría a mano un asiento que el
+documento va a volver a generar.
+
+### 4. 🔴 La reversión es genérica en la firma y `manual` adentro
+
+`reverse_journal_entry(tenant, entry_id, motivo, fecha, descripción, líneas, autor)`.
+
+Los otros tres reversores son específicos **porque cada uno toca su documento**: `reverse_payment`
+borra las `payment_applications` y marca el cobro `anulado`; `reverse_supplier_payment` marca el
+pago; `reverse_expense_tramite` marca el gasto. Un asiento manual no tiene documento, así que este
+es el más chico de los cuatro — y por eso mismo **tiene que filtrar**: reversar desde ahí el
+asiento de una factura se saltaría `cancelInvoice`, el gate de mes cerrado y toda la nota de
+crédito del Bloque 5; el de un cobro dejaría la factura pagada con la plata devuelta (T7a cuelga
+de `payment_applications`, no del asiento).
+
+Tres capas: el RPC (que es el permiso, `EXECUTE` solo `service_role`), la ruta (admin y contador,
+**los mismos que cargan**, no los que reversan cobros) y la pantalla. Y no hay cuarta puerta:
+`POST /api/finanzas/asientos` fuerza `source_type: 'manual'` y nunca acepta `reverses_entry_id`.
+
+`source_id` del espejo va **NULL**: el vínculo es `reverses_entry_id`, y con el id del original
+ahí el Mayor lo abriría como si fuera un documento.
+
+### 5. 🔒 Una sola reversión por asiento, en la BASE
+
+`journal_entries_una_reversion_por_asiento (tenant_id, reverses_entry_id) WHERE ... IS NOT NULL`.
+Hasta la `055` esa regla vivía **solo dentro de cada RPC**, repetida tres veces. Ahora cierra los
+cuatro caminos, incluido el de alguien que postee un espejo directo con el motor.
+
+📋 **Antes de aplicarla en producción** hay que contar asientos reversados dos veces (la consulta
+está al pie de la `055`); tiene que dar cero. En staging dio 9 reversiones sobre 9 asientos.
+
+### 6. El tope de 100 líneas es del FORMULARIO (D9)
+
+`MAX_LINEAS_MANUALES` acota la pantalla, no el libro: el RPC solo exige dos líneas y el
+importador de Excel —que carga asientos de 200— no pasa por ahí. Está dicho en los dos lados para
+que nadie los "unifique"; hay un test que lee el comentario.
+
+**Verificación:** `sql/tests/verificacion-054-*.sql` y `-055-*.sql` (ROLLBACK, con falla forzada
+después de postear); tests `tercero-por-linea`, `tercero-en-el-formulario`,
+`tercero-en-los-reportes`, `detalle-de-asiento`, `clonar-asiento`, `reversar-asiento-manual`.

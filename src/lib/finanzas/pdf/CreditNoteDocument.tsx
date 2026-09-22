@@ -2,10 +2,15 @@
  * Plantilla PDF para notas de crédito (Sprint 2C, D7 + D8).
  *
  * Mirror del estilo de QuoteDocument.tsx (paleta navy/gold) pero con:
- *   - Header rojo de "ANULACIÓN" en lugar del badge de status azul.
+ *   - Header rojo de "ANULACIÓN" (NC total que anula la factura) o dorado de
+ *     "PARCIAL" (NC posterior por líneas, Bloque 5) en lugar del badge azul.
  *   - Banner que cita la factura origen (FAC-XXX-NNNNNN del DD/MM/YYYY).
- *   - Razón de la anulación destacada arriba.
+ *   - Razón destacada arriba.
  *   - Totales en NEGATIVO (con paréntesis estilo contable).
+ *   - 🔴 Marca visible de DOCUMENTO INTERNO cuando `fe_estado` es
+ *     `no_emitida` (Bloque 5, D1): la NC existe en los libros del bufete pero
+ *     la DGI no la autorizó. No se le entrega al cliente como comprobante
+ *     fiscal hasta que el PAC la autorice y esta banda desaparezca.
  *
  * Server-only: usa @react-pdf/renderer (ESM). NO importar desde Client
  * Components.
@@ -47,6 +52,8 @@ export interface CreditNoteDocumentClient {
   name: string;
   client_number: string;
   ruc: string | null;
+  /** `clients.digito_verificador`. Va en su propia línea, nunca pegado al RUC. */
+  digito_verificador: string | null;
 }
 
 export interface CreditNoteDocumentInvoice {
@@ -69,6 +76,10 @@ export interface CreditNoteDocumentProps {
   grand_total: number;
   generated_at_label: string;
   generated_by_label: string;
+  /** true = la NC acompaña una anulación (factura anulada). false = NC posterior/parcial. */
+  es_anulacion: boolean;
+  /** `credit_notes.fe_estado`. `no_emitida` dibuja la banda de documento interno (D1). */
+  fe_estado: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +170,35 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   // Banner factura origen + razón
+  internalBand: {
+    backgroundColor: COLOR_RED_700,
+    color: COLOR_WHITE,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  internalBandTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 10,
+    color: COLOR_WHITE,
+    letterSpacing: 1.4,
+  },
+  internalBandText: {
+    fontSize: 8,
+    color: COLOR_WHITE,
+    marginTop: 2,
+    lineHeight: 1.3,
+  },
+  partialBadge: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 8,
+    color: COLOR_NAVY,
+    backgroundColor: COLOR_GOLD,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    letterSpacing: 1.2,
+    marginTop: 3,
+  },
   cancellationBox: {
     borderLeftWidth: 3,
     borderLeftColor: COLOR_RED_700,
@@ -404,7 +444,10 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
     grand_total,
     generated_at_label,
     generated_by_label,
+    es_anulacion,
+    fe_estado,
   } = props;
+  const noEmitida = fe_estado === "no_emitida";
 
   const invoiceKindLabel =
     invoice.invoice_kind === "HONORARIOS" ? "Honorarios" : "Reembolso";
@@ -413,7 +456,7 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
     <Document
       title={`Nota de crédito ${credit_note_number}`}
       author="Integra Legal"
-      subject={`Nota de crédito ${credit_note_number} (anula ${invoice.invoice_number})`}
+      subject={`Nota de crédito ${credit_note_number} (${es_anulacion ? "anula" : "sobre"} ${invoice.invoice_number})`}
       creator="CRM Integra Legal"
       producer="CRM Integra Legal"
     >
@@ -426,22 +469,44 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
           <View style={styles.docHeader}>
             <Text style={styles.docHeaderTitle}>NOTA DE CRÉDITO</Text>
             <Text style={styles.docHeaderNumber}>{credit_note_number}</Text>
-            <Text style={styles.docHeaderBadge}>ANULACIÓN</Text>
+            {es_anulacion ? (
+              <Text style={styles.docHeaderBadge}>ANULACIÓN</Text>
+            ) : (
+              <Text style={styles.partialBadge}>NOTA DE CRÉDITO PARCIAL</Text>
+            )}
           </View>
         </View>
 
+        {/* ===== D1: documento interno, sin autorización de la DGI ===== */}
+        {noEmitida && (
+          <View style={styles.internalBand} fixed>
+            <Text style={styles.internalBandTitle}>
+              DOCUMENTO INTERNO — SIN AUTORIZACIÓN DE LA DGI
+            </Text>
+            <Text style={styles.internalBandText}>
+              Esta nota de crédito consta en los libros del bufete pero todavía no fue
+              enviada ni autorizada por la DGI. No tiene CUFE ni valor como comprobante
+              fiscal electrónico.
+            </Text>
+          </View>
+        )}
+
         {/* ===== Banner factura origen + razón ===== */}
         <View style={styles.cancellationBox}>
-          <Text style={styles.cancellationLabel}>FACTURA ANULADA</Text>
+          <Text style={styles.cancellationLabel}>
+            {es_anulacion ? "FACTURA ANULADA" : "FACTURA ACREDITADA"}
+          </Text>
           <Text style={styles.cancellationText}>
-            Esta nota de crédito anula la factura{" "}
+            {es_anulacion
+              ? "Esta nota de crédito anula la factura"
+              : "Esta nota de crédito acredita parte de la factura"}{" "}
             <Text style={{ fontFamily: "Helvetica-Bold" }}>
               {invoice.invoice_number}
             </Text>{" "}
             ({invoiceKindLabel}) emitida el {formatDateEs(invoice.issue_date)}.
           </Text>
           <Text style={styles.cancellationReasonLabel}>
-            RAZÓN DE LA ANULACIÓN
+            {es_anulacion ? "RAZÓN DE LA ANULACIÓN" : "MOTIVO"}
           </Text>
           <Text style={styles.cancellationText}>{reason}</Text>
         </View>
@@ -453,6 +518,9 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
             <InfoLine label="Nombre" value={client.name} bold />
             <InfoLine label="N°" value={client.client_number} />
             {client.ruc && <InfoLine label="RUC" value={client.ruc} />}
+            {client.digito_verificador && (
+              <InfoLine label="DV" value={client.digito_verificador} />
+            )}
           </View>
           <View style={styles.infoCol}>
             <Text style={styles.infoColHeading}>DATOS DEL DOCUMENTO</Text>

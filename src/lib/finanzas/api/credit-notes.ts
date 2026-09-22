@@ -51,6 +51,34 @@ type DB = SupabaseClient;
  * corrige lleva la fecha en que se hace). Un test lee este archivo y falla si
  * aparece `issue_date` de la factura en el insert.
  */
+/**
+ * Cantidad ya acreditada por NC anteriores, por `invoice_line_id`. La usa
+ * `createCreditNote` para validar y el detalle de la factura para ofrecer en
+ * el diálogo solo lo que queda: una sola consulta, para que lo que la pantalla
+ * ofrece sea exactamente lo que el servidor va a aceptar.
+ */
+export async function acreditadoPorLineaDeFactura(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<Map<string, number>> {
+  const { data: previas, error: errPrevias } = await db
+    .from("credit_note_lines")
+    .select("invoice_line_id, quantity, credit_notes!inner(invoice_id, status)")
+    .eq("tenant_id", tenantId)
+    .eq("credit_notes.invoice_id", invoiceId)
+    .eq("credit_notes.status", "emitida");
+  if (errPrevias) {
+    throw new MutationError(pgErrorToMessage(errPrevias), 500, errPrevias);
+  }
+  const acreditadoPorLinea = new Map<string, number>();
+  for (const l of (previas ?? []) as { invoice_line_id: string | null; quantity: number | string }[]) {
+    if (!l.invoice_line_id) continue;
+    acreditadoPorLinea.set(l.invoice_line_id, (acreditadoPorLinea.get(l.invoice_line_id) ?? 0) + Number(l.quantity));
+  }
+  return acreditadoPorLinea;
+}
+
 export async function createCreditNote(
   db: DB,
   tenantId: string,
@@ -88,20 +116,7 @@ export async function createCreditNote(
   }
 
   // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
-  const { data: previas, error: errPrevias } = await db
-    .from("credit_note_lines")
-    .select("invoice_line_id, quantity, credit_notes!inner(invoice_id, status)")
-    .eq("tenant_id", tenantId)
-    .eq("credit_notes.invoice_id", input.invoice_id)
-    .eq("credit_notes.status", "emitida");
-  if (errPrevias) {
-    throw new MutationError(pgErrorToMessage(errPrevias), 500, errPrevias);
-  }
-  const acreditadoPorLinea = new Map<string, number>();
-  for (const l of (previas ?? []) as { invoice_line_id: string | null; quantity: number | string }[]) {
-    if (!l.invoice_line_id) continue;
-    acreditadoPorLinea.set(l.invoice_line_id, (acreditadoPorLinea.get(l.invoice_line_id) ?? 0) + Number(l.quantity));
-  }
+  const acreditadoPorLinea = await acreditadoPorLineaDeFactura(db, tenantId, input.invoice_id);
 
   // 3. La regla contable (pura)
   const facturadas: LineaFacturada[] = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
@@ -340,12 +355,13 @@ export async function getCreditNoteById(
       `
         id, credit_note_number, invoice_id, client_id, issue_date, reason,
         observations, status, currency, subtotal_total, tax_total, grand_total,
+        fe_estado, dgi_cufe, dgi_fecha_autorizacion,
         created_at, created_by,
         invoice:invoices!credit_notes_invoice_id_fkey(
-          id, invoice_number, invoice_kind, issue_date
+          id, invoice_number, invoice_kind, issue_date, status, grand_total
         ),
         client:clients!credit_notes_client_id_fkey(
-          id, name, client_number, ruc
+          id, name, client_number, ruc, digito_verificador
         )
       `
     )

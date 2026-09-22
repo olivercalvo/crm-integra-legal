@@ -41,6 +41,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const cnData = cn as unknown as {
     credit_note_number: string;
     issue_date: string;
+    fe_estado: string;
     reason: string;
     observations: string | null;
     subtotal_total: string | number;
@@ -50,11 +51,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       invoice_number: string;
       invoice_kind: "HONORARIOS" | "REEMBOLSO";
       issue_date: string;
+      status: string;
     } | null;
     client: {
       name: string;
       client_number: string;
       ruc: string | null;
+      digito_verificador: string | null;
     } | null;
     lines: Array<{
       line_order: number;
@@ -83,6 +86,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       name: cnData.client.name,
       client_number: cnData.client.client_number,
       ruc: cnData.client.ruc,
+      digito_verificador: cnData.client.digito_verificador,
     },
     invoice: {
       invoice_number: cnData.invoice.invoice_number,
@@ -105,6 +109,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       timeZone: "America/Panama",
     }),
     generated_by_label: ctx.userName ?? "",
+    // La NC de una anulación se presenta como tal; las demás son parciales o
+    // posteriores (Bloque 5). Lo dice el estado de la factura, no la NC.
+    es_anulacion: cnData.invoice.status === "anulada",
+    // D1: `no_emitida` dibuja la banda de documento interno.
+    fe_estado: cnData.fe_estado,
   };
 
   try {

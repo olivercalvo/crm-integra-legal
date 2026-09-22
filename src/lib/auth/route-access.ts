@@ -192,6 +192,18 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   //   ❌ /finanzas/cobros/nuevo    (el alta es de admin y abogada; la página
   //                                 además redirige, y la API responde 403)
   /^\/finanzas\/cobros$/,
+  // ───────────────────────────────────────────────────────────────────────────
+  // Detalle de una NOTA DE CRÉDITO (Bloque 5, 22/09/2026)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Una NC parcial lleva asiento propio (`source_type = 'nota_credito'`, D5) y
+  // el Mayor y el Diario enlazan a ella. Es el documento origen que el contador
+  // audita, así que entra al DETALLE —solo lectura: la NC es inmutable— con el
+  // mismo criterio que el detalle de factura y el de gasto de trámite.
+  //   ✅ /finanzas/notas-credito/{id}
+  //   ❌ /finanzas/notas-credito        (no hay listado; si lo hubiera: no)
+  // Emitir una NC es de admin y abogada (`POST /api/finanzas/credit-notes`),
+  // y se hace desde el detalle de la factura, no desde una ruta propia.
+  /^\/finanzas\/notas-credito\/[^/]+$/,
 ];
 
 /**

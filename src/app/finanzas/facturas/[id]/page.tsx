@@ -15,9 +15,12 @@ import { BackButton } from "@/components/ui/back-button";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { getInvoiceById } from "@/lib/finanzas/queries/invoices";
-import { previewNextInvoiceNumber } from "@/lib/finanzas/api/invoices";
+import { previewNextInvoiceNumber, periodoDeLaFacturaCerrado } from "@/lib/finanzas/api/invoices";
 import { getPaymentsForInvoice } from "@/lib/finanzas/queries/payments";
-import { getCreditNoteForInvoice } from "@/lib/finanzas/api/credit-notes";
+import {
+  listCreditNotesForInvoice,
+  acreditadoPorLineaDeFactura,
+} from "@/lib/finanzas/api/credit-notes";
 import {
   INVOICE_KIND_LABEL,
   isEditable,
@@ -32,7 +35,9 @@ import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
 import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
-import { CreditNoteCard } from "../_components/credit-note-card";
+import { CreditNotesSection } from "../_components/credit-notes-section";
+import { CreditNoteDialog, type LineaAcreditable } from "../_components/credit-note-dialog";
+import { AcreditadaTotalBadge } from "@/components/finanzas/acreditada-total-badge";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 import { fmtImporte } from "@/lib/utils/importe";
 
@@ -91,13 +96,46 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
 
-  // Cargar pagos + NC en paralelo solo si aplica
-  const [payments, creditNote] = await Promise.all([
+  // Bloque 5: lo acreditado por notas de crédito. `credited_total` es derivada
+  // (051) y `balance_due` ya la resta. "Acreditada total" (D3) no es un
+  // estado: es la factura emitida con todo su total acreditado, saldo 0.
+  const grandTotal = Number(invoice.grand_total);
+  const creditedTotal = Number(invoice.credited_total ?? 0);
+  const acreditadaTotal = !isAnulada && grandTotal > 0 && creditedTotal >= grandTotal - 0.005;
+  const puedeTenerNc = cancellable || isAnulada;
+
+  // Cargar pagos, NC, lo ya acreditado por línea y el período, en paralelo.
+  // El período solo importa si esta persona puede anular (D4: cerrado el mes
+  // de la factura, el botón "Anular" se reemplaza por "Nota de crédito").
+  const [payments, creditNotes, acreditadoPorLinea, mesCerrado] = await Promise.all([
     showPaymentsSection
       ? getPaymentsForInvoice(db, tenantId, invoice.id)
       : Promise.resolve([]),
-    isAnulada ? getCreditNoteForInvoice(db, tenantId, invoice.id) : Promise.resolve(null),
+    puedeTenerNc ? listCreditNotesForInvoice(db, tenantId, invoice.id) : Promise.resolve([]),
+    cancellable && canMutate && !acreditadaTotal
+      ? acreditadoPorLineaDeFactura(db, tenantId, invoice.id)
+      : Promise.resolve(new Map<string, number>()),
+    cancellable && canMutate
+      ? periodoDeLaFacturaCerrado(db, tenantId, String(invoice.issue_date))
+      : Promise.resolve(false),
   ]);
+
+  // Lo que el diálogo de NC puede ofrecer: facturado menos ya acreditado, por
+  // línea. Sale de la MISMA consulta que usa el servidor para validar.
+  const lineasAcreditables: LineaAcreditable[] = invoice.lines.map((ln) => ({
+    invoice_line_id: ln.id,
+    line_order: ln.line_order,
+    description: ln.description,
+    quantity: Number(ln.quantity),
+    unit_price: Number(ln.unit_price),
+    tax_rate: Number(ln.tax_rate ?? 0),
+    disponible: Math.round((Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0)) * 100) / 100,
+  }));
+  // "Anular" solo mientras la factura no tenga NC parcial (053: la anulación
+  // espeja el asiento original completo y la NC parcial ya debitó su parte) y
+  // el mes esté abierto (D4). Si no, el camino es la NC.
+  const showCancel = cancellable && canMutate && !mesCerrado && creditedTotal <= 0;
+  const showCreditNote = cancellable && canMutate && !acreditadaTotal && lineasAcreditables.some((l) => l.disponible > 0);
   // Card "Facturación Electrónica" (PAC) — visible en facturas emitidas y
   // en anuladas que hayan llegado a interactuar con DGI (para conservar
   // historial post-anulación).
@@ -160,6 +198,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                 {displayNumber}
               </h1>
               <InvoiceStatusBadge status={invoice.status} />
+              {acreditadaTotal && <AcreditadaTotalBadge />}
             </div>
             <p className="mt-1 text-sm text-gray-500">
               Creada el {formatDateTime(invoice.created_at)}
@@ -195,7 +234,16 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               grandTotal={Number(invoice.grand_total)}
             />
           )}
-          {cancellable && canMutate && (
+          {showCreditNote && (
+            <CreditNoteDialog
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoice_number}
+              balanceDue={Number(invoice.balance_due)}
+              lineas={lineasAcreditables}
+              mesCerrado={mesCerrado}
+            />
+          )}
+          {showCancel && (
             <CancelInvoiceDialog
               invoiceId={invoice.id}
               invoiceNumber={invoice.invoice_number}
@@ -208,6 +256,20 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* D4: cerrado el mes de la factura no se anula; se acredita con fecha de hoy. */}
+      {cancellable && canMutate && mesCerrado && (
+        <div role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+          El mes de esta factura ({String(invoice.issue_date).slice(0, 7)}) está cerrado: no se anula, se
+          emite una nota de crédito con fecha de hoy. Para dejarla sin efecto, acredite todas las líneas.
+        </div>
+      )}
+      {cancellable && canMutate && !mesCerrado && creditedTotal > 0 && !acreditadaTotal && (
+        <div role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+          Esta factura ya tiene B/. {fmtImporte(creditedTotal)} acreditados por nota de crédito: ya no se
+          anula. Lo que falta se acredita con otra nota de crédito.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
         {/* Cuerpo principal */}
@@ -400,14 +462,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             />
           )}
 
-          {/* Nota de crédito generada al anular (Sprint 2C, D7).
-              Visible solo en facturas anuladas que tengan NC asociada. */}
-          {isAnulada && creditNote && (
-            <CreditNoteCard
-              creditNoteId={creditNote.id}
-              creditNoteNumber={creditNote.credit_note_number}
-            />
-          )}
+          {/* Las notas de crédito de la factura (Bloque 5): la de la anulación
+              o las parciales posteriores, cada una con su detalle y su PDF. */}
+          <CreditNotesSection
+            notas={creditNotes}
+            isAnulada={isAnulada}
+            creditedTotal={creditedTotal}
+          />
 
           {/* Información de anulación — solo si la factura fue anulada.
               Render similar a DgiDataCard pero solo lectura (la anulación
@@ -480,15 +541,23 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   ${fmtImporte(Number(invoice.grand_total))}
                 </dd>
               </div>
-              {Number(invoice.amount_paid) > 0 && (
+              {(Number(invoice.amount_paid) > 0 || (creditedTotal > 0 && !isAnulada)) && (
                 <>
-                  <div className="flex justify-between text-xs text-gray-600 pt-2">
-                    <dt>Pagado</dt>
-                    <dd className="font-mono">${fmtImporte(Number(invoice.amount_paid))}</dd>
-                  </div>
+                  {Number(invoice.amount_paid) > 0 && (
+                    <div className="flex justify-between text-xs text-gray-600 pt-2">
+                      <dt>Pagado</dt>
+                      <dd className="font-mono">${fmtImporte(Number(invoice.amount_paid))}</dd>
+                    </div>
+                  )}
+                  {creditedTotal > 0 && !isAnulada && (
+                    <div className="flex justify-between text-xs text-gray-600 pt-2">
+                      <dt>Acreditado (NC)</dt>
+                      <dd className="font-mono">-${fmtImporte(creditedTotal)}</dd>
+                    </div>
+                  )}
                   <div className="flex justify-between font-semibold">
-                    <dt className="text-amber-700">Saldo</dt>
-                    <dd className="font-mono text-amber-700">
+                    <dt className={acreditadaTotal ? "text-gray-600" : "text-amber-700"}>Saldo</dt>
+                    <dd className={`font-mono ${acreditadaTotal ? "text-gray-600" : "text-amber-700"}`}>
                       ${fmtImporte(Number(invoice.balance_due))}
                     </dd>
                   </div>
@@ -503,8 +572,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <p>
                 En estado{" "}
                 <span className="font-mono">{invoice.status}</span> no se permite
-                editar líneas ni cabecera. Para revertir, anulá la factura — se
-                generará una nota de crédito automáticamente.
+                editar líneas ni cabecera. Para corregirla: anularla dentro del
+                mes (genera la nota de crédito total) o emitir una nota de
+                crédito por las líneas que correspondan.
               </p>
             </div>
           )}

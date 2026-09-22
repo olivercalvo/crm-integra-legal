@@ -34,6 +34,18 @@ export const NC_MOTIVO_MAX = 1000;
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Lo que vale una línea acreditada: `quantity × unit_price`, redondeado, más su
+ * ITBMS redondeado. Es el mismo cálculo que T8c hace en la base sobre
+ * `credit_note_lines`, y el diálogo lo usa para el total en vivo: una sola
+ * implementación, para que la vista previa no mienta.
+ */
+export function totalDeLineaDeNc(quantity: number, unitPrice: number, taxRate: number): number {
+  const subtotal = round2(quantity * unitPrice);
+  const impuesto = round2(subtotal * taxRate);
+  return round2(subtotal + impuesto);
+}
+
 // ---------------------------------------------------------------------------
 // Capa 1: la forma
 // ---------------------------------------------------------------------------
@@ -156,8 +168,6 @@ export function validarLineasDeNotaDeCredito(args: {
           : `La línea "${f.description}" tiene ${disponible} disponible(s) para acreditar (facturado ${f.quantity}, ya acreditado ${round2(f.quantity - disponible)}).`;
       return;
     }
-    const subtotal = round2(p.quantity * f.unit_price);
-    const impuesto = round2(subtotal * f.tax_rate);
     lineas.push({
       invoice_line_id: f.id,
       line_order: f.line_order,
@@ -168,7 +178,7 @@ export function validarLineasDeNotaDeCredito(args: {
       tax_code: f.tax_code,
       tax_rate: f.tax_rate,
       tax_code_id: f.tax_code_id,
-      line_total: round2(subtotal + impuesto),
+      line_total: totalDeLineaDeNc(p.quantity, f.unit_price, f.tax_rate),
     });
   });
 

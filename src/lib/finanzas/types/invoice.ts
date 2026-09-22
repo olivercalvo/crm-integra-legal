@@ -158,6 +158,8 @@ export interface InvoiceRow {
   tax_total: string | number;
   grand_total: string | number;
   amount_paid: string | number;
+  /** Lo acreditado por notas de crédito: derivada (051). `balance_due` ya la resta. */
+  credited_total: string | number;
   balance_due: string | number;
   notes: string | null;
   created_at: string;

@@ -55,7 +55,7 @@ export async function listInvoices(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
         issue_date, due_date, status, currency,
-        subtotal_total, tax_total, grand_total, amount_paid, balance_due,
+        subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,
@@ -109,7 +109,7 @@ export async function getInvoiceById(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
         issue_date, due_date, status, currency,
-        subtotal_total, tax_total, grand_total, amount_paid, balance_due,
+        subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,

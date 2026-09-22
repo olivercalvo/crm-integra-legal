@@ -833,7 +833,7 @@ export async function cancelInvoice(
   // 1. Status y pagos
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number, amount_paid, issue_date")
+    .select("id, status, invoice_number, amount_paid, credited_total, issue_date")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -859,6 +859,14 @@ export async function cancelInvoice(
       `Esta factura tiene B/. ${amountPaid.toFixed(2)} en pagos registrados. Elimine o reverse los pagos primero antes de anular.`,
       400
     );
+  }
+  // Una factura con una NC parcial ya NO se anula: la anulación espeja el
+  // asiento ORIGINAL completo, y la NC parcial ya debitó su parte con asiento
+  // propio (D5) — se contabilizaría dos veces. El resto se acredita con otra
+  // NC. El RPC lo vuelve a verificar.
+  const creditedTotal = Number(inv.credited_total ?? 0);
+  if (creditedTotal > 0) {
+    throw new InvoiceMutationError(MENSAJE_YA_ACREDITADA(creditedTotal), 409);
   }
 
   // 2. 🔴 El mes de la factura (D4). Se mira acá, con el mensaje para la
@@ -923,6 +931,13 @@ export async function cancelInvoice(
 }
 
 /** El texto de D4, en un solo lugar (lo usa también la pantalla). */
+export function MENSAJE_YA_ACREDITADA(creditedTotal: number): string {
+  return (
+    `Esta factura ya tiene B/. ${creditedTotal.toFixed(2)} acreditados por nota de crédito: ` +
+    `no se anula. Lo que falta se acredita con otra nota de crédito.`
+  );
+}
+
 export function MENSAJE_MES_CERRADO(issueDate: string): string {
   return (
     `El mes de esta factura (${issueDate.slice(0, 7)}) está cerrado: no se anula, ` +

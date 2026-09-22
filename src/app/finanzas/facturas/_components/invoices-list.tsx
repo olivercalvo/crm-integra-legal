@@ -3,8 +3,15 @@ import { FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
 import { FeEstadoBadge } from "@/components/finanzas/fe-estado-badge";
+import { AcreditadaTotalBadge } from "@/components/finanzas/acreditada-total-badge";
 import { INVOICE_KIND_LABEL, type InvoiceListItem } from "@/lib/finanzas/types/invoice";
 import { fmtImporte } from "@/lib/utils/importe";
+
+/** D3 (Bloque 5): emitida con todo el total acreditado por NC. No es un status. */
+function acreditadaTotal(inv: InvoiceListItem): boolean {
+  const grand = Number(inv.grand_total);
+  return inv.status !== "anulada" && grand > 0 && Number(inv.credited_total ?? 0) >= grand - 0.005;
+}
 
 interface Props {
   invoices: InvoiceListItem[];
@@ -88,7 +95,10 @@ export function InvoicesList({ invoices }: Props) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <InvoiceStatusBadge status={inv.status} />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <InvoiceStatusBadge status={inv.status} />
+                    {acreditadaTotal(inv) && <AcreditadaTotalBadge />}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <FeEstadoBadge estado={inv.fe_estado} />
@@ -130,6 +140,7 @@ export function InvoicesList({ invoices }: Props) {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <InvoiceStatusBadge status={inv.status} />
+                {acreditadaTotal(inv) && <AcreditadaTotalBadge />}
                 <FeEstadoBadge estado={inv.fe_estado} />
               </div>
             </div>

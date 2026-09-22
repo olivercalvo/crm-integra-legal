@@ -27,6 +27,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  ConteoConTerceros,
   ControlMedido,
   DocumentoPendiente,
   SinAsiento,
@@ -99,6 +100,76 @@ async function saldoDeCuentaControl(
     saldoApertura: apertura,
     cuentaCodigo: c.code,
     cuentaNombre: c.name,
+  };
+}
+
+/**
+ * ASIENTOS MANUALES contra la cuenta control (D5, Bloque 7).
+ *
+ * Mueven el mayor y no el auxiliar, así que son una de las causas de la
+ * diferencia — y hasta hoy caían en el residuo anónimo. Se miden acá y se
+ * nombran en pantalla; **no entran en los tramos**: un asiento manual no tiene
+ * vencimiento.
+ *
+ * `source_type = 'manual'` a propósito y no "todo lo que no sea un documento":
+ * una `reversion` o el asiento de `apertura` son otra cosa y tienen su propia
+ * explicación.
+ *
+ * El signo: para COBRAR (activo) un débito sube el mayor y sube la diferencia;
+ * para PAGAR el auxiliar se compara en valor absoluto contra un saldo acreedor,
+ * así que el efecto se invierte. Se devuelve ya con el signo que corresponde.
+ */
+async function manualesContraControl(
+  db: DB,
+  tenantId: string,
+  code: string,
+  tipo: TipoAntiguedad
+): Promise<ConteoConTerceros> {
+  const { data: cuenta } = await db
+    .from("chart_of_accounts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("code", code)
+    .maybeSingle();
+  if (!cuenta) return { cantidad: 0, monto: 0, terceros: [] };
+
+  const { data, error } = await db
+    .from("journal_entry_lines")
+    .select(
+      "entry_id, debit, credit, clients(name), suppliers(legal_name), " +
+        "journal_entries!inner(source_type)"
+    )
+    .eq("tenant_id", tenantId)
+    .eq("account_id", (cuenta as { id: string }).id)
+    .eq("journal_entries.source_type", "manual");
+
+  if (error) {
+    console.error("[finanzas/antiguedad] manualesContraControl failed", error);
+    return { cantidad: 0, monto: 0, terceros: [] };
+  }
+
+  type Fila = {
+    entry_id: string;
+    debit: number | string;
+    credit: number | string;
+    clients: { name: string } | null;
+    suppliers: { legal_name: string } | null;
+  };
+  const filas = (data ?? []) as unknown as Fila[];
+  const asientos = new Set<string>();
+  const terceros = new Set<string>();
+  let neto = 0;
+  for (const f of filas) {
+    asientos.add(f.entry_id);
+    neto += Number(f.debit ?? 0) - Number(f.credit ?? 0);
+    const nombre = f.clients?.name ?? f.suppliers?.legal_name;
+    if (nombre) terceros.add(nombre);
+  }
+
+  return {
+    cantidad: asientos.size,
+    monto: round2(tipo === "pagar" ? -neto : neto),
+    terceros: Array.from(terceros).sort((a, b) => a.localeCompare(b, "es")),
   };
 }
 
@@ -436,6 +507,22 @@ async function sinAsientoPagar(db: DB, tenantId: string): Promise<SinAsiento> {
   };
 }
 
+/**
+ * Las tres piezas de `porCablear` juntas: documentos sin asiento, cobros o
+ * pagos sin asiento, y los asientos manuales contra la cuenta control (D5).
+ */
+async function sinAsientoConManuales(
+  db: DB,
+  tenantId: string,
+  tipo: TipoAntiguedad
+): Promise<SinAsiento> {
+  const [base, manuales] = await Promise.all([
+    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
+    manualesContraControl(db, tenantId, CUENTA_CONTROL[tipo], tipo),
+  ]);
+  return { ...base, manuales };
+}
+
 export async function loadAntiguedad(
   db: DB,
   tenantId: string,
@@ -452,7 +539,7 @@ export async function loadAntiguedad(
           ([a, b]) => [...a, ...b]
         ),
     saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
-    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
+    sinAsientoConManuales(db, tenantId, tipo),
   ]);
 
   // El auxiliar de pagar se compara en VALOR ABSOLUTO: la cuenta por pagar tiene

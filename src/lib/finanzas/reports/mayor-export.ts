@@ -77,8 +77,11 @@ const COLUMNAS_MAYOR = [
  */
 export function hojaDelMayor(
   mayor: MayorDeCuenta,
+  /** Tercero deducido del DOCUMENTO de origen, por asiento. */
   terceros: Map<string, TerceroFiscal>,
-  ctx: ContextoExport
+  ctx: ContextoExport,
+  /** 054: tercero puesto en la LÍNEA, por clave `cliente:<id>` / `proveedor:<id>`. */
+  tercerosDeLinea?: Map<string, TerceroFiscal>
 ): HojaExport {
   const encabezado: string[][] = [
     [ctx.bufete],
@@ -92,8 +95,14 @@ export function hojaDelMayor(
   encabezado.push(["Movimientos", String(mayor.cantidadMovimientos)]);
 
   const filas: Celda[][] = mayor.filas.map((f) => {
-    // Sin asiento no hay tercero: la fila de saldo inicial es el caso típico.
-    const t = f.entryId ? terceros.get(f.entryId) ?? SIN_TERCERO : SIN_TERCERO;
+    // 🔴 EL TERCERO DE LA LÍNEA MANDA (054). Si la línea nombra a un cliente o
+    // a un proveedor con su FK, ese es el tercero de este renglón —y es el
+    // único que sirve en un asiento manual, donde cada línea puede ser de otro.
+    // Si no lo tiene, se cae al que se deduce del documento de origen, que es
+    // como venía funcionando. Sin asiento no hay ninguno de los dos: la fila de
+    // saldo inicial es el caso típico.
+    const deLaLinea = f.terceroClave ? tercerosDeLinea?.get(f.terceroClave) : undefined;
+    const t = deLaLinea ?? (f.entryId ? terceros.get(f.entryId) ?? SIN_TERCERO : SIN_TERCERO);
 
     return [
       fecha(f.fecha),

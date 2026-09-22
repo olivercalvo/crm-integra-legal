@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
+import { claveDeTercero } from "@/lib/finanzas/reports/tercero-fiscal";
 import type {
   CuentaDelMayor,
   LineaHermana,
@@ -177,7 +178,8 @@ export async function loadMovimientosDeCuenta(
   let q = db
     .from("journal_entry_lines")
     .select(
-      "id, entry_id, line_order, debit, credit, line_description, " +
+      "id, entry_id, line_order, debit, credit, line_description, client_id, supplier_id, " +
+        "clients(name), suppliers(legal_name), " +
         "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id)"
     )
     .eq("tenant_id", tenantId)
@@ -199,6 +201,10 @@ export async function loadMovimientosDeCuenta(
     debit: number | string;
     credit: number | string;
     line_description: string | null;
+    client_id: string | null;
+    supplier_id: string | null;
+    clients: { name: string } | null;
+    suppliers: { legal_name: string } | null;
     journal_entries: {
       entry_number: number;
       transaction_date: string;
@@ -214,7 +220,8 @@ export async function loadMovimientosDeCuenta(
   const { data: todas, error: errTodas } = await db
     .from("journal_entry_lines")
     .select(
-      "entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)"
+      "entry_id, line_order, debit, credit, line_description, client_id, supplier_id, " +
+        "clients(name), suppliers(legal_name), chart_of_accounts!inner(code, name)"
     )
     .eq("tenant_id", tenantId)
     .in("entry_id", entryIds);
@@ -230,6 +237,10 @@ export async function loadMovimientosDeCuenta(
     debit: number | string;
     credit: number | string;
     line_description: string | null;
+    client_id: string | null;
+    supplier_id: string | null;
+    clients: { name: string } | null;
+    suppliers: { legal_name: string } | null;
     chart_of_accounts: { code: string; name: string };
   };
 
@@ -243,6 +254,8 @@ export async function loadMovimientosDeCuenta(
       credit: Number(row.credit ?? 0),
       line_order: row.line_order,
       descripcion: row.line_description,
+      terceroClave: claveDeTercero(row.client_id, row.supplier_id),
+      terceroNombre: row.clients?.name ?? row.suppliers?.legal_name ?? null,
     });
     porAsiento.set(row.entry_id, lista);
   }
@@ -264,6 +277,8 @@ export async function loadMovimientosDeCuenta(
     account_name: cuentaInfo?.name ?? code,
     account_type: (cuentaInfo?.account_type ?? "asset") as AccountType,
     hermanas: porAsiento.get(f.entry_id) ?? [],
+    terceroClave: claveDeTercero(f.client_id, f.supplier_id),
+    terceroNombre: f.clients?.name ?? f.suppliers?.legal_name ?? null,
   }));
 }
 

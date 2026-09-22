@@ -7,7 +7,10 @@ import {
   loadMovimientosDeCuenta,
 } from "@/lib/finanzas/reports/libro-mayor-source";
 import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
-import { resolverTercerosFiscales } from "@/lib/finanzas/reports/tercero-fiscal";
+import {
+  resolverTercerosFiscales,
+  resolverTercerosDeLineas,
+} from "@/lib/finanzas/reports/tercero-fiscal";
 import { hojaDelMayor } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
@@ -84,13 +87,27 @@ export async function GET(request: NextRequest) {
       }))
     );
 
+    // 054: el tercero puesto EN LA LÍNEA. Se resuelve aparte porque no sale del
+    // documento de origen —un asiento manual no tiene— y es el que manda cuando
+    // existe: ver `hojaDelMayor`.
+    const tercerosDeLinea = await resolverTercerosDeLineas(
+      ctx.db,
+      ctx.tenantId,
+      mayor.filas.map((f) => f.terceroClave)
+    );
+
     const buffer = generarXlsx([
-      hojaDelMayor(mayor, terceros, {
-        bufete: REPORT_FIRM_NAME,
-        generadoEl: formatGeneratedAt(),
-        desde: desde || null,
-        hasta: hasta || null,
-      }),
+      hojaDelMayor(
+        mayor,
+        terceros,
+        {
+          bufete: REPORT_FIRM_NAME,
+          generadoEl: formatGeneratedAt(),
+          desde: desde || null,
+          hasta: hasta || null,
+        },
+        tercerosDeLinea
+      ),
     ]);
 
     const filename = `${nombreDeArchivo([

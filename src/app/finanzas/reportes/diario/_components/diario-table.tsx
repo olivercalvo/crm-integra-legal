@@ -69,6 +69,7 @@ function Asiento({ asiento, destino }: { asiento: AsientoDiario; destino: string
           <tr className="border-b text-left text-[11px] uppercase tracking-wide text-gray-400">
             <th className="px-4 py-1.5 font-semibold">Cuenta</th>
             <th className="px-4 py-1.5 font-semibold">Descripción</th>
+            <th className="px-4 py-1.5 font-semibold">Tercero</th>
             <th className="px-4 py-1.5 text-right font-semibold">Débito</th>
             <th className="px-4 py-1.5 text-right font-semibold">Crédito</th>
           </tr>
@@ -81,6 +82,9 @@ function Asiento({ asiento, destino }: { asiento: AsientoDiario; destino: string
                 <span className="ml-2 text-sm text-gray-700">{l.name}</span>
               </td>
               <td className="px-4 py-1.5 text-sm text-gray-600">{l.descripcion}</td>
+              {/* 054: el tercero de la línea. Vacío —no "—"— cuando no lo tiene:
+                  es lo normal en todo lo anterior al Bloque 7. */}
+              <td className="px-4 py-1.5 text-sm text-gray-600">{l.tercero}</td>
               <td className="px-4 py-1.5 text-right"><Importe value={l.debit} /></td>
               <td className="px-4 py-1.5 text-right"><Importe value={l.credit} /></td>
             </tr>
@@ -88,7 +92,7 @@ function Asiento({ asiento, destino }: { asiento: AsientoDiario; destino: string
         </tbody>
         <tfoot>
           <tr className="border-t bg-gray-50/60">
-            <td colSpan={2} className="px-4 py-1.5 text-right text-xs font-medium text-gray-500">
+            <td colSpan={3} className="px-4 py-1.5 text-right text-xs font-medium text-gray-500">
               Total del asiento
             </td>
             <td className="px-4 py-1.5 text-right">

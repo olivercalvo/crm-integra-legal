@@ -64,6 +64,10 @@ import {
 export interface LineaHermana extends LineaParaContrapartida {
   line_order: number;
   descripcion: string | null;
+  /** 054: `"cliente:<uuid>"` / `"proveedor:<uuid>"`, o null. */
+  terceroClave?: string | null;
+  /** Nombre de la ficha del tercero de ESTA línea, si lo tiene. */
+  terceroNombre?: string | null;
 }
 
 /** Una línea de asiento, con lo que hace falta del asiento que la contiene. */
@@ -87,6 +91,9 @@ export interface MovimientoCrudo {
   account_type: AccountType;
   /** TODAS las líneas del asiento, para poder resolver la contrapartida. */
   hermanas: LineaHermana[];
+  /** 054: el tercero de ESTA línea. */
+  terceroClave?: string | null;
+  terceroNombre?: string | null;
 }
 
 export interface CuentaDelMayor {
@@ -262,6 +269,12 @@ export interface FilaMayor {
   numero: string;
   /** Columna "Nombre": el tercero. Ver `nombreDelTercero()`. */
   nombre: string;
+  /**
+   * 054: el tercero de la línea como clave (`"cliente:<uuid>"`), cuando lo
+   * tiene. La exportación la usa para poner RUC y DV de la ficha; la pantalla
+   * ya tiene el nombre en `nombre`.
+   */
+  terceroClave: string | null;
   descripcion: string;
   contrapartida: string;
   /** true si la contrapartida es ambigua (más de una cuenta del otro lado). */
@@ -343,19 +356,36 @@ export function tipoTransaccionLabel(sourceType: string): string {
 }
 
 /**
- * Columna "Nombre" — el tercero de la operación.
+ * Columna "Nombre" — el tercero de la operación, en tres escalones.
  *
- * El ledger NO tiene un campo de tercero: no se modeló, y agregarlo ahora
- * tocaría una tabla inmutable. Se deduce de la descripción de la línea que toca
- * la CUENTA CONTROL del asiento (`cuenta_control` = clientes o proveedores),
- * que es justamente donde el seed y el futuro cableado ponen el nombre.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 1º EL TERCERO DE LA PROPIA LÍNEA (migración `054`, 22/09/2026)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Desde el Bloque 7 una línea puede nombrar al cliente o al proveedor con una
+ * FK. Es un dato, no una deducción: manda sobre todo lo demás.
  *
- * Si no hay línea de cuenta control, queda vacío en vez de inventar algo.
+ * 2º EL TERCERO DE LA LÍNEA DE CUENTA CONTROL del mismo asiento. Si la línea
+ *    que se está mirando es la de gasto y la de 100004 dice de quién es, el
+ *    renglón lo muestra igual: es el mismo asiento.
+ *
+ * 3º LA DESCRIPCIÓN de la línea de cuenta control — el heurístico viejo, de
+ *    cuando el ledger no tenía tercero. Sigue vivo porque **los asientos
+ *    anteriores a la 054 no tienen FK** y son la mayoría del libro; sacarlo
+ *    dejaría esa columna vacía en todo lo ya registrado.
+ *
+ * Si no hay nada de eso, queda vacío en vez de inventar algo.
  */
 export function nombreDelTercero(
   hermanas: LineaHermana[],
-  controlPorCodigo: Record<string, string | null>
+  controlPorCodigo: Record<string, string | null>,
+  propia?: LineaHermana | null
 ): string {
+  const deLaPropia = propia?.terceroNombre?.trim();
+  if (deLaPropia) return deLaPropia;
+
+  const conTercero = hermanas.find((l) => l.terceroNombre?.trim());
+  if (conTercero?.terceroNombre) return conTercero.terceroNombre.trim();
+
   const control = hermanas.find((l) => controlPorCodigo[l.code]);
   return control?.descripcion?.trim() || "";
 }
@@ -407,6 +437,8 @@ export function buildMayorDeCuenta(
     tipoTransaccion: "",
     numero: "",
     nombre: "",
+    // La fila de saldo inicial no es un movimiento: no tiene tercero.
+    terceroClave: null,
     descripcion: "Saldo inicial",
     contrapartida: "",
     contrapartidaAmbigua: false,
@@ -431,7 +463,7 @@ export function buildMayorDeCuenta(
     const propia =
       m.hermanas.find((h) => h.line_order === m.line_order) ?? m.hermanas[0];
 
-    const nombre = nombreDelTercero(m.hermanas, control);
+    const nombre = nombreDelTercero(m.hermanas, control, propia);
     const propiaDescripcion = m.line_description?.trim() || "";
 
     // Si la línea que se está mostrando ES la de la cuenta control, su
@@ -450,6 +482,10 @@ export function buildMayorDeCuenta(
       tipoTransaccion: tipoTransaccionLabel(m.source_type),
       numero: String(m.entry_number),
       nombre,
+      // 054: la clave del tercero de la línea, para que el Excel le ponga RUC
+      // y DV de la ficha. Si la línea no lo tiene, se mira el del asiento —la
+      // resolución por documento de origen— como hasta ahora.
+      terceroClave: propia?.terceroClave ?? m.terceroClave ?? null,
       descripcion,
       contrapartida: contrapartidaDe(propia, m.hermanas),
       contrapartidaAmbigua: contrapartidaEsAmbigua(propia, m.hermanas),

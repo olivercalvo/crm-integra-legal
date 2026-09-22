@@ -122,6 +122,27 @@ export interface SinAsiento {
    * `cobros`; se cuentan aparte para nombrarlos, no para sumarlos dos veces.
    */
   heredados?: Conteo;
+  /**
+   * ASIENTOS MANUALES contra la cuenta control (D5, Bloque 7).
+   *
+   * Un asiento de diario mueve el mayor y **no toca el auxiliar**: no hay
+   * factura ni compra detrás. Antes caía en el residuo que el reporte declaraba
+   * no saber explicar ("hay una tercera causa"). Ahora se mide y se nombra.
+   *
+   * 🔴 **No alimenta la antigüedad**, y es deliberado: un asiento manual no
+   * tiene vencimiento, así que no se puede repartir en tramos sin inventarle
+   * uno. Explica la diferencia; no entra en la tabla.
+   *
+   * `monto` es el efecto NETO sobre la cuenta control, ya con el signo con el
+   * que sube o baja la diferencia. `terceros` son los nombres que esas líneas
+   * traen (054), sin repetir, para que el contador sepa a quién mirar.
+   */
+  manuales?: ConteoConTerceros;
+}
+
+/** Un conteo que además dice a quiénes nombra. */
+export interface ConteoConTerceros extends Conteo {
+  terceros: string[];
 }
 
 /**
@@ -234,8 +255,13 @@ export function buildAntiguedad(
   // Un documento pendiente sin asiento está en el auxiliar y no en el mayor, así
   // que BAJA la diferencia. Un cobro sin asiento ya se descontó del auxiliar y no
   // del mayor, así que la SUBE. De ahí los signos.
+  //
+  // Y un ASIENTO MANUAL contra la cuenta control mueve el mayor sin tocar el
+  // auxiliar (D5): su efecto neto entra tal cual, ya con signo.
   const atribuido = round2(
-    control.sinAsiento.cobros.monto - control.sinAsiento.documentos.monto
+    control.sinAsiento.cobros.monto -
+      control.sinAsiento.documentos.monto +
+      (control.sinAsiento.manuales?.monto ?? 0)
   );
 
   return {

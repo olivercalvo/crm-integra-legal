@@ -75,6 +75,21 @@ export default async function AntiguedadPage({
           )}
         </>
       )}
+      {/* D5 (Bloque 7): los asientos manuales contra la cuenta control. Mueven
+          el mayor y no el auxiliar, así que son una causa de la diferencia —y
+          hasta el 22/09/2026 caían en el residuo anónimo de "una tercera
+          causa". NO entran en los tramos: un asiento manual no tiene
+          vencimiento. */}
+      {(sa.manuales?.cantidad ?? 0) > 0 && (
+        <>
+          , y{" "}
+          <strong>
+            {sa.manuales!.cantidad} asiento(s) de diario por {money(sa.manuales!.monto)}
+          </strong>{" "}
+          contra esta cuenta, que mueven el mayor sin pasar por un documento
+          {sa.manuales!.terceros.length > 0 && <> ({sa.manuales!.terceros.join(", ")})</>}
+        </>
+      )}
     </>
   );
 

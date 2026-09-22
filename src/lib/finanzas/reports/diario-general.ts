@@ -26,6 +26,8 @@ export interface LineaCruda {
   account_code: string;
   account_name: string;
   line_description: string | null;
+  /** 054: nombre de la ficha del tercero de la línea, si lo tiene. */
+  tercero_nombre?: string | null;
   debit: number;
   credit: number;
 }
@@ -47,6 +49,12 @@ export interface LineaDiario {
   code: string;
   name: string;
   descripcion: string;
+  /**
+   * 054: el tercero de la línea, ya resuelto a nombre. Vacío cuando la línea no
+   * nombra a nadie —que es el caso de todo lo anterior al Bloque 7 y de casi
+   * todos los asientos automáticos, donde el tercero sale del documento.
+   */
+  tercero: string;
   debit: number;
   credit: number;
 }
@@ -98,6 +106,7 @@ export function buildDiarioGeneral(crudos: AsientoCrudo[]): DiarioGeneral {
         // Si la línea no trae glosa propia, la del asiento explica igual: un
         // renglón sin texto no le dice nada a quien audita.
         descripcion: l.line_description?.trim() || a.description,
+        tercero: l.tercero_nombre?.trim() || "",
         debit: round2(l.debit),
         credit: round2(l.credit),
       }));

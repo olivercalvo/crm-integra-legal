@@ -25,6 +25,7 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     tipoTransaccion: "Gasto / compra",
     numero: "2",
     nombre: "ESTACIÓN DELTA VÍA ESPAÑA",
+    terceroClave: null,
     descripcion: "Combustible de la flota — febrero 2026",
     contrapartida: "Cuentas por pagar",
     contrapartidaAmbigua: false,

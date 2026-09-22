@@ -28,7 +28,7 @@
  *   pago          → payments → aplicación   → invoices.client_id → clients
  *   nota_credito  → credit_notes → invoice  → clients
  *   gasto         → business_expenses.supplier_id → suppliers
- *   manual / apertura / reversion           → sin tercero
+ *   manual / apertura / reversion           → el tercero de la LÍNEA (054)
  *
  * ⚠️ **EL DV DE UN CLIENTE SE LLAMA `digito_verificador`, NO `dv`.**
  *
@@ -66,6 +66,82 @@ export interface TerceroFiscal {
 
 /** Un tercero desconocido: las tres columnas vacías, nunca "N/A" ni "—". */
 export const SIN_TERCERO: TerceroFiscal = { nombre: "", ruc: "", dv: "" };
+
+/**
+ * EL TERCERO DE UNA LÍNEA (migración `054`) — la otra vía, y la que manda.
+ *
+ * Desde el Bloque 7 una línea puede nombrar al cliente o al proveedor
+ * directamente, sin pasar por el documento de origen. Eso cubre justo lo que
+ * esta resolución por `source_type` no podía: un asiento manual, donde cada
+ * línea puede ser de un tercero distinto.
+ *
+ * La clave del mapa es `"cliente:<uuid>"` / `"proveedor:<uuid>"`, la misma
+ * forma que usa el `<select>` del formulario (`valorDeTercero`), para que no
+ * haya dos vocabularios para lo mismo.
+ */
+export function claveDeTercero(
+  clientId: string | null | undefined,
+  supplierId: string | null | undefined
+): string | null {
+  if (clientId) return `cliente:${clientId}`;
+  if (supplierId) return `proveedor:${supplierId}`;
+  return null;
+}
+
+export async function resolverTercerosDeLineas(
+  db: DB,
+  tenantId: string,
+  claves: readonly (string | null)[]
+): Promise<Map<string, TerceroFiscal>> {
+  const resultado = new Map<string, TerceroFiscal>();
+  const clientes = new Set<string>();
+  const proveedores = new Set<string>();
+  for (const c of claves) {
+    if (!c) continue;
+    if (c.startsWith("cliente:")) clientes.add(c.slice("cliente:".length));
+    else if (c.startsWith("proveedor:")) proveedores.add(c.slice("proveedor:".length));
+  }
+  if (clientes.size === 0 && proveedores.size === 0) return resultado;
+
+  // 🔒 Las dos lecturas filtran por tenant: los ids vienen del ledger y sin ese
+  // filtro serían una vía para leer fichas de otro bufete.
+  const [cli, prov] = await Promise.all([
+    clientes.size > 0
+      ? db
+          .from("clients")
+          .select("id, name, ruc, digito_verificador")
+          .eq("tenant_id", tenantId)
+          .in("id", Array.from(clientes))
+      : Promise.resolve({ data: [], error: null }),
+    proveedores.size > 0
+      ? db
+          .from("suppliers")
+          .select("id, legal_name, ruc, dv")
+          .eq("tenant_id", tenantId)
+          .in("id", Array.from(proveedores))
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (cli.error) console.error("[finanzas/tercero] resolverTercerosDeLineas(clients) failed", cli.error);
+  if (prov.error) console.error("[finanzas/tercero] resolverTercerosDeLineas(suppliers) failed", prov.error);
+
+  for (const c of (cli.data ?? []) as Record<string, unknown>[]) {
+    resultado.set(`cliente:${String(c.id)}`, {
+      nombre: texto(c.name),
+      ruc: texto(c.ruc),
+      // ⚠️ En clientes el DV se llama `digito_verificador`. Ver arriba.
+      dv: texto(c.digito_verificador),
+    });
+  }
+  for (const s of (prov.data ?? []) as Record<string, unknown>[]) {
+    resultado.set(`proveedor:${String(s.id)}`, {
+      nombre: texto(s.legal_name),
+      ruc: texto(s.ruc),
+      dv: texto(s.dv),
+    });
+  }
+  return resultado;
+}
 
 /** Lo mínimo que hace falta de un asiento para resolver su tercero. */
 export interface OrigenDeAsiento {

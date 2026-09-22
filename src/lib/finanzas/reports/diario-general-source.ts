@@ -84,7 +84,10 @@ export async function loadAsientosDelDiario(
   // -- líneas, con el código y el nombre de su cuenta -------------------------
   const { data: lineas, error: errLineas } = await db
     .from("journal_entry_lines")
-    .select("entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)")
+    .select(
+      "entry_id, line_order, debit, credit, line_description, " +
+        "clients(name), suppliers(legal_name), chart_of_accounts!inner(code, name)"
+    )
     .eq("tenant_id", tenantId)
     .in("entry_id", entryIds);
 
@@ -99,6 +102,8 @@ export async function loadAsientosDelDiario(
     debit: number | string;
     credit: number | string;
     line_description: string | null;
+    clients: { name: string } | null;
+    suppliers: { legal_name: string } | null;
     chart_of_accounts: { code: string; name: string };
   };
   const porAsiento = new Map<string, LineaCruda[]>();
@@ -109,6 +114,7 @@ export async function loadAsientosDelDiario(
       account_code: l.chart_of_accounts.code,
       account_name: l.chart_of_accounts.name,
       line_description: l.line_description,
+      tercero_nombre: l.clients?.name ?? l.suppliers?.legal_name ?? null,
       debit: Number(l.debit),
       credit: Number(l.credit),
     });

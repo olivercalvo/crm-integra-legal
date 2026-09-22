@@ -16,15 +16,28 @@ import type { RangoFechas } from "@/lib/finanzas/reports/libro-mayor-source";
 
 type DB = SupabaseClient;
 
-/** Tabla y columna de la que sale el rótulo del documento, por `source_type`. */
-const DOCUMENTO_DE: Record<string, { tabla: string; campo: string }> = {
+/**
+ * Tabla y columna de la que sale el rótulo del documento, por `source_type`.
+ * `truncar`: el gasto de trámite no tiene número de documento; va su concepto
+ * recortado (D4 de Oliver, 21/09/2026: el concepto, no el proveedor).
+ */
+const DOCUMENTO_DE: Record<string, { tabla: string; campo: string; truncar?: number }> = {
   factura: { tabla: "invoices", campo: "invoice_number" },
   nota_credito: { tabla: "invoices", campo: "invoice_number" },
   gasto: { tabla: "business_expenses", campo: "supplier_name" },
+  gasto_tramite: { tabla: "expenses", campo: "concept", truncar: 40 },
   pago: { tabla: "payments", campo: "payment_number" },
   // El pago a proveedor (048) se rotula con su comprobante (CE-…).
   pago_proveedor: { tabla: "supplier_payments", campo: "payment_number" },
 };
+
+/** Recorta con puntos suspensivos, sin partir la última palabra si se puede. */
+export function truncarDocumento(texto: string, max: number): string {
+  const t = texto.trim();
+  if (t.length <= max) return t;
+  const corte = t.lastIndexOf(" ", max - 1);
+  return `${t.slice(0, corte > max / 2 ? corte : max - 1).trimEnd()}…`;
+}
 
 /**
  * Los asientos del rango, con sus líneas y el rótulo de su documento.
@@ -113,7 +126,7 @@ export async function loadAsientosDelDiario(
   }
 
   for (const [tipo, ids] of Array.from(idsPorTipo.entries())) {
-    const { tabla, campo } = DOCUMENTO_DE[tipo];
+    const { tabla, campo, truncar } = DOCUMENTO_DE[tipo];
     const { data, error: errDoc } = await db
       .from(tabla)
       .select(`id, ${campo}`)
@@ -128,7 +141,9 @@ export async function loadAsientosDelDiario(
     // puede inferirlo: se pasa por `unknown` a propósito.
     for (const fila of (data ?? []) as unknown as Record<string, unknown>[]) {
       const valor = fila[campo];
-      if (typeof valor === "string") documentos.set(fila.id as string, valor);
+      if (typeof valor === "string") {
+        documentos.set(fila.id as string, truncar ? truncarDocumento(valor, truncar) : valor);
+      }
     }
   }
 

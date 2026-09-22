@@ -41,11 +41,12 @@ test("el tipo de transacción usa el MISMO vocabulario que el Libro Mayor", () =
     // Bloque 3: el pago a PROVEEDOR es otro origen y otra etiqueta; "Cobro" es
     // el recibo de caja (REC-), para que en el Diario no se lean igual.
     asiento({ entry_id: "e5", entry_number: 5, source_type: "pago_proveedor" }),
+    asiento({ entry_id: "e6", entry_number: 6, source_type: "gasto_tramite" }),
   ]);
 
   assert.deepEqual(
     d.asientos.map((a) => a.tipoTransaccion),
-    ["Factura", "Cobro", "Asiento de diario", "Gasto / compra", "Pago a proveedor"]
+    ["Factura", "Cobro", "Asiento de diario", "Gasto / compra", "Pago a proveedor", "Gasto de trámite"]
   );
 });
 

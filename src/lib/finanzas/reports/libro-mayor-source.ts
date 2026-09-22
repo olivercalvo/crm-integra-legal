@@ -328,6 +328,9 @@ export async function loadDestinosDeOrigen(
     factura: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.factura },
     nota_credito: { tabla: "invoices", ruta: RUTA_DEL_DOCUMENTO.nota_credito },
     gasto: { tabla: "business_expenses", ruta: RUTA_DEL_DOCUMENTO.gasto },
+    // Bloque 4 (D4): el gasto de trámite se abre desde el Mayor. Faltaba desde
+    // el 03/09 y salía sin "Abrir el documento" (1.7 de la auditoría).
+    gasto_tramite: { tabla: "expenses", ruta: RUTA_DEL_DOCUMENTO.gasto_tramite },
   };
 
   const idsPorTipo = new Map<string, Set<string>>();

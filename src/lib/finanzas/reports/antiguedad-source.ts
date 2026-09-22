@@ -225,6 +225,77 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
 }
 
 /**
+ * Gastos de TRÁMITE pendientes de pago (Bloque 4, FND-010).
+ *
+ * Un gasto de trámite acredita 200001 al registrarse (DEBE 130003 / HABER
+ * cuentas por pagar, decisión de RM del 25/08) igual que una compra, así que
+ * es una cuenta por pagar y entra al auxiliar. Hasta el 21/09 no entraba, y por
+ * eso la antigüedad no cuadraba contra el mayor (FND-010).
+ *
+ * 🔴 SOLO los que están EN EL LIBRO (`posted_entry_id`). Los anteriores al
+ * posteo automático nacieron sin asiento y nadie sabe si se pagaron: no están
+ * en 200001, así que tampoco entran acá. Aparecen cuando se registran en el
+ * libro (botón de reintento en /finanzas/gastos-tramite/{id}), y entonces sí
+ * cuadran. Contarlos sin asiento sería inventar una deuda que el mayor no tiene.
+ *
+ * El saldo es `amount − amount_paid` (049); `pagado` y `anulado` no entran.
+ */
+async function gastosTramitePendientes(db: DB, tenantId: string): Promise<DocumentoPendiente[]> {
+  const { data, error } = await db
+    .from("expenses")
+    .select("id, supplier_id, concept, date, due_date, amount, amount_paid, status, posted_entry_id")
+    .eq("tenant_id", tenantId)
+    .not("posted_entry_id", "is", null)
+    .in("status", ["pendiente_pago", "parcialmente_pagado"])
+    .order("due_date");
+
+  if (error) {
+    console.error("[finanzas/antiguedad] gastosTramitePendientes failed", error);
+    throw new Error("No se pudieron leer los gastos de trámite pendientes");
+  }
+
+  type Fila = {
+    id: string;
+    supplier_id: string | null;
+    concept: string | null;
+    date: string;
+    due_date: string | null;
+    amount: number | string;
+    amount_paid: number | string;
+  };
+  const saldoDe = (g: Fila) => round2(Number(g.amount) - Number(g.amount_paid ?? 0));
+  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => saldoDe(g) > 0.005);
+
+  const ids = Array.from(new Set(filas.map((g) => g.supplier_id).filter((v): v is string => !!v)));
+  const nombres = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: provs } = await db
+      .from("suppliers")
+      .select("id, legal_name, trade_name")
+      .eq("tenant_id", tenantId)
+      .in("id", ids);
+    for (const p of (provs ?? []) as { id: string; legal_name: string; trade_name: string | null }[]) {
+      nombres.set(p.id, p.trade_name?.trim() || p.legal_name);
+    }
+  }
+
+  return filas.map((g) => {
+    const referencia = String(g.due_date ?? g.date).slice(0, 10);
+    return {
+      id: g.id,
+      numero: g.concept?.trim() || "(sin concepto)",
+      // Sin ficha no hay texto libre en `expenses` (D2): va "(sin proveedor)".
+      tercero: (g.supplier_id ? nombres.get(g.supplier_id) : undefined) ?? "(sin proveedor)",
+      terceroId: g.supplier_id,
+      fechaReferencia: referencia,
+      diasVencido: diasDesde(referencia),
+      saldo: saldoDe(g),
+      sourceType: "gasto_tramite",
+    };
+  });
+}
+
+/**
  * LOS DOCUMENTOS QUE TODAVÍA NO LLEGAN AL MAYOR.
  *
  * Es la segunda causa de que el auxiliar no cuadre, y no tiene nada que ver con
@@ -371,7 +442,12 @@ export async function loadAntiguedad(
   control: ControlMedido;
 }> {
   const [documentos, controlCrudo, sinAsiento] = await Promise.all([
-    tipo === "cobrar" ? facturasPendientes(db, tenantId) : gastosPendientes(db, tenantId),
+    tipo === "cobrar"
+      ? facturasPendientes(db, tenantId)
+      : // Compras del bufete + gastos de trámite EN EL LIBRO (FND-010).
+        Promise.all([gastosPendientes(db, tenantId), gastosTramitePendientes(db, tenantId)]).then(
+          ([a, b]) => [...a, ...b]
+        ),
     saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
     tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
   ]);

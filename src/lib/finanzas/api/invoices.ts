@@ -375,6 +375,93 @@ export async function updateInvoice(
 // EMIT
 // ---------------------------------------------------------------------------
 
+/** El asiento `factura` de una factura, si ya está en el libro (FND-011). */
+interface AsientoDeFactura {
+  entry_number: number;
+  reference: string | null;
+}
+
+async function asientoDeFacturaExistente(
+  ledgerDb: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<AsientoDeFactura | null> {
+  const { data, error } = await ledgerDb
+    .from("journal_entries")
+    .select("entry_number, reference")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", "factura")
+    .eq("source_id", invoiceId)
+    .maybeSingle();
+  if (error) {
+    throw new InvoiceMutationError(pgErrorToMessage(error), 500, error);
+  }
+  if (!data) return null;
+  return {
+    entry_number: Number((data as { entry_number: number }).entry_number),
+    reference: ((data as { reference: string | null }).reference ?? null) as string | null,
+  };
+}
+
+/**
+ * El número con el que un asiento ya escrito nombra a su factura. Está en
+ * `reference` desde la `039`; sin él no se puede saber con qué número se posteó
+ * y la emisión se detiene en vez de inventar uno (FND-011).
+ */
+function numeroDelAsiento(asiento: AsientoDeFactura): string {
+  if (!asiento.reference) {
+    throw new InvoiceMutationError(
+      `Esta factura ya tiene el asiento ${asiento.entry_number} en el libro, pero ese asiento no ` +
+        `registra con qué número se posteó. No se emite para no ponerle uno distinto al del libro: ` +
+        `avisale a Oliver.`,
+      409
+    );
+  }
+  return asiento.reference;
+}
+
+/**
+ * 🔴 El número que se va a escribir no puede pertenecer a OTRA factura.
+ *
+ * Es el guard de FND-011: se corre ANTES de postear. Si la secuencia quedó
+ * detrás de las facturas emitidas (un seed que la rebobinó, una restauración
+ * parcial), el UPDATE del paso 4 fallaría por `invoices_tenant_number_unique`
+ * **después** de que el asiento ya está en el libro, y ese asiento queda para
+ * siempre con el número de otro documento.
+ */
+async function asegurarNumeroLibre(
+  db: DB,
+  tenantId: string,
+  invoiceId: string,
+  formatted: string,
+  asientoPrevio: AsientoDeFactura | null
+): Promise<void> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("invoice_number", formatted)
+    .maybeSingle();
+  if (error) {
+    throw new InvoiceMutationError(pgErrorToMessage(error), 500, error);
+  }
+  const duenio = (data as { id: string } | null)?.id ?? null;
+  if (!duenio || duenio === invoiceId) return;
+
+  if (asientoPrevio) {
+    throw new InvoiceMutationError(
+      `Esta factura ya tiene el asiento ${asientoPrevio.entry_number} con el número ${formatted}, ` +
+        `que hoy pertenece a otra factura. No se puede emitir sin corregir el libro: avisale a Oliver.`,
+      409
+    );
+  }
+  throw new InvoiceMutationError(
+    `El número ${formatted} ya pertenece a otra factura: la numeración quedó detrás de las facturas ` +
+      `emitidas. No se emitió nada y no se registró ningún asiento. Avisale a Oliver para realinearla.`,
+    409
+  );
+}
+
 /**
  * Genera el invoice_number con get_next_sequence_number(), **registra el asiento
  * contable** y transiciona el status a 'emitida'. T2 valida la transición.
@@ -397,6 +484,28 @@ export async function updateInvoice(
  *   · Si emitiéramos primero → una factura emitida sin asiento. Eso es una
  *     divergencia SILENCIOSA entre el documento y el libro, que es exactamente
  *     lo que este módulo existe para impedir.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════
+ * 🔴 Y EL NÚMERO SE VERIFICA ANTES DE POSTEAR (FND-011, 22/09/2026)
+ * ═════════════════════════════════════════════════════════════════════════════
+ * El asiento lleva el número en `reference` y en su descripción, y se postea
+ * ANTES del UPDATE que escribe ese número en la factura. Si el UPDATE falla por
+ * el UNIQUE `invoices_tenant_number_unique` —la secuencia quedó DETRÁS de las
+ * facturas ya emitidas— el asiento queda en el libro con un número que la
+ * factura nunca recibe, y que además pertenece a OTRA factura. Pasó el 22/09 en
+ * staging (asiento 43 con `FAC-HON-000007` sobre un borrador) porque el seed
+ * rebobinaba `numbering_sequences`.
+ *
+ * Dos cierres, los dos acá:
+ *
+ *   1. **Guard antes de postear** (`asegurarNumeroLibre`): si el número ya es de
+ *      otra factura, se corta con 409 y **no se postea nada**. El hueco en la
+ *      secuencia se acepta; un asiento con número ajeno, no.
+ *   2. **El reintento toma el número DEL ASIENTO** (`asientoDeFacturaExistente`),
+ *      no uno nuevo de la secuencia. Lo hace posible el UNIQUE
+ *      `journal_entries_un_asiento_por_documento` (tenant, source_type,
+ *      source_id) de la `034`: el asiento de una factura es único y se puede
+ *      buscar por su documento. Así factura y libro dicen SIEMPRE lo mismo.
  *
  * ⚠️ **El correlativo SÍ se pierde igual.** `get_next_sequence_number` ya
  * consumió el número cuando el asiento falla, y no se devuelve: la secuencia no
@@ -485,24 +594,38 @@ export async function emitInvoice(
     lineas
   );
 
-  // 3. Llamar a la RPC SECURITY DEFINER del schema. Devuelve el INT del
-  //    siguiente número en la secuencia.
-  const sequenceType = SEQUENCE_TYPE_BY_KIND[inv.invoice_kind as InvoiceKind];
-  const { data: nextNumber, error: errSeq } = await db.rpc(
-    "get_next_sequence_number",
-    {
-      p_tenant_id: tenantId,
-      p_sequence_type: sequenceType,
-    }
-  );
+  // 3. EL NÚMERO. Antes de pedirle uno nuevo a la secuencia, mirar si esta
+  //    factura YA tiene asiento: sería el reintento de una emisión que posteó y
+  //    no llegó al UPDATE, y su número es el que está en el libro (FND-011).
+  const asientoPrevio = await asientoDeFacturaExistente(ledgerDb, tenantId, invoiceId);
+  let formatted: string;
+  if (asientoPrevio) {
+    formatted = numeroDelAsiento(asientoPrevio);
+  } else {
+    // Llamar a la RPC SECURITY DEFINER del schema. Devuelve el INT del
+    // siguiente número en la secuencia.
+    const sequenceType = SEQUENCE_TYPE_BY_KIND[inv.invoice_kind as InvoiceKind];
+    const { data: nextNumber, error: errSeq } = await db.rpc(
+      "get_next_sequence_number",
+      {
+        p_tenant_id: tenantId,
+        p_sequence_type: sequenceType,
+      }
+    );
 
-  if (errSeq || typeof nextNumber !== "number") {
-    throw new InvoiceMutationError(pgErrorToMessage(errSeq), 500, errSeq);
+    if (errSeq || typeof nextNumber !== "number") {
+      throw new InvoiceMutationError(pgErrorToMessage(errSeq), 500, errSeq);
+    }
+
+    formatted = `${PREFIX_BY_KIND[inv.invoice_kind as InvoiceKind]}-${String(
+      nextNumber
+    ).padStart(6, "0")}`;
   }
 
-  const formatted = `${PREFIX_BY_KIND[inv.invoice_kind as InvoiceKind]}-${String(
-    nextNumber
-  ).padStart(6, "0")}`;
+  // 3a. 🔴 EL NÚMERO NO PUEDE SER DE OTRA FACTURA. Se verifica ANTES de postear:
+  //     el UPDATE del paso 4 lo rechazaría igual, pero para entonces el asiento
+  //     ya estaría en el libro con ese número (FND-011). Acá no se posteó nada.
+  await asegurarNumeroLibre(db, tenantId, invoiceId, formatted, asientoPrevio);
 
   // 3b. EL ASIENTO. Con el correlativo ya generado y ANTES de emitir.
   //
@@ -526,25 +649,49 @@ export async function emitInvoice(
     throw new InvoiceMutationError(armado.mensaje, 422);
   }
 
-  try {
-    await postJournalEntry(ledgerDb, tenantId, armado.asiento, userId);
-  } catch (err) {
-    // El asiento ya existía: es un reintento de una emisión que sí posteó pero
-    // no llegó a hacer el UPDATE. No es un error — hay que dejar que la emisión
-    // termine, o la factura quedaría en borrador para siempre con su asiento ya
-    // en el libro. Las dos llaves (`source_id` y `idempotency_key`) salen del
-    // mismo invoice.id, así que cualquiera de los dos 23505 significa esto.
-    const detalle = err instanceof MutationError ? err.detail : undefined;
-    const code = (detalle as { code?: string } | undefined)?.code;
-    if (code !== "23505") {
-      throw err instanceof MutationError
-        ? new InvoiceMutationError(err.message, err.status, detalle)
-        : err;
-    }
+  if (asientoPrevio) {
+    // El reintento: el asiento ya está en el libro con ESTE número (paso 3). No
+    // se vuelve a postear —el UNIQUE de la `034` lo rechazaría— y se pasa
+    // directo al UPDATE que la emisión anterior no alcanzó a hacer.
     console.warn(
-      "[finanzas] la factura %s ya tenía asiento; se completa la emisión",
-      invoiceId
+      "[finanzas] la factura %s ya tenía el asiento %d (%s); se completa la emisión con ese número",
+      invoiceId,
+      asientoPrevio.entry_number,
+      formatted
     );
+  } else {
+    try {
+      await postJournalEntry(ledgerDb, tenantId, armado.asiento, userId);
+    } catch (err) {
+      // El asiento ya existía: es un reintento de una emisión que sí posteó pero
+      // no llegó a hacer el UPDATE, y que el paso 3 no vio (dos emisiones a la
+      // vez). No es un error — hay que dejar que la emisión termine, o la
+      // factura quedaría en borrador para siempre con su asiento ya en el libro.
+      // Las dos llaves (`source_id` y `idempotency_key`) salen del mismo
+      // invoice.id, así que cualquiera de los dos 23505 significa esto.
+      const detalle = err instanceof MutationError ? err.detail : undefined;
+      const code = (detalle as { code?: string } | undefined)?.code;
+      if (code !== "23505") {
+        throw err instanceof MutationError
+          ? new InvoiceMutationError(err.message, err.status, detalle)
+          : err;
+      }
+      // 🔴 Y manda el número DEL ASIENTO, no el que se acaba de consumir: el
+      // libro ya se escribió y no se corrige (FND-011).
+      const existente = await asientoDeFacturaExistente(ledgerDb, tenantId, invoiceId);
+      if (existente) {
+        const numeroEnElLibro = numeroDelAsiento(existente);
+        if (numeroEnElLibro !== formatted) {
+          await asegurarNumeroLibre(db, tenantId, invoiceId, numeroEnElLibro, existente);
+          formatted = numeroEnElLibro;
+        }
+      }
+      console.warn(
+        "[finanzas] la factura %s ya tenía asiento; se completa la emisión como %s",
+        invoiceId,
+        formatted
+      );
+    }
   }
 
   // 4. UPDATE status='emitida' + invoice_number=formatted. T2 valida.

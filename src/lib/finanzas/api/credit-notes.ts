@@ -17,53 +17,50 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import {
+  validarLineasDeNotaDeCredito,
+  type CreateCreditNoteInput,
+  type LineaFacturada,
+} from "@/lib/finanzas/validators/credit-note";
 
 type DB = SupabaseClient;
 
 /**
- * Crea una nota de crédito mirror de una factura. Devuelve id +
- * credit_note_number formateado. Si la NC ya existe para esta factura, NO
- * crea duplicado — devuelve la existente (idempotencia defensiva).
+ * UN SOLO CREADOR DE NOTAS DE CRÉDITO (Bloque 5, 22/09/2026).
  *
- * El caller (cancelInvoice) debe haber validado previamente que la factura
- * es anulable. Acá NO re-validamos status — la NC en sí no tiene esa
- * dependencia (es solo un documento contable de reversión).
+ * `createCreditNote` recibe las líneas de la factura que se acreditan, con su
+ * cantidad, y arma la NC: valida contra la factura (`validarLineasDeNotaDeCredito`:
+ * cantidades acumuladas por línea, tope en `balance_due`), toma el número
+ * `NC-`, inserta la cabecera con fecha de HOY y las líneas (T8c recalcula los
+ * totales; el trigger de la 051 deriva `invoices.credited_total`).
+ *
+ * `createCreditNoteFromInvoice` es la MISMA función con todas las líneas por
+ * su cantidad completa: la NC total automática que acompaña a la anulación.
+ * No hay un segundo camino que arme líneas (`nota-de-credito-un-solo-creador`
+ * lo vigila leyendo `cancelInvoice` y este archivo).
+ *
+ * Qué NO hace: no postea. El asiento propio de la NC (source_type
+ * `nota_credito`, source_id = la NC) y la reversión de la anulación son del
+ * commit 3 de este bloque y viven en quien llama (`emitCreditNote` /
+ * `cancelInvoice`), no acá, para que la anulación NO postee la NC aparte (D5).
+ *
+ * 🔴 La fecha es la de HOY, nunca la de la factura (Josuarth: el documento que
+ * corrige lleva la fecha en que se hace). Un test lee este archivo y falla si
+ * aparece `issue_date` de la factura en el insert.
  */
-export async function createCreditNoteFromInvoice(
+export async function createCreditNote(
   db: DB,
   tenantId: string,
   userId: string,
-  invoiceId: string,
-  reason: string,
-  observations: string | null = null
-): Promise<{ id: string; credit_note_number: string }> {
-  // Idempotencia: si ya existe una NC para esta factura, devolverla.
-  // Caso típico: retry del usuario tras error de red intermedio.
-  const { data: existing, error: errExisting } = await db
-    .from("credit_notes")
-    .select("id, credit_note_number")
-    .eq("tenant_id", tenantId)
-    .eq("invoice_id", invoiceId)
-    .maybeSingle();
-
-  if (errExisting) {
-    throw new MutationError(pgErrorToMessage(errExisting), 500, errExisting);
-  }
-  if (existing) {
-    return {
-      id: existing.id as string,
-      credit_note_number: existing.credit_note_number as string,
-    };
-  }
-
-  // 1. Cargar la factura origen + sus líneas (mirror exacto).
+  input: CreateCreditNoteInput
+): Promise<{ id: string; credit_note_number: string; total: number }> {
+  // 1. La factura y sus líneas
   const { data: invoice, error: errInv } = await db
     .from("invoices")
-    .select("id, client_id, invoice_number")
+    .select("id, client_id, invoice_number, status, balance_due")
     .eq("tenant_id", tenantId)
-    .eq("id", invoiceId)
+    .eq("id", input.invoice_id)
     .maybeSingle();
-
   if (errInv) {
     throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
   }
@@ -78,87 +75,114 @@ export async function createCreditNoteFromInvoice(
        tax_code, tax_rate, tax_code_id`
     )
     .eq("tenant_id", tenantId)
-    .eq("invoice_id", invoiceId)
+    .eq("invoice_id", input.invoice_id)
     .order("line_order", { ascending: true });
-
   if (errLines) {
     throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
   }
   if (!invoiceLines || invoiceLines.length === 0) {
-    throw new MutationError(
-      "La factura no tiene líneas para generar la nota de crédito.",
-      400
-    );
+    throw new MutationError("La factura no tiene líneas para generar la nota de crédito.", 400);
   }
 
-  // 2. Obtener próximo número de secuencia
-  const { data: nextNumber, error: errSeq } = await db.rpc(
-    "get_next_sequence_number",
-    {
-      p_tenant_id: tenantId,
-      p_sequence_type: "credit_note",
-    }
-  );
+  // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
+  const { data: previas, error: errPrevias } = await db
+    .from("credit_note_lines")
+    .select("invoice_line_id, quantity, credit_notes!inner(invoice_id, status)")
+    .eq("tenant_id", tenantId)
+    .eq("credit_notes.invoice_id", input.invoice_id)
+    .eq("credit_notes.status", "emitida");
+  if (errPrevias) {
+    throw new MutationError(pgErrorToMessage(errPrevias), 500, errPrevias);
+  }
+  const acreditadoPorLinea = new Map<string, number>();
+  for (const l of (previas ?? []) as { invoice_line_id: string | null; quantity: number | string }[]) {
+    if (!l.invoice_line_id) continue;
+    acreditadoPorLinea.set(l.invoice_line_id, (acreditadoPorLinea.get(l.invoice_line_id) ?? 0) + Number(l.quantity));
+  }
 
+  // 3. La regla contable (pura)
+  const facturadas: LineaFacturada[] = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
+    id: String(ln.id),
+    line_order: Number(ln.line_order),
+    service_id: (ln.service_id as string | null) ?? null,
+    description: String(ln.description ?? ""),
+    quantity: Number(ln.quantity),
+    unit_price: Number(ln.unit_price),
+    tax_code: String(ln.tax_code ?? ""),
+    tax_rate: Number(ln.tax_rate ?? 0),
+    tax_code_id: (ln.tax_code_id as string | null) ?? null,
+  }));
+  const validacion = validarLineasDeNotaDeCredito({
+    factura: {
+      invoice_number: String(invoice.invoice_number ?? ""),
+      status: String(invoice.status),
+      balance_due: Number(invoice.balance_due ?? 0),
+    },
+    facturadas,
+    acreditadoPorLinea,
+    pedido: input.lineas,
+  });
+  if (!validacion.ok) {
+    throw new MutationError(validacion.mensaje, validacion.status, undefined, validacion.fieldErrors);
+  }
+
+  // 4. El número, después de todas las validaciones (un 400 no quema correlativo)
+  const { data: nextNumber, error: errSeq } = await db.rpc("get_next_sequence_number", {
+    p_tenant_id: tenantId,
+    p_sequence_type: "credit_note",
+  });
   if (errSeq || typeof nextNumber !== "number") {
     throw new MutationError(pgErrorToMessage(errSeq), 500, errSeq);
   }
-
   const formattedNumber = `NC-${String(nextNumber).padStart(6, "0")}`;
-  const issueDateIso = new Date().toISOString().slice(0, 10);
 
-  // 3. INSERT credit_notes header (totales=0, T8c los recalcula con las líneas)
+  // 5. Cabecera con la fecha de HOY (totales = 0; T8c los recalcula con las líneas)
+  const issueDateIso = new Date().toISOString().slice(0, 10);
   const { data: cnHeader, error: errCn } = await db
     .from("credit_notes")
     .insert({
       tenant_id: tenantId,
       credit_note_number: formattedNumber,
-      invoice_id: invoiceId,
+      invoice_id: input.invoice_id,
       client_id: invoice.client_id,
       issue_date: issueDateIso,
-      reason,
-      observations,
+      reason: input.reason,
+      observations: input.observations,
       status: "emitida",
       currency: "USD",
       created_by: userId,
     })
     .select("id")
     .single();
-
   if (errCn || !cnHeader) {
     throw new MutationError(pgErrorToMessage(errCn), 400, errCn);
   }
-
   const creditNoteId = cnHeader.id as string;
 
-  // 4. INSERT credit_note_lines (clon literal). T8c recalcula totales.
-  const linesPayload = invoiceLines.map((ln) => ({
-    tenant_id: tenantId,
-    credit_note_id: creditNoteId,
-    invoice_line_id: ln.id,
-    line_order: ln.line_order,
-    service_id: ln.service_id,
-    description: ln.description,
-    quantity: ln.quantity,
-    unit_price: ln.unit_price,
-    tax_code: ln.tax_code,
-    tax_rate: ln.tax_rate,
-    tax_code_id: ln.tax_code_id,
-    created_by: userId,
-  }));
-
-  const { error: errCnLines } = await db
-    .from("credit_note_lines")
-    .insert(linesPayload);
-
+  // 6. Las líneas. T8c recalcula totales; la 051 deriva credited_total.
+  const { error: errCnLines } = await db.from("credit_note_lines").insert(
+    validacion.lineas.map((ln) => ({
+      tenant_id: tenantId,
+      credit_note_id: creditNoteId,
+      invoice_line_id: ln.invoice_line_id,
+      line_order: ln.line_order,
+      service_id: ln.service_id,
+      description: ln.description,
+      quantity: ln.quantity,
+      unit_price: ln.unit_price,
+      tax_code: ln.tax_code,
+      tax_rate: ln.tax_rate,
+      tax_code_id: ln.tax_code_id,
+      created_by: userId,
+    }))
+  );
   if (errCnLines) {
-    // COMPENSATING: borrar el header — pero T6 BLOQUEA delete de credit_notes
-    // siempre ("Nota de crédito X no puede eliminarse, es irreversible").
-    // Por eso preferimos LOGUEAR + RAISE: queda una NC huérfana sin líneas
-    // (grand_total=0) que requiere intervención manual de Oliver, pero no
-    // duplicamos numeración. Es el menor mal.
+    // COMPENSATING: T6 BLOQUEA el delete de credit_notes siempre ("no puede
+    // eliminarse, es irreversible"). Queda una NC huérfana sin líneas
+    // (grand_total = 0, credited_total no se mueve) que requiere intervención
+    // manual; no se duplica numeración. Es el menor mal, y se loguea.
     console.error(
-      "[finanzas] createCreditNoteFromInvoice: lines insert failed, NC huérfana creada con id=" +
+      "[finanzas] createCreditNote: lines insert failed, NC huérfana creada con id=" +
         creditNoteId +
         " number=" +
         formattedNumber +
@@ -167,7 +191,69 @@ export async function createCreditNoteFromInvoice(
     throw new MutationError(pgErrorToMessage(errCnLines), 400, errCnLines);
   }
 
-  return { id: creditNoteId, credit_note_number: formattedNumber };
+  return { id: creditNoteId, credit_note_number: formattedNumber, total: validacion.total };
+}
+
+/**
+ * La NC TOTAL de una factura: la misma `createCreditNote` con todas las líneas
+ * por su cantidad completa. La usa `cancelInvoice`.
+ *
+ * Idempotente para el reintento: si la factura ya está acreditada al 100%
+ * (una NC anterior por el total), devuelve esa NC en vez de fallar por el
+ * tope de `balance_due`.
+ */
+export async function createCreditNoteFromInvoice(
+  db: DB,
+  tenantId: string,
+  userId: string,
+  invoiceId: string,
+  reason: string,
+  observations: string | null = null
+): Promise<{ id: string; credit_note_number: string }> {
+  const { data: inv, error: errInv } = await db
+    .from("invoices")
+    .select("id, grand_total, credited_total")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (errInv) {
+    throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
+  }
+  if (!inv) {
+    throw new MutationError("Factura no encontrada", 404);
+  }
+  if (Number(inv.credited_total) >= Number(inv.grand_total) - 0.005 && Number(inv.grand_total) > 0) {
+    const { data: ya } = await db
+      .from("credit_notes")
+      .select("id, credit_note_number")
+      .eq("tenant_id", tenantId)
+      .eq("invoice_id", invoiceId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ya) {
+      return { id: ya.id as string, credit_note_number: ya.credit_note_number as string };
+    }
+  }
+
+  const { data: lines, error: errLines } = await db
+    .from("invoice_lines")
+    .select("id, quantity")
+    .eq("tenant_id", tenantId)
+    .eq("invoice_id", invoiceId);
+  if (errLines) {
+    throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
+  }
+  const r = await createCreditNote(db, tenantId, userId, {
+    invoice_id: invoiceId,
+    reason,
+    observations,
+    lineas: ((lines ?? []) as { id: string; quantity: number | string }[]).map((l) => ({
+      invoice_line_id: l.id,
+      quantity: Number(l.quantity),
+    })),
+  });
+  return { id: r.id, credit_note_number: r.credit_note_number };
 }
 
 /**
@@ -239,6 +325,10 @@ export async function getCreditNoteForInvoice(
     .select("id, credit_note_number")
     .eq("tenant_id", tenantId)
     .eq("invoice_id", invoiceId)
+    // Desde la 051 una factura puede tener VARIAS NC (parciales): esta
+    // devuelve la última; el listado completo es `listCreditNotesForInvoice`.
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (error || !data) {
@@ -250,4 +340,30 @@ export async function getCreditNoteForInvoice(
     id: data.id as string,
     credit_note_number: data.credit_note_number as string,
   };
+}
+
+/** Todas las NC de una factura, más nuevas primero (051: pueden ser varias). */
+export async function listCreditNotesForInvoice(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<{ id: string; credit_note_number: string; issue_date: string; reason: string; grand_total: number; fe_estado: string }[]> {
+  const { data, error } = await db
+    .from("credit_notes")
+    .select("id, credit_note_number, issue_date, reason, grand_total, fe_estado")
+    .eq("tenant_id", tenantId)
+    .eq("invoice_id", invoiceId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[finanzas/queries] listCreditNotesForInvoice failed", error);
+    return [];
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    credit_note_number: String(r.credit_note_number),
+    issue_date: String(r.issue_date),
+    reason: String(r.reason ?? ""),
+    grand_total: Number(r.grand_total ?? 0),
+    fe_estado: String(r.fe_estado ?? "no_emitida"),
+  }));
 }

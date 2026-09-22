@@ -27,7 +27,11 @@ estructural— un `SELECT` de dato).
 desaparecer del inventario en silencio.
 
 Tres modos, porque **las credenciales de producción no van a una máquina** (`CLAUDE.md` §5):
-`--staging` se conecta con `STAGING_DATABASE_URL`; `--sql` imprime **un único SELECT** —ni
+`--staging` lee `STAGING_DATABASE_URL` de **`.env.staging-db.local`** (el mismo archivo que
+`run-sql.mjs`; la primera versión buscaba `.env`, que en este repo no existe, y por eso no
+corría) y lleva el mismo candado: si la connection string apunta al project ref de producción,
+aborta. Corrido contra staging: **60 aplicadas, 2 pendientes, 0 indeterminadas**, y las 31 de la
+cola `025`–`055` en sí. `--sql` imprime **un único SELECT**; `--sql` imprime **un único SELECT** —ni
 `CREATE`, ni `DROP`, ni temporales— para pegar en el SQL Editor; `--desde` ingiere el JSON que
 ese SELECT devuelve. También `--solo-verificar` para correr el aborto de cobertura en CI.
 
@@ -35,6 +39,15 @@ Dos marcadores que no salen por nombre y fue necesario declarar aparte: la **`03
 distingue de la `028` (redefine sus funciones) y se detecta por el **privilegio** —que
 `authenticated` ya no pueda ejecutar `post_journal_entry`—; la **`053`** es un
 `CREATE OR REPLACE` de la función de la `052` y se detecta por una cadena de su **cuerpo**.
+
+### 🔒 `inventario-marcadores.test.ts` (nuevo) — el aborto que sí se corre
+
+El script aborta si un archivo de `sql/pending/` no tiene marcador, **pero el script solo corre
+cuando alguien decide correrlo**. El día que alguien agregue la `056` y no toque el inventario,
+nadie lo va a correr. `npm test` sí. El test lee el mapa como TEXTO —mismo enfoque de
+`ruc-dv-separados.test.ts` y `nav-guard.test.ts`— así que no importa el `.mjs` ni le pide tipos,
+y no se conecta a ninguna base. Verificado en los dos sentidos: con un `.sql` de prueba sin
+entrada, falla y lo nombra. Suite completa: **1169 tests, 0 fallas.**
 
 ### `docs/runbooks/despliegue-025-055.md` (nuevo)
 

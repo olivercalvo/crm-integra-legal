@@ -1,5 +1,79 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> PREPARACIÓN DEL DESPLIEGUE 025 → 055 — ANALIZADO, NO EJECUTADO — 22/09/2026 <<<
+
+**Estado:** el despliegue NO corrió. `main` sigue en `24b227a`. Lo que hay es el análisis, el
+runbook y la herramienta. Commits `bd03604` y `b68f6ab` en `develop`.
+
+**Decisión de Oliver:** una sola corrida, con la Fase 4 (la verificación con `main` todavía
+arriba) intacta. El corte en dos días se descartó: existía para achicar una ventana en la que
+no hay nadie.
+
+### 🔴 Lo que el análisis encontró y cambió el plan
+
+1. **Producción se detuvo entre la `024` y la `025`, no en la `033`.** Marcador decisivo:
+   `chart_of_accounts.cuenta_control` no existe. La cola real es de **31** migraciones, no 20.
+   Causa raíz: a `docs/staging/inventario-migraciones.md` le faltaban **catorce filas**
+   (`025`–`033` y `040`–`044`) y el análisis heredó el hueco.
+2. **La `025` no falla, miente.** Termina OK y el Estado de Resultado de producción queda mal:
+   las cuentas de costo pasan a `account_type = 'cost'` y el filtro de
+   `accounting-reports.ts:268` las deja fuera. Va última, pegada al merge.
+3. **El guard de la `040` es incondicional.** Aborta con compras sin `chart_account_code` tenga
+   o no puesto el CHECK de la `037`, así que reordenar las dos nunca fue un remedio.
+4. **La `049` y la `050` dependen de la `048`** (`ALTER TABLE supplier_payments`): las tres en el
+   mismo bloque.
+5. **`business_expenses` tiene 0 filas** — el módulo de compras nunca se usó en producción. Los
+   backfills de la `033`, `040`, `045` y `048` corren sobre cero filas y la "ventana larga"
+   dejó de ser un problema. Otros números: `expenses` 137 (no 128), `payments` 8, `invoices` 102,
+   `credit_notes` 6, `chart_of_accounts` **97** (no 62), `journal_entries` 0, un tenant que
+   **coincide** con el uuid hardcodeado en seis migraciones.
+
+### Entregables
+
+- `docs/runbooks/despliegue-025-055.md` — el runbook en texto plano.
+- Versión en página con checklists y cronómetro: https://claude.ai/artifact/RnL36m1tJEk5hhAJZ4moQG
+- `scripts/inventario-migraciones.mjs` — el inventario se GENERA desde el esquema. Tres modos
+  (`--staging`, `--sql`, `--desde`) porque las credenciales de producción no van a una máquina.
+  Corrido contra staging: 60 aplicadas, 2 pendientes, las 31 de la cola en sí.
+- 🔒 `src/lib/finanzas/integridad/__tests__/inventario-marcadores.test.ts` — falla si un archivo
+  de `sql/pending/` no tiene marcador. El script aborta también, pero el script solo corre
+  cuando alguien decide correrlo; `npm test` se corre siempre.
+
+### 🔴 DOS DECISIONES DE RM CONSULTORES QUE BLOQUEAN EL DÍA D
+
+**No son preguntas "que no bloquean". Sin estas dos respuestas, por escrito, el despliegue no
+se corre:** la `025` y la `027` las escriben en la base, y después se corrigen editando filas
+que ya alimentaron un reporte.
+
+1. **RM — la fecha de corte de los saldos iniciales (`027`, pre-flight P-2).**
+   La `027` escribe `2026-01-01` a toda cuenta con saldo. 🔴 **En la reunión del 09/09 se habló
+   de cortar el balance al 30 de junio de 2026**, y eso nunca se confirmó por escrito.
+   El encabezado de la propia `027` ya lo había marcado: *«es una FOTO DE MITAD DE AÑO, no una
+   apertura»*, con la evidencia — balance `244.476,91` contra resultado `−244.476,91` y
+   patrimonio en **cero**. Una apertura al 1 de enero tendría las de resultado en 0.
+   **Cómo se corrige:** no es un parámetro (es un literal en un `.sql` que se pega en el SQL
+   Editor). Tres caminos evaluados en el runbook §P-2(b); el recomendado es **no editar la
+   `027`** —ya corrió en staging y su `UPDATE` filtra por `IS NULL`— sino **una `056`** con el
+   `UPDATE` a la fecha confirmada, que de paso corrige staging. **Se escribe cuando RM conteste,
+   no antes.**
+2. **RM — la actividad NIIF 18 de las cuentas sin clasificar (`025`, pre-flight P-1(b)).**
+   La `025` clasifica como **operativa** toda cuenta de resultado activa sin subcategoría
+   válida. Con 97 cuentas eso puede ser varias decenas de filas. Hay que pasarle a RM la lista
+   que devuelve P-1(b) y que confirmen, cuenta por cuenta, que ninguna es de **inversión** ni de
+   **financiamiento**. Es el criterio de su propia guía: «quien modifica la clasificación
+   contable de una cuenta debe ser el contador».
+
+### Lo que queda por hacer, en orden
+
+1. Mandarle a RM las dos preguntas de arriba. **Bloquea todo lo demás.**
+2. Correr el pre-flight completo (P-0 a P-10 + P-1(e)) contra producción, solo lectura.
+3. Con la respuesta de RM sobre la fecha: escribir la `056` y probarla en staging.
+4. Regenerar el inventario de PRODUCCIÓN: `--sql` → SQL Editor → `--desde`. Hoy el único
+   inventario generado es el de staging.
+5. Recién ahí, agendar el día D.
+
+---
+
 ## >>> BLOQUE 7: MÓDULO DE ASIENTOS DE DIARIO — CONSTRUIDO Y VERIFICADO — 22/09/2026 <<<
 
 **Estado:** CONSTRUIDO. Cierra 7.3 (tercero por línea), 7.4 (clonar) y 7.6 (reversión), y con

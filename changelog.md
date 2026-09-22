@@ -1,5 +1,41 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [FND-011 — el asiento nunca lleva un número ajeno] - 2026-09-22
+
+**Staging (`develop`):** `c74cb7f`. Deploy `dpl_85XLSPWn15VLmcJRVfuUMb6sTPst`. **Sin migración.
+`main` sigue en `24b227a`.** Cierra FND-011, abierto al cerrar el Bloque 5.
+
+`emitInvoice` postea el asiento con el número (en `reference` y en la descripción) y recién
+después lo escribe en la factura; si ese UPDATE fallaba por `invoices_tenant_number_unique`, el
+asiento quedaba en un libro inmutable con el número de otra factura.
+
+- **`asegurarNumeroLibre()`** antes de postear: 409 y **nada posteado** si el número ya es de
+  otra factura. El hueco en la secuencia se acepta; el asiento con número ajeno no.
+- **`asientoDeFacturaExistente()`**: el reintento toma el número **del asiento** (`reference`) y
+  no vuelve a postear; se apoya en el UNIQUE (tenant, source_type, source_id) de la `034`. Si ese
+  número ya se lo llevó otra factura → 409 que nombra el asiento; sin `reference` (asientos
+  anteriores a la `039`) → 409 en vez de inventar un número. En la carrera (23505 al postear) se
+  relee el asiento y manda su número.
+- `emit-invoice-numero-del-asiento.test.ts` (5 casos; los cinco fallan sin el arreglo, verificado
+  con la versión anterior del archivo).
+- `scripts/verificar-fnd-011.mts`: reproduce el escenario contra el deploy (rebobina la secuencia,
+  emite, la restaura) — 3/3.
+- `scripts/reversar-asiento-huerfano.ts`: reversa un asiento con
+  `construirAsientoDeReversion`, para no limpiar el ledger a mano. Solo staging.
+
+**Staging quedó así:** el asiento 43 (321.00, `FAC-HON-000007` sobre un borrador) **reversado por
+el asiento 48** con fecha de hoy. La antigüedad por cobrar ya cierra sin residuo: 191.947,55 de
+apertura − 357,00 de documentos sin asiento = 191.590,55, y desapareció el párrafo de la "tercera
+causa". FAC-HON-000014 emitida en la verificación (asiento 49, `reference` = su número).
+
+**Verificado en el deploy:** por API como abogada, 3/3 (secuencia detrás → 409 sin asiento;
+realineada → 200 con asiento cuyo `reference` es el número de la factura; invariante global sin
+asientos con número ajeno). Con clic como contador: Mayor 100004 muestra el asiento 43 y su
+reversión 48, y "Abrir el documento" del asiento 49 lleva a FAC-HON-000014.
+
+**Tests:** 1134/1134. Lint: los 20 preexistentes de Legal.
+
+---
 ## [Nota de crédito contable — Bloque 5] - 2026-09-22
 
 **Staging (`develop`):** `a57552a` (051) → `7be8b26` (creador + validador) → `794e686` + `04649e2`

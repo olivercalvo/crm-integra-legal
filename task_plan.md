@@ -27,10 +27,10 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
 - El diálogo de NC y el de anulación no se abrieron con clic (la sesión del navegador es el
   contador); las dos llamadas se verificaron por API como abogada (`verificar-nota-de-credito.mts`,
   5/5). Todo lo del contador, con clic real.
-- **FND-011** (chico, un commit, pendiente de Oliver): `emitInvoice` deja un asiento con un número
-  ajeno si el UPDATE falla por número duplicado. El seed que rebobinaba la secuencia ya está
-  arreglado; el residuo de 321.00 en la antigüedad por cobrar de staging (asiento 43) se va con el
-  próximo reset.
+- **FND-011 CERRADO el 22/09** (`c74cb7f`, deploy `dpl_85XLSPWn15VLmcJRVfuUMb6sTPst`): guard antes
+  de postear + el reintento toma el número del asiento. El asiento 43 de staging se reversó
+  (asiento 48) y la antigüedad por cobrar ya cierra sin "tercera causa". Detalle en `changelog.md`
+  y SOP-031 §2b.
 - Todavía NO existe la reversión de una NC ni el envío de la NC a la DGI.
 - Producción, cuando vaya: 034, 036, 037, 038, 039, 045, 047, 048, 049, 050, **051, 052, 053** en
   ese orden, con sus pre-flights (`docs/staging/inventario-migraciones.md`).

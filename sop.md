@@ -2309,6 +2309,35 @@ Se acepta a conciencia (Oliver, 21/09/2026), con el criterio de `emitInvoice`:
 Hay un test en `payments-gate.test.ts` que fija el hueco como hecho documentado: si alguien lo
 "arregla" moviendo el número después del asiento, el test lo nombra.
 
+### 2b. 🔴 Y el número del ASIENTO es el mismo que el de la factura (FND-011, 22/09/2026)
+
+Un hueco se acepta; un asiento con el número de OTRO documento, no. `emitInvoice` es el único
+creador que escribe el número **después** de postear (paso 3 correlativo → 3b asiento → 4
+UPDATE), así que es el único donde el UNIQUE `invoices_tenant_number_unique` puede fallar con el
+asiento ya en un libro inmutable. Pasó en staging el 22/09: asiento 43 con `FAC-HON-000007`
+—número de otra factura— sobre un borrador, porque el seed rebobinaba `numbering_sequences`.
+
+Dos cierres en `api/invoices.ts`, los dos con test que falla sin ellos
+(`emit-invoice-numero-del-asiento.test.ts`):
+
+1. **`asegurarNumeroLibre()` antes de postear.** Si el número ya es de otra factura: 409, no se
+   postea nada y la factura sigue en borrador. El mensaje dice que la numeración quedó detrás.
+2. **`asientoDeFacturaExistente()` en el reintento.** Una emisión que posteó y no llegó al
+   UPDATE se retoma con el número **del asiento** (`reference`), no con uno nuevo, y sin volver a
+   postear. Lo hace posible el UNIQUE `journal_entries_un_asiento_por_documento` (tenant,
+   source_type, source_id) de la `034`. Si ese número ya se lo llevó otra factura → 409 que
+   nombra el asiento; si el asiento no tiene `reference` (anterior a la `039`) → 409 en vez de
+   inventar uno.
+
+Los otros tres creadores con correlativo —`createPayment` (`REC-`), `createSupplierPayment`
+(`CE-`) y `createCreditNote` (`NC-`)— escriben el número **en el mismo INSERT** y postean
+después, así que una colisión aparece antes de tocar el libro y el DELETE compensatorio alcanza.
+No hay que "emparejarlos" con esto.
+
+⚠️ **Un asiento mal posteado NO se borra: se reversa.** `scripts/reversar-asiento-huerfano.ts`
+postea el espejo con `construirAsientoDeReversion` (fecha de hoy, `reverses_entry_id`), que es la
+misma función del diálogo de cobros y de la anulación. Solo staging.
+
 ### 3. Dos puertas, un formulario, dos rutas a la misma función
 
 Se registra desde el detalle de la factura (diálogo, UNA factura) o desde `/finanzas/cobros/nuevo`

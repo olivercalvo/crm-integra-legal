@@ -15,6 +15,37 @@ lo reemplaza en `develop`; plan en `task_plan.md`.
 ---
 
 
+## Cierre del 22/09/2026 (mañana) — FND-011
+
+**SHA de la app en staging: `c74cb7f`** — deployment `dpl_85XLSPWn15VLmcJRVfuUMb6sTPst`, READY.
+Encima va solo este commit de docs. **`main` sigue en `24b227a`. Producción no se tocó.** Sin
+migraciones nuevas (las del Bloque 5 son `051`–`053`, solo staging).
+
+**1134/1134.** `tsc` limpio. Lint: los 20 preexistentes de Legal.
+
+`emitInvoice` ya no puede dejar un asiento con el número de otra factura: verifica el número
+antes de postear (409 sin postear nada) y el reintento toma el número **del asiento**, no uno
+nuevo. El asiento 43 de staging **se reversó** (asiento 48) con la reversión de verdad, no con un
+DELETE, y con eso la antigüedad por cobrar cierra sin residuo.
+
+### 🔴 Para el próximo
+
+- **El seed NUNCA rebobina `numbering_sequences`** (se arregló el 21/09 de noche). Si alguien lo
+  "simplifica" de vuelta al máximo sembrado, FND-011 vuelve a aparecer por la puerta de atrás.
+- **Un asiento mal posteado se REVERSA** (`scripts/reversar-asiento-huerfano.ts`), nunca se borra.
+- ⚠️ **En el navegador de pruebas quedó una cookie vieja llamada
+  `sb-uqmmkklbhzxqybljiecs-auth-token`** (el ref de PRODUCCIÓN) sobre el dominio del preview.
+  La app de staging no la usa —su cliente es el de staging, y el banner ámbar lo confirma— pero es
+  un resto de antes de Fase 0 y conviene borrarla del perfil de Chrome.
+
+### Estado de staging al cerrar
+
+FAC-HON-000014 emitida (asiento 49); asiento 43 reversado por el 48; `invoice_hon` = 14;
+borrador `DRAFT-ad8142bceaa8` sigue ahí y **ya no se puede emitir** (su asiento está en el libro y
+reversado): si molesta, se elimina como borrador — es una decisión de Oliver, no la tomé yo.
+
+---
+
 ## Cierre del 22/09/2026 — Bloque 5: nota de crédito contable
 
 **SHA de la app en staging: `1de1c3a`** — deployment `dpl_AwaoF2Fpyc3hYnhuccJHqyNNFBnS`, READY.

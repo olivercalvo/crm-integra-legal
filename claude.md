@@ -141,6 +141,17 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Hay una válvula de escape para restauraciones y correcciones autorizadas
   (`finanzas.amount_paid_override`). Cuándo sí y cuándo NO: `sop.md` SOP-017.
 
+### Emisión de facturas — el número del asiento (desde 2026-09-22, FND-011)
+- 🔴 **El número del asiento y el de la factura son el mismo, siempre.** `emitInvoice` postea
+  ANTES de escribir el número (correlativo → asiento → UPDATE), así que verifica primero que el
+  número no sea de otra factura (`asegurarNumeroLibre`, 409 sin postear nada) y el **reintento
+  toma el número DEL ASIENTO** (`asientoDeFacturaExistente` por el UNIQUE (tenant, source_type,
+  source_id) de la `034`), no uno nuevo de la secuencia.
+- **Los huecos siguen aceptados** (SOP-031); lo que no se acepta es un asiento inmutable con el
+  número de otro documento.
+- ⚠️ **El seed NUNCA rebobina `numbering_sequences`**: toma el máximo entre lo sembrado y lo que
+  la secuencia ya tiene. Rebobinarla es lo que produjo FND-011 en staging.
+
 ### Reversión de cobros (desde 2026-09-17)
 - 🔴 **Un cobro contabilizado NO se borra: se REVIERTE.** `deletePayment` lo rechaza con 409 si
   el cobro tiene asiento; el camino es `reversePayment` → RPC `reverse_payment` (migración `046`).

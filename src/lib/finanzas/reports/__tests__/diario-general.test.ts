@@ -6,6 +6,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   buildDiarioGeneral,
@@ -138,7 +140,6 @@ test("🔒 Bloque 5: el Diario rotula la NC con SU número (credit_notes), no co
   // Leído del código: DOCUMENTO_DE es una constante local. Si volviera a
   // apuntar a `invoices`, el source_id de una NC no encontraría fila y el
   // renglón saldría sin documento.
-  const { readFileSync } = require("node:fs") as typeof import("node:fs");
-  const src = readFileSync(require("node:path").join(process.cwd(), "src/lib/finanzas/reports/diario-general-source.ts"), "utf8");
+  const src = readFileSync(join(process.cwd(), "src/lib/finanzas/reports/diario-general-source.ts"), "utf8");
   assert.match(src, /nota_credito: \{ tabla: "credit_notes", campo: "credit_note_number" \}/);
 });

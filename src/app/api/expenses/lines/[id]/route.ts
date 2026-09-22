@@ -130,11 +130,12 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            // ⚠️ NO prometer la reversión a secas: todavía no está construida, y
-            // quien lea esto va a ir a buscarla. Ver task_plan.md §A-0-bis-2.
+            // ✅ 22/09/2026: la reversión del gasto de trámite EXISTE desde la
+            // migración 050 (Bloque 4). Este aviso quedó prometiendo que no, y
+            // mandaba a avisarle a Oliver teniendo el botón a la vista.
             `Este gasto ya está registrado en el libro contable (asiento ${numero}) ` +
-            `y no se le puede cambiar la cuenta. Corregirlo requiere un asiento de reversión, ` +
-            `que todavía no está disponible en el sistema: avísele a Oliver.`,
+            `y no se le puede cambiar la cuenta: un asiento no se edita. Si está mal, ` +
+            `reverse el gasto desde su detalle en Finanzas y cárguelo de nuevo corregido.`,
         },
         { status: 409 }
       );

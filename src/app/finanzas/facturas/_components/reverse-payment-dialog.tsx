@@ -26,11 +26,12 @@ interface Props {
    * `"cobro"` (default): recibo de caja → `/api/finanzas/payments/[id]/reverse`.
    * `"pago"`: pago a PROVEEDOR (Bloque 3) → `/api/finanzas/supplier-payments/[id]/reverse`.
    * `"gasto"`: GASTO DE TRÁMITE contabilizado (Bloque 4) → `/api/expenses/[id]/reverse`.
-   * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra ↔ gasto/caso).
-   * La vista previa es la MISMA función para los tres:
+   * `"asiento"`: ASIENTO MANUAL (Bloque 7) → `/api/finanzas/asientos/[id]/reverse`.
+   * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra ↔ gasto/caso ↔
+   * asiento/libro). La vista previa es la MISMA función para los cuatro:
    * `reversion-una-sola-implementacion` lo vigila leyendo este archivo.
    */
-  variante?: "cobro" | "pago" | "gasto";
+  variante?: "cobro" | "pago" | "gasto" | "asiento";
 }
 
 const TEXTOS = {
@@ -66,6 +67,19 @@ const TEXTOS = {
     placeholder: "Ej: Gasto cargado al caso equivocado, monto mal tipeado…",
     error: "No se pudo reversar el gasto.",
     enCurso: "Posteando el espejo y anulando el gasto…",
+  },
+  asiento: {
+    endpoint: (id: string) => `/api/finanzas/asientos/${id}/reverse`,
+    cosa: "asiento",
+    aplicadoA: "del libro",
+    // Un asiento manual no tiene documento que actualizar: el efecto empieza y
+    // termina en el libro, y decirlo así evita que alguien espere otra cosa.
+    consecuencia: "el asiento queda reflejado por su espejo y el efecto neto sobre las cuentas vuelve a cero",
+    siOcurrio: "si la operación sí ocurrió, hay que cargar el asiento corregido",
+    titulo: "Reversar asiento",
+    placeholder: "Ej: Cuenta equivocada, importe mal tipeado, asiento duplicado…",
+    error: "No se pudo reversar el asiento.",
+    enCurso: "Posteando el espejo en el libro…",
   },
 } as const;
 

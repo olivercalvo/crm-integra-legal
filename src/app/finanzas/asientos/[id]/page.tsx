@@ -17,6 +17,7 @@ import { fmtImporte } from "@/lib/utils/importe";
 import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
 import { tipoTransaccionLabel } from "@/lib/finanzas/reports/libro-mayor";
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
+import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
 
 /**
  * DETALLE DE UN ASIENTO DEL LIBRO — solo lectura (Bloque 7, commit 4).
@@ -105,6 +106,33 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               <Copy size={16} />
               Clonar
             </Link>
+          )}
+          {/* REVERSAR (7.6). Solo un asiento manual que todavía no fue
+              reversado. El diálogo es el MISMO de cobros, pagos y gastos, con
+              su cuarta variante: la vista previa del espejo sale de
+              `construirAsientoDeReversion`, la misma función que postea el
+              servidor (`reversion-una-sola-implementacion.test.ts`). */}
+          {esManual && !yaReversado && (
+            <ReversePaymentDialog
+              variante="asiento"
+              paymentId={asiento.id}
+              paymentLabel={`B/. ${fmtImporte(asiento.total)} del ${formatDate(asiento.transaction_date)}`}
+              invoiceNumber={`asiento ${asiento.entry_number}`}
+              asiento={{
+                id: asiento.id,
+                entry_number: asiento.entry_number,
+                transaction_date: asiento.transaction_date,
+                description: asiento.description,
+                reference: asiento.reference,
+                lines: asiento.lineas.map((l) => ({
+                  account_code: l.account_code,
+                  account_name: l.account_name,
+                  debit: l.debit,
+                  credit: l.credit,
+                  description: l.descripcion,
+                })),
+              }}
+            />
           )}
         </div>
       </div>

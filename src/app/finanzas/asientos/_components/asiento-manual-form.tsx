@@ -229,17 +229,14 @@ export function AsientoManualForm({
           </div>
         </dl>
 
-        {/* ⚠️ La segunda mitad de este aviso prometía un remedio QUE NO EXISTE.
-            La reversión todavía no está construida, así que un contador que se
-            equivocara iba a leer esto, ir a buscarla y no encontrarla.
-            Cuando exista, esta frase vuelve a la versión corta —está anotado en
-            task_plan.md §A-0-bis-2— y NO al revés: el aviso viejo no puede quedar
-            cuando deje de ser verdad. */}
+        {/* ✅ 22/09/2026: la reversión EXISTE (Bloque 7, migración 055), así que
+            este aviso volvió a la versión corta. Estaba anotado que tenía que
+            pasar —task_plan.md §A-0-bis-2— porque un aviso que promete un
+            remedio inexistente es tan malo como uno que niega el que sí está. */}
         <p className="text-xs text-emerald-700">
-          Un asiento registrado no se puede modificar ni borrar. Corregirlo requiere un
-          asiento de reversión, que <strong className="font-semibold">todavía no está
-          disponible en el sistema</strong>. Si este asiento quedó mal, avísele a Oliver
-          antes de registrar nada más.
+          Un asiento registrado no se puede modificar ni borrar. Si quedó mal, se{" "}
+          <strong className="font-semibold">reversa</strong> desde su pantalla: se postea el
+          espejo y los dos quedan en el libro.
         </p>
 
         <div className="flex flex-wrap gap-2">
@@ -513,13 +510,13 @@ export function AsientoManualForm({
           </p>
         )}
 
-        {/* Ver la nota de arriba: la reversión no existe todavía. Acá, que es
-            ANTES de postear, el pedido correcto es que verifique. */}
+        {/* Acá, que es ANTES de postear, el pedido sigue siendo que verifique:
+            la reversión existe, pero deja DOS asientos en el libro en vez de
+            uno, y eso no se deshace. */}
         <p className="text-xs text-gray-500">
           Un asiento registrado <strong className="font-semibold">no se puede modificar ni
-          borrar</strong>. Corregirlo requiere un asiento de reversión, que todavía no está
-          disponible en el sistema:{" "}
-          <strong className="font-semibold">verifique el asiento antes de registrarlo</strong>.
+          borrar</strong>: corregirlo deja el original y su reversión, los dos en el libro.{" "}
+          <strong className="font-semibold">Verifique el asiento antes de registrarlo</strong>.
         </p>
       </div>
     </div>

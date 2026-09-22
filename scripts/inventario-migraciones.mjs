@@ -32,8 +32,11 @@
 // hay tres modos y no uno:
 //
 //   node scripts/inventario-migraciones.mjs --staging
-//       Se conecta con STAGING_DATABASE_URL (igual que run-sql.mjs) y regenera
-//       el inventario de staging de punta a punta.
+//       Lee STAGING_DATABASE_URL de `.env.staging-db.local` (el MISMO archivo que
+//       run-sql.mjs; no `.env`, que en este repo no existe) y regenera el
+//       inventario de staging de punta a punta. Lleva el mismo candado que
+//       run-sql.mjs: si la connection string apunta al project ref de
+//       producción, aborta.
 //
 //   node scripts/inventario-migraciones.mjs --sql > /tmp/introspeccion.sql
 //       NO se conecta a nada. Imprime UNA consulta de solo lectura para pegar
@@ -56,6 +59,9 @@ const RAIZ = resolve(__dirname, "..");
 const DIR_PENDING = join(RAIZ, "sql", "pending");
 const DIR_SUPABASE = join(RAIZ, "supabase", "migrations");
 const DOC_DEFECTO = join(RAIZ, "docs", "staging", "inventario-migraciones.md");
+const ENV_STAGING = join(RAIZ, ".env.staging-db.local");
+// Mismo candado que scripts/run-sql.mjs: el project ref de producción, literal.
+const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
 
 const TENANT = "a0000000-0000-0000-0000-000000000001";
 
@@ -151,7 +157,7 @@ const MARCADORES = {
     que: "Extrae el DV escrito como texto (' DV NN') a digito_verificador",
     tipo: "dato", heuristico: true,
     sql: `SELECT NOT EXISTS (SELECT 1 FROM public.clients WHERE tax_id ~ ' DV [0-9]')`,
-    nota: "Decisión explícita: NO se aplica hasta que se retome como bloque propio.",
+    nota: "🔴 Decisión explícita: NO se aplica hasta que se retome como bloque propio. ⚠️ El marcador solo tiene sentido contra PRODUCCIÓN: en staging los clientes sembrados no traen el DV embebido en el texto, así que da 'sí' por vacuidad.",
   },
 
   // ── la cola contable ────────────────────────────────────────────────────────
@@ -235,6 +241,7 @@ const MARCADORES = {
   "cleanup-test-users-2026-05-02.sql": {
     que: "Borra 3 usuarios de prueba", tipo: "dato", heuristico: true,
     sql: `SELECT NOT EXISTS (SELECT 1 FROM public.users WHERE email ILIKE '%test%' OR email ILIKE '%prueba%')`,
+    nota: "⚠️ Solo tiene sentido contra PRODUCCIÓN. En staging el seed crea usuarios de prueba a propósito, así que siempre da NO.",
   },
   "fix-duplicate-classifications.sql": {
     que: "Deduplica cat_classifications por prefijo", tipo: "dato", heuristico: true,
@@ -247,6 +254,7 @@ const MARCADORES = {
   "hotfix_cli116_client_type.sql": {
     que: "UPDATE de una fila (CLI-116 → persona_juridica)", tipo: "dato", heuristico: true,
     sql: `SELECT EXISTS (SELECT 1 FROM public.clients WHERE client_number = 'CLI-116' AND client_type = 'persona_juridica')`,
+    nota: "⚠️ Solo tiene sentido contra PRODUCCIÓN. CLI-116 es un cliente real; en staging no existe.",
   },
   "storage_rls_policies.sql": {
     que: "Políticas de Storage ABIERTAS (solo chequean bucket_id)", tipo: "ignorar",
@@ -264,9 +272,13 @@ const MARCADORES = {
   // ── supabase/migrations ─────────────────────────────────────────────────────
   "20260402000001_initial_schema.sql": { que: "Esquema base: 14 tablas, RLS por tenant_id, índices", tipo: "tabla", tabla: "clients" },
   "20260402000002_seed_data.sql": { que: "Catálogos iniciales del tenant", tipo: "dato", heuristico: true, sql: `SELECT EXISTS (SELECT 1 FROM public.cat_institutions)` },
-  "20260402000003_seed_clients_cases.sql": { que: "⛔ 23 clientes + 46 casos REALES del bufete", tipo: "dato", heuristico: true, sql: `SELECT (SELECT count(*) FROM public.clients) > 20` },
+  "20260402000003_seed_clients_cases.sql": {
+    que: "⛔ 23 clientes + 46 casos REALES del bufete", tipo: "dato", heuristico: true,
+    sql: `SELECT (SELECT count(*) FROM public.clients) > 20`,
+    nota: "⚠️ Solo tiene sentido contra PRODUCCIÓN. En staging los clientes son ficticios y el conteo no prueba nada.",
+  },
   "20260403000001_fix_rls_jwt_claims.sql": { que: "Las funciones de RLS leen el tenant de app_metadata del JWT", tipo: "funcion", nombre: "get_tenant_id", heuristico: true },
-  "20260403000002_add_case_fields.sql": { que: "8 columnas de seguimiento en cases + follow_up_date en comments", tipo: "columna", tabla: "cases", columna: "last_followup_date" },
+  "20260403000002_add_case_fields.sql": { que: "8 columnas de seguimiento en cases + follow_up_date en comments", tipo: "columna", tabla: "cases", columna: "procedure_type" },
   "20260403000003_add_assistant_id.sql": { que: "cases.assistant_id → users", tipo: "columna", tabla: "cases", columna: "assistant_id" },
   "20260403000004_add_client_fields.sql": { que: "clients.address, clients.client_since", tipo: "columna", tabla: "clients", columna: "client_since" },
   "20260403000005_responsible_id_to_users.sql": { que: "cases.responsible_id apunta a users", tipo: "dato", heuristico: true, sql: `SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname LIKE 'cases_responsible_id%' AND confrelid = 'public.users'::regclass)` },
@@ -594,19 +606,31 @@ function arg(nombre, def = null) {
 const tiene = (n) => process.argv.includes(n);
 
 async function leerStaging() {
-  const envPath = join(RAIZ, ".env");
-  if (!existsSync(envPath)) {
-    console.error("❌ No hay .env en la raíz del repo.");
+  if (!existsSync(ENV_STAGING)) {
+    console.error(`❌ Falta ${ENV_STAGING}`);
+    console.error("   Es el mismo archivo que usa scripts/run-sql.mjs.");
     process.exit(1);
   }
-  const conn = (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1];
+  const conn = (readFileSync(ENV_STAGING, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, "");
   if (!conn) {
-    console.error("❌ No se pudo leer STAGING_DATABASE_URL de .env");
+    console.error("❌ No se pudo leer STAGING_DATABASE_URL");
     console.error("   (producción NO se consulta desde acá: usá --sql y --desde)");
     process.exit(1);
   }
+
+  // ---- CANDADO: nunca contra producción ----
+  for (const ref of PROD_PROJECT_REFS) {
+    if (conn.includes(ref)) {
+      console.error(`\n🛑 ABORTADO: la connection string apunta a PRODUCCIÓN (${ref}).`);
+      console.error("   Para producción el camino es --sql + --desde, nunca una conexión.\n");
+      process.exit(1);
+    }
+  }
+
   const { default: pg } = await import("pg");
-  const client = new pg.Client({ connectionString: conn.trim() });
+  const client = new pg.Client({ connectionString: conn });
   await client.connect();
   try {
     const sql = construirSql();

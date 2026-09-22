@@ -92,7 +92,16 @@ SELECT id, name FROM public.tenants;
 Se corre **el día −2**, no el día del despliegue. Acá es donde va el tiempo de
 pensar; el día D solo se comparan números.
 
-### P-1 · Qué reclasifica la `025`
+> 🔴 **Dos de estas no las decide el desarrollo.**
+> **P‑1(b)** (en qué actividad NIIF 18 cae cada cuenta de resultado sin clasificar)
+> y **P‑2** (a qué fecha corresponden los saldos iniciales) son **decisiones
+> contables de RM Consultores**. El pre-flight las *consulta*; no las resuelve.
+> Las dos tienen que estar respondidas **antes del día D, por escrito**. Si llega
+> el día y alguna sigue abierta, **no se corre el despliegue**: la 025 y la 027
+> escriben esas decisiones en la base, y después se corrigen editando filas que ya
+> alimentaron un reporte.
+
+### P-1 · Qué reclasifica la `025`  ·  🟡 (b) DECIDE RM
 
 ```sql
 -- (a) las que pasan a 'cost' y desaparecen del P&L de main
@@ -125,9 +134,27 @@ SELECT code, name FROM public.chart_of_accounts
 > **Parar si:** en (b) aparece una cuenta que no debería ser operativa (de
 > inversión o de financiamiento). La `025` la va a clasificar mal en silencio.
 >
-> ⚠️ Con 97 cuentas, (b) puede devolver varias decenas de filas. **Ese es el
-> trabajo largo de todo el despliegue** y va acá, el día −2, no a las seis de la
-> mañana. Presupuestar 15–25 min para mirarlas una por una.
+> ⚠️ Con 97 cuentas, (b) puede devolver varias decenas de filas.
+>
+> 🟡 **REQUIERE DECISIÓN DE RM CONSULTORES ANTES DEL DÍA D.**
+> La 025 clasifica **toda** cuenta de resultado activa sin subcategoría válida como
+> **operativa** de su tipo. Es el default correcto —hoy todo lo que existe es
+> operativo— pero es un supuesto, no un dato: las otras seis actividades NIIF 18
+> (inversión y financiamiento) quedan disponibles y nadie dijo que ninguna cuenta
+> caiga ahí.
+>
+> **Lo que hay que preguntarle a RM:** pasarles la lista que devuelve (b) y que
+> confirmen, cuenta por cuenta, que ninguna es de inversión ni de financiamiento.
+> Es el criterio de la guía de RM —«quien modifica la clasificación contable de una
+> cuenta debe ser el contador»— y es la misma razón por la que en la app la abogada
+> no puede tocar `account_type`.
+>
+> **Si una cae fuera de operativa:** se corrige **antes** de correr la 025, con un
+> UPDATE puntual de `subcategoria`. Después también se puede, pero ya habrá salido
+> en un Estado de Resultado.
+>
+> - [ ] Fecha en que RM respondió: `__________`
+> - [ ] Cuentas que RM movió de operativa: `________________________`
 
 ### P-1(e) · 🔴 Los «esperado» del POST-CHECK, calculados contra PRODUCCIÓN
 
@@ -180,7 +207,7 @@ SELECT count(*) FILTER (WHERE at  = 'cost')                 AS esperado_cost,
 > con el texto de la migración (`6 / 9 / 30 / 6`), **eso no es motivo de parar**:
 > son los de staging. Si no coincide con **estos cuatro**, ahí sí se para.
 
-### P-2 · La fecha de los saldos iniciales (`027`)
+### P-2 · La fecha de los saldos iniciales (`027`)  ·  🟡 DECIDE RM
 
 ```sql
 SELECT count(*) AS con_saldo, min(saldo_inicial) AS menor,
@@ -191,8 +218,51 @@ SELECT count(*) AS con_saldo, min(saldo_inicial) AS menor,
 - [ ] cuentas con saldo: `____`
 - [ ] ¿`2026-01-01` es la fecha de corte correcta? **SI / la correcta es `________`**
 
-> **Parar si:** la fecha real no es el 1 de enero. Corregir la `027` antes, no
-> después: después significa editar filas que ya alimentaron un asiento de apertura.
+> 🟡 **REQUIERE DECISIÓN DE RM CONSULTORES ANTES DEL DÍA D.**
+>
+> 🔴 **En la reunión del 09/09 se habló de cortar el balance al 30 de junio de
+> 2026, no al 1 de enero.** Eso todavía no está confirmado por escrito, y es
+> exactamente lo que la `027` necesita saber.
+>
+> **Y la propia migración ya lo había detectado.** Su encabezado dice, textual:
+> *«es una FOTO DE MITAD DE AÑO, no una apertura»*, y sobre el backfill:
+> *«2026-01-01 … es la ÚNICA fecha que el cliente especificó — se carga como tal,
+> no como una fecha de corte verificada, y queda sujeta a la consulta de arriba»*.
+> La evidencia que da: los saldos suman cero pero repartidos en balance
+> `244.476,91` contra resultado `−244.476,91`, con **patrimonio en cero**. Una
+> apertura al 1 de enero tendría las de resultado en 0 y el patrimonio cuadrando;
+> lo que hay es el movimiento de enero a agosto.
+>
+> **Lo que hay que preguntarle a RM:** la fecha de corte de los saldos cargados,
+> por escrito.
+>
+> - [ ] Fecha de corte que confirmó RM: `__________`
+> - [ ] Fecha en que respondieron: `__________`
+
+> **Parar si:** la fecha sigue sin confirmarse el día D. No se corre la `027` con
+> una fecha que sabemos que probablemente es la equivocada: el asiento de apertura
+> de la Fase 2 agrupa las cuentas **por esta columna**, y un asiento del libro es
+> inmutable.
+
+### P-2(b) · Cómo se corrige la fecha — no es un parámetro
+
+La `027` es un `.sql` que se pega en el SQL Editor: **no admite parámetros**. El
+`DATE '2026-01-01'` es un literal dentro del `UPDATE`. Tres caminos, no equivalentes:
+
+| | Camino | Problema |
+|---|---|---|
+| **A** | Editar el literal de la `027` | La `027` **ya corrió en staging** con 2026-01-01, y su `UPDATE` filtra por `IS NULL`: re-correr el archivo editado no cambia nada allá. Staging y producción quedan con fechas distintas y el archivo deja de describir lo que pasó |
+| **B** | Volverlo un GUC: `COALESCE(current_setting('finanzas.saldo_inicial_fecha', true)::date, DATE '2026-01-01')` | Hay que editar la migración igual, y agrega una palanca que se puede olvidar de setear — con un default silencioso que es justamente la fecha equivocada |
+| **C** | **Dejar la `027` intacta y agregar una `056`** que haga el `UPDATE` a la fecha confirmada | Producción tiene la fecha vieja entre dos migraciones de la misma corrida. Nada la lee todavía |
+
+**Recomendado: C.** La `027` queda byte a byte igual a lo que corrió en staging; la
+decisión de RM entra con su propia migración, con el acta del 09/09 en el encabezado
+y auditable; y la misma `056` corrige staging, que hoy también tiene la fecha
+equivocada. El riesgo es nulo porque **nadie lee `saldo_inicial_fecha` todavía**: el
+asiento de apertura es de la Fase 2 y no existe.
+
+⚠️ **La `056` se escribe cuando RM confirme, no antes.** Con una fecha puesta «a ver
+si es esa», el problema es el mismo que hoy.
 
 ### P-3 · Que el motor no pise nada (`028` / `030`)
 
@@ -597,10 +667,17 @@ con el Estado de Resultado mal.
 Es lo que valida que el Bloque A quedó donde dice que quedó.
 
 ```bash
-node scripts/inventario-migraciones.mjs --sql > /tmp/introspeccion.sql
+# staging (lee .env.staging-db.local, el mismo archivo que run-sql.mjs)
+node scripts/inventario-migraciones.mjs --staging
+
+# producción: sus credenciales no van a una máquina
+node scripts/inventario-migraciones.mjs --sql > introspeccion.sql
 # pegar en el SQL Editor de producción, guardar el JSON que devuelve
 node scripts/inventario-migraciones.mjs --desde salida.json --base produccion
 ```
+
+El modo `--staging` lleva el mismo candado que `run-sql.mjs`: si la connection
+string apunta al project ref de producción, aborta.
 
 - [ ] Las 31 migraciones figuran como **sí**
 - [ ] La sección «La cola, en orden» queda vacía o solo con la `022`

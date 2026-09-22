@@ -1,291 +1,153 @@
-# Inventario de migraciones — estado real vs. producción
+# Inventario de migraciones — estado real vs. la base
 
-> 🔴 **ESTE ARCHIVO ESTÁ DESACTUALIZADO Y NO SE DEBE USAR COMO FUENTE DE VERDAD.**
-> Le faltan catorce filas (`025`–`033` y `040`–`044`), y por ese hueco el análisis de
-> despliegue del 22/09/2026 arrancó la cola en la `034` cuando producción se había
-> detenido en la `024`.
+> 🤖 **ARCHIVO GENERADO. NO EDITAR A MANO.**
+> Lo produce `scripts/inventario-migraciones.mjs` leyendo el esquema de la base.
+> Editarlo a mano vuelve a traer el problema que este script existe para cerrar:
+> el 22/09/2026 a este documento le faltaban **catorce filas** (025–033 y 040–044),
+> y por ese hueco el plan de despliegue arrancó la cola en la 034 cuando producción
+> se había detenido en la 024.
 >
-> **Lo reemplaza un archivo generado.** Para producirlo:
-> ```bash
-> node scripts/inventario-migraciones.mjs --staging
-> # o, para producción (sus credenciales no van a una máquina):
-> node scripts/inventario-migraciones.mjs --sql > introspeccion.sql
-> node scripts/inventario-migraciones.mjs --desde salida.json --base produccion
-> ```
-> El script sobrescribe este archivo. Hasta que se corra, lo de abajo es histórico.
+> Para regenerarlo: `node scripts/inventario-migraciones.mjs --staging`, o
+> `--sql` + `--desde` si la base es producción (sus credenciales no van a una máquina).
 
-**Fecha del relevamiento:** 2026-08-25
-**Para qué sirve:** saber exactamente qué correr, y en qué orden, al levantar la base de
-staging (Fase 0, Tarea 3), y dejar de tratar a `sql/pending/` como si fuera una cola.
+**Base relevada:** `staging`  
+**Fecha del relevamiento:** 2026-09-22  
+**Nombre de la base:** `postgres`
 
-> **`sql/pending/` NO es una cola de pendientes.** Es un cajón donde conviven migraciones
-> ya aplicadas en producción hace meses con otras que nunca se corrieron. El nombre
-> engaña. Este documento es la fuente de verdad; el directorio no lo es.
+> **`sql/pending/` NO es una cola de pendientes.** Es un cajón donde conviven
+> migraciones aplicadas hace meses con otras que nunca se corrieron. El nombre
+> engaña; esta tabla no.
 
----
+## Cómo leer la columna «¿aplicada?»
 
-## 1. `supabase/migrations/` — en orden
+| | |
+|---|---|
+| **sí** | El objeto que deja esa migración está en la base |
+| **NO** | No está |
+| **?** | El marcador no se pudo resolver — casi siempre porque falta una migración anterior |
+| n/a | No es una migración aplicable (verificación, consolidado, obsoleta) |
+| _(heurístico)_ | Se resolvió por el **dato** y no por el esquema: el dato pudo llegar por otro camino |
 
-Ninguna de estas se aplicó con `supabase db push`: **todas se corrieron a mano en el SQL
-Editor**, convención del proyecto desde el 2026-04-05. No hay tabla de historial de
-migraciones en la base, y por eso el estado hay que reconstruirlo así.
+## 1. `supabase/migrations/`
 
-| # | Archivo | ¿En prod? | Qué hace |
-|---|---|---|---|
-| 1 | `20260402000001_initial_schema.sql` | sí | Esquema base: 14 tablas, RLS por `tenant_id`, índices, trigger `updated_at` |
-| 2 | `20260402000002_seed_data.sql` | sí | Catálogos iniciales del tenant (estados, clasificaciones, 5 instituciones) |
-| 3 | `20260402000003_seed_clients_cases.sql` | sí | ⛔ **23 clientes + 46 casos REALES del bufete, sacados del Excel.** Ver §4 |
-| 4 | `20260403000001_fix_rls_jwt_claims.sql` | sí | Las funciones de RLS pasan a leer el tenant de `app_metadata` del JWT |
-| 5 | `20260403000002_add_case_fields.sql` | sí | 8 columnas de seguimiento en `cases` + `follow_up_date` en `comments` |
-| 6 | `20260403000003_add_assistant_id.sql` | sí | `cases.assistant_id` → `users` |
-| 7 | `20260403000004_add_client_fields.sql` | sí | `clients.address`, `clients.client_since` |
-| 8 | `20260403000005_responsible_id_to_users.sql` | sí | `cases.responsible_id` deja de apuntar a `cat_team` y apunta a `users` |
-| 9 | `20260403000006_seed_complete_demo.sql` | sí | Datos de demo ficticios (etapa temprana). Innecesario hoy |
-| 10 | `20260403000010_complete_demo_data.sql` | sí | Más datos de demo ficticios. Innecesario hoy |
-| 11 | `20260403000011_fill_clients_and_documents.sql` | sí | Rellena clientes y documentos de la demo. Innecesario hoy |
-| 12 | `20260403000012_todos_and_prospects.sql` | sí | 6 tablas: `personal_todos`, `todo_comments`, `todo_documents`, `prospects`, `prospect_comments`, `prospect_documents` |
-| 13 | `20260403000013_extend_document_entity_types.sql` | sí | Amplía el CHECK de `documents.entity_type` a tareas y comentarios |
-| 14 | `20260404000001_v1_1_feedback_changes.sql` | **no** | ⚠️ Versión con error de sintaxis. **Reemplazada** por la `_fixed` de abajo. No correr |
-| 15 | `20260404000001_v1_1_feedback_changes_fixed.sql` | sí | Unifica estados "Activo"→"En trámite", `expenses.expense_type`, colores de clasificación, `personal_todos.assigned_to` |
-| 16 | `20260404000002_payment_type.sql` | sí | `client_payments.payment_type` ('tramite' \| 'administrativo') |
-| 17 | `20260405000001_client_responsible_lawyer.sql` | sí | `clients.responsible_lawyer_id` → `users` |
-| 18 | `20260504000001_add_contador_role.sql` | sí | Agrega `'contador'` al CHECK de `users.role` |
-| 19 | `20260505000001_finanzas_extend_clients.sql` | sí | 7 columnas fiscales/cobranza en `clients` + 4 CHECK |
-| 20 | `20260505000002_finanzas_catalogos.sql` | sí | `chart_of_accounts` (17 cuentas), `tax_codes` (3), `services_catalog` (9), `numbering_sequences` + `get_next_sequence_number()` |
-| 21 | `20260505000003_finanzas_b3a_quotes.sql` | sí | `quotes` + `quote_lines` |
-| 22 | `20260505000004_finanzas_b3b_invoices.sql` | sí | `invoices` + `invoice_lines` |
-| 23 | `20260505000005_finanzas_b3c_credit_notes.sql` | sí | `credit_notes` + `credit_note_lines` |
-| 24 | `20260505000006_finanzas_b3d_payments.sql` | sí | `payments` + `payment_applications` |
-| 25 | `20260505000007_finanzas_b3e_triggers.sql` | sí | **Los triggers T1–T8**: transiciones de estado, inmutabilidad de documentos y líneas, recálculo de totales. Crítico |
-| 26 | `20260506000001_finanzas_b4_schema_prep_dgi.sql` | sí | 4 columnas DGI en `invoices` (confirmado en changelog) |
-| 27 | `20260507000001_finanzas_b4_anular_factura.sql` | sí | `cancellation_reason`, `cancelled_at` + transición a `anulada` (confirmado en changelog) |
-| 28 | `20260508000001_clients_add_status_and_type.sql` | sí | `client_status`, `client_type`. El archivo dice "YA APLICADO 2026-05-08" |
-| 29 | `20260508000002_quotes_extension_and_terms_template.sql` | sí | ~19 columnas en `quotes` (token público, envío, aprobación, conversión) + `quote_terms_template`. "YA APLICADO 2026-05-08" |
-| 30 | `20260508000003_clients_drop_active_legacy.sql` | sí | Dropea `clients.active` (hoy es columna generada). "YA APLICADO 2026-05-13" |
-| — | `migration_completa.sql` | n/a | Consolidado histórico de las 14 tablas iniciales. **No correr**: se pisa con las numeradas |
-| — | `migration_final_consolidada.sql` | n/a | Otro consolidado histórico. **No correr** |
-
-## 2. `sql/pending/` — en orden
-
-| Archivo | ¿En prod? | Qué hace |
+| Archivo | ¿aplicada? | Qué hace |
 |---|---|---|
-| `001_fix_case_code_civ_002_to_ext.sql` | **sí** | Re-numera un caso mal grabado CIV-002 → EXT-001. *Changelog: ejecutado a mano el 2026-04-21* |
-| `002_enable_unaccent_and_search_rpcs.sql` | **sí** | Extensión `unaccent` + RPCs de búsqueda universal. *Changelog: ejecutado el 2026-04-21* |
-| `004_verify_familia_classification.sql` | **n/a** | Solo `SELECT` de verificación. No modifica nada; no hay nada que aplicar |
-| `005_add_familia_classification.sql` | **sí** | Clasificación FAMILIA (prefijo FAM). *Changelog: ejecutado el 2026-04-28* |
-| `006_extend_documents_for_auto_pdfs.sql` | **sí** (inferido) | `documents.source/source_version/source_content_hash` + `entity_type='quote'`. La generación de PDF de cotizaciones está viva en `main` y escribe estas columnas |
-| `007_quotes_add_title.sql` | **sí** | `quotes.title` NOT NULL + CHECK 3-100 + backfill. *Changelog: "ya ejecutada por Oliver"*. ⚠️ El changelog la nombra `007_quotes_title_required.sql`; el archivo real es `007_quotes_add_title.sql` |
-| `008_extend_chart_of_accounts.sql` | **sí** (inferido) | `is_system`, `account_name_qb`, `description` + 17 cuentas más. El módulo de reportes vive en `main` y lee `is_system` |
-| `009_create_tax_payments.sql` | **sí** (inferido) | Tabla `tax_payments` (línea 9 del VAT Summary). Referenciada por 4 archivos vivos en `main` |
-| `010_create_business_expenses.sql` | **sí** (inferido) | Tabla `business_expenses` (compras del bufete). Referenciada por 10 archivos vivos en `main` |
-| `011_business_expenses_rls_abogada.sql` | **sí** (inferido) | RLS: la abogada puede crear/editar/borrar gastos del bufete |
-| `012_extend_services_quotes_observations.sql` | **sí** (inferido) | `services_catalog.sort_order` + `quotes.observations` + `credit_notes.observations`. `observations` aparece en 32 archivos vivos |
-| `013_create_observation_templates.sql` | **sí** (inferido) | Catálogo `observation_templates` |
-| `014_quotes_estado_emitida.sql` | **sí** (inferido) | Agrega `'emitida'` al CHECK de `quotes.status` y reescribe `finanzas_validate_status_transition()`. Sin esto el alta de cotizaciones desde la UI rompe |
-| `015_quote_acceptances_rejections.sql` | **sí** (inferido) | `quote_acceptances` + `quote_rejections` para el portal público, que está vivo en `main` |
-| `016_quotes_source_quote_id.sql` | **sí** (inferido) | `quotes.source_quote_id` (duplicar cotización) |
-| `018_cleanup_test_quotes.sql` | **sí** | Borra 18 cotizaciones de prueba. *El propio archivo dice "EJECUTADO EN PRODUCCIÓN 2026-05-29"* |
-| `019_efactura_fase_1a_modelo_datos.sql` | **sí** | 8 columnas en `clients`, 9 en `invoices`, tablas `fe_emisiones` y `fe_secuencias`. *El archivo dice "EJECUTADO 2026-05-30"* |
-| `020_efactura_allocator.sql` | **sí** | RPC `allocate_fe_numero`. *El archivo dice "EJECUTADO 2026-06-02"* |
-| `021_client_numbering_sequence.sql` | **sí** (inferido) | Agrega `'client'` a `numbering_sequences` + siembra la fila. El código que la exige está vivo en prod y crea clientes sin romperse — sin esta migración, `get_next_sequence_number(tenant,'client')` tiraría `no_data_found` en TODO alta de cliente |
-| `022_backfill_dv_embebido.sql` | **NO** | Extrae el DV escrito como texto (" DV NN") a `digito_verificador`, limpia el número y puebla `tipo_receptor_fe`. **Confirmado sin aplicar por Oliver**, y así se queda hasta que se retome como bloque propio (ver `task_plan.md`). **Universo medido en producción el 02/09/2026: 2 clientes** — CLI-026 INTEGRA LEGAL y CLI-081 SERVICARE, los dos con el DV pegado al texto y `digito_verificador` vacío, o sea **bloqueados por el gate fiscal y sin riesgo de mandarle un RUC sucio a la DGI**. El encabezado del script habla de 4 clientes: CLI-096 y CLI-107 ya se corrigieron a mano. Estuvo sin commitear hasta el 2026-08-25; ahora está versionado |
-| `034_asiento_unico_por_documento.sql` | **staging sí / prod NO** | UNIQUE parcial sobre `(tenant_id, source_type, source_id) WHERE source_id IS NOT NULL`. Impide postear dos veces el mismo documento — y un asiento duplicado en un libro inmutable no se borra. **Antes de aplicar en prod: correr el chequeo de duplicados del paso 1 del propio archivo.** Staging al 02/09: 0 duplicados |
-| `035_reembolso_a_fondos_legales.sql` | **staging sí / prod NO** | Los 6 servicios `REIM-*` de `services_catalog` pasan de `2201` (pasivo) a `130003` (activo). Decisión del acta del 25/08 y **son dos lados distintos del balance**, no un rename: el par de asientos del acta solo cierra del lado del activo (ver `sop.md` SOP-013 §"La cuenta del reembolso"). ⚠️ **NO está en `BUNDLE_2`**: necesita que `130003` exista, y esa cuenta la crea `npm run seed:staging`, que corre DESPUÉS del bundle. Para una base nueva lo resuelve `apuntarReembolsosAFondosLegales()` en `scripts/seed-staging.ts` — **si cambia la cuenta, van los dos**. Aplicada a staging el 03/09: 6 servicios movidos, segunda corrida 0 filas. **Producción NO**: hay facturas de reembolso reales, se revisa con RM antes |
-| `036_expense_lines.sql` | **staging sí / prod NO** | Tabla `expense_lines` (arco exclusivo: cuelga de `expenses` O de `business_expenses`) + 4 columnas en `expenses` (`supplier_id`, `due_date`, `payment_account_code`, `posted_entry_id`) + backfill de una línea por gasto. 🔴 **En producción toca 128 gastos reales de las abogadas con 97 comprobantes detrás** (pre-flight de Oliver, 03/09). El `CHECK amount > 0` sale de ese pre-flight: `cero_o_negativos = 0`. **No toca Storage ni una vez** — el comprobante vive en el encabezado — y el paso 5 lo AFIRMA en el log además de las otras cuatro verificaciones de cantidad; si alguna falla, revierte todo. Las líneas del backfill quedan con `chart_account_code` **NULL a propósito**: nadie clasificó esos gastos nunca (ver `sop.md` SOP-013 y el encabezado del archivo). Staging 03/09: 20 gastos, 20 líneas, suma idéntica, idempotente en la segunda corrida |
-| `037_expense_lines_cuenta_obligatoria.sql` | **staging sí / prod NO** | `CHECK (chart_account_code IS NOT NULL) NOT VALID` sobre `expense_lines`. Cierra el hueco de "columna nullable + validador de aplicación = un `curl` la saltea". 🔴 **VA DESPUÉS DE LA 036, obligatorio**: el backfill de la 036 inserta NULL y con este CHECK puesto abortaría. ⚠️ `NOT VALID` salta el scan inicial pero **se hace cumplir en todo UPDATE**, incluso de filas viejas y aunque no toque la columna — medido en `sql/tests/experimento-check-not-valid.sql`, detalle en `sop.md` SOP-023. Se completa con `VALIDATE CONSTRAINT` cuando no queden NULLs; mientras quede uno, ese comando falla y es el semáforo de que la limpieza terminó. Staging 03/09: agregado con 20 líneas en NULL |
-| `038_gasto_tramite_al_ledger.sql` | **staging sí / prod NO** | `'gasto_tramite'` en el CHECK de `journal_entries.source_type` + los dos triggers de inmutabilidad sobre `expenses` y `expense_lines`. ⚠️ El CHECK es anónimo y hay DOS que mencionan `source_type`: se filtra además por `'%factura%'` y **se verifica al final que `je_reversion_requires_ref` siga en pie** — es la comprobación que le habría ahorrado la `029` a la `028`. Va después de la 036. Staging 03/09: 1 constraint dropeado (el correcto), 2 triggers creados, y `sql/tests/verificacion-038-inmutabilidad.sql` da 8/8 contra el RPC real dentro de un ROLLBACK |
-| `039_asientos_manuales.sql` | **staging sí / prod NO** | `journal_entries.reference` (requisito del acta, entra en el hash) e `idempotency_key` con UNIQUE parcial (`WHERE idempotency_key IS NOT NULL`) — mismo patrón que la `034`, y hace falta porque un asiento manual tiene `source_id` NULL y **queda fuera** del UNIQUE de esa migración. 🔴 **DROPEA y recrea `post_journal_entry`** (de 11 a 13 parámetros): un `CREATE OR REPLACE` habría dejado DOS firmas vivas y las llamadas de 11 argumentos entrarían a la vieja, perdiendo `reference` sin fallar. El DROP se lleva los GRANT de la `030`, así que el paso 3 los rehace y el paso 4 verifica que anon y authenticated NO puedan ejecutarlo. ⚠️ Cambia la fórmula de `content_hash` desde el 03/09; los asientos previos siguen válidos porque `verify_accounting_chain` NO recalcula content_hash —verificado, cadena íntegra— pero un verificador futuro que sí lo recalcule tiene que conocer esa fecha. Staging 03/09: `sql/tests/verificacion-039-manual.sql` da 6/6 dentro de un ROLLBACK |
-| `045_expense_lines_tax_code_id.sql` | **staging sí / prod NO** | `expense_lines.tax_code_id` (FK real a `tax_codes`) + backfill **solo de líneas de compra** (tasa 0 → `EXENTO`; tasa > 0 → el único código activo con esa tasa, o aborta nombrando las líneas) + `CHECK (business_expense_id IS NULL OR tax_code_id IS NOT NULL)` **validado**. 🔴 **No toca trámite a propósito**: un UPDATE sobre sus líneas históricas fallaría por el CHECK NOT VALID de la `037` y el trigger de la `038`. Va DESPUÉS de la 036 y la 040. 📋 Pre-flight contra prod: `SELECT tax_rate, COUNT(*) FROM business_expenses GROUP BY 1` — toda tasa > 0 tiene que calzar con exactamente un código activo de `tax_codes`. Staging 16/09: 10 líneas de compra (EXENTO ×7, ITBMS_7 ×3), 23 de trámite intactas, 19 asientos intactos, idempotente; `sql/tests/verificacion-045-tax-code-id.sql` da 5/5 en ROLLBACK. Detalle en `sop.md` SOP-028 |
-| `046_reversion_de_cobro.sql` | **staging sí / prod NO** | Tabla `payment_reversals` (la foto de cada `payment_application` que se borra al reversar) + RPC `reverse_payment` (SECURITY DEFINER, EXECUTE solo `service_role`): postea el espejo vía `post_journal_entry`, borra las aplicaciones (dispara T7a) y anula el cobro, **todo en una transacción**. Verifica que las líneas recibidas sean el espejo exacto del original; no lo recalcula. Va DESPUÉS de la 039 (usa la firma de 13 parámetros) y de la 042. Idempotente. Staging 17/09: `sql/tests/verificacion-046-reversion-cobro.sql` 10/10 en ROLLBACK, incluida una falla forzada después del posteo. Detalle en `sop.md` SOP-030 |
-| `047_recibo_de_caja.sql` | **staging sí / prod NO** | Recibo de caja (Bloque 2, 21/09): secuencia `'payment'` en `numbering_sequences` (CHECK re-declarado con los SIETE valores: los seis de la 033 más `payment`; siembra la fila por tenant), índice ÚNICO parcial `payments (tenant_id, payment_number) WHERE NOT NULL`, `documents` acepta `entity_type='payment'` y `source='auto_receipt_pdf'`, y `backfill_payment_numbers(tenant)` (SECURITY DEFINER, solo `service_role`): numera los cobros en NULL por `payment_date, created_at, id` (`REC-000001`…) y deja `last_number` en el último — se corre para todos los tenants y `seed-staging.ts` la vuelve a llamar después de sembrar pagos (dos caminos, como la 035). Idempotente: numera SOLO los NULL arrancando de `GREATEST(last_number, mayor REC- existente)`. Va DESPUÉS de la 033 (última en tocar ese CHECK) y de la 015 (última en tocar `documents_source_check`); no depende de la 046. 📋 Pre-flight contra prod: `payment_number` con formato distinto de `REC-######` tiene que dar 0 (la función NO renumera lo que ya tiene valor); el SELECT exacto está en el encabezado del archivo. Staging 21/09: 3 cobros numerados (REC-000001..3), segunda aplicación numeró 0, `sql/tests/verificacion-047-recibo-de-caja.sql` 10/10 en ROLLBACK. Detalle en `sop.md` SOP-031 |
-| `048_pagos_a_proveedores.sql` | **staging sí / prod NO** | Pagos a proveedores (Bloque 3, 21/09): tabla `supplier_payments` (uno por compra, parcial permitido; `kind` = `payment` \| `migrated_balance`, con CHECK que impide que un saldo heredado tenga número, banco o método, y que un pago carezca de ellos), `business_expenses.amount_paid` **derivada por trigger** de los pagos `registrado` (deriva también `status` —`pendiente_pago`/`parcialmente_pagado`/`pagado`— y `payment_date` = último pago) con guard tipo T4b (flag `finanzas.recalc`, válvula `finanzas.amount_paid_override`), CHECK de `status` con tres valores, `payment_date_consistency` reescrito, secuencia `'supplier_payment'` (CHECK con OCHO valores) y `backfill_supplier_payment_numbers()`, `documents` acepta `supplier_payment`/`auto_supplier_payment_pdf`, y RPC `reverse_supplier_payment` (espejo verificado + `anulado`, una transacción, rechaza saldos heredados). 🔴 **Backfill: cada compra `pagado` sin pagos recibe UN `migrated_balance` por su total — NO es un pago** (objeción de Oliver: la mayoría están en `pagado` por el default de la 010). Idempotente. Va DESPUÉS de la 047. 📋 Pre-flight prod: `SELECT status, COUNT(*), SUM(total) FROM business_expenses GROUP BY 1` (cuántos heredados va a crear) y `SELECT COUNT(*) FROM business_expenses WHERE status='pagado' AND total<=0` (tiene que dar 0). Staging 21/09: 3 saldos heredados; segunda aplicación creó 0; `sql/tests/verificacion-048-pagos-a-proveedores.sql` 13/13 en ROLLBACK, incluida la falla forzada tras el posteo |
-| `053_anulacion_rechaza_nc_parcial.sql` | **staging sí / prod NO** | La anulación rechaza una factura con NC PARCIAL en el libro (Bloque 5, commit 4, 22/09). Se encontró al armar la pantalla: factura de 1.000 con asiento A + NC parcial de 200 con asiento propio B (D5) → anularla espejaría A COMPLETO y B ya debitó 200: ingreso revertido por 1.200. Regla: **con una NC en el libro ya no se anula; lo que falta se acredita con otra NC**. `cancelInvoice` la rechaza por `credited_total > 0` (409) y el RPC `cancel_invoice_with_reversal` —re-declarado COMPLETO con el cuerpo de la 052 más el gate— por la existencia de un asiento `nota_credito` de alguna NC de la factura (mira el ASIENTO y no `credited_total`, porque cuando corre la app ya creó la NC total de esa misma anulación, sin asiento). Va DESPUÉS de la 052. `sql/tests/verificacion-053-anulacion-con-nc-parcial.sql` 4/4 en ROLLBACK |
-| `054_tercero_por_linea.sql` | **staging sí / prod NO** | El TERCERO de cada línea del libro (Bloque 7, commit 1, 22/09): `journal_entry_lines` gana `client_id` y `supplier_id` (FK reales a `clients`/`suppliers`, **`ON DELETE NO ACTION`** — un `SET NULL` fallaría contra `trg_jel_no_update`) con `CHECK num_nonnulls(client_id, supplier_id) <= 1` e índices parciales; `post_journal_entry` se re-declara con la **MISMA firma de 13 parámetros** —el tercero viaja dentro de `p_lines`— validando que no vengan los dos y que el tercero sea del tenant, y **sumándolo al `content_hash`** (tercera versión de la fórmula; las tres están listadas en `sop.md` SOP-014). 📋 Verificado contra information_schema: `journal_entry_lines` tenía 8 columnas y ninguna de tercero. Consecuencia buscada: un cliente o proveedor nombrado en el libro **ya no se puede eliminar**. Va DESPUÉS de la 039. `sql/tests/verificacion-054-tercero-por-linea.sql` 9/9 en ROLLBACK, con falla forzada después de postear |
-| `055_reversion_de_asiento_manual.sql` | **staging sí / prod NO** | Reversar un asiento MANUAL (Bloque 7, commit 6, 22/09): RPC `reverse_journal_entry(tenant, entry_id, motivo, fecha, descripción, líneas, autor)` — **genérico en la firma y filtrado a `source_type = 'manual'` adentro**: reversar desde ahí el asiento de una factura se saltaría `cancelInvoice`, el gate de mes cerrado y la nota de crédito. Verifica el espejo con `EXCEPT ALL`, exige la fecha de HOY y postea con `reverses_entry_id` y `source_id` NULL. Más el **índice único parcial `journal_entries_una_reversion_por_asiento (tenant_id, reverses_entry_id)`**, que saca de las tres funciones de reversión la regla de "una sola vez" y la pone en la base. 📋 **Pre-flight obligatorio antes de prod** (está al pie del archivo): cero asientos reversados dos veces — en staging dio 9 reversiones sobre 9 asientos distintos. Va DESPUÉS de la 039. `sql/tests/verificacion-055-reversion-de-asiento.sql` 9/9 en ROLLBACK, con falla forzada después de postear |
-| `049_pago_de_gasto_de_tramite.sql` | **staging sí / prod NO** | El pago de un gasto de TRÁMITE (Bloque 4, 21/09): **arco exclusivo en `supplier_payments`** (`expense_id` NULL → `expenses`, `business_expense_id` pasa a NULL, `CHECK num_nonnulls(...) = 1` — el patrón de `expense_lines` en la 036), una sola serie `CE-`; `expenses.amount_paid` y `expenses.status` (`pendiente_pago`/`parcialmente_pagado`/`pagado`/`anulado`) **derivados por trigger** de los pagos, con guard (llaves `finanzas.recalc`, `finanzas.amount_paid_override`, y `finanzas.tramite_anular` solo para que el RPC de la 050 ponga `anulado`); el trigger de `supplier_payments` se ramifica por destino; `reverse_supplier_payment` ramificado (misma firma; `expense.kind` = `compra` \| `tramite` en la respuesta); la 038 **deja de congelar `supplier_id`** (un gasto asentado puede recibir su ficha después) y **sigue congelando `payment_account_code`** (resto de la 036: el banco va en el pago; se dropea más adelante). ⚠️ FK `expense_id` NO ACTION + `expenses.case_id ON DELETE CASCADE`: borrar un caso con un gasto pagado falla en la FK, a propósito. Va DESPUÉS de la 036, 038 y 048. 📋 Pre-flight prod: `SELECT COUNT(*) FROM expenses WHERE amount <= 0` (0). Staging 21/09: 5 pagos existentes, todos con un solo destino; `sql/tests/verificacion-049-pago-de-gasto-de-tramite.sql` 13/13 en ROLLBACK, incluida la falla forzada tras el posteo |
-| `050_reversion_de_gasto_de_tramite.sql` | **staging sí / prod NO** | RPC `reverse_expense_tramite` (Bloque 4, commit 2, 21/09): la salida de la inmutabilidad de la 038. Espejo del asiento `gasto_tramite` con la fecha de HOY (verificado con `EXCEPT ALL`, no construido), `expenses.status = 'anulado'` con la llave `finanzas.tramite_anular` de la 049, UNA transacción. 🔴 Rechaza gastos con pagos registrados (primero se eliminan o reversan los pagos). No borra el gasto ni toca `posted_entry_id`. EXECUTE solo `service_role`. Va DESPUÉS de la 049 y ANTES del posteo automático (D6 de Oliver). `sql/tests/verificacion-050-reversion-de-gasto-de-tramite.sql` 9/9 en ROLLBACK, incluida la falla forzada tras el posteo |
-| `051_nota_de_credito_contable.sql` | **staging sí / prod NO** | Nota de crédito contable (Bloque 5, commit 1, 22/09): `credit_notes` gana las **13 columnas fiscales** de `invoices` (tipos de la 019; `fe_estado` default `no_emitida` = documento interno sin autorización de la DGI; CHECK con los 5 valores) — el envío a la DGI es otro bloque; `credit_notes_status_check` re-declarado con su único valor (`emitida`); **`invoices.credited_total` DERIVADA** de las NC `emitida` (trigger + guard `finanzas_guard_credited_total`, llaves `finanzas.recalc` / `amount_paid_override`); **T7a deriva el status contra el total NETO** (`grand_total − credited_total`): acreditada al 100% con pagos 0 = `emitida` con saldo 0, NO `pagada` (D3); **`balance_due` recreada** como `grand_total − amount_paid − credited_total` (era GENERATED sin el crédito; dependencias contadas en `pg_depend`: solo su `pg_attrdef`; 0 vistas, funciones, índices, políticas). `NOTIFY pgrst`. 📋 Pre-flight prod: `SELECT count(*) FROM credit_notes` y `SELECT count(*) FROM invoices WHERE balance_due <> grand_total - amount_paid` (0). Va DESPUÉS de la 032 y la 034. `sql/tests/verificacion-051-nota-de-credito.sql` 9/9 en ROLLBACK (la falla forzada tras el posteo va en la 052, que es la que postea) |
-| `052_anulacion_con_reversion_y_nc.sql` | **staging sí / prod NO** | Anulación con reversión (Bloque 5, commit 3, 22/09): RPC `cancel_invoice_with_reversal` — rechaza si el **MES DE LA FACTURA** está cerrado (Josuarth: se emite NC), verifica el espejo del asiento `factura` con `EXCEPT ALL` y lo postea como `reversion` con fecha de HOY si la factura está en el libro (sin asiento: solo el status), marca `anulada` — UNA transacción; T6 (`finanzas_no_delete_protected`, reescrita COMPLETA con sus 4 casos) y el trigger de líneas de NC ganan la **válvula `finanzas.nc_compensar`**: el DELETE compensatorio de una NC recién creada cuyo asiento no pudo postearse, solo sin asiento; `finanzas_compensar_nota_de_credito(tenant, nc)` pone la válvula y borra líneas + cabecera en la misma transacción (solo `service_role`). Reemplaza al "GATE CONTABLE (02/09)" que bloqueaba anular cualquier factura con asiento. Va DESPUÉS de la 051. `sql/tests/verificacion-052-anulacion-con-reversion.sql` 10/10 en ROLLBACK, incluida la falla forzada tras el posteo |
-| `023_contabilidad_fase1_ledger.sql` | **sí** | Motor del ledger: `accounting_periods`, `accounting_sequences`, `journal_entries`, `journal_entry_lines`, `accounting_legajos` + 6 triggers de inmutabilidad + RLS. **Confirmado por Oliver** |
-| `024_chart_of_accounts_saldo_subcategoria.sql` | **sí** | `chart_of_accounts.saldo_inicial` y `.subcategoria`. **Confirmado por Oliver** |
+| `20260402000001_initial_schema.sql` | **sí** | Esquema base: 14 tablas, RLS por tenant_id, índices · <sub>marcador: tabla clients</sub> |
+| `20260402000002_seed_data.sql` | **sí** | Catálogos iniciales del tenant · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `20260402000003_seed_clients_cases.sql` | **NO** | ⛔ 23 clientes + 46 casos REALES del bufete · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ ⚠️ Solo tiene sentido contra PRODUCCIÓN. En staging los clientes son ficticios y el conteo no prueba nada. |
+| `20260403000001_fix_rls_jwt_claims.sql` | **sí** | Las funciones de RLS leen el tenant de app_metadata del JWT · <sub>marcador: función get_tenant_id()</sub> _(heurístico)_ |
+| `20260403000002_add_case_fields.sql` | **sí** | 8 columnas de seguimiento en cases + follow_up_date en comments · <sub>marcador: cases.procedure_type</sub> |
+| `20260403000003_add_assistant_id.sql` | **sí** | cases.assistant_id → users · <sub>marcador: cases.assistant_id</sub> |
+| `20260403000004_add_client_fields.sql` | **sí** | clients.address, clients.client_since · <sub>marcador: clients.client_since</sub> |
+| `20260403000005_responsible_id_to_users.sql` | **sí** | cases.responsible_id apunta a users · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `20260403000006_seed_complete_demo.sql` | n/a | Innecesario hoy; no se corre en ninguna base nueva |
+| `20260403000010_complete_demo_data.sql` | n/a | Innecesario hoy |
+| `20260403000011_fill_clients_and_documents.sql` | n/a | Innecesario hoy |
+| `20260403000012_todos_and_prospects.sql` | **sí** | personal_todos, todo_comments, todo_documents, prospects · <sub>marcador: tabla personal_todos</sub> |
+| `20260403000013_extend_document_entity_types.sql` | **sí** | documents.entity_type acepta 'task' y 'comment' · <sub>marcador: documents_entity_type_check menciona 'comment'</sub> |
+| `20260404000001_v1_1_feedback_changes.sql` | n/a | Reemplazada por _fixed. NO correr |
+| `20260404000001_v1_1_feedback_changes_fixed.sql` | **sí** | Cambios de feedback v1.1 · <sub>marcador: tabla client_payments</sub> _(heurístico)_ |
+| `20260404000002_payment_type.sql` | **sí** | client_payments.payment_type · <sub>marcador: client_payments.payment_type</sub> |
+| `20260405000001_client_responsible_lawyer.sql` | **sí** | clients.responsible_lawyer_id · <sub>marcador: clients.responsible_lawyer_id</sub> |
+| `20260504000001_add_contador_role.sql` | **sí** | Rol 'contador' en el CHECK de users.role · <sub>marcador: users_role_check menciona 'contador'</sub> |
+| `20260505000001_finanzas_extend_clients.sql` | **sí** | Columnas fiscales en clients · <sub>marcador: clients.tax_id_type</sub> |
+| `20260505000002_finanzas_catalogos.sql` | **sí** | chart_of_accounts, tax_codes, services_catalog, numbering_sequences · <sub>marcador: tabla chart_of_accounts</sub> |
+| `20260505000003_finanzas_b3a_quotes.sql` | **sí** | quotes + quote_lines · <sub>marcador: tabla quotes</sub> |
+| `20260505000004_finanzas_b3b_invoices.sql` | **sí** | invoices + invoice_lines · <sub>marcador: tabla invoices</sub> |
+| `20260505000005_finanzas_b3c_credit_notes.sql` | **sí** | credit_notes + credit_note_lines · <sub>marcador: tabla credit_notes</sub> |
+| `20260505000006_finanzas_b3d_payments.sql` | **sí** | payments + payment_applications · <sub>marcador: tabla payment_applications</sub> |
+| `20260505000007_finanzas_b3e_triggers.sql` | **sí** | Los triggers T1–T8: transiciones, inmutabilidad, recálculo de totales · <sub>marcador: función finanzas_validate_status_transition()</sub> |
+| `20260506000001_finanzas_b4_schema_prep_dgi.sql` | **sí** | 4 columnas DGI en invoices · <sub>marcador: invoices.dgi_cufe</sub> |
+| `20260507000001_finanzas_b4_anular_factura.sql` | **sí** | cancellation_reason, cancelled_at + transición a 'anulada' · <sub>marcador: invoices.cancellation_reason</sub> |
+| `20260508000001_clients_add_status_and_type.sql` | **sí** | client_status, client_type · <sub>marcador: clients.client_status</sub> |
+| `20260508000002_quotes_extension_and_terms_template.sql` | **sí** | ~19 columnas en quotes + quote_terms_template · <sub>marcador: tabla quote_terms_template</sub> |
+| `20260508000003_clients_drop_active_legacy.sql` | **sí** | Dropea clients.active · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `migration_completa.sql` | n/a | NO correr: se pisa con las numeradas |
+| `migration_final_consolidada.sql` | n/a | NO correr |
 
-### Archivos sin numerar en el mismo directorio
+## 2. `sql/pending/`
 
-| Archivo | ¿En prod? | Qué hace |
+| Archivo | ¿aplicada? | Qué hace |
 |---|---|---|
-| `add_extrajudicial_classification.sql` | **sí** (inferido) | Clasificación EXTRAJUDICIAL (EXT). El changelog dice "no ejecutado" el 2026-04-20, pero el 2026-04-21 la migración 001 movió un caso a **EXT-001**, así que para entonces ya existía |
-| `add_payment_description_receipt.sql` | **sí** (inferido) | `client_payments.description/receipt_url/receipt_filename`. La edición de pagos con recibo está viva |
-| `add-receipt-to-expenses.sql` | **sí** (inferido) | `expenses.receipt_url/receipt_filename` |
-| `backfill_client_type_null.sql` | **incierto** | Backfill de `client_type` para 26 clientes legacy. Es puro dato: no hay forma de saberlo desde el repo. **Verificar contra la base** |
-| `cleanup-test-users-2026-05-02.sql` | **incierto** | Borra 3 usuarios de prueba. **Verificar contra la base** |
-| `fix-duplicate-classifications.sql` | **sí** (inferido) | Deduplica `cat_classifications` por prefijo. El dropdown de prod no muestra duplicados |
-| `fix-duplicate-statuses-2026-08-23.sql` | **sí** | Deja `cat_statuses` en 2 filas activas. *El archivo dice "YA APLICADO 2026-08-23 por Oliver"* |
-| `hotfix_cli116_client_type.sql` | **incierto** | UPDATE de una fila (CLI-116 → `persona_juridica`). **Verificar contra la base** |
-| `storage_rls_policies.sql` | **sí, pero obsoleto** | Políticas de Storage ABIERTAS (solo chequean `bucket_id`). Fueron el hallazgo OWASP Crítico #1 y las reemplaza el archivo de abajo. **No correr en staging** |
-| `storage_rls_tenant_scoped.sql` | **sí** | Aísla el bucket `documents` por tenant. *El archivo dice "APLICADO 2026-07-13, verificado"*. Ésta es la buena |
-| `update-classification-colors.sql` | **sí** (inferido) | Colores oficiales de las clasificaciones. Los badges de prod los muestran |
-| `ENVIRONMENT_VARIABLES.md` | n/a | No es SQL |
+| `001_fix_case_code_civ_002_to_ext.sql` | **sí** | Re-numera CIV-002 → EXT-001 · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `002_enable_unaccent_and_search_rpcs.sql` | **sí** | Extensión unaccent + RPCs de búsqueda universal · <sub>marcador: función f_unaccent()</sub> |
+| `004_verify_familia_classification.sql` | n/a | No modifica nada: no hay nada que aplicar ni que detectar |
+| `005_add_familia_classification.sql` | **sí** | Clasificación FAMILIA (prefijo FAM) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `006_extend_documents_for_auto_pdfs.sql` | **sí** | documents.source / source_version / source_content_hash + entity_type 'quote' · <sub>marcador: documents.source_content_hash</sub> |
+| `007_quotes_add_title.sql` | **sí** | quotes.title NOT NULL + CHECK 3-100 + backfill · <sub>marcador: quotes.title</sub> |
+| `008_extend_chart_of_accounts.sql` | **sí** | is_system, account_name_qb, description + 17 cuentas · <sub>marcador: chart_of_accounts.is_system</sub> |
+| `009_create_tax_payments.sql` | **sí** | Tabla tax_payments · <sub>marcador: tabla tax_payments</sub> |
+| `010_create_business_expenses.sql` | **sí** | Tabla business_expenses (compras del bufete) · <sub>marcador: tabla business_expenses</sub> |
+| `011_business_expenses_rls_abogada.sql` | **sí** | RLS: la abogada crea/edita/borra gastos del bufete · <sub>marcador: 4 política(s) sobre public.business_expenses</sub> _(heurístico)_ |
+| `012_extend_services_quotes_observations.sql` | **sí** | services_catalog.sort_order + quotes.observations + credit_notes.observations · <sub>marcador: services_catalog.sort_order</sub> |
+| `013_create_observation_templates.sql` | **sí** | Catálogo observation_templates · <sub>marcador: tabla observation_templates</sub> |
+| `014_quotes_estado_emitida.sql` | **sí** | 'emitida' en el CHECK de quotes.status + reescribe finanzas_validate_status_transition · <sub>marcador: quotes_status_check menciona 'emitida'</sub> |
+| `015_quote_acceptances_rejections.sql` | **sí** | quote_acceptances + quote_rejections (portal público) · <sub>marcador: tabla quote_acceptances</sub> |
+| `016_quotes_source_quote_id.sql` | **sí** | quotes.source_quote_id (duplicar cotización) · <sub>marcador: quotes.source_quote_id</sub> |
+| `018_cleanup_test_quotes.sql` | **sí** | Borra 18 cotizaciones de prueba (EJECUTADO EN PRODUCCIÓN 2026-05-29) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `019_efactura_fase_1a_modelo_datos.sql` | **sí** | 8 columnas en clients, 9 en invoices, fe_emisiones + fe_secuencias · <sub>marcador: tabla fe_emisiones</sub> |
+| `020_efactura_allocator.sql` | **sí** | RPC allocate_fe_numero · <sub>marcador: función allocate_fe_numero()</sub> |
+| `021_client_numbering_sequence.sql` | **sí** | 'client' en numbering_sequences + siembra la fila · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `022_backfill_dv_embebido.sql` | **sí** | Extrae el DV escrito como texto (' DV NN') a digito_verificador · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ 🔴 Decisión explícita: NO se aplica hasta que se retome como bloque propio. ⚠️ El marcador solo tiene sentido contra PRODUCCIÓN: en staging los clientes sembrados no traen el DV embebido en el texto, así que da 'sí' por vacuidad. |
+| `023_contabilidad_fase1_ledger.sql` | **sí** | Motor del ledger: 5 tablas + 6 triggers de inmutabilidad + RLS · <sub>marcador: tabla journal_entries</sub> |
+| `024_chart_of_accounts_saldo_subcategoria.sql` | **sí** | chart_of_accounts.saldo_inicial y .subcategoria · <sub>marcador: chart_of_accounts.saldo_inicial</sub> |
+| `025_niif18_tipo_costo_y_subcategorias.sql` | **sí** | NIIF 18: account_type gana 'cost', cuenta_control, subcategorías nuevas, cuenta 200004 · <sub>marcador: chart_of_accounts.cuenta_control</sub> Marcador decisivo del corte de producción al 22/09/2026: esta columna NO existe en prod. |
+| `026_cuenta_distribucion_socias.sql` | **sí** | Cuenta 300004 Distribución a Socias · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ INSERT puro: no deja ningún objeto de esquema. Solo se puede detectar por el dato. |
+| `027_saldo_inicial_fecha.sql` | **sí** | chart_of_accounts.saldo_inicial_fecha + CHECK 'si hay saldo, hay fecha' · <sub>marcador: chart_of_accounts.saldo_inicial_fecha</sub> |
+| `028_fase2_motor_posteo.sql` | **sí** | post_journal_entry, ensure_accounting_periods, verify_accounting_chain + períodos · <sub>marcador: función post_journal_entry()</sub> |
+| `029_restaurar_check_reversion.sql` | **sí** | Restaura je_reversion_requires_ref · <sub>marcador: constraint je_reversion_requires_ref</sub> |
+| `030_ledger_permisos_y_periodos.sql` | **sí** | El RPC pasa a SECURITY DEFINER con EXECUTE solo para service_role · <sub>marcador: authenticated no puede ejecutar post_journal_entry()</sub> No se distingue de la 028 por el nombre de la función: se distingue por el privilegio. |
+| `031_bucket_documents_privado.sql` | **sí** | El bucket documents pasa a privado · <sub>marcador: bucket documents: public = false</sub> |
+| `032_amount_paid_derivado.sql` | **sí** | invoices.amount_paid derivada + guard T4b · <sub>marcador: función finanzas_guard_amount_paid()</sub> |
+| `033_proveedores_entidad.sql` | **sí** | Tabla suppliers + supplier_id/due_date en business_expenses + backfill · <sub>marcador: tabla suppliers</sub> |
+| `034_asiento_unico_por_documento.sql` | **sí** | UNIQUE parcial (tenant, source_type, source_id) · <sub>marcador: índice journal_entries_un_asiento_por_documento</sub> |
+| `035_reembolso_a_fondos_legales.sql` | **sí** | Los 6 servicios REIM-* pasan de 2201 (pasivo) a 130003 (activo) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ UPDATE de catálogo: sin objeto de esquema. Depende de que exista la cuenta 130003. |
+| `036_expense_lines.sql` | **sí** | Tabla expense_lines + 4 columnas en expenses + backfill · <sub>marcador: tabla expense_lines</sub> |
+| `037_expense_lines_cuenta_obligatoria.sql` | **sí** | CHECK chart_account_code NOT NULL (NOT VALID) sobre expense_lines · <sub>marcador: constraint expense_lines_cuenta_obligatoria</sub> |
+| `038_gasto_tramite_al_ledger.sql` | **sí** | 'gasto_tramite' en source_type + inmutabilidad de expenses y expense_lines · <sub>marcador: función gasto_tramite_tiene_asiento()</sub> |
+| `039_asientos_manuales.sql` | **sí** | journal_entries.reference e idempotency_key + redefine post_journal_entry · <sub>marcador: journal_entries.reference</sub> |
+| `040_compras_con_lineas.sql` | **sí** | Una línea por compra y la cuenta del encabezado se apaga (CHECK a NULL) · <sub>marcador: constraint business_expenses_cuenta_vive_en_la_linea</sub> |
+| `041_banco_del_cobro.sql` | **sí** | payments.payment_account_code · <sub>marcador: payments.payment_account_code</sub> |
+| `042_pago_proveedor_source_type.sql` | **sí** | 'pago_proveedor' en el CHECK de journal_entries.source_type · <sub>marcador: journal_entries_source_type_check menciona 'pago_proveedor'</sub> |
+| `043_relink_servicios_plan_vigente.sql` | **sí** | Los 5 servicios HON-* se relinkean a sus cuentas de ingreso vigentes · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ UPDATE de catálogo. Aborta entera si alguna de las 5 cuentas no existe, está inactiva o no es income. |
+| `044_gasto_numero_factura_proveedor.sql` | **sí** | business_expenses.supplier_invoice_number · <sub>marcador: business_expenses.supplier_invoice_number</sub> |
+| `045_expense_lines_tax_code_id.sql` | **sí** | expense_lines.tax_code_id (FK real) + backfill de líneas de compra · <sub>marcador: expense_lines.tax_code_id</sub> |
+| `046_reversion_de_cobro.sql` | **sí** | Tabla payment_reversals + RPC reverse_payment · <sub>marcador: tabla payment_reversals</sub> |
+| `047_recibo_de_caja.sql` | **sí** | Recibo de caja REC-: secuencia 'payment', índice único, CHECK de documents, backfill · <sub>marcador: índice payments_tenant_payment_number_key</sub> payments.payment_number ya existía desde b3d_payments: NO sirve como marcador. |
+| `048_pagos_a_proveedores.sql` | **sí** | Tabla supplier_payments (CE-) + amount_paid derivado en compras + RPC de reversión · <sub>marcador: tabla supplier_payments</sub> |
+| `049_pago_de_gasto_de_tramite.sql` | **sí** | Arco exclusivo en supplier_payments + expenses.amount_paid/status derivados · <sub>marcador: supplier_payments.expense_id</sub> |
+| `050_reversion_de_gasto_de_tramite.sql` | **sí** | RPC reverse_expense_tramite · <sub>marcador: función reverse_expense_tramite()</sub> |
+| `051_nota_de_credito_contable.sql` | **sí** | 13 columnas fiscales en credit_notes + invoices.credited_total + balance_due recreada · <sub>marcador: invoices.credited_total</sub> |
+| `052_anulacion_con_reversion_y_nc.sql` | **sí** | RPC cancel_invoice_with_reversal + válvula finanzas.nc_compensar · <sub>marcador: función cancel_invoice_with_reversal()</sub> |
+| `053_anulacion_rechaza_nc_parcial.sql` | **sí** | La anulación rechaza una factura con NC parcial en el libro · <sub>marcador: el cuerpo de cancel_invoice_with_reversal() incluye «ya tiene la nota de crédito»</sub> Es un CREATE OR REPLACE de la función de la 052: por nombre son indistinguibles. Se mira el cuerpo. |
+| `054_tercero_por_linea.sql` | **sí** | journal_entry_lines.client_id / .supplier_id (dos FK reales) · <sub>marcador: journal_entry_lines.client_id</sub> |
+| `055_reversion_de_asiento_manual.sql` | **sí** | RPC reverse_journal_entry + una sola reversión por asiento · <sub>marcador: índice journal_entries_una_reversion_por_asiento</sub> |
+| `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
+| `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
+| `backfill_client_type_null.sql` | **sí** | Backfill de client_type para clientes legacy · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `cleanup-test-users-2026-05-02.sql` | **NO** | Borra 3 usuarios de prueba · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ ⚠️ Solo tiene sentido contra PRODUCCIÓN. En staging el seed crea usuarios de prueba a propósito, así que siempre da NO. |
+| `fix-duplicate-classifications.sql` | **sí** | Deduplica cat_classifications por prefijo · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `fix-duplicate-statuses-2026-08-23.sql` | **sí** | Deja cat_statuses en 2 filas activas · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
+| `hotfix_cli116_client_type.sql` | **NO** | UPDATE de una fila (CLI-116 → persona_juridica) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ ⚠️ Solo tiene sentido contra PRODUCCIÓN. CLI-116 es un cliente real; en staging no existe. |
+| `storage_rls_policies.sql` | n/a | OBSOLETA — fue el hallazgo OWASP Crítico #1. La reemplaza storage_rls_tenant_scoped.sql. NO correr. |
+| `storage_rls_tenant_scoped.sql` | **sí** | Aísla el bucket documents por tenant (primera carpeta = tenant_id del JWT) · <sub>marcador: 4 política(s) sobre storage.objects</sub> _(heurístico)_ |
+| `update-classification-colors.sql` | **sí** | Colores oficiales de las clasificaciones · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 
-**Faltan los números 003 y 017.** No existen en el directorio y no aparecen en el
-historial de git. O nunca se crearon, o se borraron sin dejar rastro.
+## 3. La cola, en orden
+
+Faltan **2** migraciones de `sql/pending/`, en este orden:
+
+```
+cleanup-test-users-2026-05-02
+hotfix_cli116_client_type
+```
+
+⚠️ Este listado es el **orden del directorio**, no el orden de aplicación.
+Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
+051 antes de 052 antes de 053) están en el runbook del despliegue,
+`docs/runbooks/despliegue-025-055.md`.
 
 ---
 
-## 3. Qué verificar contra la base antes de seguir
-
-Tres archivos y nada más. Los tres son cambios de **dato**, no de esquema, y por eso el
-repo no puede responderlos:
-
-```sql
--- backfill_client_type_null.sql → ¿quedan clientes sin tipo?
-SELECT COUNT(*) FROM clients
-WHERE tenant_id='a0000000-0000-0000-0000-000000000001' AND client_type IS NULL;
--- Si el backfill corrió: 3 (los tres DUDOSOS que quedaron fuera a propósito).
--- Si no corrió: 29.
-
--- hotfix_cli116_client_type.sql
-SELECT client_number, client_type FROM clients
-WHERE tenant_id='a0000000-0000-0000-0000-000000000001' AND client_number='CLI-116';
--- Aplicado → 'persona_juridica'. Sin aplicar → NULL.
-
--- cleanup-test-users-2026-05-02.sql
-SELECT email FROM users WHERE email IN (
-  'test-abog-0502@integra-panama.com',
-  'test-asis-0502@integra-panama.com',
-  'asistente@integra-panama.com');
--- Aplicado → 0 filas.
-```
-
----
-
-## 4. Orden de aplicación para STAGING
-
-No es "correr todo". Hay tres grupos que **se saltan a propósito**.
-
-### 4.1 Se saltan — datos reales de clientes (Ley 81)
-
-- `supabase/migrations/20260402000003_seed_clients_cases.sql` — **23 clientes y 46 casos
-  REALES** del bufete, extraídos del Excel, con los nombres de las licenciadas. Meter esto
-  en staging es exactamente lo que Fase 0 vino a evitar.
-- `scripts/load_real_data.sql` y `scripts/run_all_pending.sql` (que lo incluye en su
-  PARTE 3) — mismo problema.
-
-### 4.2 Se saltan — datos de demo viejos que chocan con el seed nuevo
-
-`20260403000006_seed_complete_demo.sql`, `20260403000010_complete_demo_data.sql`,
-`20260403000011_fill_clients_and_documents.sql`. Son ficticios, así que no hay problema
-legal, pero duplicarían catálogos y ensuciarían los conteos. Los reemplaza
-`npm run seed:staging`.
-
-### 4.3 Se saltan — reemplazados o rotos
-
-`20260404000001_v1_1_feedback_changes.sql` (sintaxis rota, usar la `_fixed`),
-`migration_completa.sql`, `migration_final_consolidada.sql`,
-`sql/pending/storage_rls_policies.sql` (políticas abiertas; usar `storage_rls_tenant_scoped`),
-y los limpiadores de datos que no tienen a qué apuntar en una base vacía:
-`001`, `018`, `cleanup-test-users-2026-05-02`, `fix-duplicate-classifications`,
-`fix-duplicate-statuses-2026-08-23`, `backfill_client_type_null`,
-`hotfix_cli116_client_type`, `022_backfill_dv_embebido`.
-
-### 4.4 Se corren — esquema, en este orden
-
-```
-supabase/migrations/
-  20260402000001_initial_schema.sql
-  20260402000002_seed_data.sql
-  20260403000001_fix_rls_jwt_claims.sql
-  20260403000002_add_case_fields.sql
-  20260403000003_add_assistant_id.sql
-  20260403000004_add_client_fields.sql
-  20260403000005_responsible_id_to_users.sql
-  20260403000012_todos_and_prospects.sql
-  20260403000013_extend_document_entity_types.sql
-  20260404000001_v1_1_feedback_changes_fixed.sql
-  20260404000002_payment_type.sql
-  20260405000001_client_responsible_lawyer.sql
-  20260504000001_add_contador_role.sql
-  20260505000001_finanzas_extend_clients.sql
-  20260505000002_finanzas_catalogos.sql
-  20260505000003_finanzas_b3a_quotes.sql
-  20260505000004_finanzas_b3b_invoices.sql
-  20260505000005_finanzas_b3c_credit_notes.sql
-  20260505000006_finanzas_b3d_payments.sql
-  20260505000007_finanzas_b3e_triggers.sql
-  20260506000001_finanzas_b4_schema_prep_dgi.sql
-  20260507000001_finanzas_b4_anular_factura.sql
-  20260508000001_clients_add_status_and_type.sql
-  20260508000002_quotes_extension_and_terms_template.sql
-  20260508000003_clients_drop_active_legacy.sql
-
-sql/pending/
-  002_enable_unaccent_and_search_rpcs.sql
-  005_add_familia_classification.sql
-  add_extrajudicial_classification.sql
-  update-classification-colors.sql
-  add_payment_description_receipt.sql
-  add-receipt-to-expenses.sql
-  006_extend_documents_for_auto_pdfs.sql
-  007_quotes_add_title.sql
-  008_extend_chart_of_accounts.sql
-  009_create_tax_payments.sql
-  010_create_business_expenses.sql
-  011_business_expenses_rls_abogada.sql
-  012_extend_services_quotes_observations.sql
-  013_create_observation_templates.sql
-  014_quotes_estado_emitida.sql
-  015_quote_acceptances_rejections.sql
-  016_quotes_source_quote_id.sql
-  019_efactura_fase_1a_modelo_datos.sql
-  020_efactura_allocator.sql
-  021_client_numbering_sequence.sql
-  023_contabilidad_fase1_ledger.sql
-  024_chart_of_accounts_saldo_subcategoria.sql
-  storage_rls_tenant_scoped.sql
-```
-
-Sobre `20260508000003_clients_drop_active_legacy.sql`: trae un `DO $$` que espera encontrar
-`clients.active` como columna generada, que no es como queda en una base recién creada
-(`initial_schema` la crea como BOOLEAN común). **No aborta**: emite un `RAISE NOTICE` y la
-dropea igual, que es el resultado que se busca.
-
-### 4.5 Después del esquema
-
-```bash
-npm run seed:staging
-```
-
----
-
-## 5. Cómo se comparan los conteos contra producción (Tarea 3)
-
-Las consultas de abajo se corren **una vez en cada base** y se comparan a mano. Las de
-producción son de solo lectura.
-
-```sql
--- Tablas
-SELECT COUNT(*) FROM information_schema.tables
-WHERE table_schema='public' AND table_type='BASE TABLE';
-
--- Políticas RLS
-SELECT COUNT(*) FROM pg_policies WHERE schemaname='public';
-
--- Triggers (sin los internos de FK)
-SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema='public';
-
--- Triggers de inmutabilidad del ledger — deben ser 6
-SELECT tgname FROM pg_trigger
-WHERE tgname IN ('trg_je_no_update','trg_je_no_delete','trg_jel_no_update',
-                 'trg_jel_no_delete','trg_leg_no_update','trg_leg_no_delete')
-ORDER BY tgname;
-
--- Secuencias de numeración
-SELECT sequence_type, last_number FROM numbering_sequences
-WHERE tenant_id='a0000000-0000-0000-0000-000000000001' ORDER BY sequence_type;
-
--- Plan de cuentas — prod: 62 activas, 34 inactivas (legacy QuickBooks)
-SELECT active, COUNT(*) FROM chart_of_accounts
-WHERE tenant_id='a0000000-0000-0000-0000-000000000001' GROUP BY active;
-```
-
-Los **datos** no se comparan: staging tiene 15 clientes y 30 casos ficticios contra los
-207 casos de producción, y esa diferencia es el objetivo, no un problema.
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-22 22:05._

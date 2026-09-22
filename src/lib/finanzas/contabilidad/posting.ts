@@ -110,6 +110,19 @@ export interface LineaAsiento {
   debit: number;
   credit: number;
   description?: string | null;
+  /**
+   * EL TERCERO DE ESTA LÍNEA (migración `054`). Opcional, y **uno u otro,
+   * nunca los dos**: lo hace cumplir el CHECK `jel_tercero_unico` y, antes, el
+   * propio RPC con un mensaje que nombra la línea.
+   *
+   * Se puede poner en cualquier línea, no solo en las de control: un ajuste
+   * contra ingresos también puede decir de qué cliente se trata.
+   *
+   * 🔬 Entra en el `content_hash` del asiento: es contenido contable, como
+   * `reference`. Ver `sop.md` SOP-014.
+   */
+  client_id?: string | null;
+  supplier_id?: string | null;
 }
 
 export interface AsientoInput {
@@ -173,6 +186,9 @@ export async function postJournalEntry(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // 054: el tercero viaja DENTRO de la línea, no como parámetro del RPC.
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_source_id: input.source_id ?? null,
     p_source_cufe: input.source_cufe ?? null,

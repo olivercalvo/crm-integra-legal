@@ -809,6 +809,32 @@ Dentro del RPC, el `SELECT ... FOR UPDATE` sobre la fila de `accounting_sequence
 las dos cosas con un solo candado: el correlativo sin huecos y la cadena. `sha256()` es nativo
 desde PostgreSQL 11 (la base corre 17.6), así que no hace falta pgcrypto.
 
+### 🔬 Las tres versiones de la fórmula del `content_hash`
+
+`content_hash` se computa dentro de `post_journal_entry` sobre un `concat_ws('|', …)` de la
+cabecera más un `string_agg` de las líneas. **Esa fórmula cambió dos veces**, y quien alguna vez
+escriba un verificador que RECALCULE el contenido desde las columnas —el actual no lo hace—
+tiene que conocer las tres versiones o va a reportar como adulterados todos los asientos viejos:
+
+| Desde | Migración | Qué se agregó | Línea hasheada |
+|---|---|---|---|
+| **2026-08-27** | `028` | la fórmula original | `code:debit:credit:descr` |
+| **2026-09-03** | `039` | `reference` en la cabecera (`idempotency_key` **no**: es transporte, no contabilidad) | `code:debit:credit:descr` |
+| **2026-09-22** | `054` | `client_id` y `supplier_id` de cada línea | `code:debit:credit:descr:client_id:supplier_id` |
+
+Los dos campos del tercero se concatenan **siempre**, también vacíos: una fórmula de forma
+variable no se puede auditar.
+
+🔴 **Cambiar la fórmula NO rompe nada de lo ya escrito, y esto está verificado, no supuesto:**
+`verify_accounting_chain()` (028) comprueba dos cosas —que `prev_hash` encadene con el `hash`
+anterior y que `hash = sha256(prev_hash || content_hash)`— y **nunca recalcula `content_hash`
+desde las columnas**. Los asientos viejos conservan el suyo y la cadena sigue íntegra. Por eso
+también hay que decir qué NO detecta el hash: una cadena rota, sí; un campo adulterado, no. Lo
+que protege los campos son los triggers de inmutabilidad de la `023`.
+
+**Si mañana se agrega un campo más:** entra al hash solo si es contenido contable, se suma una
+fila a esta tabla con su fecha, y se deja la fórmula con forma fija.
+
 ### Verificar la integridad de la cadena
 
 ```sql

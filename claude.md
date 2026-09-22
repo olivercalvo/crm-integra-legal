@@ -231,6 +231,50 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Vocabulario del Diario/Mayor:** `pago` = "Cobro", `pago_proveedor` = "Pago a proveedor".
 - FND-010 (los gastos de trámite en la antigüedad por pagar) se cerró el mismo día con el Bloque 4.
 
+### Nota de crédito contable (desde 2026-09-22, Bloque 5 — SOLO staging)
+- 🔴 **Una NC se emite POR LÍNEAS con cantidad, nunca por monto libre.** El precio y la tasa son
+  los de la factura (`credit_note_lines` copia `unit_price`, `tax_rate`, `tax_code_id`); el asiento
+  se arma por línea (cuenta de ingreso de cada servicio, 130003 en los REIM-*, ITBMS por tasa) y
+  así una NC parcial da el ITBMS proporcional exacto. Validador puro: `validators/credit-note.ts`.
+  Tope (D7): **no se acredita más que `balance_due`**; lo cobrado se reversa primero.
+- 🔴 **Dos caminos, dos asientos distintos (D5):**
+  - **Anular dentro del mes** = NC total automática (`createCreditNoteFromInvoice`) + REVERSIÓN
+    del asiento de la factura con fecha de hoy + `anulada`, en UNA transacción
+    (RPC `cancel_invoice_with_reversal`, 052). La NC de una anulación **NO tiene asiento propio**:
+    contabilizarla aparte sería contar dos veces.
+  - **NC posterior o parcial** = asiento PROPIO `source_type = 'nota_credito'` con
+    **`source_id = la NC`** (no la factura), construido por `asiento-nota-credito.ts` (la factura
+    al revés, con `construirAsientoDeFactura` e invirtiendo). Mayor y Diario llegan a
+    `/finanzas/notas-credito/{id}`.
+- 🔴 **Cerrado el MES DE LA FACTURA no se anula: se emite NC con fecha de hoy** (Josuarth, acta
+  del 09/09). Lo verifica `cancelInvoice` (409) Y el RPC contra `accounting_periods` por
+  `issue_date`. La pantalla reemplaza "Anular" por "Nota de crédito" (D4). Es distinto del
+  control de `post_journal_entry`, que mira el mes de HOY.
+- 🔴 **Una factura con una NC en el libro ya NO se anula (053).** La anulación espeja el asiento
+  original COMPLETO y la NC parcial ya debitó su parte: descuadre de 1.200 sobre 1.000. Lo que
+  falta se acredita con OTRA NC. `cancelInvoice` rechaza por `credited_total > 0`; el RPC por la
+  existencia de un asiento `nota_credito` (mira el ASIENTO, porque cuando corre ya existe la NC
+  total de esa misma anulación, sin asiento).
+- **`invoices.credited_total` es DERIVADA (051)** de las NC `emitida` (trigger + guard, llaves
+  `finanzas.recalc`/`amount_paid_override`) y **`balance_due = grand_total − amount_paid −
+  credited_total`**. T7a deriva el status contra el total NETO: **acreditada al 100% con pagos 0 =
+  `emitida` con saldo 0, NO `pagada`** (D3). "Acreditada total" es un badge derivado en pantalla,
+  no un status; la antigüedad no la lista porque filtra por saldo.
+- **La NC nace `fe_estado = 'no_emitida'`: DOCUMENTO INTERNO sin autorización de la DGI (D1).**
+  Tiene las 13 columnas fiscales de `invoices` (051) pero el envío al PAC es otro bloque. Detalle
+  y PDF llevan la banda roja mientras siga así; el badge dice "Sin emitir a la DGI", no "Sin
+  enviar". **No se le entrega al cliente como comprobante fiscal.**
+- **Válvula `finanzas.nc_compensar` (052):** T6 rechaza el DELETE de una NC; el creador la
+  inserta ANTES de postear y si el posteo falla la deshace con
+  `finanzas_compensar_nota_de_credito` (válvula + DELETE en la misma transacción, solo sin
+  asiento). Deja HUECOS en `NC-` (criterio de SOP-031).
+- **Quién:** emite NC y anula admin y abogada (`POST /api/finanzas/credit-notes`,
+  `POST /api/finanzas/invoices/[id]/cancel`); el contador ve el detalle de la NC (patrón exacto en
+  `route-access.ts`, sin listado) y baja el PDF. **Todavía NO existe la reversión de una NC.**
+- **NC de COMPRA no va (D6).** Preguntas abiertas en `task_plan.md`: (i) ideati — ¿la DGI acepta
+  una NC enviada semanas después de su fecha contable?; (ii) Josuarth — acreditar una factura ya
+  cobrada (saldo acreedor) y el excedente del recibo.
+
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`
   (`ruc`, `dv`) y dos campos en pantalla. Josuarth lo pidió textual el 25/08: los
@@ -352,7 +396,7 @@ que vivía acá era falsa y por eso se corrigió.
 
 ## Módulo Finanzas — Anulación de facturas
 
-### ⚠️ Regla nueva del 09/09/2026 — TODAVÍA NO IMPLEMENTADA
+### Regla del 09/09/2026 — IMPLEMENTADA el 22/09/2026 (Bloque 5, SOLO staging)
 
 Acta de la reunión con RM:
 
@@ -365,36 +409,40 @@ Y su par, que aplica a todo el módulo contable:
 > **La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
 > que revierte.
 
-🔴 **Lo de abajo describe el comportamiento de HOY, que todavía no cumple esta
-regla:** el botón de anular sigue disponible mientras el status lo permita, sin
-mirar en qué mes cae `issue_date`. El gate por mes y el desvío a nota de crédito
-son un commit propio. Se anota acá —y no sólo en `task_plan.md`— para que nadie
-lea la sección siguiente como si fuera la política vigente del bufete.
+### Estado actual (desde `794e686` / `dcbdd23`, staging)
 
-### Estado actual (Camino 1, MVP transitorio)
-
-Las abogadas y admins pueden anular facturas emitidas desde la UI:
-- Botón "Anular factura" visible en detalle cuando status ∈ {emitida, parcialmente_pagada, pagada}
-- Modal con textarea obligatoria (mínimo 3 caracteres, máximo 1000)
-- Permisos: admin + abogada + contador (NO asistente)
-- La anulación es UN solo UPDATE atómico: status='anulada' + cancellation_reason + cancelled_at = NOW()
-- T2 (status transition validator) permite emitida→anulada y parcialmente_pagada→anulada
-- T2 NO permite pagada→anulada hoy. Cuando llegue Fase 2C (pagos) habrá que revisar el trigger junto con la lógica de reverso de payments.
+Las abogadas y admins anulan y emiten notas de crédito desde el detalle de la factura:
+- **"Anular factura"** visible cuando status ∈ {emitida, parcialmente_pagada, pagada}, **el mes de
+  `issue_date` está abierto y la factura no tiene NC** (053). Modal con motivo obligatorio (3–1000).
+  Con pagos aplicados el modal bloquea ("reverse los pagos primero").
+- La anulación es **NC total automática + reversión del asiento con fecha de hoy + `anulada`**, en
+  UNA transacción (RPC `cancel_invoice_with_reversal`, 052; `cancelInvoice()` en
+  `api/invoices.ts` con DELETE compensatorio de la NC si el RPC falla). Sin asiento propio para la NC.
+- **"Nota de crédito"** (por líneas con cantidad) convive con Anular cuando el mes está abierto y
+  **lo reemplaza cuando está cerrado**, con el aviso de D4. Es `POST /api/finanzas/credit-notes` →
+  `emitCreditNote` → asiento propio `nota_credito`. Con una NC parcial, Anular desaparece y queda
+  solo NC para el resto.
+- Permisos: admin + abogada (NO contador, NO asistente). El contador VE la NC (`/finanzas/notas-credito/{id}`) y su PDF.
+- El "GATE CONTABLE (02/09/2026)" que bloqueaba anular cualquier factura con asiento se eliminó:
+  la reversión real lo reemplaza.
+- T2 permite emitida→anulada y parcialmente_pagada→anulada; NO pagada→anulada (se reversan los cobros primero).
 
 Schema relevante:
-- invoices.cancellation_reason TEXT NULL — obligatorio al anular
-- invoices.cancelled_at TIMESTAMPTZ NULL — timestamp UTC interno
-- Migration: 20260507000001_finanzas_b4_anular_factura.sql
+- invoices.cancellation_reason TEXT NULL, invoices.cancelled_at TIMESTAMPTZ NULL (B4)
+- invoices.credited_total NUMERIC derivada (051); balance_due la resta
+- credit_notes: 13 columnas fiscales + fe_estado 'no_emitida' (051); credit_note_lines.invoice_line_id
+- Migrations: 20260507000001 (B4), 051, 052, 053 (Bloque 5, SOLO staging)
 
 ### Estado futuro (Camino 2, post-integración eFactura)
 
-Cuando se complete la integración con la API de eFactura, el helper cancelInvoice() debe extenderse con la siguiente lógica de bifurcación:
+Cuando se complete la integración con la API de eFactura, `cancelInvoice()` y `emitCreditNote()`
+deben extenderse con la siguiente lógica de bifurcación:
 
 | Escenario | Acción | Endpoint DGI |
 |---|---|---|
-| Factura sin dgi_cufe (pre-integración o falla) | Anular solo en BD interna | — |
+| Factura sin dgi_cufe (pre-integración o falla) | Anular solo en BD interna (hoy) | — |
 | dgi_cufe registrado, < 182h desde dgi_fecha_autorizacion | Anular en DGI + BD | POST /api/v1/InvoiceEvents/CreateCancellation con cancellationReason |
-| dgi_cufe registrado, ≥ 182h | NC obligatoria (no anular) | POST /api/v1/Invoices con tipoDocumento=04 (módulo NC, sprint propio) |
+| dgi_cufe registrado, ≥ 182h | NC obligatoria (no anular) | POST /api/v1/Invoices con tipoDocumento=04 — la NC contable ya existe; falta el envío |
 | Anulada manualmente en portal eFactura | Detectar via polling, sync BD | GET /Invoices/{id} |
 
 Activos ya preparados para Camino 2:
@@ -402,15 +450,16 @@ Activos ya preparados para Camino 2:
 - cancelled_at → auditoría interna
 - dgi_fecha_autorizacion → cálculo de ventana 182h
 - dgi_cufe → identificador único para el endpoint de cancelación
-- cancelInvoice() helper en src/lib/finanzas/api/invoices.ts → punto único donde se intercepta para agregar la llamada DGI
+- credit_notes.fe_estado / punto_facturacion / numero_documento / ef_invoice_uuid (051) → la NC ya tiene dónde guardar la respuesta del PAC
+- cancelInvoice() y emitCreditNote() → puntos únicos donde se intercepta para agregar la llamada DGI
 
 Items pendientes Camino 2:
-- Cliente API eFactura server-side
+- Cliente API eFactura server-side para NC (tipo 04)
 - Helper canCancel() que retorna 'anular' | 'nc-obligatoria' según horas transcurridas
 - UI condicional en CancelInvoiceDialog (≥182h bloquea botón y sugiere NC)
-- Módulo Nota de Crédito (sprint propio)
 - Polling sync portal eFactura (no hay webhook documentado)
 - Manejo idempotencia: cola de retry o flag pending_sync si DGI cae después del UPDATE local
+- Pregunta a ideati (task_plan.md): ¿la DGI acepta una NC enviada semanas después de su fecha contable?
 
 ## Sprint 2E.1 Cotizaciones — Backend (Cerrado 2026-05-13)
 

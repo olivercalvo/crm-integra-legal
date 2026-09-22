@@ -15,6 +15,56 @@ lo reemplaza en `develop`; plan en `task_plan.md`.
 ---
 
 
+## Cierre del 22/09/2026 — Bloque 5: nota de crédito contable
+
+**SHA de la app en staging: `1de1c3a`** — deployment `dpl_AwaoF2Fpyc3hYnhuccJHqyNNFBnS`, READY.
+Encima va solo este commit de docs. **`main` sigue en `24b227a`. Producción no se tocó, ni
+lectura ni escritura.** Migraciones `051`, `052` y `053` aplicadas SOLO en staging.
+
+**1129/1129.** `tsc` limpio. Lint: los 20 errores preexistentes de Legal, ninguno en los archivos
+del bloque.
+
+### Qué entró (detalle en `changelog.md`, reglas en SOP-034 y CLAUDE.md)
+
+NC por líneas con cantidad (validador puro, tope por saldo); asiento propio de la NC con
+`source_id = la NC`; anulación = NC total + reversión con fecha de hoy + `anulada` en un RPC;
+bloqueo por mes de la factura cerrado; 053: con NC en el libro no se anula; `credited_total`
+derivada y `balance_due` con el crédito; badge "Acreditada total"; detalle de NC con banda de
+documento interno; PDF con la banda; Mayor y Diario llegan a la NC.
+
+### 🔴 Tres cosas que nadie debe "arreglar"
+
+1. **La NC de una anulación NO tiene asiento propio.** Lo que corrige el libro es la reversión.
+   Postearla aparte contaría dos veces (SOP-034 §2).
+2. **"Acreditada total" no es un status.** No se agrega al CHECK; es `credited_total >=
+   grand_total` en pantalla. T7a la deja `emitida` con saldo 0 (D3).
+3. **La banda "DOCUMENTO INTERNO" del PDF no es decorativa.** Se va sola cuando `fe_estado` deje
+   de ser `no_emitida`, y eso lo hace el envío al PAC, que no existe.
+
+### Verificado en el deploy
+
+Por API como abogada (`verificar-nota-de-credito.mts`, 5/5): 403 del contador, anulación con
+reversión, NC parcial con asiento, tope, 409 de la 053. Con clic como contador: detalle de
+factura con la sección de NC, detalle de la NC (banda, RUC y DV, asiento), PDF (bajado y leído:
+banda y cabeceras), "Acreditada total", Mayor → NC, Diario con NC-…, antigüedad sin la acreditada.
+
+### Estado de staging al cerrar
+
+FAC-HON-000012 `emitida` con NC-000006 (107, asiento 47), saldo 214; FAC-HON-000013 `anulada`
+(NC-000005, reversión 46 del 45); FAC-HON-000002 acreditada total (NC-000004, asiento 42);
+FAC-HON-000011 anulada (NC-000001, reversión 41). Huecos NC-000002/000003. `credit_note` = 6,
+`invoice_hon` = 13. Borrador `DRAFT-ad8142bceaa8` con el asiento 43 huérfano (FND-011): residuo
+de 321.00 en la antigüedad por cobrar hasta el próximo reset de staging.
+
+### Pendiente de Oliver
+
+- FND-011 (chico): guard de número duplicado antes de postear + el reintento toma el número del
+  asiento existente.
+- Las dos preguntas de `task_plan.md` (ideati: fecha de la NC ante la DGI; Josuarth: saldo
+  acreedor y excedente del recibo).
+
+---
+
 ## Cierre del 21/09/2026 (noche, tarde) — Bloque 4: gasto de trámite completo
 
 **SHA de la app en staging: `1fc59ec`** — deployment `dpl_HwP1tbWzjaE7ndoLGBzH1MeaQfxT`, READY.

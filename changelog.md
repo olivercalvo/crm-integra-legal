@@ -1,5 +1,86 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Nota de crédito contable — Bloque 5] - 2026-09-22
+
+**Staging (`develop`):** `a57552a` (051) → `7be8b26` (creador + validador) → `794e686` + `04649e2`
+(contabilidad, 052) → `dcbdd23` + `523ca6a` (UI, 053) → `432a35e` + `1de1c3a` (Mayor y Diario).
+Deploy `dpl_AwaoF2Fpyc3hYnhuccJHqyNNFBnS`. **Sin migración a producción. `main` sigue en
+`24b227a`.** Migraciones `051`, `052` y `053` SOLO en staging. Cierra 2.5, 2.6 y 3.5 de la
+auditoría del 21/09 y la regla del acta del 09/09. Diseño aprobado por Oliver (P1–P7, D1–D7).
+
+### `051` (`a57552a`) — la NC como documento contable
+
+`credit_notes` gana las 13 columnas fiscales de `invoices` (`fe_estado` default `no_emitida`);
+`credit_notes_status_check` re-declarado; `invoices.credited_total` DERIVADA (trigger + guard);
+T7a deriva el status contra el total neto (acreditada al 100% = `emitida` saldo 0, D3);
+`balance_due` recreada restando el crédito (dependencias contadas: solo su `pg_attrdef`).
+`verificacion-051` 9/9.
+
+### Creador y validador (`7be8b26`)
+
+`createCreditNote` genérico por líneas con cantidad; `validarLineasDeNotaDeCredito` (máximo por
+línea = facturado − ya acreditado; total ≤ `balance_due`, D7); `createCreditNoteFromInvoice` es
+la misma función con todas las líneas; `getCreditNoteById`/`listCreditNotesForInvoice`. Test
+estructural: una sola inserción, fecha = hoy, validar antes de consumir el número.
+
+### Contabilidad (`794e686`, `04649e2`, 052)
+
+Asiento propio de la NC (`asiento-nota-credito.ts`: `construirAsientoDeFactura` invertido,
+`source_id = la NC`); `emitCreditNote` con DELETE compensatorio por la válvula
+`finanzas.nc_compensar`; `cancelInvoice` = NC total + reversión con `construirAsientoDeReversion`
++ `anulada` en el RPC `cancel_invoice_with_reversal` (una transacción, espejo EXCEPT ALL, fecha
+de hoy); bloqueo por MES DE LA FACTURA cerrado (D4) en app y RPC; fuera el "GATE CONTABLE
+(02/09)". `POST /api/finanzas/credit-notes` (admin, abogada). `verificacion-052` 10/10 con falla
+forzada. Fix: el rechazo por cuenta inactiva nombra a la NC.
+
+### UI (`dcbdd23`, `523ca6a`, 053)
+
+Diálogo de NC por líneas (checkbox + cantidad ≤ disponible, precio y tasa de la factura, total en
+vivo con `totalDeLineaDeNc` — la misma función del validador —, motivo, redirect al detalle);
+`/finanzas/notas-credito/[id]` (admin, abogada, contador; patrón exacto para el contador):
+factura, cliente con RUC y DV en dos líneas, líneas, totales, su asiento o la reversión de la
+anulación, PDF; banda DOCUMENTO INTERNO mientras `no_emitida` (D1). Detalle de factura: sección
+con todas las NC, badge "Acreditada total" (también en el listado), "Acreditado (NC)" en el
+resumen, aviso de mes cerrado; Anular solo sin NC y con el mes abierto. PDF: banda roja fija,
+cabecera ANULACIÓN o NOTA DE CRÉDITO PARCIAL, DV en su línea. **`053`:** una factura con NC en el
+libro ya no se anula (`cancelInvoice` 409 por `credited_total`; el RPC por el asiento
+`nota_credito`); `verificacion-053` 4/4. El seed ya no rebobina `numbering_sequences` (FND-011).
+
+### Mayor y Diario (`432a35e`, `1de1c3a`)
+
+`RUTA_DEL_DOCUMENTO.nota_credito` → `/finanzas/notas-credito/{id}`; `DIRECTOS.nota_credito` y
+`DOCUMENTO_DE.nota_credito` → `credit_notes`; la reversión de una factura (052) y de un gasto de
+trámite (050) enlazan a su documento; la antigüedad por cobrar documentada como filtro por saldo
+(D3).
+
+### Verificado en el deploy
+
+Por API contra el deploy (`verificar-nota-de-credito.mts`, 5/5, como abogada; prepara y emite
+FAC-HON-000012/000013 si no hay candidatas): contador 403/403; anular 000013 → NC-000005,
+reversión 46 del 45 con fecha de hoy, 0 asientos `nota_credito` (D5), `anulada`,
+`credited = grand`; NC parcial sobre 000012 → NC-000006 por 107 (asiento 47, ref NC-000006),
+saldo 214, sigue `emitida`, `no_emitida`; acreditar de más → 400; anular con NC parcial → 409
+(053). Con clic real como contador: detalle de 000012 (sección NC, Acreditado −107, Saldo 214, sin
+botones), enlace a NC-000006 → detalle con banda, RUC y DV, asiento 47 (D 400001 100 / D 200003 7 /
+H 100004 107); NC-000005 muestra la reversión 46; "Ver PDF" → 200 y los dos PDF leídos (banda
+"DOCUMENTO INTERNO", PARCIAL/ACREDITADA vs ANULACIÓN/ANULADA, RUC y DV); FAC-HON-000002 con
+"Acreditada total"; Mayor 100004 → "Abrir el documento" de la NC 47 lleva a la NC, de las
+reversiones 41/46 a su factura; Diario rotula NC-000004/NC-000006 con enlace; antigüedad por
+cobrar sin 000002 ni 000013. **El diálogo de NC y el de anulación no se abrieron con clic**: la
+sesión del navegador es el contador; sus dos llamadas se verificaron por API como abogada.
+
+### Lo que no calza / quedó
+
+- **FND-011:** `emitInvoice` deja un asiento con un número ajeno si el UPDATE falla por número
+  duplicado (salió porque el seed rebobinaba la secuencia; el seed se arregló, `emitInvoice` no).
+  Asiento 43 (321.00, borrador `DRAFT-ad8142bceaa8`) es el residuo de la antigüedad por cobrar
+  de staging hasta el próximo reset.
+- Hueco `NC-000002`/`000003` (compensadas el 22/09 por cuenta inactiva); `credit_note` = 6.
+- Lint: los 20 errores preexistentes de Legal; ninguno en los archivos del bloque.
+
+**Tests:** 1129/1129.
+
+---
 ## [Gasto de trámite completo — Bloque 4] - 2026-09-21
 
 **Staging (`develop`):** `d53bd5d` (049) → `9d1641a` + `80cc65f` (reversión, 050) → `31fc711` + `0884921` (posteo automático) → `a340f71` + `521e26a` + `bdda37e` (el pago) → `1fc59ec` (drill-down + FND-010). Deploy `dpl_HwP1tbWzjaE7ndoLGBzH1MeaQfxT`. **Sin

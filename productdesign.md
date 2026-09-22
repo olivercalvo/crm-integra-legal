@@ -810,6 +810,33 @@ ven desde la compra, como los cobros nacieron desde la factura. El pago de un **
 
 ---
 
+### NOTA DE CRÉDITO — la factura se corrige por líneas, y el libro lo refleja
+
+**Qué es.** Una nota de crédito es un documento `NC-000001` que acredita líneas de una factura
+emitida, con cantidad: el precio y el impuesto son los de la factura. Nace con la fecha del día
+(nunca la de la factura) y queda como **documento interno** hasta que la DGI la autorice: la
+pantalla y el PDF lo dicen con una banda roja, y el badge dice "Sin emitir a la DGI".
+
+**Dos formas de corregir una factura.**
+- **Anular** (solo dentro del mes de la factura, sin cobros, sin NC previa): genera la NC total y
+  revierte el asiento de la factura con la fecha de hoy. La factura queda `anulada`.
+- **Nota de crédito** (siempre que quede saldo; obligatoria cuando el mes está cerrado o cuando
+  ya hay una NC parcial): se marcan las líneas y la cantidad; el total se ve en vivo; la NC lleva
+  su propio asiento. La factura sigue `emitida` con menos saldo; acreditada al 100% muestra
+  "Acreditada total" con saldo 0 y sale de la antigüedad — no es "pagada", porque no se cobró.
+- No se acredita más que el saldo pendiente: lo cobrado se reversa primero.
+
+**Dónde.** Botones "Nota de crédito" y "Anular factura" en el detalle de la factura (admin,
+abogada); sección "Notas de crédito" con cada NC, su badge, monto y PDF; detalle propio en
+`/finanzas/notas-credito/{id}` con la factura, el cliente (RUC y DV en dos líneas), las líneas, el
+asiento —o la reversión que acompañó la anulación— y el PDF. El contador llega ahí desde el Libro
+Mayor y el Diario ("Abrir el documento"), en solo lectura.
+
+**Fuera de alcance, a propósito.** Envío de la NC a la DGI (tipo 04); reversión de una NC; NC de
+compra; acreditar una factura ya cobrada (saldo acreedor) — pregunta a Josuarth.
+
+---
+
 ## REQUERIMIENTOS NO FUNCIONALES
 
 - **Mobile-first:** diseñado primero para celular, funciona en desktop

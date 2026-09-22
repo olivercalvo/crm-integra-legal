@@ -2576,3 +2576,106 @@ gasto (`DIRECTOS`, `DOCUMENTO_DE` con el concepto truncado).
 - `PGRST200` al leer una reversión → PostgREST no resuelve el self-join de `journal_entries` por
   nombre de FK; `getReversionDeGastoTramite` lee el original aparte a propósito.
 - Un gasto viejo que no aparece en la antigüedad por pagar → no está en el libro (punto 5).
+
+## SOP-034: Nota de crédito contable — por líneas, dos asientos distintos, documento interno
+
+**Por qué existe:** desde el 22/09/2026 (Bloque 5, migraciones `051`–`053`, SOLO en staging) la
+nota de crédito dejó de ser "la card de una factura anulada" y pasó a ser un documento contable
+con líneas, asiento y pantalla. Cierra 2.5, 2.6 y 3.5 de la auditoría del 21/09 y la regla del
+acta del 09/09 ("cerrado el mes, nota de crédito con fecha del día"). Hay cinco decisiones que
+alguien podría deshacer creyendo que simplifica.
+
+### 1. 🔴 Por líneas con cantidad, nunca por monto libre
+
+Josuarth: "factura de mil, nota de crédito de doscientos". La tentación es un campo "monto". No:
+la factura es líneas con cantidad, precio y tasa, y su asiento se arma POR LÍNEA (cuenta de
+ingreso del servicio, 130003 en los `REIM-*`, ITBMS por tasa). Una NC por monto obligaría a
+prorratear entre cuentas y tasas y el ITBMS saldría inexacto. Una NC por líneas da el asiento
+exacto. `credit_note_lines` copia `unit_price`, `tax_rate`, `tax_code_id` de la línea de la
+factura (una NC no inventa precios) y `invoice_line_id` la ata a la línea que acredita.
+
+Dos capas puras en `validators/credit-note.ts`: la forma del request
+(`validateCreateCreditNoteInput`) y la regla contable (`validarLineasDeNotaDeCredito`): cada
+línea acredita como máximo lo facturado MENOS lo ya acreditado por NC anteriores de esa línea;
+el total no supera `balance_due` (**D7: lo cobrado no se acredita — "reverse el cobro primero"**).
+`totalDeLineaDeNc` es la única implementación del total (subtotal redondeado + impuesto
+redondeado, como T8c) y el diálogo lo usa para la vista previa: si reimplementa, miente.
+`acreditadoPorLineaDeFactura` es la única consulta de lo ya acreditado: la pantalla ofrece
+exactamente lo que el servidor va a aceptar.
+
+### 2. 🔴 Dos caminos, dos asientos — y la NC de una anulación NO tiene el suyo (D5)
+
+| Camino | Cuándo | Documento | Libro |
+|---|---|---|---|
+| **Anular** | mes de la factura ABIERTO, sin pagos, sin NC | NC total automática (`createCreditNoteFromInvoice`, la MISMA `createCreditNote` con todas las líneas) | **reversión** del asiento de la factura (`construirAsientoDeReversion`, espejo verificado con EXCEPT ALL), fecha de HOY, `reverses_entry_id` |
+| **Nota de crédito** | siempre que quede saldo; obligatorio con el mes cerrado | NC parcial o total por líneas | **asiento propio** `source_type = 'nota_credito'`, **`source_id = la NC`**, `reference = NC-…` (`asiento-nota-credito.ts`: la factura al revés) |
+
+La anulación la hace el RPC `cancel_invoice_with_reversal` (052) en UNA transacción: verifica
+mes, pagos, NC en el libro (053), espejo; postea la reversión; marca `anulada`. La app crea la NC
+ANTES y, si el RPC falla, la deshace (§4). **Postear además el asiento de la NC sería contabilizar
+dos veces**: por eso `cancelInvoice` no conoce `construirAsientoDeNotaDeCredito` y hay un test que
+lo lee. El detalle de una NC de anulación muestra la reversión como "lo que corrige el libro".
+
+**Corolario (053): una factura con una NC en el libro ya no se anula.** Factura de 1.000 con
+asiento A, NC parcial de 200 con asiento B, anular espejaría A completo: ingreso revertido por
+1.200. Lo que falta se acredita con otra NC. `cancelInvoice` mira `credited_total > 0`; el RPC mira
+la EXISTENCIA de un asiento `nota_credito` de alguna NC de la factura — porque cuando corre, la
+app ya creó la NC total de esa misma anulación (sin asiento) y `credited_total` ya es el total.
+
+### 3. 🔴 El mes de la FACTURA, no el de hoy (D4)
+
+`periodoDeLaFacturaCerrado(issue_date)` en la app (409 con el texto de Josuarth) y en el RPC. Es
+otro control que el de `post_journal_entry`, que mira el mes de la fecha del asiento (hoy). Los
+dos hacen falta: uno decide si se puede anular, el otro si se puede escribir. El detalle de la
+factura reemplaza "Anular" por "Nota de crédito" con un aviso, y el diálogo lo repite.
+
+El "GATE CONTABLE (02/09/2026)" que bloqueaba anular cualquier factura con asiento se eliminó:
+era un tapón mientras no existía la reversión. Un test falla si vuelve.
+
+### 4. La válvula de compensación (`finanzas.nc_compensar`, 052)
+
+T6 rechaza el DELETE de `credit_notes` y el trigger de líneas también — correcto para una NC
+emitida. Pero el creador inserta la NC ANTES de postear (número tomado, líneas insertadas) y si
+el posteo falla hay que deshacerla, igual que el cobro y el pago (SOP-031). Sin válvula quedaría
+una NC con número y sin libro. `finanzas_compensar_nota_de_credito(tenant, nc)` pone la llave y
+borra líneas + cabecera **en la misma transacción**, y T6 la rechaza igual si la NC ya tiene
+asiento `nota_credito` (con asiento no hay válvula: se reversa, cuando exista). Los huecos en
+`NC-` que deja son los mismos huecos aceptados de SOP-031. `verificacion-052` lo prueba forzando
+la falla después del posteo.
+
+### 5. `credited_total`, `balance_due` y "Acreditada total" (051, D3)
+
+`invoices.credited_total` es DERIVADA por trigger de las NC `emitida`, con guard (llaves
+`finanzas.recalc` / `amount_paid_override`, mismo patrón que `amount_paid`). `balance_due` se
+recreó como `grand_total − amount_paid − credited_total` (era GENERATED sin el crédito;
+dependencias contadas en `pg_depend` antes del DROP: solo su `pg_attrdef`). T7a deriva el status
+contra el total NETO: **acreditada al 100% sin pagos = `emitida` con saldo 0, NO `pagada`** —
+no hubo cobro. "Acreditada total" es un badge derivado (`credited_total >= grand_total`), no un
+status: no se agregó valor al CHECK. La antigüedad por cobrar filtra por `balance_due > 0`, así que
+esa factura deja de ser una cuenta por cobrar sin tocar el reporte.
+
+### 6. Documento INTERNO hasta que la DGI diga otra cosa (D1)
+
+`credit_notes` tiene las 13 columnas fiscales de `invoices` (051) y nace `fe_estado =
+'no_emitida'`. El envío al PAC (tipo 04) es otro bloque. Mientras tanto la NC vale en los libros
+del bufete y NO como comprobante fiscal: la pantalla lleva la banda roja, el PDF una banda fija
+"DOCUMENTO INTERNO — SIN AUTORIZACIÓN DE LA DGI" en cada página, y el badge dice "Sin emitir a
+la DGI" en ámbar (a propósito distinto del "Sin enviar" gris de la factura: una factura sin enviar
+es lo normal mientras se prepara; una NC contable sin DGI es una advertencia). No se le entrega
+al cliente.
+
+### 7. Quién, dónde, y qué NO existe
+
+- Emiten y anulan: admin y abogada (`POST /api/finanzas/credit-notes`,
+  `POST /api/finanzas/invoices/[id]/cancel`, con `createAdminClient()` como ledgerDb).
+- Ven el detalle (`/finanzas/notas-credito/{id}`) y el PDF: admin, abogada, contador. El contador
+  entra por patrón exacto en `route-access.ts` (sin listado); Mayor y Diario lo llevan ahí
+  (`DIRECTOS.nota_credito` → `credit_notes`, `RUTA_DEL_DOCUMENTO.nota_credito`). La reversión de
+  una factura (052) y de un gasto de trámite (050) también enlazan a su documento.
+- **NO existe**: reversión de una NC, NC de compra (D6), envío de la NC a la DGI, NC sobre
+  factura ya cobrada (saldo acreedor — pregunta a Josuarth en `task_plan.md`).
+
+**Verificación:** `sql/tests/verificacion-051/052/053-*.sql` (ROLLBACK); tests
+`credit-note.test.ts`, `nota-de-credito-un-solo-creador.test.ts`, `asiento-nota-credito.test.ts`,
+`nota-de-credito-pantalla.test.ts`; `scripts/verificar-nota-de-credito.mts` contra el deploy
+(prepara facturas por la API si no quedan candidatas).

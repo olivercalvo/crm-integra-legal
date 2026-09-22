@@ -9,6 +9,18 @@
 
 ---
 
+## FND-011: `emitInvoice` deja un asiento con un número que la factura nunca recibe cuando el UPDATE falla por número duplicado
+**Fecha:** 2026-09-22
+**Contexto:** Verificación en pantalla del commit 4 del Bloque 5. `verificar-nota-de-credito.mts` necesitaba facturas nuevas y las emitió por la API como la abogada. La primera emisión falló con `duplicate key value violates unique constraint "invoices_tenant_number_unique"`, y la antigüedad por cobrar de staging quedó con un residuo de 321,00 que el reporte atribuye a "una tercera causa".
+**Hallazgo:**
+- **Causa de fondo, arreglada en `523ca6a`:** `seed-staging.ts` pisaba `numbering_sequences` con el máximo SEMBRADO (`invoice_hon = 7`) cada vez que se corría, aunque la base ya tuviera facturas emitidas después del seed (hasta `FAC-HON-000011`). La siguiente emisión tomaba el 8 y chocaba con el UNIQUE. Ahora las secuencias se dejan en el máximo entre lo sembrado y lo que ya tienen; staging se realineó a mano (`invoice_hon = 11`).
+- **Lo que quedó al descubierto, y NO está arreglado:** `emitInvoice` toma el número (paso 3), postea el asiento con ese número en la descripción y la referencia (3b) y recién después hace el `UPDATE ... status='emitida', invoice_number` (4). Ese orden es el de SOP-031 y es correcto para una falla TRANSITORIA: el reintento encuentra el asiento (23505 idempotente) y completa la emisión. Pero si el UPDATE falla por **número duplicado**, el reintento toma OTRO número de la secuencia: el asiento dice `FAC-HON-000007` y la factura saldría `FAC-HON-000014`. Y mientras nadie reintenta, el libro tiene **un asiento de 321,00 en 100004 (asiento 43, "Factura FAC-HON-000007 — FERRETERÍA VALLARINO") cuyo `source_id` es un borrador** (`DRAFT-ad8142bceaa8`) — el residuo exacto de la antigüedad por cobrar de staging (36,00 − 507,00 + 150,00 = −321,00).
+- `FAC-HON-000007` de verdad es otra factura (de Aurelio Barría, sin asiento). El asiento 43 la nombra sin ser suya.
+**Impacto:** Solo puede pasar si la secuencia queda detrás de los números emitidos — en producción no hay seed que la rebobine, así que hoy es un riesgo de staging. Pero el modo de falla es el peor: un asiento inmutable con el número de un documento ajeno. El ledger no se borra; en staging el residuo se va con el próximo reset de la base.
+**Decisión:** Pendiente de Oliver. **Es chico** (un commit): (1) antes de postear, comprobar que `formatted` no exista ya en `invoices` del tenant y fallar con 409 ("la secuencia está detrás de las facturas: avisale a Oliver") sin consumir el asiento; (2) en el reintento, cuando el asiento ya existe, tomar el número de SU `reference` en vez de pedir otro a la secuencia, para que factura y asiento digan lo mismo. Con un test que fuerce el UNIQUE.
+
+---
+
 ## FND-010: La antigüedad por pagar no lee los gastos de trámite, que SÍ acreditan 200001
 **Fecha:** 2026-09-21
 **Contexto:** Verificación en pantalla del commit 4 del Bloque 3. La "Antigüedad de Cuentas por Pagar" de staging mostraba una diferencia contra el mayor de 1.464,20 que el propio reporte declaraba no poder explicar ("hay una tercera causa"). Se descompuso contra la base para descartar que fuera del bloque.

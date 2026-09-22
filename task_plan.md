@@ -1,5 +1,54 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 5: NOTA DE CRÉDITO CONTABLE — CONSTRUIDO Y VERIFICADO — 22/09/2026 <<<
+
+**Estado:** CONSTRUIDO. Cierra 2.5, 2.6 y 3.5 de la auditoría y la regla del acta del 09/09.
+Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (contabilidad, 052) →
+`dcbdd23` + `523ca6a` (UI, 053) → `432a35e` + `1de1c3a` (Mayor y Diario) en staging; deploy
+`dpl_AwaoF2Fpyc3hYnhuccJHqyNNFBnS`. Migraciones `051`, `052`, `053` SOLO en staging; `main` en
+`24b227a`. Detalle en `changelog.md`; reglas en `sop.md` SOP-034 y CLAUDE.md.
+
+**Diseño aprobado (P1–P7, D1–D7 de Oliver) y cómo se cumplió:**
+- D1 opción B: 13 columnas fiscales, `fe_estado 'no_emitida'`, PDF y pantalla con la marca de
+  documento interno. ✅
+- D2 una factura con CUFE también admite NC contable (no se mira `dgi_cufe` para la NC). ✅
+- D3 sin estado nuevo: acreditada al 100% = `emitida` saldo 0 + badge derivado; T7a NO la marca
+  pagada (verificado en 051 y en FAC-HON-000002); la antigüedad no la lista. ✅
+- D4 bloqueo por período de `issue_date` cerrado en `cancelInvoice` y en el RPC; la UI cambia el
+  botón a "Nota de crédito"; el GATE CONTABLE del 02/09 eliminado. ✅
+- D5 anulación = reversión sin NC posteada aparte; NC posterior/parcial = asiento propio
+  `nota_credito` con `source_id = la NC`; `DIRECTOS`/`DOCUMENTO_DE` corregidos. ✅
+- D6 NC de compra NO va. ✅
+- D7 validador: no más que `balance_due`, mensaje "reverse el cobro primero". ✅
+- **Agregado por hallazgo (053):** una factura con NC parcial en el libro ya no se anula
+  (doble conteo); se acredita el resto con otra NC.
+
+**Desvíos y pendientes:**
+- El diálogo de NC y el de anulación no se abrieron con clic (la sesión del navegador es el
+  contador); las dos llamadas se verificaron por API como abogada (`verificar-nota-de-credito.mts`,
+  5/5). Todo lo del contador, con clic real.
+- **FND-011** (chico, un commit, pendiente de Oliver): `emitInvoice` deja un asiento con un número
+  ajeno si el UPDATE falla por número duplicado. El seed que rebobinaba la secuencia ya está
+  arreglado; el residuo de 321.00 en la antigüedad por cobrar de staging (asiento 43) se va con el
+  próximo reset.
+- Todavía NO existe la reversión de una NC ni el envío de la NC a la DGI.
+- Producción, cuando vaya: 034, 036, 037, 038, 039, 045, 047, 048, 049, 050, **051, 052, 053** en
+  ese orden, con sus pre-flights (`docs/staging/inventario-migraciones.md`).
+
+### 📌 Dos preguntas abiertas (no bloquean)
+
+1. **ideati — la fecha de la NC ante la DGI.** La NC contable lleva la fecha del día en que se
+   emite (acta del 09/09) y puede salir semanas después de la factura. Cuando se envíe al PAC
+   como tipo 04: ¿la DGI acepta una NC cuya fecha contable es semanas posterior a la de la
+   factura que referencia? ¿Hay ventana? Hoy la NC queda `no_emitida` y no se manda.
+2. **Josuarth — acreditar una factura ya cobrada.** Hoy la NC no puede superar el saldo
+   pendiente: si el cliente ya pagó y se le reconoce un descuento, hay que reversar el cobro
+   primero. ¿Quiere en cambio que la NC pueda dejar la factura con **saldo a favor del cliente**
+   (saldo acreedor), y a qué cuenta iría (anticipos de clientes)? Va junto con la pregunta del
+   **excedente de un recibo** (Parte B): hoy se rechaza; ¿va a 100004 o a anticipos?
+
+---
+
 ## >>> BLOQUE 4: GASTO DE TRÁMITE COMPLETO — CONSTRUIDO Y VERIFICADO — 21/09/2026 <<<
 
 **Estado:** CONSTRUIDO. Cierra 1.5, 1.6, 1.7 de la auditoría y FND-010. Commits `d53bd5d` (049) → `9d1641a` + `80cc65f` (reversión, 050) → `31fc711` + `0884921` (posteo automático) → `a340f71` + `521e26a` + `bdda37e` (el pago) → `1fc59ec` (drill-down + FND-010)

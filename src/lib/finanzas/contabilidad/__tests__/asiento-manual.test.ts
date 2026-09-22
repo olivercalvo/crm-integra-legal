@@ -33,6 +33,7 @@ function linea(over: Partial<LineaManualDraft> = {}): LineaManualDraft {
     debit: "",
     credit: "",
     description: "",
+    tercero: "",
     ...over,
   };
 }

@@ -4,6 +4,7 @@ import { BookOpenCheck, CalendarDays } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
+import { listTercerosDelLibro } from "@/lib/finanzas/queries/terceros-del-libro";
 import { AsientoManualForm } from "./_components/asiento-manual-form";
 
 /**
@@ -61,6 +62,11 @@ export default async function AsientosPage() {
     .filter((c) => c.active)
     .map((c) => ({ code: c.code, name: c.name }));
 
+  // Los terceros que una línea puede nombrar (054). Clientes y proveedores en
+  // una sola consulta cada uno: la lista se arma una vez y la comparten las N
+  // líneas del formulario.
+  const terceros = await listTercerosDelLibro(ctx.db, ctx.tenantId);
+
   // La fecha se calcula en el SERVIDOR: el reloj del navegador puede estar en otra
   // zona horaria y un asiento cargado a las 22:00 en Panamá caería en el día
   // siguiente — o sea, en otro período contable si es fin de mes.
@@ -97,7 +103,7 @@ export default async function AsientosPage() {
           asientos.
         </div>
       ) : (
-        <AsientoManualForm cuentas={cuentas} hoy={hoy} />
+        <AsientoManualForm cuentas={cuentas} terceros={terceros} hoy={hoy} />
       )}
     </div>
   );

@@ -46,6 +46,23 @@ export function buildFinancialBlockMessage(counts: FinancialCounts): string | nu
   )}. Desactívalo en su lugar.`;
 }
 
+/**
+ * EL LIBRO CONTABLE bloquea distinto (migración `054`, 22/09/2026).
+ *
+ * Desde que una línea de asiento puede nombrar al cliente (`client_id`, FK
+ * `ON DELETE NO ACTION`), un cliente mencionado en el libro no se borra —y no
+ * es "todavía no": el libro es inmutable, así que **nunca** se va a poder.
+ * Por eso el mensaje no promete que se destrabe borrando otra cosa.
+ */
+export function buildLedgerBlockMessage(count: number | null | undefined): string | null {
+  const n = count ?? 0;
+  if (n <= 0) return null;
+  return (
+    `Este cliente aparece en ${n} línea(s) de asiento del libro contable y no se puede ` +
+    "eliminar: el libro es inmutable. Desactívalo en su lugar."
+  );
+}
+
 /** Mensaje genérico para cualquier FK que bloquee (defensa en profundidad). */
 export const GENERIC_FK_BLOCK_MESSAGE =
   "Este cliente tiene registros asociados y no se puede eliminar. Desactívalo en su lugar.";

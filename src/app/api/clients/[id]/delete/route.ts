@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   FINANCIAL_DEPENDENCIES,
   buildFinancialBlockMessage,
+  buildLedgerBlockMessage,
   isForeignKeyViolation,
   GENERIC_FK_BLOCK_MESSAGE,
   type FinancialCounts,
@@ -86,6 +87,24 @@ export async function POST(
     const financialBlock = buildFinancialBlockMessage(financialCounts);
     if (financialBlock) {
       return NextResponse.json({ error: financialBlock }, { status: 400 });
+    }
+
+    // Y EL LIBRO CONTABLE (054): una línea de asiento puede nombrar al cliente,
+    // con FK `ON DELETE NO ACTION`. Va acá, junto a los otros conteos y ANTES
+    // de borrar un solo documento, por el mismo motivo que ellos. El mensaje es
+    // distinto a propósito: el libro es inmutable, así que no hay nada que
+    // borrar antes para destrabarlo (D2).
+    const { count: enElLibro, error: errLibro } = await admin
+      .from("journal_entry_lines")
+      .select("id", { count: "exact", head: true })
+      .eq("client_id", clientId)
+      .eq("tenant_id", profile.tenant_id);
+
+    if (errLibro) throw errLibro;
+
+    const ledgerBlock = buildLedgerBlockMessage(enElLibro);
+    if (ledgerBlock) {
+      return NextResponse.json({ error: ledgerBlock }, { status: 400 });
     }
 
     // ---- No blocking check remains: from here on we delete. ----

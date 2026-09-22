@@ -14,7 +14,9 @@ import {
   lineaManualVacia,
   totalesManuales,
   type LineaManualDraft,
+  valorDeTercero,
 } from "@/lib/finanzas/contabilidad/asiento-manual";
+import type { TercerosDelLibro } from "@/lib/finanzas/queries/terceros-del-libro";
 
 /**
  * FORMULARIO DE ASIENTO MANUAL DE DIARIO.
@@ -58,6 +60,12 @@ export interface CuentaAsientoOption {
 
 interface Props {
   cuentas: CuentaAsientoOption[];
+  /**
+   * Clientes y proveedores del bufete (054). Una línea puede nombrar a UNO, o a
+   * ninguno: el `<select>` es un solo campo con dos grupos, así que dejar los
+   * dos cargados es imposible desde acá.
+   */
+  terceros: TercerosDelLibro;
   /** Fecha de hoy, calculada en el servidor para no depender del reloj del navegador. */
   hoy: string;
 }
@@ -77,7 +85,7 @@ function money(n: number): string {
   });
 }
 
-export function AsientoManualForm({ cuentas, hoy }: Props) {
+export function AsientoManualForm({ cuentas, terceros, hoy }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -318,6 +326,40 @@ export function AsientoManualForm({ cuentas, hoy }: Props) {
                       {c.code} · {c.name}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-4">
+                <Label className="mb-1 block text-xs">
+                  Tercero <span className="text-gray-400">(opcional)</span>
+                </Label>
+                <select
+                  value={l.tercero}
+                  onChange={(e) => actualizar(i, { tercero: e.target.value })}
+                  aria-label={`Tercero de la línea ${i + 1}`}
+                  className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
+                >
+                  <option value="">— Sin tercero —</option>
+                  {terceros.clientes.length > 0 && (
+                    <optgroup label="Clientes">
+                      {terceros.clientes.map((c) => (
+                        <option key={c.id} value={valorDeTercero("cliente", c.id)}>
+                          {c.nombre}
+                          {c.numero ? ` · ${c.numero}` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {terceros.proveedores.length > 0 && (
+                    <optgroup label="Proveedores">
+                      {terceros.proveedores.map((p) => (
+                        <option key={p.id} value={valorDeTercero("proveedor", p.id)}>
+                          {p.nombre}
+                          {p.numero ? ` · ${p.numero}` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 

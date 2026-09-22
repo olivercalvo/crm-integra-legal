@@ -58,6 +58,15 @@ export interface LineaManualDraft {
   debit: string;
   credit: string;
   description: string;
+  /**
+   * EL TERCERO, como lo maneja el `<select>`: `""`, `"cliente:<uuid>"` o
+   * `"proveedor:<uuid>"` (ver `TERCERO_SEPARADOR`).
+   *
+   * Un solo campo y no dos, porque en la pantalla es una sola pregunta —"¿de
+   * quién?"— y porque así es imposible dejar cliente Y proveedor cargados a la
+   * vez, que es lo único que el CHECK `jel_tercero_unico` no perdona.
+   */
+  tercero: string;
 }
 
 /** Una línea ya lista para el RPC. */
@@ -66,6 +75,45 @@ export interface LineaManual {
   debit: number;
   credit: number;
   description: string | null;
+  /** 054: uno, otro, o ninguno. Nunca los dos. */
+  client_id: string | null;
+  supplier_id: string | null;
+}
+
+/**
+ * Cómo viaja el tercero dentro del `<select>`: tipo, separador, id.
+ *
+ * El separador es `:` y el id es un uuid, que no contiene `:`, así que el
+ * primer `:` parte el valor sin ambigüedad.
+ */
+export const TERCERO_SEPARADOR = ":";
+export type TipoDeTercero = "cliente" | "proveedor";
+
+/** El valor del `<option>` de un tercero. */
+export function valorDeTercero(tipo: TipoDeTercero, id: string): string {
+  return `${tipo}${TERCERO_SEPARADOR}${id}`;
+}
+
+/**
+ * Del valor del `<select>` a las dos columnas de la línea.
+ *
+ * Un valor vacío, desconocido o mal formado da `{ null, null }`: sin tercero.
+ * No lanza — el RPC es quien rechaza un id que no existe, con el mensaje que
+ * nombra al bufete dueño.
+ */
+export function parseTercero(valor: string | null | undefined): {
+  client_id: string | null;
+  supplier_id: string | null;
+} {
+  const v = (valor ?? "").trim();
+  const i = v.indexOf(TERCERO_SEPARADOR);
+  if (i <= 0) return { client_id: null, supplier_id: null };
+  const tipo = v.slice(0, i);
+  const id = v.slice(i + 1).trim();
+  if (id === "") return { client_id: null, supplier_id: null };
+  if (tipo === "cliente") return { client_id: id, supplier_id: null };
+  if (tipo === "proveedor") return { client_id: null, supplier_id: id };
+  return { client_id: null, supplier_id: null };
 }
 
 export interface TotalesManuales {
@@ -76,12 +124,21 @@ export interface TotalesManuales {
   cuadra: boolean;
 }
 
-/** Máximo de líneas por asiento. Un ajuste de depreciación rara vez pasa de 20. */
+/**
+ * Máximo de líneas por asiento **EN EL FORMULARIO**. Un ajuste de depreciación
+ * rara vez pasa de 20, y nadie teclea cien líneas a mano.
+ *
+ * 🔴 **Es un tope de ESTA pantalla, no del libro** (D9, 22/09/2026). El RPC
+ * `post_journal_entry` no tiene tope —solo exige dos líneas— y el importador de
+ * Excel, que carga asientos de 200 líneas, **no pasa por acá y no lo aplica**.
+ * Si alguien "unifica" los dos números va a romper el import o a dejar el
+ * formulario inusable. Lo mismo dicho del otro lado en el módulo del import.
+ */
 export const MAX_LINEAS_MANUALES = 100;
 
 /** Una línea vacía para arrancar el editor. */
 export function lineaManualVacia(key: string): LineaManualDraft {
-  return { key, account_code: "", debit: "", credit: "", description: "" };
+  return { key, account_code: "", debit: "", credit: "", description: "", tercero: "" };
 }
 
 /**
@@ -114,7 +171,8 @@ export function lineaManualVaciaODescartable(l: LineaManualDraft): boolean {
     l.account_code.trim() === "" &&
     parseImporte(l.debit) === 0 &&
     parseImporte(l.credit) === 0 &&
-    l.description.trim() === ""
+    l.description.trim() === "" &&
+    (l.tercero ?? "").trim() === ""
   );
 }
 
@@ -271,12 +329,17 @@ export function armarAsientoManual(
     };
   }
 
-  const lineas: LineaManual[] = utiles.map((l) => ({
-    account_code: l.account_code.trim(),
-    debit: round2(parseImporte(l.debit)),
-    credit: round2(parseImporte(l.credit)),
-    description: l.description.trim() === "" ? null : l.description.trim(),
-  }));
+  const lineas: LineaManual[] = utiles.map((l) => {
+    const { client_id, supplier_id } = parseTercero(l.tercero);
+    return {
+      account_code: l.account_code.trim(),
+      debit: round2(parseImporte(l.debit)),
+      credit: round2(parseImporte(l.credit)),
+      description: l.description.trim() === "" ? null : l.description.trim(),
+      client_id,
+      supplier_id,
+    };
+  });
 
   return { ok: true, lineas, totales: totalesManuales(utiles) };
 }

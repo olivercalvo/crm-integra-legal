@@ -177,6 +177,24 @@ export async function deleteSupplier(db: DB, tenantId: string, userId: string, i
     );
   }
 
+  // 054: y si aparece en el LIBRO, tampoco — pero por otro motivo, y el mensaje
+  // lo dice. La FK es `ON DELETE NO ACTION` y el libro es inmutable: no es que
+  // haya que borrar algo antes, es que nunca se va a poder. Sin este conteo el
+  // DELETE explotaría con el texto crudo de la FK (D2).
+  const { count: enElLibro } = await db
+    .from("journal_entry_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("supplier_id", id);
+
+  if ((enElLibro ?? 0) > 0) {
+    throw new MutationError(
+      `${antes.legal_name} aparece en ${enElLibro} línea(s) de asiento del libro contable y no se ` +
+        "puede eliminar: el libro es inmutable. Desactívelo en su lugar.",
+      409
+    );
+  }
+
   const { error } = await db
     .from("suppliers")
     .delete()

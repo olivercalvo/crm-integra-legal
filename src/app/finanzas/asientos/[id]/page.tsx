@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import {
   BookOpenCheck,
   CalendarDays,
+  Copy,
   FileText,
   Hash,
   Undo2,
@@ -91,8 +92,21 @@ export default async function AsientoDetallePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Las acciones —Clonar (7.4) y Reversar (7.6)— entran en los commits
-            siguientes. El enlace no se pone antes que lo que promete. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* CLONAR (7.4). Solo en asientos manuales: clonar el de una factura
+              crearía a mano un asiento que el documento va a volver a generar.
+              nav-guard-ok: esta pantalla ya es admin+contador, los mismos del
+              formulario al que lleva. */}
+          {esManual && (
+            <Link
+              href={`/finanzas/asientos?clonar=${asiento.id}`}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-integra-navy/30 bg-white px-4 text-sm font-semibold text-integra-navy hover:bg-integra-navy hover:text-white"
+            >
+              <Copy size={16} />
+              Clonar
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Los dos lados de la reversión (D6) */}

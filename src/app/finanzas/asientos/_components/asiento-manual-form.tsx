@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BookOpenCheck, Loader2, Plus, Trash2 } from "lucide-react";
+import { BookOpenCheck, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +66,17 @@ interface Props {
    * dos cargados es imposible desde acá.
    */
   terceros: TercerosDelLibro;
+  /**
+   * CLONAR (7.4, D7): las líneas de un asiento que ya está en el libro, listas
+   * para editar. Llegan con **los montos puestos** —es lo que pidió Josuarth—
+   * y la pantalla las trata como cualquier borrador: todo editable.
+   */
+  plantilla?: LineaManualDraft[] | null;
+  /** Número del asiento del que salió el clon, para decirlo en pantalla. */
+  clonadoDe?: number | null;
+  /** La naturaleza y la referencia del original: también se arrastran (D7). */
+  descripcionInicial?: string;
+  referenciaInicial?: string;
   /** Fecha de hoy, calculada en el servidor para no depender del reloj del navegador. */
   hoy: string;
 }
@@ -85,18 +96,30 @@ function money(n: number): string {
   });
 }
 
-export function AsientoManualForm({ cuentas, terceros, hoy }: Props) {
+export function AsientoManualForm({
+  cuentas,
+  terceros,
+  hoy,
+  plantilla = null,
+  clonadoDe = null,
+  descripcionInicial = "",
+  referenciaInicial = "",
+}: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [token, setToken] = useState(() => crypto.randomUUID());
+  // 🔴 SIEMPRE la de hoy, también en un clon (D7): la del original puede caer
+  //    en un mes cerrado y el rechazo del RPC parecería un bug del botón.
   const [fecha, setFecha] = useState(hoy);
-  const [descripcion, setDescripcion] = useState("");
-  const [referencia, setReferencia] = useState("");
-  const [lineas, setLineas] = useState<LineaManualDraft[]>([
-    lineaManualVacia("l0"),
-    lineaManualVacia("l1"),
-  ]);
+  const [descripcion, setDescripcion] = useState(descripcionInicial);
+  const [referencia, setReferencia] = useState(referenciaInicial);
+  const [lineas, setLineas] = useState<LineaManualDraft[]>(
+    // El clon arranca con las líneas del original; sin clon, dos vacías.
+    plantilla && plantilla.length >= 2
+      ? plantilla
+      : [lineaManualVacia("l0"), lineaManualVacia("l1")]
+  );
 
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -239,6 +262,22 @@ export function AsientoManualForm({ cuentas, terceros, hoy }: Props) {
 
   return (
     <div className="space-y-5">
+      {/* CLONAR (7.4): se dice de dónde salió y qué NO se clonó. La fecha es la
+          de hoy a propósito, y si no se avisa parece un descuido. */}
+      {clonadoDe !== null && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-xl border border-integra-gold/50 bg-integra-gold/10 p-4 text-sm text-integra-navy"
+        >
+          <Copy size={16} className="mt-0.5 shrink-0 text-integra-gold" />
+          <p>
+            Copiado del <strong>asiento {clonadoDe}</strong>: cuentas, importes, terceros y
+            descripciones vinieron tal cual. <strong>La fecha es la de hoy</strong>, no la del
+            original. Revise los importes y registre cuando esté.
+          </p>
+        </div>
+      )}
+
       {/* ── Encabezado ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>

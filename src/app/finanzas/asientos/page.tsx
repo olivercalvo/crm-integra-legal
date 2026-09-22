@@ -5,6 +5,12 @@ import { BookOpenCheck, CalendarDays } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { listTercerosDelLibro } from "@/lib/finanzas/queries/terceros-del-libro";
+import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
+import {
+  borradoresDesdeAsiento,
+  MAX_LINEAS_MANUALES,
+  type LineaManualDraft,
+} from "@/lib/finanzas/contabilidad/asiento-manual";
 import { AsientoManualForm } from "./_components/asiento-manual-form";
 
 /**
@@ -43,10 +49,46 @@ export const metadata = {
 /** Tiene que coincidir con `ADMIN_CONTADOR_ONLY_PREFIXES` y con la ruta de API. */
 const ROLES = ["admin", "contador"];
 
-export default async function AsientosPage() {
+export default async function AsientosPage({
+  searchParams,
+}: {
+  searchParams?: { clonar?: string };
+}) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole)) {
     redirect("/finanzas");
+  }
+
+  // CLONAR (7.4, D7): `?clonar=<id>` precarga el formulario con las líneas de
+  // un asiento que ya está en el libro — montos y descripciones incluidos.
+  //
+  // Solo asientos MANUALES: clonar el de una factura fabricaría a mano un
+  // asiento que su documento va a volver a generar. Y solo hasta el tope del
+  // formulario: un asiento de 200 líneas entró por el importador, que no pasa
+  // por esta pantalla (D9).
+  let plantilla: LineaManualDraft[] | null = null;
+  let clonadoDe: number | null = null;
+  let descripcionClonada = "";
+  let referenciaClonada = "";
+  let avisoDelClon: string | null = null;
+  if (searchParams?.clonar) {
+    const origen = await getAsientoDelLibro(ctx.db, ctx.tenantId, searchParams.clonar);
+    if (!origen) {
+      avisoDelClon = "No se encontró el asiento que se quería clonar.";
+    } else if (origen.source_type !== "manual") {
+      avisoDelClon =
+        `El asiento ${origen.entry_number} salió de un documento, no de una carga manual: ` +
+        "no se clona desde acá. El documento genera el suyo.";
+    } else if (origen.lineas.length > MAX_LINEAS_MANUALES) {
+      avisoDelClon =
+        `El asiento ${origen.entry_number} tiene ${origen.lineas.length} líneas y este formulario ` +
+        `admite ${MAX_LINEAS_MANUALES}. Se cargó por otra vía y por ahí se vuelve a cargar.`;
+    } else {
+      plantilla = borradoresDesdeAsiento(origen.lineas);
+      clonadoDe = origen.entry_number;
+      descripcionClonada = origen.description;
+      referenciaClonada = origen.reference ?? "";
+    }
   }
 
   // ⚠️ TODAS las cuentas activas, sin lista corta y sin filtro por tipo.
@@ -97,13 +139,30 @@ export default async function AsientosPage() {
         </Link>
       </div>
 
+      {avisoDelClon && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          {avisoDelClon}
+        </div>
+      )}
+
       {cuentas.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           No hay cuentas activas en el plan. Cargue el plan de cuentas antes de registrar
           asientos.
         </div>
       ) : (
-        <AsientoManualForm cuentas={cuentas} terceros={terceros} hoy={hoy} />
+        <AsientoManualForm
+          cuentas={cuentas}
+          terceros={terceros}
+          hoy={hoy}
+          plantilla={plantilla}
+          clonadoDe={clonadoDe}
+          descripcionInicial={descripcionClonada}
+          referenciaInicial={referenciaClonada}
+        />
       )}
     </div>
   );

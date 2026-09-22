@@ -136,6 +136,43 @@ export interface TotalesManuales {
  */
 export const MAX_LINEAS_MANUALES = 100;
 
+/**
+ * UN ASIENTO EXISTENTE, convertido en borradores para el editor (7.4, D7).
+ *
+ * Josuarth lo describió así: «abrís un asiento viejo, le das copiar, y te queda
+ * uno igual donde solo cambiás los montos». O sea que **los montos se
+ * arrastran**, no se limpian: si el clon llegara en cero habría que teclearlo
+ * entero y el botón no ahorraría nada.
+ *
+ * 🔴 **La fecha NO se clona.** El clon lleva la de HOY y eso se decide en la
+ * pantalla, no acá: la del original puede caer en un mes cerrado, y entonces el
+ * RPC lo rechazaría con un error que parecería un bug del botón. Es además el
+ * mismo criterio del acta del 09/09 para todo lo que se registra de nuevo.
+ *
+ * Módulo PURO: recibe líneas ya leídas, no consulta nada.
+ */
+export function borradoresDesdeAsiento(
+  lineas: readonly {
+    account_code: string;
+    debit: number;
+    credit: number;
+    descripcion: string | null;
+    terceroClave: string | null;
+  }[]
+): LineaManualDraft[] {
+  return lineas.map((l, i) => ({
+    key: `clon-${i}`,
+    account_code: l.account_code,
+    // Los importes viajan como texto porque eso es lo que edita el formulario.
+    // `toFixed(2)` y no el importe crudo: el editor muestra dos decimales y un
+    // "12" suelto se vería distinto al resto de las filas.
+    debit: l.debit > 0 ? l.debit.toFixed(2) : "",
+    credit: l.credit > 0 ? l.credit.toFixed(2) : "",
+    description: l.descripcion ?? "",
+    tercero: l.terceroClave ?? "",
+  }));
+}
+
 /** Una línea vacía para arrancar el editor. */
 export function lineaManualVacia(key: string): LineaManualDraft {
   return { key, account_code: "", debit: "", credit: "", description: "", tercero: "" };

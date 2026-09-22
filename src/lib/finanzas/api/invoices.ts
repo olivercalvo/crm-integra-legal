@@ -23,7 +23,9 @@ import type {
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
-import { createCreditNoteFromInvoice } from "@/lib/finanzas/api/credit-notes";
+import { createCreditNoteFromInvoice, compensarNotaDeCredito } from "@/lib/finanzas/api/credit-notes";
+import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
@@ -799,36 +801,39 @@ export function validateCancelInput(
 }
 
 /**
- * Anula una factura emitida. Sprint 2C: ahora bloquea si tiene pagos
- * aplicados (amount_paid > 0) y genera una nota de crédito mirror
- * automáticamente.
+ * ANULAR una factura emitida (Bloque 5, 22/09/2026 — D4, D5).
  *
- * Reglas de origen:
- *   - emitida sin pagos        ✓ → genera NC + UPDATE status='anulada'
- *   - parcialmente_pagada      ✗ rechaza con mensaje pidiendo eliminar pagos
- *   - pagada                   ✗ rechaza con mismo mensaje
- *   - borrador / pre_emision   ✗ usar Eliminar
- *   - anulada                  ✗ ya está anulada
+ *   1. Gates de status y de pagos (como antes: sin pagos, no anulada, emitida).
+ *   2. 🔴 El MES DE LA FACTURA cerrado → 409: "no se anula, se emite una nota
+ *      de crédito con fecha de hoy" (Josuarth). La pantalla cambia el botón.
+ *   3. La NC TOTAL automática (`createCreditNoteFromInvoice`: la misma función
+ *      que la NC manual, con todas las líneas). Fecha de hoy.
+ *   4. RPC `cancel_invoice_with_reversal` (052), UNA transacción: si la factura
+ *      está en el libro, postea la REVERSIÓN de su asiento con la fecha de hoy
+ *      (el espejo lo arma `construirAsientoDeReversion`, la misma función que
+ *      dibuja la vista previa; el RPC lo verifica), y marca `anulada`. La NC NO
+ *      se postea aparte: el libro cierra con el espejo (D5).
+ *   5. Si el RPC falla, la NC se deshace con la válvula de la 052.
  *
- * Atomicidad: la NC se crea ANTES del UPDATE de la factura. Si el UPDATE
- * falla, la NC queda huérfana (sin factura anulada que la respalde) — caso
- * extremadamente raro porque el UPDATE es un cambio de status validado por
- * T2 que ya pasó la pre-check. Si ocurre, queda en logs y requiere
- * intervención manual. Aceptable para MVP (alternativa: SECURITY DEFINER RPC
- * con BEGIN/COMMIT, fuera de scope de este sprint).
+ * El "GATE CONTABLE (02/09/2026)" que rechazaba anular cualquier factura con
+ * asiento se ELIMINÓ acá: la reversión real es lo que ese gate esperaba.
+ *
+ * `ledgerDb` es el cliente de SERVICIO (SOP-014): lee el asiento, llama al RPC
+ * y compensa.
  */
 export async function cancelInvoice(
   db: DB,
+  ledgerDb: DB,
   tenantId: string,
   userId: string,
   invoiceId: string,
   reason: string,
   observations: string | null = null
 ) {
-  // 1. Cargar status + amount_paid para validar antes de cualquier mutación.
+  // 1. Status y pagos
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number, amount_paid")
+    .select("id, status, invoice_number, amount_paid, issue_date")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -848,13 +853,6 @@ export async function cancelInvoice(
       400
     );
   }
-
-  // 2. Bloqueo D3.d/D3.e: si la factura tiene pagos aplicados, NO se anula.
-  //    El usuario debe deshacer los pagos primero (T7a revierte status a
-  //    'emitida' automáticamente al quitar el último): un cobro sin asiento se
-  //    ELIMINA, uno contabilizado se REVERSA (`reversePayment`, 17/09/2026).
-  //    Este gate NO cambia con la reversión: sigue mirando `amount_paid`, que
-  //    T7a deja en cero en los dos caminos.
   const amountPaid = Number(inv.amount_paid);
   if (amountPaid > 0) {
     throw new InvoiceMutationError(
@@ -863,78 +861,93 @@ export async function cancelInvoice(
     );
   }
 
-  // 2b. 🔴 GATE CONTABLE (02/09/2026): si la factura ya tiene asiento, NO se
-  //     anula todavía.
-  //
-  //     Anular hoy cambiaría el status y generaría la nota de crédito, pero el
-  //     asiento seguiría en el libro tal cual: la factura desaparecería de la
-  //     antigüedad y su débito quedaría vivo en el mayor. El Balance y el auxiliar
-  //     divergirían **en silencio**, que es el único resultado inaceptable.
-  //
-  //     Revertir un asiento NO es postear su espejo: hay que decidir con qué
-  //     fecha se revierte —la del asiento original, que puede caer en un período
-  //     cerrado, o la de la anulación— y eso es criterio contable, no una
-  //     decisión de implementación. Se resuelve en el bloque de reversiones.
-  //
-  //     Mientras tanto se bloquea, que es feo pero VISIBLE. Hoy afecta a las
-  //     facturas que ya tienen asiento sembrado en staging.
-  const { data: asiento } = await db
-    .from("journal_entries")
-    .select("entry_number")
-    .eq("tenant_id", tenantId)
-    .eq("source_type", "factura")
-    .eq("source_id", invoiceId)
-    .maybeSingle();
-
-  if (asiento) {
-    const numero = (asiento as { entry_number: number }).entry_number;
-    throw new InvoiceMutationError(
-      `Esta factura ya está registrada en el libro contable (asiento ${numero}), ` +
-        `y anularla dejaría el libro sin cuadrar con el reporte de cuentas por cobrar. ` +
-        `La anulación de facturas contabilizadas se habilita junto con el asiento de ` +
-        `reversión. Avisale a Oliver antes de hacer cualquier otra cosa con esta factura.`,
-      409
-    );
+  // 2. 🔴 El mes de la factura (D4). Se mira acá, con el mensaje para la
+  //    persona, y el RPC lo vuelve a verificar (es el permiso).
+  if (await periodoDeLaFacturaCerrado(db, tenantId, String(inv.issue_date))) {
+    throw new InvoiceMutationError(MENSAJE_MES_CERRADO(String(inv.issue_date)), 409);
   }
 
-  // 3. Generar NC mirror (idempotente: si ya existe, devuelve la existente).
-  const cn = await createCreditNoteFromInvoice(
-    db,
-    tenantId,
-    userId,
-    invoiceId,
-    reason,
-    observations
-  );
+  // 3. La NC total, con la MISMA función que la NC manual.
+  const cn = await createCreditNoteFromInvoice(db, tenantId, userId, invoiceId, reason, observations);
 
-  // 4. UPDATE atómico de la factura. T2 valida la transición.
-  const { error: errUpd } = await db
-    .from("invoices")
-    .update({
-      status: "anulada",
-      cancellation_reason: reason,
-      cancelled_at: new Date().toISOString(),
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", invoiceId);
-
-  if (errUpd) {
-    // NC ya quedó creada (idempotente, no se duplica en retry). Loguear
-    // para visibilidad operativa.
-    console.error(
-      "[finanzas] cancelInvoice: NC creada (" +
-        cn.credit_note_number +
-        ") pero UPDATE invoice falló:",
-      errUpd
-    );
-    throw new InvoiceMutationError(pgErrorToMessage(errUpd), 400, errUpd);
+  // 4. El espejo del asiento de la factura, si lo hay, y la anulación en el RPC.
+  const original = await getAsientoDeFactura(ledgerDb, tenantId, invoiceId);
+  let lines: { account_code: string; debit: number; credit: number; description: string | null }[] | null = null;
+  let description = `Anulación de la factura ${inv.invoice_number}`;
+  const hoy = new Date().toISOString().slice(0, 10);
+  if (original) {
+    const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: invoiceId });
+    if (!armado.ok) {
+      await compensarNotaDeCredito(ledgerDb, tenantId, cn.id, new MutationError(armado.mensaje, 422));
+      throw new MutationError(armado.mensaje, 422); // inalcanzable: compensar lanza
+    }
+    // Lo que va al RPC sale de `armado.asiento`: la misma función que dibuja
+    // la vista previa (reversion-una-sola-implementacion).
+    lines = armado.asiento.lines.map((l) => ({
+      account_code: l.account_code,
+      debit: l.debit,
+      credit: l.credit,
+      description: l.description ?? null,
+    }));
+    description = armado.asiento.description;
   }
+
+  const { data, error } = await ledgerDb.rpc("cancel_invoice_with_reversal", {
+    p_tenant_id: tenantId,
+    p_invoice_id: invoiceId,
+    p_reason: reason,
+    p_observations: observations,
+    p_transaction_date: hoy,
+    p_description: description,
+    p_lines: lines,
+    p_created_by: userId,
+  });
+  if (error) {
+    console.error("[finanzas/api] cancel_invoice_with_reversal failed", error);
+    await compensarNotaDeCredito(
+      ledgerDb,
+      tenantId,
+      cn.id,
+      new InvoiceMutationError(error.message || "No se pudo anular la factura", 422, error)
+    );
+  }
+  const r = (data ?? {}) as { entry_number?: number | null; reversed_entry_number?: number | null };
 
   return {
     id: invoiceId,
     credit_note_id: cn.id,
     credit_note_number: cn.credit_note_number,
+    reversal_entry_number: r.entry_number ?? null,
+    reversed_entry_number: r.reversed_entry_number ?? null,
   };
+}
+
+/** El texto de D4, en un solo lugar (lo usa también la pantalla). */
+export function MENSAJE_MES_CERRADO(issueDate: string): string {
+  return (
+    `El mes de esta factura (${issueDate.slice(0, 7)}) está cerrado: no se anula, ` +
+    `se emite una nota de crédito con fecha de hoy.`
+  );
+}
+
+/** ¿El período contable del mes de `issueDate` está cerrado? */
+export async function periodoDeLaFacturaCerrado(db: DB, tenantId: string, issueDate: string): Promise<boolean> {
+  const year = Number(issueDate.slice(0, 4));
+  const month = Number(issueDate.slice(5, 7));
+  const { data } = await db
+    .from("accounting_periods")
+    .select("status")
+    .eq("tenant_id", tenantId)
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+  return (data as { status?: string } | null)?.status === "cerrado";
+}
+
+/** El asiento `factura` de una factura, con sus líneas, o null. */
+async function getAsientoDeFactura(db: DB, tenantId: string, invoiceId: string) {
+  const mapa = await cargarAsientosPorOrigen(db, tenantId, "factura", [invoiceId]);
+  return mapa.get(invoiceId) ?? null;
 }
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import type {
 
 type DB = SupabaseClient;
 
-interface FilaLinea {
+export interface FilaLinea {
   line_order: number;
   description: string;
   subtotal: number | string | null;
@@ -69,8 +69,33 @@ export async function cargarFacturaParaAsiento(
     .order("line_order", { ascending: true });
 
   if (errLin) throw errLin;
-  const lineasCrudas = (filas ?? []) as unknown as FilaLinea[];
+  const lineas = await resolverLineasParaAsiento(db, tenantId, (filas ?? []) as unknown as FilaLinea[]);
 
+  const cliente = (inv as { client?: { name?: string } | { name?: string }[] | null }).client;
+  const nombre = Array.isArray(cliente) ? cliente[0]?.name : cliente?.name;
+
+  return {
+    id: (inv as { id: string }).id,
+    invoice_number: invoiceNumber,
+    issue_date: (inv as { issue_date: string }).issue_date,
+    grand_total: num((inv as { grand_total: number | string }).grand_total),
+    client_name: nombre ?? "—",
+    lineas,
+  };
+}
+
+/**
+ * De las filas crudas de líneas (factura O nota de crédito: misma forma) a
+ * `LineaFacturaParaAsiento`, resolviendo la cuenta de ingreso del servicio y si
+ * esa cuenta existe y está activa en el plan. Compartido por
+ * `cargarFacturaParaAsiento` y `cargarNotaDeCreditoParaAsiento` (Bloque 5):
+ * la NC es la factura al revés, así que sus líneas se resuelven igual.
+ */
+export async function resolverLineasParaAsiento(
+  db: DB,
+  tenantId: string,
+  lineasCrudas: FilaLinea[]
+): Promise<LineaFacturaParaAsiento[]> {
   // ---- Los servicios de esas líneas -------------------------------------
   const serviceIds = Array.from(
     new Set(lineasCrudas.map((l) => l.service_id).filter((x): x is string => !!x))
@@ -114,7 +139,7 @@ export async function cargarFacturaParaAsiento(
     for (const c of (cta ?? []) as { code: string }[]) activas.add(c.code);
   }
 
-  const lineas: LineaFacturaParaAsiento[] = lineasCrudas.map((l) => {
+  return lineasCrudas.map((l) => {
     const svc = l.service_id ? servicios.get(l.service_id) : undefined;
     const cuenta = svc?.revenue_account ?? null;
     return {
@@ -128,15 +153,4 @@ export async function cargarFacturaParaAsiento(
     };
   });
 
-  const cliente = (inv as { client?: { name?: string } | { name?: string }[] | null }).client;
-  const nombre = Array.isArray(cliente) ? cliente[0]?.name : cliente?.name;
-
-  return {
-    id: (inv as { id: string }).id,
-    invoice_number: invoiceNumber,
-    issue_date: (inv as { issue_date: string }).issue_date,
-    grand_total: num((inv as { grand_total: number | string }).grand_total),
-    client_name: nombre ?? "—",
-    lineas,
-  };
 }

@@ -22,6 +22,9 @@ import {
   type CreateCreditNoteInput,
   type LineaFacturada,
 } from "@/lib/finanzas/validators/credit-note";
+import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { construirAsientoDeNotaDeCredito } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
+import { cargarNotaDeCreditoParaAsiento } from "@/lib/finanzas/queries/nota-credito-para-asiento";
 
 type DB = SupabaseClient;
 
@@ -192,6 +195,72 @@ export async function createCreditNote(
   }
 
   return { id: creditNoteId, credit_note_number: formattedNumber, total: validacion.total };
+}
+
+/**
+ * DESHACER una NC recién creada cuyo asiento no pudo postearse (o cuya
+ * anulación falló). Es el DELETE compensatorio de SOP-031, con la válvula de
+ * la 052 (`finanzas.nc_compensar`): T6 y el trigger de líneas la dejan pasar
+ * SOLO si la NC no tiene asiento. Va por el cliente de SERVICIO, en el mismo
+ * request. El número `NC-` ya se consumió: queda un hueco, como en cobros.
+ *
+ * Si la compensación falla, se loguea y se lanza la causa original: una NC
+ * con número y sin libro es visible (no aparece en el Mayor) y requiere
+ * intervención manual; nunca se tapa.
+ */
+export async function compensarNotaDeCredito(
+  ledgerDb: DB,
+  tenantId: string,
+  ncId: string,
+  causa: MutationError
+): Promise<never> {
+  const { error } = await ledgerDb.rpc("finanzas_compensar_nota_de_credito", {
+    p_tenant_id: tenantId,
+    p_credit_note_id: ncId,
+  });
+  if (error) {
+    console.error(
+      "[finanzas] DELETE compensatorio FALLÓ para la nota de crédito %s. Quedó con número y sin libro.",
+      ncId,
+      error
+    );
+  }
+  throw causa;
+}
+
+/**
+ * EMITIR una NC manual (parcial o total, mes cerrado o no): la crea con
+ * `createCreditNote` y postea su asiento PROPIO (`nota_credito`, D5). Si el
+ * posteo falla (período de hoy cerrado, cuenta de ingreso inactiva, RPC), la
+ * NC se deshace con la válvula y el error vuelve tal cual.
+ *
+ * `ledgerDb` es el cliente de SERVICIO (SOP-014): postea y compensa.
+ */
+export async function emitCreditNote(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  input: CreateCreditNoteInput
+): Promise<{ id: string; credit_note_number: string; total: number; entry_id: string }> {
+  const nc = await createCreditNote(db, tenantId, userId, input);
+
+  const datos = await cargarNotaDeCreditoParaAsiento(ledgerDb, tenantId, nc.id);
+  if (!datos) {
+    await compensarNotaDeCredito(ledgerDb, tenantId, nc.id, new MutationError("La nota de crédito se creó pero no se pudo releer para contabilizarla.", 500));
+  }
+  const armado = construirAsientoDeNotaDeCredito(datos as NonNullable<typeof datos>);
+  if (!armado.ok) {
+    await compensarNotaDeCredito(ledgerDb, tenantId, nc.id, new MutationError(armado.mensaje, 422));
+  }
+  let entryId: string;
+  try {
+    entryId = await postJournalEntry(ledgerDb, tenantId, (armado as { ok: true; asiento: import("@/lib/finanzas/contabilidad/posting").AsientoInput }).asiento, userId);
+  } catch (err) {
+    await compensarNotaDeCredito(ledgerDb, tenantId, nc.id, err instanceof MutationError ? err : new MutationError(String(err), 500));
+    throw err; // inalcanzable: compensar lanza siempre
+  }
+  return { ...nc, entry_id: entryId };
 }
 
 /**

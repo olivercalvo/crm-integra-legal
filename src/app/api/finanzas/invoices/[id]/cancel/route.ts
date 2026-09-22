@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   cancelInvoice,
   validateCancelInput,
@@ -53,6 +54,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const result = await cancelInvoice(
       ctx.db,
+      // 🔑 SOP-014: la reversión va con el cliente de SERVICIO.
+      createAdminClient(),
       ctx.tenantId,
       ctx.userId,
       params.id,

@@ -143,8 +143,12 @@ SELECT code, name FROM public.chart_of_accounts
 > (inversión y financiamiento) quedan disponibles y nadie dijo que ninguna cuenta
 > caiga ahí.
 >
-> **Lo que hay que preguntarle a RM:** pasarles la lista que devuelve (b) y que
-> confirmen, cuenta por cuenta, que ninguna es de inversión ni de financiamiento.
+> **Lo que hay que preguntarle a RM:** ejecutar
+> **`sql/verificacion/cuentas_para_rm_niif18.sql`** —no la (b) cruda, que cuenta de
+> más porque incluye las que los pasos C y D mapean solos— pegar el resultado en
+> Excel y mandárselo al contador. Trae tres columnas vacías para que marque cuenta
+> por cuenta si el default es correcto. Si devuelve cero filas, no hay nada que
+> preguntar y el punto queda cerrado.
 > Es el criterio de la guía de RM —«quien modifica la clasificación contable de una
 > cuenta debe ser el contador»— y es la misma razón por la que en la app la abogada
 > no puede tocar `account_type`.

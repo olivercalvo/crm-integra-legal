@@ -56,6 +56,9 @@ export function SupplierForm({ proveedor, proximoNumero, cuentas }: Props) {
   const [address, setAddress] = useState(proveedor?.address ?? "");
   const [phone, setPhone] = useState(proveedor?.phone ?? "");
   const [email, setEmail] = useState(proveedor?.email ?? "");
+  const [contactName, setContactName] = useState(proveedor?.contact_name ?? "");
+  const [contactPhone, setContactPhone] = useState(proveedor?.contact_phone ?? "");
+  const [contactEmail, setContactEmail] = useState(proveedor?.contact_email ?? "");
   const [defaultAccount, setDefaultAccount] = useState(
     proveedor?.default_chart_account_code ?? ""
   );
@@ -98,6 +101,9 @@ export function SupplierForm({ proveedor, proximoNumero, cuentas }: Props) {
       address: address || null,
       phone: phone || null,
       email: email || null,
+      contact_name: contactName || null,
+      contact_phone: contactPhone || null,
+      contact_email: contactEmail || null,
       default_chart_account_code: defaultAccount || null,
       payment_terms_days: Number(plazo || 0),
       active,
@@ -362,9 +368,16 @@ export function SupplierForm({ proveedor, proximoNumero, cuentas }: Props) {
         </p>
       </fieldset>
 
-      {/* ---------------- Contacto ---------------- */}
+      {/* ---------------- Datos de la empresa ---------------- */}
+      {/* 🔴 DOS BLOQUES, NO UNO. `phone`/`email` son de la EMPRESA (la central) y
+          `contact_*` son de la PERSONA. La central del proveedor y el celular del
+          ejecutivo de cuenta no son el mismo número — el día que difieran, tener
+          un solo par de campos obliga a migrar. Por eso la leyenda de cada
+          fieldset dice de quién son los datos, y no sólo "Contacto". */}
       <fieldset className="rounded-xl border bg-white p-4">
-        <legend className="px-1 text-sm font-semibold text-integra-navy">Contacto</legend>
+        <legend className="px-1 text-sm font-semibold text-integra-navy">
+          Datos de la empresa
+        </legend>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label htmlFor="address" className={labelCls}>
@@ -386,6 +399,61 @@ export function SupplierForm({ proveedor, proximoNumero, cuentas }: Props) {
             </label>
             <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
             <Error campo="email" />
+            <p className="mt-1 text-xs text-gray-500">
+              El de la empresa, no el de la persona.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      {/* ---------------- Persona de contacto (4.1) ---------------- */}
+      <fieldset className="rounded-xl border bg-white p-4">
+        <legend className="px-1 text-sm font-semibold text-integra-navy">
+          Persona de contacto
+        </legend>
+        <p className="mb-3 text-xs text-gray-500">
+          Con quién se habla en este proveedor. Los tres campos son opcionales y son{" "}
+          <strong>distintos</strong> de los datos de la empresa de arriba: la central y el
+          celular de la persona no suelen ser el mismo número.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label htmlFor="contact_name" className={labelCls}>
+              Nombre del contacto
+            </label>
+            <input
+              id="contact_name"
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Ana Pérez"
+              className={inputCls}
+            />
+            <Error campo="contact_name" />
+          </div>
+          <div>
+            <label htmlFor="contact_phone" className={labelCls}>
+              Teléfono del contacto
+            </label>
+            <input
+              id="contact_phone"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              className={inputCls}
+            />
+            <Error campo="contact_phone" />
+          </div>
+          <div>
+            <label htmlFor="contact_email" className={labelCls}>
+              Correo del contacto
+            </label>
+            <input
+              id="contact_email"
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              className={inputCls}
+            />
+            <Error campo="contact_email" />
           </div>
         </div>
       </fieldset>

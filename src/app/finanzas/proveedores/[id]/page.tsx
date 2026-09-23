@@ -117,12 +117,45 @@ export default async function ProveedorDetallePage({ params }: { params: { id: s
         </p>
       </div>
 
+      {/* Cuenta contable por defecto (4.4). Va en su propia tarjeta y no junto a
+          los términos de pago: son dos cosas que el proveedor "arrastra" a cada
+          compra, pero una es contable y la otra es de cobranza. */}
       <div className="rounded-xl border bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold text-integra-navy">Contacto</h2>
+        <h2 className="mb-3 text-sm font-semibold text-integra-navy">
+          Cuenta contable por defecto
+        </h2>
+        <dl className="grid gap-4 sm:grid-cols-3">
+          <Campo label="Cuenta">
+            {proveedor.default_chart_account_code ? (
+              <span className="font-mono">{proveedor.default_chart_account_code}</span>
+            ) : (
+              <Vacio />
+            )}
+          </Campo>
+        </dl>
+        <p className="mt-3 text-xs text-gray-500">
+          Se precarga en cada línea de una <strong>compra</strong> nueva de este proveedor y se
+          puede cambiar línea por línea. No toca las compras ya cargadas, y no se usa en los
+          gastos de trámite, que siguen yendo a <span className="font-mono">130003</span>.
+        </p>
+      </div>
+
+      <div className="rounded-xl border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-integra-navy">Datos de la empresa</h2>
         <dl className="grid gap-4 sm:grid-cols-3">
           <Campo label="Dirección">{proveedor.address ?? <Vacio />}</Campo>
           <Campo label="Teléfono">{proveedor.phone ?? <Vacio />}</Campo>
           <Campo label="Correo">{proveedor.email ?? <Vacio />}</Campo>
+        </dl>
+      </div>
+
+      {/* Persona de contacto (4.1). Separada de la empresa a propósito. */}
+      <div className="rounded-xl border bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold text-integra-navy">Persona de contacto</h2>
+        <dl className="grid gap-4 sm:grid-cols-3">
+          <Campo label="Nombre">{proveedor.contact_name ?? <Vacio />}</Campo>
+          <Campo label="Teléfono">{proveedor.contact_phone ?? <Vacio />}</Campo>
+          <Campo label="Correo">{proveedor.contact_email ?? <Vacio />}</Campo>
         </dl>
       </div>
 

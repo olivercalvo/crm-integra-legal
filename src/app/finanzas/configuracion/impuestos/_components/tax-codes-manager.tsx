@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,13 @@ import {
 
 interface Props {
   taxCodes: TaxCodeRow[];
-  /** Solo el admin edita. El contador entra a mirar. */
+  /**
+   * Quién puede editar Y crear: admin y contador. La abogada entra a mirar.
+   *
+   * Es el mismo set que `ROLES_ESCRITURA` en las dos rutas de `/api`. Si alguna
+   * vez se amplía hay que mover los tres juntos — ocultar el botón no reemplaza
+   * al 403, y el 403 no reemplaza a ocultar el botón.
+   */
   canEdit: boolean;
 }
 
@@ -34,6 +40,23 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
+  // ---- alta de una tasa (2.4) ---------------------------------------------
+  const [creando, setCreando] = useState(false);
+  const [nuevoCodigo, setNuevoCodigo] = useState("");
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoPct, setNuevoPct] = useState("");
+  const [errorAlta, setErrorAlta] = useState<string | null>(null);
+
+  /**
+   * Lo que se va a guardar, calculado en vivo mientras se escribe (D7).
+   *
+   * La persona piensa en "7%" y la base guarda `0.0700`. Mostrar las dos cosas
+   * al mismo tiempo es lo que evita que alguien cargue 700% — el servidor lo
+   * rechaza igual, pero un rechazo después de completar el formulario enseña
+   * menos que ver el decimal mientras se escribe.
+   */
+  const decimalNuevo = parseTaxRatePercent(nuevoPct);
+
   function empezar(t: TaxCodeRow) {
     setEditando(t.id);
     setValorPct(String(Number((Number(t.rate) * 100).toFixed(4))));
@@ -44,6 +67,50 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
   function cancelar() {
     setEditando(null);
     setError(null);
+  }
+
+  function abrirAlta() {
+    setCreando(true);
+    setNuevoCodigo("");
+    setNuevoNombre("");
+    setNuevoPct("");
+    setErrorAlta(null);
+  }
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    if (decimalNuevo === null) {
+      setErrorAlta("La tasa se escribe como porcentaje: 7 para 7%, 7.5 para 7.5%.");
+      return;
+    }
+    setGuardando(true);
+    setErrorAlta(null);
+    try {
+      const res = await fetch("/api/finanzas/configuracion/tax-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: nuevoCodigo.trim().toUpperCase(),
+          name: nuevoNombre.trim(),
+          rate: decimalNuevo,
+          active: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const campos = data?.errors as Record<string, string> | undefined;
+        setErrorAlta(
+          campos?.code ?? campos?.name ?? campos?.rate ?? data?.error ?? "No se pudo crear la tasa."
+        );
+        return;
+      }
+      setCreando(false);
+      router.refresh();
+    } catch {
+      setErrorAlta("No se pudo conectar con el servidor.");
+    } finally {
+      setGuardando(false);
+    }
   }
 
   async function guardar(t: TaxCodeRow) {
@@ -86,6 +153,115 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
   }
 
   return (
+    <div className="space-y-3">
+      {/* ---- Alta de una tasa (2.4) ---- */}
+      {canEdit && !creando && (
+        <Button type="button" variant="outline" onClick={abrirAlta} className="gap-1.5">
+          <Plus size={16} />
+          Nueva tasa
+        </Button>
+      )}
+
+      {canEdit && creando && (
+        <form
+          onSubmit={crear}
+          className="rounded-lg border border-gray-200 bg-white p-4 space-y-3"
+        >
+          <h3 className="text-sm font-semibold text-integra-navy">Nueva tasa</h3>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label htmlFor="nuevo-codigo" className="mb-1 block text-xs font-medium text-gray-700">
+                Código
+              </label>
+              <Input
+                id="nuevo-codigo"
+                value={nuevoCodigo}
+                onChange={(e) => setNuevoCodigo(e.target.value.toUpperCase())}
+                placeholder="ITBMS_10"
+                disabled={guardando}
+                className="font-mono"
+              />
+              <p className="mt-1 text-[11px] text-gray-500">
+                Mayúsculas, números y guión bajo. No se puede cambiar después.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="nuevo-nombre" className="mb-1 block text-xs font-medium text-gray-700">
+                Nombre
+              </label>
+              <Input
+                id="nuevo-nombre"
+                value={nuevoNombre}
+                onChange={(e) => setNuevoNombre(e.target.value)}
+                placeholder="ITBMS 10%"
+                disabled={guardando}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="nuevo-pct" className="mb-1 block text-xs font-medium text-gray-700">
+                Tasa (%)
+              </label>
+              <Input
+                id="nuevo-pct"
+                value={nuevoPct}
+                onChange={(e) => setNuevoPct(e.target.value)}
+                placeholder="10"
+                inputMode="decimal"
+                disabled={guardando}
+                className="text-right font-mono"
+              />
+              {/* 🔴 D7 — se escribe el PORCENTAJE y se muestra el decimal que se
+                  guarda. Las dos cosas a la vez: es lo que evita cargar 700%. */}
+              <p className="mt-1 text-[11px] text-gray-500">
+                {nuevoPct.trim() === "" ? (
+                  "Se escribe en porcentaje: 10 para 10%."
+                ) : decimalNuevo === null ? (
+                  <span className="text-red-600">No es un número.</span>
+                ) : decimalNuevo > 1 ? (
+                  <span className="text-red-600">
+                    {formatTaxRate(decimalNuevo)} — no puede superar el 100%.
+                  </span>
+                ) : (
+                  <>
+                    Se guarda como{" "}
+                    <strong className="font-mono">{decimalNuevo.toFixed(4)}</strong> ={" "}
+                    {formatTaxRate(decimalNuevo)}
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {errorAlta && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{errorAlta}</p>
+          )}
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={guardando} className="gap-1.5">
+              <Check size={16} />
+              Crear tasa
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCreando(false)}
+              disabled={guardando}
+            >
+              Cancelar
+            </Button>
+          </div>
+
+          <p className="text-[11px] text-gray-500">
+            La tasa nueva aparece sola en los selectores de facturas, compras y gastos de
+            trámite, y su ITBMS va a <span className="font-mono">200003</span> como las demás.
+            Una tasa no se borra: se desactiva.
+          </p>
+        </form>
+      )}
+
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="w-full text-sm">
         <thead>
@@ -196,6 +372,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
           {error}
         </p>
       )}
+    </div>
     </div>
   );
 }

@@ -82,11 +82,57 @@ código con un FK compuesto y los selectores ordenan por él.
 - El comentario de la prop `canEdit` en `tax-codes-manager.tsx` decía "Solo el admin edita. El
   contador entra a mirar" — falso desde que la pantalla existe.
 
-### Pendiente de este bloque
+### ✅ Verificado en staging con clics reales — 23/09/2026
 
-⚠️ **La verificación con clics reales en staging NO se hizo.** El deploy está OK y la pantalla
-carga, pero entrar exige escribir una contraseña en el formulario de login, y eso es algo que
-el agente no hace. Queda para Oliver; el detalle está en `ESTADO-Y-HANDOFF.md`.
+**SHA desplegado y verificado: `61c1e52`** (deploy `crm-integra-legal-4xid3lwu7`). Los diez
+pasos del handoff, como admin:
+
+1. El selector de cuenta por defecto ofrece **36 cuentas** (6 de costo + 30 de gasto) y
+   🔴 **`130003` NO está**, ni ninguna de activo, pasivo, patrimonio o ingreso.
+2. `610005 · Internet` guardada en PRV‑001 y visible en la ficha.
+3. **Precarga y D4:** al elegir el proveedor la línea arranca en `610005`; se cambió a
+   `610001 · Alquiler`, se agregó otra línea → la nueva volvió a `610005` y **la cambiada no se
+   tocó**.
+4. **Degradación (D3), los dos avisos:** con `610005` desactivada, la ficha abre con el selector
+   vacío y *"La cuenta guardada (610005) ya no sirve… Las compras ya cargadas no cambian"*; el
+   alta de compra avisa *"…Las líneas arrancan sin cuenta y hay que elegirla a mano. Se corrige
+   en la ficha del proveedor"* y la línea queda vacía. **`610005` reactivada al terminar.**
+5. Contacto cargado con teléfono y correo **distintos** de los de la empresa; las dos tarjetas
+   separadas en la ficha.
+6. Botones Contado · 15 · 30 · 45 · 60 · 90 con el campo editable, y el vencimiento precargado
+   solo: fecha `23/09/2026` + 30 días = `23/10/2026`.
+7. Alta de `PRUEBA_10`: **`Se guarda como 0.1000 = 10%`** en vivo mientras se escribe, y `700`
+   → **`700% — no puede superar el 100%`** en rojo. El código se guardó en MAYÚSCULAS aunque se
+   tipeó en minúsculas.
+8. `Prueba 10%` apareció **sola en los tres selectores**: factura, compra y gasto de trámite.
+9. Desactivada → **desapareció de los tres**.
+10. Alta duplicada → *"Ya existe un impuesto con el código "PRUEBA_10"… reactívelo en lugar de
+    crear otro"*, en español y sin crear nada.
+
+### 🔴 Hallazgo: una tasa no se puede desactivar desde la pantalla
+
+El pie del formulario de alta dice *"Una tasa no se borra: se desactiva"* — y **desactivarla no
+se puede desde la UI**. El modo edición sólo tiene nombre y tasa, y `guardar()` manda
+`{ rate, name }` sin `active` (`tax-codes-manager.tsx:137`). El `PATCH` **ya lo soporta**
+(`active` está en `UpdateTaxCodeInput` y en el validador): falta el control en pantalla.
+
+Para completar el paso 9 hubo que desactivar `PRUEBA_10` por SQL contra staging. **Queda
+pendiente**, anotado en `ESTADO-Y-HANDOFF.md`.
+
+⚠️ Aparte, los botones **Editar** y **Desactivar** de una fila del Plan de Cuentas no
+respondieron al clic durante la verificación. **No se confirma como bug**: en esa sesión varios
+clics por referencia fallaron de forma intermitente en pantallas que sí funcionan, así que el
+síntoma puede ser del entorno de automatización. Queda para confirmar a mano.
+
+### Estado en que quedó staging
+
+- `610005 Internet` **reactivada** (como estaba).
+- `PRUEBA_10` **creada y desactivada**, como se pidió. Es la única fila nueva del catálogo.
+- PRV‑001 CABLE ONDA quedó con los datos de prueba cargados (cuenta `610005`, contacto
+  *Mariela Q. Aguilar*, teléfonos y correos). Son datos de prueba en una base de prueba y son la
+  evidencia de que la función anda; si molestan se borran desde la ficha.
+- Ninguna compra ni gasto se guardó: los formularios se usaron y se abandonaron.
+
 
 ## [Preparación del despliegue a producción: runbook + inventario generado] - 2026-09-22
 

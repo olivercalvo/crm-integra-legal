@@ -5,10 +5,14 @@
 **Estado:** CONSTRUIDO. Cierra **4.1, 4.4, 4.5 y 2.4**. Siete commits, `a7acdac` → `61c1e52`
 en `develop`, deploy OK. Migración `057` SOLO en staging; `main` sigue en `24b227a`.
 
-⚠️ **Lo que NO se hizo: la verificación con clics reales.** El deploy responde y la pantalla
-carga (banda ámbar de staging confirmada), pero entrar exige escribir una contraseña en el
-formulario de login y eso el agente no lo hace. **Queda pendiente para Oliver** — la lista de
-qué clickear está en `ESTADO-Y-HANDOFF.md`.
+✅ **VERIFICADO EN STAGING CON CLICS REALES el 23/09/2026. SHA desplegado: `61c1e52`.**
+Los diez pasos del handoff, incluidos los dos que no se podían saltear: la degradación con los
+dos avisos ámbar (y la cuenta reactivada al terminar) y el ciclo completo de 2.4 — crear
+`PRUEBA_10` viendo `Se guarda como 0.1000 = 10%`, verla en los tres selectores y desactivarla.
+Detalle en `changelog.md`.
+
+🔴 **Un hueco encontrado en la verificación:** una tasa **no se puede desactivar desde la
+pantalla**. El `PATCH` ya soporta `active`; falta el control. Pendiente en el handoff.
 
 ### Lo entregado
 

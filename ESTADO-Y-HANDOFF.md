@@ -4,9 +4,31 @@
 
 ---
 
-## 🔴 PENDIENTE — los clics en staging del Bloque 8 (23/09/2026)
+## 🔴 PENDIENTE — desactivar una tasa desde la pantalla (23/09/2026)
 
-**El Bloque 8 está construido y desplegado, pero NO verificado con clics.**
+Salió de la verificación del Bloque 8. El pie del formulario de alta de tasas dice *"Una tasa no
+se borra: se desactiva"*, y **desactivarla no se puede desde la UI**: el modo edición sólo tiene
+nombre y tasa, y `guardar()` manda `{ rate, name }` sin `active`
+(`tax-codes-manager.tsx:137`).
+
+**El backend ya está**: `active` está en `UpdateTaxCodeInput`, en `validateUpdateTaxCode` y en
+`updateTaxCode`. Falta sólo el control en pantalla — un botón por fila que mande
+`{ active: !t.active }` al `PATCH` que ya existe, con el mismo `canEdit`.
+
+Mientras tanto, `PRUEBA_10` quedó desactivada por SQL contra staging.
+
+⚠️ Aparte: los botones **Editar** y **Desactivar** de una fila del Plan de Cuentas no
+respondieron al clic durante la verificación. **No confirmado como bug** — en esa sesión varios
+clics por referencia fallaron de forma intermitente en pantallas que sí funcionaban. Confirmar
+a mano antes de abrir un hallazgo.
+
+---
+
+## ✅ CERRADO — los clics en staging del Bloque 8 (23/09/2026)
+
+**El Bloque 8 está construido, desplegado y VERIFICADO con clics. SHA: `61c1e52`.**
+Los diez pasos de abajo se ejecutaron el 23/09/2026 como admin; el detalle de qué se vio en
+cada uno está en `changelog.md`. Se deja la lista como referencia para la próxima.
 
 - Deploy: `61c1e52` → `https://crm-integra-legal-4xid3lwu7-olivercalvos-projects.vercel.app`
   (estado `success`, la pantalla carga, banda ámbar de staging confirmada).

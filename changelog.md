@@ -1,5 +1,77 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Prueba 5 cerrada, D3 rediseñado y la lista base de lint] - 2026-09-23
+
+**Staging (`develop`):** `dc01f4e` (lint) → `def8a91` (D3) → `b88c212` (prueba 5).
+Sin migraciones nuevas. `main` sigue en `24b227a`.
+
+### 🔴 La respuesta exitosa es `0600`, y el clasificador la llamaba rechazo
+
+Prueba 5, medida en el sandbox con `i_amb = 2` impreso antes de cada llamada:
+
+```
+[{ "codigo": "0600", "mensaje": "Evento registrado con éxito" }]
+```
+
+El clasificador la leía como **`rechazada`** — `0600` no estaba en la lista de códigos de
+éxito, que venía del endpoint de **emisión**, y el mensaje no dice "anulado" ni "cancelado".
+**La DGI anuló el documento y el CRM informó un rechazo.** Pasó de verdad, no es hipotético.
+
+Dos decisiones de diseño evitaron que terminara en un descuadre, y vale anotarlas porque son
+la razón de que esto se pueda contar como un susto y no como un incidente:
+
+1. **El modo de fallar es NO ESCRIBIR.** Como lo leyó como rechazo, no tocó la factura ni el
+   libro: no quedó ningún asiento revertido de más. Con un default optimista habría revertido
+   un asiento **inmutable** contra una respuesta que no entendía.
+2. **El reintento lo arregló solo**, porque el segundo pedido devuelve `0622`. Que es
+   exactamente para lo que se rediseñó D3 esa misma mañana.
+
+La lección, escrita en el archivo: **los códigos de este endpoint no son los del de emisión.**
+
+### El reintento vuelve a PEDIR, no consulta (D3)
+
+El GET de estado no refleja la anulación —mismo payload antes y después— así que la "consulta
+de estado antes de reintentar" que pedía D3 **no se puede hacer con la API que existe**. Lo
+que sí se puede es volver a pedir la anulación, porque está medido que es estable.
+
+«Completar anulación» ahora llama al PAC **antes** de tocar el libro: `0622` (o un éxito)
+confirma y sigue; cualquier otra cosa deja la factura pendiente con su banda roja. El motivo
+de confirmar en vez de avanzar directo es que `fe_estado='canceled'` **lo escribimos
+nosotros**: después de una caída es una intención, no un hecho.
+
+### Lint: se congela la deuda y se hace exigible el criterio
+
+`npm run lint` nunca estuvo en cero, y venía reportándose como "lint verde". Los 20 errores
+preexistentes del módulo Legal quedan congelados en `docs/lint-baseline.md` y **no se
+corrigen**. Desde hoy el criterio es **cero errores nuevos fuera de esa lista**, verificado por
+`scripts/lint-contra-baseline.mjs` — que compara por **archivo + regla + símbolo**, no por
+número de línea, para que agregar una línea no invente errores nuevos.
+
+### Verificado
+
+- **Sandbox:** `FAC-REI-000003` emitida y anulada, con la respuesta cruda guardada en
+  `docs/efactura/prueba5-anulacion-exitosa.txt`. Se pidió la anulación dos veces más y **no se
+  duplicó nada**: UNA nota de crédito (`NC-000008`) y UN asiento de reversión.
+- **Clics** en `crm-integra-legal-git-develop`: la factura figura **Anulada** con estado fiscal
+  **Anulada en DGI**, la `NC-000008` aparece en su tarjeta, y el Diario General muestra el
+  asiento **N.º 55 · 2026-09-23 · Reversión · FAC-REI-000003**, cuadrado 10,00 / 10,00 con el
+  par `100004` / `130003`.
+- Suite **1284/1284**, `tsc` verde, **0 errores de lint nuevos**.
+
+### 🔴 Bloqueado
+
+`POST …/emit-efactura` devuelve **500** desde el deploy de Preview: **no tiene cargadas las
+credenciales del sandbox**. Por eso la emisión y la anulación de la prueba se corrieron desde
+localhost. Queda sin verificar con clics **una anulación de una factura CON CUFE** — apretar
+el botón da "Error interno" hasta que Preview tenga las env vars, que es una decisión de
+Oliver.
+
+### Tocado en staging
+
+`FAC-HON-000016` y el primer intento de `FAC-REI-000003` quedaron con `fe_estado='error'` y su
+número reservado, que es lo que la política de reuso D-3 define para una emisión rechazada.
+`FAC-HON-000007` sigue como estaba, sin tocar.
+
 ## [Bloque 9B — anulación ante la DGI] - 2026-09-23
 
 **Staging (`develop`):** `f3cc400` (matriz completa) → `bb3891f` (motivo 15) → `66c0131`

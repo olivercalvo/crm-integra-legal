@@ -51,31 +51,47 @@ no se llama **nunca**, en ninguno de los caminos.
   pasa las 182 h desde la AUTORIZACIÓN el 25/09 ~03:05 — desde la EMISIÓN (10/06) está
   pasadísima. Esa diferencia es justo la que la prueba (c) tiene que resolver.
 
-### ❌ LO ÚNICO QUE FALTA DEL BLOQUE: la prueba 5
+### ✅ Prueba 5 CERRADA — 23/09/2026
 
-**Cómo se ve una anulación que la DGI ACEPTA sigue sin saberse**, y el código lo dice en vez de
-suponerlo (clase `indeterminada`).
+**La respuesta exitosa de `CreateCancellation` es
+`[{codigo:"0600", mensaje:"Evento registrado con éxito"}]`**, HTTP 200. Informe completo en
+`docs/efactura/prueba5-anulacion-exitosa.txt`.
 
-Por qué no se cerró: el único documento autorizado de staging (`FAC-REI-000002`) **ya tenía un
-evento de anulación encima** y el PAC **no tiene endpoint para listar eventos**, así que no se
-puede afirmar si lo creamos nosotros en la primera corrida —que quedó truncada por un `head` y
-murió a mitad— o ya estaba. No se afirma.
+🔴 **Y medirla encontró un bug real:** el clasificador la llamaba `rechazada`. `0600` no estaba
+en la lista de códigos de éxito —que venía del endpoint de EMISIÓN— y el mensaje no dice
+"anulado" ni "cancelado". **La DGI anuló el documento y el CRM informó un rechazo.**
 
-Emitir un documento nuevo se frenó dos veces:
-- `1002 Documento duplicado` — `fe_secuencias` del punto 001 venía atrás de lo que el sandbox
-  ya tenía consumido. **Se adelantó a 20** (nunca se rebobina: eso fue FND-011).
-- `1601` / `1602` — **los RUC del seed son ficticios** y la DGI no los reconoce. El único RUC
-  de staging que el sandbox acepta es el de CONSTRUCTORA CHIRIQUÍ ANTIGUO
-  (`1499876-1-690042`), y su única factura es justamente la que ya tiene el evento.
+Dos decisiones de diseño evitaron que eso terminara en un descuadre:
+1. **El modo de fallar es no escribir.** No tocó la factura ni el libro.
+2. **El reintento lo arregló solo** con el `0622` — exactamente para lo que se rediseñó D3.
 
-**Para cerrarla:** crear una factura nueva para ese cliente, emitirla al sandbox
-(`scripts/efactura/prueba-emitir-sandbox.ts`) y anularla
-(`scripts/efactura/prueba-anulacion-sandbox.ts <cufe>`). Son dos comandos una vez que la
-factura existe.
+**Paso 6 verificado:** se pidió la anulación dos veces más y no se duplicó nada. Quedó UNA
+nota de crédito (`NC-000008`) y UN asiento de reversión (**#55**, fecha de hoy).
 
-⚠️ **Quedó en staging, y es un estado real que el sistema produjo, no basura:**
-`FAC-HON-000007` en `fe_estado='error'` con su número reservado — el comportamiento que la
-política de reuso D-3 define para una emisión rechazada.
+**Cómo se consiguió el documento autorizado.** El sandbox rechaza con `1601`/`1602` cualquier
+RUC de receptor ficticio — medido que rebota **igual en tipo `01` que en `09`**, así que no era
+cuestión del tipo de documento. Se usó el procedimiento ya documentado: apuntar el cliente al
+RUC/DV del emisor en las **tres** columnas y restaurarlo.
+`scripts/efactura/prueba5-emitir-con-receptor-valido.ts` lo hace con la restauración en un
+`finally`.
+
+**La factura de la prueba:** `FAC-REI-000003`, CUFE
+`FE0920000025046169-3-2021-4000002026092300000000230010126041396134`, autorizada 23/09 22:13
+(`i_amb = 2`), anulada el mismo día.
+
+### 🔴 BLOQUEADO: el PAC no se puede llamar desde el deploy de Preview
+
+`POST /api/finanzas/invoices/[id]/emit-efactura` devuelve **500** desde
+`crm-integra-legal-git-develop`: el deploy **no tiene cargadas las credenciales del sandbox**.
+Por eso los pasos 3 y 4 de la prueba 5 se corrieron desde localhost, que es el camino que este
+mismo archivo ya documentaba.
+
+**Lo que eso deja pendiente:** verificar con clics **una anulación de una factura CON CUFE**.
+Se verificó todo lo que no necesita el PAC —la factura anulada, la NC y el asiento de
+reversión en el Diario— pero apretar «Anular factura» sobre una factura autorizada va a dar
+"Error interno" hasta que Preview tenga las env vars.
+
+**Cargarlas es un cambio de env vars en la cuenta del cliente: lo decide Oliver.**
 
 ### Verificado con clics — SHA `2a308b2`
 
@@ -85,10 +101,13 @@ con `NC-000007` y el asiento de reversión **#52** con fecha de hoy.
 
 ### Lo que sigue
 
-1. **Cerrar la prueba 5** (arriba). Es lo único que le falta a 9B.
+1. **Decidir si Preview lleva las credenciales del sandbox.** Sin eso no se puede verificar
+   con clics una anulación con CUFE, y todo lo que hable con el PAC sigue corriéndose desde
+   localhost.
 2. **9C no se empieza** hasta que Oliver lo diga. Sus pruebas (d) y (e) siguen anotadas.
-3. ⚠️ **Deuda:** `npm run lint` tiene 20 errores preexistentes en 16 archivos del módulo Legal.
-   Ninguno toca Finanzas. Limpiarlos es una decisión de Oliver.
+3. ⚠️ **Deuda de lint congelada** en `docs/lint-baseline.md` (20 errores del módulo Legal).
+   El criterio es **cero errores nuevos fuera de esa lista**, verificado por
+   `scripts/lint-contra-baseline.mjs`. No se vuelve a decir "lint verde".
 
 ---
 

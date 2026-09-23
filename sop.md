@@ -3103,9 +3103,38 @@ de la DGI. Cada llamada queda registrada en `fe_anulaciones` con su propio `inte
 
 ⚠️ Una factura marcada `'canceled'` **sin CUFE guardado** completa el libro sin llamar al PAC:
 no hay a quién preguntarle.
-- ❌ **Cómo se ve un ÉXITO sigue sin saberse.** Por eso el clasificador tiene una clase
-  `indeterminada` que **no es un error**: es "no tocar el libro y escalar". Un HTTP 200 con
-  array vacío cae ahí a propósito. `task_plan.md` tiene qué falta para cerrarla.
+- ✅ 🔴 **El ÉXITO es `0600 — Evento registrado con éxito`**, y medirlo encontró un bug real:
+  el clasificador lo llamaba **`rechazada`**. `0600` no estaba en la lista de códigos de éxito
+  —que venía del endpoint de EMISIÓN— y el mensaje no dice "anulado" ni "cancelado".
+  **La DGI anuló el documento y el CRM informó un rechazo.**
+
+  Dos decisiones de diseño salvaron el caso, y conviene que queden escritas porque son el
+  motivo de que esto no terminara en un descuadre:
+  1. **El modo de fallar es NO ESCRIBIR.** Como lo leyó como rechazo, no tocó la factura ni el
+     libro. Con un default optimista habría revertido un asiento inmutable contra una
+     respuesta que no entendía.
+  2. **El reintento lo arregló solo**, porque el segundo pedido devuelve `0622`.
+
+  La lección: **los códigos de este endpoint no son los del de emisión**. Suponer que
+  compartían numeración es lo que produjo el bug.
+
+- La clase `indeterminada` se queda y sigue sin ser un error: es "no tocar el libro y escalar".
+  Un HTTP 200 con array vacío cae ahí a propósito — ahora que sabemos que el éxito trae código,
+  un array vacío es todavía más sospechoso.
+
+### Cómo se consigue un documento autorizado en el sandbox
+
+La DGI de pruebas rechaza con `1601` / `1602` **cualquier RUC de receptor que no exista en su
+registro**, y los de staging son ficticios. Medido el 23/09/2026: rebota igual como
+`tipoDocumento 01` que como `09`, así que **no es cuestión del tipo de documento**.
+
+El procedimiento es apuntar el cliente al **RUC/DV del emisor** (emisor = receptor está
+aceptado en sandbox) **en las tres columnas** —`tax_id`, `ruc` y `digito_verificador`, porque
+`map-receptor.ts` lee `tax_id ?? ruc`— y restaurarlo al terminar.
+
+Lo automatiza `scripts/efactura/prueba5-emitir-con-receptor-valido.ts`, **con la restauración
+en un `finally`**: dejar un cliente de staging apuntando al RUC del bufete es el tipo de resto
+que después aparece en un reporte y nadie sabe de dónde salió.
 
 ### El motivo son 15 caracteres, y son de la DGI
 

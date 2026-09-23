@@ -416,9 +416,20 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   23/09): mismo payload antes y después, `deletedDate: null` en los dos. **La consulta de
   estado antes de reintentar que pide D3 NO SE PUEDE HACER**: no hay a qué preguntarle. El
   reintento se apoya en el `0622`. `MARCADOR_DE_ANULACION_CONFIRMADO` se queda en `false`.
-- ❌ **Cómo se ve un ÉXITO sigue sin saberse.** Por eso el clasificador tiene `indeterminada`,
-  que **no es un error**: es "no tocar el libro y escalar". Un 200 con array vacío cae ahí a
-  propósito. **No completarlo sin la evidencia del sandbox.**
+- ✅ 🔴 **El ÉXITO es `0600` = "Evento registrado con éxito"** (medido en sandbox 23/09), y
+  medirlo encontró un bug: el clasificador lo llamaba **rechazo**, porque `0600` venía de la
+  lista del endpoint de EMISIÓN y el mensaje no dice "anulado". **Los códigos de este endpoint
+  NO son los del de emisión.** No escribió nada (falla del lado seguro) y el reintento lo
+  arregló solo con el `0622`.
+- **`indeterminada` se queda** y sigue sin ser un error: es "no tocar el libro y escalar". Un
+  200 con array vacío cae ahí — ahora que el éxito trae código, es más sospechoso todavía.
+- ⚠️ **El sandbox rechaza todo RUC de receptor ficticio** (`1601`/`1602`), igual en tipo `01`
+  que en `09`. Para emitir hay que apuntar el cliente al RUC/DV del emisor **en las tres
+  columnas** y restaurarlo: `scripts/efactura/prueba5-emitir-con-receptor-valido.ts` lo hace
+  con la restauración en un `finally`.
+- ⚠️ **Los deploys de Preview NO tienen las credenciales del sandbox**: la ruta de emisión
+  devuelve 500. Todo lo que hable con el PAC se corre desde localhost. Cargarlas en Preview es
+  un cambio de env vars en la cuenta del cliente.
 - 🔴 **El motivo exige 15 caracteres y los pide la DGI**, en tres capas: el validador
   (`validators/cancel-invoice.ts`, el MISMO módulo que importa el diálogo), el botón que no se
   habilita, y el CHECK de la `058`. ⚠️ El mínimo de la **nota de crédito** sigue en 3.

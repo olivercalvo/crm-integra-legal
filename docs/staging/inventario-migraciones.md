@@ -123,6 +123,8 @@
 | `054_tercero_por_linea.sql` | **sí** | journal_entry_lines.client_id / .supplier_id (dos FK reales) · <sub>marcador: journal_entry_lines.client_id</sub> |
 | `055_reversion_de_asiento_manual.sql` | **sí** | RPC reverse_journal_entry + una sola reversión por asiento · <sub>marcador: índice journal_entries_una_reversion_por_asiento</sub> |
 | `057_proveedor_cuenta_por_defecto_y_contacto.sql` | **sí** | suppliers gana la cuenta contable por defecto (solo COMPRAS) + los tres campos de la persona de contacto · <sub>marcador: suppliers.default_chart_account_code</sub> Bloque 8. Va después de la 033 (crea `suppliers`); no depende de nada más. La 056 queda reservada para la corrección de la fecha de los saldos iniciales, pendiente de RM. |
+| `058_motivo_de_anulacion_minimo_15.sql` | **sí** | El motivo de anulación exige 15..1000 caracteres (lo pide la DGI) · <sub>marcador: constraint invoices_cancellation_reason_largo</sub> Bloque 9B, D5. Va después de la 20260507000001 (crea `invoices.cancellation_reason`). Si producción tiene alguna factura anulada con un motivo más corto, la migración ABORTA y las lista: no las corrige, porque el motivo sale impreso en el PDF de la factura anulada. |
+| `059_registro_de_anulaciones_ante_la_dgi.sql` | **sí** | Tabla fe_anulaciones — qué le pedimos al PAC al anular y qué contestó · <sub>marcador: tabla fe_anulaciones</sub> Bloque 9B. Espejo de `fe_emisiones`; va después de ella y de la 20260507000001. Existe porque anular es PAC primero y libro después: es lo único que distingue "nunca preguntamos" de "preguntamos y no entendimos la respuesta". |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -151,4 +153,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-23 15:18._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-23 20:16._

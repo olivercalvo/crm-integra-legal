@@ -236,6 +236,11 @@ const MARCADORES = {
     tipo: "constraint", nombre: "invoices_cancellation_reason_largo",
     nota: "Bloque 9B, D5. Va después de la 20260507000001 (crea `invoices.cancellation_reason`). Si producción tiene alguna factura anulada con un motivo más corto, la migración ABORTA y las lista: no las corrige, porque el motivo sale impreso en el PDF de la factura anulada.",
   },
+  "059_registro_de_anulaciones_ante_la_dgi.sql": {
+    que: "Tabla fe_anulaciones — qué le pedimos al PAC al anular y qué contestó",
+    tipo: "tabla", tabla: "fe_anulaciones",
+    nota: "Bloque 9B. Espejo de `fe_emisiones`; va después de ella y de la 20260507000001. Existe porque anular es PAC primero y libro después: es lo único que distingue \"nunca preguntamos\" de \"preguntamos y no entendimos la respuesta\".",
+  },
 
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {

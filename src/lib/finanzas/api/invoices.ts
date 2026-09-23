@@ -904,48 +904,18 @@ export async function updateInvoiceDgiData(
 // ---------------------------------------------------------------------------
 
 /**
- * Valida la razón de anulación. Reglas:
- *   - reason debe ser string trimeado de longitud >= 3.
- *   - Sin tope superior — el TEXT de Postgres es ilimitado en la práctica
- *     y queremos permitir razones detalladas que la abogada arme con paste
- *     desde un email de DGI/cliente.
+ * 🗑️ `validateCancelInput` VIVÍA ACÁ Y SE FUE EN EL BLOQUE 9B (23/09/2026).
  *
- * Devuelve la razón YA TRIMEADA si pasa, o un error map (compatible con el
- * resto del módulo) si no.
+ * Validaba el motivo de anulación con un mínimo de **3** caracteres mientras la
+ * DGI pedía **15**, y el diálogo repetía el número por su cuenta. Dos copias del
+ * mismo umbral, ninguna de las dos mirando a la otra: por eso el mínimo pudo
+ * quedar desactualizado sin que nada fallara.
+ *
+ * Ahora el largo lo decide `validators/cancel-invoice.ts`
+ * (`validarMotivoDeAnulacion`), que es puro y lo importan **los dos** — la ruta
+ * a través del orquestador, y el diálogo directamente. El tope de las
+ * observaciones lo aplica la ruta, que es la única que las recibe.
  */
-export function validateCancelInput(
-  raw: Partial<CancelInvoiceInput> | null | undefined
-):
-  | { ok: true; data: CancelInvoiceInput }
-  | { ok: false; errors: { reason?: string; observations?: string } } {
-  // 🔴 El largo lo decide `validators/cancel-invoice.ts`, que es el MISMO
-  //    módulo que importa el diálogo. Duplicar el número acá fue lo que
-  //    permitió que el mínimo viviera en 3 mientras la DGI pedía 15.
-  const motivo = validarMotivoDeAnulacion(raw?.reason);
-  if (!motivo.ok) {
-    return { ok: false, errors: { reason: motivo.mensaje } };
-  }
-  const reason = motivo.motivo;
-
-  // observations opcional (Sprint QUOTES-POLISH D7). Si viene, trim + máx 2000.
-  let observations: string | null = null;
-  if (raw?.observations != null) {
-    const trimmed = String(raw.observations).trim();
-    if (trimmed.length > 0) {
-      if (trimmed.length > 2000) {
-        return {
-          ok: false,
-          errors: {
-            observations: "Las observaciones no pueden tener más de 2000 caracteres.",
-          },
-        };
-      }
-      observations = trimmed;
-    }
-  }
-
-  return { ok: true, data: { reason, observations } };
-}
 
 /**
  * ANULAR una factura emitida (Bloque 5, 22/09/2026 — D4, D5).

@@ -226,9 +226,25 @@ test("autorizada SIN CUFE → inconsistente, no se adivina", () => {
 // EL CASO DEL PORTAL: la razón de ser de `nc_04_requiere_cufe`
 // ---------------------------------------------------------------------------
 
-test("🔴 sin CUFE → PIDE el CUFE; no decide por su cuenta", () => {
+test("sin CUFE y sin bloqueos → se anula SÓLO en el libro, como hoy", () => {
+  // Es la celda "sin CUFE / mes abierto" de la matriz de D2, que dice textual
+  // "es lo de hoy y no cambia". La corrección del 23/09 cambia cuál es la nota
+  // de crédito cuando hay que emitir una; no le saca a nadie una acción que
+  // hoy funciona. Convertir esto en un bloqueo es una decisión de política del
+  // bufete, no un detalle de implementación.
   const r = decidirAccionFiscal(
     limpia({ feEstado: "no_emitida", dgiCufe: null, issueDate: "2026-05-20" }),
+    enHoras(1)
+  );
+  assert.equal(r.accion, "anular_solo_en_el_libro");
+  if (r.accion !== "anular_solo_en_el_libro") return;
+  assert.match(r.advertencia, /portal/i, "la advertencia nombra el camino que el CRM no registra");
+  assert.match(r.advertencia, /NO la anula/, "y dice que esto no la anula ante la DGI");
+});
+
+test("🔴 sin CUFE y CON un bloqueo → PIDE el CUFE; no decide por su cuenta", () => {
+  const r = decidirAccionFiscal(
+    limpia({ feEstado: "no_emitida", dgiCufe: null, mesCerrado: true }),
     enHoras(1)
   );
   assert.equal(r.accion, "nc_04_requiere_cufe");
@@ -248,13 +264,19 @@ test("🔴 una factura de ANTES del 8 de julio y una de DESPUÉS dan la MISMA re
   const vieja = limpia({ feEstado: "no_emitida", dgiCufe: null, issueDate: "2026-03-02" });
   const nueva = { ...vieja, issueDate: "2026-09-20" };
 
-  assert.equal(decidirAccionFiscal(vieja, enHoras(1)).accion, "nc_04_requiere_cufe");
-  assert.equal(decidirAccionFiscal(nueva, enHoras(1)).accion, "nc_04_requiere_cufe");
+  assert.equal(decidirAccionFiscal(vieja, enHoras(1)).accion, "anular_solo_en_el_libro");
+  assert.equal(decidirAccionFiscal(nueva, enHoras(1)).accion, "anular_solo_en_el_libro");
+
+  // Y con el mes cerrado, las dos piden el CUFE — tampoco se distinguen ahí.
+  const viejaCerrada = { ...vieja, mesCerrado: true };
+  const nuevaCerrada = { ...nueva, mesCerrado: true };
+  assert.equal(decidirAccionFiscal(viejaCerrada, enHoras(1)).accion, "nc_04_requiere_cufe");
+  assert.equal(decidirAccionFiscal(nuevaCerrada, enHoras(1)).accion, "nc_04_requiere_cufe");
 });
 
 test("un intento fallido ('error') tampoco tiene CUFE: mismo camino", () => {
   const r = decidirAccionFiscal(limpia({ feEstado: "error", dgiCufe: null }), enHoras(1));
-  assert.equal(r.accion, "nc_04_requiere_cufe");
+  assert.equal(r.accion, "anular_solo_en_el_libro");
 });
 
 test("sin CUFE y además con el mes cerrado → los motivos viajan igual", () => {
@@ -323,8 +345,10 @@ test("sin ninguna fecha válida → inconsistente, no se inventa un punto de par
 });
 
 test("un CUFE en blanco cuenta como ausente, no como presente", () => {
+  // Con el mes cerrado, para que la respuesta sea la que distingue: un CUFE
+  // real daría `nc_04`; uno en blanco tiene que pedir el CUFE.
   const r = decidirAccionFiscal(
-    limpia({ feEstado: "no_emitida", dgiCufe: "   " }),
+    limpia({ feEstado: "no_emitida", dgiCufe: "   ", mesCerrado: true }),
     enHoras(1)
   );
   assert.equal(r.accion, "nc_04_requiere_cufe");
@@ -370,14 +394,19 @@ test("no muta el estado que recibe", () => {
   assert.deepEqual(estado, copia);
 });
 
-test("las NUEVE acciones se pueden alcanzar, y todas traen mensaje para la pantalla", () => {
+test("las DIEZ acciones se pueden alcanzar, y todas traen mensaje para la pantalla", () => {
   // La pantalla de 9B/5 tiene que poder mostrar esto sin volver a derivar la
   // matriz. Si el texto vive en el JSX, algún día el botón y el mensaje van a
   // discrepar — es la lección de `validarConsistenciaDeKind`.
   const casos: Array<[string, EstadoDeFactura, Date]> = [
     ["anular_en_dgi_y_libro", limpia(), enHoras(1)],
     ["nc_04", limpia(), enHoras(500)],
-    ["nc_04_requiere_cufe", limpia({ feEstado: "no_emitida", dgiCufe: null }), enHoras(1)],
+    ["anular_solo_en_el_libro", limpia({ feEstado: "no_emitida", dgiCufe: null }), enHoras(1)],
+    [
+      "nc_04_requiere_cufe",
+      limpia({ feEstado: "no_emitida", dgiCufe: null, mesCerrado: true }),
+      enHoras(1),
+    ],
     ["completar_anulacion_en_libro", limpia({ feEstado: "canceled" }), enHoras(1)],
     ["reversar_cobros_primero", limpia({ amountPaid: 10 }), enHoras(1)],
     ["esperar_confirmacion", limpia({ feEstado: "pending" }), enHoras(1)],
@@ -393,5 +422,5 @@ test("las NUEVE acciones se pueden alcanzar, y todas traen mensaje para la panta
     assert.ok(r.mensaje.length > 20, `"${r.accion}" sin mensaje usable`);
     vistas.add(r.accion);
   }
-  assert.equal(vistas.size, 9, `acciones alcanzadas: ${Array.from(vistas).join(", ")}`);
+  assert.equal(vistas.size, 10, `acciones alcanzadas: ${Array.from(vistas).join(", ")}`);
 });

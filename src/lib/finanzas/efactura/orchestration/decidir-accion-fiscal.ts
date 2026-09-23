@@ -11,7 +11,7 @@
  *
  * |                        | Mes de `issue_date` ABIERTO        | Mes CERRADO |
  * |------------------------|------------------------------------|-------------|
- * | **Sin CUFE**           | 🔴 se PIDE el CUFE (ver abajo)      | se pide el CUFE |
+ * | **Sin CUFE**           | **anular sólo en el libro** (lo de hoy) | 🔴 se PIDE el CUFE |
  * | **Autorizada, < 182 h**| **anular en la DGI + en el libro** | **NC** — gana el mes cerrado |
  * | **Autorizada, ≥ 182 h**| **NC** — gana el plazo del PAC     | **NC** — coinciden |
  * | **Ya tiene NC**        | 🔴 no se anula nunca               | no se anula |
@@ -51,12 +51,21 @@
  *    `'no_emitida'`, `dgi_cufe` nulo, `punto_facturacion` nulo— porque el
  *    portal es un camino que el CRM no registra.
  *
- *    Así que para ese caso la respuesta es `nc_04_requiere_cufe`: una acción
- *    que PIDE el CUFE en lugar de inventarlo. No se usa una fecha de corte para
- *    decidirlo. Una fecha hardcodeada resolviendo una acción fiscal es
- *    exactamente el tipo de supuesto que seis meses después nadie recuerda que
- *    era un supuesto, y el error no se ve: sale una nota de crédito genérica
- *    donde iba una `04` con referencia, y eso se descubre en una auditoría.
+ *    Eso NO le quita a nadie una acción que hoy funciona: sin CUFE y sin nada
+ *    que lo impida, se sigue anulando **sólo en el libro**, que es la celda que
+ *    la matriz de D2 dejó textualmente "como hoy". Lo que cambia es **cuál es
+ *    la nota de crédito cuando hay que emitir una**: ahí la respuesta es
+ *    `nc_04_requiere_cufe`, una acción que PIDE el CUFE en lugar de inventarlo.
+ *
+ *    No se usa una fecha de corte para decidirlo. Una fecha hardcodeada
+ *    resolviendo una acción fiscal es exactamente el tipo de supuesto que seis
+ *    meses después nadie recuerda que era un supuesto, y el error no se ve: sale
+ *    una nota de crédito genérica donde iba una `04` con referencia, y eso se
+ *    descubre en una auditoría.
+ *
+ *    La advertencia de `anular_solo_en_el_libro` es la contracara: dice, en la
+ *    pantalla, que el documento puede seguir vivo ante la DGI. Convertir eso en
+ *    un bloqueo es una decisión de política del bufete, no de este archivo.
  *
  * 3. `'pending'` NO ES "TODAVÍA NO SE MANDÓ": es "se mandó y no sabemos cómo
  *    terminó". Decidir cualquier cosa ahí es apostar. Se espera al
@@ -152,7 +161,13 @@ export type AccionSobreFactura =
       /** Aviso del plazo de ITBMS. No bloquea. */
       advertencia: string | null;
     }
-  /** No hay CUFE guardado, y la base no alcanza para saber si existe uno. */
+  /**
+   * Sin CUFE y sin nada que lo impida: se anula SÓLO en el libro, que es lo que
+   * el CRM hace hoy y lo que la matriz de D2 dejó explícitamente sin cambiar.
+   * La advertencia recuerda que el documento puede seguir vivo ante la DGI.
+   */
+  | { accion: "anular_solo_en_el_libro"; mensaje: string; advertencia: string }
+  /** Sin CUFE y con algo que impide anular: la corrección es una NC, y falta el CUFE. */
   | { accion: "nc_04_requiere_cufe"; motivos: string[]; mensaje: string }
   /** 🔴 Anulada ante la DGI, viva en el libro (D4). Acción de reintento. */
   | { accion: "completar_anulacion_en_libro"; cufe: string | null; mensaje: string }
@@ -270,6 +285,26 @@ export function decidirAccionFiscal(
   //    a mano en el portal de ideati (punto 050) cuyo CUFE el CRM no guardó.
   //    Se ven igual. Se pide el dato en vez de inventarlo.
   if (!cufe) {
+    // 🔴 SIN CUFE Y SIN BLOQUEOS SE SIGUE ANULANDO SÓLO EN EL LIBRO.
+    //    Es la celda "sin CUFE / mes abierto" de la matriz de D2, que dice
+    //    textual "es lo de hoy y no cambia". La corrección del 23/09 —que una
+    //    factura sin CUFE guardado puede igual existir ante la DGI, emitida a
+    //    mano por el punto 050— cambia CUÁL es la nota de crédito cuando hay
+    //    que emitir una, no le quita a nadie una acción que hoy funciona.
+    //    Convertir esto en un bloqueo sería una decisión de política del
+    //    bufete, no un detalle de implementación.
+    if (motivos.length === 0) {
+      return {
+        accion: "anular_solo_en_el_libro",
+        mensaje:
+          "Esta factura se anula en el libro contable y se genera su nota de crédito total.",
+        advertencia:
+          "Esta factura no tiene CUFE guardado en el CRM, así que anularla acá NO la anula " +
+          "ante la DGI. Si se emitió a mano en el portal de ideati (punto 050), el documento " +
+          "sigue vivo ante la DGI y hay que anularlo también allá.",
+      };
+    }
+
     return {
       accion: "nc_04_requiere_cufe",
       motivos,

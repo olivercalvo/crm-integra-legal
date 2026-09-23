@@ -225,11 +225,41 @@ test("el rechazo por CUFE inexistente trae su propia pista", () => {
   assert.match(String(r.pista), /CUFE/);
 });
 
-test("un código desconocido con mensaje → rechazada, no indeterminada", () => {
-  // Un código que el PAC devuelve y no reconocemos es información: algo salió
-  // mal y hay que mostrarlo. Lo indeterminado es la AUSENCIA de información.
+test("🔴 un código DESCONOCIDO → indeterminada, NUNCA rechazada", () => {
+  // Esta regla se dio vuelta el 23/09/2026 y la dio vuelta un caso real: el
+  // clasificador decía "un código que no es de éxito y viene con mensaje es un
+  // rechazo", y con esa regla llamó rechazo a `0600 — Evento registrado con
+  // éxito`, con la DGI habiendo anulado el documento.
+  //
+  // El error no fue el código que faltaba en la lista: fue tratar lo
+  // desconocido como malo. Un código que no reconocemos no dice si salió bien
+  // o mal — dice que hay que mirar.
   const r = clasificarRespuestaDeAnulacion([{ codigo: "9999", mensaje: "Algo pasó" }]);
-  assert.equal(r.clase, "rechazada");
+  assert.equal(
+    r.clase,
+    "indeterminada",
+    "Si esto vuelve a dar 'rechazada', el próximo código que ideati agregue para un ÉXITO " +
+      "se va a informar como un rechazo, igual que pasó con el 0600."
+  );
+});
+
+test("lo desconocido no escribe nada: el mensaje manda a mirar, no afirma", () => {
+  const r = clasificarRespuestaDeAnulacion([{ codigo: "8888", mensaje: "Procesado parcialmente" }]);
+  assert.equal(r.clase, "indeterminada");
+  assert.match(r.mensaje, /consultar el estado|no se pudo clasificar/i);
+});
+
+test("un rechazo de verdad lo dice el MENSAJE, no el número", () => {
+  // Las palabras del PAC son castellano y estables; los números, no.
+  for (const mensaje of [
+    "No se pudo anular el documento",
+    "Documento rechazado por la DGI",
+    "El CUFE indicado no existe",
+    "Venció el plazo para anular",
+  ]) {
+    const r = clasificarRespuestaDeAnulacion([{ codigo: "4242", mensaje }]);
+    assert.equal(r.clase, "rechazada", mensaje);
+  }
 });
 
 // ---------------------------------------------------------------------------

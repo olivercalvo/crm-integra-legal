@@ -441,19 +441,50 @@ test("🔒 camino RECHAZADA por el PAC: la secuencia completa", async () => {
   assert.equal(b.invoice.numero_documento, 6, "y sigue reservado en la factura");
 });
 
-test("🔒 camino ACEPTADA SIN CONFIRMAR (pending): la secuencia completa", async () => {
+test("🔒 camino INCIERTO (no sabemos qué contestó): la secuencia completa", async () => {
+  // Antes esto se llamaba `pending_async` y dejaba la factura en 'pending', que
+  // el gate T0 considera intocable: nadie podía reenviarla y el reconciliador
+  // que iba a destrabarla no existe. Una respuesta que no entendemos no puede
+  // dejar el documento en un estado del que no se sale.
   const { diario, b } = await correr(() => RESPUESTA_PENDIENTE);
 
   assert.deepEqual(diario, [
     ...HASTA_EL_POST,
     "UPDATE fe_emisiones {autorizada, cod_res, response_payload}",
     "UPDATE invoices {ef_invoice_uuid}",
+    "UPDATE invoices {fe_estado}",
   ]);
-  assert.equal(
-    b.invoice.fe_estado,
-    "pending",
-    "queda 'pending' a propósito: nadie más la toca hasta que el reconciliador resuelva"
-  );
+  assert.equal(b.invoice.fe_estado, "error", "'error' es REINTENTABLE");
+});
+
+test("🔴 INCIERTO no es un rechazo: el mensaje dice 'Estado por confirmar'", async () => {
+  // Es la lección del `0600`: el clasificador de anulación llamó rechazo a un
+  // éxito porque el código no estaba en su lista. Acá, decirle a la licenciada
+  // "la DGI rechazó" sobre algo que no entendimos la manda a corregir una
+  // factura que puede estar perfecta.
+  const { b } = await correr(() => RESPUESTA_PENDIENTE);
+  const emision = b.feEmisiones[0];
+  const payload = emision.response_payload as Record<string, unknown>;
+  const meta = payload?._meta as Record<string, unknown> | undefined;
+  assert.equal(meta?.errorKind, "incierto", "queda registrado como incierto, no como rechazo");
+});
+
+test("🔴 con códigos pero SIN `autorizada: false`, tampoco es rechazo", async () => {
+  // El atajo "si hay códigos, rechazó" es el que produjo el bug del 0600.
+  // El PAC manda `autorizada` SIEMPRE y explícito: si no está, no dictaminó.
+  const { b } = await correr(() => ({
+    invoice: "ef-uuid-9",
+    rRetEnviFe: {
+      xProtFe: {
+        rProtFe: { gInfProt: { gResProc: [{ dCodRes: "7777", dMsgRes: "Algo nuevo" }] } },
+      },
+    },
+  }));
+  assert.equal(b.invoice.fe_estado, "error", "reintentable");
+  const meta = (b.feEmisiones[0].response_payload as Record<string, unknown>)?._meta as
+    | Record<string, unknown>
+    | undefined;
+  assert.equal(meta?.errorKind, "incierto");
 });
 
 test("🔒 camino SE CAYÓ LA RED: la secuencia completa", async () => {

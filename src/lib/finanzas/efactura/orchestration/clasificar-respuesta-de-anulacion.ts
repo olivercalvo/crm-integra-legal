@@ -117,9 +117,17 @@ const CODIGO_ANULADA = "0600";
  */
 const CODIGOS_DE_EXITO = new Set([CODIGO_ANULADA, "0260", "0", "00", "000", "0000"]);
 
-/** Negaciones que invalidan cualquier señal optimista. La lección del 1602. */
+/**
+ * Las palabras con las que el PAC dice que algo NO se hizo.
+ *
+ * 🔴 Desde el 23/09/2026 esta lista no sólo invalida una señal optimista:
+ * **es lo único que declara un rechazo.** Un código desconocido ya no alcanza
+ * — ver `esRechazo`. Son palabras y no números a propósito: los números los
+ * inventa ideati sin avisar (el `0600` lo probó), el castellano de "no se
+ * pudo" no cambia.
+ */
 const NEGACIONES =
-  /\bno\s+se\s+(pudo|puede)\b|\bno\s+fue\b|\bno\s+existe\b|\binexistente\b|\bno\s+se\s+encuentra\b|\brechaz/;
+  /\bno\s+se\s+(pudo|puede)\b|\bno\s+fue\b|\bno\s+existe\b|\binexistente\b|\bno\s+se\s+encuentra\b|\brechaz|\bvenci[oó]?\b|\bvencid|\bfuera\s+de\s+plazo\b|\bno\s+(est[aá]\s+)?permitid|\binv[aá]lid|\bno\s+corresponde\b/;
 
 /**
  * El texto del éxito, medido: *"Evento registrado con éxito"*. No dice
@@ -214,14 +222,27 @@ function esYaAnulada(e: EventoDeAnulacion): boolean {
   return SENIAL_YA_ANULADA_TEXTO.test(texto(e));
 }
 
+/**
+ * 🔴 RECHAZO SÓLO CUANDO EL MENSAJE DICE QUE ALGO NO SE PUDO.
+ *
+ * Acá había una línea que decía: *"un código que no es de éxito y viene con
+ * mensaje: rechazo"*. Esa línea es la que clasificó
+ * `0600 — Evento registrado con éxito` como un rechazo el 23/09/2026, con la
+ * DGI habiendo anulado el documento.
+ *
+ * El error no fue el código que faltaba en la lista: fue **tratar lo
+ * desconocido como malo**. Un código que no reconocemos no dice si salió bien
+ * o mal — dice que hay que mirar. Ahora eso cae en `indeterminada`, que no
+ * escribe nada y deja el caso a la vista.
+ *
+ * Lo que sí es un rechazo es un mensaje que lo dice: "no se pudo", "rechazado",
+ * "inexistente", "venció el plazo". Eso lo decide `NEGACIONES`, que son
+ * palabras, no números — y las palabras del PAC son en castellano y estables.
+ */
 function esRechazo(e: EventoDeAnulacion): boolean {
   if (esYaAnulada(e)) return false;
-  if (NEGACIONES.test(texto(e))) return true;
-  // Un código que no es de éxito y viene con mensaje: rechazo.
-  if (e.codigo && !CODIGOS_DE_EXITO.has(e.codigo.trim()) && !SENIAL_DE_ANULADA.test(texto(e))) {
-    return true;
-  }
-  return false;
+  if (esExito(e)) return false;
+  return NEGACIONES.test(texto(e));
 }
 
 function pistaPara(eventos: EventoDeAnulacion[]): string | null {

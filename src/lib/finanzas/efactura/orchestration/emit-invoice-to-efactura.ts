@@ -62,7 +62,26 @@ import {
 type DB = SupabaseClient;
 
 export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error";
-export type EmitErrorKind = "pac_rejected" | "pac_duplicate" | "transport";
+
+/**
+ * 🔴 `incierto` — "el PAC contestó algo que no sé leer", y NO es un rechazo.
+ *
+ * Lo agregó el 23/09/2026 la prueba 5 del Bloque 9B, que encontró el problema
+ * del otro lado: el endpoint de ANULACIÓN devuelve `0600 — Evento registrado
+ * con éxito` y el clasificador, que heredaba la lista de códigos de este
+ * endpoint, lo llamó **rechazo**. La DGI había anulado el documento y el CRM
+ * informó lo contrario.
+ *
+ * La regla que sale de ahí, y que ahora vale para los dos: **un código que no
+ * reconocemos no se declara rechazo.** Se declara incierto, no se escribe nada
+ * que dependa de él, el documento queda reintentable y la pantalla dice
+ * "Estado por confirmar" en vez de afirmar algo que no sabemos.
+ *
+ * Para la emisión el discriminador no es una lista de códigos sino el campo
+ * `autorizada`, que el PAC manda SIEMPRE y explícito — verificado contra dos
+ * respuestas reales del sandbox, una autorizada y una rechazada.
+ */
+export type EmitErrorKind = "pac_rejected" | "pac_duplicate" | "transport" | "incierto";
 
 export type { CodRes };
 
@@ -323,29 +342,27 @@ export async function emitInvoiceToEfactura(
     });
   }
 
-  if (parsed.kind === "pending_async") {
-    await persistPendingAsync(
-      db,
-      tenantId,
-      invoiceId,
-      emisionId,
-      parsed
-    );
+  if (parsed.kind === "incierto") {
+    await persistIncierto(db, tenantId, invoiceId, emisionId, parsed);
     return buildResult({
       invoiceId,
       intento,
       puntoFacturacion,
       numeroDocumento,
-      feEstado: "pending",
+      // 'error' y no 'pending': 'pending' es intocable para el gate T0 y
+      // nadie podría reintentar. Ver el comentario de ParsedIncierto.
+      feEstado: "error",
       cufe: null,
       protocoloAutorizacion: null,
       fechaAutorizacion: null,
       efInvoiceUuid: parsed.efInvoiceUuid,
       qrContent: null,
       codRes: parsed.codRes,
-      errorKind: null,
-      errorMessage: null,
-      errorHint: null,
+      errorKind: "incierto",
+      errorMessage: MENSAJE_INCIERTO(summarizeCodRes(parsed.codRes)),
+      errorHint:
+        "No cambie nada todavía. Verifique en el portal de la DGI si el documento quedó " +
+        "autorizado; si no aparece, vuelva a enviarlo.",
     });
   }
 
@@ -474,17 +491,35 @@ async function persistAuthorized(
   }
 }
 
-async function persistPendingAsync(
+/** El texto que ve la licenciada cuando no sabemos qué contestó el PAC. */
+export function MENSAJE_INCIERTO(resumen: string | null): string {
+  return (
+    "Estado por confirmar: la DGI respondió algo que el sistema no puede interpretar, " +
+    "así que NO se da por autorizada ni por rechazada. " +
+    (resumen ? `Respuesta: ${resumen}. ` : "") +
+    "La factura queda lista para reenviar."
+  );
+}
+
+async function persistIncierto(
   db: DB,
   tenantId: string,
   invoiceId: string,
   emisionId: string,
-  parsed: ParsedPendingAsync
+  parsed: ParsedIncierto
 ): Promise<void> {
+  // `autorizada: null` y `errorKind: 'incierto'` — las dos cosas dicen lo
+  // mismo desde lados distintos: no sabemos. Un `false` acá afirmaría un
+  // rechazo que el PAC no dictaminó.
+  const responsePayload = {
+    raw: parsed.raw,
+    _meta: { errorKind: "incierto" as EmitErrorKind },
+  };
+
   const { error: errEmis } = await db
     .from("fe_emisiones")
     .update({
-      response_payload: parsed.raw as unknown as object,
+      response_payload: responsePayload as unknown as object,
       autorizada: null,
       cod_res: parsed.codRes,
     })
@@ -492,7 +527,7 @@ async function persistPendingAsync(
     .eq("id", emisionId);
   if (errEmis) {
     console.error(
-      "[efactura/orchestration] persistPendingAsync: UPDATE fe_emisiones falló",
+      "[efactura/orchestration] persistIncierto: UPDATE fe_emisiones falló",
       errEmis
     );
   }
@@ -505,13 +540,23 @@ async function persistPendingAsync(
       .eq("id", invoiceId);
     if (errInv) {
       console.error(
-        "[efactura/orchestration] persistPendingAsync: UPDATE invoices.ef_invoice_uuid falló",
+        "[efactura/orchestration] persistIncierto: UPDATE invoices.ef_invoice_uuid falló",
         errInv
       );
     }
   }
-  // fe_estado se queda en 'pending' (lo dejó T2). El reconciliador lo
-  // moverá a authorized/error en un sprint posterior.
+  // 🔴 Y la factura vuelve a 'error', que es REINTENTABLE. Antes se quedaba en
+  //    'pending', que el gate T0 considera intocable: nadie podía reenviarla y
+  //    el reconciliador que iba a destrabarla no existe. Una respuesta que no
+  //    entendemos no puede dejar el documento en un estado del que no se sale.
+  const { error: errEstado } = await db
+    .from("invoices")
+    .update({ fe_estado: "error" })
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId);
+  if (errEstado) {
+    throw new MutationError(pgErrorToMessage(errEstado), 500, errEstado);
+  }
 }
 
 async function persistRejected(
@@ -611,8 +656,17 @@ type ParsedAuthorized = {
   raw: unknown;
 };
 
-type ParsedPendingAsync = {
-  kind: "pending_async";
+/**
+ * 🔴 "No sé qué contestó." Ver el comentario de `EmitErrorKind`.
+ *
+ * Antes esto era `pending_async` y dejaba la factura en `fe_estado='pending'`,
+ * que el gate T0 considera **intocable**: nadie podía reintentar y el
+ * reconciliador que iba a destrabarla no existe. Ahora deja `'error'`, que es
+ * reintentable, y el mensaje dice que el estado está por confirmar en vez de
+ * afirmar un rechazo.
+ */
+type ParsedIncierto = {
+  kind: "incierto";
   efInvoiceUuid: string | null;
   codRes: CodRes[];
   raw: unknown;
@@ -627,7 +681,7 @@ type ParsedRejected = {
   raw: unknown;
 };
 
-type ParsedPacResponse = ParsedAuthorized | ParsedPendingAsync | ParsedRejected;
+type ParsedPacResponse = ParsedAuthorized | ParsedIncierto | ParsedRejected;
 
 /**
  * Clasifica la respuesta del POST /api/v1/Invoices en uno de tres caminos:
@@ -690,7 +744,11 @@ function parsePacResponse(raw: unknown): ParsedPacResponse {
     };
   }
 
-  if (autorizada === false || codRes.length > 0) {
+  // 🔴 RECHAZO SÓLO CUANDO EL PAC LO DICE. `autorizada` viene SIEMPRE y
+  //    explícito — verificado contra dos respuestas reales del sandbox, una
+  //    autorizada y una rechazada (`1601`/`1602`). Con `false` no hace falta
+  //    reconocer los códigos: el PAC ya dictaminó.
+  if (autorizada === false) {
     return {
       kind: "rejected",
       summary: summarizeCodRes(codRes) ?? "El PAC rechazó el documento.",
@@ -701,20 +759,14 @@ function parsePacResponse(raw: unknown): ParsedPacResponse {
     };
   }
 
-  // HTTP 200 sin CUFE, sin autorizada, sin cod_res, pero con UUID interno:
-  // el PAC aceptó el documento pero no confirmó autorización en este round.
-  if (efInvoiceUuid) {
-    return { kind: "pending_async", efInvoiceUuid, codRes, raw };
-  }
-
-  return {
-    kind: "rejected",
-    summary: "Respuesta inesperada del PAC (sin CUFE, sin UUID, sin códigos).",
-    isDuplicate: false,
-    efInvoiceUuid: null,
-    codRes,
-    raw,
-  };
+  // 🔴 TODO LO DEMÁS ES INCIERTO, NO RECHAZO.
+  //    Incluye el caso que antes se declaraba rechazado: códigos presentes sin
+  //    un `autorizada: false` que los respalde. Ese atajo —"si hay códigos,
+  //    rechazó"— es exactamente el que hizo que el endpoint de anulación
+  //    informara un rechazo sobre un documento que la DGI había anulado
+  //    (`0600`, 23/09/2026). Un código que no reconocemos no dice si salió bien
+  //    o mal: dice que hay que mirar.
+  return { kind: "incierto", efInvoiceUuid, codRes, raw };
 }
 
 function extractCodRes(r: Record<string, unknown>): CodRes[] {

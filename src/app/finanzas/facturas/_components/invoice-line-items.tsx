@@ -15,6 +15,7 @@ import type {
 } from "@/lib/finanzas/types/invoice";
 import type { ValidationErrors } from "@/lib/finanzas/validators/invoice";
 import { fmtImporte } from "@/lib/utils/importe";
+import { contadorDeDescripcion } from "@/lib/finanzas/validators/controles-dgi";
 
 interface Props {
   lines: InvoiceLineInput[];
@@ -213,11 +214,36 @@ export function InvoiceLineItems({
                       onChange={(e) => patchLine(idx, { description: e.target.value })}
                       placeholder="Descripción de la línea…"
                       disabled={disabled}
-                      className={lineErrors.description ? "border-red-300" : ""}
+                      aria-invalid={contadorDeDescripcion(ln.description).excedido || undefined}
+                      className={
+                        lineErrors.description || contadorDeDescripcion(ln.description).excedido
+                          ? "border-red-300"
+                          : ""
+                      }
                     />
-                    {lineErrors.description && (
-                      <p className="mt-1 text-xs text-red-600">{lineErrors.description}</p>
-                    )}
+                    {/* 🔴 CONTADOR DE CARACTERES (DGI 10105).
+                        El tope de 500 es de la DGI, y ya rebotó una factura por
+                        una descripción de 545. El contador existe para que ese
+                        error se vea MIENTRAS se escribe: descubrirlo cuando la
+                        DGI contesta significa una factura ya emitida y numerada
+                        que hay que anular. */}
+                    <div className="mt-1 flex items-start justify-between gap-2">
+                      {lineErrors.description ? (
+                        <p className="text-xs text-red-600">{lineErrors.description}</p>
+                      ) : (
+                        <span />
+                      )}
+                      <span
+                        aria-live="polite"
+                        className={`shrink-0 text-xs font-mono ${
+                          contadorDeDescripcion(ln.description).excedido
+                            ? "font-semibold text-red-600"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {contadorDeDescripcion(ln.description).texto}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

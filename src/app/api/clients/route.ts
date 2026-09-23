@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     // FE DGI: validar coherencia de campos fiscales (DV obligatorio si 01/03).
-    const fiscalErrors = validateFiscalFields({ tipo_receptor_fe, digito_verificador });
+    const fiscalErrors = validateFiscalFields({ tipo_receptor_fe, digito_verificador, ruc });
     if (Object.keys(fiscalErrors).length > 0) {
       return NextResponse.json(
         { error: Object.values(fiscalErrors)[0], fieldErrors: fiscalErrors },

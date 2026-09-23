@@ -109,6 +109,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       const fiscalErrors = validateFiscalFields({
         tipo_receptor_fe: finalTipo,
         digito_verificador: finalDV,
+        // El RUC "final" igual que los otros dos: lo que venga en el body, o lo
+        // que ya estaba. Sin esto, cambiar el tipo a 01 sobre un cliente sin
+        // RUC pasaría, y la factura moriría recién en el PAC.
+        tax_id: tax_id !== undefined ? tax_id : existing.tax_id,
+        ruc: ruc !== undefined ? ruc : existing.ruc,
       });
       if (Object.keys(fiscalErrors).length > 0) {
         return NextResponse.json(

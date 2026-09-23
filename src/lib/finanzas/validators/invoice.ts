@@ -17,6 +17,7 @@ import type {
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { INVOICE_KIND_LABEL } from "@/lib/finanzas/types/invoice";
+import { validarDescripcionDeLinea } from "@/lib/finanzas/validators/controles-dgi";
 
 export type ValidationErrors = Record<string, string>;
 
@@ -35,8 +36,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function validateLine(line: Partial<InvoiceLineInput>): ValidationErrors {
   const e: ValidationErrors = {};
 
-  if (!line.description || !String(line.description).trim()) {
-    e.description = "Descripción requerida";
+  // 🔴 El largo lo decide `controles-dgi.ts`, el MISMO módulo que usa el
+  //    contador del formulario. La DGI rechaza con `10105` arriba de 500, y ya
+  //    pasó: una descripción de 545 caracteres que el CRM aceptó sin decir nada
+  //    y que la DGI rechazó sobre una factura ya emitida y numerada.
+  const desc = validarDescripcionDeLinea(line.description);
+  if (!desc.ok) {
+    e.description = desc.mensaje;
   }
 
   const qty = Number(line.quantity);

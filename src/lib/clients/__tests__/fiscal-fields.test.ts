@@ -51,9 +51,50 @@ test("validateFiscalFields: 03 sin DV → error", () => {
   assert.ok(errs.digito_verificador);
 });
 
-test("validateFiscalFields: 01 con DV válido → ok", () => {
-  const errs = validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "40" });
+test("validateFiscalFields: 01 con DV y RUC válidos → ok", () => {
+  const errs = validateFiscalFields({
+    tipo_receptor_fe: "01",
+    digito_verificador: "40",
+    ruc: "8-123-456",
+  });
   assert.deepEqual(errs, {});
+});
+
+test("🔴 validateFiscalFields: 01 SIN RUC → error en tax_id", () => {
+  // Desde el 23/09/2026 el RUC se verifica al GUARDAR, no recién al emitir.
+  // El caso real: una factura rechazada con 1601/1602, el cliente corregido
+  // después del rechazo, y la factura nunca reenviada.
+  const errs = validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "40" });
+  assert.ok(errs.tax_id, "el error tiene que nombrar el campo del RUC");
+  assert.match(errs.tax_id, /RUC/);
+});
+
+test("🔒 validateFiscalFields mira `tax_id ?? ruc`, que es lo que viaja", () => {
+  // El mapper lee `tax_id ?? ruc`. Verificar sólo uno deja pasar lo que el
+  // otro va a mandar — ya costó un intento de emisión.
+  assert.deepEqual(
+    validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "40", ruc: "8-123-456" }),
+    {},
+    "con `ruc` solo, alcanza"
+  );
+  assert.ok(
+    validateFiscalFields({
+      tipo_receptor_fe: "01",
+      digito_verificador: "40",
+      tax_id: "@@@@",
+      ruc: "8-123-456",
+    }).tax_id,
+    "un `tax_id` inválido NO lo tapa un `ruc` bueno: tax_id es el que viaja"
+  );
+});
+
+test("validateFiscalFields: 03 gobierno también exige RUC", () => {
+  assert.ok(validateFiscalFields({ tipo_receptor_fe: "03", digito_verificador: "1" }).tax_id);
+});
+
+test("validateFiscalFields: 02 y 04 NO exigen RUC", () => {
+  assert.deepEqual(validateFiscalFields({ tipo_receptor_fe: "02" }), {});
+  assert.deepEqual(validateFiscalFields({ tipo_receptor_fe: "04" }), {});
 });
 
 test("validateFiscalFields: 02 consumidor final sin DV → ok (no lo requiere)", () => {
@@ -69,7 +110,11 @@ test("validateFiscalFields: 04 extranjero sin DV → ok", () => {
 test("validateFiscalFields: DV con formato inválido → error, aun en 02", () => {
   assert.ok(validateFiscalFields({ tipo_receptor_fe: "02", digito_verificador: "abc" }).digito_verificador);
   assert.ok(validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "123" }).digito_verificador, "3 dígitos es inválido");
-  assert.deepEqual(validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "7" }), {}, "1 dígito es válido");
+  assert.deepEqual(
+    validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "7", ruc: "8-123-456" }),
+    {},
+    "1 dígito es válido"
+  );
 });
 
 test("validateFiscalFields: tipo inválido → error", () => {

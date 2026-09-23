@@ -11,6 +11,8 @@
  *     el tipo de receptor es 01 o 03). Para 02/04 no aplica.
  */
 
+import { validarRucDeReceptor } from "@/lib/finanzas/validators/controles-dgi";
+
 export type TipoReceptorFe = "01" | "02" | "03" | "04";
 
 export const TIPO_RECEPTOR_FE_OPTIONS: { value: TipoReceptorFe; label: string }[] = [
@@ -90,6 +92,21 @@ export function normalizeClientType(raw: unknown): ClientType | null {
 export interface FiscalFieldsInput {
   tipo_receptor_fe?: string | null;
   digito_verificador?: string | null;
+  /**
+   * 🔴 El RUC. Desde el 23/09/2026 también se verifica acá, al GUARDAR el
+   * cliente, y no recién al emitir.
+   *
+   * El caso real: una factura rechazada por la DGI con `1601`/`1602`, el
+   * cliente corregido después del rechazo, y la factura nunca reenviada —
+   * rechazada ante la DGI con los datos ya arreglados en el CRM. Verificar la
+   * forma al guardar no evita el `1602` (que existencia sólo la sabe la DGI),
+   * pero sí el `1601`, que es de FORMACIÓN.
+   *
+   * Son dos porque el mapper lee `tax_id ?? ruc`: verificar sólo uno deja
+   * pasar lo que el otro va a mandar.
+   */
+  tax_id?: string | null;
+  ruc?: string | null;
 }
 
 /**
@@ -114,5 +131,20 @@ export function validateFiscalFields(
     errors.digito_verificador =
       "El dígito verificador es obligatorio para contribuyentes (01) y gobierno (03).";
   }
+
+  // 🔴 EL RUC, cuando el tipo de receptor lo exige. Delega en `controles-dgi`,
+  //    que es el mismo módulo que usa el gate de emisión: si el formulario y el
+  //    gate tuvieran cada uno su idea de qué es un RUC válido, se podría
+  //    guardar un cliente que después no se puede facturar.
+  //
+  //    Se mira `tax_id ?? ruc` porque es lo que el mapper manda.
+  if (tipoRequiresDV(tipo)) {
+    const rucQueViaja = (input.tax_id ?? input.ruc) ?? null;
+    const r = validarRucDeReceptor(rucQueViaja);
+    if (!r.ok) {
+      errors.tax_id = r.mensaje;
+    }
+  }
+
   return errors;
 }

@@ -26,6 +26,7 @@
  */
 
 import type { ValidationErrors, ValidationResult } from "@/lib/finanzas/validators/payment";
+import { validarDescripcionDeLinea } from "@/lib/finanzas/validators/controles-dgi";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -168,6 +169,20 @@ export function validarLineasDeNotaDeCredito(args: {
           : `La línea "${f.description}" tiene ${disponible} disponible(s) para acreditar (facturado ${f.quantity}, ya acreditado ${round2(f.quantity - disponible)}).`;
       return;
     }
+    // 🔴 LA DESCRIPCIÓN SE HEREDA, ASÍ QUE SE HEREDA EL PROBLEMA.
+    //    Una NC copia la descripción de la línea de la factura: no se escribe
+    //    acá. Pero las facturas anteriores al 23/09/2026 se guardaron sin el
+    //    tope de 500, así que una de ellas puede arrastrar una descripción que
+    //    la DGI rechaza con `10105` — y la NC la llevaría intacta al PAC.
+    //    Verificarlo acá es lo único que corta esa herencia.
+    const desc = validarDescripcionDeLinea(f.description);
+    if (!desc.ok) {
+      fieldErrors[`lineas.${i}.description`] =
+        `La línea "${String(f.description).slice(0, 40)}…" de la factura no se puede acreditar ` +
+        `tal como está: ${desc.mensaje} Corrija la descripción en la factura antes de emitir la nota de crédito.`;
+      return;
+    }
+
     lineas.push({
       invoice_line_id: f.id,
       line_order: f.line_order,

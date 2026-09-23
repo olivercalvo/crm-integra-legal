@@ -8,10 +8,62 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreateSupplierInput, UpdateSupplierInput } from "@/lib/finanzas/types/supplier";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { allocateSupplierNumber } from "@/lib/finanzas/numbering/supplier-numbering";
+import { motivoDeRechazoComoDefaultDeProveedor } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 type DB = SupabaseClient;
 
 const ENTITY = "suppliers";
+
+/**
+ * La cuenta por defecto del proveedor tiene que EXISTIR, ser de gasto o costo y
+ * estar activa (4.4).
+ *
+ * Es cross-tabla, así que no puede vivir en el validador puro: el mismo patrón
+ * que `isValidExpenseAccountCode` en `api/business-expenses.ts`.
+ *
+ * 🔴 Usa `motivoDeRechazoComoDefaultDeProveedor`, NO `motivoDeRechazo`. El
+ * segundo permite `asset` a propósito, para que `130003` pueda clasificar un
+ * gasto de trámite. Acá un activo no sirve: una compra del bufete es un gasto o
+ * un costo propio, nunca un adelanto por un cliente. Ver el comentario largo en
+ * `contabilidad/cuentas-de-gasto.ts`.
+ *
+ * Se valida al GUARDAR, no al leer: una cuenta puede desactivarse después, y
+ * para ese caso la decisión es DEGRADAR en pantalla, no bloquear la ficha.
+ */
+async function validarCuentaPorDefecto(
+  db: DB,
+  tenantId: string,
+  code: string | null
+): Promise<void> {
+  if (!code) return;
+
+  const { data, error } = await db
+    .from("chart_of_accounts")
+    .select("code, name, account_type, active")
+    .eq("tenant_id", tenantId)
+    .eq("code", code)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[finanzas/api] validarCuentaPorDefecto failed", error);
+    throw new MutationError(pgErrorToMessage(error), 500, error);
+  }
+  if (!data) {
+    throw new MutationError(
+      `La cuenta contable "${code}" no existe en el plan de cuentas.`,
+      400
+    );
+  }
+
+  const motivo = motivoDeRechazoComoDefaultDeProveedor({
+    code: data.code as string,
+    name: data.name as string,
+    account_type: data.account_type as AccountType,
+    active: data.active as boolean,
+  });
+  if (motivo) throw new MutationError(motivo, 400);
+}
 
 /** 23505 = unique_violation. El único UNIQUE "de negocio" es el nombre. */
 function esNombreRepetido(error: unknown): boolean {
@@ -25,6 +77,8 @@ export async function createSupplier(
   userId: string,
   input: CreateSupplierInput
 ) {
+  await validarCuentaPorDefecto(db, tenantId, input.default_chart_account_code);
+
   const supplierNumber = await allocateSupplierNumber(db, tenantId);
 
   const { data, error } = await db
@@ -40,6 +94,10 @@ export async function createSupplier(
       address: input.address,
       phone: input.phone,
       email: input.email,
+      default_chart_account_code: input.default_chart_account_code,
+      contact_name: input.contact_name,
+      contact_phone: input.contact_phone,
+      contact_email: input.contact_email,
       payment_terms_days: input.payment_terms_days,
       active: input.active,
       notes: input.notes,
@@ -96,6 +154,8 @@ export async function updateSupplier(
 
   if (!antes) throw new MutationError("Proveedor no encontrado", 404);
 
+  await validarCuentaPorDefecto(db, tenantId, input.default_chart_account_code);
+
   const { error } = await db
     .from("suppliers")
     .update({
@@ -106,6 +166,10 @@ export async function updateSupplier(
       address: input.address,
       phone: input.phone,
       email: input.email,
+      default_chart_account_code: input.default_chart_account_code,
+      contact_name: input.contact_name,
+      contact_phone: input.contact_phone,
+      contact_email: input.contact_email,
       payment_terms_days: input.payment_terms_days,
       active: input.active,
       notes: input.notes,

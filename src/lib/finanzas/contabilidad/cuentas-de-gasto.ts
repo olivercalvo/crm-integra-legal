@@ -111,6 +111,80 @@ export function esTipoValidoParaGasto(t: AccountType): boolean {
   return !TIPOS_IMPOSIBLES_EN_GASTO.includes(t);
 }
 
+// ---------------------------------------------------------------------------
+// LA CUENTA POR DEFECTO DE UN PROVEEDOR — una regla MÁS ESTRICTA, a propósito
+// ---------------------------------------------------------------------------
+/**
+ * 🔴 NO ES `esTipoValidoParaGasto`, Y NO SE DEBEN UNIFICAR.
+ *
+ * Las dos preguntan "¿esta cuenta sirve para un gasto?" y contestan distinto,
+ * porque responden preguntas distintas:
+ *
+ *   · `esTipoValidoParaGasto` decide qué puede clasificar UNA LÍNEA YA CARGADA.
+ *     Permite `asset` **a propósito**: así `130003 Fondo Legales de Clientes`
+ *     —que es un activo— puede clasificar un gasto de trámite, que es plata que
+ *     el bufete adelanta por un cliente y después recupera.
+ *
+ *   · Ésta decide qué puede ser el DEFAULT de un proveedor, y eso es sólo para
+ *     COMPRAS del bufete (`business_expenses`). Ahí un activo no tiene sentido:
+ *     una compra del bufete es un gasto o un costo propio, nunca un adelanto por
+ *     un cliente. Josuarth lo pidió textual: "tiene que ser de gasto o costo".
+ *
+ * Si alguien las unifica "porque son lo mismo", pasa una de dos cosas:
+ *   — si gana la laxa, un proveedor puede quedar con `130003` de default y toda
+ *     compra suya nacería clasificada como un adelanto por un cliente, inflando
+ *     un activo que nadie va a recuperar;
+ *   — si gana la estricta, el gasto de trámite deja de poder clasificarse contra
+ *     `130003` y se rompe el par con las facturas `REIM-*`.
+ *
+ * Ver `sop.md` SOP-036 y el encabezado de `sql/pending/057_…`.
+ */
+export const TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR: AccountType[] = ["expense", "cost"];
+
+/** true si el TIPO sirve como cuenta por defecto de un proveedor. */
+export function esTipoValidoComoDefaultDeProveedor(t: AccountType): boolean {
+  return TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR.includes(t);
+}
+
+/**
+ * El predicado completo: tipo correcto **y** activa.
+ *
+ * `active` entra acá y no en el tipo porque una cuenta desactivada sigue siendo
+ * de gasto: lo que dejó de ser es elegible. Es la misma condición que la
+ * pantalla usa para DEGRADAR (D3) cuando el default de un proveedor deja de
+ * servir — precarga vacía y avisa, nunca bloquea.
+ */
+export function esCuentaValidaComoDefaultDeProveedor(cuenta: {
+  account_type: AccountType;
+  active: boolean;
+}): boolean {
+  return cuenta.active && esTipoValidoComoDefaultDeProveedor(cuenta.account_type);
+}
+
+/**
+ * Por qué una cuenta NO sirve como default de un proveedor, o `null` si sirve.
+ *
+ * Devuelve el texto completo, igual que `motivoDeRechazo`: el consumidor es una
+ * respuesta HTTP y un aviso en pantalla, los dos se muestran tal cual.
+ */
+export function motivoDeRechazoComoDefaultDeProveedor(cuenta: {
+  code: string;
+  name: string;
+  account_type: AccountType;
+  active: boolean;
+}): string | null {
+  if (esCuentaValidaComoDefaultDeProveedor(cuenta)) return null;
+
+  if (!cuenta.active) {
+    return `La cuenta ${cuenta.code} ${cuenta.name} está desactivada y no puede ser la cuenta por defecto de un proveedor.`;
+  }
+  return (
+    `La cuenta ${cuenta.code} ${cuenta.name} no puede ser la cuenta por defecto de un proveedor: ` +
+    `sólo sirven las de gasto o costo, y ésta es de tipo "${cuenta.account_type}". ` +
+    `Una compra del bufete es un gasto o un costo propio, nunca un adelanto por un cliente.`
+  );
+}
+
 /**
  * El mensaje de rechazo para una cuenta, o `null` si es válida.
  *

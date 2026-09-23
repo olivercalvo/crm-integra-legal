@@ -20,9 +20,13 @@ import assert from "node:assert/strict";
 import {
   cuentasClasificables,
   cuentasSugeridasParaTramite,
+  esCuentaValidaComoDefaultDeProveedor,
+  esTipoValidoComoDefaultDeProveedor,
   esTipoValidoParaGasto,
   motivoDeRechazo,
+  motivoDeRechazoComoDefaultDeProveedor,
   TIPOS_IMPOSIBLES_EN_GASTO,
+  TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR,
   type CuentaClasificable,
 } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { ACCOUNT_TYPES } from "@/lib/finanzas/types/chart-of-account";
@@ -237,5 +241,91 @@ test("el caso real: 610002 y 500004 se llaman casi igual y solo una es de costo"
   assert.ok(
     !sugeridas.includes("610002"),
     "la parecida NO, o el error se repite exactamente igual"
+  );
+});
+
+// ---------------------------------------------------------------------------
+// LA CUENTA POR DEFECTO DE UN PROVEEDOR (4.4) — más estricta, a propósito
+// ---------------------------------------------------------------------------
+/**
+ * 🔒 ESTE BLOQUE EXISTE PARA QUE NADIE UNIFIQUE LOS DOS PREDICADOS.
+ *
+ * `esTipoValidoParaGasto` y `esTipoValidoComoDefaultDeProveedor` contestan
+ * distinto sobre `asset`, y esa diferencia ES la regla:
+ *
+ *   · la laxa deja pasar `asset` para que `130003 Fondo Legales de Clientes`
+ *     clasifique un gasto de trámite (plata adelantada POR UN CLIENTE);
+ *   · la estricta lo rechaza porque una COMPRA del bufete es un gasto o un
+ *     costo propio, nunca un adelanto.
+ *
+ * Si alguien los unifica, se rompe una de las dos cosas. El test falla antes.
+ */
+test("🔴 los dos predicados DISCREPAN sobre `asset`, y esa es la regla", () => {
+  assert.ok(
+    esTipoValidoParaGasto("asset"),
+    "la laxa tiene que dejar pasar `asset`: es como 130003 clasifica un gasto de trámite"
+  );
+  assert.ok(
+    !esTipoValidoComoDefaultDeProveedor("asset"),
+    "la estricta tiene que rechazar `asset`: una compra del bufete no es un adelanto por un cliente"
+  );
+});
+
+test("el default de un proveedor sólo admite gasto o costo", () => {
+  assert.deepEqual(
+    [...TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR].sort(),
+    ["cost", "expense"],
+    "Josuarth lo pidió textual: gasto o costo"
+  );
+  for (const t of ACCOUNT_TYPES) {
+    const esperado = t === "expense" || t === "cost";
+    assert.equal(
+      esTipoValidoComoDefaultDeProveedor(t),
+      esperado,
+      `${t} debería ${esperado ? "servir" : "no servir"} como default de proveedor`
+    );
+  }
+});
+
+test("una cuenta desactivada no sirve como default, aunque sea de gasto", () => {
+  assert.ok(
+    !esCuentaValidaComoDefaultDeProveedor({ account_type: "expense", active: false }),
+    "desactivada no es elegible"
+  );
+  assert.ok(
+    esCuentaValidaComoDefaultDeProveedor({ account_type: "expense", active: true }),
+    "de gasto y activa sí"
+  );
+});
+
+test("el rechazo EXPLICA, y distingue desactivada de tipo equivocado", () => {
+  const porTipo = motivoDeRechazoComoDefaultDeProveedor({
+    code: "130003",
+    name: "Fondo Legales de Clientes",
+    account_type: "asset",
+    active: true,
+  });
+  assert.ok(porTipo, "130003 no puede ser el default de un proveedor");
+  assert.match(porTipo, /gasto o costo/, "el mensaje dice qué SÍ sirve");
+  assert.match(porTipo, /adelanto/, "y por qué un activo no");
+
+  const porInactiva = motivoDeRechazoComoDefaultDeProveedor({
+    code: "610001",
+    name: "Alquiler",
+    account_type: "expense",
+    active: false,
+  });
+  assert.ok(porInactiva, "una cuenta desactivada se rechaza");
+  assert.match(porInactiva, /desactivada/, "y el motivo es ése, no el tipo");
+
+  assert.equal(
+    motivoDeRechazoComoDefaultDeProveedor({
+      code: "610001",
+      name: "Alquiler",
+      account_type: "expense",
+      active: true,
+    }),
+    null,
+    "una cuenta de gasto activa no tiene motivo de rechazo"
   );
 });

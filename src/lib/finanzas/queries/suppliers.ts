@@ -9,7 +9,9 @@ import type { SupplierListItem, SupplierRow } from "@/lib/finanzas/types/supplie
 type DB = SupabaseClient;
 
 const COLS =
-  "id, tenant_id, supplier_number, legal_name, trade_name, ruc, dv, address, phone, email, payment_terms_days, active, notes, created_by, created_at, updated_at";
+  "id, tenant_id, supplier_number, legal_name, trade_name, ruc, dv, address, phone, email, " +
+  "default_chart_account_code, contact_name, contact_phone, contact_email, " +
+  "payment_terms_days, active, notes, created_by, created_at, updated_at";
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;

@@ -38,6 +38,21 @@ export interface SupplierRow {
   address: string | null;
   phone: string | null;
   email: string | null;
+  /**
+   * Cuenta contable que se precarga en cada línea de COMPRA de este proveedor
+   * (4.4). 🔴 SOLO compras: en gastos de trámite el default sigue siendo
+   * `130003` — ver `esCuentaValidaComoDefaultDeProveedor` y la 057.
+   * FK lógico a `chart_of_accounts.code`; puede quedar apuntando a una cuenta
+   * que después se desactivó o se reclasificó, y en ese caso la pantalla
+   * DEGRADA (precarga vacía + aviso), no bloquea.
+   */
+  default_chart_account_code: string | null;
+  /** Nombre de la PERSONA de contacto. Distinto de `legal_name`, que es la empresa. */
+  contact_name: string | null;
+  /** Teléfono de la PERSONA. Distinto de `phone`, que es la central de la empresa. */
+  contact_phone: string | null;
+  /** Correo de la PERSONA. Distinto de `email`, que es el de la empresa. */
+  contact_email: string | null;
   /** Plazo en días. 0 = contado. */
   payment_terms_days: number;
   active: boolean;
@@ -64,6 +79,10 @@ export interface CreateSupplierInput {
   address: string | null;
   phone: string | null;
   email: string | null;
+  default_chart_account_code: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
   payment_terms_days: number;
   active: boolean;
   notes: string | null;

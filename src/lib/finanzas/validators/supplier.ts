@@ -155,6 +155,46 @@ export function validateCreateSupplier(
     }
   }
 
+  // -- la persona de contacto (4.1) -----------------------------------------
+  // Son los de la PERSONA, no los de la empresa: `phone` y `email` de arriba
+  // siguen siendo la central del proveedor.
+  const contactName = opcional(raw.contact_name);
+  if (contactName) {
+    if (contactName.length < 2) {
+      errors.contact_name = "El nombre del contacto es muy corto (mínimo 2 caracteres)";
+    } else if (contactName.length > 120) {
+      errors.contact_name = "El nombre del contacto es muy largo (máximo 120 caracteres)";
+    }
+  }
+
+  const contactPhone = opcional(raw.contact_phone);
+  if (contactPhone) {
+    if (contactPhone.length < 3) {
+      errors.contact_phone = "El teléfono del contacto es muy corto";
+    } else if (contactPhone.length > 50) {
+      errors.contact_phone = "El teléfono del contacto es muy largo (máximo 50 caracteres)";
+    }
+  }
+
+  const contactEmail = opcional(raw.contact_email);
+  if (contactEmail) {
+    if (contactEmail.length > 200) {
+      errors.contact_email = "El correo del contacto es muy largo (máximo 200 caracteres)";
+    } else if (!EMAIL_RE.test(contactEmail)) {
+      errors.contact_email = "El correo del contacto no parece válido";
+    }
+  }
+
+  // -- cuenta contable por defecto (4.4) -------------------------------------
+  // Acá sólo el LARGO. Que sea de gasto o costo y esté activa es una pregunta
+  // cross-tabla contra `chart_of_accounts`, y la contesta `api/suppliers.ts`
+  // con `motivoDeRechazoComoDefaultDeProveedor` — el mismo patrón que
+  // `isValidExpenseAccountCode` en `api/business-expenses.ts`.
+  const defaultAccount = opcional(raw.default_chart_account_code);
+  if (defaultAccount && defaultAccount.length > 20) {
+    errors.default_chart_account_code = "El código de cuenta es muy largo (máximo 20 caracteres)";
+  }
+
   // -- términos de pago -----------------------------------------------------
   // Se acepta cualquier plazo del rango, no solo los sugeridos: que un proveedor
   // trabaje a 45 días no puede impedir cargarlo.
@@ -188,6 +228,10 @@ export function validateCreateSupplier(
       address,
       phone,
       email,
+      default_chart_account_code: defaultAccount,
+      contact_name: contactName,
+      contact_phone: contactPhone,
+      contact_email: contactEmail,
       payment_terms_days: plazo,
       active: raw.active !== false,
       notes,

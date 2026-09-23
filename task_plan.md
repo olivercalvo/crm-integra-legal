@@ -1,5 +1,281 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 9C: NOTA DE CRÉDITO FISCAL — FASE 0, SIN CÓDIGO — 23/09/2026 <<<
+
+**Estado: PLAN. No se escribió una línea de código.** Espera aprobación.
+
+Hoy la nota de crédito es un **documento interno**: nace `fe_estado = 'no_emitida'`, tiene sus
+13 columnas fiscales desde la `051` y su banda roja, y **no se le entrega al cliente como
+comprobante fiscal**. 9C es mandarla a la DGI.
+
+---
+
+### 0. Lo que ya está y no hay que rehacer
+
+| Pieza | Estado |
+|---|---|
+| NC por líneas con cantidad, precio y tasa copiados | ✅ Bloque 5 |
+| `credit_notes` con las 13 columnas fiscales | ✅ migración `051` |
+| Asiento propio `nota_credito` | ✅ Bloque 5 |
+| `tipoDocumento` derivado por `tipoDocumentoDeKind` | ✅ (01 / 09) |
+| `MapInvoiceOptions.tipoDocumento` como override | ✅ existe, nadie lo usa |
+| Anulación ante la DGI con `0600` / `0622` | ✅ Bloque 9B |
+| Clasificador con `incierto` para lo desconocido | ✅ 23/09 |
+
+**Lo que falta es el envío**: armar el documento de la NC, referenciar el original, mandarlo, y
+guardar lo que conteste.
+
+---
+
+### 1. 🔴 El bloque de referencia está DOBLEMENTE anidado, y el repo lo tenía mal anotado
+
+Leído del swagger hoy. `GDGenRequest.documentosFiscalesReferenciados[]` es un array de:
+
+```
+GDFRefRequest
+├── rucEmisorDocumentoReferenciado : { tipoRuc, ruc, digitoVerificador }
+├── nombreRazonSocialEmisor        : string
+├── fechaEmisionDocumentoReferenciado : string
+└── informacionReferencia          : gDFRefNumRequest      ← ⚠️ WRAPPER
+    ├── informacionReferencia                : { cufeReferenciado }
+    ├── informacionReferenciaFacturaPapel    : { numeroFacturaPapel }
+    └── informacionReferenciaImpresoraFiscal : { numeroFeImpresoraFiscal }
+```
+
+⚠️ **`informacionReferencia` aparece DOS VECES, una adentro de la otra.** Las notas anteriores
+de este archivo lo escribían plano (`informacionReferencia.cufeReferenciado`), que es un nivel
+de menos. Es exactamente la clase de error que la DGI devuelve como rechazo y que en
+desarrollo no se ve.
+
+**El emisor referenciado es el bufete mismo**, no el cliente: la NC referencia una factura que
+emitimos nosotros. Sale de `EFACTURA_EMISOR_RUC` / `_DV` / `_TIPO_CONTRIBUYENTE`.
+
+---
+
+### 2. Los tres casos, y qué los distingue
+
+| Caso | `tipoDocumento` | Referencia | Estado |
+|---|---|---|---|
+| **A. Factura con CUFE en el CRM** | `04` | `cufeReferenciado` | listo para construir |
+| **B. Factura del portal `050`** (antes de julio) | `04` | `cufeReferenciado`, **pero el CUFE hay que cargarlo** | necesita migración + pantalla |
+| **C. Sin CUFE en ningún lado** | ⚠️ `06` **a confirmar** | `numeroFacturaPapel` | bloqueado por la prueba (P1) |
+
+**Total vs parcial (A y B):** es el mismo documento; cambia qué líneas van. `credit_note_lines`
+ya guarda **sólo las acreditadas** con su cantidad, así que la parcial no necesita nada nuevo —
+el mapper recorre esas líneas y listo. Lo confirmó ideati el 22/09: *"NC parcial: se envían
+SOLO las líneas que se acreditan."*
+
+---
+
+### 3. Caso B — el CUFE que está en la DGI y no en el CRM
+
+Las facturas anteriores al **8 de julio de 2026** se emitieron a mano en el portal de ideati por
+el punto **`050`**: tienen CUFE ante la DGI y el CRM nunca lo guardó. Hoy
+`decidirAccionFiscal` devuelve `nc_04_requiere_cufe` para ellas — una acción que **pide el
+dato** en vez de inventarlo.
+
+**Cómo se registra:**
+
+1. **Migración (staging)** — `invoices.dgi_cufe` ya existe y acepta el valor. Lo que hace falta
+   es poder decir **de dónde salió**, para no confundir un CUFE que emitió el CRM con uno
+   tecleado a mano:
+   `dgi_cufe_origen text CHECK (IN ('crm','portal_050'))`, nulo para las que no tienen CUFE.
+   Sin esa columna, dentro de seis meses nadie sabe por qué una factura tiene CUFE y
+   `fe_estado = 'no_emitida'`.
+2. **Pantalla** — en el detalle, sobre la acción `nc_04_requiere_cufe`: un campo para pegar el
+   CUFE, con el formato validado (largo y caracteres, **no** un patrón cerrado: mismo criterio
+   que el RUC) y un aviso de que se copia del portal de ideati.
+3. **Punto de facturación**: la NC sale del **`051`** con la **misma secuencia**, aunque la
+   factura original sea del `050`. Lo confirmó ideati el 22/09: *"la NC puede usar la MISMA
+   secuencia del punto 051; la duplicidad la valida la DGI por tipo de documento"*.
+   **`fe_secuencias` NO se toca.**
+
+⚠️ **Pregunta abierta (P2)** más abajo: referenciar entre puntos distintos no está probado.
+
+---
+
+### 4. Caso C — la NC genérica, y por qué está bloqueada
+
+ideati recomendó **nota de crédito genérica** para facturas sin CUFE. El swagger **acepta**
+`tipoDocumento` con `pattern "01|02|03|04|05|06|07|08|09|10"` — o sea que `06` es un valor
+legal del contrato — pero **no le pone nombre ni descripción a ninguno de los diez**, y
+`types/catalogs.ts` sólo declara seis.
+
+**No se escribe una línea hasta confirmarlo.** La confirmación es la prueba de sandbox **S5**
+(abajo), no una pregunta a ideati: se puede medir.
+
+---
+
+### 5. Anular una NC — se reutiliza lo que ya existe
+
+`POST /InvoiceEvents/CreateCancellation` recibe un **CUFE**, sin importar de qué documento sea.
+ideati lo dijo el 22/09: *"las notas de crédito y de débito se anulan por el MISMO endpoint"*.
+
+O sea que `anularEnPac`, el clasificador (`0600` / `0622` / `incierto`) y el mínimo de 15
+caracteres **se reutilizan tal cual**. Lo que hay que agregar es la mitad contable:
+
+- 🔴 **Hoy NO existe la reversión de una NC.** Es lo único que quedó sin construir del Bloque 5.
+- El asiento espejo lo arma **`construirAsientoDeReversion`**, la misma función de los cobros,
+  los gastos de trámite y los asientos manuales. **Fecha de hoy, nunca la del original**
+  (acta del 09/09).
+- Necesita su **RPC** (`reverse_credit_note`), con el mismo molde que `reverse_payment` (`046`)
+  y `reverse_journal_entry` (`055`): una transacción, fecha de hoy, y el índice único parcial
+  `(tenant_id, reverses_entry_id)` que ya impide reversar dos veces.
+- ⚠️ **Y hay que decidir qué pasa con `invoices.credited_total`**, que es DERIVADA (`051`) de
+  las NC `emitida`. Anular una NC tiene que devolverle saldo a la factura. Eso es un trigger o
+  una escritura dentro del RPC, y es la parte que puede romper algo: `balance_due` depende de
+  `credited_total`, y `T7a` deriva el `status` contra el total neto.
+
+---
+
+### 6. Impacto en `decidirAccionFiscal()` y en la matriz
+
+Hoy la matriz responde **sobre una factura**. 9C agrega documentos que también tienen vida
+fiscal propia.
+
+**Lo que NO cambia:** las celdas actuales. Una factura con CUFE fuera de plazo sigue diciendo
+`nc_04`; lo que cambia es que ahora esa acción **se puede ejecutar**.
+
+**Lo que sí cambia, y hay que decidirlo antes de escribir:**
+
+1. `nc_04_requiere_cufe` deja de ser un callejón: con el CUFE cargado (caso B) pasa a `nc_04`.
+   Es automático — la matriz ya mira `dgi_cufe`.
+2. **Hace falta una matriz para la NC**, aunque sea chica: una NC `authorized` dentro de las
+   182 h se anula; fuera de plazo, **no hay "NC de la NC"** — habría que emitir una nueva
+   factura, y eso Josuarth no lo pidió. **Propongo `decidirAccionSobreNotaDeCredito()`**, con
+   la misma forma que la de facturas y compartiendo `calcularVentana`.
+3. ⚠️ **Una factura cuya NC se anuló vuelve a tener saldo**, así que vuelve a ser acreditable.
+   La matriz de facturas no necesita cambios porque lee `credited_total`, que sería derivada —
+   **pero eso hay que verificarlo**, no suponerlo.
+
+---
+
+### 7. Verificar que 04, 05 y 06 comparten el clasificador de emisión
+
+**Es un supuesto, y está anotado como tal** en `docs/efactura/clasificadores-de-respuesta.md`:
+*"se emiten por el MISMO endpoint que el 01 y el 09, así que comparten `parsePacResponse`. El
+`tipoDocumento` cambia el payload que se manda, no la forma de la respuesta."*
+
+Suponerlo es exactamente lo que produjo el bug del `0600`. **Se verifica con respuestas reales**
+(pruebas S3, S5, S6) y se agregan los fixtures a `anulacion-en-pac.test.ts` y a un archivo
+nuevo `emision-04-06.test.ts`, con la misma forma que los fixtures reales de hoy.
+
+Lo concreto a verificar en cada respuesta: que traiga **`autorizada` explícito** (que es el
+discriminador de la emisión) y que el código de éxito sea `0260` y no otro.
+
+---
+
+### 8. Las pruebas de sandbox, en orden
+
+🔴 **Todas con `i_amb = 2` impreso y verificado antes de cada llamada.**
+
+🔴 **El cliente es siempre el mismo problema:** el sandbox rechaza con `1601`/`1602` cualquier
+RUC de receptor que no exista en el registro de la DGI, y **está medido que rebota igual en
+tipo `01` que en `09`**. El único camino probado es apuntar el cliente al **RUC/DV del emisor**
+en las **tres** columnas (`tax_id`, `ruc`, `digito_verificador`) y restaurarlo — lo hace
+`scripts/efactura/prueba5-emitir-con-receptor-valido.ts` con la restauración en un `finally`.
+
+| # | Prueba | Qué confirma | Evidencia que se guarda |
+|---|---|---|---|
+| **S1** | Emitir una factura nueva al sandbox (cliente apuntado al emisor) | la línea base y el CUFE a referenciar | CUFE, protocolo, `fe_emisiones` |
+| **S2** | **NC 04 TOTAL** sobre esa factura, con `cufeReferenciado` | que el bloque de referencia esté bien armado, con su doble anidamiento | payload enviado + respuesta cruda |
+| **S3** | Leer la respuesta de S2 | 🔴 que el `04` traiga `autorizada` explícito y `0260` | fixture para el test |
+| **S4** | **NC 04 PARCIAL** (una línea de dos) | que el ITBMS proporcional que calcula el Bloque 5 le sirva a la DGI | payload + respuesta + comparación de totales |
+| **S5** | Emitir con `tipoDocumento = 06` y referencia por `numeroFacturaPapel` | 🔴 **si el `06` es la NC genérica y qué campos exige** | respuesta cruda, aceptada o rechazada, **y el código del rechazo si lo hay** |
+| **S6** | Anular la NC de S2 con `CreateCancellation` | que una NC se anule por el mismo endpoint (`0600`) | respuesta cruda |
+| **S7** | Anular la NC de S2 **otra vez** | que dé `0622`, igual que una factura | respuesta cruda |
+| **S8** | 🔴 **NC 04 desde el `051` referenciando un CUFE del punto `050`** | que se pueda referenciar **entre puntos** (caso B) | respuesta cruda |
+
+**S8 es la que puede tumbar el caso B entero.** Si la DGI no acepta una NC del `051` contra un
+documento del `050`, las facturas de antes de julio no se pueden acreditar electrónicamente
+desde el CRM y hay que ir al portal. **Conviene correrla temprano**, no al final.
+
+Cada respuesta cruda va a `docs/efactura/`, con el mismo formato que
+`prueba5-anulacion-exitosa.txt`.
+
+---
+
+### 9. Migraciones (staging solamente)
+
+| # | Qué | Por qué |
+|---|---|---|
+| `060` | `credit_notes`: `fe_estado`, `punto_facturacion`, `numero_documento`, `dgi_cufe`, `dgi_protocolo_autorizacion`, `dgi_fecha_autorizacion`, `qr_content`, `ef_invoice_uuid` | ⚠️ **verificar primero**: la `051` dice que ya agregó "las 13 columnas fiscales". Si están, la `060` no existe |
+| `061` | `fe_emisiones_nc` (o `fe_emisiones.credit_note_id`) | el registro del intento, espejo del de facturas |
+| `062` | `invoices.dgi_cufe_origen` (`'crm'` / `'portal_050'`) | caso B: distinguir el CUFE que emitió el CRM del tecleado a mano |
+| `063` | RPC `reverse_credit_note` + qué pasa con `credited_total` | la reversión de la NC, que hoy no existe |
+
+⚠️ **La `060` puede no hacer falta.** Antes de escribirla hay que mirar `information_schema`,
+no el encabezado de la `051`. Es la regla de siempre acá.
+
+---
+
+### 10. Riesgos, ordenados por lo que cuesta descubrirlos tarde
+
+1. 🔴 **`credited_total` es derivada y la reversión de la NC la toca.** `balance_due` la resta y
+   `T7a` deriva el `status` contra el total neto. Es la parte con más probabilidad de romper
+   algo que ya funciona, y el daño se ve en el saldo de una factura, no en un error.
+2. 🔴 **El doble anidamiento del bloque de referencia.** Un nivel de más o de menos es un
+   rechazo de la DGI sobre un documento real. Se cubre con un **golden propio** antes de tocar
+   el mapper — la regla de 9A: el refactor y el JSON dorado nunca en el mismo commit.
+3. **S8 puede invalidar el caso B** (referenciar entre puntos). Correrla temprano.
+4. **El `06` puede no ser la NC genérica.** Si S5 rechaza, el caso C queda sin camino y hay que
+   preguntarle a ideati — con el código de rechazo en la mano, que es mucho mejor que
+   preguntar a ciegas.
+5. **Huecos en la numeración.** La NC comparte la secuencia del `051` con las facturas: un
+   envío fallido quema un número. Es el criterio de SOP-031 y ya está aceptado, pero conviene
+   decirlo antes de que aparezca el primer salto.
+6. ⚠️ **La NC ya emitida a la DGI deja de ser un documento interno.** La banda roja
+   ("Sin emitir a la DGI") y el PDF cambian, y **el PDF de una NC autorizada lleva CUFE y QR**.
+   Eso es trabajo de pantalla que no se ve en el plan técnico.
+
+---
+
+### 11. Orden propuesto
+
+1. **S8 y S5 primero** (las dos que pueden cambiar el alcance).
+2. Golden del payload de la NC `04` — antes de tocar el mapper.
+3. `documentosFiscalesReferenciados` en el mapper + su commit de refactor, separado del golden.
+4. Migraciones, con la verificación de la `051` antes de escribir la `060`.
+5. Emisión de la NC (ruta + orquestador, reutilizando el de facturas).
+6. Caso B: `dgi_cufe_origen` + la pantalla para cargar el CUFE.
+7. Reversión de la NC (RPC) — la parte de `credited_total`, con su verificación SQL.
+8. Pantalla: botón "Enviar a la DGI" en la NC, aviso de los 90 días, PDF con CUFE y QR.
+9. Caso C, **sólo si S5 lo habilita**.
+
+---
+
+### 12. Preguntas para ideati — sólo lo que no está en ningún lado
+
+Revisado antes de anotarlas: el swagger completo, `docs/efactura/`, y las respuestas del
+22/09/2026.
+
+**P1. ¿El `tipoDocumento` 06 es la nota de crédito genérica?**
+El swagger acepta `06` en el patrón pero no le pone nombre a ninguno de los diez valores.
+⚠️ **No se pregunta todavía**: primero se corre S5, que lo mide. Si S5 lo rechaza, la pregunta
+sale con el código de rechazo adjunto.
+
+**P2. ¿Se puede emitir una nota de crédito desde el punto de facturación `051` que referencie
+una factura emitida por el punto `050`?**
+Es el caso de las facturas de antes de julio, emitidas a mano en el portal. ideati ya confirmó
+que la NC puede usar la misma secuencia del `051`, pero no que pueda **referenciar** un
+documento de otro punto. ⚠️ **Tampoco se pregunta todavía**: la mide S8.
+
+**P3. ¿Una nota de crédito autorizada se anula con el mismo `CreateCancellation` y la misma
+ventana de 182 horas que una factura?**
+ideati dijo el 22/09 que "las notas de crédito y de débito se anulan por el mismo endpoint",
+pero no dijo nada del plazo. ⚠️ Lo mide S6, y el plazo sólo se sabría dejando pasar 182 horas —
+**esta sí es pregunta**, redactada simple:
+
+> *Una nota de crédito que ya autorizó la DGI, ¿se puede anular con el mismo endpoint y dentro
+> del mismo plazo de 182 horas que una factura? ¿O las notas de crédito tienen otro plazo?*
+
+**P4. Para Josuarth, no para ideati:** ¿necesita la **nota de débito** (`05`)? Sigue sin
+respuesta desde el 22/09. Si la necesita, entra en este mismo bloque; si no, `05` queda
+declarado y sin uso, como hoy.
+
+---
+
+
 ## >>> BLOQUE PREVENTIVO: ERRORES DE LA DGI — 23/09/2026 <<<
 
 **Estado:** construido y verificado con clics. `f235841` → `edcaf73` en `develop`. Sin

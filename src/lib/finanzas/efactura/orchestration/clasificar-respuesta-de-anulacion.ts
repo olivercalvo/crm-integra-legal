@@ -24,22 +24,29 @@
  *    pide D3 **no se puede hacer con la API que existe**. Lo único que informa
  *    la anulación es el propio `0622`. Detalle en `anulacion-en-pac.ts`.
  *
- * ❌ **Sigue sin saberse cómo se ve un ÉXITO** (prueba 5). El único documento
- *    autorizado que había en staging ya tenía un evento de anulación encima, y
- *    emitir uno nuevo se frenó en los RUC ficticios del seed, que la DGI
- *    rechaza (`1601`/`1602`). Anotado en `task_plan.md`.
+ * ✅ **El ÉXITO es `0600 — Evento registrado con éxito`** (prueba 5, medida el
+ *    mismo día sobre `FAC-REI-000003`).
  *
- * 🔴 Mientras eso siga abierto, la tentación es suponer —"HTTP 200 y array
- * vacío debe ser que salió bien"— y esa suposición tiene una consecuencia
- * concreta: si es falsa, el orquestador marca la factura como anulada, revierte
- * el asiento, y el documento sigue **vivo ante la DGI**. Un descuadre entre
- * nuestros libros y los de la DGI que nadie ve hasta la próxima declaración.
+ * 🔴 **Y ESE DATO LLEGÓ ENCONTRANDO EL BUG QUE BUSCABA.** La versión anterior
+ *    de este archivo clasificó esa respuesta como `rechazada`: `0600` no estaba
+ *    en la lista de códigos de éxito —que venía del endpoint de EMISIÓN— y el
+ *    mensaje no dice "anulado" ni "cancelado". O sea que **la DGI anuló el
+ *    documento y el CRM informó un rechazo.**
  *
- * Así que existe una cuarta respuesta, `indeterminada`, y **no es un error**:
- * es "el PAC contestó algo que no reconozco". El orquestador la trata como la
- * orden de NO tocar el libro y escalar el caso. Un array vacío cae ahí a
- * propósito. Cuando la prueba 5 diga qué devuelve de verdad, esto se ajusta
- * **en su propio commit**, con la respuesta real citada. No antes.
+ *    No escribió nada, que es el modo de fallar que este módulo eligió, así que
+ *    no quedó ningún asiento revertido de más. Y el reintento lo arregló solo,
+ *    porque el segundo pedido devuelve `0622`. Pero sin ese reintento la
+ *    factura habría quedado viva en el libro con el documento muerto ante la
+ *    DGI.
+ *
+ *    La lección concreta: **los códigos de este endpoint no son los del de
+ *    emisión.** Suponer que sí es lo que produjo el bug.
+ *
+ * La clase `indeterminada` se queda, y sigue sin ser un error: es "el PAC
+ * contestó algo que no reconozco", y el orquestador la trata como la orden de
+ * NO tocar el libro y escalar. Un HTTP 200 con array vacío cae ahí a propósito
+ * — ahora sabemos que el éxito trae código, así que un array vacío es todavía
+ * más sospechoso que antes.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * LAS HEURÍSTICAS DE TEXTO SON LA RED, EL CÓDIGO NUMÉRICO ES EL DATO
@@ -75,18 +82,52 @@ export type ResultadoDeAnulacionEnPac =
   | { clase: "indeterminada"; eventos: EventoDeAnulacion[]; mensaje: string; crudo: unknown };
 
 /**
- * Códigos que el PAC usa para "salió bien" en el endpoint de emisión. `0260` es
- * "Autorizado el uso de la FE" (Ficha Técnica DGI v1.00 §8, Tabla 7); los ceros
- * cubren las variantes de OK. **No está confirmado que este endpoint use los
- * mismos** — prueba de sandbox 5.
+ * 🔒 `0600` — LA RESPUESTA EXITOSA, MEDIDA EN SANDBOX EL 23/09/2026.
+ *
+ * Anulando `FAC-REI-000003` (CUFE `FE09…396134`), el PAC devolvió HTTP 200 con:
+ *
+ *     [{ "codigo": "0600", "mensaje": "Evento registrado con éxito" }]
+ *
+ * 🔴 **Y ESTA VERSIÓN DEL CLASIFICADOR LO LLAMÓ `rechazada`.** `0600` no estaba
+ * en la lista de códigos de éxito —que venía del endpoint de EMISIÓN— y el
+ * mensaje no dice "anulado" ni "cancelado", así que cayó en la regla de "código
+ * desconocido con mensaje ⇒ rechazo".
+ *
+ * Consecuencia real, no hipotética: **la DGI anuló el documento y el CRM dijo
+ * que lo había rechazado.** No escribió nada —que es el modo de fallar que este
+ * módulo eligió, y por eso no quedó un asiento revertido de más— pero la
+ * factura habría quedado viva en el libro con el documento muerto allá si nadie
+ * reintentaba.
+ *
+ * Se arregló sola al reintentar, porque el segundo pedido devuelve `0622` y eso
+ * sí estaba contemplado. Es exactamente para lo que se rediseñó D3.
+ *
+ * La lección: los códigos del endpoint de emisión **no son los mismos** que los
+ * de este. Suponer que sí es lo que produjo el bug.
  */
-const CODIGOS_DE_EXITO = new Set(["0260", "0", "00", "000", "0000"]);
+const CODIGO_ANULADA = "0600";
+
+/**
+ * Códigos que el PAC usa para "salió bien" **en el endpoint de emisión**.
+ * `0260` es "Autorizado el uso de la FE" (Ficha Técnica DGI v1.00 §8, Tabla 7);
+ * los ceros cubren las variantes de OK.
+ *
+ * ⚠️ Se conservan como red, pero el código de ESTE endpoint es el `0600` de
+ * arriba: está medido que no comparte la numeración.
+ */
+const CODIGOS_DE_EXITO = new Set([CODIGO_ANULADA, "0260", "0", "00", "000", "0000"]);
 
 /** Negaciones que invalidan cualquier señal optimista. La lección del 1602. */
 const NEGACIONES =
   /\bno\s+se\s+(pudo|puede)\b|\bno\s+fue\b|\bno\s+existe\b|\binexistente\b|\bno\s+se\s+encuentra\b|\brechaz/;
 
-const SENIAL_DE_ANULADA = /\banulad[ao]\b|\bcancelad[ao]\b|\banulaci[oó]n\s+(exitosa|procesada|registrada)\b/;
+/**
+ * El texto del éxito, medido: *"Evento registrado con éxito"*. No dice
+ * "anulado" ni "cancelado" — de ahí que la versión anterior, que sólo buscaba
+ * esas dos palabras, no lo reconociera.
+ */
+const SENIAL_DE_ANULADA =
+  /\banulad[ao]\b|\bcancelad[ao]\b|\banulaci[oó]n\s+(exitosa|procesada|registrada)\b|\bevento\s+registrado\b/;
 /**
  * 🔴 `0622` — CONFIRMADO EN SANDBOX EL 23/09/2026.
  *

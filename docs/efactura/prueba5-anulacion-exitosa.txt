@@ -1,0 +1,75 @@
+◇ injecting env (27) from .env.local // tip: ⌘ override existing { override: true }
+══════════════════════════════════════════════════════════════════════════════
+PRUEBA 5 — la respuesta EXITOSA de CreateCancellation
+fecha:   2026-09-23T22:14:08.198Z
+factura: FAC-REI-000003 · emitida · fe: authorized
+CUFE:    FE0920000025046169-3-2021-4000002026092300000000230010126041396134
+══════════════════════════════════════════════════════════════════════════════
+
+🔒 [anulacion] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ anularFacturaAnteDgi (el orquestador del CRM)
+
+
+RESULTADO del orquestador:
+{
+  "estado": "rechazada_por_la_dgi",
+  "mensaje": "La DGI rechazó la anulación. [0600] Evento registrado con éxito",
+  "pista": null
+}
+
+─── fe_anulaciones intento #1 · resultado=rechazada · i_amb=2
+
+🔴 RESPUESTA CRUDA DEL PAC:
+[
+  {
+    "codigo": "0600",
+    "mensaje": "Evento registrado con éxito"
+  }
+]
+
+🔒 [reintento-directo] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ POST CreateCancellation otra vez, mismo CUFE
+
+
+RESPUESTA (2ª vez):
+[
+  {
+    "codigo": "0622",
+    "mensaje": "Ya existe un evento de anulación para esta FE"
+  }
+]
+
+CLASIFICADA como:
+{
+  "clase": "ya_anulada",
+  "eventos": [
+    {
+      "codigo": "0622",
+      "mensaje": "Ya existe un evento de anulación para esta FE"
+    }
+  ],
+  "mensaje": "La DGI informa que este documento ya tiene un evento de anulación. [0622] Ya existe un evento de anulación para esta FE"
+}
+
+→ anularFacturaAnteDgi otra vez (no debería escribir nada)
+⚠️ NO rebotó: {"estado":"anulada","mensaje":"Factura anulada ante la DGI y en el libro contable.","credit_note_id":"c738bcf4-b19e-4e77-9a82-e271927efb13","credit_note_number":"NC-000008","reversal_entry_number":55}
+
+══════════════════════════════════════════════════════════════════════════════
+ESTADO FINAL
+
+factura:
+{
+  "status": "anulada",
+  "fe_estado": "canceled",
+  "credited_total": 10,
+  "balance_due": 0,
+  "cancellation_reason": "Prueba 5 del Bloque 9B: medir la respuesta exitosa de la anulacion"
+}
+
+notas de crédito: 1  →  NC-000008
+asientos de la factura: 2
+  #54 2026-09-23 [factura]
+  #55 2026-09-23 [reversion] (reversión)
+══════════════════════════════════════════════════════════════════════════════
+
+📄 informe: C:\Users\Oliver\Desktop\Cliente en el Centro\Clientes\Integra\02_Desarrollo\crm-integra-legal\docs\efactura\prueba5-anulacion-exitosa.txt

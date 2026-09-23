@@ -107,7 +107,49 @@ test("un código de éxito con mensaje de anulación → anulada", () => {
 });
 
 /**
- * 🔒 LA RESPUESTA REAL DEL SANDBOX, 23/09/2026.
+ * 🔒 LA RESPUESTA EXITOSA REAL DEL SANDBOX, 23/09/2026.
+ *
+ * Medida anulando `FAC-REI-000003` (CUFE `FE09…396134`). HTTP 200 con este
+ * array, textual.
+ *
+ * 🔴 ESTE FIXTURE EXISTE PORQUE LA VERSIÓN ANTERIOR DEL CLASIFICADOR LO LLAMÓ
+ *    `rechazada`. `0600` no estaba en la lista de códigos de éxito —que venía
+ *    del endpoint de EMISIÓN— y el mensaje no dice "anulado" ni "cancelado".
+ *    O sea: la DGI anuló el documento y el CRM informó un rechazo.
+ *
+ *    No se escribió nada (el módulo falla del lado seguro) y el reintento lo
+ *    arregló solo con el `0622`. Pero sin reintento la factura habría quedado
+ *    viva en el libro con el documento muerto allá.
+ */
+const RESPUESTA_REAL_EXITOSA = [{ codigo: "0600", mensaje: "Evento registrado con éxito" }];
+
+test("🔒 0600 (respuesta REAL del sandbox) → anulada", () => {
+  const r = clasificarRespuestaDeAnulacion(RESPUESTA_REAL_EXITOSA);
+  assert.equal(
+    r.clase,
+    "anulada",
+    "Si esto vuelve a dar 'rechazada', el CRM le va a decir a la licenciada que la DGI " +
+      "rechazó una anulación que en realidad se aplicó."
+  );
+  assert.match(r.mensaje, /0600/);
+});
+
+test("🔴 los códigos de ESTE endpoint no son los del de emisión", () => {
+  // `0260` ("Autorizado el uso de la FE") es del endpoint de EMISIÓN y se
+  // conserva como red, pero el de la anulación es `0600`. Suponer que
+  // compartían numeración es exactamente lo que produjo el bug.
+  assert.equal(clasificarRespuestaDeAnulacion([{ codigo: "0600" }]).clase, "anulada");
+});
+
+test("el texto solo también alcanza, si algún día cambia el código del éxito", () => {
+  const r = clasificarRespuestaDeAnulacion([
+    { codigo: "7777", mensaje: "Evento registrado con éxito" },
+  ]);
+  assert.equal(r.clase, "anulada");
+});
+
+/**
+ * 🔒 LA RESPUESTA REAL DEL SANDBOX AL PEDIRLA DOS VECES, 23/09/2026.
  *
  * Pedirle dos veces la anulación al mismo CUFE devolvió HTTP 200 con este
  * array, textual. Es el único dato MEDIDO que tiene este módulo: todo lo demás

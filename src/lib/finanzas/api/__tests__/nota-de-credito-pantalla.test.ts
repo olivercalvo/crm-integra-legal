@@ -54,7 +54,29 @@ test("🔒 el diálogo calcula el total con totalDeLineaDeNc y no por su cuenta"
 
 test("el detalle de la factura: Anular solo sin NC parcial y con el mes abierto; el disponible sale de la misma consulta que valida", () => {
   const src = leer(FACTURA);
-  assert.match(src, /const showCancel = cancellable && canMutate && !mesCerrado && creditedTotal <= 0;/);
+  // 🔒 Desde el Bloque 9B (23/09/2026) el "no se anula con NC parcial ni con el
+  //    mes cerrado" YA NO se arma acá con condiciones sueltas: lo decide
+  //    `decidirAccionFiscal` (SOP-038), la MISMA función que usa el servidor.
+  //    Verificar la expresión literal de `showCancel` sería verificar que la
+  //    pantalla tiene su propia copia de la regla, que es justo lo que se sacó.
+  assert.match(
+    src,
+    /import \{ decidirAccionFiscal \} from "@\/lib\/finanzas\/efactura\/orchestration\/decidir-accion-fiscal"/,
+    "la pantalla consulta la matriz, no reimplementa las condiciones"
+  );
+  // Sin saltos de línea, para que el formato del archivo no sea lo que decide
+  // si este test pasa.
+  const compacto = src.replace(/\s+/g, " ");
+  assert.ok(
+    compacto.includes(
+      'const showCancel = canMutate && (accionFiscal.accion === "anular_en_dgi_y_libro" || accionFiscal.accion === "anular_solo_en_el_libro");'
+    ),
+    "el botón sale de la acción que devolvió la matriz"
+  );
+  assert.ok(
+    !/const showCancel =[^;]*creditedTotal/.test(compacto),
+    "si vuelve a armarse con condiciones sueltas, se desincroniza del servidor"
+  );
   assert.match(src, /\{showCancel && \(\s*<CancelInvoiceDialog/);
   assert.match(src, /periodoDeLaFacturaCerrado\(db, tenantId, String\(invoice\.issue_date\)\)/, "el MES de la factura (D4)");
   assert.match(src, /acreditadoPorLineaDeFactura\(db, tenantId, invoice\.id\)/);

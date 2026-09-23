@@ -37,6 +37,27 @@ interface Props {
   /** CUFE registrado (vía PAC o carga manual). Ver `feEstado`. */
   dgiCufe?: string | null;
   disabled?: boolean;
+  /**
+   * 🔴 `"completar"` es el estado intermedio de D4: la factura YA está anulada
+   * ante la DGI y sólo falta el libro. Es el MISMO formulario y el MISMO
+   * endpoint —el orquestador reconoce el caso solo— y por eso es una variante y
+   * no un diálogo aparte: dos formularios para la misma llamada terminan
+   * discrepando en el largo del motivo, en el manejo del error o en las dos
+   * cosas.
+   */
+  variante?: "anular" | "completar";
+  /**
+   * El motivo que ya viajó a la DGI, para precargarlo al completar. No es una
+   * comodidad: el motivo que la DGI tiene y el que va a quedar en el libro
+   * tienen que ser el MISMO, y escribirlo de nuevo es la forma más fácil de que
+   * dejen de serlo.
+   */
+  motivoInicial?: string;
+  /**
+   * Cuánto falta para que venza la ventana de anulación de la DGI (D6). Sale de
+   * `decidirAccionFiscal`, no se recalcula acá.
+   */
+  horasRestantes?: number | null;
 }
 
 /**
@@ -59,11 +80,15 @@ export function CancelInvoiceDialog({
   feEstado,
   dgiCufe,
   disabled,
+  variante = "anular",
+  motivoInicial,
+  horasRestantes,
 }: Props) {
+  const completando = variante === "completar";
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(motivoInicial ?? "");
   const [observations, setObservations] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [observationsError, setObservationsError] = useState<string | null>(null);
@@ -75,7 +100,10 @@ export function CancelInvoiceDialog({
 
   // ¿La factura ya tiene CUFE autorizado por la DGI? Anularla acá NO la anula
   // ante la DGI (cancelInvoice sólo cambia estado local) → disclaimer + checkbox.
-  const hasCufe = invoiceHasAuthorizedCufe(feEstado, dgiCufe);
+  // Al COMPLETAR, el checkbox de la DGI no aplica: el documento ya está anulado
+  // allá — de eso se trata este estado. Pedir la confirmación otra vez sería
+  // pedirle a la persona que prometa algo que ya pasó.
+  const hasCufe = !completando && invoiceHasAuthorizedCufe(feEstado, dgiCufe);
 
   // Autofocus al textarea cuando se abre el dialog. Pequeño delay para que
   // el render del modal termine antes; sin él el focus se pierde porque el
@@ -97,7 +125,7 @@ export function CancelInvoiceDialog({
   const isBlocked = amountPaid > 0.001;
 
   function reset() {
-    setReason("");
+    setReason(motivoInicial ?? "");
     setObservations("");
     setReasonError(null);
     setObservationsError(null);
@@ -176,10 +204,14 @@ export function CancelInvoiceDialog({
           setOpen(true);
         }}
         disabled={disabled || isPending}
-        className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 min-h-[48px]"
+        className={
+          completando
+            ? "bg-red-600 text-white border-red-600 hover:bg-red-700 hover:text-white min-h-[48px]"
+            : "text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 min-h-[48px]"
+        }
       >
         <XCircle size={16} className="mr-2" />
-        Anular factura
+        {completando ? "Completar anulación" : "Anular factura"}
       </Button>
 
       <ConfirmationModal
@@ -195,13 +227,23 @@ export function CancelInvoiceDialog({
         confirmDisabled={
           !isBlocked && isCancelConfirmDisabled({ hasCufe, dgiConfirmed, reason })
         }
-        title={isBlocked ? "No se puede anular" : "Anular factura"}
+        title={
+          isBlocked
+            ? "No se puede anular"
+            : completando
+              ? "Completar la anulación en el libro"
+              : "Anular factura"
+        }
         confirmButtonText={
           isBlocked
             ? "Entendido"
             : isPending
-              ? "Anulando…"
-              : "Sí, anular y generar nota de crédito"
+              ? completando
+                ? "Completando…"
+                : "Anulando…"
+              : completando
+                ? "Sí, completar la anulación"
+                : "Sí, anular y generar nota de crédito"
         }
         cancelButtonText={isBlocked ? "Cerrar" : "Cancelar"}
       >
@@ -257,6 +299,35 @@ export function CancelInvoiceDialog({
             </>
           ) : (
             <>
+              {/* 🔴 ESTADO INTERMEDIO (D4): anulada ante la DGI, viva en el libro. */}
+              {completando && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-md border-l-4 border-red-600 bg-red-50 p-3 text-sm text-red-900"
+                >
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-red-600" />
+                  <div>
+                    <p className="font-semibold">
+                      Esta factura ya está anulada ante la DGI.
+                    </p>
+                    <p className="mt-1">
+                      Lo que falta es anularla en el libro contable y generar su nota de
+                      crédito. Mientras quede así, la factura no acepta cobros ni notas de
+                      crédito: no es una factura vigente, aunque el libro todavía la muestre.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* AVISO DE PLAZO (D6): cuánto queda de la ventana de la DGI. */}
+              {!completando && hasCufe && typeof horasRestantes === "number" && (
+                <p className="text-xs text-gray-600">
+                  {horasRestantes >= 1
+                    ? `Quedan ${Math.floor(horasRestantes)} horas del plazo que la DGI da para anular este documento.`
+                    : "Queda menos de una hora del plazo que la DGI da para anular este documento."}
+                </p>
+              )}
+
               {/* DISCLAIMER DGI: solo para facturas con CUFE autorizado.
                   Anular en el CRM NO notifica a la DGI. */}
               {hasCufe && (
@@ -282,7 +353,9 @@ export function CancelInvoiceDialog({
               {/* MODO ANULACIÓN: factura sin pagos */}
               <div
                 role="alert"
-                className="flex items-start gap-2 rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900"
+                className={`flex items-start gap-2 rounded-md border-l-4 border-red-500 bg-red-50 p-3 text-sm text-red-900 ${
+                  completando ? "hidden" : ""
+                }`}
               >
                 <AlertTriangle
                   size={16}
@@ -356,7 +429,9 @@ export function CancelInvoiceDialog({
                   >
                     {reasonError ??
                       (meetsMinimum
-                        ? "Esta razón se incluye en la nota de crédito y queda registrada permanentemente."
+                        ? completando
+                          ? "Es el motivo que ya se le envió a la DGI. Déjelo igual para que el documento y el libro digan lo mismo."
+                          : "Esta razón se incluye en la nota de crédito y queda registrada permanentemente."
                         : `Mínimo ${MOTIVO_ANULACION_MIN} caracteres — lo exige la DGI para anular un ` +
                           `documento electrónico. ${
                             trimmedLen === 0
@@ -460,7 +535,9 @@ export function CancelInvoiceDialog({
               {isPending && (
                 <p className="text-xs text-gray-500 inline-flex items-center gap-1">
                   <Loader2 size={12} className="animate-spin" />
-                  Anulando y generando nota de crédito…
+                  {completando
+                    ? "Completando la anulación en el libro…"
+                    : "Anulando y generando nota de crédito…"}
                 </p>
               )}
             </>

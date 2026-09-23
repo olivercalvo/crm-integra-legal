@@ -30,6 +30,8 @@ import {
 import { EmitInvoiceDialog } from "../_components/emit-invoice-dialog";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { CancelInvoiceDialog } from "../_components/cancel-invoice-dialog";
+import { decidirAccionFiscal } from "@/lib/finanzas/efactura/orchestration/decidir-accion-fiscal";
+import { ultimoIntentoDeAnulacion } from "@/lib/finanzas/queries/anulaciones";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
@@ -120,6 +122,34 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       : Promise.resolve(false),
   ]);
 
+  // 🔴 QUÉ SE PUEDE HACER CON ESTA FACTURA — lo decide la matriz, no el JSX.
+  //    Hasta el 23/09/2026 `showCancel` se armaba acá con tres condiciones
+  //    sueltas, y el servidor las volvía a evaluar por su cuenta. Ahora la
+  //    pantalla y la ruta llaman a la MISMA función (SOP-038): si discrepan, es
+  //    un bug de una sola implementación, no de dos que se desincronizaron.
+  const accionFiscal = decidirAccionFiscal(
+    {
+      status: invoice.status,
+      feEstado: invoice.fe_estado ?? "no_emitida",
+      dgiCufe: invoice.dgi_cufe ?? null,
+      issueDate: String(invoice.issue_date),
+      dgiFechaAutorizacion: invoice.dgi_fecha_autorizacion ?? null,
+      creditedTotal,
+      amountPaid: Number(invoice.amount_paid ?? 0),
+      mesCerrado,
+    },
+    new Date()
+  );
+
+  // 🔴 ESTADO INTERMEDIO (D4): anulada ante la DGI, viva en el libro. Mientras
+  //    esté así NO se registran cobros ni notas de crédito — no es una factura
+  //    vigente, aunque el libro todavía la muestre.
+  const anulacionAMedias = accionFiscal.accion === "completar_anulacion_en_libro";
+  const intentoDeAnulacion =
+    anulacionAMedias && canMutate
+      ? await ultimoIntentoDeAnulacion(db, tenantId, invoice.id)
+      : null;
+
   // Lo que el diálogo de NC puede ofrecer: facturado menos ya acreditado, por
   // línea. Sale de la MISMA consulta que usa el servidor para validar.
   const lineasAcreditables: LineaAcreditable[] = invoice.lines.map((ln) => ({
@@ -131,11 +161,20 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     tax_rate: Number(ln.tax_rate ?? 0),
     disponible: Math.round((Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0)) * 100) / 100,
   }));
-  // "Anular" solo mientras la factura no tenga NC parcial (053: la anulación
-  // espeja el asiento original completo y la NC parcial ya debitó su parte) y
-  // el mes esté abierto (D4). Si no, el camino es la NC.
-  const showCancel = cancellable && canMutate && !mesCerrado && creditedTotal <= 0;
-  const showCreditNote = cancellable && canMutate && !acreditadaTotal && lineasAcreditables.some((l) => l.disponible > 0);
+  // "Anular" aparece cuando la matriz dice que se puede anular — con la DGI o
+  // sólo en el libro, según la factura tenga CUFE o no. Los motivos por los que
+  // no se puede (mes cerrado, NC previa, plazo vencido) los junta la matriz y
+  // salen en el aviso de abajo, todos juntos.
+  const showCancel =
+    canMutate &&
+    (accionFiscal.accion === "anular_en_dgi_y_libro" ||
+      accionFiscal.accion === "anular_solo_en_el_libro");
+  const showCreditNote =
+    cancellable &&
+    canMutate &&
+    !anulacionAMedias &&
+    !acreditadaTotal &&
+    lineasAcreditables.some((l) => l.disponible > 0);
   // Card "Facturación Electrónica" (PAC) — visible en facturas emitidas y
   // en anuladas que hayan llegado a interactuar con DGI (para conservar
   // historial post-anulación).
@@ -252,22 +291,58 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               amountPaid={Number(invoice.amount_paid)}
               feEstado={invoice.fe_estado}
               dgiCufe={invoice.dgi_cufe}
+              horasRestantes={
+                accionFiscal.accion === "anular_en_dgi_y_libro"
+                  ? accionFiscal.ventana.horasRestantes
+                  : null
+              }
+            />
+          )}
+          {/* 🔴 D4: la factura está anulada ante la DGI y falta el libro. */}
+          {anulacionAMedias && canMutate && (
+            <CancelInvoiceDialog
+              variante="completar"
+              motivoInicial={intentoDeAnulacion?.motivo}
+              invoiceId={invoice.id}
+              invoiceNumber={invoice.invoice_number}
+              invoiceKind={invoice.invoice_kind}
+              grandTotal={Number(invoice.grand_total)}
+              amountPaid={Number(invoice.amount_paid)}
+              feEstado={invoice.fe_estado}
+              dgiCufe={invoice.dgi_cufe}
             />
           )}
         </div>
       </div>
 
-      {/* D4: cerrado el mes de la factura no se anula; se acredita con fecha de hoy. */}
-      {cancellable && canMutate && mesCerrado && (
-        <div role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
-          El mes de esta factura ({String(invoice.issue_date).slice(0, 7)}) está cerrado: no se anula, se
-          emite una nota de crédito con fecha de hoy. Para dejarla sin efecto, acredite todas las líneas.
+      {/* 🔴 D4 — ESTADO INTERMEDIO: anulada ante la DGI, viva en el libro.
+          Es la única banda ROJA de esta pantalla, y lo es a propósito: no es un
+          aviso, es una factura que no está en ninguno de sus dos estados
+          normales y que alguien tiene que terminar de anular. */}
+      {anulacionAMedias && (
+        <div
+          role="alert"
+          className="rounded-md border-l-4 border-red-600 bg-red-50 p-3 text-sm text-red-900"
+        >
+          <span className="font-semibold">
+            Esta factura está ANULADA ante la DGI y todavía viva en el libro contable.
+          </span>{" "}
+          {accionFiscal.mensaje}
+          {intentoDeAnulacion && (
+            <span className="mt-1 block text-xs text-red-800">
+              Motivo enviado a la DGI: «{intentoDeAnulacion.motivo}»
+            </span>
+          )}
         </div>
       )}
-      {cancellable && canMutate && !mesCerrado && creditedTotal > 0 && !acreditadaTotal && (
+
+      {/* Por qué NO se puede anular: los motivos los junta la matriz (SOP-038) y
+          salen TODOS, no el primero que aparece. Antes eran dos avisos armados
+          acá con sus propias condiciones, que es como se desincronizan de lo
+          que el servidor decide. */}
+      {cancellable && canMutate && !anulacionAMedias && !showCancel && !acreditadaTotal && (
         <div role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
-          Esta factura ya tiene B/. {fmtImporte(creditedTotal)} acreditados por nota de crédito: ya no se
-          anula. Lo que falta se acredita con otra nota de crédito.
+          {accionFiscal.mensaje}
         </div>
       )}
 

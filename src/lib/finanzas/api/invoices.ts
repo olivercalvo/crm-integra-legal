@@ -18,7 +18,6 @@ import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
   UpdateInvoiceDgiInput,
-  CancelInvoiceInput,
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
@@ -29,7 +28,6 @@ import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
-import { validarMotivoDeAnulacion } from "@/lib/finanzas/validators/cancel-invoice";
 import {
   validarConsistenciaDeKind,
   motivoDeInconsistenciaDeKind,

@@ -144,20 +144,51 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
   (asiento 48) y la antigüedad por cobrar ya cierra sin "tercera causa". Detalle en `changelog.md`
   y SOP-031 §2b.
 - Todavía NO existe la reversión de una NC ni el envío de la NC a la DGI.
-- **ANULACIÓN FISCAL (no construido). ideati, 17/09/2026: la anulación ante la DGI solo es posible
-  dentro de los 7 días de emitida; después corresponde nota de crédito. Hoy `cancelInvoice` anula
-  solo de nuestro lado y el documento sigue vivo ante la DGI. Esto además acorta la frontera que se
-  fijó en el Bloque 5: para una factura autorizada manda el plazo de 7 días, no el cierre del mes.**
+- **ANULACIÓN FISCAL (no construido). ✅ RESPONDIDO por ideati (Eduardo Méndez) el 22/09/2026.**
+  Hoy `cancelInvoice` anula solo de nuestro lado y el documento sigue vivo ante la DGI. La
+  frontera del Bloque 5 se acorta igual: para una factura autorizada manda el plazo del PAC, no
+  el cierre del mes. Las seis respuestas:
+
+  1. **Plazo: 182 HORAS.** ✅ Nuestras notas estaban **bien** (`claude.md`, `sop.md`, este
+     archivo, `emisor-config.ts`). Lo que estaba mal era **la nota del 17/09 que decía "7 días"**,
+     corregida acá: 182 h son 7,58 días. ⚠️ **No dijeron desde cuándo se cuentan.** Se asume
+     **desde la fecha de emisión**, que es el más estricto de los dos candidatos
+     (`fechaEmision` vs `dgi_fecha_autorizacion`), y el rechazo del PAC queda como respaldo si la
+     ventana real resultara más larga.
+  2. **`cancellationReason`: texto libre, mínimo 15 caracteres.** ⚠️ Nuestro modal de anulación
+     hoy exige 3–1000 (`invoices.cancellation_reason`): **el mínimo sube a 15** cuando se cablee
+     el envío, y hay que moverlo en el validador y en el CHECK. Las **notas de crédito y de
+     débito se anulan por el MISMO endpoint**.
+  3. **NC sobre factura sin CUFE:** la DGI **sí** acepta la referencia a factura en papel
+     (`informacionReferenciaFacturaPapel.numeroFacturaPapel`, que ya habíamos encontrado en el
+     swagger), pero ideati **recomienda usar NOTA DE CRÉDITO GENÉRICA**.
+     🔴 **Cuál es el tipo de la genérica es DATO A CONFIRMAR, no afirmado.** Lo que sí se puede
+     decir con evidencia, revisado el 23/09: `GDGenRequest.tipoDocumento` tiene
+     `"pattern": "01|02|03|04|05|06|07|08|09|10"`, así que **`06` es un valor que el contrato
+     acepta** — pero el swagger **no le pone nombre ni descripción a ninguno de los diez**, y en
+     el repo `TIPO_DOCUMENTO` (`efactura/types/catalogs.ts`) solo declara seis (01, 02, 03, 04,
+     05, 09). **Confirmar con ideati que la genérica es el `06` antes de escribir una línea.**
+  4. **NC parcial: se envían SOLO las líneas que se acreditan.** ✅ Calza con el modelo del
+     Bloque 5 sin cambios: `credit_note_lines` ya guarda únicamente las líneas acreditadas, con
+     su cantidad.
+  5. **Plazo máximo entre factura y NC: no hay validación técnica.** Para la declaración jurada
+     de ITBMS vale hasta **90 días**. → **Cierra la pregunta abierta #1** de más abajo.
+  6. **Correlativo: la NC puede usar la MISMA secuencia del punto 051**; la duplicidad la valida
+     la DGI **por tipo de documento**. ✅ **No hay que tocar `fe_secuencias`** — la duda sobre una
+     migración de la `020` queda cerrada **sin cambios**.
+
+  **Lo que sigue abierto del lado fiscal:** el tipo de la NC genérica (punto 3) y si Josuarth va
+  a necesitar la **nota de débito (`05`)**.
   Lo que el swagger del PAC (`docs/efactura/swagger-v1.json`) SÍ tiene y lo que no, revisado el
   22/09/2026 antes de escribirle a ideati:
   - ✅ El endpoint existe: `POST /api/v1/InvoiceEvents/CreateCancellation`, header
     `Accept-Language` (requerido, default `es-PA`), body `CancellationRequest { cufe,
     cancellationReason }`, respuesta `200` con un **array** de `{ codigo, mensaje }`.
-  - ❌ El swagger **no dice nada del plazo** ni desde cuándo se cuenta. Y nuestras propias notas
-    dicen **182 horas** (claude.md, sop.md, este archivo, `emisor-config.ts`), que son 7,58 días,
-    no 7: el número viene del Sprint Camino 1 (`a2e617c`, 07/05/2026) sin fuente citada. **Hay que
-    preguntarle a ideati cuál rige y desde qué momento** — ¿`fechaEmision` del documento o
-    `dgi_fecha_autorizacion`?— y corregir los cuatro lugares con la respuesta.
+  - ❌ El swagger **no dice nada del plazo** ni desde cuándo se cuenta. ✅ **RESUELTO el
+    22/09/2026: son 182 horas**, como ya decían `claude.md`, `sop.md`, este archivo y
+    `emisor-config.ts` — el número del Sprint Camino 1 (`a2e617c`, 07/05/2026) era correcto.
+    Los cuatro lugares quedan como están. Lo único que ideati NO precisó es **desde cuándo**
+    se cuentan; se asume desde la fecha de emisión (ver el punto 1 de arriba).
   - Referenciar el documento original: `GDGenRequest.documentosFiscalesReferenciados[]` →
     `GDFRefRequest { rucEmisorDocumentoReferenciado{tipoRuc,ruc,digitoVerificador},
     nombreRazonSocialEmisor, fechaEmisionDocumentoReferenciado, informacionReferencia }`, y ahí
@@ -174,8 +205,9 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
   - ❌ El swagger **no dice nada de serie ni punto de facturación para el tipo 04**: `GDGenRequest`
     tiene `tipoDocumento`, `numeroDocumento` y `puntoFacturacion` sin más. De nuestro lado,
     `fe_secuencias` es `(tenant_id, punto_facturacion)` — **sin `tipo_documento`**— así que hoy una
-    NC tomaría número del MISMO correlativo que las facturas 01/09. Preguntar si la DGI exige
-    serie separada; si la exige, es una migración de `fe_secuencias` (`020`).
+    NC tomaría número del MISMO correlativo que las facturas 01/09. ✅ **RESUELTO el 22/09/2026:
+    la DGI NO exige serie separada** — la duplicidad se valida por tipo de documento, así que la
+    NC puede usar la misma secuencia. **`fe_secuencias` no se toca.**
   - `tipoDocumento` en `types/catalogs.ts`: declarados `01` interna, `02` importación, `03`
     exportación, **`04` nota de crédito**, **`05` nota de débito**, `09` reembolso. **Usados de
     verdad solo `01` y `09`** (`tipoDocumentoDeKind`); `04` y `05` están declarados y nadie los
@@ -183,17 +215,22 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
     mapper **nunca arma `documentosFiscalesReferenciados`**: no hay código que referencie un
     documento original. Para Integra el que falta de verdad es el `05` (nota de débito: recargos
     o intereses sobre una factura ya emitida) — preguntarle a Josuarth si lo va a necesitar. La
-    lista completa de la DGI puede tener tipos genéricos sin CUFE de referencia (06/07): **no
-    están en el swagger ni en el repo**, confirmarlo con ideati junto con lo anterior.
+    lista completa de la DGI puede tener tipos genéricos sin CUFE de referencia (06/07).
+    ⚠️ **Corrección del 23/09:** decir que "no están en el swagger" era impreciso. El swagger
+    **no los nombra**, pero **sí los admite**: `tipoDocumento` lleva
+    `"pattern": "01|02|03|04|05|06|07|08|09|10"`, diez valores sin una sola etiqueta ni
+    descripción. O sea que el contrato acepta `06` y `07`; **qué es cada uno sigue sin confirmar**
+    (ver el punto 3 de las respuestas de ideati).
 - Producción, cuando vaya: 034, 036, 037, 038, 039, 045, 047, 048, 049, 050, **051, 052, 053** en
   ese orden, con sus pre-flights (`docs/staging/inventario-migraciones.md`).
 
-### 📌 Dos preguntas abiertas (no bloquean)
+### 📌 Preguntas abiertas
 
-1. **ideati — la fecha de la NC ante la DGI.** La NC contable lleva la fecha del día en que se
-   emite (acta del 09/09) y puede salir semanas después de la factura. Cuando se envíe al PAC
-   como tipo 04: ¿la DGI acepta una NC cuya fecha contable es semanas posterior a la de la
-   factura que referencia? ¿Hay ventana? Hoy la NC queda `no_emitida` y no se manda.
+1. ✅ **CERRADA el 22/09/2026 — ideati, la fecha de la NC ante la DGI.** Preguntaba si la DGI
+   acepta una NC cuya fecha contable es semanas posterior a la de la factura que referencia.
+   **Respuesta: no hay validación técnica de plazo entre factura y NC.** El límite es fiscal, no
+   del PAC: para la declaración jurada de ITBMS vale hasta **90 días**. La decisión del acta del
+   09/09 —la NC lleva la fecha del día en que se emite— queda **confirmada y sin conflicto**.
 2. **Josuarth — acreditar una factura ya cobrada.** Hoy la NC no puede superar el saldo
    pendiente: si el cliente ya pagó y se le reconoce un descuento, hay que reversar el cobro
    primero. ¿Quiere en cambio que la NC pueda dejar la factura con **saldo a favor del cliente**

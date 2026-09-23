@@ -12,6 +12,7 @@ import {
   paymentTermsLabel,
 } from "@/lib/finanzas/types/supplier";
 import { avisosDeRuc } from "@/lib/finanzas/validators/supplier";
+import type { SupplierDefaultAccountOption } from "@/lib/finanzas/queries/suppliers";
 
 /**
  * Formulario de proveedor, para crear y para editar.
@@ -33,11 +34,18 @@ interface Props {
   proveedor: SupplierRow | null;
   /** Solo para el alta: el número que le va a tocar. */
   proximoNumero?: string | null;
+  /**
+   * Cuentas elegibles como cuenta por defecto: gasto o costo, activas (4.4).
+   * Viene del servidor con `listSupplierDefaultAccountOptions`, que filtra por
+   * `TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR` — el mismo predicado que usa el
+   * guard, para que el selector y el servidor no puedan divergir.
+   */
+  cuentas: SupplierDefaultAccountOption[];
 }
 
 type Errores = Record<string, string>;
 
-export function SupplierForm({ proveedor, proximoNumero }: Props) {
+export function SupplierForm({ proveedor, proximoNumero, cuentas }: Props) {
   const router = useRouter();
   const editando = proveedor !== null;
 
@@ -48,9 +56,24 @@ export function SupplierForm({ proveedor, proximoNumero }: Props) {
   const [address, setAddress] = useState(proveedor?.address ?? "");
   const [phone, setPhone] = useState(proveedor?.phone ?? "");
   const [email, setEmail] = useState(proveedor?.email ?? "");
+  const [defaultAccount, setDefaultAccount] = useState(
+    proveedor?.default_chart_account_code ?? ""
+  );
   const [plazo, setPlazo] = useState(String(proveedor?.payment_terms_days ?? 0));
   const [active, setActive] = useState(proveedor?.active ?? true);
   const [notes, setNotes] = useState(proveedor?.notes ?? "");
+
+  /**
+   * ¿La cuenta que el proveedor tiene guardada sigue siendo elegible?
+   *
+   * `cuentas` ya viene filtrada a gasto/costo activas, así que "no está en la
+   * lista" es exactamente "dejó de servir". Se calcula contra el valor
+   * GUARDADO y no contra el del estado: si la persona elige otra, el aviso
+   * tiene que seguir explicando por qué apareció.
+   */
+  const cuentaGuardadaInvalida =
+    !!proveedor?.default_chart_account_code &&
+    !cuentas.some((c) => c.code === proveedor.default_chart_account_code);
 
   const [errores, setErrores] = useState<Errores>({});
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
@@ -75,6 +98,7 @@ export function SupplierForm({ proveedor, proximoNumero }: Props) {
       address: address || null,
       phone: phone || null,
       email: email || null,
+      default_chart_account_code: defaultAccount || null,
       payment_terms_days: Number(plazo || 0),
       active,
       notes: notes || null,
@@ -287,6 +311,54 @@ export function SupplierForm({ proveedor, proximoNumero }: Props) {
         <p className="mt-2 text-xs text-gray-500">
           Los botones son atajos. Se acepta cualquier plazo de {PAYMENT_TERMS_MIN} a{" "}
           {PAYMENT_TERMS_MAX} días.
+        </p>
+      </fieldset>
+
+      {/* ---------------- Cuenta contable por defecto (4.4) ---------------- */}
+      <fieldset className="rounded-xl border bg-white p-4">
+        <legend className="px-1 text-sm font-semibold text-integra-navy">
+          Cuenta contable por defecto
+        </legend>
+
+        <label htmlFor="cuenta" className={labelCls}>
+          Cuenta que se precarga en cada línea de compra
+        </label>
+        <select
+          id="cuenta"
+          value={cuentaGuardadaInvalida ? "" : defaultAccount}
+          onChange={(e) => setDefaultAccount(e.target.value)}
+          className={`${inputCls} w-full`}
+        >
+          <option value="">Sin cuenta por defecto</option>
+          {cuentas.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.code} · {c.name}
+            </option>
+          ))}
+        </select>
+        <Error campo="default_chart_account_code" />
+
+        {/* 🔴 DEGRADAR, NO BLOQUEAR (D3). Si la cuenta guardada se desactivó o
+            la reclasificaron, la ficha se abre igual y avisa. No se la agrega
+            al selector: volver a ofrecerla sería invitar a guardarla otra vez. */}
+        {cuentaGuardadaInvalida && (
+          <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              La cuenta guardada (<strong className="font-mono">{proveedor?.default_chart_account_code}</strong>)
+              ya no sirve como cuenta por defecto: se desactivó o la reclasificaron a un tipo que
+              no es gasto ni costo. Elegí otra, o dejá el proveedor sin cuenta por defecto. Las
+              compras ya cargadas <strong>no cambian</strong>.
+            </span>
+          </p>
+        )}
+
+        <p className="mt-2 text-xs text-gray-500">
+          Se precarga en cada línea de una compra nueva de este proveedor, y se puede cambiar
+          línea por línea. <strong>No toca las compras ya cargadas.</strong> Sólo se ofrecen
+          cuentas de gasto o costo activas: una compra del bufete es un gasto propio, no un
+          adelanto por un cliente (por eso <span className="font-mono">130003</span> no está en
+          la lista, y por eso los gastos de trámite no usan esta cuenta).
         </p>
       </fieldset>
 

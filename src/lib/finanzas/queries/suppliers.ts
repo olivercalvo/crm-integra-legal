@@ -5,6 +5,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SupplierListItem, SupplierRow } from "@/lib/finanzas/types/supplier";
+import { TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 type DB = SupabaseClient;
 
@@ -110,6 +112,55 @@ export interface SupplierOption {
   legal_name: string;
   trade_name: string | null;
   payment_terms_days: number;
+  /** Cuenta que se precarga en cada línea de COMPRA (4.4). Puede ser inválida hoy: la pantalla degrada. */
+  default_chart_account_code: string | null;
+}
+
+/** Una cuenta que puede ser el default de un proveedor. */
+export interface SupplierDefaultAccountOption {
+  code: string;
+  name: string;
+  account_type: AccountType;
+}
+
+/**
+ * Las cuentas que la ficha del proveedor ofrece como cuenta por defecto (4.4).
+ *
+ * 🔴 Más corta que `listExpenseAccountOptions`, y a propósito. Aquélla trae
+ * `asset`, `cost` y `expense` porque un gasto de TRÁMITE se clasifica contra
+ * `130003`, que es un activo. Ésta trae sólo gasto y costo: el default de un
+ * proveedor es para COMPRAS del bufete, y una compra propia nunca es un
+ * adelanto por un cliente.
+ *
+ * El filtro sale de `TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR` y no de una lista
+ * literal, para que el selector y el guard del servidor no puedan divergir.
+ *
+ * Sólo ACTIVAS. Si el proveedor que se está editando tiene guardada una cuenta
+ * que ya no está en esta lista, la pantalla DEGRADA: la muestra como inválida y
+ * pide elegir otra (D3). No se la agrega a la lista: ofrecerla otra vez sería
+ * invitar a volver a guardarla.
+ */
+export async function listSupplierDefaultAccountOptions(
+  db: DB,
+  tenantId: string
+): Promise<SupplierDefaultAccountOption[]> {
+  const { data, error } = await db
+    .from("chart_of_accounts")
+    .select("code, name, account_type")
+    .eq("tenant_id", tenantId)
+    .eq("active", true)
+    .in("account_type", TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR)
+    .order("code");
+
+  if (error) {
+    console.error("[finanzas/queries] listSupplierDefaultAccountOptions failed", error);
+    return [];
+  }
+  return (data ?? []).map((c) => ({
+    code: c.code as string,
+    name: c.name as string,
+    account_type: c.account_type as AccountType,
+  }));
 }
 
 export async function listSupplierOptions(
@@ -118,7 +169,7 @@ export async function listSupplierOptions(
 ): Promise<SupplierOption[]> {
   const { data, error } = await db
     .from("suppliers")
-    .select("id, supplier_number, legal_name, trade_name, payment_terms_days")
+    .select("id, supplier_number, legal_name, trade_name, payment_terms_days, default_chart_account_code")
     .eq("tenant_id", tenantId)
     .eq("active", true)
     .order("legal_name");

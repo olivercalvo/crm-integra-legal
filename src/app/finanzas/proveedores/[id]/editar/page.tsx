@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { getSupplier } from "@/lib/finanzas/queries/suppliers";
+import { listSupplierDefaultAccountOptions } from "@/lib/finanzas/queries/suppliers";
 import { SupplierForm } from "../../_components/supplier-form";
 
 const ROLES = ["admin", "abogada", "contador"];
@@ -21,6 +22,8 @@ export default async function EditarProveedorPage({ params }: { params: { id: st
   const proveedor = await getSupplier(ctx.db, ctx.tenantId, params.id);
   if (!proveedor) notFound();
 
+  const cuentas = await listSupplierDefaultAccountOptions(ctx.db, ctx.tenantId);
+
   return (
     <div className="space-y-4">
       <Link
@@ -35,7 +38,7 @@ export default async function EditarProveedorPage({ params }: { params: { id: st
         Editar {proveedor.legal_name}
       </h1>
 
-      <SupplierForm proveedor={proveedor} />
+      <SupplierForm proveedor={proveedor} cuentas={cuentas} />
     </div>
   );
 }

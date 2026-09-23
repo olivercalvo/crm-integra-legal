@@ -116,6 +116,32 @@ export function BusinessExpenseForm(props: Props) {
 
   const proveedorElegido = props.suppliers.find((s) => s.id === supplierId) ?? null;
 
+  /**
+   * La cuenta por defecto del proveedor (4.4), YA VALIDADA contra el catálogo.
+   *
+   * `props.accounts` trae asset/cost/expense activas (es la lista de gastos, que
+   * incluye `130003` para trámite). Acá se exige además que sea de gasto o
+   * costo: el default de un proveedor es sólo para COMPRAS, y una compra del
+   * bufete no es un adelanto por un cliente. Es el mismo criterio que
+   * `esTipoValidoComoDefaultDeProveedor` del lado del servidor.
+   *
+   * Si el proveedor tiene una cuenta guardada que ya no pasa ese filtro
+   * —se desactivó o la reclasificaron—, esto devuelve `""` y la pantalla avisa:
+   * DEGRADAR, no bloquear (D3).
+   */
+  const cuentaDefaultProveedor = (() => {
+    const code = proveedorElegido?.default_chart_account_code;
+    if (!code) return "";
+    const cuenta = props.accounts.find((a) => a.code === code);
+    if (!cuenta) return "";
+    const tipo = cuenta.account_type ?? "expense";
+    return tipo === "expense" || tipo === "cost" ? code : "";
+  })();
+
+  /** El proveedor tiene cuenta guardada pero ya no sirve: hay que avisar. */
+  const cuentaProveedorInvalida =
+    !!proveedorElegido?.default_chart_account_code && cuentaDefaultProveedor === "";
+
   /** Recalcula el vencimiento salvo que ya lo hayan editado a mano. */
   function proponerVencimiento(fechaGasto: string, plazo: number | null) {
     if (vencimientoTocado) return;
@@ -328,6 +354,24 @@ export function BusinessExpenseForm(props: Props) {
                 const p = props.suppliers.find((x) => x.id === id) ?? null;
                 if (p) setSupplierName("");
                 proponerVencimiento(expenseDate, p?.payment_terms_days ?? 0);
+
+                // 🔴 D4 — EL DEFAULT PRECARGA, NUNCA REESCRIBE.
+                // Sólo se completan las líneas que están SIN cuenta. Una línea
+                // que ya tiene una elegida no se toca al cambiar de proveedor:
+                // sería pisar una decisión de la persona con una preferencia de
+                // catálogo, y en silencio.
+                const code = p?.default_chart_account_code ?? null;
+                if (code) {
+                  const cuenta = props.accounts.find((a) => a.code === code);
+                  const tipo = cuenta?.account_type ?? "expense";
+                  if (cuenta && (tipo === "expense" || tipo === "cost")) {
+                    setLineas((prev) =>
+                      prev.map((l) =>
+                        l.chart_account_code ? l : { ...l, chart_account_code: code }
+                      )
+                    );
+                  }
+                }
               }}
               disabled={isPending}
               className={
@@ -344,6 +388,16 @@ export function BusinessExpenseForm(props: Props) {
             </select>
             {errors.supplier_id && (
               <p className="mt-1 text-xs text-red-600">{errors.supplier_id}</p>
+            )}
+            {cuentaProveedorInvalida && (
+              <p className="mt-1.5 rounded-md bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+                La cuenta por defecto de este proveedor (
+                <strong className="font-mono">
+                  {proveedorElegido?.default_chart_account_code}
+                </strong>
+                ) ya no sirve: se desactivó o la reclasificaron. Las líneas arrancan sin cuenta y
+                hay que elegirla a mano. Se corrige en la ficha del proveedor.
+              </p>
             )}
             <p className="mt-1 text-xs text-gray-500">
               {proveedorElegido ? (
@@ -525,7 +579,10 @@ export function BusinessExpenseForm(props: Props) {
             ...a,
             account_type: a.account_type ?? "expense",
           }))}
-          cuentaPorDefecto=""
+          // 4.4 — la cuenta del proveedor, o "" si no tiene o si dejó de ser
+          // válida. El motivo de que el default NO pueda ser `130003` está en
+          // `cuentas-de-gasto.ts` y en el encabezado de la `057`.
+          cuentaPorDefecto={cuentaDefaultProveedor}
           taxCodes={props.taxCodes}
           impuestoPorDefecto={IMPUESTO_POR_DEFECTO_COMPRA}
           mostrarTotales={false}

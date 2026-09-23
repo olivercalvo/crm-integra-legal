@@ -98,6 +98,8 @@ export interface SupplierSnapshot {
   legal_name: string;
   trade_name: string | null;
   payment_terms_days: number;
+  /** Cuenta por defecto para las líneas de COMPRA (4.4). Opcional. */
+  default_chart_account_code?: string | null;
 }
 
 /** Snapshot mínimo de la cuenta contable para joins. */

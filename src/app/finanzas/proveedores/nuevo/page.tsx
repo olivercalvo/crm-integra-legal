@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { previewNextSupplierNumber } from "@/lib/finanzas/numbering/supplier-numbering";
+import { listSupplierDefaultAccountOptions } from "@/lib/finanzas/queries/suppliers";
 import { SupplierForm } from "../_components/supplier-form";
 
 const ROLES = ["admin", "abogada", "contador"];
@@ -16,7 +17,10 @@ export default async function NuevoProveedorPage() {
     redirect("/finanzas");
   }
 
-  const proximoNumero = await previewNextSupplierNumber(ctx.db, ctx.tenantId);
+  const [proximoNumero, cuentas] = await Promise.all([
+    previewNextSupplierNumber(ctx.db, ctx.tenantId),
+    listSupplierDefaultAccountOptions(ctx.db, ctx.tenantId),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -30,7 +34,7 @@ export default async function NuevoProveedorPage() {
 
       <h1 className="text-2xl font-bold text-integra-navy">Nuevo proveedor</h1>
 
-      <SupplierForm proveedor={null} proximoNumero={proximoNumero} />
+      <SupplierForm proveedor={null} proximoNumero={proximoNumero} cuentas={cuentas} />
     </div>
   );
 }

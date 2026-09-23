@@ -375,6 +375,41 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - ⚠️ `services_catalog.default_tax_code` la referencia con un FK compuesto `ON UPDATE CASCADE`:
   editar un código lo renombra también allá. Detalle en `sop.md` SOP-037.
 
+### Qué se puede hacer ante la DGI con una factura emitida (desde 2026-09-23, Bloque 9A)
+- 🔴 **La matriz es una FUNCIÓN, no una tabla en un .md**: `decidirAccionFiscal()` en
+  `efactura/orchestration/decidir-accion-fiscal.ts`, pura, sin I/O y **sin reloj propio**
+  (`ahora` entra por parámetro). Seis respuestas, cada una con su mensaje en claro para que la
+  pantalla NO vuelva a derivar la matriz en el JSX. Detalle en `sop.md` SOP-038.
+- **Decide lo FISCAL, no lo interno.** Si la factura se puede anular en el CRM —sin cobros, mes
+  abierto, sin NC en el libro— lo sigue decidiendo `cancelInvoice`. Son dos preguntas distintas.
+- 🔴 **La ventana de 182 h se cuenta desde `issue_date`, no desde `dgi_fecha_autorizacion`.**
+  ideati confirmó el plazo el 22/09 pero NO dijo desde cuándo; se toma el candidato que cierra
+  ANTES (y `issue_date`, que es una fecha sin hora, a las 00:00 de Panamá). Si la ventana real
+  fuera más larga ofrecemos una NC donde se podía anular: inofensivo. Al revés ofreceríamos un
+  botón que la DGI rechaza. Se cambia `INSTANTE_DE_INICIO` y ningún llamador.
+- 🔴 **"Sin CUFE" NO significa "nunca llegó a la DGI".** Las facturas anteriores al **8 de julio
+  de 2026** se emitieron a mano en el portal de ideati (punto `050`): **tienen CUFE**, pero el
+  CRM no lo guardó, y en la base se ven idénticas a una que jamás se envió. La respuesta es
+  `nc_04_requiere_cufe` — **pide el CUFE, no lo inventa**. 🔒 Hay un test que exige la MISMA
+  respuesta para una factura de marzo y una de septiembre: **nada de fechas de corte**.
+- **`'pending'` no es "todavía no se mandó": es "se mandó y no sabemos cómo terminó".** Gana
+  sobre todo lo demás, incluso con CUFE guardado.
+- **Los 90 días de la declaración de ITBMS ADVIERTEN, no bloquean.** El PAC no valida plazo
+  entre factura y NC (ideati, 22/09); quien decide es el contador.
+- ⚠️ **Todavía NO está cableado**: la función no tiene llamadores. La usa 9B.
+
+### Congelamientos — la regla del JSON dorado (desde 2026-09-23)
+- 🔒 **Un `*-esperado.json` y el código que ese golden verifica NUNCA van en el mismo commit.**
+  Si el mismo commit regenera la referencia, el test pasó comparándose consigo mismo y no probó
+  nada — y queda el registro de un congelamiento que nunca ocurrió. Lo hace cumplir
+  `golden-y-refactor-no-van-juntos.test.ts` (sólo las MODIFICACIONES; un golden que nace no
+  puede tapar nada). `sop.md` SOP-039.
+- 🔴 **Un golden sólo sirve si congela un documento VÁLIDO.** Hay un test que verifica que los
+  cuatro payloads congelados CUADREN (`totalNeto + totalITBMS = valorTotalFactura`): la primera
+  versión del fixture multilínea sumaba mal y congeló un documento que la DGI rechazaría.
+- **Un golden nunca depende del reloj.** La fecha se pasa explícita; hay un test que corre el
+  generador dos veces y compara.
+
 ### Exportación de reportes (desde 2026-09-02)
 - **El formato es XLSX, no CSV**, y el motivo es concreto: un CSV abre el DV `05` como `5`. Además
   el separador de Excel depende de la configuración regional de la máquina, no del archivo. El

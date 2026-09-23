@@ -1,5 +1,93 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 9A — la red antes del refactor fiscal] - 2026-09-23
+
+**Staging (`develop`):** `5c0d708` (golden) → `f344172` (secuencia de escrituras) →
+`9fd72b3` (`decidirAccionFiscal`) → docs. **Sin migración, sin pantalla, sin cambios en
+producción.** `main` sigue en `24b227a`.
+
+El Bloque 9B va a meter mano en el orquestador que **hoy autoriza facturas reales del bufete
+ante la DGI**, para que anular ante la DGI y emitir una nota de crédito sean dos instancias
+del mismo flujo. Una regresión ahí **no se descubre en desarrollo**: se descubre como un
+rechazo de la DGI sobre una factura real, delante del cliente, y el intento no se deshace.
+Así que primero va la red. Este bloque no agrega una sola línea de comportamiento.
+
+### El payload completo, congelado (`5c0d708`)
+
+`receptor-payload-congelado` congelaba sólo `informacionReceptor`. Ahora se congela el
+documento entero —`datosGenerales` con emisor y receptor, `listaItems` y `totales`— para
+cuatro casos: `01-honorarios`, `09-reembolso` (la rama que menos se ejerce y más cara sale:
+las 34 REI ya emitidas como `01` no se corrigen), `01-extranjero` y `01-multilinea-mixta`
+(tasas 7% / 0% / exento, cantidades que no son 1, precios con decimales). Se compara el JSON
+**serializado**: una clave que pasa a `undefined` desaparece del body y el PAC no la ve.
+
+Dos cosas salieron de escribirlo, y las dos quedaron como test permanente:
+
+- **La fecha se pasa explícita.** El mapper cae en `new Date()` si no se le da una, y un
+  golden que depende del reloj falla mañana solo — y el reflejo de quien lo ve fallar es
+  regenerarlo, que es justo lo que el archivo existe para impedir.
+- 🔴 **Un golden sólo sirve si congela un documento VÁLIDO.** La primera versión del fixture
+  multilínea sumaba mal el encabezado (1.837,50 donde las líneas daban 1.832,50) y congeló un
+  payload donde `totalNeto + totalITBMS` no daba `valorTotalFactura`: un documento que la DGI
+  rechazaría, guardado como referencia, con el test pasando porque se comparaba consigo
+  mismo. Hay un test que verifica que los cuatro **cuadren**.
+
+También salió que `tipo_receptor_fe` `03` **no** es el no residente (exige RUC igual y el
+mapper corta): el no residente es el `04`.
+
+### La secuencia de escrituras, congelada (`f344172`)
+
+Los tests que ya había sobre `emitInvoiceToEfactura` miran el **resultado**. Ninguno miraba el
+**orden**, y el orden es donde vive lo que ese módulo hace bien:
+
+1. el número se **reserva** en la factura antes de que corra el mapper, que es la primera
+   pieza que puede lanzar (es lo que cerró FAC-REI-000039);
+2. el documento que se le va a mandar al PAC se **guarda** antes del POST;
+3. al volver, el registro del intento se cierra **antes** de tocar la factura.
+
+Las tres son decisiones sobre qué queda en la base si el proceso se muere en el peor momento,
+y las tres se pierden reordenando dos `await` sin romper ningún otro test ni cambiar ninguna
+firma. Un fake de Supabase anota cada operación en un diario —tabla, verbo, columnas—, el POST
+se anota en el **mismo** diario, y los cinco caminos quedan escritos como listas literales.
+Arriba de eso, cinco reglas que recorren los cuatro caminos y seguirán aplicando a los que 9B
+agregue.
+
+**Verificado que atrapa, no sólo que pasa:** invirtiendo los dos `UPDATE` del camino
+autorizado fallan dos tests — el congelado y la regla que lo explica.
+
+### `decidirAccionFiscal()` — la matriz, en código (`9fd72b3`)
+
+La matriz de "qué se puede hacer ante la DGI con esta factura" vivía en prosa en `claude.md`.
+Ahora es una función pura, sin I/O y **sin reloj propio**, con seis respuestas y un mensaje en
+claro para cada una (para que 9B no vuelva a derivar la matriz en el JSX). Decide **lo
+fiscal**; si la factura se puede anular en el CRM lo sigue decidiendo `cancelInvoice`.
+
+- **La ventana se cuenta desde la EMISIÓN**, no desde la autorización: ideati confirmó las 182
+  horas pero no dijo desde cuándo, y se toma el candidato que cierra antes.
+- 🔴 **"Sin CUFE" no significa "nunca llegó a la DGI".** Las facturas anteriores al 8 de julio
+  se emitieron a mano en el portal de ideati (punto `050`): tienen CUFE, pero el CRM no lo
+  guardó, y en la base se ven idénticas a una que jamás se envió. La respuesta **pide el
+  CUFE** en vez de inventarlo, y hay un test que exige la misma respuesta para una factura de
+  marzo y una de septiembre — si alguien "mejora" esto con una fecha de corte, falla.
+- `'pending'` no es "todavía no se mandó": es "se mandó y no sabemos cómo terminó".
+
+Detalle en `sop.md` **SOP-038**.
+
+### La regla del golden, con test (docs)
+
+🔒 `golden-y-refactor-no-van-juntos.test.ts`: ningún commit puede **modificar** un
+`*-esperado.json` junto con código de producción. Si lo hace, el congelamiento se comparó
+consigo mismo y no probó nada. Sólo las modificaciones, no el alta: un golden que nace no
+puede tapar nada. Verificado con un commit de prueba en una rama descartable, que el test
+detectó nombrando commit y archivo. Detalle en `sop.md` **SOP-039**.
+
+### Estado
+
+Suite **1225/1225** (34 tests nuevos en el bloque), `tsc` verde.
+⚠️ `npm run lint` tiene **20 errores preexistentes** en 16 archivos del módulo Legal
+(imports y variables sin usar, dos `prefer-const`). Ninguno es de este bloque y ninguno toca
+Finanzas. No se tocaron: es deuda anterior y su limpieza es una decisión aparte.
+
 ## [Desactivar y reactivar una tasa desde la pantalla] - 2026-09-23
 
 **Staging (`develop`):** `3c9cb47`. Cierra el hueco que encontró la verificación del Bloque 8.

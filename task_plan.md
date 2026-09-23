@@ -1,5 +1,51 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 9A: LA RED ANTES DEL REFACTOR FISCAL — CERRADO — 23/09/2026 <<<
+
+**Estado:** CERRADO. Cuatro commits, `5c0d708` → docs, en `develop`. **Sin migración, sin
+pantalla, sin cambios de comportamiento.** `main` sigue en `24b227a`.
+
+9B va a tocar el orquestador que **hoy autoriza facturas reales del bufete ante la DGI**. Una
+regresión ahí no se descubre en desarrollo: se descubre como un rechazo de la DGI sobre una
+factura real. Este bloque puso la red primero y no agregó una sola línea de comportamiento.
+
+### Lo entregado
+
+1. **`5c0d708` — el payload COMPLETO congelado.** Cuatro casos (`01-honorarios`,
+   `09-reembolso`, `01-extranjero`, `01-multilinea-mixta`), comparados serializados. Dos
+   hallazgos quedaron como test permanente: la fecha se pasa explícita (el mapper cae en
+   `new Date()`) y **los cuatro payloads tienen que CUADRAR** — la primera versión del fixture
+   multilínea congeló un documento que la DGI rechazaría. Además: `tipo_receptor_fe` `03` no
+   es el no residente; es el `04`.
+2. **`f344172` — la SECUENCIA DE ESCRITURAS congelada.** Cinco caminos como listas literales y
+   cinco reglas que los recorren. **Verificado que atrapa**: invirtiendo dos `UPDATE` fallan
+   dos tests.
+3. **`9fd72b3` — `decidirAccionFiscal()`.** La matriz de `claude.md` como función pura, seis
+   respuestas con mensaje. SOP-038.
+4. **docs** — SOP-038, SOP-039, `changelog.md`, `claude.md`, este archivo, y
+   `golden-y-refactor-no-van-juntos.test.ts`, que hace cumplir que un golden y su refactor
+   nunca vayan juntos. Verificado con un commit de prueba en una rama descartable.
+
+### Decisiones registradas
+
+D1 los cuatro casos del golden · D2 la ventana se cuenta desde `issue_date` (el candidato que
+cierra antes) · D3 **sin heurística por fecha** para el caso "sin CUFE": se pide el dato ·
+D4 `'pending'` gana sobre todo · D5 los 90 días advierten, no bloquean · D6 el mensaje de cada
+acción vive en la función, no en el JSX · D7 el refactor y el golden nunca en el mismo commit,
+con test.
+
+### Lo que sigue
+
+1. **9B** — `canCancel()` + ventana, cliente del evento de anulación, orquestador PAC→ledger
+   con sus tres caminos de falla, UI condicional, y las pruebas de sandbox (1, 5, a, b, c),
+   cada una precedida por confirmar `i_amb = 2` **en el log**.
+2. **9C no se empieza.**
+3. ⚠️ **Deuda encontrada, no tocada:** `npm run lint` tiene **20 errores preexistentes** en 16
+   archivos del módulo Legal (imports y variables sin usar, dos `prefer-const`). Ninguno toca
+   Finanzas. Limpiarlos es una decisión de Oliver, no un arreglo al pasar.
+
+---
+
 ## >>> BLOQUE 8: PROVEEDOR COMPLETO Y TASAS DE ITBMS — CONSTRUIDO — 23/09/2026 <<<
 
 **Estado:** CONSTRUIDO. Cierra **4.1, 4.4, 4.5 y 2.4**. Siete commits, `a7acdac` → `61c1e52`

@@ -2911,3 +2911,124 @@ forzada, 11/11) y los cuatro tests de `cuentas-de-gasto.test.ts`.
   configurar por tasa.
 - `TAX_CODE_RE` = `^[A-Z0-9_]{2,20}$`. No es cosmético: el código es la clave del FK compuesto
   y el orden de los selectores.
+
+
+---
+
+## SOP-038: Qué se puede hacer ante la DGI con una factura ya emitida
+
+**Desde:** Bloque 9A, 23/09/2026. Sin migración: la decisión se calcula, no se guarda.
+**Dónde:** `src/lib/finanzas/efactura/orchestration/decidir-accion-fiscal.ts`
+(`decidirAccionFiscal()`), tests en `__tests__/decidir-accion-fiscal.test.ts`.
+
+La matriz vivía en prosa, en `claude.md`, bajo "Estado futuro (Camino 2)". Una tabla en un
+`.md` no se prueba, no falla cuando una pantalla la contradice y se copia mal. Ahora es una
+función pura: sin I/O, sin base, **sin reloj propio** — `ahora` entra por parámetro.
+
+### Decide lo FISCAL, no lo interno
+
+Si la factura se puede anular **en el CRM** —que no tenga cobros aplicados, que el mes de
+`issue_date` esté abierto, que no tenga ya una nota de crédito en el libro (053)— lo sigue
+decidiendo `cancelInvoice`. Son dos preguntas distintas y se responden por separado: una
+factura puede estar perfectamente anulable de nuestro lado y llevar 200 horas autorizada
+ante la DGI, que es exactamente el caso que obliga a la nota de crédito.
+
+### Las seis respuestas
+
+| Estado en la base | Acción | Qué se manda |
+|---|---|---|
+| `fe_estado='canceled'` | `ya_anulada_en_dgi` | nada |
+| `fe_estado='pending'` | `esperar_confirmacion` | nada, todavía |
+| CUFE presente, ≤ 182 h | `anular_en_dgi` | `POST /api/v1/InvoiceEvents/CreateCancellation` |
+| CUFE presente, > 182 h | `nc_04` | NC tipo `04` referenciando ese CUFE |
+| Sin CUFE | `nc_04_requiere_cufe` | **se pide el CUFE**, no se decide |
+| `authorized` sin CUFE | `inconsistente` | nada: hay que mirarlo |
+
+Todas traen `mensaje` en claro, para que la pantalla **no vuelva a derivar la matriz** en el
+JSX. Es la lección de `validarConsistenciaDeKind`: si el cliente reimplementa, algún día el
+botón y el texto discrepan.
+
+### 1. La ventana se cuenta desde la EMISIÓN, no desde la autorización
+
+ideati confirmó el plazo el 22/09/2026 —**182 horas**— pero **no dijo desde cuándo se
+cuenta**. Los dos candidatos son `issue_date` y `dgi_fecha_autorizacion`, y se toma **el que
+cierra la ventana antes**. Si la ventana real resultara más larga, lo peor que pasa es que
+ofrecemos una nota de crédito donde todavía se podía anular: inofensivo. Al revés
+ofreceríamos un botón que la DGI va a rechazar, delante del cliente. El rechazo del PAC
+queda como respaldo.
+
+`issue_date` es una fecha **sin hora**, así que se toma **las 00:00 de Panamá** (UTC−5, sin
+horario de verano) — el instante que hace vencer la ventana lo antes posible, mismo criterio.
+
+Cuando ideati precise el dato se cambia `INSTANTE_DE_INICIO` y **ningún llamador**.
+
+### 2. 🔴 "Sin CUFE" NO significa "nunca llegó a la DGI"
+
+Las facturas del bufete **anteriores al 8 de julio de 2026** se emitieron **a mano en el
+portal de ideati, por el punto de facturación `050`**: tienen CUFE ante la DGI, pero el CRM
+nunca lo guardó. En la base se ven **idénticas** a una que jamás se envió — `fe_estado`
+`'no_emitida'`, `dgi_cufe` nulo, `punto_facturacion` nulo — porque el portal es un camino que
+el CRM no registra.
+
+Por eso la respuesta es `nc_04_requiere_cufe`: una acción que **pide el CUFE** en lugar de
+inventarlo. **No se usa una heurística por fecha.** Hay un test que pasa una factura de marzo
+y una de septiembre y exige la MISMA respuesta. Una fecha de corte decidiendo una acción
+fiscal es el tipo de supuesto que en seis meses nadie recuerda que era un supuesto, y el
+error no se ve en pantalla: sale una nota de crédito genérica donde iba una `04` con
+referencia, y eso aparece en una auditoría.
+
+### 3. `'pending'` no es "todavía no se mandó"
+
+Es "**se mandó y no sabemos cómo terminó**". Gana sobre todo lo demás, incluso si ya hay un
+CUFE guardado. Decidir ahí es apostar: se anularía un documento que puede no existir, o se
+dejaría vivo uno que sí.
+
+### El plazo de 90 días advierte, no bloquea
+
+ideati fue explícito: entre factura y NC **no hay validación técnica de plazo**. Los 90 días
+son de la **declaración jurada de ITBMS**, no del PAC. Por eso viajan como `advertencia`
+junto a la acción `nc_04` y quien decide es el contador.
+
+### Lo que sigue sin confirmar
+
+El **tipo de la nota de crédito genérica** (¿`06`?) para el caso de una factura que realmente
+nunca pasó por la DGI. El swagger acepta `"01|02|03|04|05|06|07|08|09|10"` pero **no le pone
+nombre a ninguno**. No se escribe una línea hasta que ideati lo confirme.
+
+---
+
+## SOP-039: Un JSON dorado y su refactor nunca van en el mismo commit
+
+**Desde:** Bloque 9A, 23/09/2026.
+**Lo hace cumplir:** `src/lib/finanzas/integridad/__tests__/golden-y-refactor-no-van-juntos.test.ts`
+
+Un golden (`*-esperado.json`) sirve para **una sola cosa**: demostrar que un cambio en el
+código no alteró lo que sale. Sirve mientras siga siendo un punto fijo. Si el mismo commit
+que toca el mapper regenera el JSON esperado, **el test pasa porque se comparó contra sí
+mismo** y no probó nada — y queda el registro de un congelamiento que nunca ocurrió, así que
+el próximo que lea la historia va a creer que ese camino está cubierto.
+
+**El modo de fallar no es malicioso, es cómodo.** Se corre la suite, falla el golden, y hay
+un comando a mano (`ACTUALIZAR_PAYLOAD=1 npm test`) que lo "arregla" en dos segundos. Nadie
+decidió saltarse la verificación: siguió el camino que el error sugería. Por eso la regla
+necesita un test y no un párrafo.
+
+**Cómo lo detecta:** recorre la historia de git y, para cada golden, busca los commits que lo
+**MODIFICARON**; si en ese commit viene además un archivo de `src/` que no sea un test, falla
+nombrando commit y archivos.
+
+🔴 **Sólo las modificaciones, no el alta.** Un golden que NACE en un commit no puede tapar
+nada: antes no existía, no había con qué comparar. Es la regeneración la que borra la
+evidencia. (Por eso `3720e4f`, que creó `receptor-payload-esperado.json` junto a
+`tercero-fiscal.ts`, no cuenta como violación.)
+
+Pueden acompañar a un golden modificado: otros tests, otros goldens, `.md`, scripts y SQL de
+verificación. No puede: código de producción.
+
+**Si el test falla, no se arregla el test: se parte el commit en dos.** Primero el cambio de
+código con el golden viejo —que debe fallar y mostrar el diff real—, después la actualización
+del golden, explicada en su mensaje. Un commit que sólo toca un `-esperado.json` ya es una
+alarma; uno que lo toca junto al código que verifica es la alarma que este test levanta.
+
+Los goldens **se descubren solos** (barrido por `*-esperado.json`): uno nuevo queda cubierto
+sin tocar nada. Hay un test que verifica que el barrido no devuelva vacío.

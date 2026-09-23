@@ -231,6 +231,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "suppliers", columna: "default_chart_account_code",
     nota: "Bloque 8. Va después de la 033 (crea `suppliers`); no depende de nada más. La 056 queda reservada para la corrección de la fecha de los saldos iniciales, pendiente de RM.",
   },
+  "058_motivo_de_anulacion_minimo_15.sql": {
+    que: "El motivo de anulación exige 15..1000 caracteres (lo pide la DGI)",
+    tipo: "constraint", nombre: "invoices_cancellation_reason_largo",
+    nota: "Bloque 9B, D5. Va después de la 20260507000001 (crea `invoices.cancellation_reason`). Si producción tiene alguna factura anulada con un motivo más corto, la migración ABORTA y las lista: no las corrige, porque el motivo sale impreso en el PDF de la factura anulada.",
+  },
 
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {

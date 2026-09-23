@@ -16,6 +16,12 @@ import {
   invoiceHasAuthorizedCufe,
   isCancelConfirmDisabled,
 } from "./cancel-invoice-dialog.logic";
+import {
+  MOTIVO_ANULACION_MIN,
+  MOTIVO_ANULACION_MAX,
+  faltanParaElMinimo,
+  validarMotivoDeAnulacion,
+} from "@/lib/finanzas/validators/cancel-invoice";
 
 interface Props {
   invoiceId: string;
@@ -81,8 +87,13 @@ export function CancelInvoiceDialog({
   }, [open]);
 
   const trimmedLen = reason.trim().length;
-  const meetsMinimum = trimmedLen >= 3;
-  const REASON_MAX = 1000;
+  // 🔴 El mínimo son 15 y lo pide la DGI, no nosotros: es el largo que exige
+  //    `cancellationReason` de CreateCancellation (ideati, 22/09/2026). El
+  //    número vive en `validators/cancel-invoice.ts`, el mismo módulo que usa
+  //    la ruta de API y el mismo largo que el CHECK de la 058.
+  const faltan = faltanParaElMinimo(reason);
+  const meetsMinimum = faltan === 0;
+  const REASON_MAX = MOTIVO_ANULACION_MAX;
   const isBlocked = amountPaid > 0.001;
 
   function reset() {
@@ -105,11 +116,12 @@ export function CancelInvoiceDialog({
       return;
     }
 
-    const trimmed = reason.trim();
-    if (trimmed.length < 3) {
-      setReasonError("La razón de anulación debe tener al menos 3 caracteres.");
+    const motivo = validarMotivoDeAnulacion(reason);
+    if (!motivo.ok) {
+      setReasonError(motivo.mensaje);
       return;
     }
+    const trimmed = motivo.motivo;
     const trimmedObs = observations.trim();
     if (trimmedObs.length > OBSERVATIONS_MAX) {
       setObservationsError(
@@ -181,7 +193,7 @@ export function CancelInvoiceDialog({
         onConfirm={isBlocked ? () => setOpen(false) : submit}
         loading={isPending}
         confirmDisabled={
-          !isBlocked && isCancelConfirmDisabled({ hasCufe, dgiConfirmed })
+          !isBlocked && isCancelConfirmDisabled({ hasCufe, dgiConfirmed, reason })
         }
         title={isBlocked ? "No se puede anular" : "Anular factura"}
         confirmButtonText={
@@ -329,7 +341,7 @@ export function CancelInvoiceDialog({
                   disabled={isPending}
                   rows={3}
                   maxLength={REASON_MAX}
-                  placeholder="Ej: Datos del receptor incorrectos, error en el monto…"
+                  placeholder="Ej: Datos del receptor incorrectos, error en el monto facturado…"
                   className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm bg-white focus:outline-none focus:border-integra-navy ${
                     reasonError
                       ? "border-red-300"
@@ -343,7 +355,16 @@ export function CancelInvoiceDialog({
                     }`}
                   >
                     {reasonError ??
-                      "Esta razón se incluye en la nota de crédito y queda registrada permanentemente."}
+                      (meetsMinimum
+                        ? "Esta razón se incluye en la nota de crédito y queda registrada permanentemente."
+                        : `Mínimo ${MOTIVO_ANULACION_MIN} caracteres — lo exige la DGI para anular un ` +
+                          `documento electrónico. ${
+                            trimmedLen === 0
+                              ? ""
+                              : faltan === 1
+                                ? "Falta 1."
+                                : `Faltan ${faltan}.`
+                          }`)}
                   </p>
                   <span
                     aria-live="polite"

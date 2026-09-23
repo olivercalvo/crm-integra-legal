@@ -29,6 +29,7 @@ import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
+import { validarMotivoDeAnulacion } from "@/lib/finanzas/validators/cancel-invoice";
 import {
   validarConsistenciaDeKind,
   motivoDeInconsistenciaDeKind,
@@ -917,15 +918,14 @@ export function validateCancelInput(
 ):
   | { ok: true; data: CancelInvoiceInput }
   | { ok: false; errors: { reason?: string; observations?: string } } {
-  const reason = raw?.reason ? String(raw.reason).trim() : "";
-  if (reason.length < 3) {
-    return {
-      ok: false,
-      errors: {
-        reason: "La razón de anulación debe tener al menos 3 caracteres.",
-      },
-    };
+  // 🔴 El largo lo decide `validators/cancel-invoice.ts`, que es el MISMO
+  //    módulo que importa el diálogo. Duplicar el número acá fue lo que
+  //    permitió que el mínimo viviera en 3 mientras la DGI pedía 15.
+  const motivo = validarMotivoDeAnulacion(raw?.reason);
+  if (!motivo.ok) {
+    return { ok: false, errors: { reason: motivo.mensaje } };
   }
+  const reason = motivo.motivo;
 
   // observations opcional (Sprint QUOTES-POLISH D7). Si viene, trim + máx 2000.
   let observations: string | null = null;

@@ -47,29 +47,71 @@ test("undefined/null (props ausentes en factura no-electrónica) → NO aplica",
 
 // ---------------------------------------------------------------------------
 // isCancelConfirmDisabled — gating del botón
+//
+// Dos motivos independientes: el motivo corto y el checkbox de la DGI. Los
+// tests los cruzan porque el bug natural acá es que uno tape al otro — que el
+// checkbox marcado "habilite" un botón que igual va a rebotar por el largo.
 // ---------------------------------------------------------------------------
+
+/** Un motivo que cumple el mínimo de la DGI (15). Son 31 caracteres. */
+const MOTIVO_OK = "Datos del receptor incorrectos.";
+/** Diez caracteres: pasaba con el mínimo viejo de 3, rebota con el nuevo. */
+const MOTIVO_CORTO = "monto mal.";
 
 test("factura CON CUFE y checkbox SIN marcar → botón deshabilitado", () => {
   assert.equal(
-    isCancelConfirmDisabled({ hasCufe: true, dgiConfirmed: false }),
+    isCancelConfirmDisabled({ hasCufe: true, dgiConfirmed: false, reason: MOTIVO_OK }),
     true
   );
 });
 
 test("factura CON CUFE y checkbox marcado → botón habilitado", () => {
   assert.equal(
-    isCancelConfirmDisabled({ hasCufe: true, dgiConfirmed: true }),
+    isCancelConfirmDisabled({ hasCufe: true, dgiConfirmed: true, reason: MOTIVO_OK }),
     false
   );
 });
 
-test("factura SIN CUFE → botón nunca se deshabilita por el checkbox (marcado o no)", () => {
+test("factura SIN CUFE → el checkbox no la deshabilita (marcado o no)", () => {
   assert.equal(
-    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: false }),
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: false, reason: MOTIVO_OK }),
     false
   );
   assert.equal(
-    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: true }),
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: true, reason: MOTIVO_OK }),
+    false
+  );
+});
+
+test("🔴 motivo corto → botón deshabilitado, aunque todo lo demás esté bien", () => {
+  // Con el mínimo viejo de 3, "monto mal." pasaba y el error aparecía DESPUÉS
+  // de apretar. Con 15 ese sería el caso corriente, no la excepción.
+  assert.equal(
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: true, reason: MOTIVO_CORTO }),
+    true
+  );
+  assert.equal(
+    isCancelConfirmDisabled({ hasCufe: true, dgiConfirmed: true, reason: MOTIVO_CORTO }),
+    true,
+    "el checkbox marcado NO compensa un motivo corto"
+  );
+});
+
+test("motivo vacío → botón deshabilitado", () => {
+  assert.equal(
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: false, reason: "" }),
+    true
+  );
+  assert.equal(
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: false, reason: "      " }),
+    true,
+    "espacios no son un motivo"
+  );
+});
+
+test("motivo justo en el borde (15) → el botón se habilita", () => {
+  assert.equal(
+    isCancelConfirmDisabled({ hasCufe: false, dgiConfirmed: false, reason: "a".repeat(15) }),
     false
   );
 });

@@ -9,6 +9,7 @@
  */
 
 import type { FeEstado } from "@/lib/finanzas/types/invoice";
+import { faltanParaElMinimo } from "@/lib/finanzas/validators/cancel-invoice";
 
 /**
  * ¿La factura tiene un CUFE autorizado por la DGI? Cubre las dos vías por las
@@ -29,17 +30,28 @@ export function invoiceHasAuthorizedCufe(
 }
 
 /**
- * ¿El botón "confirmar anulación" está deshabilitado? La única regla nueva es
- * el checkbox DGI: para facturas con CUFE hay que marcar la confirmación de
- * que ya se anuló (o se anulará) en el portal de la DGI. El estado de carga lo
- * maneja el propio `ConfirmationModal`, no esta función.
+ * ¿El botón "confirmar anulación" está deshabilitado? Dos motivos, los dos
+ * evaluados acá para que el JSX no tenga que acordarse de ninguno:
  *
- * Para facturas SIN CUFE, nunca se deshabilita por este motivo (la validación
- * de la razón sigue haciéndose en `submit()` con error inline, como antes).
+ *   1. **El motivo no llega al mínimo de la DGI** (15 caracteres). Antes esto
+ *      se validaba recién en `submit()`, con el error apareciendo DESPUÉS de
+ *      apretar. Con un mínimo de 3 era un detalle; con 15 es el caso corriente
+ *      —"error en el monto" son 18, pero "monto mal" son 10— así que apretar y
+ *      que rebote pasaría a ser lo normal. Que el botón no se habilite y el
+ *      contador diga cuánto falta es la diferencia entre una regla que se
+ *      entiende mientras se escribe y una que se descubre a los golpes.
+ *
+ *   2. **El checkbox DGI**, para facturas que ya tienen CUFE: hay que confirmar
+ *      que se anuló (o se va a anular) en el portal.
+ *
+ * El estado de carga lo maneja el propio `ConfirmationModal`, no esta función.
  */
 export function isCancelConfirmDisabled(params: {
   hasCufe: boolean;
   dgiConfirmed: boolean;
+  /** El texto tal como está escrito; el trim lo hace `faltanParaElMinimo`. */
+  reason: string;
 }): boolean {
+  if (faltanParaElMinimo(params.reason) > 0) return true;
   return params.hasCufe && !params.dgiConfirmed;
 }

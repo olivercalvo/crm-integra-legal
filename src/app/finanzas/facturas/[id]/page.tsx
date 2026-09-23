@@ -324,9 +324,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           role="alert"
           className="rounded-md border-l-4 border-red-600 bg-red-50 p-3 text-sm text-red-900"
         >
-          <span className="font-semibold">
-            Esta factura está ANULADA ante la DGI y todavía viva en el libro contable.
-          </span>{" "}
+          {/* El texto lo pone la matriz (una sola fuente). Acá sólo se resalta
+              la primera oración, que es el titular. */}
           {accionFiscal.mensaje}
           {intentoDeAnulacion && (
             <span className="mt-1 block text-xs text-red-800">
@@ -483,7 +482,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           </section>
 
           {/* Pagos — visible si la factura está emitida (con o sin pagos
-              parciales/totales). En anuladas y borradores no se muestra. */}
+              parciales/totales). En anuladas y borradores no se muestra.
+              🔴 D4: con la anulación a medias NO se registran cobros —
+              `canMutate` va en false. La factura está muerta ante la DGI y
+              cobrarla sería cobrar un documento que ya no existe. Reversar SÍ
+              sigue disponible (`canReverse` no se toca): reversar los cobros
+              es justamente lo que hay que hacer para poder terminar de
+              anularla. */}
           {showPaymentsSection && (
             <PaymentsSection
           bancos={bancos}
@@ -493,7 +498,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               grandTotal={Number(invoice.grand_total)}
               amountPaid={Number(invoice.amount_paid)}
               balanceDue={Number(invoice.balance_due)}
-              canMutate={canMutate}
+              canMutate={canMutate && !anulacionAMedias}
               canReverse={canReverse}
             />
           )}

@@ -1,5 +1,54 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE PREVENTIVO: ERRORES DE LA DGI — 23/09/2026 <<<
+
+**Estado:** construido y verificado con clics. `f235841` → `edcaf73` en `develop`. Sin
+migraciones. `main` sigue en `24b227a`.
+
+### Lo entregado
+
+1. **`dc01f4e`** — lista base de lint (20 errores congelados) + script que hace exigible
+   "cero errores nuevos". **No se vuelve a decir "lint verde".**
+2. **`def8a91`** — D3 rediseñado: el reintento vuelve a PEDIR la anulación, no consulta.
+3. **`b88c212`** — prueba 5: la respuesta exitosa es `0600`, y el clasificador la llamaba rechazo.
+4. **`f235841`** — lo desconocido es **incierto**, nunca rechazo, en los DOS clasificadores.
+5. **`236c0b5`** — controles antes de enviar: descripción 2–500 con contador, RUC/DV al guardar.
+6. **`766e35b`** — la alerta de rechazo traducida, que no se borra al editar, + contador y filtro.
+7. **`edcaf73`** — fix de una regresión propia: el error bloqueaba el formulario sin mostrarse.
+
+### ❌ Sigue abierto: el PAC desde Preview
+
+`POST …/emit-efactura` devuelve **500** desde el deploy de la rama: **no tiene cargadas las
+credenciales del sandbox**. Todo lo que hable con el PAC se corre desde localhost.
+
+`docs/efactura/variables-de-entorno.md` tiene la lista completa **sin valores**: 16
+obligatorias (una sola secreta, `EFACTURA_API_KEY`), 2 opcionales, y las 2 que ya están.
+Cargarlas es un cambio de env vars en la cuenta del cliente: **lo decide Oliver.**
+
+**Lo que eso deja sin verificar con clics:** una anulación —y un reenvío— de una factura CON
+CUFE. Todo lo que no necesita el PAC sí se verificó.
+
+### Dato para la próxima prueba de sandbox
+
+El sandbox rechaza con `1601`/`1602` **cualquier** RUC de receptor ficticio, y está medido que
+rebota **igual en tipo `01` que en `09`** — la sospecha razonable era que el `09` no lo
+validaba, y es falsa. El único camino es apuntar el cliente al RUC/DV del emisor en las TRES
+columnas: `scripts/efactura/prueba5-emitir-con-receptor-valido.ts` lo hace con la restauración
+en un `finally`.
+
+### Estado de las facturas de prueba en staging
+
+| Factura | Estado | Por qué |
+|---|---|---|
+| `FAC-HON-000007` | `fe_estado='error'` | **No se tocó** — Oliver la usa para la demo |
+| `FAC-HON-000016` | `fe_estado='error'` | rechazo `1601`/`1602`; es la que muestra la alerta |
+| `FAC-REI-000003` | `anulada` / `canceled` | la de la prueba 5: emitida, autorizada y anulada |
+
+⚠️ El contador del listado dice **2**, no 3: `FAC-REI-000003` dejó de estar en error cuando la
+prueba 5 la emitió y la anuló.
+
+---
+
 ## >>> BLOQUE 9B: ANULACIÓN ANTE LA DGI — CONSTRUIDO — 23/09/2026 <<<
 
 **Estado:** CONSTRUIDO y verificado con clics. Ocho commits, `f3cc400` → `d94858a` en

@@ -1,5 +1,77 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Errores de la DGI: prevenirlos y verlos] - 2026-09-23
+
+**Staging (`develop`):** `f235841` (incierto) → `236c0b5` (controles previos) →
+`766e35b` (alerta) → `edcaf73` (fix). Sin migraciones. `main` sigue en `24b227a`.
+
+### 🔴 Lo desconocido ya no se declara rechazo
+
+La prueba 5 dejó una lección que valía para más de un lugar: el clasificador de anulación
+llamó **rechazo** a `0600 — Evento registrado con éxito`. El error no fue el código que
+faltaba en la lista: fue **tratar lo desconocido como malo**, y eso estaba en los dos
+clasificadores.
+
+Ahora, en los dos, lo desconocido es **incierto**: no escribe nada que dependa de él, el
+documento queda reintentable, y la pantalla dice *"Estado por confirmar"*.
+
+El discriminador de la emisión no es una lista de códigos sino `autorizada`, que el PAC manda
+**siempre y explícito** — verificado contra dos respuestas reales, una autorizada y una
+rechazada. `docs/efactura/clasificadores-de-respuesta.md` tiene la tabla con el **origen** de
+cada código.
+
+⚠️ `pending_async` se fue, y era un problema aparte: dejaba la factura en `fe_estado='pending'`,
+que el gate T0 considera **intocable**. Nadie podía reenviarla y el reconciliador que iba a
+destrabarla no existe.
+
+### Antes de enviar
+
+- **Descripción de línea 2–500** con contador visible (`312/500`, rojo al pasarse). El tope es
+  de la DGI (`10105`) y ya rebotó una factura con **545** caracteres.
+- **RUC y DV del receptor** verificados **al guardar el cliente**, no recién al emitir.
+- ⚠️ **ideati no tiene endpoint para consultar un RUC** (swagger completo). El `1601` se
+  previene; el `1602` sólo lo sabe la DGI.
+
+### Después de un rechazo
+
+La tarjeta fiscal decía *"el último envío al PAC falló. Puedes reintentar."* — para saber **por
+qué** había que apretar el botón otra vez. O sea: para enterarse del motivo de un rechazo había
+que provocar otro.
+
+Ahora muestra el motivo **traducido** —qué pasó, qué hacer, dónde, con el cliente nombrado— y
+**el texto crudo del PAC debajo**, que es lo único que sirve para hablar con ideati.
+
+🔴 **Y no se borra al editar.** Se lee de `fe_emisiones`, que es historia. Es el caso real que
+lo trajo: cliente corregido después del rechazo, factura nunca reenviada, rechazada ante la DGI
+con los datos ya arreglados. El aviso además lo dice.
+
+**Contador "N facturas con error en la DGI"** en el listado, con filtro `?fe=error`.
+
+### Lint
+
+Los 20 errores preexistentes quedan congelados en `docs/lint-baseline.md` y **no se corrigen**.
+El criterio pasa a ser **cero errores nuevos fuera de esa lista**, verificado por
+`scripts/lint-contra-baseline.mjs` — que compara por archivo + regla + símbolo, no por línea.
+**No se vuelve a decir "lint verde"** mientras esa lista exista.
+
+### ⚠️ Una regresión propia, y cómo se veía
+
+El error del RUC salía bajo la clave `tax_id`, y el formulario de clientes **no tiene ningún
+campo con ese nombre**: el campo se llama `ruc`. El error existía, bloqueaba el wizard, y **no
+se renderizaba en ningún lado** — el botón "Siguiente" dejaba de funcionar sin decir nada.
+Un error que bloquea y no se ve es peor que no validar. Arreglado en `edcaf73`, con un test que
+exige la clave correcta.
+
+### Verificado con clics
+
+En `crm-integra-legal-git-develop`: el contador de la alarma (**2 facturas**), el filtro
+`?fe=error` mostrando exactamente esas dos, la alerta de `FAC-HON-000016` con el motivo
+traducido y `[1601] · [1602]` crudo debajo, el botón "Reenviar a la DGI", y **la prueba que
+importa** — se editó y guardó el cliente CONSTRUCTORA CHIRIQUÍ ANTIGUO desde el formulario y
+**la alerta siguió ahí**. El contador del campo: `41/500`, `500/500` sin rojo, `545/500` en rojo.
+
+Suite **1330/1330**, `tsc` verde, **0 errores de lint nuevos**.
+
 ## [Prueba 5 cerrada, D3 rediseñado y la lista base de lint] - 2026-09-23
 
 **Staging (`develop`):** `dc01f4e` (lint) → `def8a91` (D3) → `b88c212` (prueba 5).

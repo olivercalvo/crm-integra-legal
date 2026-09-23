@@ -3169,3 +3169,82 @@ ser el mismo.
 
 Y **la pantalla ya no decide**: `showCancel` sale de `decidirAccionFiscal` (SOP-038), la misma
 función que usa el servidor.
+
+
+---
+
+## SOP-041: Errores de la DGI — prevenirlos antes de enviar, y verlos después
+
+**Desde:** 23/09/2026. Sin migración.
+**Dónde:** `validators/controles-dgi.ts`, `efactura/mensajes-dgi.ts`,
+`queries/fe-emisiones.ts`.
+
+Dos rechazos reales, con la misma forma: **el error existía antes de enviar y nadie lo miró.**
+
+### Antes de enviar
+
+| Control | Rechazo que previene | Dónde |
+|---|---|---|
+| Descripción de línea 2–500 | `10105` (llegó con **545** caracteres) | validador de factura + contador en el campo |
+| Descripción heredada por la NC | `10105` en facturas viejas | validador de nota de crédito |
+| RUC del receptor con forma válida | `1601` | al **guardar el cliente** y al emitir |
+| DV obligatorio para receptores 01/03 | `1601` | al guardar el cliente y al emitir |
+
+🔒 **El contador y el validador cuentan IGUAL** (los dos trimean) y hay un test que lo fija. Si
+contaran distinto, el campo diría 501 y el error 499, y la persona borraría caracteres sin
+entender por qué no alcanza.
+
+🔴 **Del RUC se valida la FORMA MÍNIMA, no un patrón cerrado.** Misma regla que en proveedores:
+en Panamá conviven cédulas, prefijos `PE-`/`E-`/`N-`, jurídicos y folios viejos. Un validador
+estricto rechaza RUC legítimos y deja a alguien **sin poder facturar**, que es un daño peor y
+más silencioso que un rechazo de la DGI, porque no tiene mensaje.
+
+⚠️ **ideati NO tiene endpoint para consultar un RUC.** Revisado el swagger completo el
+23/09/2026: sus 17 rutas son catálogos, facturas y el evento de anulación. Así que el `1601`
+(de formación) se previene y el `1602` (de existencia) no: eso sólo lo sabe la DGI.
+
+### Después de un rechazo
+
+La tarjeta fiscal muestra el motivo **traducido**: qué pasó, qué hacer y **dónde**, con el
+cliente nombrado. *"Regla de formación del RUC invalida"* es correcto y no le sirve a nadie: no
+dice de quién es el RUC ni en qué pantalla se arregla.
+
+🔴 **El texto del PAC nunca se tira.** Va debajo, en monoespaciado, con su código: es lo único
+que sirve para hablar con ideati. Traducir no es reemplazar.
+
+🔴 **Un código que no está en el catálogo no se explica.** Misma regla que en los
+clasificadores (SOP-040): se muestra el texto crudo y se dice que el sistema no lo tiene
+traducido. El `1002` (duplicado) es el único que **no manda a reenviar**.
+
+### 🔴 Por qué la alerta no se borra al editar
+
+Es la mitad del caso real: el cliente se corrigió **después** del rechazo y la factura nunca se
+reenvió — quedó rechazada ante la DGI con los datos ya arreglados en el CRM.
+
+El aviso se lee de **`fe_emisiones`**, que es historia: nada de lo que se edite en la ficha del
+cliente o en la factura lo cambia. Tres tests lo sostienen: que la fuente sea `fe_emisiones` y
+no `clients`, que el gate sea `fe_estado`, y que **ninguna de las dos rutas de clientes
+mencione `fe_estado`**.
+
+Y el aviso **lo dice**: *"Este aviso queda hasta que la factura se envíe otra vez y la DGI la
+acepte. Corregir los datos no lo borra."* No alcanza con que sea verdad — sin esa línea,
+alguien corrige el RUC, ve que el aviso sigue, y cree que el sistema no guardó el cambio.
+
+El botón dice **"Reenviar a la DGI"**, no "reintentar": reintentar suena a que falló el
+sistema. Lo que falló fue el documento ante la DGI.
+
+### El contador del listado
+
+**"N facturas con error en la DGI"**, arriba de todo, con enlace a `?fe=error`. Se cuenta
+**siempre**, con o sin filtros puestos: es una alarma, no una columna del resultado — si
+dependiera de los filtros, desaparecería justo cuando alguien está mirando otra cosa.
+
+### ⚠️ Una lección de forma que costó una tarde
+
+El error del RUC se devolvía bajo la clave `tax_id`, y **el formulario de clientes no tiene
+ningún campo con ese nombre**: el campo en pantalla se llama `ruc`. El error existía, bloqueaba
+el wizard, y **no se renderizaba en ningún lado**. El botón "Siguiente" simplemente dejaba de
+funcionar, sin mensaje y sin campo en rojo.
+
+**Un error que bloquea y no se ve es peor que no validar.** Hay un test que exige que la clave
+sea `ruc` y NO `tax_id`.

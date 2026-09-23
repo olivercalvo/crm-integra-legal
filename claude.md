@@ -441,6 +441,28 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   cobros y NC bloqueados mientras dure — pero **reversar cobros sigue disponible**, porque es
   lo que hay que hacer para poder completarla. Detalle en `sop.md` SOP-040.
 
+### Errores de la DGI — prevenir y mostrar (desde 2026-09-23)
+- 🔴 **Descripción de línea: 2 a 500 caracteres** (`controles-dgi.ts`). El tope es de la DGI
+  (`10105`) y ya rebotó una factura con **545**. Contador visible en el campo (`312/500`), rojo
+  al pasarse. 🔒 El contador y el validador **cuentan igual** (los dos trimean) y hay un test.
+- **La NOTA DE CRÉDITO hereda la descripción de la factura**, así que hereda el problema: las
+  facturas anteriores a esa fecha se guardaron sin el tope. El validador de NC lo verifica y
+  manda a corregir **la factura**.
+- 🔴 **RUC y DV del receptor se verifican al GUARDAR EL CLIENTE**, no recién al emitir. Del RUC
+  se valida la **forma mínima**, no un patrón cerrado — un validador estricto deja a alguien
+  sin poder facturar, que es peor y más silencioso que un rechazo.
+- ⚠️ **ideati NO tiene endpoint para consultar un RUC** (swagger completo, 23/09/2026). El
+  `1601` (formación) se previene; el `1602` (existencia) sólo lo sabe la DGI.
+- 🔴 **La alerta de rechazo NO se borra al editar.** Se lee de `fe_emisiones`, que es historia.
+  Es el caso real: cliente corregido después del rechazo, factura nunca reenviada, rechazada
+  ante la DGI con los datos ya arreglados. 🔒 Tres tests, incluido que **ninguna ruta de
+  clientes mencione `fe_estado`**. Y el aviso lo dice en pantalla.
+- **Contador "N facturas con error en la DGI"** en el listado, con filtro `?fe=error`. Se
+  cuenta SIEMPRE, con o sin filtros: es una alarma, no una columna.
+- ⚠️ **Un error bajo una clave que ningún campo renderiza es peor que no validar**: bloquea y
+  no se ve. Pasó con `tax_id` en el formulario de clientes, donde el campo se llama `ruc`.
+  Detalle en `sop.md` SOP-041.
+
 ### Congelamientos — la regla del JSON dorado (desde 2026-09-23)
 - 🔒 **Un `*-esperado.json` y el código que ese golden verifica NUNCA van en el mismo commit.**
   Si el mismo commit regenera la referencia, el test pasó comparándose consigo mismo y no probó

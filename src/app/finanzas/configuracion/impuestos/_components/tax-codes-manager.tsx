@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, Plus, X } from "lucide-react";
+import { Check, Eye, EyeOff, Pencil, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +108,46 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
       router.refresh();
     } catch {
       setErrorAlta("No se pudo conectar con el servidor.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /**
+   * Activa o desactiva una tasa.
+   *
+   * 🔴 ES LO MÁS PARECIDO A BORRAR QUE HAY, Y A PROPÓSITO. Cinco claves foráneas
+   * apuntan a `tax_codes` (`invoice_lines`, `quote_lines`, `credit_note_lines`,
+   * `expense_lines` y el FK compuesto de `services_catalog`): borrar una tasa
+   * usada rompería documentos ya emitidos. Desactivarla la saca de los
+   * selectores y deja intactas las líneas viejas, que guardan su propio
+   * `tax_rate`.
+   *
+   * La fila NO desaparece del listado: se muestra "Inactivo" y se puede
+   * reactivar. Una tasa que se esconde es una tasa que alguien vuelve a crear
+   * con otro código, y ahí aparece el duplicado que el UNIQUE rechaza.
+   *
+   * Reusa el `PATCH` que ya existía —`active` ya estaba en `UpdateTaxCodeInput`,
+   * en el validador y en `updateTaxCode`— así que no hay ruta nueva ni permiso
+   * nuevo: el mismo `canEdit` (admin y contador) que la edición.
+   */
+  async function alternarActivo(t: TaxCodeRow) {
+    setGuardando(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/finanzas/configuracion/tax-codes/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: !t.active }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error ?? "No se pudo cambiar el estado de la tasa.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("No se pudo conectar con el servidor.");
     } finally {
       setGuardando(false);
     }
@@ -348,16 +388,43 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
                         </Button>
                       </div>
                     ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => empezar(t)}
-                      >
-                        <span className="flex items-center gap-1">
-                          <Pencil size={14} /> Editar
-                        </span>
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => empezar(t)}
+                          disabled={guardando}
+                        >
+                          <span className="flex items-center gap-1">
+                            <Pencil size={14} /> Editar
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => alternarActivo(t)}
+                          disabled={guardando}
+                          title={
+                            t.active
+                              ? "Sacarla de los selectores. Las líneas ya cargadas no cambian."
+                              : "Volver a ofrecerla en los selectores."
+                          }
+                        >
+                          <span className="flex items-center gap-1">
+                            {t.active ? (
+                              <>
+                                <EyeOff size={14} /> Desactivar
+                              </>
+                            ) : (
+                              <>
+                                <Eye size={14} /> Reactivar
+                              </>
+                            )}
+                          </span>
+                        </Button>
+                      </div>
                     )}
                   </td>
                 )}

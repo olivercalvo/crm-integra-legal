@@ -84,6 +84,45 @@ test("parseTaxRatePercent convierte lo que la persona escribe", () => {
   assert.equal(parseTaxRatePercent("hola"), null);
 });
 
+/**
+ * 🔒 EL PAYLOAD DEL BOTÓN DESACTIVAR / REACTIVAR.
+ *
+ * El control de la pantalla manda `{ active: !t.active }` y nada más. Si el
+ * validador algún día exigiera `name` o `rate`, ese botón dejaría de funcionar
+ * y el síntoma sería "no pasa nada al hacer clic" — el peor de todos, porque no
+ * hay error que leer.
+ *
+ * Desactivar es lo más parecido a borrar que hay: cinco FK apuntan a
+ * `tax_codes`, así que borrar rompería documentos ya emitidos.
+ */
+test("`{ active: false }` solo es un payload válido — es lo que manda el botón", () => {
+  const r = validateUpdateTaxCode({ active: false });
+  assert.ok(r.ok, "desactivar no necesita mandar nombre ni tasa");
+  if (!r.ok) return;
+  assert.equal(r.data.active, false);
+  assert.ok(!("name" in r.data), "no inventa un nombre");
+  assert.ok(!("rate" in r.data), "ni una tasa");
+});
+
+test("`{ active: true }` solo también — reactivar es el mismo camino", () => {
+  const r = validateUpdateTaxCode({ active: true });
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.data.active, true);
+});
+
+test("un payload vacío sigue siendo un error", () => {
+  const r = validateUpdateTaxCode({});
+  assert.ok(!r.ok, "sin cambios no hay nada que guardar");
+  if (r.ok) return;
+  assert.ok(r.errors.general, "y el error lo dice");
+});
+
+test("`active` tiene que ser booleano, no la cadena \"false\"", () => {
+  const r = validateUpdateTaxCode({ active: "false" });
+  assert.ok(!r.ok, '"false" es truthy: aceptarlo activaría lo que se quiso desactivar');
+});
+
 test("la edición sigue sin admitir el código: se elige una vez", () => {
   const r = validateUpdateTaxCode({ code: "OTRO", name: "Nombre nuevo" });
   assert.ok(r.ok, "el resto del payload es válido");

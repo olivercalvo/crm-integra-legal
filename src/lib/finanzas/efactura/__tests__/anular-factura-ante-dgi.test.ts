@@ -321,36 +321,12 @@ test("🔒 camino SE CORTÓ LA RED: no se toca nada", { skip: skipNoMocks }, asy
   assert.deepEqual(diario, [...HASTA_EL_POST, "UPDATE fe_anulaciones resultado=sin_respuesta"]);
   assert.equal(r.estado, "no_sabemos");
   assert.match(r.mensaje, /NO se modificó/);
-  assert.match(r.mensaje, /portal de la DGI/, "el mensaje dice qué verificar antes de reintentar");
+  // Desde el 23/09/2026 el mensaje NO manda al portal a mirar: está medido que
+  // volver a pedir la anulación es seguro y que la DGI informa si ya llegó.
+  assert.match(r.mensaje, /volver a intentarlo/i);
+  assert.doesNotMatch(r.mensaje, /verificar en el portal/i);
   assert.equal(e.invoice.fe_estado, "authorized");
 });
-
-test(
-  "🔒 camino RESPUESTA QUE NO ENTENDEMOS: consulta el estado y NO decide",
-  { skip: skipNoMocks },
-  async () => {
-    // D3: antes de decidir nada se consulta el documento. Hoy esa consulta no
-    // puede afirmar si está anulado, así que el caso escala a una persona — y
-    // la respuesta de la consulta se guarda igual, porque es la evidencia que
-    // la prueba de sandbox (b) necesita.
-    const { r, diario, e } = await correr({ respuestaDelPac: () => [] });
-
-    assert.deepEqual(diario, [
-      ...HASTA_EL_POST,
-      "GET /Invoices/Authorization/{cufe}  ⟵ la DGI",
-      "UPDATE fe_anulaciones resultado=indeterminada",
-    ]);
-    assert.equal(r.estado, "no_sabemos");
-    assert.equal(e.invoice.fe_estado, "authorized", "no se marcó nada");
-    assert.equal(e.invoice.status, "emitida", "el libro no se tocó");
-
-    const guardado = e.anulaciones[0].response_payload as Record<string, unknown>;
-    assert.ok(
-      "_consulta_de_estado" in guardado,
-      "la respuesta de la consulta se guarda: es la evidencia de la prueba (b)"
-    );
-  }
-);
 
 test(
   "🔒 camino LA DGI ANULÓ PERO EL LIBRO FALLÓ: el estado intermedio de D4",
@@ -374,34 +350,145 @@ test(
   }
 );
 
+// ---------------------------------------------------------------------------
+// EL REINTENTO (D3 rediseñado el 23/09/2026)
+//
+// El diseño original decía "consultar el estado antes de reintentar". La prueba
+// de sandbox (b) mostró que el GET de autorización NO refleja la anulación —
+// mismo payload antes y después— así que no hay a qué preguntarle. Lo que sí se
+// puede es volver a PEDIR la anulación: está medido que es estable y devuelve
+// `0622 — Ya existe un evento de anulación`.
+// ---------------------------------------------------------------------------
+
+/** Factura marcada como anulada ante la DGI, con el libro pendiente. */
+const A_MEDIAS = {
+  id: INVOICE,
+  status: "emitida",
+  fe_estado: "canceled",
+  dgi_cufe: CUFE,
+  issue_date: EMISION,
+  dgi_fecha_autorizacion: "2026-09-23T09:00:00-05:00",
+  credited_total: 0,
+  amount_paid: 0,
+};
+
+/** La respuesta REAL del sandbox al pedir una anulación ya existente. */
+const RESPUESTA_0622 = [
+  { codigo: "0622", mensaje: "Ya existe un evento de anulación para esta FE" },
+];
+
 test(
-  "🔒 camino COMPLETAR desde el estado intermedio: NO vuelve a llamar al PAC",
+  "🔴 (a) el reintento recibe 0622 → lo toma como ÉXITO y sigue al libro",
   { skip: skipNoMocks },
   async () => {
-    // Pedirle otra vez la anulación a un endpoint del que no sabemos si es
-    // idempotente, sobre un documento que ya está anulado, sólo puede empeorar
-    // las cosas.
+    // "Ya existe un evento de anulación" significa que el documento está muerto
+    // ante la DGI, que es lo único que este paso necesita saber. Tratarlo como
+    // rechazo dejaría la factura trabada en el estado intermedio para siempre,
+    // porque el reintento nunca podría avanzar.
     const { r, diario, e } = await correr({
-      invoice: {
-        id: INVOICE,
-        status: "emitida",
-        fe_estado: "canceled",
-        dgi_cufe: CUFE,
-        issue_date: EMISION,
-        dgi_fecha_autorizacion: "2026-09-23T09:00:00-05:00",
-        credited_total: 0,
-        amount_paid: 0,
-      },
+      invoice: { ...A_MEDIAS },
+      respuestaDelPac: () => RESPUESTA_0622,
     });
 
     assert.deepEqual(diario, [
       "SELECT invoices (estado fiscal e interno)",
       "SELECT accounting_periods (¿mes cerrado?)",
+      "SELECT fe_anulaciones (último intento)",
+      "INSERT fe_anulaciones {created_by, cufe, i_amb, intento, invoice_id, motivo, request_payload, resultado, tenant_id} resultado=sin_respuesta ← ANTES del POST",
+      "POST /InvoiceEvents/CreateCancellation  ⟵ la DGI",
+      "UPDATE fe_anulaciones resultado=ya_anulada",
       "→ cancelInvoice (NC total + reversión + 'anulada')",
     ]);
     assert.equal(r.estado, "anulada");
-    assert.equal(e.anulaciones.length, 0, "no se registró un intento nuevo");
     assert.equal(e.invoice.status, "anulada");
+    assert.equal(e.anulaciones[0].resultado, "ya_anulada", "queda registrado como tal");
+  }
+);
+
+test(
+  "🔴 (b) el reintento recibe otro error → NO toca el libro y queda pendiente",
+  { skip: skipNoMocks },
+  async () => {
+    const { r, diario, e } = await correr({
+      invoice: { ...A_MEDIAS },
+      respuestaDelPac: () => [{ codigo: "1602", mensaje: "El CUFE indicado no existe" }],
+    });
+
+    assert.equal(
+      diario.filter((l) => l.startsWith("→ cancelInvoice")).length,
+      0,
+      "avanzar al libro con la duda sería revertir un asiento INMUTABLE confiando en una " +
+        "marca que escribimos nosotros, no en una confirmación de la DGI"
+    );
+    assert.equal(r.estado, "anulada_en_dgi_falta_el_libro");
+    assert.equal(e.invoice.status, "emitida", "la factura se queda donde estaba");
+    assert.equal(e.invoice.fe_estado, "canceled", "y sigue pendiente, con su banda roja");
+    assert.equal(e.anulaciones[0].resultado, "rechazada");
+  }
+);
+
+test(
+  "🔴 (b bis) si la red se corta en el reintento, tampoco se toca el libro",
+  { skip: skipNoMocks },
+  async () => {
+    const { r, diario, e } = await correr({
+      invoice: { ...A_MEDIAS },
+      respuestaDelPac: () => new Error("ECONNRESET"),
+    });
+
+    assert.equal(diario.filter((l) => l.startsWith("→ cancelInvoice")).length, 0);
+    assert.equal(r.estado, "anulada_en_dgi_falta_el_libro");
+    assert.equal(e.invoice.status, "emitida");
+    assert.equal(e.anulaciones[0].resultado, "sin_respuesta");
+  }
+);
+
+test(
+  "🔴 (c) el reintento YA NO consulta el estado: el GET no se llama nunca",
+  { skip: skipNoMocks },
+  async () => {
+    // El GET de autorización devuelve lo mismo antes y después de la anulación
+    // (prueba de sandbox (b), 23/09/2026). Preguntaba y no informaba nada.
+    for (const respuesta of [
+      () => RESPUESTA_0622,
+      () => [{ codigo: "1602", mensaje: "no existe" }],
+      () => [],
+      () => new Error("ECONNRESET"),
+    ]) {
+      const { diario } = await correr({ invoice: { ...A_MEDIAS }, respuestaDelPac: respuesta });
+      assert.equal(
+        diario.filter((l) => l.startsWith("GET ")).length,
+        0,
+        `se llamó al GET de estado: ${diario.join(" | ")}`
+      );
+    }
+  }
+);
+
+test(
+  "🔴 (c bis) el camino normal tampoco consulta el estado, ni con una respuesta rara",
+  { skip: skipNoMocks },
+  async () => {
+    const { r, diario, e } = await correr({ respuestaDelPac: () => [] });
+    assert.equal(diario.filter((l) => l.startsWith("GET ")).length, 0);
+    assert.deepEqual(diario, [...HASTA_EL_POST, "UPDATE fe_anulaciones resultado=indeterminada"]);
+    assert.equal(r.estado, "no_sabemos");
+    assert.equal(e.invoice.fe_estado, "authorized", "no se marcó nada");
+    assert.match(r.mensaje, /volver a intentarlo/i, "el mensaje dice que reintentar es seguro");
+  }
+);
+
+test(
+  "un reintento sobre una factura SIN CUFE completa el libro sin llamar al PAC",
+  { skip: skipNoMocks },
+  async () => {
+    // Marcada como anulada ante la DGI pero sin CUFE guardado: no hay a quién
+    // preguntarle. Lo único que queda por hacer es el libro.
+    const { r, diario } = await correr({
+      invoice: { ...A_MEDIAS, dgi_cufe: null },
+    });
+    assert.equal(diario.filter((l) => l.startsWith("POST ")).length, 0);
+    assert.equal(r.estado, "anulada");
   }
 );
 

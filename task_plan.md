@@ -30,7 +30,21 @@ imprimió y verificó `i_amb = 2` antes de salir.
   `GET /Invoices/Authorization/{cufe}` devuelve EXACTAMENTE el mismo payload antes y después —
   `autorizada: true`, `deletedDate: null`, `deletedBy: null`. La hipótesis de `deletedDate` era
   falsa. 🔴 **Con eso se cae la "consulta de estado antes de reintentar" de D3: no hay a qué
-  preguntarle.** El reintento se apoya en el `0622`.
+  preguntarle.**
+
+### ✅ D3 rediseñado — 23/09/2026
+
+Decisión de Oliver con la evidencia de arriba. **El reintento no consulta: vuelve a pedir la
+anulación.** «Completar anulación» llama a `CreateCancellation` antes de tocar el libro; `0622`
+cuenta como éxito y sigue a la mitad contable; cualquier otra cosa deja la factura en
+`fe_estado='canceled'` pendiente, con su banda roja. El GET salió del orquestador.
+
+El motivo de confirmar en vez de avanzar directo: `fe_estado='canceled'` lo escribimos
+nosotros, así que después de una caída es una **intención, no un hecho**. Avanzar al libro sin
+volver a preguntar sería revertir un asiento inmutable confiando en una marca propia.
+
+Tres tests nuevos: `0622` → éxito y sigue al libro; otro error → el libro no se toca; y el GET
+no se llama **nunca**, en ninguno de los caminos.
 - **(c) Rechazo por plazo: NO SE PUDO PROBAR.** El documento que iba a servir ya tenía un
   evento de anulación encima, así que el PAC contestó `0622` antes de llegar a evaluar el
   plazo. ⚠️ **Dato al pasar:** `FAC-REI-000002` se autorizó el 17/09 13:05, así que recién

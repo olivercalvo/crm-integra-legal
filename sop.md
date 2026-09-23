@@ -3077,9 +3077,32 @@ Pruebas del 23/09/2026 (informe completo en `docs/efactura/prueba-anulacion-sand
   dejaría la factura trabada en el estado intermedio para siempre.
 - ✅ 🔴 **`GET /Invoices/Authorization/{cufe}` NO refleja la anulación.** Devuelve el mismo
   payload antes y después —`autorizada: true`, `deletedDate: null`— con el evento ya existente.
-  **La "consulta de estado antes de reintentar" que pide D3 no se puede hacer con la API que
-  existe.** El reintento se apoya en `0622`. `MARCADOR_DE_ANULACION_CONFIRMADO` se queda en
-  `false` para siempre, y ahora por un motivo medido.
+  **La "consulta de estado antes de reintentar" que pedía D3 no se puede hacer con la API que
+  existe.** `MARCADOR_DE_ANULACION_CONFIRMADO` se queda en `false` para siempre, y ahora por un
+  motivo medido.
+
+### 🔴 El reintento, rediseñado el 23/09/2026
+
+Con esa evidencia, D3 se rehízo. **El reintento no consulta: vuelve a pedir la anulación.**
+
+- «Completar anulación» **llama a `CreateCancellation` antes de tocar el libro.**
+- `0622` (o una anulación exitosa) ⇒ **confirmado**: sigue a la mitad contable, igual que una
+  respuesta exitosa normal.
+- Cualquier otra cosa —rechazo, respuesta que no se reconoce, red cortada— ⇒ la factura **se
+  queda en `fe_estado='canceled'` pendiente**, con su banda roja y su botón. El libro no se
+  toca.
+
+**Por qué se confirma en vez de avanzar directo:** `fe_estado = 'canceled'` lo escribimos
+NOSOTROS antes de la mitad contable. Si el proceso murió justo ahí, esa marca es una
+**intención, no un hecho**. Avanzar al libro sin volver a preguntar sería revertir un asiento
+—inmutable— confiando en una marca propia. El `0622` es lo que la convierte en hecho, y es la
+única confirmación disponible.
+
+Pedirlo de nuevo es seguro: está medido que el endpoint es estable y no duplica nada del lado
+de la DGI. Cada llamada queda registrada en `fe_anulaciones` con su propio `intento`.
+
+⚠️ Una factura marcada `'canceled'` **sin CUFE guardado** completa el libro sin llamar al PAC:
+no hay a quién preguntarle.
 - ❌ **Cómo se ve un ÉXITO sigue sin saberse.** Por eso el clasificador tiene una clase
   `indeterminada` que **no es un error**: es "no tocar el libro y escalar". Un HTTP 200 con
   array vacío cae ahí a propósito. `task_plan.md` tiene qué falta para cerrarla.

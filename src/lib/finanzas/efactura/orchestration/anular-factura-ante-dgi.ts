@@ -31,12 +31,12 @@
  *
  *   2. **NO SABEMOS SI LLEGÓ** (se cortó la red, o el PAC contestó algo que el
  *      clasificador no reconoce). Tampoco se escribe nada en la factura ni en
- *      el libro. Se guarda el intento con `sin_respuesta` / `indeterminada` y
- *      **el caso escala a una persona**. No hay reintento automático, y no lo
- *      hay porque hoy no se puede leer con certeza si un documento está anulado
- *      del lado del PAC (ver `anulacion-en-pac.ts`: `anulado` devuelve `null`
- *      hasta la prueba de sandbox (b)). Reintentar a ciegas sobre un endpoint
- *      del que no sabemos si es idempotente es la peor opción disponible.
+ *      el libro. Se guarda el intento con `sin_respuesta` / `indeterminada`, y
+ *      **volver a apretar el botón es seguro**: está medido que pedir la
+ *      anulación dos veces devuelve `0622 — Ya existe un evento de anulación`,
+ *      así que el segundo intento distingue solo "ya estaba anulado" de "se
+ *      anuló ahora" de "lo rechazó". No hay reintento AUTOMÁTICO —lo dispara
+ *      una persona— pero ya no hay que ir al portal a mirar antes.
  *
  *   3. **LA DGI ANULÓ PERO EL LIBRO FALLÓ.** Es el estado intermedio de D4.
  *      `fe_estado` ya quedó en `'canceled'` —se escribe ANTES de tocar el
@@ -45,6 +45,27 @@
  *      anulación. Si ese UPDATE previo no existiera, una caída entre el PAC y
  *      el libro dejaría una factura anulada ante la DGI **sin una sola marca en
  *      nuestra base**: indistinguible de una que nunca se tocó.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 🔴 EL REINTENTO NO CONSULTA EL ESTADO: LO VUELVE A PEDIR (23/09/2026)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * D3 decía "el reintento SIEMPRE consulta el estado del documento antes de
+ * volver a llamar". **No se puede**: la prueba de sandbox (b) mostró que
+ * `GET /Invoices/Authorization/{cufe}` devuelve EXACTAMENTE el mismo payload
+ * antes y después de que exista el evento de anulación —`autorizada: true`,
+ * `deletedDate: null`—. Ese endpoint responde por la AUTORIZACIÓN del
+ * documento, no por su vigencia. No hay a qué preguntarle.
+ *
+ * Lo que sí se puede es **volver a pedir la anulación**, porque está medido que
+ * es estable: dos llamadas seguidas devuelven `0622 — Ya existe un evento de
+ * anulación para esta FE`. El POST es a la vez el reintento y la confirmación,
+ * y es la única confirmación disponible.
+ *
+ * Por eso «Completar anulación» **llama al PAC antes de tocar el libro**.
+ * `fe_estado = 'canceled'` lo escribimos NOSOTROS antes de la mitad contable:
+ * si el proceso murió justo ahí, esa marca es una intención, no un hecho.
+ * Avanzar al libro sin volver a preguntar sería revertir un asiento —inmutable—
+ * confiando en una marca propia.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * LO QUE ESTE MÓDULO NO DECIDE
@@ -69,11 +90,7 @@ import {
   type FeEstado,
 } from "@/lib/finanzas/efactura/orchestration/decidir-accion-fiscal";
 import { clasificarRespuestaDeAnulacion } from "@/lib/finanzas/efactura/orchestration/clasificar-respuesta-de-anulacion";
-import {
-  anularEnPac,
-  consultarEstadoEnPac,
-  leerEstadoDelDocumento,
-} from "@/lib/finanzas/efactura/transport/anulacion-en-pac";
+import { anularEnPac } from "@/lib/finanzas/efactura/transport/anulacion-en-pac";
 import { validarMotivoDeAnulacion } from "@/lib/finanzas/validators/cancel-invoice";
 
 type DB = SupabaseClient;
@@ -141,12 +158,63 @@ export async function anularFacturaAnteDgi(
   const motivo = validado.motivo;
 
   // ---------------------------------------------------------------------------
-  // CAMINO CORTO — la factura YA está anulada ante la DGI y sólo falta el libro.
-  //   Es el reintento del estado intermedio. No se vuelve a llamar al PAC: el
-  //   documento ya está muerto ahí, y pedirlo de nuevo sobre un endpoint que no
-  //   sabemos si es idempotente sólo puede empeorar las cosas.
+  // EL REINTENTO — la factura quedó marcada como anulada ante la DGI y falta el
+  // libro. Se le VUELVE A PEDIR la anulación al PAC antes de tocar el libro.
+  //
+  // 🔴 ESO CAMBIÓ EL 23/09/2026, Y LO CAMBIÓ LA EVIDENCIA DEL SANDBOX.
+  //
+  //    El diseño original (D3) decía "consultar el estado del documento antes
+  //    de reintentar". No se puede: `GET /Invoices/Authorization/{cufe}`
+  //    devuelve EXACTAMENTE el mismo payload antes y después de que exista el
+  //    evento de anulación —`autorizada: true`, `deletedDate: null`—. Ese
+  //    endpoint responde por la AUTORIZACIÓN del documento, no por su vigencia.
+  //    No hay a qué preguntarle.
+  //
+  //    Lo que sí se puede es volver a pedir la anulación, porque medimos que es
+  //    ESTABLE: dos llamadas seguidas devuelven HTTP 200 con
+  //    `0622 — Ya existe un evento de anulación para esta FE`. Así que el POST
+  //    es a la vez el reintento y la confirmación, y es la ÚNICA confirmación
+  //    disponible.
+  //
+  //    Por qué importa que se confirme: `fe_estado = 'canceled'` lo escribimos
+  //    NOSOTROS antes de tocar el libro. Si el proceso murió justo ahí, esa
+  //    marca es una intención, no un hecho. Pasar al libro sin volver a
+  //    preguntar sería revertir un asiento —inmutable— confiando en una marca
+  //    propia. El `0622` (o una anulación exitosa) es lo que la convierte en
+  //    hecho.
+  //
+  //    Si el PAC contesta cualquier otra cosa, la factura se queda donde está:
+  //    `'canceled'` pendiente, con la banda roja y el botón. No se toca el
+  //    libro.
   // ---------------------------------------------------------------------------
   if (accion.accion === "completar_anulacion_en_libro") {
+    if (!accion.cufe) {
+      // Marcada como anulada ante la DGI pero sin CUFE guardado: no hay a quién
+      // preguntarle. Se completa en el libro, que es lo único que queda por
+      // hacer, y la advertencia de la matriz ya lo explica en pantalla.
+      return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+    }
+
+    const confirmacion = await confirmarAnulacionEnPac(
+      db,
+      tenantId,
+      userId,
+      invoiceId,
+      accion.cufe,
+      motivo
+    );
+
+    if (!confirmacion.confirmada) {
+      return {
+        estado: "anulada_en_dgi_falta_el_libro",
+        mensaje:
+          "No se pudo confirmar con la DGI que este documento esté anulado, así que el libro " +
+          "contable no se tocó. La factura sigue pendiente de completar. " +
+          confirmacion.mensaje,
+        detalle: confirmacion.mensaje,
+      };
+    }
+
     return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
   }
 
@@ -211,9 +279,8 @@ export async function anularFacturaAnteDgi(
       intento,
       mensaje:
         "No se pudo confirmar si la DGI recibió la anulación: la comunicación se cortó. " +
-        "La factura NO se modificó. Antes de reintentar hay que verificar en el portal de " +
-        "la DGI si el documento quedó anulado — pedirlo dos veces sobre un documento que ya " +
-        "está anulado puede dar un error que tape el estado real. Detalle: " +
+        "La factura NO se modificó. Puede volver a intentarlo: si el pedido había llegado, " +
+        "la DGI lo informa y la anulación sigue desde donde quedó. Detalle: " +
         recortar(detalle, 200),
     };
   }
@@ -240,24 +307,21 @@ export async function anularFacturaAnteDgi(
   //   y su respuesta se guarda: es la evidencia que esa prueba necesita.
   // ---------------------------------------------------------------------------
   if (clasificacion.clase === "indeterminada") {
-    const consulta = await consultarEstadoSinRomper(accion.cufe);
-    await cerrarIntento(db, tenantId, intentoId, "indeterminada", {
-      respuesta,
-      _consulta_de_estado: consulta?.crudo ?? null,
-      _meta: {
-        anulado_segun_hipotesis: consulta?.anuladoSegunHipotesis ?? null,
-        deleted_date: consulta?.deletedDate ?? null,
-        autorizada: consulta?.autorizada ?? null,
-      },
-    });
+    // 🔴 Acá iba una consulta de estado al PAC, y se sacó el 23/09/2026: el GET
+    //    de autorización NO refleja la anulación (mismo payload antes y
+    //    después), así que preguntaba y no informaba nada. Lo que resuelve este
+    //    caso es volver a apretar el botón: el segundo POST distingue "ya
+    //    estaba anulado" (`0622`) de "se anuló ahora" de "lo rechazó".
+    await cerrarIntento(db, tenantId, intentoId, "indeterminada", respuesta);
 
     return {
       estado: "no_sabemos",
       intento,
       mensaje:
         "La DGI contestó algo que el sistema no puede interpretar, así que NO se modificó " +
-        "nada: la factura sigue emitida y el libro sin tocar. Verifique en el portal de la " +
-        "DGI si el documento quedó anulado y avise a soporte con el número de esta factura. " +
+        "nada: la factura sigue emitida y el libro sin tocar. Puede volver a intentarlo — si " +
+        "el documento ya hubiera quedado anulado, la DGI lo informa y la anulación sigue " +
+        "desde donde quedó. Si vuelve a pasar, avise a soporte con el número de esta factura. " +
         clasificacion.mensaje,
     };
   }
@@ -408,14 +472,79 @@ async function cerrarIntento(
   }
 }
 
-/** La consulta de estado nunca puede tumbar el flujo: es información extra. */
-async function consultarEstadoSinRomper(cufe: string) {
-  try {
-    return leerEstadoDelDocumento(await consultarEstadoEnPac(cufe));
-  } catch (err) {
-    console.error("[efactura/anulacion] falló la consulta de estado", err);
-    return null;
+/**
+ * VOLVER A PEDIRLE LA ANULACIÓN AL PAC PARA CONFIRMAR QUE EL DOCUMENTO ESTÁ
+ * MUERTO — el reintento del estado intermedio.
+ *
+ * Es seguro pedirlo de nuevo: está medido que el endpoint es **estable**. Dos
+ * llamadas seguidas sobre el mismo CUFE devuelven HTTP 200 con
+ * `0622 — Ya existe un evento de anulación para esta FE`, y el clasificador lo
+ * lee como `ya_anulada`. No duplica nada del lado de la DGI.
+ *
+ * Para el reintento, `ya_anulada` y `anulada` son **lo mismo**: el documento
+ * está muerto allá, que es lo único que este paso necesita saber antes de
+ * dejar que se toque el libro.
+ *
+ * Cualquier otra cosa —un rechazo, una respuesta que no se reconoce, la red
+ * cortada— devuelve `confirmada: false` y la factura se queda donde está.
+ * Nunca se avanza al libro con la duda: la reversión es inmutable.
+ *
+ * Cada llamada queda registrada en `fe_anulaciones` con su propio `intento`.
+ */
+async function confirmarAnulacionEnPac(
+  db: DB,
+  tenantId: string,
+  userId: string,
+  invoiceId: string,
+  cufe: string,
+  motivo: string
+): Promise<{ confirmada: boolean; mensaje: string }> {
+  const emisor = loadEmisorConfig();
+  const intento = await proximoIntento(db, tenantId, invoiceId);
+  const pedido = { cufe, cancellationReason: motivo };
+
+  const { data: fila, error } = await db
+    .from("fe_anulaciones")
+    .insert({
+      tenant_id: tenantId,
+      invoice_id: invoiceId,
+      intento,
+      cufe,
+      motivo,
+      request_payload: pedido,
+      resultado: "sin_respuesta",
+      i_amb: emisor.iAmb,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !fila) {
+    throw new MutationError(pgErrorToMessage(error), 500, error);
   }
+  const intentoId = fila.id as string;
+
+  let respuesta: unknown;
+  try {
+    respuesta = await anularEnPac(pedido);
+  } catch (err) {
+    const detalle = err instanceof Error ? err.message : String(err);
+    await cerrarIntento(db, tenantId, intentoId, "sin_respuesta", {
+      _meta: { error: recortar(detalle, 500) },
+    });
+    return {
+      confirmada: false,
+      mensaje: `No se pudo hablar con la DGI: ${recortar(detalle, 200)}`,
+    };
+  }
+
+  const clasificacion = clasificarRespuestaDeAnulacion(respuesta);
+  await cerrarIntento(db, tenantId, intentoId, clasificacion.clase, respuesta);
+
+  if (clasificacion.clase === "anulada" || clasificacion.clase === "ya_anulada") {
+    return { confirmada: true, mensaje: clasificacion.mensaje };
+  }
+  return { confirmada: false, mensaje: clasificacion.mensaje };
 }
 
 function recortar(s: string, max: number): string {

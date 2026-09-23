@@ -4,7 +4,16 @@
 
 ---
 
-## 🔴 PENDIENTE — desactivar una tasa desde la pantalla (23/09/2026)
+## ✅ CERRADO — desactivar una tasa desde la pantalla (23/09/2026)
+
+Resuelto en `3c9cb47` y **verificado con clics** en la URL fija de la rama:
+`PRUEBA_10` se reactivó con el botón, volvió al selector de compra, se desactivó con
+el botón y desapareció del de factura. Los dos movimientos quedaron en `audit_log`
+con `field = 'active'`. Queda desactivada.
+
+El texto de abajo se conserva porque explica por qué una tasa no se borra.
+
+### (histórico) El hueco
 
 Salió de la verificación del Bloque 8. El pie del formulario de alta de tasas dice *"Una tasa no
 se borra: se desactiva"*, y **desactivarla no se puede desde la UI**: el modo edición sólo tiene

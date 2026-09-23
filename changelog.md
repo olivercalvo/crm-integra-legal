@@ -1,5 +1,27 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Desactivar y reactivar una tasa desde la pantalla] - 2026-09-23
+
+**Staging (`develop`):** `3c9cb47`. Cierra el hueco que encontró la verificación del Bloque 8.
+
+Un botón por fila, al lado de Editar, que manda `{ active: !t.active }` al `PATCH` que **ya
+existía**: `active` estaba en `UpdateTaxCodeInput`, en el validador y en `updateTaxCode`. Sin
+ruta nueva, sin permiso nuevo, mismo `canEdit` (admin y contador).
+
+La fila **no desaparece** del listado: queda "Inactivo" y el botón pasa a "Reactivar". Una tasa
+que se esconde es una tasa que alguien vuelve a crear con otro código, y ahí aparece el
+duplicado que el UNIQUE rechaza.
+
+🔒 Cuatro tests sobre el contrato del payload. El que importa: `{ active: false }` **solo** tiene
+que ser válido. Si el validador algún día exigiera `name` o `rate`, el botón dejaría de
+funcionar y el síntoma sería *"no pasa nada al hacer clic"* — el peor, porque no hay error que
+leer. También se fija que la cadena `"false"` se rechace: es truthy, y aceptarla activaría justo
+lo que se quiso desactivar.
+
+**Verificado con clics** en `crm-integra-legal-git-develop`: `PRUEBA_10` reactivada con el botón
+→ vuelve al selector de compra → desactivada con el botón → desaparece del de factura. Los dos
+movimientos en `audit_log` con `field = 'active'`. Suite 1187/1187.
+
 ## [Bloque 8 — proveedor completo y tasas de ITBMS] - 2026-09-23
 
 **Staging (`develop`):** `a7acdac` (057) → `c1b40e5` (backend 4.4) → `e7c27e6` (UI 4.4) →

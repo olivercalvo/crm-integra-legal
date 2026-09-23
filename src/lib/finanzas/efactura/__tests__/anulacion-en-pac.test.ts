@@ -58,14 +58,16 @@ test("🔴 una respuesta con forma desconocida → indeterminada, y guarda el cr
 });
 
 test("🔴 el lector de estado NO afirma que un documento esté anulado", () => {
-  // `deletedDate` es la hipótesis obvia y también el tipo de hipótesis que se
-  // vuelve un hecho por repetición. La prueba de sandbox (b) es la que cierra
-  // esto; hasta entonces `anulado` es null y el caso escala a una persona.
+  // `deletedDate` era la hipótesis obvia, y la prueba de sandbox (b) del
+  // 23/09/2026 la desmintió: el GET devuelve el MISMO payload antes y después
+  // de que exista el evento de anulación — `autorizada: true`, `deletedDate:
+  // null`. No hay marcador que confirmar, así que esto no es prudencia
+  // provisional: es el resultado.
   assert.equal(
     MARCADOR_DE_ANULACION_CONFIRMADO,
     false,
-    "Si esto pasó a true, tiene que haber una respuesta real del sandbox citada en " +
-      "task_plan.md como 'confirmado en sandbox' con su fecha."
+    "El sandbox mostró que el GET no refleja la anulación. Ponerlo en true afirmaría, " +
+      "sobre un documento fiscal, algo que el PAC no dice."
   );
 
   const e = leerEstadoDelDocumento({
@@ -102,6 +104,43 @@ test("un código de éxito con mensaje de anulación → anulada", () => {
     { codigo: "0260", mensaje: "Documento anulado correctamente" },
   ]);
   assert.equal(r.clase, "anulada");
+});
+
+/**
+ * 🔒 LA RESPUESTA REAL DEL SANDBOX, 23/09/2026.
+ *
+ * Pedirle dos veces la anulación al mismo CUFE devolvió HTTP 200 con este
+ * array, textual. Es el único dato MEDIDO que tiene este módulo: todo lo demás
+ * son heurísticas. Si alguna vez se toca el clasificador, esto es lo que no
+ * puede cambiar de significado.
+ */
+const RESPUESTA_REAL_YA_ANULADA = [
+  { codigo: "0622", mensaje: "Ya existe un evento de anulación para esta FE" },
+];
+
+test("🔒 0622 (respuesta REAL del sandbox) → ya_anulada, NO rechazada", () => {
+  // Para un reintento, "ya existe un evento de anulación" es un ÉXITO: el
+  // documento está muerto ante la DGI, que es lo que se quería. Clasificarlo
+  // como rechazo dejaría a la factura trabada en el estado intermedio para
+  // siempre, porque el reintento nunca podría avanzar al libro.
+  const r = clasificarRespuestaDeAnulacion(RESPUESTA_REAL_YA_ANULADA);
+  assert.equal(r.clase, "ya_anulada");
+  assert.match(r.mensaje, /0622/);
+});
+
+test("🔒 el código manda aunque el mensaje cambie de redacción", () => {
+  // ideati podría reescribir el texto en castellano sin avisar. El código no.
+  const r = clasificarRespuestaDeAnulacion([
+    { codigo: "0622", mensaje: "Evento previo registrado" },
+  ]);
+  assert.equal(r.clase, "ya_anulada");
+});
+
+test("y el mensaje también alcanza, si algún día cambia el código", () => {
+  const r = clasificarRespuestaDeAnulacion([
+    { codigo: "9999", mensaje: "Ya existe un evento de anulación para esta FE" },
+  ]);
+  assert.equal(r.clase, "ya_anulada");
 });
 
 test("mensaje de 'ya estaba anulada' → ya_anulada (para el reintento es un éxito)", () => {

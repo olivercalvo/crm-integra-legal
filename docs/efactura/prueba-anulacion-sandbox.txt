@@ -1,0 +1,274 @@
+◇ injecting env (27) from .env.local // tip: ⌘ override existing { override: true }
+══════════════════════════════════════════════════════════════════════════════
+PRUEBAS DE SANDBOX 9B — anulación ante la DGI
+fecha: 2026-09-23T20:50:04.986Z
+CUFE:  FE0920000025046169-3-2021-4000002026091700000000010010121650905584
+══════════════════════════════════════════════════════════════════════════════
+
+🔒 [b-antes] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ GET /api/v1/Invoices/Authorization/{cufe}  (estado ANTES de anular)
+
+RESPUESTA (antes):
+{
+  "id": "3d2bd0a3-8293-4b46-9673-01de5664e2f9",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": "ID00001528364-1-65300620260000000000059872",
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+          "dFecProc": "2026-09-17T18:05:39.994Z",
+          "dProtAut": "00001528364-1-65300620260000000000059872",
+          "dDigVal": "pgbUrK+HudBQsBC3DbGamNfpQkeO70pjFnH+ZJ6Dsq0=",
+          "gResProc": [
+            {
+              "dCodRes": "0260",
+              "dMsgRes": "Autorizado el uso de la FE"
+            }
+          ],
+          "signature": ""
+        }
+      }
+    }
+  },
+  "invoice": "60a9e526-1fca-474c-a0f6-b4c8012a2f22",
+  "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+  "secuence": 7,
+  "requestTime": 1.5074589,
+  "autorizada": true,
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+  "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0920000025046169-3-2021-4000002026091700000000010010121650905584&iAmb=2&digestValue=2e731df4-0e02-4f7c-b860-a398213f6c58&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwOTIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkxNzAwMDAwMDAwMDEwMDEwMTIxNjUwOTA1NTg0IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiIyZTczMWRmNC0wZTAyLTRmN2MtYjg2MC1hMzk4MjEzZjZjNTgifQ.p7Iu6WbbmrHiCDLeAmAhYcHKgiJvaehricfda7AONKc",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-17T18:05:41.107Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+LEÍDA por leerEstadoDelDocumento:
+{
+  "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+  "autorizada": true,
+  "anulado": null,
+  "anuladoSegunHipotesis": false,
+  "deletedDate": null,
+  "deletedBy": null,
+  "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+  "crudo": {
+    "id": "3d2bd0a3-8293-4b46-9673-01de5664e2f9",
+    "rRetEnviFe": {
+      "dVerForm": "1.00",
+      "iAmb": 2,
+      "dVerApl": "1.0",
+      "xProtFe": {
+        "rProtFe": {
+          "dVerForm": 1,
+          "gInfProt": {
+            "dId": "ID00001528364-1-65300620260000000000059872",
+            "iAmb": 2,
+            "dVerApl": "1.0",
+            "dCUFE": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+            "dFecProc": "2026-09-17T18:05:39.994Z",
+            "dProtAut": "00001528364-1-65300620260000000000059872",
+            "dDigVal": "pgbUrK+HudBQsBC3DbGamNfpQkeO70pjFnH+ZJ6Dsq0=",
+            "gResProc": [
+              {
+                "dCodRes": "0260",
+                "dMsgRes": "Autorizado el uso de la FE"
+              }
+            ],
+            "signature": ""
+          }
+        }
+      }
+    },
+    "invoice": "60a9e526-1fca-474c-a0f6-b4c8012a2f22",
+    "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+    "secuence": 7,
+    "requestTime": 1.5074589,
+    "autorizada": true,
+    "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+    "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+    "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0920000025046169-3-2021-4000002026091700000000010010121650905584&iAmb=2&digestValue=2e731df4-0e02-4f7c-b860-a398213f6c58&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwOTIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkxNzAwMDAwMDAwMDEwMDEwMTIxNjUwOTA1NTg0IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiIyZTczMWRmNC0wZTAyLTRmN2MtYjg2MC1hMzk4MjEzZjZjNTgifQ.p7Iu6WbbmrHiCDLeAmAhYcHKgiJvaehricfda7AONKc",
+    "isRetry": false,
+    "createdBy": "25046169-3-2021",
+    "createdDate": "2026-09-17T18:05:41.107Z",
+    "updatedBy": null,
+    "updatedDate": null,
+    "deletedBy": null,
+    "deletedDate": null
+  }
+}
+
+🔒 [prueba-5] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/InvoiceEvents/CreateCancellation  (primera vez)
+
+RESPUESTA (1ª anulación):
+[
+  {
+    "codigo": "0622",
+    "mensaje": "Ya existe un evento de anulación para esta FE"
+  }
+]
+
+CLASIFICADA como:
+{
+  "clase": "rechazada",
+  "eventos": [
+    {
+      "codigo": "0622",
+      "mensaje": "Ya existe un evento de anulación para esta FE"
+    }
+  ],
+  "mensaje": "[0622] Ya existe un evento de anulación para esta FE",
+  "pista": null
+}
+
+🔒 [b-despues] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ GET /api/v1/Invoices/Authorization/{cufe}  (estado DESPUÉS)
+
+RESPUESTA (después):
+{
+  "id": "3d2bd0a3-8293-4b46-9673-01de5664e2f9",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": "ID00001528364-1-65300620260000000000059872",
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+          "dFecProc": "2026-09-17T18:05:39.994Z",
+          "dProtAut": "00001528364-1-65300620260000000000059872",
+          "dDigVal": "pgbUrK+HudBQsBC3DbGamNfpQkeO70pjFnH+ZJ6Dsq0=",
+          "gResProc": [
+            {
+              "dCodRes": "0260",
+              "dMsgRes": "Autorizado el uso de la FE"
+            }
+          ],
+          "signature": ""
+        }
+      }
+    }
+  },
+  "invoice": "60a9e526-1fca-474c-a0f6-b4c8012a2f22",
+  "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+  "secuence": 7,
+  "requestTime": 1.5074589,
+  "autorizada": true,
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+  "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0920000025046169-3-2021-4000002026091700000000010010121650905584&iAmb=2&digestValue=2e731df4-0e02-4f7c-b860-a398213f6c58&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwOTIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkxNzAwMDAwMDAwMDEwMDEwMTIxNjUwOTA1NTg0IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiIyZTczMWRmNC0wZTAyLTRmN2MtYjg2MC1hMzk4MjEzZjZjNTgifQ.p7Iu6WbbmrHiCDLeAmAhYcHKgiJvaehricfda7AONKc",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-17T18:05:41.107Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+LEÍDA por leerEstadoDelDocumento:
+{
+  "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+  "autorizada": true,
+  "anulado": null,
+  "anuladoSegunHipotesis": false,
+  "deletedDate": null,
+  "deletedBy": null,
+  "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+  "crudo": {
+    "id": "3d2bd0a3-8293-4b46-9673-01de5664e2f9",
+    "rRetEnviFe": {
+      "dVerForm": "1.00",
+      "iAmb": 2,
+      "dVerApl": "1.0",
+      "xProtFe": {
+        "rProtFe": {
+          "dVerForm": 1,
+          "gInfProt": {
+            "dId": "ID00001528364-1-65300620260000000000059872",
+            "iAmb": 2,
+            "dVerApl": "1.0",
+            "dCUFE": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+            "dFecProc": "2026-09-17T18:05:39.994Z",
+            "dProtAut": "00001528364-1-65300620260000000000059872",
+            "dDigVal": "pgbUrK+HudBQsBC3DbGamNfpQkeO70pjFnH+ZJ6Dsq0=",
+            "gResProc": [
+              {
+                "dCodRes": "0260",
+                "dMsgRes": "Autorizado el uso de la FE"
+              }
+            ],
+            "signature": ""
+          }
+        }
+      }
+    },
+    "invoice": "60a9e526-1fca-474c-a0f6-b4c8012a2f22",
+    "cufe": "FE0920000025046169-3-2021-4000002026091700000000010010121650905584",
+    "secuence": 7,
+    "requestTime": 1.5074589,
+    "autorizada": true,
+    "protocoloAutorizacion": "00001528364-1-65300620260000000000059872",
+    "fechaAutorizacion": "2026-09-17T18:05:39.994Z",
+    "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0920000025046169-3-2021-4000002026091700000000010010121650905584&iAmb=2&digestValue=2e731df4-0e02-4f7c-b860-a398213f6c58&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwOTIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkxNzAwMDAwMDAwMDEwMDEwMTIxNjUwOTA1NTg0IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiIyZTczMWRmNC0wZTAyLTRmN2MtYjg2MC1hMzk4MjEzZjZjNTgifQ.p7Iu6WbbmrHiCDLeAmAhYcHKgiJvaehricfda7AONKc",
+    "isRetry": false,
+    "createdBy": "25046169-3-2021",
+    "createdDate": "2026-09-17T18:05:41.107Z",
+    "updatedBy": null,
+    "updatedDate": null,
+    "deletedBy": null,
+    "deletedDate": null
+  }
+}
+
+🔴 CAMPOS QUE CAMBIARON AL ANULAR: (ninguno)
+
+🔒 [prueba-a] AMBIENTE: EFACTURA_I_AMB = 2  ·  NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/InvoiceEvents/CreateCancellation  (SEGUNDA vez, mismo CUFE)
+
+RESPUESTA (2ª anulación):
+[
+  {
+    "codigo": "0622",
+    "mensaje": "Ya existe un evento de anulación para esta FE"
+  }
+]
+
+CLASIFICADA como:
+{
+  "clase": "rechazada",
+  "eventos": [
+    {
+      "codigo": "0622",
+      "mensaje": "Ya existe un evento de anulación para esta FE"
+    }
+  ],
+  "mensaje": "[0622] Ya existe un evento de anulación para esta FE",
+  "pista": null
+}
+
+🔴 IDEMPOTENCIA: la segunda llamada devolvió LO MISMO que la primera
+
+══════════════════════════════════════════════════════════════════════════════
+FIN. Nada de esto tocó la base de datos.
+══════════════════════════════════════════════════════════════════════════════
+
+📄 informe: C:\Users\Oliver\Desktop\Cliente en el Centro\Clientes\Integra\02_Desarrollo\crm-integra-legal\docs\efactura\prueba-anulacion-sandbox.txt

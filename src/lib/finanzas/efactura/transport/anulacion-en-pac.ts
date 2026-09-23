@@ -15,31 +15,39 @@
  * sandbox (a)), no sabemos qué pasa si lo hacemos.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * 🔴 NO SABEMOS QUÉ CAMPO DICE "ESTE DOCUMENTO ESTÁ ANULADO"
+ * 🔴 EL GET NO DICE SI EL DOCUMENTO ESTÁ ANULADO. MEDIDO, NO SUPUESTO.
  * ─────────────────────────────────────────────────────────────────────────────
  * `InvoiceReceptionResponse` —lo que devuelve el GET— tiene `autorizada`,
  * `protocoloAutorizacion`, `fechaAutorizacion`, `cufe`… y también `deletedDate`
  * y `deletedBy`. El swagger **no describe ni uno solo de esos campos**: no hay
  * una sola `description` en el esquema.
  *
- * `deletedDate` es la hipótesis obvia. También es exactamente el tipo de
- * hipótesis que se vuelve un hecho por repetición: alguien la escribe, el
- * siguiente la lee ya sin el condicional, y seis meses después el reintento
- * decide sobre un campo que en realidad marcaba otra cosa (un borrado lógico
- * del PAC, por ejemplo, que no es lo mismo que una anulación ante la DGI).
+ * `deletedDate` era la hipótesis obvia. **Y es falsa.**
  *
- * Por eso `leerEstadoDelDocumento` devuelve `anulado: null` mientras
- * `MARCADOR_DE_ANULACION_CONFIRMADO` sea `false`, y expone aparte lo que la
- * hipótesis diría (`anuladoSegunHipotesis`) junto con el payload crudo. La
- * prueba de sandbox (b) —"consultar el documento anulado y registrar qué campo
- * y qué valor muestran que está anulado"— es la que cierra esto, y lo cierra
- * cambiando una constante o reemplazando el lector, en su propio commit.
+ * Prueba de sandbox (b), 23/09/2026: se consultó el documento
+ * `FE0920000025046169-3-2021-…905584` antes y después de pedir su anulación, y
+ * el PAC devolvió **exactamente el mismo payload** — `autorizada: true`,
+ * `deletedDate: null`, `deletedBy: null`, `updatedDate: null`. **Ningún campo
+ * cambió**, con el evento de anulación ya existente (la llamada a
+ * `CreateCancellation` de esa misma corrida devolvió `0622 — Ya existe un
+ * evento de anulación para esta FE`).
  *
- * Consecuencia buscada, no accidental: **mientras esto no esté confirmado, el
- * reintento automático no existe.** `anulado: null` significa que el
- * orquestador no puede decidir solo y tiene que mostrarle el caso a una
- * persona. Es más lento y es correcto: la alternativa es adivinar sobre un
- * documento fiscal.
+ * O sea que este endpoint responde por la AUTORIZACIÓN del documento, no por su
+ * vigencia. Lo único que informa una anulación es el propio `0622`.
+ *
+ * Consecuencias, las dos importantes:
+ *
+ *   1. **La "consulta de estado antes de reintentar" que pide D3 no se puede
+ *      hacer con la API que existe.** No es que falte implementarla: no hay a
+ *      qué preguntarle.
+ *   2. **El reintento se apoya en `0622`, no en el GET.** Volver a llamar a
+ *      `CreateCancellation` es seguro —es estable, prueba (a)— y su respuesta
+ *      distingue "ya estaba anulado" de "se anuló ahora" de "lo rechazó".
+ *
+ * `leerEstadoDelDocumento` se conserva porque `autorizada` y `fechaAutorizacion`
+ * siguen siendo útiles, y porque guardar el payload crudo es lo que permitió
+ * llegar a esta conclusión. Pero `anulado` es **siempre `null`**, y ahora eso
+ * no es prudencia provisional: es el resultado.
  */
 
 import { get, post } from "@/lib/finanzas/efactura/transport/efactura-client";
@@ -48,9 +56,16 @@ const RUTA_ANULAR = "/api/v1/InvoiceEvents/CreateCancellation";
 const RUTA_ESTADO = "/api/v1/Invoices/Authorization";
 
 /**
- * 🔴 Lo flipa la prueba de sandbox (b), no una lectura del swagger.
- * Mientras sea `false`, `leerEstadoDelDocumento` no afirma que un documento
- * esté anulado: devuelve `null` y el caso escala a una persona.
+ * 🔴 SE QUEDA EN `false` PARA SIEMPRE, y ahora por un motivo medido.
+ *
+ * La prueba de sandbox (b) del 23/09/2026 mostró que el GET **no refleja la
+ * anulación**: mismo payload antes y después, `deletedDate` nulo en los dos.
+ * No hay marcador que confirmar. Ponerlo en `true` afirmaría, sobre un
+ * documento fiscal, algo que el PAC no dice.
+ *
+ * Queda como constante y no como un `false` suelto porque es el lugar donde
+ * está escrito el hallazgo: si mañana ideati agrega un campo de vigencia, acá
+ * se ve qué había que cambiar y por qué.
  */
 export const MARCADOR_DE_ANULACION_CONFIRMADO = false;
 

@@ -7,32 +7,47 @@
  * dos `nullable`, sin `enum`, sin `required` y sin una sola descripción.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * 🔴 NO SABEMOS CÓMO SE VE UN ÉXITO. Y ESO ESTÁ ESCRITO EN EL CÓDIGO.
+ * LO QUE EL SANDBOX CONTESTÓ (23/09/2026) Y LO QUE SIGUE ABIERTO
  * ─────────────────────────────────────────────────────────────────────────────
- * Ninguna respuesta real de este endpoint pasó todavía por acá. Las pruebas de
- * sandbox 5 y (a) existen justamente para eso. Hasta entonces, la tentación es
- * suponer —"HTTP 200 y array vacío debe ser que salió bien"— y esa suposición
- * tiene una consecuencia concreta: si es falsa, el orquestador marca la factura
- * como anulada, revierte el asiento, y el documento sigue **vivo ante la DGI**.
- * Un descuadre entre nuestros libros y los de la DGI que nadie ve hasta la
- * próxima declaración.
+ * ✅ **Repetir la anulación es ESTABLE.** Dos llamadas seguidas sobre el mismo
+ *    CUFE devuelven HTTP 200 con
+ *    `[{codigo:"0622", mensaje:"Ya existe un evento de anulación para esta FE"}]`.
+ *    No explota, no cambia nada y no depende de cuántas veces se pida. Para un
+ *    reintento eso es un **éxito**, no un rechazo, y por eso `0622` clasifica
+ *    como `ya_anulada`.
+ *
+ * ✅ **El GET de estado NO sirve para saber si un documento está anulado.**
+ *    `GET /Invoices/Authorization/{cufe}` devuelve EXACTAMENTE el mismo payload
+ *    antes y después —`autorizada: true`, `deletedDate: null`, `deletedBy:
+ *    null`— con el evento de anulación ya existente. Ningún campo cambia.
+ *    Consecuencia de diseño: la "consulta de estado antes de reintentar" que
+ *    pide D3 **no se puede hacer con la API que existe**. Lo único que informa
+ *    la anulación es el propio `0622`. Detalle en `anulacion-en-pac.ts`.
+ *
+ * ❌ **Sigue sin saberse cómo se ve un ÉXITO** (prueba 5). El único documento
+ *    autorizado que había en staging ya tenía un evento de anulación encima, y
+ *    emitir uno nuevo se frenó en los RUC ficticios del seed, que la DGI
+ *    rechaza (`1601`/`1602`). Anotado en `task_plan.md`.
+ *
+ * 🔴 Mientras eso siga abierto, la tentación es suponer —"HTTP 200 y array
+ * vacío debe ser que salió bien"— y esa suposición tiene una consecuencia
+ * concreta: si es falsa, el orquestador marca la factura como anulada, revierte
+ * el asiento, y el documento sigue **vivo ante la DGI**. Un descuadre entre
+ * nuestros libros y los de la DGI que nadie ve hasta la próxima declaración.
  *
  * Así que existe una cuarta respuesta, `indeterminada`, y **no es un error**:
- * es "el PAC contestó algo que no reconozco; andá a preguntarle al documento".
- * El orquestador (9B/4) la trata como la orden de consultar el estado antes de
- * tocar el libro, que es exactamente lo que pide D3. Un array vacío cae ahí a
- * propósito.
- *
- * Cuando las pruebas 5 y (a) digan qué devuelve de verdad, esto se ajusta **en
- * su propio commit**, con la respuesta real citada en el mensaje. No antes.
+ * es "el PAC contestó algo que no reconozco". El orquestador la trata como la
+ * orden de NO tocar el libro y escalar el caso. Un array vacío cae ahí a
+ * propósito. Cuando la prueba 5 diga qué devuelve de verdad, esto se ajusta
+ * **en su propio commit**, con la respuesta real citada. No antes.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * LAS HEURÍSTICAS SON PROVISIONALES Y ESTÁN MARCADAS COMO TALES
+ * LAS HEURÍSTICAS DE TEXTO SON LA RED, EL CÓDIGO NUMÉRICO ES EL DATO
  * ─────────────────────────────────────────────────────────────────────────────
- * Los patrones de texto de abajo vienen del **otro** endpoint —el de emisión,
- * cuyos `gResProc` sí vimos— y de cómo escribe ideati en español. Sirven para
- * no quedarse completamente ciego, no para decidir sin red: cualquier cosa que
- * no matchee cae en `indeterminada`, nunca en "anulada".
+ * Los patrones de abajo vienen del **otro** endpoint —el de emisión, cuyos
+ * `gResProc` sí vimos— y de cómo escribe ideati en español. Sirven para no
+ * quedarse ciego si el PAC cambia un código, no para decidir sin red:
+ * cualquier cosa que no matchee cae en `indeterminada`, nunca en "anulada".
  *
  * La precedencia es la misma lección de `classify-pac-error.ts`: **un código de
  * rechazo gana sobre cualquier señal optimista**. Ahí el bug fue que
@@ -72,7 +87,28 @@ const NEGACIONES =
   /\bno\s+se\s+(pudo|puede)\b|\bno\s+fue\b|\bno\s+existe\b|\binexistente\b|\bno\s+se\s+encuentra\b|\brechaz/;
 
 const SENIAL_DE_ANULADA = /\banulad[ao]\b|\bcancelad[ao]\b|\banulaci[oó]n\s+(exitosa|procesada|registrada)\b/;
-const SENIAL_DE_YA_ANULADA = /\bya\s+(fue|est[aá]|se\s+encuentra)\s+(anulad|cancelad)/;
+/**
+ * 🔴 `0622` — CONFIRMADO EN SANDBOX EL 23/09/2026.
+ *
+ * Llamando dos veces a `CreateCancellation` sobre el mismo CUFE, el PAC
+ * devuelve HTTP 200 con:
+ *
+ *     [{ "codigo": "0622", "mensaje": "Ya existe un evento de anulación para esta FE" }]
+ *
+ * O sea: **es estable**. Repetir la anulación no explota ni cambia nada; avisa
+ * que el evento ya existe. Para un reintento eso es un ÉXITO, no un rechazo.
+ *
+ * Y es la ÚNICA forma que tenemos de saberlo, porque
+ * `GET /Invoices/Authorization/{cufe}` **no refleja la anulación**: devuelve
+ * exactamente el mismo payload antes y después, con `autorizada: true` y
+ * `deletedDate: null`. Ver `anulacion-en-pac.ts`.
+ *
+ * La heurística de texto se conserva como red por si el PAC cambiara el código,
+ * pero manda el código numérico: es dato medido, no inferencia.
+ */
+const CODIGO_YA_ANULADA = "0622";
+const SENIAL_YA_ANULADA_TEXTO =
+  /\bya\s+(fue|est[aá]|se\s+encuentra)\s+(anulad|cancelad)|\bya\s+existe\s+un\s+evento\s+de\s+anulaci[oó]n/;
 
 /**
  * Pistas accionables para los rechazos que sabemos anticipar. El detalle
@@ -133,7 +169,8 @@ function esExito(e: EventoDeAnulacion): boolean {
 }
 
 function esYaAnulada(e: EventoDeAnulacion): boolean {
-  return SENIAL_DE_YA_ANULADA.test(texto(e));
+  if (e.codigo?.trim() === CODIGO_YA_ANULADA) return true;
+  return SENIAL_YA_ANULADA_TEXTO.test(texto(e));
 }
 
 function esRechazo(e: EventoDeAnulacion): boolean {
@@ -181,7 +218,7 @@ export function clasificarRespuestaDeAnulacion(crudo: unknown): ResultadoDeAnula
       clase: "ya_anulada",
       eventos,
       mensaje:
-        "La DGI informa que este documento ya estaba anulado. " +
+        "La DGI informa que este documento ya tiene un evento de anulación. " +
         (resumirEventos(eventos) ?? ""),
     };
   }

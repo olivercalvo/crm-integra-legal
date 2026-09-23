@@ -1,5 +1,44 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 8: PROVEEDOR COMPLETO Y TASAS DE ITBMS — CONSTRUIDO — 23/09/2026 <<<
+
+**Estado:** CONSTRUIDO. Cierra **4.1, 4.4, 4.5 y 2.4**. Siete commits, `a7acdac` → `61c1e52`
+en `develop`, deploy OK. Migración `057` SOLO en staging; `main` sigue en `24b227a`.
+
+⚠️ **Lo que NO se hizo: la verificación con clics reales.** El deploy responde y la pantalla
+carga (banda ámbar de staging confirmada), pero entrar exige escribir una contraseña en el
+formulario de login y eso el agente no lo hace. **Queda pendiente para Oliver** — la lista de
+qué clickear está en `ESTADO-Y-HANDOFF.md`.
+
+### Lo entregado
+
+- **4.4** — `suppliers.default_chart_account_code`, SOLO compras. Predicado propio y estricto
+  (`esTipoValidoComoDefaultDeProveedor`), separado a propósito del de gastos. Degrada cuando la
+  cuenta deja de servir; precarga sólo líneas sin cuenta. SOP-036.
+- **4.1** — `contact_name` / `contact_phone` / `contact_email`, separados de los de la empresa,
+  con dos bloques rotulados en el formulario y dos tarjetas en la ficha.
+- **4.5** — **ya estaba construido.** Los botones rápidos y la precarga del vencimiento existían
+  desde la `033`. Se agregó el único guard que faltaba: que los cuatro atajos que pidió Josuarth
+  estén en la lista. No se sacaron el 15 ni el 45.
+- **2.4** — alta de tasas, admin y contador, porcentaje→fracción con el decimal a la vista.
+  Confirmado con evidencia que una tasa nueva aparece sola en los tres selectores y que su
+  ITBMS va a `200003`. Sin borrado: cinco FK. SOP-037.
+
+### Decisiones registradas
+
+D1 migración `057` (la `056` queda para RM) · D2 sólo compras · D3 predicado nuevo + degradar ·
+D4 precarga, nunca reescribe · D5 número libre con atajos · D6 tres columnas de contacto ·
+D7 POST admin+contador, porcentaje con decimal a la vista, sin borrar.
+
+### Lo que sigue
+
+1. **Clics en staging** (ver el handoff). Bloquea el cierre formal del bloque.
+2. El **bloque fiscal** quedó desbloqueado por las respuestas de ideati del 22/09 — no se
+   empezó, va en el bloque siguiente.
+3. Sigue abierto: el tipo de la NC genérica (¿`06`?) y si Josuarth necesita la nota de débito.
+
+---
+
 ## >>> PREPARACIÓN DEL DESPLIEGUE 025 → 055 — ANALIZADO, NO EJECUTADO — 22/09/2026 <<<
 
 **Estado:** el despliegue NO corrió. `main` sigue en `24b227a`. Lo que hay es el análisis, el

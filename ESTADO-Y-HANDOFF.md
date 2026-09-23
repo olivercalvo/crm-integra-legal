@@ -4,6 +4,53 @@
 
 ---
 
+## 🔴 PENDIENTE — los clics en staging del Bloque 8 (23/09/2026)
+
+**El Bloque 8 está construido y desplegado, pero NO verificado con clics.**
+
+- Deploy: `61c1e52` → `https://crm-integra-legal-4xid3lwu7-olivercalvos-projects.vercel.app`
+  (estado `success`, la pantalla carga, banda ámbar de staging confirmada).
+- **Por qué quedó pendiente:** entrar exige escribir la contraseña de `STAGING_UI_PASSWORD` en
+  el formulario de login, y eso es algo que el agente no hace en ningún caso. No es un problema
+  del deploy ni del código.
+- Queda una pestaña de Chrome abierta en el login de ese deploy.
+
+### Qué hay que clickear (y con qué rol)
+
+El usuario de staging tiene rol **contador**, que alcanza para todo lo de abajo: entra a
+Proveedores y a Gastos del Bufete con CRUD, y a Configuración → Impuestos con edición.
+
+**4.4 — cuenta por defecto (`/finanzas/proveedores`)**
+1. Abrir un proveedor → Editar. El bloque "Cuenta contable por defecto" ofrece sólo cuentas de
+   **gasto y costo activas**. ✅ `130003 Fondo Legales de Clientes` **NO** tiene que estar.
+2. Elegir una (ej. `610001 Alquiler`), guardar, y verla en la ficha.
+3. Ir a `/finanzas/gastos-bufete/nuevo`, elegir ese proveedor: cada línea nueva tiene que
+   arrancar con esa cuenta. Cambiarla en una línea y agregar otra → la nueva vuelve al default,
+   la cambiada **no** se toca.
+4. **Degradación:** desactivar esa cuenta en Configuración → Plan de Cuentas, volver a la ficha
+   del proveedor → aviso ámbar y selector vacío; volver al alta de compra → líneas sin cuenta y
+   el aviso que manda a la ficha. Reactivar la cuenta al terminar.
+
+**4.1 — contacto (`/finanzas/proveedores/[id]/editar`)**
+5. Cargar nombre, teléfono y correo del contacto **distintos** de los de la empresa. Guardar y
+   ver en la ficha las dos tarjetas separadas ("Datos de la empresa" y "Persona de contacto").
+
+**4.5 — plazo**
+6. Los botones Contado · 15 · 30 · 45 · 60 · 90 escriben el número y el campo sigue editable
+   (probar un 22 a mano). Elegir el proveedor en un alta de compra → el vencimiento se precarga.
+
+**2.4 — tasas (`/finanzas/configuracion/impuestos`)**
+7. "Nueva tasa" → código `PRUEBA_10`, nombre `Prueba 10%`, tasa `10`. Debajo del campo tiene que
+   decir **`Se guarda como 0.1000 = 10%`** mientras se escribe. Probar `700` → aviso rojo.
+8. Crear. Verificar que aparece en los selectores de **factura**, **compra** y **gasto de
+   trámite** (los tres, es lo que pidió Oliver explícitamente).
+9. **Desactivarla** y confirmar que desaparece de los tres selectores.
+10. Intentar crear otra con el mismo código → mensaje en español, no un `duplicate key`.
+
+Cuando esté, anotar el SHA verificado en `changelog.md` y cerrar el bloque en `task_plan.md`.
+
+---
+
 ## Nota del 21/09/2026 — FND-009 y producción
 
 **Producción NO está afectada por FND-009.** El "Marcar como pagada" roto es el de `develop`

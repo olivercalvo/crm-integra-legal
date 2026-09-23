@@ -340,6 +340,41 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   existiendo como respaldo de la migración `033`. Eliminarlas es un commit
   posterior, después de verificar que nada se perdió.
 
+### Proveedor — cuenta por defecto y contacto (desde 2026-09-23, migración `057` SOLO staging)
+- 🔴 **`suppliers.default_chart_account_code` es SOLO para COMPRAS.** Precarga la cuenta en cada
+  línea de `business_expenses` nueva de ese proveedor. **En gastos de trámite NO se usa: ahí el
+  default sigue siendo `130003`**, y no se unifica. Tres razones en `sop.md` SOP-036; la fuerte
+  es que **rompería el par `130003` / `REIM-*`** — un adelanto recuperable por un cliente se
+  volvería en silencio un gasto propio del bufete y el activo nunca se debitaría.
+- 🔒 **Dos predicados que DISCREPAN a propósito**, los dos en `contabilidad/cuentas-de-gasto.ts`:
+  `esTipoValidoParaGasto` **permite** `asset` (para que `130003` clasifique un trámite) y
+  `esTipoValidoComoDefaultDeProveedor` lo **rechaza** (una compra del bufete no es un adelanto).
+  Hay un test cuyo nombre es *"los dos predicados DISCREPAN sobre `asset`, y esa es la regla"*.
+  Unificarlos rompe una de las dos cosas.
+- **FK lógico sin constraint**, y es seguro porque `updateChartAccount` **rechaza cambiar el
+  `code`** de cualquier cuenta: el puntero no se puede orfanar por un rename. Lo que sí pasa
+  —que la cuenta se desactive o la reclasifiquen— un FK real tampoco lo cubriría.
+- **DEGRADAR, NO BLOQUEAR.** Si el default deja de ser válido, la ficha abre con aviso y el
+  selector vacío, y el alta de compra arranca sin cuenta. La inválida no se vuelve a ofrecer.
+- **PRECARGA, NUNCA REESCRIBE.** Sólo se completan las líneas SIN cuenta. Lo ya guardado no se
+  toca — y no se podría: las líneas de un gasto posteado son inmutables por la `038`.
+- **`contact_name` / `contact_phone` / `contact_email` son de la PERSONA.** `phone` y `email`
+  siguen siendo los de la EMPRESA. Son dos bloques distintos en el formulario y en la ficha.
+- **`payment_terms_days` sigue siendo un número libre** (0–365) con botones de atajo. No es un
+  tramo de la antigüedad — eso ya estaba escrito y sigue valiendo.
+
+### Tasas de impuesto — alta (desde 2026-09-23)
+- **Se pueden crear tasas nuevas**: `POST /api/finanzas/configuracion/tax-codes`, **admin y
+  contador**. La abogada LEE el catálogo pero no lo modifica (mismo criterio que la
+  clasificación contable de una cuenta). Los tres lugares se mueven juntos.
+- 🔴 **La pantalla pide el PORCENTAJE y guarda la FRACCIÓN**, mostrando las dos a la vez. El
+  CHECK es `rate BETWEEN 0 AND 1`: "7" donde va `0.07` daría 700%.
+- 🔴 **Una tasa NO se borra: se desactiva.** Cinco FK apuntan a `tax_codes`.
+- **Una tasa nueva aparece sola** en los tres selectores y su ITBMS va a `200003`: es una
+  constante del asiento (`CUENTA_ITBMS`), no un campo por tasa. Nada que configurar.
+- ⚠️ `services_catalog.default_tax_code` la referencia con un FK compuesto `ON UPDATE CASCADE`:
+  editar un código lo renombra también allá. Detalle en `sop.md` SOP-037.
+
 ### Exportación de reportes (desde 2026-09-02)
 - **El formato es XLSX, no CSV**, y el motivo es concreto: un CSV abre el DV `05` como `5`. Además
   el separador de Excel depende de la configuración regional de la máquina, no del archivo. El

@@ -2816,3 +2816,98 @@ que nadie los "unifique"; hay un test que lee el comentario.
 **Verificación:** `sql/tests/verificacion-054-*.sql` y `-055-*.sql` (ROLLBACK, con falla forzada
 después de postear); tests `tercero-por-linea`, `tercero-en-el-formulario`,
 `tercero-en-los-reportes`, `detalle-de-asiento`, `clonar-asiento`, `reversar-asiento-manual`.
+
+---
+
+## SOP-036: La cuenta contable por defecto de un proveedor (4.4) — y por qué NO se unifica
+
+**Desde:** Bloque 8, 23/09/2026. Migración `057` (SOLO staging).
+
+### La regla
+
+`suppliers.default_chart_account_code` se precarga en cada línea de una **COMPRA** nueva de ese
+proveedor (`business_expenses`). Se puede cambiar línea por línea y se puede cambiar en la
+ficha. **En gastos de trámite (`expenses`) no se usa: ahí el default sigue siendo `130003`.**
+
+### 🔴 Por qué no se unifica — tres razones, y la segunda es la fuerte
+
+1. **`130003 Fondo Legales de Clientes` es un ACTIVO.** La regla que pidió Josuarth para esta
+   columna —"tiene que ser de gasto o costo"— vuelve estructuralmente imposible que la cuenta
+   de un proveedor sea `130003`. Un default de proveedor no podría reproducir el default
+   correcto de trámite: sólo reemplazarlo por uno equivocado.
+
+2. **Rompería el par `130003` / `REIM-*`.** Un gasto de trámite es plata que el bufete
+   **adelanta por un cliente**: DEBE `130003` al incurrirlo, y la factura de reembolso
+   (`REIM-*`) ACREDITA `130003` al recuperarla. `asiento-factura.ts` lo dice textual: *"si
+   divergen, el saldo de 130003 deja de cerrar"*. Si la cuenta del proveedor pisara ese
+   default, un adelanto recuperable se convertiría en silencio en un gasto propio del bufete,
+   el activo nunca se debitaría, y la factura de reembolso acreditaría contra un saldo que no
+   existe.
+
+3. **El mismo proveedor cae de los dos lados.** Una mensajería puede ser un trámite adelantado
+   por un cliente Y un gasto de oficina del bufete. Un solo default no puede servir para los dos.
+
+Si algún día se quiere en trámite, la forma correcta es una **segunda columna**
+(`default_chart_account_code_tramite`), nunca reusar ésta.
+
+### 🔒 Dos predicados que DISCREPAN, a propósito
+
+| | Permite `asset` | Para qué |
+|---|---|---|
+| `esTipoValidoParaGasto` | **sí** | Qué puede clasificar una LÍNEA ya cargada. Deja pasar `asset` para que `130003` clasifique un trámite |
+| `esTipoValidoComoDefaultDeProveedor` | **no** | Qué puede ser el DEFAULT de un proveedor. Sólo gasto o costo |
+
+Los dos viven en `contabilidad/cuentas-de-gasto.ts`, uno al lado del otro, y
+`cuentas-de-gasto.test.ts` tiene un test cuyo nombre es *"los dos predicados DISCREPAN sobre
+`asset`, y esa es la regla"*. **Unificarlos rompe una de las dos cosas**: si gana el laxo, un
+proveedor puede quedar con `130003` y toda compra suya nace como un adelanto por un cliente; si
+gana el estricto, el trámite deja de poder clasificarse contra `130003`.
+
+### FK lógico, sin constraint
+
+Mismo patrón que `business_expenses.chart_account_code`. El riesgo clásico —que renombren la
+clave y el puntero quede huérfano— **no existe acá**: `updateChartAccount` rechaza cambiar el
+`code` de cualquier cuenta. Lo que sí pasa es que la cuenta se desactive o la reclasifiquen, y
+un FK real no mira ni `active` ni `account_type`; a cambio agregaría el modo de falla de no
+poder borrar una cuenta.
+
+### Degradar, no bloquear
+
+Si la cuenta guardada deja de ser válida: la ficha del proveedor abre igual, el selector
+arranca vacío y un aviso ámbar explica por qué; el alta de compra arranca sin cuenta y dice que
+se corrige en la ficha. **La cuenta inválida no se vuelve a ofrecer en el selector.**
+
+### El default precarga, nunca reescribe
+
+Al elegir proveedor se completan sólo las líneas **sin** cuenta. Una línea ya elegida no se
+toca. Las compras guardadas no se tocan nunca — y además no se podría: las líneas de un gasto
+posteado son inmutables por los triggers de la `038`.
+
+**Verificación:** `sql/tests/verificacion-057-proveedor-campos.sql` (ROLLBACK con falla
+forzada, 11/11) y los cuatro tests de `cuentas-de-gasto.test.ts`.
+
+---
+
+## SOP-037: Alta de tasas de impuesto (2.4)
+
+**Desde:** Bloque 8, 23/09/2026. Sin migración: `tax_codes` ya lo soportaba.
+
+- **`POST /api/finanzas/configuracion/tax-codes`, roles admin y contador** — los mismos del
+  `PATCH`, no los del `GET`. La abogada lee el catálogo pero no lo modifica: mismo criterio que
+  la clasificación contable de una cuenta. Los tres lugares (la página, las dos rutas) se
+  mueven juntos.
+- **La pantalla pide el PORCENTAJE y guarda la FRACCIÓN**, mostrando las dos cosas mientras se
+  escribe (`Se guarda como 0.1000 = 10%`). La columna es `NUMERIC(6,4)` con CHECK `0..1`:
+  sin eso, "7" donde va `0.07` daría 700% y el error recién se vería en el total.
+- 🔴 **Una tasa NO se borra: se desactiva.** Cinco FK apuntan a `tax_codes`
+  (`invoice_lines`, `quote_lines`, `credit_note_lines`, `expense_lines` y el compuesto de
+  `services_catalog`). Las líneas viejas conservan su snapshot de `tax_rate`.
+- ⚠️ **`services_catalog_default_tax_code_fk` es compuesto sobre `(tenant_id, code)` con
+  `ON UPDATE CASCADE`**: editar un código lo renombra también en `services_catalog`. Es el
+  comportamiento actual y está bien; sólo no estaba escrito en ningún lado.
+- **Una tasa nueva aparece sola** en los selectores de factura, compra y gasto de trámite:
+  `listTaxCodesActive` lee todas las activas sin lista literal. Y **su ITBMS va a `200003`**
+  porque `CUENTA_ITBMS` es una constante del asiento, no un campo por tasa. No hay nada que
+  configurar por tasa.
+- `TAX_CODE_RE` = `^[A-Z0-9_]{2,20}$`. No es cosmético: el código es la clave del FK compuesto
+  y el orden de los selectores.

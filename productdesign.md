@@ -879,3 +879,32 @@ asientos de diario; sí ve el Diario General.
 - **Multi-tenant:** aislamiento por RLS desde día 1
 - **Branding:** azul marino #1B2A4A, dorado #C5A55A, blanco #FFFFFF, serif profesional, logo Integra
 - **Performance:** paginación y búsqueda indexada (crecimiento a cientos de registros en el próximo año)
+
+---
+
+## Bloque 8 — Proveedor completo y tasas de ITBMS (23/09/2026)
+
+**Ficha del proveedor.** Tres bloques nuevos o renombrados, y el rótulo es parte del diseño:
+
+- **Cuenta contable por defecto** — un selector con las cuentas de gasto y costo activas. El
+  texto de ayuda dice para qué sirve *y qué no hace*: "se precarga en cada línea de una compra
+  nueva… **no toca las compras ya cargadas**", y explica por qué `130003` no está en la lista.
+  Si la cuenta guardada dejó de servir, aviso ámbar y selector vacío: **degradar, no bloquear**.
+- **Datos de la empresa** (antes "Contacto") y **Persona de contacto** — dos bloques separados.
+  El correo de la empresa aclara "El de la empresa, no el de la persona". La separación existe
+  porque la central del proveedor y el celular del ejecutivo de cuenta no son el mismo número.
+- En la ficha, tres tarjetas en vez de una.
+
+**Alta de compra.** Al elegir proveedor, las líneas **sin** cuenta se completan con su default;
+una línea ya elegida no se toca. Si el default dejó de servir, un aviso dice que se corrige en
+la ficha del proveedor, no ahí.
+
+**Configuración → Impuestos.** Botón "Nueva tasa" y formulario inline para admin y contador. El
+campo pide el **porcentaje** y debajo muestra, en vivo, el decimal que se va a guardar:
+
+> Se guarda como **0.1000** = 10%
+
+Las dos unidades a la vista al mismo tiempo. Es lo que evita cargar 700%: el servidor lo rechaza
+igual, pero un rechazo al final del formulario enseña menos que ver el decimal mientras se
+escribe. El pie aclara que la tasa aparece sola en los tres selectores, que su ITBMS va a
+`200003`, y que una tasa **no se borra: se desactiva**.

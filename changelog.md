@@ -1,5 +1,93 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 8 — proveedor completo y tasas de ITBMS] - 2026-09-23
+
+**Staging (`develop`):** `a7acdac` (057) → `c1b40e5` (backend 4.4) → `e7c27e6` (UI 4.4) →
+`93c4fc3` (4.1) → `6d19ef6` (4.5) → `9911c0e` (backend 2.4) → `61c1e52` (UI 2.4).
+Deploy de `61c1e52` OK. **Migración `057` SOLO en staging. `main` sigue en `24b227a`.**
+Cierra 4.1, 4.4, 4.5 y 2.4.
+
+### `057` — cuatro columnas en `suppliers`
+
+`default_chart_account_code`, `contact_name`, `contact_phone`, `contact_email`. Todas
+opcionales, todas aditivas, sin backfill. Los cuatro CHECK validan el **largo**, nunca el
+formato — mismo criterio que el RUC en la `033`. Verificación con `ROLLBACK` y falla forzada,
+11/11, incluida la que confirma que **no** apareció un FK real a `chart_of_accounts`.
+
+### 4.4 — la cuenta por defecto del proveedor, SOLO en compras
+
+🔴 **En gastos de trámite el default sigue siendo `130003`, y no se unifica.** El motivo está
+escrito en tres lugares (la migración, `cuentas-de-gasto.ts` y SOP-036) porque es exactamente
+el tipo de cosa que alguien "arregla" después:
+
+- `130003 Fondo Legales de Clientes` es un **ACTIVO**. La regla "gasto o costo" que pidió
+  Josuarth vuelve estructuralmente imposible que la cuenta de un proveedor sea `130003`.
+- **Rompería el par `130003` / `REIM-*`**: un adelanto recuperable por un cliente se volvería
+  en silencio un gasto propio del bufete, y el activo nunca se debitaría.
+- El mismo proveedor cae de los dos lados (una mensajería es trámite Y gasto de oficina).
+
+**Predicado nuevo y separado.** `esTipoValidoComoDefaultDeProveedor` rechaza `asset`;
+`esTipoValidoParaGasto` lo permite a propósito. 🔒 Cuatro tests lo fijan, y el primero dice
+que **los dos predicados DISCREPAN sobre `asset` y esa discrepancia ES la regla**.
+
+**FK lógico sin constraint, y acá se puede afirmar por qué es seguro:** `updateChartAccount`
+rechaza cambiar el `code` de cualquier cuenta ("El CÓDIGO es INMUTABLE"), así que el puntero no
+se puede orfanar por un rename. Un FK real no miraría `active` ni `account_type` —los dos casos
+que sí pasan— y agregaría el modo de falla de no poder borrar una cuenta.
+
+**D3 · DEGRADAR, NO BLOQUEAR.** Si la cuenta guardada se desactiva o la reclasifican: la ficha
+abre igual con aviso ámbar y el selector vacío, y el alta de compra arranca sin cuenta avisando
+que se corrige en la ficha. La cuenta inválida **no** se agrega al selector.
+
+**D4 · PRECARGA, NUNCA REESCRIBE.** Al elegir proveedor se completan sólo las líneas **sin**
+cuenta. Las compras ya guardadas no se tocan — además de la decisión, las líneas de un gasto
+posteado son inmutables por los triggers de la `038`.
+
+### 4.1 — la persona de contacto, separada de la empresa
+
+Dos bloques y las leyendas lo dicen: "Datos de la empresa" (el fieldset viejo, renombrado) y
+"Persona de contacto". `phone`/`email` siguen siendo los de la empresa. La central del
+proveedor y el celular del ejecutivo de cuenta no son el mismo número.
+
+### 4.5 — ya estaba construido
+
+Los botones rápidos existían desde la `033` (`PAYMENT_TERMS_SUGERIDOS = [0,15,30,45,60,90]`,
+campo editable, rango 0–365) y el plazo **ya precargaba** el vencimiento en las cuatro puertas:
+el formulario de compra al elegir proveedor y al cambiar la fecha, el servidor en
+`api/business-expenses.ts`, y el gasto de trámite desde el caso. `vencimientoPorPlazo` ya
+estaba testeado con año bisiesto y cruce de año. Lo único que faltaba era el guard de que los
+cuatro atajos que pidió Josuarth estén en la lista. **No se sacaron el 15 ni el 45**: son
+plazos reales y quitarlos sería una regresión.
+
+### 2.4 — alta de tasas de ITBMS
+
+`POST /api/finanzas/configuracion/tax-codes`, **admin y contador** (los del `PATCH`, no los del
+`GET`: la abogada lee pero no modifica). El formulario pide el **porcentaje** y muestra en vivo
+el decimal que se guarda — `Se guarda como 0.1000 = 10%`. Es lo que evita cargar 700%: el
+servidor lo rechaza igual, pero un rechazo después de completar el formulario enseña menos.
+
+**Confirmado con evidencia, sin tocar nada:** una tasa nueva aparece sola en los selectores
+(`listTaxCodesActive` lee `.eq("active", true)` sin lista literal, y es la misma función que
+alimenta facturas, compras y gastos de trámite) y su ITBMS va a `200003` porque
+`CUENTA_ITBMS` es una constante del asiento, no un campo por tasa.
+
+🔴 **Nada de borrar**: cinco FK apuntan a `tax_codes`. Desactivar ya es el mecanismo.
+`TAX_CODE_RE` nuevo (mayúsculas, números, guión bajo) porque `services_catalog` referencia el
+código con un FK compuesto y los selectores ordenan por él.
+
+### Corregido de paso
+
+- Dos errores `TS2802` en `inventario-marcadores.test.ts` que entraron en `f2f7294`: ese commit
+  se cerró **sin correr `tsc`**. `matchAll` y un spread sobre un `Set` sin `downlevelIteration`.
+- El comentario de la prop `canEdit` en `tax-codes-manager.tsx` decía "Solo el admin edita. El
+  contador entra a mirar" — falso desde que la pantalla existe.
+
+### Pendiente de este bloque
+
+⚠️ **La verificación con clics reales en staging NO se hizo.** El deploy está OK y la pantalla
+carga, pero entrar exige escribir una contraseña en el formulario de login, y eso es algo que
+el agente no hace. Queda para Oliver; el detalle está en `ESTADO-Y-HANDOFF.md`.
+
 ## [Preparación del despliegue a producción: runbook + inventario generado] - 2026-09-22
 
 **Sin migración a producción. Sin merge. `main` sigue en `24b227a`.** Trabajo de análisis y

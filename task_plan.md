@@ -1,5 +1,83 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> BLOQUE 9B: ANULACIÓN ANTE LA DGI — CONSTRUIDO — 23/09/2026 <<<
+
+**Estado:** CONSTRUIDO y verificado con clics. Ocho commits, `f3cc400` → `d94858a` en
+`develop`. Migraciones **`058` y `059` SOLO en staging**. `main` sigue en `24b227a`.
+
+### Lo entregado
+
+1. **`f3cc400`** — la matriz COMPLETA de D2 (9A había entregado sólo el eje fiscal). Junta
+   TODOS los motivos que impiden anular, no el primero. **Corregido de paso:** la celda "sin
+   CUFE / mes abierto" vuelve a ser "anular sólo en el libro", como dice D2 textual.
+2. **`bb3891f`** — el motivo pasa a 15 caracteres (D5), en tres capas + migración `058`.
+3. **`66c0131`** — cliente del evento de anulación + clasificador.
+4. **`c10ee0d`** — migración `059`, tabla `fe_anulaciones`.
+5. **`e27c5e3`** — el orquestador PAC → libro, con sus tres caminos de falla.
+6. **`bcbe6df` + `2a308b2`** — la pantalla (D4, D6). Dos arreglos que encontraron los clics.
+7. **`d94858a`** — las pruebas de sandbox.
+
+### Confirmado en sandbox — 23/09/2026
+
+Informe con los payloads crudos: `docs/efactura/prueba-anulacion-sandbox.txt`. Cada llamada
+imprimió y verificó `i_amb = 2` antes de salir.
+
+- **(a) Idempotencia: SÍ, es estable.** Dos llamadas seguidas a `CreateCancellation` sobre el
+  mismo CUFE devuelven HTTP 200 con
+  `[{codigo:"0622", mensaje:"Ya existe un evento de anulación para esta FE"}]`. Para un
+  reintento es un ÉXITO. Era un bug del clasificador, ya corregido.
+- **(b) Qué campo muestra que está anulado: NINGUNO.**
+  `GET /Invoices/Authorization/{cufe}` devuelve EXACTAMENTE el mismo payload antes y después —
+  `autorizada: true`, `deletedDate: null`, `deletedBy: null`. La hipótesis de `deletedDate` era
+  falsa. 🔴 **Con eso se cae la "consulta de estado antes de reintentar" de D3: no hay a qué
+  preguntarle.** El reintento se apoya en el `0622`.
+- **(c) Rechazo por plazo: NO SE PUDO PROBAR.** El documento que iba a servir ya tenía un
+  evento de anulación encima, así que el PAC contestó `0622` antes de llegar a evaluar el
+  plazo. ⚠️ **Dato al pasar:** `FAC-REI-000002` se autorizó el 17/09 13:05, así que recién
+  pasa las 182 h desde la AUTORIZACIÓN el 25/09 ~03:05 — desde la EMISIÓN (10/06) está
+  pasadísima. Esa diferencia es justo la que la prueba (c) tiene que resolver.
+
+### ❌ LO ÚNICO QUE FALTA DEL BLOQUE: la prueba 5
+
+**Cómo se ve una anulación que la DGI ACEPTA sigue sin saberse**, y el código lo dice en vez de
+suponerlo (clase `indeterminada`).
+
+Por qué no se cerró: el único documento autorizado de staging (`FAC-REI-000002`) **ya tenía un
+evento de anulación encima** y el PAC **no tiene endpoint para listar eventos**, así que no se
+puede afirmar si lo creamos nosotros en la primera corrida —que quedó truncada por un `head` y
+murió a mitad— o ya estaba. No se afirma.
+
+Emitir un documento nuevo se frenó dos veces:
+- `1002 Documento duplicado` — `fe_secuencias` del punto 001 venía atrás de lo que el sandbox
+  ya tenía consumido. **Se adelantó a 20** (nunca se rebobina: eso fue FND-011).
+- `1601` / `1602` — **los RUC del seed son ficticios** y la DGI no los reconoce. El único RUC
+  de staging que el sandbox acepta es el de CONSTRUCTORA CHIRIQUÍ ANTIGUO
+  (`1499876-1-690042`), y su única factura es justamente la que ya tiene el evento.
+
+**Para cerrarla:** crear una factura nueva para ese cliente, emitirla al sandbox
+(`scripts/efactura/prueba-emitir-sandbox.ts`) y anularla
+(`scripts/efactura/prueba-anulacion-sandbox.ts <cufe>`). Son dos comandos una vez que la
+factura existe.
+
+⚠️ **Quedó en staging, y es un estado real que el sistema produjo, no basura:**
+`FAC-HON-000007` en `fe_estado='error'` con su número reservado — el comportamiento que la
+política de reuso D-3 define para una emisión rechazada.
+
+### Verificado con clics — SHA `2a308b2`
+
+Los cuatro cruces del gate del motivo, el borde exacto (15 habilita, 13 no), la banda roja con
+el motivo precargado, y **una anulación real de punta a punta**: `FAC-HON-000014` quedó anulada
+con `NC-000007` y el asiento de reversión **#52** con fecha de hoy.
+
+### Lo que sigue
+
+1. **Cerrar la prueba 5** (arriba). Es lo único que le falta a 9B.
+2. **9C no se empieza** hasta que Oliver lo diga. Sus pruebas (d) y (e) siguen anotadas.
+3. ⚠️ **Deuda:** `npm run lint` tiene 20 errores preexistentes en 16 archivos del módulo Legal.
+   Ninguno toca Finanzas. Limpiarlos es una decisión de Oliver.
+
+---
+
 ## >>> BLOQUE 9A: LA RED ANTES DEL REFACTOR FISCAL — CERRADO — 23/09/2026 <<<
 
 **Estado:** CERRADO. Cuatro commits, `5c0d708` → docs, en `develop`. **Sin migración, sin

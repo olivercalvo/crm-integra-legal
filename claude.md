@@ -398,6 +398,38 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   entre factura y NC (ideati, 22/09); quien decide es el contador.
 - ⚠️ **Todavía NO está cableado**: la función no tiene llamadores. La usa 9B.
 
+### Anular ante la DGI (desde 2026-09-23, Bloque 9B — migraciones `058` y `059` SOLO staging)
+- 🔴 **PAC PRIMERO, LIBRO DESPUÉS (D3), y no es reversible.** Libro primero dejaría una factura
+  anulada en nuestros libros y VIVA ante la DGI, con un asiento de reversión inmutable por
+  diseño: no se puede deshacer. PAC primero deja un documento muerto ante la DGI y vivo en el
+  libro: se ve, se explica y se termina con un botón.
+- 🔴 **`fe_estado = 'canceled'` se escribe ANTES de tocar el libro.** Es lo único que convierte
+  una caída en un estado recuperable. Sin ese UPDATE, morirse en la línea siguiente dejaría una
+  factura anulada ante la DGI **sin una sola marca en nuestra base**.
+- **Tres caminos de falla, tres códigos**: 409 `anulada_en_dgi_falta_el_libro` (estado
+  intermedio D4), 422 `rechazada_por_la_dgi` (nada cambió), 502 `no_sabemos` (nada cambió).
+  Devolver 200 para todo lo que no explota mostraría "listo" sobre una factura a medio anular.
+- ✅ **`0622` = "Ya existe un evento de anulación para esta FE" es un ÉXITO para el reintento**
+  (confirmado en sandbox 23/09). Tratarlo como rechazo dejaría la factura trabada en el estado
+  intermedio para siempre.
+- 🔴 **`GET /Invoices/Authorization/{cufe}` NO refleja la anulación** (confirmado en sandbox
+  23/09): mismo payload antes y después, `deletedDate: null` en los dos. **La consulta de
+  estado antes de reintentar que pide D3 NO SE PUEDE HACER**: no hay a qué preguntarle. El
+  reintento se apoya en el `0622`. `MARCADOR_DE_ANULACION_CONFIRMADO` se queda en `false`.
+- ❌ **Cómo se ve un ÉXITO sigue sin saberse.** Por eso el clasificador tiene `indeterminada`,
+  que **no es un error**: es "no tocar el libro y escalar". Un 200 con array vacío cae ahí a
+  propósito. **No completarlo sin la evidencia del sandbox.**
+- 🔴 **El motivo exige 15 caracteres y los pide la DGI**, en tres capas: el validador
+  (`validators/cancel-invoice.ts`, el MISMO módulo que importa el diálogo), el botón que no se
+  habilita, y el CHECK de la `058`. ⚠️ El mínimo de la **nota de crédito** sigue en 3.
+- **`fe_anulaciones` (059)** distingue "nunca preguntamos" de "preguntamos y no entendimos la
+  respuesta" — dos casos que llevan a decisiones opuestas. `sin_respuesta` e `indeterminada`
+  son estados de primera clase, no errores.
+- **En pantalla:** banda ROJA del estado intermedio (la única del detalle), «Completar
+  anulación» como VARIANTE del mismo diálogo, motivo precargado con el que ya viajó a la DGI, y
+  cobros y NC bloqueados mientras dure — pero **reversar cobros sigue disponible**, porque es
+  lo que hay que hacer para poder completarla. Detalle en `sop.md` SOP-040.
+
 ### Congelamientos — la regla del JSON dorado (desde 2026-09-23)
 - 🔒 **Un `*-esperado.json` y el código que ese golden verifica NUNCA van en el mismo commit.**
   Si el mismo commit regenera la referencia, el test pasó comparándose consigo mismo y no probó

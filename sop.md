@@ -3032,3 +3032,88 @@ alarma; uno que lo toca junto al código que verifica es la alarma que este test
 
 Los goldens **se descubren solos** (barrido por `*-esperado.json`): uno nuevo queda cubierto
 sin tocar nada. Hay un test que verifica que el barrido no devuelva vacío.
+
+
+---
+
+## SOP-040: Anular una factura ante la DGI — PAC primero, libro después
+
+**Desde:** Bloque 9B, 23/09/2026. Migraciones `058` y `059`, SOLO en staging.
+**Dónde:** `efactura/orchestration/anular-factura-ante-dgi.ts`, con
+`clasificar-respuesta-de-anulacion.ts` y `transport/anulacion-en-pac.ts`.
+**Quién:** admin y abogada. El contador NO anula.
+
+### El orden no es una preferencia
+
+Las dos mitades pueden fallar, así que la pregunta no es cómo evitarlo sino **cuál de los dos
+estados a medias preferimos**:
+
+| Orden | Qué queda si falla la segunda mitad | ¿Se arregla? |
+|---|---|---|
+| Libro primero | Factura anulada en NUESTROS libros y **viva ante la DGI** | 🔴 **No.** Habría que deshacer un asiento de reversión, y son inmutables por diseño (`023`) |
+| **PAC primero** | Documento **muerto ante la DGI** y vivo en el libro | ✅ Sí: se ve, se explica y se termina con un botón |
+
+Por eso va el PAC primero. Y por eso `fe_estado = 'canceled'` **se escribe ANTES de tocar el
+libro**: sin ese UPDATE, morirse en la línea siguiente dejaría una factura anulada ante la DGI
+**sin una sola marca en nuestra base**, indistinguible de una que nunca se tocó.
+
+### Los tres caminos de falla
+
+1. **La DGI rechaza.** No se escribe nada fuera del registro del intento. La factura queda
+   igual. El rechazo por plazo trae su próximo paso: la nota de crédito.
+2. **No sabemos si llegó** (red cortada, o respuesta que no se reconoce). Tampoco se escribe
+   nada. El intento queda en `sin_respuesta` / `indeterminada` y **el caso escala a una
+   persona**. No hay reintento automático (ver abajo).
+3. **La DGI anuló y el libro falló.** Estado intermedio (D4). La ruta devuelve **409**, no 500:
+   un 500 haría creer que no pasó nada cuando el documento ya está muerto ante la DGI.
+
+### 🔴 Lo que el sandbox contestó, y lo que se cae con eso
+
+Pruebas del 23/09/2026 (informe completo en `docs/efactura/prueba-anulacion-sandbox.txt`):
+
+- ✅ **Repetir la anulación es estable.** Dos llamadas seguidas sobre el mismo CUFE devuelven
+  `[{codigo:"0622", mensaje:"Ya existe un evento de anulación para esta FE"}]`. Para un
+  reintento eso es un **éxito**. `0622` clasifica como `ya_anulada`; tratarlo como rechazo
+  dejaría la factura trabada en el estado intermedio para siempre.
+- ✅ 🔴 **`GET /Invoices/Authorization/{cufe}` NO refleja la anulación.** Devuelve el mismo
+  payload antes y después —`autorizada: true`, `deletedDate: null`— con el evento ya existente.
+  **La "consulta de estado antes de reintentar" que pide D3 no se puede hacer con la API que
+  existe.** El reintento se apoya en `0622`. `MARCADOR_DE_ANULACION_CONFIRMADO` se queda en
+  `false` para siempre, y ahora por un motivo medido.
+- ❌ **Cómo se ve un ÉXITO sigue sin saberse.** Por eso el clasificador tiene una clase
+  `indeterminada` que **no es un error**: es "no tocar el libro y escalar". Un HTTP 200 con
+  array vacío cae ahí a propósito. `task_plan.md` tiene qué falta para cerrarla.
+
+### El motivo son 15 caracteres, y son de la DGI
+
+`cancellationReason` exige un mínimo de 15 (ideati, 22/09/2026). Tres capas: el validador
+(`validators/cancel-invoice.ts`, el MISMO módulo que importa el diálogo), el botón que no se
+habilita con el contador diciendo cuánto falta, y el CHECK de la `058` —que es la que no se
+puede saltear, porque el RPC `cancel_invoice_with_reversal` escribe la columna directo.
+
+⚠️ El mínimo de la **nota de crédito** sigue en 3: los 15 son del endpoint de anulación, y una
+NC hoy es un documento interno. Cuando 9C la envíe al PAC habrá que revisarlo.
+
+### `fe_anulaciones`
+
+Espejo de `fe_emisiones`. Existe porque, con el proceso muerto a mitad de camino, es lo único
+que distingue **"nunca preguntamos"** de **"preguntamos y no entendimos la respuesta"** — dos
+situaciones que llevan a decisiones opuestas. Una columna booleana no las distingue.
+
+El CUFE se guarda **en la fila**, no por join: es lo que realmente viajó, y tiene que seguir
+siendo verdad aunque después se corrija la factura.
+
+### En la pantalla
+
+La banda **roja** del estado intermedio es la única roja del detalle, a propósito: no es un
+aviso, es una factura que no está en ninguno de sus dos estados normales. Mientras esté así
+**no se registran cobros ni notas de crédito** — pero **sí se reversan** los cobros que ya
+estaban, porque eso es justamente lo que hay que hacer para poder completar la anulación.
+
+«Completar anulación» es el MISMO diálogo con `variante="completar"`, no uno nuevo: dos
+formularios para la misma llamada terminan discrepando. Precarga el motivo que ya viajó a la
+DGI, porque el motivo que la DGI tiene y el que va a quedar en la nota de crédito tienen que
+ser el mismo.
+
+Y **la pantalla ya no decide**: `showCancel` sale de `decidirAccionFiscal` (SOP-038), la misma
+función que usa el servidor.

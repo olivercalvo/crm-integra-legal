@@ -1,5 +1,90 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 9B — anulación ante la DGI] - 2026-09-23
+
+**Staging (`develop`):** `f3cc400` (matriz completa) → `bb3891f` (motivo 15) → `66c0131`
+(cliente + clasificador) → `c10ee0d` (`059`) → `e27c5e3` (orquestador) → `bcbe6df` + `2a308b2`
+(pantalla) → `d94858a` (sandbox). Migraciones **`058` y `059` SOLO en staging**.
+`main` sigue en `24b227a`.
+
+Hasta hoy `cancelInvoice` anulaba sólo de nuestro lado y el documento seguía **vivo ante la
+DGI**. Ahora, cuando la factura tiene CUFE, la anulación pasa por el PAC antes de tocar el
+libro.
+
+### El orden, que es toda la decisión (D3)
+
+Las dos mitades pueden fallar, así que la pregunta es cuál de los dos estados a medias
+preferimos. **Libro primero** deja una factura anulada en nuestros libros y viva ante la DGI,
+con un asiento de reversión que es inmutable por diseño: no se puede deshacer. **PAC primero**
+deja un documento muerto ante la DGI y vivo en el libro: se ve, se explica y se termina con un
+botón. El segundo es recuperable y el primero no.
+
+🔴 Y en el medio, `fe_estado = 'canceled'` **se escribe antes de tocar el libro**. Sin ese
+UPDATE, una caída en la línea siguiente dejaría una factura anulada ante la DGI sin una sola
+marca en nuestra base.
+
+### Lo que el sandbox contestó (y lo que se cayó con eso)
+
+- ✅ **Repetir la anulación es estable**: `0622 — Ya existe un evento de anulación para esta
+  FE`, HTTP 200, igual todas las veces. **Era un bug del clasificador**, que lo trataba como
+  rechazo: así la factura habría quedado trabada en el estado intermedio para siempre.
+- ✅ 🔴 **El GET de estado NO refleja la anulación.** Mismo payload antes y después,
+  `deletedDate: null` en los dos. La hipótesis obvia era falsa, y con ella se cae la "consulta
+  de estado antes de reintentar" de D3: **no hay a qué preguntarle**. El reintento se apoya en
+  el `0622`.
+- ❌ **Cómo se ve un ÉXITO sigue abierto.** El único documento autorizado de staging ya tenía
+  un evento de anulación encima y no hay endpoint para listar eventos, así que no se puede
+  afirmar si lo creamos nosotros. Emitir uno nuevo se frenó en los RUC ficticios del seed
+  (`1601`/`1602`). Detalle en `task_plan.md`.
+
+Informe con los payloads crudos: `docs/efactura/prueba-anulacion-sandbox.txt`. Cada llamada
+imprime y verifica `i_amb = 2` antes de salir.
+
+### La matriz ya no está en dos lados
+
+`decidirAccionFiscal` pasó a ser la matriz COMPLETA de D2 (9A había entregado sólo el eje
+fiscal). Junta **todos** los motivos que impiden anular y los devuelve juntos: antes la
+pantalla mostraba uno, la persona lo arreglaba, reintentaba, y le fallaba por el siguiente.
+El detalle de la factura la consulta en vez de rearmar las condiciones.
+
+🔴 **Corregido de paso, antes de que llegara a la ruta:** yo había convertido la celda "sin
+CUFE / mes abierto" en "pedir el CUFE", y esa celda de D2 dice textual *"es lo de hoy y no
+cambia"*. Habría dejado de poder anularse cualquier factura sin CUFE, que en producción son
+casi todas.
+
+### El motivo pasa a 15 caracteres (D5)
+
+Es el mínimo que pide la DGI para `cancellationReason`. Entra **antes** que el envío, no junto
+con él: si entrara después habría una ventana en la que la pantalla acepta algo que el PAC va
+a rechazar sobre una factura real. Tres capas: validador, botón que no se habilita, y el CHECK
+de la `058`. La migración **aborta y lista** si producción tiene alguna factura con un motivo
+más corto — no las corrige, porque ese texto sale impreso en el PDF de la anulada.
+
+### En la pantalla (D4, D6)
+
+Banda **roja** del estado intermedio —la única roja del detalle—, botón «Completar anulación»
+que es el MISMO diálogo con otra variante, motivo precargado con el que ya viajó a la DGI, y
+bloqueo de cobros y notas de crédito mientras dure. El diálogo dice cuántas horas quedan del
+plazo.
+
+**Verificado con clics** en `crm-integra-legal-git-develop`, SHA `2a308b2`: los cuatro cruces
+del gate del motivo (10 y 22 caracteres × checkbox DGI marcado y sin marcar), el borde exacto
+(15 habilita, 13 no, descontando el espacio final), la banda roja con el motivo precargado, y
+**una anulación real de punta a punta** — `FAC-HON-000014` quedó anulada con `NC-000007` y el
+asiento de reversión **#52** con fecha de hoy.
+
+🔴 **Dos cosas las encontraron los clics, no los tests:** «Registrar pago» seguía visible en el
+estado intermedio (D4 dice bloquear cobros; yo había escondido sólo la NC) y el titular de la
+banda repetía palabra por palabra el mensaje de la matriz.
+
+### Estado
+
+Suite **1277/1277**, `tsc` verde, `next build` OK.
+⚠️ `npm run lint`: **20 errores preexistentes** del módulo Legal, ninguno de este bloque.
+⚠️ **Tocado en staging:** `fe_secuencias` del punto 001 adelantada a 20 (nunca se rebobina —
+eso fue FND-011) y `FAC-HON-000007` quedó en `fe_estado='error'` con su número reservado, que
+es el comportamiento que la política de reuso D-3 define para una emisión rechazada.
+
 ## [Bloque 9A — la red antes del refactor fiscal] - 2026-09-23
 
 **Staging (`develop`):** `5c0d708` (golden) → `f344172` (secuencia de escrituras) →

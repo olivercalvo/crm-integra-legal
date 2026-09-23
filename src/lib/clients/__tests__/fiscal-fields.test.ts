@@ -65,8 +65,16 @@ test("🔴 validateFiscalFields: 01 SIN RUC → error en tax_id", () => {
   // El caso real: una factura rechazada con 1601/1602, el cliente corregido
   // después del rechazo, y la factura nunca reenviada.
   const errs = validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "40" });
-  assert.ok(errs.tax_id, "el error tiene que nombrar el campo del RUC");
-  assert.match(errs.tax_id, /RUC/);
+  assert.ok(errs.ruc, "el error tiene que nombrar el campo del RUC");
+  assert.match(errs.ruc, /RUC/);
+});
+
+test("🔒 el error del RUC sale bajo la clave `ruc`, que es el campo en pantalla", () => {
+  // Un error bajo una clave que ningún campo renderiza no se ve: el formulario
+  // deja de avanzar y no dice por qué. Pasó, y lo encontró un clic.
+  const errs = validateFiscalFields({ tipo_receptor_fe: "01", digito_verificador: "40" });
+  assert.ok(errs.ruc);
+  assert.equal(errs.tax_id, undefined, "NO bajo `tax_id`: ese campo no existe en el formulario");
 });
 
 test("🔒 validateFiscalFields mira `tax_id ?? ruc`, que es lo que viaja", () => {
@@ -83,13 +91,13 @@ test("🔒 validateFiscalFields mira `tax_id ?? ruc`, que es lo que viaja", () =
       digito_verificador: "40",
       tax_id: "@@@@",
       ruc: "8-123-456",
-    }).tax_id,
+    }).ruc,
     "un `tax_id` inválido NO lo tapa un `ruc` bueno: tax_id es el que viaja"
   );
 });
 
 test("validateFiscalFields: 03 gobierno también exige RUC", () => {
-  assert.ok(validateFiscalFields({ tipo_receptor_fe: "03", digito_verificador: "1" }).tax_id);
+  assert.ok(validateFiscalFields({ tipo_receptor_fe: "03", digito_verificador: "1" }).ruc);
 });
 
 test("validateFiscalFields: 02 y 04 NO exigen RUC", () => {

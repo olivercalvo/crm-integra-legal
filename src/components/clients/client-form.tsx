@@ -137,6 +137,9 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
       const fiscalErrors = validateFiscalFields({
         tipo_receptor_fe: formData.tipo_receptor_fe,
         digito_verificador: formData.digito_verificador,
+        // Sin esto el validador ve un RUC vacío y bloquea el paso SIN mostrar
+        // nada, porque el error saldría bajo una clave que este form no pinta.
+        ruc: formData.ruc,
       });
       Object.assign(errors, fiscalErrors);
     }

@@ -142,7 +142,11 @@ export function validateFiscalFields(
     const rucQueViaja = (input.tax_id ?? input.ruc) ?? null;
     const r = validarRucDeReceptor(rucQueViaja);
     if (!r.ok) {
-      errors.tax_id = r.mensaje;
+      // 🔴 LA CLAVE ES `ruc`, QUE ES COMO SE LLAMA EL CAMPO EN PANTALLA.
+      //    Un error bajo una clave que ningún campo renderiza no se ve: el
+      //    formulario deja de avanzar y no dice por qué. Pasó el 23/09/2026
+      //    con la clave `tax_id`, y lo encontró un clic, no un test.
+      errors.ruc = r.mensaje;
     }
   }
 

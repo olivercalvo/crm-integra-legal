@@ -17,6 +17,9 @@ import {
   avisosDeRuc,
 } from "@/lib/finanzas/validators/supplier";
 import {
+  PAYMENT_TERMS_MAX,
+  PAYMENT_TERMS_MIN,
+  PAYMENT_TERMS_SUGERIDOS,
   paymentTermsLabel,
   vencimientoPorPlazo,
   nombreDeProveedor,
@@ -149,6 +152,31 @@ test("rechaza un plazo imposible", () => {
   assert.ok(!validateCreateSupplier(base({ payment_terms_days: -1 })).ok);
   assert.ok(!validateCreateSupplier(base({ payment_terms_days: 400 })).ok);
   assert.ok(!validateCreateSupplier(base({ payment_terms_days: 30.5 })).ok);
+});
+
+/**
+ * 🔒 LOS CUATRO ATAJOS QUE PIDIÓ JOSUARTH (4.5, D5).
+ *
+ * El plazo es un NÚMERO LIBRE con botones de atajo, no un selector cerrado —y
+ * la diferencia importa: los tramos 1-30 / 31-60 / 61-90 / 91+ que Josuarth
+ * nombró son los de la ANTIGÜEDAD, que salen de `due_date`, no del plazo.
+ * `CLAUDE.md` ya lo advierte: "`payment_terms_days` NO es un tramo de la
+ * antigüedad". Cerrarlo a cuatro valores confundiría las dos cosas en el campo
+ * mismo, y además rechazaría plazos reales de 15 o 45 días.
+ *
+ * Este test fija que los cuatro atajos estén, sin impedir que haya más.
+ */
+test("los atajos de plazo incluyen contado, 30, 60 y 90", () => {
+  for (const d of [0, 30, 60, 90]) {
+    assert.ok(
+      PAYMENT_TERMS_SUGERIDOS.includes(d as never),
+      `falta el atajo de ${d} días, que Josuarth pidió explícitamente`
+    );
+  }
+  assert.ok(
+    PAYMENT_TERMS_SUGERIDOS.every((d) => d >= PAYMENT_TERMS_MIN && d <= PAYMENT_TERMS_MAX),
+    "un atajo fuera del rango del CHECK daría un error al guardar"
+  );
 });
 
 test("paymentTermsLabel dice Contado en cero y singulariza el día 1", () => {

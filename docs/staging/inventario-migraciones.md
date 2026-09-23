@@ -11,7 +11,7 @@
 > `--sql` + `--desde` si la base es producción (sus credenciales no van a una máquina).
 
 **Base relevada:** `staging`  
-**Fecha del relevamiento:** 2026-09-22  
+**Fecha del relevamiento:** 2026-09-23  
 **Nombre de la base:** `postgres`
 
 > **`sql/pending/` NO es una cola de pendientes.** Es un cajón donde conviven
@@ -122,6 +122,7 @@
 | `053_anulacion_rechaza_nc_parcial.sql` | **sí** | La anulación rechaza una factura con NC parcial en el libro · <sub>marcador: el cuerpo de cancel_invoice_with_reversal() incluye «ya tiene la nota de crédito»</sub> Es un CREATE OR REPLACE de la función de la 052: por nombre son indistinguibles. Se mira el cuerpo. |
 | `054_tercero_por_linea.sql` | **sí** | journal_entry_lines.client_id / .supplier_id (dos FK reales) · <sub>marcador: journal_entry_lines.client_id</sub> |
 | `055_reversion_de_asiento_manual.sql` | **sí** | RPC reverse_journal_entry + una sola reversión por asiento · <sub>marcador: índice journal_entries_una_reversion_por_asiento</sub> |
+| `057_proveedor_cuenta_por_defecto_y_contacto.sql` | **sí** | suppliers gana la cuenta contable por defecto (solo COMPRAS) + los tres campos de la persona de contacto · <sub>marcador: suppliers.default_chart_account_code</sub> Bloque 8. Va después de la 033 (crea `suppliers`); no depende de nada más. La 056 queda reservada para la corrección de la fecha de los saldos iniciales, pendiente de RM. |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -150,4 +151,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-22 22:05._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-23 15:18._

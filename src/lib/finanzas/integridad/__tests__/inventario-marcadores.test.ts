@@ -60,7 +60,9 @@ function clavesDeclaradas(): Set<string> {
   );
 
   const claves = new Set<string>();
-  for (const m of fuente.slice(inicio).matchAll(/^ {2}"([^"]+\.sql)":/gm)) {
+  // Array.from y no un for-of directo: el tsconfig del proyecto no habilita
+  // `downlevelIteration`, y `matchAll` devuelve un iterador, no un array.
+  for (const m of Array.from(fuente.slice(inicio).matchAll(/^ {2}"([^"]+\.sql)":/gm))) {
     claves.add(m[1]);
   }
   return claves;
@@ -115,7 +117,7 @@ test("no quedan entradas en MARCADORES cuyo archivo ya no existe", () => {
     )
   );
 
-  const huerfanas = [...declaradas].filter(
+  const huerfanas = Array.from(declaradas).filter(
     (f) => !enDisco.has(f) && !enSupabase.has(f)
   );
 

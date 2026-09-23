@@ -1,7 +1,17 @@
 # Runbook del despliegue 025 → 055
 
-**Qué es:** la corrida completa de las 31 migraciones contables pendientes a la
-base de producción, más el merge de `develop` a `main`.
+**Qué es:** la corrida completa de las **32** migraciones contables pendientes a
+la base de producción, más el merge de `develop` a `main`.
+
+> ⚠️ **El nombre del archivo dice `025-055` y ya se quedó corto.** El 23/09/2026
+> se sumó la **`057`** (Bloque 8). No se renombró a propósito: renombrarlo rompe
+> los enlaces que ya apuntan acá desde `changelog.md`, `task_plan.md`, el
+> inventario y la versión en página. Renombrarlo es una decisión de Oliver.
+>
+> 🔒 **La `056` está RESERVADA** para la corrección de la fecha de los saldos
+> iniciales (§P-2(b)), que depende de la respuesta de RM. Si RM contesta después
+> del despliegue, la `056` se aplica sola más adelante; el orden no la necesita
+> antes que la `057`.
 
 **Versión en página:** https://claude.ai/artifact/RnL36m1tJEk5hhAJZ4moQG
 (checklists marcables, botones de copiar y un cronómetro de la ventana).
@@ -12,7 +22,8 @@ desde acá y no pasa nada.
 - **Estado de producción:** relevado el 2026-09-22 por pre-flight de solo lectura.
 - **Dónde se detuvo:** entre la `024` y la `025`. Marcador decisivo:
   `chart_of_accounts.cuenta_control` no existe.
-- **Duración estimada:** ~3 h 20 m de punta a punta.
+- **Duración estimada:** ~3 h 25 m de punta a punta (la `057` son dos minutos:
+  cuatro columnas nullable sobre una tabla vacía).
 
 ---
 
@@ -449,14 +460,21 @@ Ninguna se revierte con un `DROP`. Y desde que el motor entra en línea
 
 ---
 
-## 3 · Bloque A — 22 migraciones, con la app arriba
+## 3 · Bloque A — 23 migraciones, con la app arriba
 
 Ninguna de estas altera lo que el código de `main` muestra hoy.
 
 ```
 026 → 027 → 028 → 029 → 030 → 031 → 032 → 033 → 034 → 036 → 038
  → 039 → 041 → 042 → 044 → 046 → 047 → 051 → 052 → 053 → 054 → 055
+ → 057
 ```
+
+> **Por qué la `057` va al final de A y no junto a la `033`.** Su única
+> dependencia es que exista `suppliers` (la crea la `033`), así que cualquier
+> posición posterior sirve. Se appendea para **no alterar un orden ya
+> verificado**: mover una migración de lugar obliga a re-verificar las
+> dependencias de todas las que quedan alrededor, y acá no se gana nada.
 
 - [ ] **`026` · `027`** — cuenta de socias y fecha de los saldos
   > Parar si la `027` falla en `ADD CONSTRAINT coa_saldo_inicial_requiere_fecha`:
@@ -524,6 +542,22 @@ Ninguna de estas altera lo que el código de `main` muestra hoy.
   > ese orden. La `055` lleva un **pre-flight propio al pie del archivo**: correrlo
   > antes, no después. Si detecta un asiento reversado dos veces, el índice único
   > falla al crearse. Con el libro vacío no puede pasar, pero se corre igual.
+
+- [ ] **`057`** — cuenta por defecto del proveedor + persona de contacto
+  ```
+  NOTICE: 057: columna `default_chart_account_code` agregada.
+  NOTICE: 057: columna `contact_name` agregada.
+  NOTICE: 057: columna `contact_phone` agregada.
+  NOTICE: 057: columna `contact_email` agregada.
+  NOTICE: 057: 4 columna(s) nueva(s) de 4 posibles.
+  NOTICE: 057 — VERIFICACIÓN
+  NOTICE:   columnas nuevas ....... 4 (esperado 4)
+  NOTICE:   CHECK nuevos .......... 4 (esperado 4)
+  NOTICE:   filas con dato ........ 0 (esperado 0 en la 1ª pasada)
+  ```
+  > **Parar si:** cualquiera de los dos contadores no da 4. Aditiva pura: cuatro
+  > columnas nullable, sin backfill, sin tocar ninguna columna existente. Es
+  > inerte para el código de `main`, que no conoce `suppliers` siquiera.
 
 - [ ] **Recargar el esquema de PostgREST**
   ```sql

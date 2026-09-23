@@ -226,6 +226,11 @@ const MARCADORES = {
   },
   "054_tercero_por_linea.sql": { que: "journal_entry_lines.client_id / .supplier_id (dos FK reales)", tipo: "columna", tabla: "journal_entry_lines", columna: "client_id" },
   "055_reversion_de_asiento_manual.sql": { que: "RPC reverse_journal_entry + una sola reversión por asiento", tipo: "indice", nombre: "journal_entries_una_reversion_por_asiento" },
+  "057_proveedor_cuenta_por_defecto_y_contacto.sql": {
+    que: "suppliers gana la cuenta contable por defecto (solo COMPRAS) + los tres campos de la persona de contacto",
+    tipo: "columna", tabla: "suppliers", columna: "default_chart_account_code",
+    nota: "Bloque 8. Va después de la 033 (crea `suppliers`); no depende de nada más. La 056 queda reservada para la corrección de la fecha de los saldos iniciales, pendiente de RM.",
+  },
 
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {

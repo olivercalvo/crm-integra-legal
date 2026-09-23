@@ -202,7 +202,29 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
      hoy exige 3–1000 (`invoices.cancellation_reason`): **el mínimo sube a 15** cuando se cablee
      el envío, y hay que moverlo en el validador y en el CHECK. Las **notas de crédito y de
      débito se anulan por el MISMO endpoint**.
-  3. **NC sobre factura sin CUFE:** la DGI **sí** acepta la referencia a factura en papel
+  3. 🔴 **CORRECCIÓN DEL 23/09/2026 (Oliver) — "sin CUFE" casi no existe, y por eso esta
+     respuesta de ideati aplica mucho menos de lo que parecía.**
+
+     **Las facturas del bufete anteriores al 8 de julio de 2026 NO son pre-eFactura.** Se
+     emitieron **a mano en el portal de ideati, por el punto de facturación `050`**, así que
+     **tienen CUFE ante la DGI** — lo que pasa es que el CRM nunca lo guardó. Para ellas la
+     nota de crédito es la **`04` con su CUFE**, no la genérica. La genérica queda **sólo** para
+     facturas que nunca pasaron por la DGI, si es que existe alguna.
+
+     ⚠️ **Y acá está el problema de diseño, que es nuevo:** nuestra base **no puede distinguir**
+     una factura emitida por el portal de una que nunca se emitió. Las dos se ven igual —
+     `fe_estado = 'no_emitida'`, `dgi_cufe IS NULL`, `punto_facturacion IS NULL`— porque el
+     portal es un camino que el CRM no registra. O sea que `decidirAccionFiscal()`
+     **no puede resolver sola** la fila "sin CUFE" de la matriz: la respuesta depende de un
+     hecho que sólo está en el portal de ideati.
+
+     **Consecuencia para 9A:** la matriz devuelve `nc_04_requiere_cufe` para ese caso —
+     una acción que **pide el CUFE** en vez de inventarlo. No se usa una heurística por fecha:
+     una fecha de corte decidiendo una acción fiscal es exactamente el tipo de supuesto que
+     después nadie recuerda que era un supuesto. Ver SOP-038.
+
+  3-bis. **La respuesta original de ideati, que sigue valiendo para el caso raro:** la DGI **sí**
+     acepta la referencia a factura en papel
      (`informacionReferenciaFacturaPapel.numeroFacturaPapel`, que ya habíamos encontrado en el
      swagger), pero ideati **recomienda usar NOTA DE CRÉDITO GENÉRICA**.
      🔴 **Cuál es el tipo de la genérica es DATO A CONFIRMAR, no afirmado.** Lo que sí se puede
@@ -238,9 +260,10 @@ Commits `a57552a` (051) → `7be8b26` (creador) → `794e686` + `04649e2` (conta
     conviven **tres hermanos**: `informacionReferencia.cufeReferenciado` (electrónico),
     `informacionReferenciaFacturaPapel.numeroFacturaPapel` y
     `informacionReferenciaImpresoraFiscal.numeroFeImpresoraFiscal`. O sea que **una factura
-    anterior a eFactura, sin CUFE, es referenciable por número de factura en papel** — eso
-    desbloquea la NC fiscal sobre las viejas, y hay que confirmarle a ideati que la DGI lo acepta
-    para el tipo 04.
+    anterior a eFactura, sin CUFE, es referenciable por número de factura en papel**.
+    ⚠️ **Corrección del 23/09:** esto resultó ser mucho menos útil de lo que parecía, porque las
+    facturas viejas del bufete **sí tienen CUFE** (portal de ideati, punto `050`). El camino de
+    "factura en papel" queda para un caso que puede no existir. Ver el punto 3 de arriba.
   - ⚠️ **La obligatoriedad no se puede leer del swagger**: no tiene ni un `required` (0 de 101
     schemas) ni un solo `enum`, y todo es `nullable: true`, `cufeReferenciado` incluido. Quien
     valida es la DGI. Tampoco hay descripciones: de 24 en todo el archivo, 22 son de catálogos y 2

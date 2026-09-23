@@ -1,0 +1,421 @@
+{
+  "01-honorarios": {
+    "_porque": "El caso corriente: honorarios a un cliente jurídico panameño. tipoDocumento 01 y el CPBS de HON.",
+    "payload": {
+      "datosGenerales": {
+        "tipoEmision": "01",
+        "tipoDocumento": "01",
+        "numeroDocumento": 101,
+        "puntoFacturacion": "051",
+        "fechaEmision": "2026-09-15T09:30:00-05:00",
+        "tipoOperacion": 1,
+        "destinoOperacion": 1,
+        "formatoGeneracionCafe": 1,
+        "maneraEntregaCafe": 1,
+        "envioContenedorReceptor": 2,
+        "procesoGeneracionFe": 1,
+        "tipoTransaccionVenta": 1,
+        "tipoSucursal": 1,
+        "informacionEmisor": {
+          "datosRucEmisor": {
+            "tipoContribuyente": 2,
+            "ruc": "1234567",
+            "digitoVerificador": "12"
+          },
+          "nombreORazonSocial": "Integra Legal, S.A.",
+          "codigoSucursal": "0000",
+          "direccionSucursal": "Calle 50, Edif. Ejemplo",
+          "ubicacionEmisor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoSucursal": "+507-200-0000",
+          "direccionCorreoElectronico": "facturas@integra-panama.com"
+        },
+        "informacionReceptor": {
+          "tipoReceptorFe": "01",
+          "nombreRazonReceptor": "DISTRIBUIDORA PORTOBELO, S.A.",
+          "direccionReceptor": "Vía España 100",
+          "ubicacionReceptor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoContactoReceptor": "+507-300-0000",
+          "correoElectronicoReceptor": "pagos@portobelo.test",
+          "correoElectronicoRecepctor": "pagos@portobelo.test",
+          "datosRucReceptor": {
+            "tipoContribuyente": 2,
+            "rucReceptor": "155123456-2-2015",
+            "digitoVerificador": "05"
+          },
+          "paisReceptor": "PA"
+        }
+      },
+      "listaItems": [
+        {
+          "numeroSecuenciaItem": 1,
+          "descripcionProductoServicio": "Asesoría legal corporativa",
+          "cantidadProductoServicio": 1,
+          "codigoItemCodificacionPanamena": 99999999,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 1000,
+            "precioItem": 1000,
+            "sumaPrecioItem": 1070
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "01",
+            "montoITBMS": 70
+          }
+        }
+      ],
+      "totales": {
+        "tiempoPago": 2,
+        "grupoFormasPago": [
+          {
+            "formaPago": "08",
+            "valorCuotaPagada": 1070
+          }
+        ],
+        "totalNeto": 1000,
+        "totalITBMS": 70,
+        "totalGrabado": 70,
+        "totalGravado": 70,
+        "valorTotalFactura": 1070,
+        "sumaValoresRecibidos": 1070,
+        "numeroTotalItems": 1,
+        "totalTodosItems": 1070,
+        "grupoInformacionPago": [
+          {
+            "numeroSecuenciaCuota": 1,
+            "fechaVencimientoCuota": "2026-10-15T00:00:00-05:00",
+            "valorCuota": 1070
+          }
+        ]
+      }
+    }
+  },
+  "09-reembolso": {
+    "_porque": "tipoDocumento 09 derivado de invoice_kind por tipoDocumentoDeKind, y el CPBS de REI. Es la rama que menos se ejerce y la más cara de romper: las 34 REI ya emitidas como 01 no se corrigen (decisión de Josuarth), así que un error acá se arrastra.",
+    "payload": {
+      "datosGenerales": {
+        "tipoEmision": "01",
+        "tipoDocumento": "09",
+        "numeroDocumento": 102,
+        "puntoFacturacion": "051",
+        "fechaEmision": "2026-09-15T09:30:00-05:00",
+        "tipoOperacion": 1,
+        "destinoOperacion": 1,
+        "formatoGeneracionCafe": 1,
+        "maneraEntregaCafe": 1,
+        "envioContenedorReceptor": 2,
+        "procesoGeneracionFe": 1,
+        "tipoTransaccionVenta": 1,
+        "tipoSucursal": 1,
+        "informacionEmisor": {
+          "datosRucEmisor": {
+            "tipoContribuyente": 2,
+            "ruc": "1234567",
+            "digitoVerificador": "12"
+          },
+          "nombreORazonSocial": "Integra Legal, S.A.",
+          "codigoSucursal": "0000",
+          "direccionSucursal": "Calle 50, Edif. Ejemplo",
+          "ubicacionEmisor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoSucursal": "+507-200-0000",
+          "direccionCorreoElectronico": "facturas@integra-panama.com"
+        },
+        "informacionReceptor": {
+          "tipoReceptorFe": "01",
+          "nombreRazonReceptor": "DISTRIBUIDORA PORTOBELO, S.A.",
+          "direccionReceptor": "Vía España 100",
+          "ubicacionReceptor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoContactoReceptor": "+507-300-0000",
+          "correoElectronicoReceptor": "pagos@portobelo.test",
+          "correoElectronicoRecepctor": "pagos@portobelo.test",
+          "datosRucReceptor": {
+            "tipoContribuyente": 2,
+            "rucReceptor": "155123456-2-2015",
+            "digitoVerificador": "05"
+          },
+          "paisReceptor": "PA"
+        }
+      },
+      "listaItems": [
+        {
+          "numeroSecuenciaItem": 1,
+          "descripcionProductoServicio": "Tasa MICI — registro de marca",
+          "cantidadProductoServicio": 1,
+          "codigoItemCodificacionPanamena": 88888888,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 250,
+            "precioItem": 250,
+            "sumaPrecioItem": 250
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "00",
+            "montoITBMS": 0
+          }
+        }
+      ],
+      "totales": {
+        "tiempoPago": 2,
+        "grupoFormasPago": [
+          {
+            "formaPago": "08",
+            "valorCuotaPagada": 250
+          }
+        ],
+        "totalNeto": 250,
+        "totalITBMS": 0,
+        "totalGrabado": 0,
+        "totalGravado": 0,
+        "valorTotalFactura": 250,
+        "sumaValoresRecibidos": 250,
+        "numeroTotalItems": 1,
+        "totalTodosItems": 250,
+        "grupoInformacionPago": [
+          {
+            "numeroSecuenciaCuota": 1,
+            "fechaVencimientoCuota": "2026-10-15T00:00:00-05:00",
+            "valorCuota": 250
+          }
+        ]
+      }
+    }
+  },
+  "01-extranjero": {
+    "_porque": "Receptor no residente (tipo_receptor_fe 04): va con grupoIdentificacionExtranjera y su país, sin datosRucReceptor y sin ubicación. Es la rama que un cliente del exterior ejercita y la facturación corriente no.",
+    "payload": {
+      "datosGenerales": {
+        "tipoEmision": "01",
+        "tipoDocumento": "01",
+        "numeroDocumento": 103,
+        "puntoFacturacion": "051",
+        "fechaEmision": "2026-09-15T09:30:00-05:00",
+        "tipoOperacion": 1,
+        "destinoOperacion": 1,
+        "formatoGeneracionCafe": 1,
+        "maneraEntregaCafe": 1,
+        "envioContenedorReceptor": 2,
+        "procesoGeneracionFe": 1,
+        "tipoTransaccionVenta": 1,
+        "tipoSucursal": 1,
+        "informacionEmisor": {
+          "datosRucEmisor": {
+            "tipoContribuyente": 2,
+            "ruc": "1234567",
+            "digitoVerificador": "12"
+          },
+          "nombreORazonSocial": "Integra Legal, S.A.",
+          "codigoSucursal": "0000",
+          "direccionSucursal": "Calle 50, Edif. Ejemplo",
+          "ubicacionEmisor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoSucursal": "+507-200-0000",
+          "direccionCorreoElectronico": "facturas@integra-panama.com"
+        },
+        "informacionReceptor": {
+          "tipoReceptorFe": "04",
+          "nombreRazonReceptor": "OFFSHORE HOLDINGS LTD",
+          "direccionReceptor": "Vía España 100",
+          "telefonoContactoReceptor": "+507-300-0000",
+          "correoElectronicoReceptor": "pagos@portobelo.test",
+          "correoElectronicoRecepctor": "pagos@portobelo.test",
+          "grupoIdentificacionExtranjera": {
+            "pasaportNumeroIdentificacionExtranjera": "GB-8842119",
+            "paisExtranjero": "GB"
+          },
+          "paisReceptor": "GB"
+        }
+      },
+      "listaItems": [
+        {
+          "numeroSecuenciaItem": 1,
+          "descripcionProductoServicio": "Asesoría legal corporativa",
+          "cantidadProductoServicio": 1,
+          "codigoItemCodificacionPanamena": 99999999,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 1000,
+            "precioItem": 1000,
+            "sumaPrecioItem": 1070
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "01",
+            "montoITBMS": 70
+          }
+        }
+      ],
+      "totales": {
+        "tiempoPago": 2,
+        "grupoFormasPago": [
+          {
+            "formaPago": "08",
+            "valorCuotaPagada": 1070
+          }
+        ],
+        "totalNeto": 1000,
+        "totalITBMS": 70,
+        "totalGrabado": 70,
+        "totalGravado": 70,
+        "valorTotalFactura": 1070,
+        "sumaValoresRecibidos": 1070,
+        "numeroTotalItems": 1,
+        "totalTodosItems": 1070,
+        "grupoInformacionPago": [
+          {
+            "numeroSecuenciaCuota": 1,
+            "fechaVencimientoCuota": "2026-10-15T00:00:00-05:00",
+            "valorCuota": 1070
+          }
+        ]
+      }
+    }
+  },
+  "01-multilinea-mixta": {
+    "_porque": "Tres líneas con 7%, 0% y exento, cantidades que no son 1 y precios con decimales. Es donde mapTotales puede redondear distinto sin que nadie lo note hasta que la DGI rechaza por descuadre de centavos.",
+    "payload": {
+      "datosGenerales": {
+        "tipoEmision": "01",
+        "tipoDocumento": "01",
+        "numeroDocumento": 104,
+        "puntoFacturacion": "051",
+        "fechaEmision": "2026-09-15T09:30:00-05:00",
+        "tipoOperacion": 1,
+        "destinoOperacion": 1,
+        "formatoGeneracionCafe": 1,
+        "maneraEntregaCafe": 1,
+        "envioContenedorReceptor": 2,
+        "procesoGeneracionFe": 1,
+        "tipoTransaccionVenta": 1,
+        "tipoSucursal": 1,
+        "informacionEmisor": {
+          "datosRucEmisor": {
+            "tipoContribuyente": 2,
+            "ruc": "1234567",
+            "digitoVerificador": "12"
+          },
+          "nombreORazonSocial": "Integra Legal, S.A.",
+          "codigoSucursal": "0000",
+          "direccionSucursal": "Calle 50, Edif. Ejemplo",
+          "ubicacionEmisor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoSucursal": "+507-200-0000",
+          "direccionCorreoElectronico": "facturas@integra-panama.com"
+        },
+        "informacionReceptor": {
+          "tipoReceptorFe": "01",
+          "nombreRazonReceptor": "DISTRIBUIDORA PORTOBELO, S.A.",
+          "direccionReceptor": "Vía España 100",
+          "ubicacionReceptor": {
+            "codigoUbicacion": "8-8-7",
+            "corregimiento": "Bella Vista",
+            "distrito": "Panamá",
+            "provincia": "Panamá"
+          },
+          "telefonoContactoReceptor": "+507-300-0000",
+          "correoElectronicoReceptor": "pagos@portobelo.test",
+          "correoElectronicoRecepctor": "pagos@portobelo.test",
+          "datosRucReceptor": {
+            "tipoContribuyente": 2,
+            "rucReceptor": "155123456-2-2015",
+            "digitoVerificador": "05"
+          },
+          "paisReceptor": "PA"
+        }
+      },
+      "listaItems": [
+        {
+          "numeroSecuenciaItem": 1,
+          "descripcionProductoServicio": "Horas de asesoría",
+          "cantidadProductoServicio": 7.5,
+          "codigoItemCodificacionPanamena": 99999999,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 166,
+            "precioItem": 1245,
+            "sumaPrecioItem": 1332.15
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "01",
+            "montoITBMS": 87.15
+          }
+        },
+        {
+          "numeroSecuenciaItem": 2,
+          "descripcionProductoServicio": "Gestión ante registro público",
+          "cantidadProductoServicio": 3,
+          "codigoItemCodificacionPanamena": 99999999,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 62.5,
+            "precioItem": 187.5,
+            "sumaPrecioItem": 187.5
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "00",
+            "montoITBMS": 0
+          }
+        },
+        {
+          "numeroSecuenciaItem": 3,
+          "descripcionProductoServicio": "Servicio exento",
+          "cantidadProductoServicio": 2,
+          "codigoItemCodificacionPanamena": 99999999,
+          "grupoPrecios": {
+            "precioUnitarioTransferencia": 200,
+            "precioItem": 400,
+            "sumaPrecioItem": 400
+          },
+          "grupoITBMS": {
+            "tasaITBMSAplicable": "00",
+            "montoITBMS": 0
+          }
+        }
+      ],
+      "totales": {
+        "tiempoPago": 2,
+        "grupoFormasPago": [
+          {
+            "formaPago": "08",
+            "valorCuotaPagada": 1919.65
+          }
+        ],
+        "totalNeto": 1832.5,
+        "totalITBMS": 87.15,
+        "totalGrabado": 87.15,
+        "totalGravado": 87.15,
+        "valorTotalFactura": 1919.65,
+        "sumaValoresRecibidos": 1919.65,
+        "numeroTotalItems": 3,
+        "totalTodosItems": 1919.65,
+        "grupoInformacionPago": [
+          {
+            "numeroSecuenciaCuota": 1,
+            "fechaVencimientoCuota": "2026-10-15T00:00:00-05:00",
+            "valorCuota": 1919.65
+          }
+        ]
+      }
+    }
+  }
+}

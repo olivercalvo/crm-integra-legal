@@ -32,6 +32,8 @@ import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { CancelInvoiceDialog } from "../_components/cancel-invoice-dialog";
 import { decidirAccionFiscal } from "@/lib/finanzas/efactura/orchestration/decidir-accion-fiscal";
 import { ultimoIntentoDeAnulacion } from "@/lib/finanzas/queries/anulaciones";
+import { ultimoEnvioFallido } from "@/lib/finanzas/queries/fe-emisiones";
+import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
@@ -149,6 +151,20 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     anulacionAMedias && canMutate
       ? await ultimoIntentoDeAnulacion(db, tenantId, invoice.id)
       : null;
+
+  // 🔴 QUÉ DIJO LA DGI EN EL ÚLTIMO ENVÍO FALLIDO.
+  //    Se lee de `fe_emisiones`, que es historia: nada de lo que se edite en la
+  //    ficha del cliente o en la factura lo cambia. Por eso el aviso NO
+  //    desaparece al corregir — que es exactamente el caso que lo trajo: una
+  //    factura rechazada, el cliente arreglado después, y la factura nunca
+  //    reenviada, rechazada ante la DGI con los datos ya correctos.
+  const envioFallido =
+    invoice.fe_estado === "error"
+      ? await ultimoEnvioFallido(db, tenantId, invoice.id)
+      : null;
+  const rechazoDgi = envioFallido
+    ? traducirRechazo(envioFallido.codigos, invoice.client?.name ?? null)
+    : null;
 
   // Lo que el diálogo de NC puede ofrecer: facturado menos ya acreditado, por
   // línea. Sale de la MISMA consulta que usa el servidor para validar.
@@ -522,6 +538,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               puntoFacturacion={invoice.punto_facturacion}
               numeroDocumento={invoice.numero_documento}
               canEmitToPac={canEmitToPac}
+              rechazo={rechazoDgi}
             />
           )}
 

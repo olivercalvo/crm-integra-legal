@@ -39,6 +39,13 @@ interface Props {
   receptorNombre: string | null;
   /** Si es un reintento tras error previo, copy del CTA cambia. */
   isRetry: boolean;
+  /**
+   * Rótulo del botón, cuando quien lo usa sabe algo que este componente no.
+   * El detalle de la factura lo usa para distinguir "Reenviar a la DGI" de
+   * "Consultar y reenviar" cuando el envío anterior quedó INCIERTO — ahí no
+   * hubo rechazo y decir "reintentar" sugiere que algo falló.
+   */
+  etiqueta?: string;
   disabled?: boolean;
 }
 
@@ -63,6 +70,7 @@ export function EmitEfacturaDialog({
   receptorRuc,
   receptorNombre,
   isRetry,
+  etiqueta,
   disabled,
 }: Props) {
   const router = useRouter();
@@ -72,10 +80,10 @@ export function EmitEfacturaDialog({
   const [errorHint, setErrorHint] = useState<string | null>(null);
   const [codRes, setCodRes] = useState<CodRes[]>([]);
   const [errorKind, setErrorKind] = useState<
-    "pac_rejected" | "pac_duplicate" | "transport" | null
+    "pac_rejected" | "pac_duplicate" | "transport" | "incierto" | null
   >(null);
 
-  const ctaLabel = isRetry ? "Reintentar envío" : "Enviar al PAC";
+  const ctaLabel = etiqueta ?? (isRetry ? "Reenviar a la DGI" : "Enviar al PAC");
   const ctaIcon = isRetry ? RotateCw : Send;
   const Icon = ctaIcon;
 

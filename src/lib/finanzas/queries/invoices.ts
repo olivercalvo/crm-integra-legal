@@ -19,6 +19,14 @@ interface ListInvoicesParams {
   client_id?: string | null;
   case_id?: string | null;
   kind?: InvoiceKind | null;
+  /**
+   * 🔴 Filtro por estado FISCAL, que es otra cosa que `status`.
+   *
+   * Una factura puede estar `emitida` y perfecta de nuestro lado, y rechazada
+   * por la DGI. Sin este filtro, encontrar las rechazadas exige abrirlas una
+   * por una — y el caso que trajo esto fue justamente una que nadie reenvió.
+   */
+  fe_estado?: string | null;
   /** Búsqueda por invoice_number (parcial, ilike). */
   search?: string | null;
   page?: number;
@@ -72,6 +80,7 @@ export async function listInvoices(
     .range(from, to);
 
   if (params.status) q = q.eq("status", params.status);
+  if (params.fe_estado) q = q.eq("fe_estado", params.fe_estado);
   if (params.kind) q = q.eq("invoice_kind", params.kind);
   if (params.client_id) q = q.eq("client_id", params.client_id);
   if (params.case_id) q = q.eq("case_id", params.case_id);

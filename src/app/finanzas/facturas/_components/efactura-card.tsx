@@ -18,6 +18,7 @@ import { formatDateTime } from "@/lib/utils/format-date";
 import { FeEstadoBadge } from "@/components/finanzas/fe-estado-badge";
 import type { FeEstado } from "@/lib/finanzas/types/invoice";
 import { EmitEfacturaDialog } from "./emit-efactura-dialog";
+import type { RechazoTraducido } from "@/lib/finanzas/efactura/mensajes-dgi";
 
 interface Props {
   invoiceId: string;
@@ -36,6 +37,17 @@ interface Props {
   numeroDocumento: number | null;
   /** Si el usuario puede disparar el envío (admin|abogada). */
   canEmitToPac: boolean;
+  /**
+   * 🔴 Lo que dijo la DGI en el último envío fallido, ya traducido.
+   *
+   * Antes esta sección decía "el último envío al PAC falló" y nada más: para
+   * saber POR QUÉ había que apretar el botón otra vez y leerlo en el diálogo.
+   * O sea que para enterarse del motivo del rechazo había que provocar otro.
+   *
+   * `null` cuando no hay registro del intento (facturas anteriores al
+   * cableado, o una lectura que falló): la sección vuelve al aviso genérico.
+   */
+  rechazo?: RechazoTraducido | null;
 }
 
 /**
@@ -70,6 +82,7 @@ export function EfacturaCard({
   puntoFacturacion,
   numeroDocumento,
   canEmitToPac,
+  rechazo,
 }: Props) {
   return (
     <section className="rounded-xl border bg-white p-5 shadow-sm">
@@ -116,6 +129,7 @@ export function EfacturaCard({
           receptorRuc={receptorRuc}
           receptorNombre={receptorNombre}
           canEmitToPac={canEmitToPac}
+          rechazo={rechazo ?? null}
         />
       )}
 
@@ -283,6 +297,7 @@ function ErrorSection({
   receptorRuc,
   receptorNombre,
   canEmitToPac,
+  rechazo,
 }: {
   invoiceId: string;
   invoiceNumber: string;
@@ -290,16 +305,62 @@ function ErrorSection({
   receptorRuc: string | null;
   receptorNombre: string | null;
   canEmitToPac: boolean;
+  rechazo: RechazoTraducido | null;
 }) {
+  // 🔴 Un envío que quedó INCIERTO no es un rechazo, y decirle a la licenciada
+  //    que la DGI rechazó algo que puede estar autorizado la manda a corregir
+  //    una factura que está perfecta. Es la lección del `0600`.
+  const incierto = rechazo?.donde === "ningún lado" && rechazo?.sinTraduccion === false;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-3 rounded-lg border-l-4 border-red-400 bg-red-50 p-4 text-red-900">
+      <div
+        role="alert"
+        className="flex items-start gap-3 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 text-red-900"
+      >
         <AlertCircle size={20} className="mt-0.5 shrink-0 text-red-600" />
-        <div className="text-sm">
-          <p className="font-semibold">El último envío al PAC falló</p>
-          <p>
-            Puedes reintentar. Si vuelve a fallar, el detalle del rechazo se
-            mostrará en el cuadro de confirmación.
+        <div className="space-y-2 text-sm">
+          <p className="font-semibold">
+            {rechazo
+              ? "La DGI no aceptó esta factura"
+              : "El último envío al PAC falló"}
+          </p>
+
+          {rechazo ? (
+            <>
+              <p>{rechazo.resumen}</p>
+              {rechazo.queHacer && (
+                <p>
+                  <span className="font-semibold">Qué hacer: </span>
+                  {rechazo.queHacer}
+                </p>
+              )}
+              {/* 🔴 El texto del PAC NUNCA se tira: traducir no es reemplazar,
+                  y es lo único que sirve para hablar con ideati. */}
+              <p className="rounded border border-red-200 bg-white/60 px-2 py-1 font-mono text-xs text-red-800">
+                {rechazo.textoDelPac}
+              </p>
+              {rechazo.sinTraduccion && (
+                <p className="text-xs italic">
+                  El sistema no tiene traducido este motivo. El texto de arriba es el que
+                  devolvió la DGI.
+                </p>
+              )}
+            </>
+          ) : (
+            <p>
+              Puede volver a enviarla. Si falla otra vez, el detalle del rechazo se muestra en
+              el cuadro de confirmación.
+            </p>
+          )}
+
+          {/* El aviso queda hasta que se reenvíe: editar el cliente o la
+              factura NO lo borra. Es a propósito — el caso que trajo esto fue
+              una factura corregida que nunca se reenvió y quedó rechazada ante
+              la DGI con los datos ya arreglados. */}
+          <p className="text-xs">
+            Este aviso queda hasta que la factura se envíe otra vez y la DGI la acepte.
+            Corregir los datos no lo borra.
           </p>
         </div>
       </div>
@@ -311,10 +372,11 @@ function ErrorSection({
           receptorRuc={receptorRuc}
           receptorNombre={receptorNombre}
           isRetry
+          etiqueta={incierto ? "Consultar y reenviar a la DGI" : "Reenviar a la DGI"}
         />
       ) : (
         <p className="text-xs italic text-gray-500">
-          Solo admin o abogada pueden reintentar envíos al PAC.
+          Solo admin o abogada pueden reenviar facturas a la DGI.
         </p>
       )}
     </div>

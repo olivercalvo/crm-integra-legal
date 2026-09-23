@@ -37,6 +37,30 @@ export interface UpdateTaxCodeInput {
   active?: boolean;
 }
 
+/**
+ * Alta de una tasa (2.4).
+ *
+ * `code` sólo existe acá: `UpdateTaxCodeInput` no lo tiene a propósito, porque
+ * es la clave por la que las líneas referencian el impuesto y renombrarlo
+ * dejaría documentos apuntando a un código que ya no existe. Se elige una vez.
+ */
+export interface CreateTaxCodeInput {
+  code: string;
+  name: string;
+  rate: number;
+  active: boolean;
+}
+
+/**
+ * Forma admitida de un código: mayúsculas, dígitos y guión bajo.
+ *
+ * No es cosmético. `services_catalog.default_tax_code` lo referencia con un FK
+ * compuesto `(tenant_id, code)`, y el listado y los selectores lo ordenan por
+ * código. Un código con espacios o acentos se ordena distinto según el locale y
+ * complica cualquier import posterior.
+ */
+export const TAX_CODE_RE = /^[A-Z0-9_]{2,20}$/;
+
 /** Máximo de decimales que aguanta la columna `NUMERIC(6,4)`. */
 export const TAX_RATE_DECIMALS = 4;
 

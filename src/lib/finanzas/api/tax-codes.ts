@@ -8,7 +8,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MutationError } from "@/lib/finanzas/api/errors";
-import type { TaxCodeRow, UpdateTaxCodeInput } from "@/lib/finanzas/types/tax-code";
+import type {
+  CreateTaxCodeInput,
+  TaxCodeRow,
+  UpdateTaxCodeInput,
+} from "@/lib/finanzas/types/tax-code";
 
 const ENTITY = "tax_codes";
 const SELECT_COLS = "id, code, name, rate, active";
@@ -33,6 +37,77 @@ export async function listTaxCodes(
     ...t,
     rate: Number(t.rate),
   }));
+}
+
+/**
+ * Da de alta una tasa (2.4).
+ *
+ * 🔴 NO HAY BORRADO, Y NO ES UN OLVIDO. Cinco claves foráneas apuntan a
+ * `tax_codes`: `invoice_lines`, `quote_lines`, `credit_note_lines`,
+ * `expense_lines` y el FK compuesto de `services_catalog`. Borrar una tasa
+ * usada rompería documentos ya emitidos. Desactivarla ya es el mecanismo: sale
+ * de los selectores y las líneas viejas conservan su snapshot de `tax_rate`.
+ *
+ * El `code` es único por tenant (`tax_codes_tenant_code_unique`) y el 23505 se
+ * traduce acá: un "duplicate key value violates unique constraint" crudo no le
+ * dice nada a quien está cargando una tasa.
+ */
+export async function createTaxCode(
+  db: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  input: CreateTaxCodeInput
+): Promise<TaxCodeRow> {
+  const { data, error } = await db
+    .from("tax_codes")
+    .insert({
+      tenant_id: tenantId,
+      code: input.code,
+      name: input.name,
+      rate: input.rate,
+      active: input.active,
+    })
+    .select(SELECT_COLS)
+    .single();
+
+  if (error || !data) {
+    const e = error as { code?: string } | null;
+    if (e?.code === "23505") {
+      throw new MutationError(
+        `Ya existe un impuesto con el código "${input.code}". Los códigos no se repiten: ` +
+          `si el que busca está desactivado, reactívelo en lugar de crear otro.`,
+        409,
+        error
+      );
+    }
+    console.error("[finanzas] createTaxCode failed", error);
+    throw new MutationError("No se pudo crear el impuesto", 400, error);
+  }
+
+  // Crear una tasa es de las cosas que después alguien pregunta "¿quién y
+  // cuándo?". Mismo criterio que el cambio de tasa.
+  try {
+    await db.from("audit_log").insert({
+      tenant_id: tenantId,
+      user_id: userId,
+      entity: ENTITY,
+      entity_id: (data as unknown as TaxCodeRow).id,
+      action: "create",
+      field: null,
+      old_value: null,
+      new_value: JSON.stringify({
+        code: input.code,
+        name: input.name,
+        rate: input.rate,
+        active: input.active,
+      }),
+    });
+  } catch (err) {
+    console.warn("[finanzas] createTaxCode: audit_log insert falló", err);
+  }
+
+  const fila = data as unknown as TaxCodeRow;
+  return { ...fila, rate: Number(fila.rate) };
 }
 
 /**

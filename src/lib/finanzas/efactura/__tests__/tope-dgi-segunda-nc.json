@@ -1,0 +1,20 @@
+{
+  "_que_es": "Resultado de emitir una SEGUNDA nota de crédito por el total, después de anular la primera ante la DGI",
+  "_medido": "2026-09-24T16:42:05.222Z",
+  "_autorizada": true,
+  "_libera_el_monto": true,
+  "resultado": {
+    "ok": true,
+    "feEstado": "authorized",
+    "creditNoteId": "1195f8bc-cd8b-440d-b41e-7032d4ecca1c",
+    "creditNoteNumber": "NC-000014",
+    "puntoFacturacion": "001",
+    "numeroDocumento": 41,
+    "cufe": "FE0420000025046169-3-2021-4000002026092400000000410010125132296957",
+    "protocoloAutorizacion": "00001528364-1-65300620260000000000060057",
+    "fechaAutorizacion": "2026-09-24T16:42:04.071Z",
+    "intento": 1,
+    "errorKind": null,
+    "mensaje": null
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "_que_es": "Respuesta de CreateCancellation al anular una NOTA DE CRÉDITO ante la DGI",
+  "_medido": "2026-09-24T16:42:05.221Z",
+  "_clasificada": "anulada",
+  "respuesta": [
+    {
+      "codigo": "0600",
+      "mensaje": "Evento registrado con éxito"
+    }
+  ]
+}

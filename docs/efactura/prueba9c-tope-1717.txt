@@ -1,0 +1,64 @@
+══════════════════════════════════════════════════════════════════════════════
+9C — ¿la DGI libera el monto al anular una nota de crédito?
+fecha: 2026-09-24T16:41:43.992Z
+══════════════════════════════════════════════════════════════════════════════
+
+cliente apuntado al RUC/DV del emisor (las tres columnas)
+
+[1] factura creada y emitida: FAC-HON-000017 · B/. 10
+
+🔒 [emision-factura] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+    ✅ autorizada · CUFE FE0120000025046169-3-2021-4000002026092400000000390010120192983559
+
+[2] NC-000013 creada y contabilizada · B/. 10
+
+🔒 [emision-nc1] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+    ✅ AUTORIZÓ · 001-40
+    CUFE de la NC: FE0420000025046169-3-2021-4000002026092400000000400010124362686913
+
+🔒 [anulacion-nc1-en-dgi] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/InvoiceEvents/CreateCancellation  (CUFE de la NC)
+
+RESPUESTA CRUDA de CreateCancellation (NC):
+[
+  {
+    "codigo": "0600",
+    "mensaje": "Evento registrado con éxito"
+  }
+]
+
+[3] anulación de la NC ante la DGI: anulada
+    ✅ anulada ante la DGI · fe_estado = canceled
+
+[4] reversada en el libro · asiento 59 revierte al 58 · acreditado de la factura = 0 · saldo = 10
+
+[5] NC-000014 creada y contabilizada · B/. 10
+
+🔒 [emision-nc2] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+
+RESULTADO de la NC #2:
+{
+  "ok": true,
+  "feEstado": "authorized",
+  "creditNoteId": "1195f8bc-cd8b-440d-b41e-7032d4ecca1c",
+  "creditNoteNumber": "NC-000014",
+  "puntoFacturacion": "001",
+  "numeroDocumento": 41,
+  "cufe": "FE0420000025046169-3-2021-4000002026092400000000410010125132296957",
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000060057",
+  "fechaAutorizacion": "2026-09-24T16:42:04.071Z",
+  "intento": 1,
+  "errorKind": null,
+  "mensaje": null
+}
+
+══════════════════════════════════════════════════════════════════════════════
+VEREDICTO
+  ✅ LA DGI AUTORIZÓ LA SEGUNDA NC.
+     ⇒ La DGI LIBERA el monto al anular una nota de crédito.
+     ⇒ Su tope y nuestro `credited_total` coinciden. No hay que cambiar nada.
+══════════════════════════════════════════════════════════════════════════════
+
+📌 fixtures guardados en src/lib/finanzas/efactura/__tests__/
+
+✅ cliente restaurado

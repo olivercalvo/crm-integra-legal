@@ -27,9 +27,33 @@ guardar lo que conteste.
 
 ---
 
-### 1. 🔴 El bloque de referencia está DOBLEMENTE anidado, y el repo lo tenía mal anotado
+### 1. ✅ RESUELTO — el bloque de referencia está DOBLEMENTE anidado (24/09/2026)
 
-Leído del swagger hoy. `GDGenRequest.documentosFiscalesReferenciados[]` es un array de:
+**No se decidió leyendo: se decidió con dos autorizaciones reales.** Se mandó la MISMA nota de
+crédito al sandbox con las dos formas:
+
+| Forma | Resultado |
+|---|---|
+| **A — anidada** (la del swagger) | ✅ `0260 Autorizado el uso de la FE` |
+| **B — plana** (la de las notas viejas) | ❌ `0100 The element 'gDFRefNum' … has incomplete content. List of possible elements expected: 'gDFRefFE, gDFRefFacPap, gDFRefFacIE'` |
+
+El propio rechazo nombra los tres hermanos que el wrapper espera: el anidado no es una rareza
+del swagger, **es lo que pide el XSD de la DGI**. Golden en
+`referencia-fiscal-esperada.json`, contra-ejemplo en `referencia-fiscal-rechazada.json`,
+evidencia en `docs/efactura/prueba9c-referencia.txt`.
+
+**Dos hallazgos más de la misma prueba:**
+
+- 🔴 **`fechaEmisionDocumentoReferenciado` lleva ZONA HORARIA.** El primer intento la mandó
+  pelada (`2026-09-24T00:00:00`) y rebotó con `0100 … datatype 'fechaTZ' … Pattern constraint
+  failed`. Es el mismo formato que `fechaEmision`, y `toPanamaIso` ya lo produce.
+- ⚠️ **La DGI NO valida `nombreRazonSocialEmisor` contra el RUC.** La prueba autorizó con el
+  nombre del CLIENTE donde va el del EMISOR del documento referenciado —que somos nosotros—.
+  Un error ahí **no lo va a atrapar el PAC**: lo tiene que atrapar el código.
+- ✅ **Y la NC `04` AUTORIZÓ**, así que el tipo 04 comparte el endpoint y el clasificador de
+  emisión, con `autorizada` explícito y `0260`. Queda verificado lo del punto 7.
+
+La forma, para referencia:
 
 ```
 GDFRefRequest
@@ -43,9 +67,12 @@ GDFRefRequest
 ```
 
 ⚠️ **`informacionReferencia` aparece DOS VECES, una adentro de la otra.** Las notas anteriores
-de este archivo lo escribían plano (`informacionReferencia.cufeReferenciado`), que es un nivel
-de menos. Es exactamente la clase de error que la DGI devuelve como rechazo y que en
-desarrollo no se ve.
+de este archivo lo escribían plano, un nivel de menos. **Verificado el 24/09: la plana la
+rechaza la DGI.**
+
+✅ **Nada de lo que corre en producción manda este bloque.** `main` (`24b227a`) no tiene una
+sola referencia a `documentosFiscalesReferenciados`, `cufeReferenciado`, `numeroFacturaPapel`
+ni `gDFRef` — el error vivía sólo en las notas, nunca en el código.
 
 **El emisor referenciado es el bufete mismo**, no el cliente: la NC referencia una factura que
 emitimos nosotros. Sale de `EFACTURA_EMISOR_RUC` / `_DV` / `_TIPO_CONTRIBUYENTE`.

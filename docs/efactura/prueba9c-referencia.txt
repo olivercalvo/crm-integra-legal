@@ -1,0 +1,161 @@
+◇ injecting env (27) from .env.local // tip: ◈ encrypted .env [www.dotenvx.com]
+══════════════════════════════════════════════════════════════════════════════
+9C — la forma de `documentosFiscalesReferenciados`
+fecha:   2026-09-24T14:56:16.260Z
+factura: FAC-REI-000004 (authorized)
+══════════════════════════════════════════════════════════════════════════════
+
+cliente apuntado al RUC/DV del emisor (las tres columnas)
+
+(la factura ya estaba autorizada: se reusa su CUFE)
+✅ CUFE de la factura: FE0920000025046169-3-2021-4000002026092400000000240010129902781442
+
+🔒 [FORMA-A-anidada] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices  (NC 04, FORMA-A-anidada, documento 27)
+
+documentosFiscalesReferenciados — FORMA-A-anidada:
+[
+  {
+    "rucEmisorDocumentoReferenciado": {
+      "tipoRuc": 2,
+      "ruc": "25046169-3-2021",
+      "digitoVerificador": "40"
+    },
+    "nombreRazonSocialEmisor": "CONSTRUCTORA CHIRIQUÍ ANTIGUO, S.A.",
+    "fechaEmisionDocumentoReferenciado": "2026-09-24T00:00:00-05:00",
+    "informacionReferencia": {
+      "informacionReferencia": {
+        "cufeReferenciado": "FE0920000025046169-3-2021-4000002026092400000000240010129902781442"
+      }
+    }
+  }
+]
+
+🔴 FORMA-A-anidada: autorizada = true · cufe = sí
+
+RESPUESTA — FORMA-A-anidada:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "e951643b-8430-485a-965c-b74d17c25350",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": "ID00001528364-1-65300620260000000000060040",
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": "FE0420000025046169-3-2021-4000002026092400000000270010122108856789",
+          "dFecProc": "2026-09-24T14:56:18.544Z",
+          "dProtAut": "00001528364-1-65300620260000000000060040",
+          "dDigVal": "JCjPLRfQMCGXy7sGLiNYRj9E/KvQKhDPJOWEvfXlV3Y=",
+          "gResProc": [
+            {
+              "dCodRes": "0260",
+              "dMsgRes": "Autorizado el uso de la FE"
+            }
+          ],
+          "signature": ""
+        }
+      }
+    }
+  },
+  "invoice": "3736f146-4bf8-4b85-a08a-b4cf00f62c66",
+  "cufe": "FE0420000025046169-3-2021-4000002026092400000000270010122108856789",
+  "secuence": 16,
+  "requestTime": 1.3946995,
+  "autorizada": true,
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000060040",
+  "fechaAutorizacion": "2026-09-24T14:56:18.544Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0420000025046169-3-2021-4000002026092400000000270010122108856789&iAmb=2&digestValue=a53ad08e-6652-46ea-8497-659a51233b8c&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwNDIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMjcwMDEwMTIyMTA4ODU2Nzg5IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiJhNTNhZDA4ZS02NjUyLTQ2ZWEtODQ5Ny02NTlhNTEyMzNiOGMifQ.H10TF6-vUuj0RX3lEzkmJlRPRB3slRGqLEJw8Hnzuqs",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T14:56:19.186Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+🔒 [FORMA-B-plana] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices  (NC 04, FORMA-B-plana, documento 28)
+
+documentosFiscalesReferenciados — FORMA-B-plana:
+[
+  {
+    "rucEmisorDocumentoReferenciado": {
+      "tipoRuc": 2,
+      "ruc": "25046169-3-2021",
+      "digitoVerificador": "40"
+    },
+    "nombreRazonSocialEmisor": "CONSTRUCTORA CHIRIQUÍ ANTIGUO, S.A.",
+    "fechaEmisionDocumentoReferenciado": "2026-09-24T00:00:00-05:00",
+    "informacionReferencia": {
+      "cufeReferenciado": "FE0920000025046169-3-2021-4000002026092400000000240010129902781442"
+    }
+  }
+]
+
+🔴 FORMA-B-plana: autorizada = false · cufe = sí
+
+RESPUESTA — FORMA-B-plana:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "3462fd62-861e-47dd-ae33-45ab3bf8f72f",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": null,
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": null,
+          "dFecProc": "2026-09-24T14:56:20.954Z",
+          "dProtAut": null,
+          "dDigVal": null,
+          "gResProc": [
+            {
+              "dCodRes": "0100",
+              "dMsgRes": "The element 'gDFRefNum' in namespace 'http://dgi-fep.mef.gob.pa' has incomplete content. List of possible elements expected: 'gDFRefFE, gDFRefFacPap, gDFRefFacIE' in namespace 'http://dgi-fep.mef.gob.pa'."
+            }
+          ],
+          "signature": null
+        }
+      }
+    }
+  },
+  "invoice": "dfa96b7e-0bdc-47dc-97b6-b4cf00f62fc8",
+  "cufe": "FE0420000025046169-3-2021-4000002026092400000000280010125325245776",
+  "secuence": 17,
+  "requestTime": 0.0887884,
+  "autorizada": false,
+  "protocoloAutorizacion": null,
+  "fechaAutorizacion": "2026-09-24T14:56:20.954Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0420000025046169-3-2021-4000002026092400000000280010125325245776&iAmb=2&digestValue=aa2580d8-a7bf-4bda-be43-b6d6d8249a12&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwNDIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMjgwMDEwMTI1MzI1MjQ1Nzc2IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiJhYTI1ODBkOC1hN2JmLTRiZGEtYmU0My1iNmQ2ZDgyNDlhMTIifQ.BFDSXfyHrDY5ZNPzbetc4TOEaeN8XSAMWbPkBPd_pdM",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T14:56:20.971Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+══════════════════════════════════════════════════════════════════════════════
+VEREDICTO
+  FORMA A (anidada, la del swagger): ✅ AUTORIZÓ
+  FORMA B (plana, la de las notas):  ❌ no autorizó
+══════════════════════════════════════════════════════════════════════════════
+
+✅ cliente restaurado
+
+📄 informe: C:\Users\Oliver\Desktop\Cliente en el Centro\Clientes\Integra\02_Desarrollo\crm-integra-legal\docs\efactura\prueba9c-referencia.txt

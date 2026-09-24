@@ -1,0 +1,19 @@
+{
+  "_origen": "RECHAZADO por el sandbox el 2026-09-24. Ver docs/efactura/prueba9c-referencia.txt",
+  "_codigo": "0100",
+  "_mensaje": "The element 'gDFRefNum' in namespace 'http://dgi-fep.mef.gob.pa' has incomplete content. List of possible elements expected: 'gDFRefFE, gDFRefFacPap, gDFRefFacIE' in namespace 'http://dgi-fep.mef.gob.pa'.",
+  "documentosFiscalesReferenciados": [
+    {
+      "rucEmisorDocumentoReferenciado": {
+        "tipoRuc": 2,
+        "ruc": "25046169-3-2021",
+        "digitoVerificador": "40"
+      },
+      "nombreRazonSocialEmisor": "CONSTRUCTORA CHIRIQUÍ ANTIGUO, S.A.",
+      "fechaEmisionDocumentoReferenciado": "2026-09-24T00:00:00-05:00",
+      "informacionReferencia": {
+        "cufeReferenciado": "FE0920000025046169-3-2021-4000002026092400000000240010129902781442"
+      }
+    }
+  ]
+}

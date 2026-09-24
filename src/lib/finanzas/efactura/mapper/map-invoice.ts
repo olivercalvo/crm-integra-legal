@@ -23,6 +23,10 @@ import { mapReceptor } from "./map-receptor";
 import { mapItem } from "./map-item";
 import { mapTotales } from "./map-totales";
 import { toPanamaIso } from "./format-decimals";
+import {
+  construirReferenciaFiscal,
+  type ReferenciaAFacturaElectronica,
+} from "./map-referencia-fiscal";
 
 export interface MapInvoiceOptions {
   /** Ambiente PAC (informativo — no se envía en InvoiceRequest, queda para el transport). */
@@ -40,6 +44,17 @@ export interface MapInvoiceOptions {
    * no son un `invoice_kind`.
    */
   tipoDocumento?: TipoDocumento;
+  /**
+   * La factura que este documento corrige. **Sólo la lleva una nota de
+   * crédito**, y sin ella el bloque no se manda: una factura normal no
+   * referencia nada.
+   *
+   * 🔴 El bloque NO se arma acá: lo arma `construirReferenciaFiscal()`, que
+   * está congelado contra el payload que la DGI autorizó (`0260`) el
+   * 24/09/2026. La forma plana la rechaza con `0100`, y ese rechazo no se
+   * descubre en desarrollo: se descubre sobre un documento real.
+   */
+  referencia?: ReferenciaAFacturaElectronica;
 }
 
 /**
@@ -128,6 +143,17 @@ export function mapInvoiceToEfacturaRequest(
     tipoSucursal: emisor.defaultTipoSucursal,
     informacionEmisor,
     informacionReceptor,
+    // Sólo va si quien llama pasó la referencia. `undefined` no se serializa,
+    // así que una factura normal sale con el mismo payload de siempre — y el
+    // congelamiento del receptor lo sigue comprobando.
+    ...(options?.referencia
+      ? {
+          documentosFiscalesReferenciados: construirReferenciaFiscal(
+            options.referencia,
+            emisor
+          ),
+        }
+      : {}),
   };
 
   return {

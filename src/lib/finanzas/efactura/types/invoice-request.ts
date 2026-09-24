@@ -18,6 +18,8 @@
  * contrato que no usamos.
  */
 
+import type { DocumentoFiscalReferenciado } from "@/lib/finanzas/efactura/mapper/map-referencia-fiscal";
+
 // ---------------------------------------------------------------------------
 // Sub-tipos hoja
 // ---------------------------------------------------------------------------
@@ -183,6 +185,15 @@ export interface DatosGenerales {
   informacionInteresEmisor?: string;
   informacionEmisor: InformacionEmisor;
   informacionReceptor: InformacionReceptor;
+  /**
+   * Los documentos que este corrige. Sólo lo lleva una nota de crédito.
+   *
+   * 🔴 El bloque tiene `informacionReferencia` DOS VECES, una dentro de la
+   * otra. No se arma a mano: lo construye `construirReferenciaFiscal()`, que
+   * está congelado contra el payload que la DGI autorizó el 24/09/2026. La
+   * forma plana la rechaza con `0100`.
+   */
+  documentosFiscalesReferenciados?: DocumentoFiscalReferenciado[];
 }
 
 // ---------------------------------------------------------------------------

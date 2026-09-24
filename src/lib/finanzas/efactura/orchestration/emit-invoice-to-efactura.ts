@@ -645,7 +645,7 @@ async function persistTransportError(
 // Parser de la respuesta del PAC
 // ---------------------------------------------------------------------------
 
-type ParsedAuthorized = {
+export type ParsedAuthorized = {
   kind: "authorized";
   cufe: string;
   protocoloAutorizacion: string | null;
@@ -665,14 +665,14 @@ type ParsedAuthorized = {
  * reintentable, y el mensaje dice que el estado está por confirmar en vez de
  * afirmar un rechazo.
  */
-type ParsedIncierto = {
+export type ParsedIncierto = {
   kind: "incierto";
   efInvoiceUuid: string | null;
   codRes: CodRes[];
   raw: unknown;
 };
 
-type ParsedRejected = {
+export type ParsedRejected = {
   kind: "rejected";
   summary: string;
   isDuplicate: boolean;
@@ -681,7 +681,7 @@ type ParsedRejected = {
   raw: unknown;
 };
 
-type ParsedPacResponse = ParsedAuthorized | ParsedIncierto | ParsedRejected;
+export type ParsedPacResponse = ParsedAuthorized | ParsedIncierto | ParsedRejected;
 
 /**
  * Clasifica la respuesta del POST /api/v1/Invoices en uno de tres caminos:
@@ -694,7 +694,17 @@ type ParsedPacResponse = ParsedAuthorized | ParsedIncierto | ParsedRejected;
  *                      vacía/inesperada. isDuplicate=true si el dMsgRes
  *                      sugiere documento ya autorizado.
  */
-function parsePacResponse(raw: unknown): ParsedPacResponse {
+/**
+ * 🔴 UNA SOLA IMPLEMENTACIÓN, PARA FACTURAS Y PARA NOTAS DE CRÉDITO.
+ *
+ * Se exporta —y no se copia— porque la lección del `0600` fue exactamente
+ * ésa: los códigos de un endpoint no son los de otro, y un clasificador
+ * duplicado diverge sin que nadie lo note hasta que llama un rechazo a un
+ * éxito. La NC `04` sale por el MISMO `POST /api/v1/Invoices` y ya está
+ * medido (24/09/2026) que su respuesta trae `autorizada` explícito y `0260`,
+ * igual que una factura.
+ */
+export function parsePacResponse(raw: unknown): ParsedPacResponse {
   if (!raw || typeof raw !== "object") {
     return {
       kind: "rejected",

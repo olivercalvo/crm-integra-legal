@@ -1,0 +1,73 @@
+══════════════════════════════════════════════════════════════════════════════
+9C — emitir una nota de crédito a la DGI
+fecha: 2026-09-24T16:20:44.139Z
+══════════════════════════════════════════════════════════════════════════════
+
+cliente apuntado al RUC/DV del emisor (las tres columnas)
+
+[1] NC sobre factura SIN CUFE ......... ✅ RECHAZADA y correlativo INTACTO
+    «La factura FAC-HON-000007 no tiene CUFE, así que esta nota de crédito no se puede enviar a la DGI: el documento electrónico tiene que decir qué factura corrige.»
+
+🔒 [emision-factura] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices  (factura FAC-HON-000003)
+
+✅ factura FAC-HON-000003 con CUFE: FE0120000025046169-3-2021-4000002026092400000000370010120670432592
+
+NC parcial creada: NC-000012 (B/. 2140)
+
+🔒 [emision-nc-parcial] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices  (tipoDocumento 04, NC parcial)
+
+[2] NC PARCIAL ........................ ✅ AUTORIZÓ · 001-38
+    CUFE: FE0420000025046169-3-2021-4000002026092400000000380010120610581819
+
+credit_notes después del envío:
+{
+  "fe_estado": "authorized",
+  "dgi_cufe": "FE0420000025046169-3-2021-4000002026092400000000380010120610581819",
+  "dgi_protocolo_autorizacion": "00001528364-1-65300620260000000000060054",
+  "punto_facturacion": "001",
+  "numero_documento": 38,
+  "i_amb": 2
+}
+
+fe_emisiones de esta NC:
+[
+  {
+    "intento": 1,
+    "autorizada": true,
+    "cufe": "FE0420000025046169-3-2021-4000002026092400000000380010120610581819",
+    "punto_facturacion": "001",
+    "numero_documento": 38,
+    "i_amb": 2
+  }
+]
+
+tipoDocumento + documentosFiscalesReferenciados enviados:
+{
+  "tipoDocumento": "04",
+  "documentosFiscalesReferenciados": [
+    {
+      "informacionReferencia": {
+        "informacionReferencia": {
+          "cufeReferenciado": "FE0120000025046169-3-2021-4000002026092400000000370010120670432592"
+        }
+      },
+      "nombreRazonSocialEmisor": "INTEGRA LEGAL",
+      "rucEmisorDocumentoReferenciado": {
+        "ruc": "25046169-3-2021",
+        "tipoRuc": 2,
+        "digitoVerificador": "40"
+      },
+      "fechaEmisionDocumentoReferenciado": "2026-06-01T00:00:00-05:00"
+    }
+  ]
+}
+
+[3] reenviar una NC autorizada ........ ✅ RECHAZADO: «Esta nota de crédito ya fue autorizada por la DGI.»
+
+══════════════════════════════════════════════════════════════════════════════
+FIN
+══════════════════════════════════════════════════════════════════════════════
+
+✅ cliente restaurado

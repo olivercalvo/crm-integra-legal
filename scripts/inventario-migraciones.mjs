@@ -254,6 +254,12 @@ const MARCADORES = {
     nota: "Bloque 9C, caso B. Las facturas anteriores al 8 de julio de 2026 TIENEN CUFE ante la DGI pero el CRM no lo guardo; al cargarlo a mano quedan indistinguibles de una que el sistema emitio. La columna dice cual es cual. NO toca `fe_estado`: este sistema no las emitio.",
   },
 
+  "062_fe_emisiones_de_nota_de_credito.sql": {
+    que: "fe_emisiones.credit_note_id — el historial de envios tambien guarda NC",
+    tipo: "columna", tabla: "fe_emisiones", columna: "credit_note_id",
+    nota: "Bloque 9C. Arco exclusivo con invoice_id, como supplier_payments en la 049. Una tabla aparte obligaria a que la alerta de rechazo (SOP-041) consultara dos y las mezclara, o --mas probable-- a que quedara a medias sin que ningun test lo note.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

@@ -50,6 +50,7 @@ export interface TraduccionDgi {
  * | `1002`  | rechazo real del sandbox, 23/09/2026 |
  * | `10105` | rechazo real que recibió el bufete (descripción de 545 caracteres) |
  * | `0622`  | respuesta real del endpoint de anulación, 23/09/2026 |
+ * | `1717`  | rechazo real del sandbox al emitir una NC, 24/09/2026 |
  */
 const CATALOGO: Record<string, TraduccionDgi> = {
   "1601": {
@@ -85,6 +86,29 @@ const CATALOGO: Record<string, TraduccionDgi> = {
     queePaso: "La DGI informa que este documento ya tiene un evento de anulación.",
     queHacer: "No hay nada que corregir: el documento ya está anulado ante la DGI.",
     donde: "ningún lado",
+  },
+  /**
+   * Medido el 24/09/2026: la DGI **lleva su propia cuenta** de lo acreditado
+   * por factura y rechaza cuando la suma de notas de crédito se pasa.
+   *
+   * ⚠️ El mensaje del PAC dice "inconsistentes con el monto", que suena a un
+   * error de tipeo en el monto de ESTA nota de crédito. Casi nunca es eso: es
+   * que la factura **ya tiene otra nota de crédito** y entre las dos se pasan.
+   * Por eso la traducción manda a mirar las notas de crédito de la factura y
+   * no el monto que se acaba de escribir.
+   *
+   * ✅ Y una NC **anulada** ante la DGI NO cuenta: está medido que libera el
+   * monto (`tope-de-la-dgi-congelado.test.ts`). Así que si la que sobra ya se
+   * anuló, el problema es otro y hay que mirar el detalle.
+   */
+  "1717": {
+    queePaso:
+      "Entre esta nota de crédito y las que ya tiene la factura, se está acreditando más de lo " +
+      "que la factura vale.",
+    queHacer:
+      "Revise las notas de crédito que ya tiene la factura y acredite sólo lo que falta. Si " +
+      "alguna se anuló, la DGI ya no la cuenta: en ese caso avise, porque el problema es otro.",
+    donde: "la factura",
   },
 };
 

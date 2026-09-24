@@ -191,3 +191,33 @@ test("singular y plural, que es lo que separa un sistema cuidado de uno que no",
   assert.match(pagina, /conErrorDgi === 1 \? "" : "s"/);
   assert.match(pagina, /conErrorDgi === 1 \? "la aceptó" : "las aceptó"/);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// [1717] — el tope que lleva la DGI (Bloque 9C, 24/09/2026)
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("[1717] se traduce, y manda a mirar las OTRAS notas de crédito", () => {
+  const t = traducirCodigoDgi("1717");
+  assert.ok(t, "1717 tiene que estar en el catálogo: es un rechazo real del sandbox");
+  if (!t) return;
+  // 🔴 El mensaje del PAC dice "inconsistentes con el monto", que suena a un
+  //    error de tipeo en ESTA nota de crédito. Casi nunca es eso: es que la
+  //    factura ya tiene otra. La traducción existe justamente para no mandar a
+  //    revisar el campo equivocado.
+  assert.match(t.queHacer, /notas de crédito que ya tiene la factura/);
+  assert.equal(t.donde, "la factura");
+  assert.ok(
+    !/monto de esta/i.test(t.queHacer),
+    "no debe mandar a revisar el monto que se acaba de escribir"
+  );
+});
+
+test("[1717] avisa que una NC anulada ya no cuenta para la DGI", () => {
+  // Está medido que la DGI libera el monto al anular (tope-de-la-dgi-congelado).
+  // Si alguien ve este rechazo con la NC vieja ya anulada, el problema es otro
+  // y conviene que la pantalla lo diga en vez de mandarlo a un callejón.
+  const t = traducirCodigoDgi("1717");
+  assert.ok(t);
+  if (!t) return;
+  assert.match(t.queHacer, /se anuló/);
+});

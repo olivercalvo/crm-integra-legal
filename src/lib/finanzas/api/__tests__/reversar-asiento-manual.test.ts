@@ -78,9 +78,19 @@ test("la ruta: admin y contador, el tenant del contexto y el cliente de servicio
   assert.match(src, /MOTIVO_MIN|MOTIVO_MAX/);
 });
 
-test("el diálogo tiene su cuarta variante y sigue siendo el mismo componente", () => {
+test("el diálogo suma variantes SIN dejar de ser un solo componente", () => {
+  // Lo que se protege no es el número de variantes —el Bloque 9C sumó la
+  // quinta, `nota_credito`— sino que cada reversión nueva entre como una
+  // variante más y no como un diálogo propio que reimplemente el espejo.
   const dlg = leer("src/app/finanzas/facturas/_components/reverse-payment-dialog.tsx");
-  assert.match(dlg, /variante\?: "cobro" \| "pago" \| "gasto" \| "asiento";/);
+  const decl = dlg.match(/variante\?: ([^;]+);/);
+  assert.ok(decl, "no se encontró la declaración de `variante`");
+  const variantes = decl[1].split("|").map((v) => v.trim().replace(/"/g, ""));
+  for (const esperada of ["cobro", "pago", "gasto", "asiento", "nota_credito"]) {
+    assert.ok(variantes.includes(esperada), `falta la variante "${esperada}"`);
+  }
+  // Cada variante declara SU endpoint en el mismo mapa.
   assert.match(dlg, /endpoint: \(id: string\) => `\/api\/finanzas\/asientos\/\$\{id\}\/reverse`/);
+  assert.match(dlg, /endpoint: \(id: string\) => `\/api\/finanzas\/credit-notes\/\$\{id\}\/reverse`/);
   assert.match(dlg, /construirAsientoDeReversion/, "la vista previa sigue saliendo de la función pura");
 });

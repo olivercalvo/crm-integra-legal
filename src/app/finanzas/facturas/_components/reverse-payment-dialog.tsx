@@ -27,11 +27,13 @@ interface Props {
    * `"pago"`: pago a PROVEEDOR (Bloque 3) → `/api/finanzas/supplier-payments/[id]/reverse`.
    * `"gasto"`: GASTO DE TRÁMITE contabilizado (Bloque 4) → `/api/expenses/[id]/reverse`.
    * `"asiento"`: ASIENTO MANUAL (Bloque 7) → `/api/finanzas/asientos/[id]/reverse`.
+   * `"nota_credito"`: NOTA DE CRÉDITO (Bloque 9C) → `/api/finanzas/credit-notes/[id]/reverse`.
    * Cambia la ruta y las palabras (cobro/factura ↔ pago/compra ↔ gasto/caso ↔
-   * asiento/libro). La vista previa es la MISMA función para los cuatro:
-   * `reversion-una-sola-implementacion` lo vigila leyendo este archivo.
+   * asiento/libro ↔ nota de crédito/factura). La vista previa es la MISMA
+   * función para las cinco: `reversion-una-sola-implementacion` lo vigila
+   * leyendo este archivo.
    */
-  variante?: "cobro" | "pago" | "gasto" | "asiento";
+  variante?: "cobro" | "pago" | "gasto" | "asiento" | "nota_credito";
 }
 
 const TEXTOS = {
@@ -80,6 +82,26 @@ const TEXTOS = {
     placeholder: "Ej: Cuenta equivocada, importe mal tipeado, asiento duplicado…",
     error: "No se pudo reversar el asiento.",
     enCurso: "Posteando el espejo en el libro…",
+  },
+  /**
+   * Bloque 9C. La consecuencia que se nombra es la que la persona va a ir a
+   * mirar: **la factura recupera su saldo**. El saldo no se escribe —lo
+   * recalcula el trigger de la 051 cuando la NC queda anulada— pero eso es un
+   * detalle de implementación y no lo que hay que decir en un modal.
+   *
+   * ⚠️ Esto NO anula la nota de crédito ante la DGI. Si ya fue autorizada, hay
+   * que anularla ahí también, y el detalle lo ofrece aparte.
+   */
+  nota_credito: {
+    endpoint: (id: string) => `/api/finanzas/credit-notes/${id}/reverse`,
+    cosa: "nota de crédito",
+    aplicadoA: "de la factura",
+    consecuencia: "la nota de crédito queda anulada y la factura recupera su saldo",
+    siOcurrio: "si había que acreditar, hay que emitir otra nota de crédito",
+    titulo: "Reversar nota de crédito",
+    placeholder: "Ej: Nota de crédito emitida a la factura equivocada, monto mal tipeado…",
+    error: "No se pudo reversar la nota de crédito.",
+    enCurso: "Posteando el espejo y devolviendo el saldo a la factura…",
   },
 } as const;
 

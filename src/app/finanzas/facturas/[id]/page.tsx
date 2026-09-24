@@ -31,6 +31,7 @@ import { EmitInvoiceDialog } from "../_components/emit-invoice-dialog";
 import { DeleteInvoiceButton } from "../_components/delete-invoice-button";
 import { CancelInvoiceDialog } from "../_components/cancel-invoice-dialog";
 import { decidirAccionFiscal } from "@/lib/finanzas/efactura/orchestration/decidir-accion-fiscal";
+import { CufeDelPortalCard } from "../_components/cufe-del-portal-card";
 import { ultimoIntentoDeAnulacion } from "@/lib/finanzas/queries/anulaciones";
 import { ultimoEnvioFallido } from "@/lib/finanzas/queries/fe-emisiones";
 import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
@@ -349,6 +350,20 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             </span>
           )}
         </div>
+      )}
+
+      {/* 🔴 SIN CUFE NO HAY NOTA DE CRÉDITO ELECTRÓNICA (Bloque 9C).
+          La matriz devuelve `nc_04_requiere_cufe` cuando la factura no se puede
+          anular y tampoco se puede acreditar ante la DGI porque le falta el
+          CUFE. Son dos casos que en la base se ven IGUAL —la del portal, que sí
+          lo tiene, y la que nunca pasó por la DGI— y el sistema no puede
+          distinguirlos solo: la tarjeta dice las dos cosas. */}
+      {accionFiscal.accion === "nc_04_requiere_cufe" && (
+        <CufeDelPortalCard
+          invoiceId={invoice.id}
+          invoiceNumber={invoice.invoice_number}
+          puedeCargar={canMutate}
+        />
       )}
 
       {/* Por qué NO se puede anular: los motivos los junta la matriz (SOP-038) y

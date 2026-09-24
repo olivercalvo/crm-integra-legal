@@ -110,8 +110,37 @@ test("el detalle de la NC: admin, abogada y contador; el contador abre el detall
   assert.equal(puedeAccederA("asistente", `/finanzas/notas-credito/${id}`), false, "el asistente no");
   assert.equal(puedeAccederA("contador", "/finanzas/notas-credito"), false, "el listado no existe y si existiera: no");
   assert.equal(puedeAccederA("contador", `/finanzas/notas-credito/${id}/editar`), false, "solo lectura");
-  // Sin botones de mutación: la NC es inmutable.
-  assert.doesNotMatch(src, /fetch\(|method: "POST"|Dialog/, "el detalle no muta nada");
+  // 🔴 HASTA EL BLOQUE 9C ESTE TEST EXIGÍA QUE EL DETALLE NO MUTARA NADA.
+  //    Era cierto: la NC era inmutable y su reversión no existía. Ahora existe
+  //    —y el envío a la DGI también—, así que lo que se protege cambió: ya no
+  //    es "no hay botones" sino **quién** los ve. Dejarlo como estaba habría
+  //    obligado a borrar el test, que es la peor salida.
+  assert.match(
+    src,
+    /\["admin", "abogada", "contador"\]\.includes\(userRole\)/,
+    "reversar: admin, abogada y contador, la misma lista que reversar un cobro"
+  );
+  assert.match(
+    src,
+    /const puedeEnviarALaDgi =[\s\S]{0,40}puedeAccionar/,
+    "emitir a la DGI cuelga de `puedeAccionar` (admin y abogada), no de la lista de reversar"
+  );
+  assert.match(
+    src,
+    /const puedeAccionar = userRole === "admin" \|\| userRole === "abogada";/,
+    "y `puedeAccionar` sigue sin incluir al contador"
+  );
+  // La decisión de qué se puede hacer sale de la MATRIZ, no de un `if` acá.
+  assert.match(
+    src,
+    /decidirAccionSobreNotaDeCredito\(/,
+    "el plazo de 182 h lo decide la función pura, no el JSX"
+  );
+  assert.doesNotMatch(
+    src,
+    /182|HORAS_PARA_ANULAR/,
+    "la pantalla NO vuelve a derivar el plazo: lo recibe en el mensaje de la matriz"
+  );
   assert.match(src, /cargarAsientosPorOrigen\(db, tenantId, SOURCE_TYPE_NOTA_CREDITO, \[nc\.id\]\)/, "su asiento propio");
   assert.match(src, /cargarAsientosPorOrigen\(db, tenantId, "reversion", \[nc\.invoice\.id\]\)/, "o la reversión de la anulación (D5)");
   assert.match(src, /DOCUMENTO INTERNO|Documento interno — sin autorización de la DGI/i);

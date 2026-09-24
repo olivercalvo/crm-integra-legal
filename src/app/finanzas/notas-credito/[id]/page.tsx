@@ -20,6 +20,12 @@ import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { SOURCE_TYPE_NOTA_CREDITO } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
 import { NcFeEstadoBadge } from "@/components/finanzas/nc-fe-estado-badge";
 import { CreditNotePdfButton } from "@/components/finanzas/credit-note-pdf-button";
+import { EnviarNcALaDgiButton } from "./_components/enviar-nc-a-la-dgi-button";
+import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import {
+  decidirAccionSobreNotaDeCredito,
+  type FeEstado,
+} from "@/lib/finanzas/efactura/orchestration/decidir-accion-fiscal";
 import { INVOICE_KIND_LABEL, type InvoiceKind } from "@/lib/finanzas/types/invoice";
 
 /**
@@ -32,9 +38,16 @@ import { INVOICE_KIND_LABEL, type InvoiceKind } from "@/lib/finanzas/types/invoi
  *
  * La ven admin, abogada y contador. El contador entra por patrón exacto en
  * `route-access.ts` (`/finanzas/notas-credito/{id}`), igual que al detalle de
- * la factura: **el detalle sí, el listado no**. No hay nada que mutar acá: la
- * NC es inmutable (T6 y el trigger de líneas), y su reversión todavía no
- * existe.
+ * la factura: **el detalle sí, el listado no**.
+ *
+ * 🔴 Desde el Bloque 9C la pantalla SÍ tiene dos acciones, y no son la misma:
+ *   · **Enviar a la DGI** (admin y abogada) — hasta que corre, la NC es un
+ *     documento interno.
+ *   · **Reversar** (admin, abogada y CONTADOR, la misma lista que reversar un
+ *     cobro: corregir el libro es su trabajo).
+ * Lo que se puede hacer lo decide `decidirAccionSobreNotaDeCredito()`, la misma
+ * función pura que usa el servidor, para que el botón y el 409 nunca digan
+ * cosas distintas.
  *
  * 🔴 D1: mientras `fe_estado = 'no_emitida'` la pantalla lleva la banda de
  * DOCUMENTO INTERNO, igual que el PDF. La NC consta en los libros del bufete
@@ -125,6 +138,40 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
   const recienEmitida = searchParams?.emitida === "1";
 
+  // ── Qué se puede hacer con esta nota de crédito ──────────────────────────
+  //
+  // 🔴 La decisión NO se deriva acá en el JSX: la toma la misma función pura
+  //    que usa el servidor (`decidirAccionSobreNotaDeCredito`), con el reloj
+  //    pasado por parámetro. Es la regla de 9A — la matriz es una función, no
+  //    una tabla en un .md ni un `if` en una pantalla — y existe para que el
+  //    botón y el 409 nunca digan cosas distintas.
+  const accion = decidirAccionSobreNotaDeCredito(
+    {
+      status: nc.status,
+      feEstado: nc.fe_estado as FeEstado,
+      dgiCufe: nc.dgi_cufe,
+      issueDate: nc.issue_date,
+      dgiFechaAutorizacion: nc.dgi_fecha_autorizacion,
+      tieneAsientoPropio: asiento !== null,
+    },
+    new Date()
+  );
+
+  // Emitir a la DGI: admin y abogada, y sólo mientras no haya salido bien.
+  const puedeEnviarALaDgi =
+    puedeAccionar &&
+    !esAnulacion &&
+    (nc.fe_estado === "no_emitida" || nc.fe_estado === "error");
+
+  // Reversar: admin, abogada y CONTADOR —la misma lista que reversar un cobro,
+  // porque corregir el libro es su trabajo— y sólo si hay algo que reversar.
+  const puedeReversar =
+    ["admin", "abogada", "contador"].includes(userRole) &&
+    accion.accion !== "sin_asiento_propio" &&
+    accion.accion !== "nada_que_hacer" &&
+    accion.accion !== "esperar_confirmacion" &&
+    asiento !== null;
+
   return (
     <div className="space-y-5">
       {recienEmitida && (
@@ -171,8 +218,61 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
         <div className="flex flex-wrap items-center gap-2">
           <CreditNotePdfButton creditNoteId={nc.id} />
+          {puedeEnviarALaDgi && nc.invoice && (
+            <EnviarNcALaDgiButton
+              creditNoteId={nc.id}
+              creditNoteNumber={nc.credit_note_number}
+              invoiceNumber={nc.invoice.invoice_number}
+              esReintento={nc.fe_estado === "error"}
+            />
+          )}
+          {puedeReversar && asiento && (
+            <ReversePaymentDialog
+              variante="nota_credito"
+              paymentId={nc.id}
+              paymentLabel={`${nc.credit_note_number} · ${fmtImporte(Number(nc.grand_total))}`}
+              asiento={asiento}
+              invoiceNumber={nc.invoice?.invoice_number ?? ""}
+            />
+          )}
         </div>
       </div>
+
+      {/*
+        Qué se puede hacer con esta nota de crédito, en una sola línea y en
+        castellano. El texto sale de la MATRIZ, no se escribe acá: si el
+        servidor rechaza, va a decir exactamente lo mismo.
+
+        Se muestra sólo cuando hay algo que explicar — el camino feliz no
+        necesita un cartel, tiene un botón.
+      */}
+      {(accion.accion === "sin_camino_fuera_de_plazo" ||
+        accion.accion === "sin_asiento_propio" ||
+        accion.accion === "esperar_confirmacion" ||
+        accion.accion === "inconsistente") && (
+        <div
+          role="note"
+          className={`flex items-start gap-3 rounded-md border-l-4 p-4 text-sm ${
+            accion.accion === "esperar_confirmacion"
+              ? "border-amber-500 bg-amber-50 text-amber-900"
+              : "border-gray-400 bg-gray-50 text-gray-800"
+          }`}
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p>{accion.mensaje}</p>
+            {accion.accion === "sin_camino_fuera_de_plazo" && (
+              /* Sólo el DATO, nunca el plazo: el mensaje de arriba ya lo dice, y
+                 repetirlo acá sería derivar la matriz en el JSX. Hay un test
+                 que falla si aparece el número en este archivo. */
+              <p className="mt-1 text-xs opacity-80">
+                Autorizada por la DGI el {formatDate(nc.dgi_fecha_autorizacion ?? nc.issue_date)} ·
+                pasaron {Math.floor(accion.ventana.horasTranscurridas)} horas desde que se emitió.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* D1: documento interno */}
       {noEmitida && (

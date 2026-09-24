@@ -488,8 +488,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   evaluar** porque muere antes. Pregunta a ideati **en espera** hasta que el bufete confirme si
   existe alguna factura en papel que acreditar.
 - ⚠️ **La DGI LLEVA SU PROPIA CUENTA de lo acreditado por documento referenciado** y rechaza con
-  `[1717]` cuando se pasa. Su tope puede diferir del nuestro: `credited_total` cuenta las NC de
-  NUESTRA base, la DGI cuenta las que ELLA autorizó.
+  `[1717]` cuando se pasa. ✅ **Pero LIBERA el monto al anular una NC** (medido el 24/09: factura
+  10.00 → NC 10.00 autorizada → anulada ante la DGI → otra NC 10.00 → **autorizada**). O sea que
+  su tope y nuestro `credited_total` coinciden, y el validador **NO** tiene que contar las NC
+  anuladas. 🔒 `tope-de-la-dgi-congelado.test.ts` falla si esa medición cambia, para que tocar el
+  tope sea una decisión y no un descubrimiento.
 - 🔒 **`parsePacResponse` se EXPORTA, no se copia.** Es la lección del `0600`: un clasificador
   duplicado diverge y termina llamando rechazo a un éxito. Lo mismo con `fe_emisiones`, que
   guarda facturas y NC en la MISMA tabla por arco exclusivo (`062`, como la `049`) para que la
@@ -509,6 +512,13 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   emisión DE LA NC**, no de su factura (`decidirAccionSobreNotaDeCredito()`). 🔴 **Fuera de
   plazo NO hay "NC de la NC"**: la pantalla manda a hablar con el contador en vez de ofrecer un
   botón que la DGI rechaza.
+- 🔴 **Una factura se bloquea para anular por sus NC VIGENTES, no por su historia** (migración
+  `063`). La `053` miraba la EXISTENCIA del asiento de la NC y los asientos no se borran: una NC
+  reversada la dejaba sin salida para siempre. Ahora el RPC exige que el asiento **no esté
+  reversado**. ⚠️ Se sigue mirando el ASIENTO y no `credit_notes.status`, porque cuando el RPC
+  corre ya existe la NC total de esa misma anulación, `emitida` y sin asiento: un filtro por
+  status la haría bloquearse a sí misma. El lado de la app no cambió —`credited_total` ya excluye
+  las anuladas— y por eso lleva test.
 - **`credit_notes.status` admite `emitida` y `anulada`, y la única transición es entre esas dos,
   en ese orden.** Las cantidades acreditadas se liberan solas: `acreditadoPorLineaDeFactura` ya
   filtraba por `status = 'emitida'` desde la `051`.

@@ -1,5 +1,96 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [9C — el tope de la DGI, la 063 y las cuatro pantallas] - 2026-09-24
+
+**Staging (`develop`):** `30c0980` (tope `[1717]`) → `4cebc9e` (`063`) → `98b1997` (pantallas).
+Migración `063`, **SOLO staging**. `main` sigue en `24b227a`.
+
+> ⚠️ **Las cuatro pantallas NO se verificaron con clics.** La sesión del navegador rebotó a
+> `/login` durante toda la sesión y sólo hay un navegador conectado. Lo que sí se verificó:
+> `npm run build` termina en 0 con las tres rutas nuevas compiladas, y hay 15 tests que leen
+> las pantallas y fijan quién ve cada botón y de dónde sale cada texto. **No reemplaza abrir
+> la pantalla.**
+
+### ✅ La DGI libera el monto al anular una nota de crédito
+
+El `[1717]` del 24/09 dejó una pregunta con consecuencias: la DGI lleva su propia cuenta de lo
+acreditado por factura, **¿esa cuenta se descuenta al anular una NC?** Si no se descontara,
+nuestro tope estaría mal para ella y dejaríamos emitir una NC que va a rechazar, sobre un
+documento real y delante del cliente.
+
+Se midió, con la secuencia completa en el sandbox:
+
+| Paso | Resultado |
+|---|---|
+| factura nueva de B/. 10.00 | ✅ autorizada |
+| NC de B/. 10.00 | ✅ autorizada (CUFE `FE04…`) |
+| anular ESA NC ante la DGI | ✅ `0600 Evento registrado con éxito` |
+| reversarla en el libro | `credited_total` vuelve a 0 |
+| **otra NC de B/. 10.00, misma factura** | ✅ **AUTORIZADA** |
+
+**La DGI libera.** Su tope y nuestro `credited_total` coinciden, y el validador **no** tiene que
+contar las NC anuladas: la fórmula de la `051` ya las deja fuera. **No había nada que
+implementar** — y saberlo cuesta lo mismo que suponerlo mal. Las dos respuestas quedaron como
+fixtures con un test que falla si la medición cambia.
+
+De paso, la corrida verificó la cadena entera de punta a punta y confirmó que una NC se anula
+por el **mismo endpoint** que una factura y con el mismo `0600`.
+
+### 🔴 Una factura se bloquea por sus NC vigentes, no por su historia
+
+Arregla la consecuencia que la `060` dejó anotada sin resolver: **una factura cuya nota de
+crédito se reversó seguía sin poder anularse, para siempre.**
+
+La `053` bloqueaba por la EXISTENCIA del asiento de una NC, y los asientos son inmutables. Una
+NC reversada —cuyo débito ya fue cancelado por su propio espejo— seguía bloqueando como si nada.
+Ahora bloquea sólo una NC **vigente**: con asiento propio y sin reversar.
+
+⚠️ Se sigue mirando el ASIENTO y no `credit_notes.status`, y es a propósito: cuando el RPC corre
+ya existe la NC total de esa misma anulación, `emitida` y sin asiento, así que un filtro por
+status la haría bloquearse a sí misma y **ninguna** factura se podría anular. La verificación de
+la migración falla si aparece `cn.status` en la función.
+
+El lado de TypeScript **no cambió una línea** —la app y la matriz miran `credited_total`, que ya
+excluye las anuladas— y por eso lleva test: para que nadie "arregle" el gate creyendo que le
+falta algo.
+
+Verificación en ROLLBACK con los tres casos: NC vigente → bloqueada; única NC reversada → anuló;
+una vigente y otra reversada → bloqueada, por la vigente. La primera versión buscaba facturas
+candidatas en staging y encontró **cero**, así que ahora el escenario se construye adentro.
+
+### Las cuatro pantallas
+
+- **Enviar la NC a la DGI** (admin, abogada). Avisa antes de que sea irreversible. Un rechazo del
+  PAC **no** se muestra como error del sistema: el envío ocurrió y quedó en `fe_emisiones`.
+- **Cargar el CUFE del portal** (admin, abogada). Valida con el mismo módulo que el servidor y
+  muestra los avisos que no bloquean. Dice que pegar el CUFE no lo verifica ante la DGI, porque
+  ideati no tiene endpoint para consultar un documento ajeno.
+- **Reversar la NC** (admin, abogada, contador), con el mismo diálogo de los cobros en su quinta
+  variante. El plazo lo decide la matriz y la pantalla no repite el número.
+- **El mensaje de «sin CUFE»**, palabra por palabra como lo pidió el bufete. La misma tarjeta
+  sirve para los dos casos porque en la base se ven igual —la del portal, que sí tiene CUFE, y la
+  que nunca pasó por la DGI—: el sistema no puede distinguirlos, así que dice las dos cosas.
+
+`[1717]` entró al catálogo de mensajes traducidos. Su texto del PAC dice "inconsistentes con el
+monto", que suena a un error de tipeo en esta NC; casi nunca es eso, es que la factura ya tiene
+otra. La traducción manda a mirar las NC de la factura y no el campo recién escrito.
+
+### Dos guardarraíles viejos, actualizados en vez de borrados
+
+- El que fijaba las variantes del diálogo de reversión ahora protege **lo que importa** —que cada
+  reversión entre como una variante más y no como un diálogo propio que reimplemente el espejo—
+  en vez del número de variantes.
+- El que exigía que el detalle de la NC "no mutara nada" era cierto hasta hoy. Ahora protege
+  **quién** ve cada botón y que el plazo no se derive en el JSX. Ese último atrapó un error real:
+  la pantalla tenía el "182" escrito a mano.
+
+### Limpieza
+
+`FAC-HON-000016` había quedado acreditada al 100 % por una NC que dejó la primera corrida de la
+prueba de emisión. Se deshizo con la válvula `finanzas.nc_compensar` (sin asiento): vuelve a
+`saldo 10.70` y `fe_estado = error`, lista para la prueba del rechazo traducido.
+`.env.preview-sandbox.local` se borró.
+
 ## [Bloque 9C — la nota de crédito ante la DGI, y su reversión] - 2026-09-24
 
 **Staging (`develop`):** `602b2ab` (evidencia S5/S8) → `96be17d` (`060`) → `191027f`

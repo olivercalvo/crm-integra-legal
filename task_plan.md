@@ -3773,3 +3773,40 @@ Contablemente ya no haría daño —la reversión deshizo el débito parcial— 
 asiento, no el saldo. La salida sigue siendo emitir otra NC. **Es una decisión de Oliver, no
 un arreglo**: relajar la `053` para que mire el saldo neto es tocar una regla que se diseñó
 con cuidado para impedir un descuadre de 1.200 sobre 1.000.
+
+
+---
+
+## >>> 9C — ESTADO AL CIERRE DEL 24/09/2026 <<<
+
+**Servidor: completo y verificado. Pantallas: construidas, SIN clics.**
+
+| Pieza | Estado |
+|---|---|
+| `060` reversión de la NC · `061` CUFE del portal · `062` `fe_emisiones` · `063` NC vigentes | ✅ aplicadas en staging, cada una con su verificación |
+| Emitir la NC a la DGI | ✅ **autorizada en el sandbox** (`NC-000012`, `NC-000014`) |
+| Tope `[1717]` | ✅ **la DGI libera el monto al anular**: nada que implementar |
+| 182 h para anular una NC | ✅ matriz + 12 tests |
+| Las 4 pantallas | ⚠️ **construidas y compiladas, sin verificar con clics** |
+
+### ⚠️ Lo que falta, y es lo mismo que faltaba ayer
+
+La sesión del navegador rebotó a `/login` durante toda la sesión (comprobado cinco veces; hay
+un solo navegador conectado). Queda pendiente **la Tarea 1 entera** y la verificación con clics
+de las cuatro pantallas:
+
+- `i_amb = 2` en los logs de la función antes de emitir.
+- Emitir una factura nueva desde la interfaz y anularla desde la interfaz.
+- Reenviar `FAC-HON-000016` y ver el rechazo traducido con la alerta persistente.
+  (Está lista: acreditado 0, saldo 10.70, `fe_estado = error`.)
+- Emitir la NC a la DGI, total y parcial · cargar el CUFE del portal · anular una NC · el
+  mensaje de "sin CUFE".
+
+Lo que sí se verificó de las pantallas: `npm run build` termina en 0 con las tres rutas nuevas
+compiladas, y 15 tests leen los archivos y fijan quién ve cada botón, de dónde sale cada texto
+y qué no se vuelve a derivar en el JSX. **No reemplaza abrir la pantalla.**
+
+### Pregunta a ideati: sigue EN ESPERA
+
+La del caso C (referenciar una factura en papel rompe el PAC). Espera a que el bufete confirme
+si existe alguna factura en papel que acreditar.

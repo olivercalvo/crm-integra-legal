@@ -137,3 +137,88 @@ test("⚠️ la DGI NO valida `nombreRazonSocialEmisor` contra el RUC", () => {
   // Cuando el mapper lo construya, tiene que poner la razón social del EMISOR
   // (`EFACTURA_EMISOR_RAZON_SOCIAL`), no la del cliente.
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Y AHORA, LA FUNCIÓN CONTRA EL GOLDEN (Bloque 9C)
+// ═══════════════════════════════════════════════════════════════════════════
+// El golden se congeló en `3f190a9`, ANTES de que existiera
+// `construirReferenciaFiscal`. Esto es la otra mitad: la comparación. Van en
+// commits distintos a propósito (SOP-039) — si el mismo commit hubiera traído
+// la referencia y el código que la produce, el test habría pasado
+// comparándose consigo mismo.
+
+import { construirReferenciaFiscal } from "../mapper/map-referencia-fiscal";
+
+/**
+ * El emisor de la prueba. Los tres primeros campos son los que realmente
+ * viajaron al sandbox; `nombreORazonSocial` es el CORRECTO, que es justamente
+ * el que la prueba NO mandó (ver el test de abajo).
+ */
+const EMISOR = {
+  tipoContribuyente: 2 as const,
+  ruc: "25046169-3-2021",
+  digitoVerificador: "40",
+  nombreORazonSocial: "INTEGRA LEGAL, S.A.",
+};
+
+const CUFE = "FE0920000025046169-3-2021-4000002026092400000000240010129902781442";
+
+test("🔒 `construirReferenciaFiscal` produce EXACTAMENTE el bloque que autorizó", () => {
+  const [bloque] = construirReferenciaFiscal(
+    { cufe: CUFE, fechaEmision: "2026-09-24" },
+    EMISOR
+  );
+
+  // Todo menos la razón social, que el golden guarda equivocada a propósito.
+  const { nombreRazonSocialEmisor: _esperadoMal, ...restoEsperado } = bloqueOk;
+  const { nombreRazonSocialEmisor: _nuestro, ...restoNuestro } = bloque;
+  assert.deepEqual(
+    restoNuestro,
+    restoEsperado,
+    "el bloque dejó de ser idéntico al que la DGI autorizó el 24/09/2026"
+  );
+});
+
+test("🔴 y corrige lo único que la prueba mandó mal: la razón social es la del EMISOR", () => {
+  const [bloque] = construirReferenciaFiscal(
+    { cufe: CUFE, fechaEmision: "2026-09-24" },
+    EMISOR
+  );
+  assert.equal(bloque.nombreRazonSocialEmisor, EMISOR.nombreORazonSocial);
+  assert.notEqual(
+    bloque.nombreRazonSocialEmisor,
+    bloqueOk.nombreRazonSocialEmisor,
+    "el golden tiene el nombre del CLIENTE ahí, y la función NO debe reproducirlo: " +
+      "la DGI no valida ese campo, así que el único control es este"
+  );
+});
+
+test("🔴 el anidado sobrevive al round-trip por JSON", () => {
+  // Un `informacionReferencia` de más o de menos no se ve leyendo el objeto:
+  // se ve en el cuerpo que sale por la red.
+  const json = JSON.parse(
+    JSON.stringify(construirReferenciaFiscal({ cufe: CUFE, fechaEmision: "2026-09-24" }, EMISOR))
+  ) as Bloque[];
+  assert.equal(
+    (json[0].informacionReferencia as { informacionReferencia?: unknown }).informacionReferencia !==
+      undefined,
+    true,
+    "el wrapper se aplanó en la serialización"
+  );
+});
+
+test("sin CUFE no arma nada: lanza y dice qué hacer", () => {
+  assert.throws(
+    () => construirReferenciaFiscal({ cufe: "   ", fechaEmision: "2026-09-24" }, EMISOR),
+    /cargar su CUFE/,
+    "tiene que explicar el caso B, no fallar con un genérico"
+  );
+});
+
+test("la fecha del documento referenciado sale con el huso de Panamá", () => {
+  const [bloque] = construirReferenciaFiscal(
+    { cufe: CUFE, fechaEmision: "2026-07-01" },
+    EMISOR
+  );
+  assert.equal(bloque.fechaEmisionDocumentoReferenciado, "2026-07-01T00:00:00-05:00");
+});

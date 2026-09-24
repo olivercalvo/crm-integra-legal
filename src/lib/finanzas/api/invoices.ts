@@ -28,6 +28,7 @@ import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
+import { validarCufe } from "@/lib/finanzas/validators/cufe";
 import {
   validarConsistenciaDeKind,
   motivoDeInconsistenciaDeKind,
@@ -1092,4 +1093,115 @@ function cryptoRandom(): string {
   return Array.from(arr)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EL CUFE DEL PORTAL (Bloque 9C, caso B — migración `061`)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface RegistrarCufeResult {
+  invoice_id: string;
+  invoice_number: string;
+  dgi_cufe: string;
+  dgi_cufe_origen: string;
+  avisos: string[];
+}
+
+/**
+ * Guarda el CUFE de una factura que se emitió A MANO en el portal de ideati.
+ *
+ * Las facturas anteriores al 8 de julio de 2026 salieron por el punto `050` y
+ * **tienen CUFE ante la DGI**: el CRM simplemente no lo guardó. Sin ese dato no
+ * se les puede emitir una nota de crédito electrónica, porque el bloque
+ * `documentosFiscalesReferenciados` se arma con el CUFE del documento que se
+ * corrige (y referenciar por número de factura en papel hace explotar al PAC —
+ * ver `map-referencia-fiscal.ts`).
+ *
+ * 🔴 NO CAMBIA `fe_estado`. La factura sigue `no_emitida` porque **este sistema
+ * no la emitió**, y decir lo contrario sería ensuciar el registro de envíos con
+ * un envío que nunca ocurrió. Lo que la marca es `dgi_cufe_origen =
+ * 'portal_050'`, que es una afirmación verdadera y distinta.
+ *
+ * 🔴 NO PISA UN CUFE QUE YA ESTÉ. Si la factura ya tiene uno, se rechaza con
+ * 409: o lo devolvió el PAC —y entonces esto sería corromper el vínculo con el
+ * documento real— o ya lo cargó alguien. Corregir un CUFE mal tecleado es una
+ * operación distinta y todavía no existe; hasta que exista, la pregunta la
+ * contesta una persona mirando el portal.
+ *
+ * ⚠️ Nadie puede verificar acá que el CUFE exista ante la DGI: ideati no tiene
+ * endpoint para consultar un documento ajeno (swagger completo, 23/09/2026). Si
+ * está mal, se va a ver como un rechazo al emitir la nota de crédito.
+ */
+export async function registrarCufeDelPortal(
+  db: DB,
+  tenantId: string,
+  invoiceId: string,
+  cufeCrudo: string
+): Promise<RegistrarCufeResult> {
+  const revisado = validarCufe(cufeCrudo);
+  if (!revisado.ok) {
+    throw new MutationError(revisado.mensaje ?? "El CUFE no tiene la forma esperada.", 400);
+  }
+
+  const { data: inv, error: errFetch } = await db
+    .from("invoices")
+    .select("id, invoice_number, status, fe_estado, dgi_cufe")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+
+  if (errFetch) {
+    throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  }
+  if (!inv) {
+    throw new MutationError("Factura no encontrada", 404);
+  }
+
+  const f = inv as {
+    id: string;
+    invoice_number: string;
+    status: string;
+    fe_estado: string | null;
+    dgi_cufe: string | null;
+  };
+
+  if (f.status === "borrador" || f.status === "cancelada_pre_emision") {
+    throw new MutationError(
+      "Esta factura todavía es un borrador, así que no pudo emitirse en el portal. " +
+        "El CUFE se carga sobre una factura ya emitida.",
+      409
+    );
+  }
+  if (f.dgi_cufe && f.dgi_cufe.trim().length > 0) {
+    throw new MutationError(
+      `La factura ${f.invoice_number} ya tiene un CUFE guardado. Si el que está cargado es ` +
+        "incorrecto, hay que revisarlo con administración antes de cambiarlo.",
+      409
+    );
+  }
+  if (f.fe_estado === "pending") {
+    throw new MutationError(
+      "Esta factura tiene un envío a la DGI en curso: hay que esperar el resultado antes de " +
+        "cargarle un CUFE a mano.",
+      409
+    );
+  }
+
+  const { error: errUpd } = await db
+    .from("invoices")
+    .update({ dgi_cufe: revisado.valor, dgi_cufe_origen: "portal_050" })
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId);
+
+  if (errUpd) {
+    throw new MutationError(pgErrorToMessage(errUpd), 500, errUpd);
+  }
+
+  return {
+    invoice_id: f.id,
+    invoice_number: f.invoice_number,
+    dgi_cufe: revisado.valor,
+    dgi_cufe_origen: "portal_050",
+    avisos: revisado.avisos,
+  };
 }

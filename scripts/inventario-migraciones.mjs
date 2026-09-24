@@ -260,6 +260,15 @@ const MARCADORES = {
     nota: "Bloque 9C. Arco exclusivo con invoice_id, como supplier_payments en la 049. Una tabla aparte obligaria a que la alerta de rechazo (SOP-041) consultara dos y las mezclara, o --mas probable-- a que quedara a medias sin que ningun test lo note.",
   },
 
+  "063_anular_con_nc_reversada.sql": {
+    que: "La anulacion bloquea solo por NC VIGENTES (no reversadas)",
+    tipo: "dato", heuristico: true,
+    // Sin cast a regprocedure: si la funcion no existiera, el cast lanzaria y
+    // romperia la consulta UNICA del inventario entero, no solo esta fila.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'cancel_invoice_with_reversal' AND position('reverses_entry_id = je.id' IN pg_get_functiondef(p.oid)) > 0)`,
+    nota: "Bloque 9C. La 053 miraba la EXISTENCIA del asiento de la NC, y los asientos no se borran: una NC reversada bloqueaba la factura para siempre. El marcador es `dato` porque la 063 no crea ningun objeto nuevo -- reemplaza el cuerpo de una funcion que ya existia desde la 052.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

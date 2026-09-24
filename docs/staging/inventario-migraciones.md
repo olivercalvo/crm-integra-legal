@@ -11,7 +11,7 @@
 > `--sql` + `--desde` si la base es producción (sus credenciales no van a una máquina).
 
 **Base relevada:** `staging`  
-**Fecha del relevamiento:** 2026-09-23  
+**Fecha del relevamiento:** 2026-09-24  
 **Nombre de la base:** `postgres`
 
 > **`sql/pending/` NO es una cola de pendientes.** Es un cajón donde conviven
@@ -125,6 +125,10 @@
 | `057_proveedor_cuenta_por_defecto_y_contacto.sql` | **sí** | suppliers gana la cuenta contable por defecto (solo COMPRAS) + los tres campos de la persona de contacto · <sub>marcador: suppliers.default_chart_account_code</sub> Bloque 8. Va después de la 033 (crea `suppliers`); no depende de nada más. La 056 queda reservada para la corrección de la fecha de los saldos iniciales, pendiente de RM. |
 | `058_motivo_de_anulacion_minimo_15.sql` | **sí** | El motivo de anulación exige 15..1000 caracteres (lo pide la DGI) · <sub>marcador: constraint invoices_cancellation_reason_largo</sub> Bloque 9B, D5. Va después de la 20260507000001 (crea `invoices.cancellation_reason`). Si producción tiene alguna factura anulada con un motivo más corto, la migración ABORTA y las lista: no las corrige, porque el motivo sale impreso en el PDF de la factura anulada. |
 | `059_registro_de_anulaciones_ante_la_dgi.sql` | **sí** | Tabla fe_anulaciones — qué le pedimos al PAC al anular y qué contestó · <sub>marcador: tabla fe_anulaciones</sub> Bloque 9B. Espejo de `fe_emisiones`; va después de ella y de la 20260507000001. Existe porque anular es PAC primero y libro después: es lo único que distingue "nunca preguntamos" de "preguntamos y no entendimos la respuesta". |
+| `060_reversion_de_nota_de_credito.sql` | **sí** | RPC reverse_credit_note + credit_notes.cancelled_at · <sub>marcador: credit_notes.cancelled_at</sub> Bloque 9C. Era lo único que quedaba sin construir del Bloque 5. El marcador es la COLUMNA y no la función porque la migración también reemplaza `finanzas_credit_note_immutability`, que ya existía: un marcador de función daría positivo sin que la 060 se haya corrido. La reversión NO escribe credited_total — lo recalcula el trigger de la 051. |
+| `061_cufe_cargado_a_mano.sql` | **sí** | invoices.dgi_cufe_origen — CUFE del PAC vs. CUFE copiado del portal · <sub>marcador: invoices.dgi_cufe_origen</sub> Bloque 9C, caso B. Las facturas anteriores al 8 de julio de 2026 TIENEN CUFE ante la DGI pero el CRM no lo guardo; al cargarlo a mano quedan indistinguibles de una que el sistema emitio. La columna dice cual es cual. NO toca `fe_estado`: este sistema no las emitio. |
+| `062_fe_emisiones_de_nota_de_credito.sql` | **sí** | fe_emisiones.credit_note_id — el historial de envios tambien guarda NC · <sub>marcador: fe_emisiones.credit_note_id</sub> Bloque 9C. Arco exclusivo con invoice_id, como supplier_payments en la 049. Una tabla aparte obligaria a que la alerta de rechazo (SOP-041) consultara dos y las mezclara, o --mas probable-- a que quedara a medias sin que ningun test lo note. |
+| `063_anular_con_nc_reversada.sql` | **sí** | La anulacion bloquea solo por NC VIGENTES (no reversadas) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ Bloque 9C. La 053 miraba la EXISTENCIA del asiento de la NC, y los asientos no se borran: una NC reversada bloqueaba la factura para siempre. El marcador es `dato` porque la 063 no crea ningun objeto nuevo -- reemplaza el cuerpo de una funcion que ya existia desde la 052. |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -153,4 +157,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-23 20:16._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-24 16:51._

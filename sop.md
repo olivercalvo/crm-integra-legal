@@ -3248,3 +3248,167 @@ funcionar, sin mensaje y sin campo en rojo.
 
 **Un error que bloquea y no se ve es peor que no validar.** Hay un test que exige que la clave
 sea `ruc` y NO `tax_id`.
+
+---
+
+## SOP-042: Reversar una nota de crédito — se cambia un estado, no se resta un número
+
+**Desde 2026-09-24 (Bloque 9C, migración `060`, SOLO staging).**
+
+Era lo único que quedaba sin construir del Bloque 5: la nota de crédito se emitía y no había
+forma de deshacerla.
+
+### La regla
+
+🔴 **La reversión no toca `credited_total`, ni `balance_due`, ni el `status` de la factura.**
+
+`invoices.credited_total` es DERIVADA desde la `051`: el trigger `trg_recalc_invoice_credited`
+hace `SUM(grand_total) WHERE status = 'emitida'` sobre las NC de esa factura, y en cascada
+llama a `finanzas_recalc_one_invoice_amount_paid`, que rehace `balance_due` y el `status`
+(T7a). Así que el RPC `reverse_credit_note` hace exactamente dos escrituras:
+
+1. postear el asiento espejo, y
+2. `UPDATE credit_notes SET status = 'anulada'`.
+
+Y nada más. Los tres números se recalculan solos, **con la misma función que los calculó al
+emitir la NC**.
+
+### Por qué no se resta
+
+Restar `grand_total` y listo funciona la primera vez y crea una **segunda fórmula**. El día
+que discrepa de la primera, el síntoma no es un error: es el saldo equivocado de una factura.
+Y con dos NC parciales sobre la misma factura el atajo ya está mal desde el principio —
+restar el total deja el saldo mal sin que nada falle.
+
+Corolario: `finanzas_guard_credited_total` **no necesita una válvula nueva**. El recalculador
+ya abre `finanzas.recalc` por su cuenta.
+
+🔒 **Dos guardianes, porque uno no alcanza:**
+- `reversion-de-nc-no-resta-a-mano.test.ts` lee el código y falla si `reverseCreditNote`
+  escribe los derivados, si reimplementa el espejo o si deja de cortar la NC sin asiento.
+- El bloque de verificación de la propia `060` **aborta** si encuentra una escritura directa
+  de `credited_total` dentro del reversor. Así la regla viaja con el `.sql` a cualquier base,
+  no sólo al repo.
+
+### Una NC sin asiento propio no se reversa
+
+Hay dos clases de nota de crédito, y la diferencia es D5:
+
+| Clase | Asiento propio | Se reversa |
+|---|---|---|
+| NC posterior o parcial | sí (`source_type = 'nota_credito'`) | ✅ |
+| NC de una ANULACIÓN de factura | **no** — la anulación ya reversó el asiento de la factura | ❌ |
+
+Reversar la segunda sería **des-anular una factura por la puerta de atrás**, sin pasar por
+`cancelInvoice` ni por el gate de mes cerrado. Se corta en la app (409) y otra vez en el RPC,
+por si alguien lo llama directo. Es el mismo criterio del filtro `source_type = 'manual'` de
+la `055`.
+
+### Lo que salió gratis
+
+`acreditadoPorLineaDeFactura` ya filtraba `status = 'emitida'` desde la `051`, así que **las
+cantidades acreditadas se liberan solas** al reversar: la línea vuelve a estar disponible para
+otra NC sin tocar una sola consulta.
+
+### Consecuencia conocida, no resuelta
+
+Una factura cuya NC se reversó **sigue sin poder anularse**: la `053` rechaza por la existencia
+de un asiento `nota_credito` en el libro, y los asientos no se borran. Contablemente ya no
+haría daño —la reversión deshizo el débito parcial— pero la regla mira el asiento, no el
+saldo. La salida sigue siendo emitir otra NC. Cambiarlo es una decisión aparte, no un arreglo.
+
+### Anular la NC ante la DGI
+
+Mismas **182 horas** que una factura, por el MISMO endpoint (`CreateCancellation` recibe un
+CUFE sin preguntar de qué documento es). 🔴 **Contadas desde la emisión DE LA NC**, no de su
+factura: son dos documentos y dos plazos, y una NC emitida hoy sobre una factura de hace un
+mes tiene sus 182 horas completas. Y fuera de plazo **no hay "NC de la NC"** —
+`decidirAccionSobreNotaDeCredito()` devuelve `sin_camino_fuera_de_plazo` y manda a hablar con
+el contador, en vez de ofrecer un botón que la DGI va a rechazar.
+
+---
+
+## SOP-043: La nota de crédito ante la DGI — referenciar bien, o no mandar
+
+**Desde 2026-09-24 (Bloque 9C, migraciones `061` y `062`, SOLO staging).**
+
+### El bloque de referencia va DOBLEMENTE anidado
+
+No se decidió leyendo el swagger —que no tiene un solo `required` ni un `enum`— sino mandando
+**la misma NC con las dos formas** al sandbox:
+
+| Forma | Resultado |
+|---|---|
+| anidada (`informacionReferencia.informacionReferencia.cufeReferenciado`) | ✅ `0260 Autorizado` |
+| plana (`informacionReferencia.cufeReferenciado`) | ❌ `0100 … 'gDFRefNum' … incomplete content` |
+
+El propio rechazo nombra los tres hermanos que el wrapper espera (`gDFRefFE`, `gDFRefFacPap`,
+`gDFRefFacIE`). Lo arma `construirReferenciaFiscal()`, congelado contra
+`referencia-fiscal-esperada.json`, con el contra-ejemplo plano guardado aparte **con su código
+de rechazo** — un contra-ejemplo medido vale más que un comentario que diga "no lo aplanes".
+
+Dos detalles que costaron un rechazo cada uno:
+- 🔴 `fechaEmisionDocumentoReferenciado` **lleva huso**. Pelada rebota con `0100 … datatype
+  'fechaTZ' … Pattern constraint failed`.
+- ⚠️ **La DGI NO valida `nombreRazonSocialEmisor` contra el RUC**: la prueba autorizó con el
+  nombre equivocado ahí. Un error en ese campo **no lo atrapa el PAC**. Va el del EMISOR —la
+  factura referenciada la emitimos nosotros— y el único control es un test.
+
+### Sin CUFE no se manda nada, y se corta antes del correlativo
+
+Una NC que no se puede referenciar **no es un envío que falla: es un envío que no se hace**.
+El gate está en T0, antes de tocar la secuencia.
+
+| Caso | Qué pasó | Qué ofrece el sistema |
+|---|---|---|
+| **A** — factura emitida por el CRM | tiene CUFE | emitir la NC |
+| **B** — factura del portal (antes del 8/7/2026, punto `050`) | **tiene CUFE ante la DGI**, el CRM no lo guardó | cargarlo a mano |
+| **C** — nunca pasó por la DGI | no hay CUFE en ningún lado | **no hay camino**: «consulte con administración» |
+
+🔴 **El caso B no se marca `authorized`.** `registrarCufeDelPortal` guarda el CUFE y
+`dgi_cufe_origen = 'portal_050'`, y **no toca `fe_estado`**: este sistema no emitió esas
+facturas, y decir que sí sería ensuciar el registro de envíos con un envío que nunca ocurrió.
+Sin esa columna, un CUFE del PAC y uno tecleado son **idénticos** en la base, y la
+combinación "con CUFE y `fe_estado = 'no_emitida'`" va a ser la normal en estas facturas.
+
+Del CUFE se valida la **forma mínima**, no un patrón cerrado — mismo criterio que el RUC. Las
+facturas del caso B son de otro punto y otro año: un patrón calcado sobre los CUFE de hoy
+rechazaría justo los que hacen falta cargar. Y los **saltos de línea del copiar-pegar se
+limpian**, porque el portal muestra el CUFE partido en varias líneas y rechazarlo por eso
+sería castigar a la persona por algo que el CRM puede arreglar solo.
+
+### El caso C está bloqueado del lado de ideati
+
+Referenciar por `informacionReferenciaFacturaPapel` hace que el PAC conteste `[0000] Object
+reference not set to an instance of an object` — un `NullReferenceException` de .NET, no una
+validación de negocio. **Pasa igual con `tipoDocumento` 04 que con 06**, así que lo que rompe
+es el bloque de papel y no el tipo de documento; el `06` quedó **sin evaluar**, porque el
+documento muere antes de llegar ahí.
+
+La pregunta a ideati está redactada en `task_plan.md` y **en espera**: primero el bufete
+confirma si existe alguna factura en papel que acreditar. Por la corrección del 23/09, las
+anteriores al 8 de julio **tienen CUFE** y entran por el caso B, así que el caso C puede no
+tener ningún documento real.
+
+### ⚠️ La DGI lleva su propia cuenta de lo acreditado
+
+Rechaza con `[1717] Monto de las notas de crédito o débito inconsistentes con el monto de la
+FE original referenciada` cuando la suma de NC pasa el total de la factura referenciada.
+**Su tope puede diferir del nuestro**: `credited_total` cuenta las NC de NUESTRA base, la DGI
+cuenta las que ELLA autorizó. Se descubrió porque dos pruebas del mismo día acreditaron la
+misma factura del sandbox.
+
+### Lo que NO se reescribió
+
+- `parsePacResponse` se **exporta**, no se copia. Es la lección del `0600`: un clasificador
+  duplicado diverge y termina llamando rechazo a un éxito.
+- El mapper es el mismo, con la NC ocupando el lugar de la factura en el bundle: el receptor
+  sale del `map-receptor` congelado y el ITBMS proporcional de una NC parcial lo calcula el
+  mismo `mapTotales`.
+- `fe_emisiones` es la misma tabla, por **arco exclusivo** (`062`, igual que `supplier_payments`
+  en la `049`). Una tabla aparte partiría en dos la alerta de rechazo de SOP-041 — o, más
+  probable, alguien agregaría la NC a una sola y la alerta quedaría a medias sin que ningún
+  test lo note.
+- 🔴 `invoice_kind` **se hereda de la factura original**: de ahí sale el CPBS, y una NC sobre un
+  reembolso tiene que llevar el del reembolso. Es un dato que la NC no tiene por su cuenta y
+  que es fácil dejar en HONORARIOS sin que nada falle hasta que la DGI observa el anexo.

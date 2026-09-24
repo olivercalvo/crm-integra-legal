@@ -1,5 +1,100 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 9C — la nota de crédito ante la DGI, y su reversión] - 2026-09-24
+
+**Staging (`develop`):** `602b2ab` (evidencia S5/S8) → `96be17d` (`060`) → `191027f`
+(reversión + 182 h) → `7b2ced6` / `fe8195f` (referencia + golden) → `2f632ae` (`061`) →
+`c2bd8f7` (`062` + emisión). Migraciones `060`, `061` y `062`, **SOLO staging**.
+`main` sigue en `24b227a`.
+
+> ⚠️ **Ningún commit de este bloque se verificó con clics.** La sesión del navegador estuvo
+> caída toda la sesión y no se pudo entrar. Lo que sí se verificó es más fuerte para estas
+> capas: el camino de emisión corrió **de punta a punta contra el sandbox real** y la
+> reversión contra la **base real de staging** en ROLLBACK. Falta la UI, que no se construyó
+> justamente por eso.
+
+### La nota de crédito se manda a la DGI
+
+Hasta hoy era un documento **interno**: nacía `fe_estado = 'no_emitida'`, con banda roja, y no
+se le entregaba al cliente como comprobante fiscal. Ahora sale por el mismo endpoint que una
+factura con `tipoDocumento = 04`.
+
+**Autorizada en el sandbox el 24/09**: `NC-000012` sobre `FAC-HON-000003` (B/. 2.140 con ITBMS
+al 7 %), CUFE `FE04…`, protocolo guardado, `fe_emisiones` al día. Evidencia en
+`docs/efactura/prueba9c-emitir-nc.txt`.
+
+### 🔴 El bloque de referencia va doblemente anidado, y lo decidió la DGI
+
+El swagger decía una cosa y las notas del repo otra. En vez de elegir, se mandó **la misma nota
+de crédito con las dos formas**: la anidada autorizó (`0260`) y la plana la rechazó (`0100`,
+nombrando los tres hermanos que el wrapper espera). El golden se congeló en un commit y la
+función que lo produce en otro — si hubieran ido juntos, el test habría pasado comparándose
+consigo mismo.
+
+Dos cosas que la DGI **no** valida y el código sí:
+- La fecha del documento referenciado **lleva huso**. Sin él, `0100`.
+- `nombreRazonSocialEmisor` **no se cruza contra el RUC**: la prueba autorizó con el nombre
+  equivocado. Va el del emisor, y el único control es un test.
+
+### 🔴 Sin CUFE no se manda nada — y no se quema correlativo
+
+Una NC que no se puede referenciar no es un envío que falla: es un envío que no se hace. El
+gate corta antes de tocar la secuencia, y está medido.
+
+- **Caso B** (facturas del portal, anteriores al 8 de julio): **el CUFE existe ante la DGI** y
+  ahora se carga a mano. La migración `061` agrega `dgi_cufe_origen` porque un CUFE del PAC y
+  uno tecleado son idénticos en la base — y esa pregunta llega el día en que algo no cuadra
+  ante la DGI, que es el peor momento para no tenerla contestada. **No se marca
+  `authorized`**: este sistema no emitió esas facturas.
+- **Caso C** (nunca pasó por la DGI): **no hay camino**. Referenciar por factura en papel hace
+  que el PAC conteste `[0000] Object reference not set to an instance of an object` — una
+  excepción suya, igual con `04` que con `06`. La pregunta a ideati está redactada y **en
+  espera** de que el bufete confirme si existe alguna factura en papel que acreditar.
+
+### 🔴 Reversar una NC no resta ningún número
+
+Era lo único que quedaba sin construir del Bloque 5. `credited_total` ya era derivada desde la
+`051`, así que el RPC `reverse_credit_note` cambia **un estado** y el trigger que ya existía
+recalcula `credited_total`, `balance_due` y el `status` de la factura **con la misma función
+que los calculó al emitir**.
+
+Restar `grand_total` habría sido más corto y habría creado una segunda fórmula. El día que
+discrepa, el síntoma no es un error: es el saldo equivocado de una factura. Con dos NC
+parciales sobre la misma factura el atajo ya está mal desde el principio.
+
+Hay un test que lee el código y falla si aparece la escritura directa —probado con mutación— y
+**la propia migración aborta** si la encuentra, así que la regla viaja con el `.sql`.
+
+Verificación en ROLLBACK sobre `FAC-HON-000009` (parcialmente pagada), 12 comprobaciones en
+verde: monta dos NC parciales, reversa una y el acreditado queda en la **otra** (3.00 → 1.00),
+no en cero; falla forzada tras el posteo con el correlativo intacto; reversar dos veces
+rechazado; con las dos anuladas el saldo vuelve al original y la cadena de hash sigue íntegra.
+
+Y una NC **sin asiento propio no se reversa**: salió de anular una factura, y des-anularla
+desde ahí se saltearía `cancelInvoice` y el gate de mes cerrado.
+
+### Anular la NC ante la DGI: las mismas 182 horas
+
+Por el mismo endpoint, pero **contadas desde la emisión de la NC**, no de su factura — son dos
+documentos y dos plazos. Y fuera de plazo **no hay "NC de la NC"**: la respuesta manda a
+hablar con el contador en vez de ofrecer un botón que la DGI va a rechazar.
+
+### Hallazgos de la corrida
+
+- ⚠️ **La DGI lleva su propia cuenta de lo acreditado** por documento referenciado y rechaza
+  con `[1717]` cuando se pasa. Su tope puede diferir del nuestro: `credited_total` cuenta las
+  NC de nuestra base, la DGI cuenta las que ella autorizó.
+- La prueba eligió "una factura cualquiera" y eligió `FAC-HON-000007`, la de la demo,
+  dejándola acreditada al 100 %. `fe_estado` quedó intacto —el gate corta antes de escribir
+  nada fiscal— y la NC se deshizo con la válvula `finanzas.nc_compensar`. Ahora hay una lista
+  `NO_TOCAR` en el script.
+
+### Lo que queda
+
+Toda la UI: el botón de reversar en el detalle de la NC, el de emitirla a la DGI, el campo
+para pegar el CUFE y el mensaje de "sin CUFE". No se construyó porque no se pudo verificar
+con clics, y la regla de la casa es que ningún commit con pantalla cierra sin ellos.
+
 ## [Errores de la DGI: prevenirlos y verlos] - 2026-09-23
 
 **Staging (`develop`):** `f235841` (incierto) → `236c0b5` (controles previos) →

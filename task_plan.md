@@ -317,6 +317,13 @@ Revisado antes de anotarlas: el swagger completo, `docs/efactura/`, y las respue
 22/09/2026.
 
 **P1. 🔴 PARA IDEATI — referenciar una factura en papel hace explotar al PAC.**
+
+> ⏸️ **EN ESPERA — no se manda todavía.** Decisión de Oliver del 24/09/2026: primero el
+> bufete confirma **si existe alguna factura en papel** que haya que acreditar. Por la
+> corrección del 23/09, las anteriores al 8 de julio **tienen CUFE** y entran por el caso B,
+> que funciona — así que el caso C puede no tener ningún documento real, y preguntar por algo
+> que no existe gasta una consulta que después hace falta para algo que sí.
+
 Medido el 24/09/2026 en el sandbox, con el código en la mano:
 
 > *Cuando mandamos un documento con `documentosFiscalesReferenciados` referenciando una factura
@@ -3709,3 +3716,60 @@ Las listas autoritativas están en el bloque **"ESTADO (cierre 2026-06-03)"** al
 
 **Nota:** esta fase se cerró con el deploy del 14/08/2026. De acá en adelante los cuatro
 pasos son parte del ciclo de CADA release (ver `sop.md`), no un hito pendiente del plan.
+
+---
+
+## >>> 9C — ESTADO AL 24/09/2026: SERVIDOR COMPLETO, UI PENDIENTE <<<
+
+El plan de arriba se ejecutó con el alcance recortado que aprobó Oliver (sin caso C).
+Esto es lo que quedó hecho y lo que falta.
+
+### ✅ Hecho y verificado
+
+| Pieza | Cómo se verificó |
+|---|---|
+| `060` — RPC `reverse_credit_note`, status `anulada`, inmutabilidad con UNA transición | ROLLBACK contra staging, 12 comprobaciones |
+| `reverseCreditNote` + `POST /api/finanzas/credit-notes/[id]/reverse` | tests + el RPC medido |
+| `decidirAccionSobreNotaDeCredito()` — 182 h desde la emisión DE LA NC | 12 tests |
+| `construirReferenciaFiscal()` — el doble anidado | golden contra el payload que autorizó |
+| `061` — `dgi_cufe_origen` + `registrarCufeDelPortal` + `POST …/invoices/[id]/cufe` | migración verificada + 10 tests del validador |
+| `062` — `fe_emisiones` con arco exclusivo | migración verificada |
+| `emitCreditNoteToEfactura` + `POST …/credit-notes/[id]/emit` | 🔴 **sandbox real: `NC-000012` AUTORIZADA** |
+
+### ⏳ Lo que falta: TODA la pantalla
+
+Ninguna de estas cuatro se construyó, y el motivo es uno solo: **la sesión del navegador
+estuvo caída** y la regla del proyecto es que ningún commit con pantalla cierra sin clics
+reales. Construirlas sin poder abrirlas sería exactamente lo que esa regla evita.
+
+Las cuatro son de detalle de documento y no necesitan migraciones nuevas:
+
+1. **Detalle de la NC** — botón «Reversar» (admin, abogada, contador) con el diálogo de
+   cobros en su variante, y el botón «Enviar a la DGI» (admin, abogada) cuando
+   `fe_estado ∈ {no_emitida, error}`. La banda roja sale sola cuando pase a `authorized`.
+2. **Detalle de la factura, caso B** — campo para pegar el CUFE del portal, con
+   `avisos` mostrados sin bloquear, sobre la acción `nc_04_requiere_cufe`.
+3. **Detalle de la factura, caso C** — el mensaje en lenguaje simple: *«Esta factura no tiene
+   CUFE. Consulta con administración antes de hacer la nota de crédito»*, y el botón de NC
+   fiscal deshabilitado. El texto del servidor ya lo dice; falta mostrarlo antes de apretar.
+4. **Cablear `decidirAccionSobreNotaDeCredito()`** en el detalle de la NC. Hoy la función no
+   tiene llamadores, igual que `decidirAccionFiscal()` cuando se escribió en 9A.
+
+🔒 Cuando se agreguen, `nav-guard.test.ts` va a pedir que el menú y las rutas se muevan
+juntos, y los enlaces nuevos del JSX entran en su barrido.
+
+### 📋 Verificación con clics que quedó pendiente (la lista de Oliver)
+
+- NC total · NC parcial · NC de una factura de antes de julio con el CUFE cargado a mano ·
+  anulación de una NC · el mensaje de "sin CUFE".
+- **Tarea 0 entera**: `i_amb = 2` en los logs de la función, emitir desde la interfaz, anular
+  desde la interfaz, y reenviar `FAC-HON-000016` esperando el rechazo traducido.
+
+### ⚠️ Consecuencia conocida que nadie decidió todavía
+
+Una factura cuya NC se reversó **sigue sin poder anularse**: la `053` rechaza por la
+existencia de un asiento `nota_credito` en el libro, y los asientos no se borran.
+Contablemente ya no haría daño —la reversión deshizo el débito parcial— pero la regla mira el
+asiento, no el saldo. La salida sigue siendo emitir otra NC. **Es una decisión de Oliver, no
+un arreglo**: relajar la `053` para que mire el saldo neto es tocar una regla que se diseñó
+con cuidado para impedir un descuadre de 1.200 sobre 1.000.

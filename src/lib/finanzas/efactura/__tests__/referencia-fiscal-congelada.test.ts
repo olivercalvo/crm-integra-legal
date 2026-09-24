@@ -170,8 +170,13 @@ test("🔒 `construirReferenciaFiscal` produce EXACTAMENTE el bloque que autoriz
   );
 
   // Todo menos la razón social, que el golden guarda equivocada a propósito.
-  const { nombreRazonSocialEmisor: _esperadoMal, ...restoEsperado } = bloqueOk;
-  const { nombreRazonSocialEmisor: _nuestro, ...restoNuestro } = bloque;
+  const sinElNombre = <T extends { nombreRazonSocialEmisor: string }>(b: T) => {
+    const copia: Partial<T> = { ...b };
+    delete copia.nombreRazonSocialEmisor;
+    return copia;
+  };
+  const restoEsperado = sinElNombre(bloqueOk);
+  const restoNuestro = sinElNombre(bloque);
   assert.deepEqual(
     restoNuestro,
     restoEsperado,

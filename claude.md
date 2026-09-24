@@ -463,6 +463,56 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   no se ve. Pasó con `tax_id` en el formulario de clientes, donde el campo se llama `ruc`.
   Detalle en `sop.md` SOP-041.
 
+### Nota de crédito FISCAL y su reversión (desde 2026-09-24, Bloque 9C — SOLO staging)
+- 🔴 **La NC ya se manda a la DGI**: `tipoDocumento = 04`, mismo endpoint que una factura,
+  `POST /api/finanzas/credit-notes/[id]/emit` (admin y abogada). Autorizada en sandbox el
+  24/09 (`NC-000012`, CUFE `FE04…`). Deja de ser sólo un documento interno.
+- 🔴 **`documentosFiscalesReferenciados` lleva `informacionReferencia` DOS VECES, una dentro
+  de la otra.** Decidido con dos autorizaciones reales, no leyendo: la anidada autorizó
+  (`0260`), la plana la rechazó la DGI (`0100`, nombrando `gDFRefFE, gDFRefFacPap,
+  gDFRefFacIE`). Lo arma `construirReferenciaFiscal()` y está congelado contra
+  `referencia-fiscal-esperada.json`; el contra-ejemplo plano se guarda con su código.
+  ⚠️ La fecha del documento referenciado **lleva huso** (`toPanamaIso`); pelada rebota.
+  ⚠️ **La DGI NO valida `nombreRazonSocialEmisor`**: autorizó con el nombre equivocado. Va el
+  del EMISOR (somos nosotros, que emitimos la factura referenciada), y el único control es un
+  test.
+- 🔴 **SIN CUFE NO SE MANDA NADA, y se corta antes de quemar correlativo.** Caso B: la factura
+  se emitió en el portal (antes del 8/7/2026) y **el CUFE existe** — se carga a mano
+  (`POST /api/finanzas/invoices/[id]/cufe`, migración `061`, admin y abogada), y
+  `invoices.dgi_cufe_origen` distingue `'crm'` de `'portal_050'` porque en la base son
+  idénticos. **NO toca `fe_estado`**: este sistema no las emitió. Caso C (nunca pasó por la
+  DGI): **no hay camino** — la pantalla dice «consulte con administración» y no deja emitir.
+- 🔴 **Referenciar una FACTURA EN PAPEL rompe el PAC**: contesta `[0000] Object reference not
+  set to an instance of an object` —un `NullReferenceException` suyo—, igual con `04` que con
+  `06`. Lo que falla es el bloque de papel, no el tipo de documento, y el `06` quedó **sin
+  evaluar** porque muere antes. Pregunta a ideati **en espera** hasta que el bufete confirme si
+  existe alguna factura en papel que acreditar.
+- ⚠️ **La DGI LLEVA SU PROPIA CUENTA de lo acreditado por documento referenciado** y rechaza con
+  `[1717]` cuando se pasa. Su tope puede diferir del nuestro: `credited_total` cuenta las NC de
+  NUESTRA base, la DGI cuenta las que ELLA autorizó.
+- 🔒 **`parsePacResponse` se EXPORTA, no se copia.** Es la lección del `0600`: un clasificador
+  duplicado diverge y termina llamando rechazo a un éxito. Lo mismo con `fe_emisiones`, que
+  guarda facturas y NC en la MISMA tabla por arco exclusivo (`062`, como la `049`) para que la
+  alerta de rechazo de SOP-041 siga siendo una sola consulta.
+- 🔴 **REVERSAR UNA NC NO RESTA NADA** (migración `060`). `credited_total` ya era derivada
+  (`051`), y `balance_due` y el `status` cuelgan de ella. El RPC `reverse_credit_note` cambia
+  UN estado —`credit_notes.status = 'anulada'`— y el trigger que ya existía recalcula los tres
+  con la MISMA función que los calculó al emitir. Restar `grand_total` habría creado una segunda
+  fórmula que algún día discrepa, y el síntoma sería el saldo equivocado de una factura, no un
+  error. 🔒 Hay un test que lee el código y falla si aparece la escritura directa, y la propia
+  migración aborta si la encuentra.
+- 🔴 **Una NC SIN asiento propio no se reversa**: salió de anular una factura (D5) y
+  des-anularla desde ahí se saltearía `cancelInvoice` y el gate de mes cerrado. Cortado en los
+  dos lados. **Reversar la NC: admin, abogada y contador** (igual que un cobro); **emitirla:
+  admin y abogada**.
+- **Anular una NC ante la DGI: las MISMAS 182 h**, por el mismo endpoint, contadas **desde la
+  emisión DE LA NC**, no de su factura (`decidirAccionSobreNotaDeCredito()`). 🔴 **Fuera de
+  plazo NO hay "NC de la NC"**: la pantalla manda a hablar con el contador en vez de ofrecer un
+  botón que la DGI rechaza.
+- **`credit_notes.status` admite `emitida` y `anulada`, y la única transición es entre esas dos,
+  en ese orden.** Las cantidades acreditadas se liberan solas: `acreditadoPorLineaDeFactura` ya
+  filtraba por `status = 'emitida'` desde la `051`.
+
 ### Congelamientos — la regla del JSON dorado (desde 2026-09-23)
 - 🔒 **Un `*-esperado.json` y el código que ese golden verifica NUNCA van en el mismo commit.**
   Si el mismo commit regenera la referencia, el test pasó comparándose consigo mismo y no probó

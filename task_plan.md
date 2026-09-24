@@ -121,6 +121,46 @@ dato** en vez de inventarlo.
 
 ---
 
+### ✅ S8 RESUELTA — SÍ se puede referenciar un documento de OTRO punto (24/09/2026)
+
+**El caso B no se cae.** Medido en el sandbox:
+
+1. Se emitió una factura desde el punto **`002`** → ✅ `0260 Autorizado`.
+2. Se emitió una **NC `04` desde el `001`** referenciando el CUFE de esa factura → ✅ `0260`.
+
+O sea que las facturas de antes de julio, emitidas a mano por el punto `050`, **se pueden
+acreditar con una NC `04` desde el `051`**, que es lo que ideati había dicho de la secuencia y
+ahora está probado también para la referencia.
+
+### 🔴 S5 — BLOQUEADA, y el motivo NO es el tipo `06`
+
+El primer intento mezcló dos novedades (`tipoDocumento = 06` **y** referencia por
+`numeroFacturaPapel`). Se desambiguó mandando `04` con referencia a papel, y **falla con el
+mismo error**:
+
+| Prueba | Resultado |
+|---|---|
+| `06` + `informacionReferenciaFacturaPapel` | ❌ `[0000] Object reference not set to an instance of an object.` |
+| `04` + `informacionReferenciaFacturaPapel` | ❌ **el mismo error** |
+| `04` + `cufeReferenciado` | ✅ `0260 Autorizado` |
+
+🔴 **Lo que falla es referenciar por FACTURA EN PAPEL, no el tipo de documento.** Y `0000
+Object reference not set to an instance of an object` es una **excepción del código de ideati**
+—un `NullReferenceException` de .NET que se les escapa por la respuesta—, no una validación de
+negocio. La hipótesis: su código lee `informacionReferencia.cufeReferenciado` sin preguntar si
+existe, así que cualquier referencia que no sea por CUFE lo rompe.
+
+**Consecuencia:** el **caso C** (facturas en papel o sin CUFE) queda **sin camino**, y el
+motivo está del lado de ideati.
+
+⚠️ **Y el `06` sigue sin respuesta**: nunca llegó a evaluarse, porque murió antes en la
+referencia.
+
+**Qué tan grave es.** Probablemente poco: por la corrección del 23/09, las facturas anteriores
+al 8 de julio **tienen CUFE** (portal `050`) y entran por el caso B, que funciona. El caso C
+quedaría sólo para facturas que nunca pasaron por la DGI, *"si es que existe alguna"*. Pero eso
+lo tiene que confirmar el bufete, no yo.
+
 ### 4. Caso C — la NC genérica, y por qué está bloqueada
 
 ideati recomendó **nota de crédito genérica** para facturas sin CUFE. El swagger **acepta**
@@ -276,16 +316,22 @@ no el encabezado de la `051`. Es la regla de siempre acá.
 Revisado antes de anotarlas: el swagger completo, `docs/efactura/`, y las respuestas del
 22/09/2026.
 
-**P1. ¿El `tipoDocumento` 06 es la nota de crédito genérica?**
-El swagger acepta `06` en el patrón pero no le pone nombre a ninguno de los diez valores.
-⚠️ **No se pregunta todavía**: primero se corre S5, que lo mide. Si S5 lo rechaza, la pregunta
-sale con el código de rechazo adjunto.
+**P1. 🔴 PARA IDEATI — referenciar una factura en papel hace explotar al PAC.**
+Medido el 24/09/2026 en el sandbox, con el código en la mano:
 
-**P2. ¿Se puede emitir una nota de crédito desde el punto de facturación `051` que referencie
-una factura emitida por el punto `050`?**
-Es el caso de las facturas de antes de julio, emitidas a mano en el portal. ideati ya confirmó
-que la NC puede usar la misma secuencia del `051`, pero no que pueda **referenciar** un
-documento de otro punto. ⚠️ **Tampoco se pregunta todavía**: la mide S8.
+> *Cuando mandamos un documento con `documentosFiscalesReferenciados` referenciando una factura
+> en papel (`informacionReferencia.informacionReferenciaFacturaPapel.numeroFacturaPapel`), la
+> respuesta es `[0000] Object reference not set to an instance of an object`. Pasa igual con
+> `tipoDocumento` 04 y 06. Con `informacionReferencia.informacionReferencia.cufeReferenciado` el
+> mismo documento autoriza sin problema (`0260`). ¿Está soportada la referencia por factura en
+> papel? ¿Y cuál es el `tipoDocumento` de la nota de crédito genérica que nos recomendaron para
+> las facturas sin CUFE?*
+
+Las dos preguntas van juntas porque la segunda no se pudo medir: el documento murió antes, en
+la referencia.
+
+**P2. ✅ RESUELTA — no hace falta preguntar.** S8 lo midió el 24/09: una NC desde un punto
+referenciando un documento de otro punto **autoriza**.
 
 **P3. ¿Una nota de crédito autorizada se anula con el mismo `CreateCancellation` y la misma
 ventana de 182 horas que una factura?**

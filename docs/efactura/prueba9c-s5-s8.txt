@@ -1,0 +1,244 @@
+◇ injecting env (27) from .env.local // tip: ⌘ override existing { override: true }
+══════════════════════════════════════════════════════════════════════════════
+9C — S5 (¿el 06 es la NC genérica?) y S8 (¿se cruza de punto?)
+fecha:   2026-09-24T15:04:05.479Z
+factura: FAC-REI-000004 · CUFE FE0920000025046169-3-2021-4000002026092400000000240010129902781442
+══════════════════════════════════════════════════════════════════════════════
+
+cliente apuntado al RUC/DV del emisor (las tres columnas)
+
+──────────────────────────────────────────────────────────────────────────────
+S5 — ¿el tipoDocumento 06 es la nota de crédito genérica?
+──────────────────────────────────────────────────────────────────────────────
+
+🔒 [S5-tipo-06-papel] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices · tipoDocumento=06 · punto=001 · nº 32
+❌ no autorizó · [0000] Object reference not set to an instance of an object.
+
+RESPUESTA — S5-tipo-06-papel:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "ec0f46f0-ceee-4376-9682-a6661fe65e60",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": null,
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": null,
+          "dFecProc": "2026-09-24T15:04:09.303Z",
+          "dProtAut": null,
+          "dDigVal": null,
+          "gResProc": [
+            {
+              "dCodRes": "0000",
+              "dMsgRes": "Object reference not set to an instance of an object."
+            }
+          ],
+          "signature": null
+        }
+      }
+    }
+  },
+  "invoice": "40aa42a1-2511-4faf-b865-b4cf00f85476",
+  "cufe": "FE0620000025046169-3-2021-4000002026092400000000320010126034452069",
+  "secuence": 21,
+  "requestTime": 0.2563922,
+  "autorizada": false,
+  "protocoloAutorizacion": null,
+  "fechaAutorizacion": "2026-09-24T15:04:09.303Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0620000025046169-3-2021-4000002026092400000000320010126034452069&iAmb=2&digestValue=ec092197-c081-4426-809f-c4840b801901&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwNjIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMzIwMDEwMTI2MDM0NDUyMDY5IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiJlYzA5MjE5Ny1jMDgxLTQ0MjYtODA5Zi1jNDg0MGI4MDE5MDEifQ.HxHsJmH0X4hnmZjgagtA_n3-iPO8EXDg3korszfkRO4",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T15:04:09.314Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+──────────────────────────────────────────────────────────────────────────────
+S5b — tipoDocumento 04 con referencia a factura en PAPEL
+──────────────────────────────────────────────────────────────────────────────
+
+🔒 [S5b-tipo-04-papel] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices · tipoDocumento=04 · punto=001 · nº 33
+❌ no autorizó · [0000] Object reference not set to an instance of an object.
+
+RESPUESTA — S5b-tipo-04-papel:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "15c4bcd4-8e33-4daa-949e-cf70a33c708c",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": null,
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": null,
+          "dFecProc": "2026-09-24T15:04:11.207Z",
+          "dProtAut": null,
+          "dDigVal": null,
+          "gResProc": [
+            {
+              "dCodRes": "0000",
+              "dMsgRes": "Object reference not set to an instance of an object."
+            }
+          ],
+          "signature": null
+        }
+      }
+    }
+  },
+  "invoice": "27968c35-4423-4536-9a3b-b4cf00f85703",
+  "cufe": "FE0420000025046169-3-2021-4000002026092400000000330010126986628451",
+  "secuence": 22,
+  "requestTime": 0.2542556,
+  "autorizada": false,
+  "protocoloAutorizacion": null,
+  "fechaAutorizacion": "2026-09-24T15:04:11.207Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0420000025046169-3-2021-4000002026092400000000330010126986628451&iAmb=2&digestValue=5b6742bf-fca8-4de0-9f10-8d16089f3613&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwNDIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMzMwMDEwMTI2OTg2NjI4NDUxIiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiI1YjY3NDJiZi1mY2E4LTRkZTAtOWYxMC04ZDE2MDg5ZjM2MTMifQ.J4aBu2fK-W37fU_COjrN90lV1fU2HvmfW-x4od4eFOA",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T15:04:11.22Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+──────────────────────────────────────────────────────────────────────────────
+S8 — ¿se puede referenciar un documento de otro punto? (paso 1: emitir desde 002)
+──────────────────────────────────────────────────────────────────────────────
+
+🔒 [S8-factura-otro-punto] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices · tipoDocumento=01 · punto=002 · nº 34
+✅ AUTORIZÓ · [0260] Autorizado el uso de la FE
+
+RESPUESTA — S8-factura-otro-punto:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "7a21ca99-73ff-4d7a-9cdc-6d1c31793409",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": "ID00001528364-1-65300620260000000000060043",
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": "FE0120000025046169-3-2021-4000002026092400000000340020123922309569",
+          "dFecProc": "2026-09-24T15:04:12.459Z",
+          "dProtAut": "00001528364-1-65300620260000000000060043",
+          "dDigVal": "dslK8Ss6h7OKSxiUUkEGln5ZqKJ9Z+UqqLx/QJGjuUI=",
+          "gResProc": [
+            {
+              "dCodRes": "0260",
+              "dMsgRes": "Autorizado el uso de la FE"
+            }
+          ],
+          "signature": ""
+        }
+      }
+    }
+  },
+  "invoice": "491da761-ada8-4a00-a43d-b4cf00f8586b",
+  "cufe": "FE0120000025046169-3-2021-4000002026092400000000340020123922309569",
+  "secuence": 23,
+  "requestTime": 0.7665147,
+  "autorizada": true,
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000060043",
+  "fechaAutorizacion": "2026-09-24T15:04:12.459Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0120000025046169-3-2021-4000002026092400000000340020123922309569&iAmb=2&digestValue=76e81186-d3c3-46f5-83b8-4c4f2c88fdcc&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwMTIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMzQwMDIwMTIzOTIyMzA5NTY5IiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiI3NmU4MTE4Ni1kM2MzLTQ2ZjUtODNiOC00YzRmMmM4OGZkY2MifQ.sL5h2sE9N-dG77txXB5_l0VrIoT4BZ6jrlwLrANXQC8",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T15:04:12.958Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+──────────────────────────────────────────────────────────────────────────────
+S8 — paso 2: NC 04 desde 001 referenciando el CUFE del 002
+──────────────────────────────────────────────────────────────────────────────
+
+🔒 [S8-nc-cruzando-puntos] AMBIENTE: EFACTURA_I_AMB = 2 · NEXT_PUBLIC_APP_ENV = local
+→ POST /api/v1/Invoices · tipoDocumento=04 · punto=001 · nº 35
+✅ AUTORIZÓ · [0260] Autorizado el uso de la FE
+
+RESPUESTA — S8-nc-cruzando-puntos:
+{
+  "qrContentImageBase64": "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",
+  "xml": null,
+  "id": "f6463f67-aabd-46e5-b297-ec2e147f3f82",
+  "rRetEnviFe": {
+    "dVerForm": "1.00",
+    "iAmb": 2,
+    "dVerApl": "1.0",
+    "xProtFe": {
+      "rProtFe": {
+        "dVerForm": 1,
+        "gInfProt": {
+          "dId": "ID00001528364-1-65300620260000000000060044",
+          "iAmb": 2,
+          "dVerApl": "1.0",
+          "dCUFE": "FE0420000025046169-3-2021-4000002026092400000000350010124249203731",
+          "dFecProc": "2026-09-24T15:04:14.922Z",
+          "dProtAut": "00001528364-1-65300620260000000000060044",
+          "dDigVal": "qY1ixax5T97L+j1UebfBFsjUipTsXAMDNYyeQ9ytF9g=",
+          "gResProc": [
+            {
+              "dCodRes": "0260",
+              "dMsgRes": "Autorizado el uso de la FE"
+            }
+          ],
+          "signature": ""
+        }
+      }
+    }
+  },
+  "invoice": "3238ed68-c849-4988-b5cd-b4cf00f85ada",
+  "cufe": "FE0420000025046169-3-2021-4000002026092400000000350010124249203731",
+  "secuence": 24,
+  "requestTime": 1.3208424,
+  "autorizada": true,
+  "protocoloAutorizacion": "00001528364-1-65300620260000000000060044",
+  "fechaAutorizacion": "2026-09-24T15:04:14.922Z",
+  "qrContent": "https://dgi-fep-test.mef.gob.pa:40001/Consultas/FacturasPorQR?chFE=FE0420000025046169-3-2021-4000002026092400000000350010124249203731&iAmb=2&digestValue=19426c08-f727-4487-bde0-ede211c0f85d&jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjaEZFIjoiRkUwNDIwMDAwMDI1MDQ2MTY5LTMtMjAyMS00MDAwMDAyMDI2MDkyNDAwMDAwMDAwMzUwMDEwMTI0MjQ5MjAzNzMxIiwiaUFtYiI6MiwiZGlnZXN0VmFsdWUiOiIxOTQyNmMwOC1mNzI3LTQ0ODctYmRlMC1lZGUyMTFjMGY4NWQifQ.DU916xJlMirvra36NA7PJZKwi_s1Hp6xd5BdMZEvGTs",
+  "isRetry": false,
+  "createdBy": "25046169-3-2021",
+  "createdDate": "2026-09-24T15:04:15.558Z",
+  "updatedBy": null,
+  "updatedDate": null,
+  "deletedBy": null,
+  "deletedDate": null
+}
+
+══════════════════════════════════════════════════════════════════════════════
+VEREDICTO
+  S5  — tipoDocumento 06 con referencia a papel: ❌ no autorizó
+  S5b — tipoDocumento 04 con referencia a papel: ❌ no autorizó
+  S8 paso 1 — factura desde el punto 002: ✅
+  S8 paso 2 — NC cruzando puntos: ✅ AUTORIZÓ
+══════════════════════════════════════════════════════════════════════════════
+
+✅ cliente restaurado
+
+📄 informe: C:\Users\Oliver\Desktop\Cliente en el Centro\Clientes\Integra\02_Desarrollo\crm-integra-legal\docs\efactura\prueba9c-s5-s8.txt

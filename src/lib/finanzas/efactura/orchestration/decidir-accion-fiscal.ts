@@ -354,10 +354,188 @@ export function decidirAccionFiscal(
 }
 
 // ---------------------------------------------------------------------------
+// LA MISMA PREGUNTA, SOBRE UNA NOTA DE CRÉDITO (Bloque 9C)
+// ---------------------------------------------------------------------------
+/**
+ * Una NC autorizada por la DGI es un documento fiscal con vida propia, así que
+ * tiene su propia ventana de anulación — y es **la misma de 182 horas**, porque
+ * se anula por el MISMO endpoint (`POST /InvoiceEvents/CreateCancellation`,
+ * que recibe un CUFE sin preguntar de qué documento es; ideati, 22/09).
+ *
+ * 🔴 SE CUENTA DESDE LA EMISIÓN DE LA NC, no desde la de su factura. Son dos
+ * documentos y dos plazos: una NC emitida hoy sobre una factura de hace un mes
+ * tiene sus 182 horas completas.
+ *
+ * 🔴 Y NO HAY "NC DE LA NC". Cuando el plazo vence, una factura todavía tiene
+ * salida (se acredita); una nota de crédito no tiene ninguna dentro de lo que
+ * el bufete pidió. Por eso `sin_camino_fuera_de_plazo` dice en claro que hay
+ * que hablarlo, en vez de ofrecer un botón que la DGI va a rechazar.
+ */
+export interface EstadoDeNotaDeCredito {
+  /** `credit_notes.status`: `emitida` | `anulada`. */
+  status: string;
+  /** `credit_notes.fe_estado`. */
+  feEstado: FeEstado;
+  /** `credit_notes.dgi_cufe`. Presente ⇒ existe ante la DGI. */
+  dgiCufe: string | null;
+  /** `credit_notes.issue_date`, `YYYY-MM-DD`. */
+  issueDate: string | null;
+  /** `credit_notes.dgi_fecha_autorizacion`, ISO con huso. */
+  dgiFechaAutorizacion: string | null;
+  /**
+   * ¿Tiene asiento propio (`source_type = 'nota_credito'`)?
+   *
+   * 🔴 `false` es la NC que salió de ANULAR una factura: no se contabiliza
+   * aparte (D5) y no se reversa, porque la anulación ya reversó el asiento de
+   * la factura. Es el mismo filtro que aplica el RPC `reverse_credit_note`.
+   */
+  tieneAsientoPropio: boolean;
+}
+
+export type AccionSobreNotaDeCredito =
+  /** Autorizada, dentro de plazo: se anula ante la DGI y se reversa en el libro. */
+  | { accion: "anular_en_dgi_y_libro"; cufe: string; ventana: Ventana; mensaje: string }
+  /** Nunca fue a la DGI (documento interno): se reversa sólo en el libro. */
+  | { accion: "reversar_solo_en_el_libro"; mensaje: string; advertencia: string | null }
+  /** Autorizada y vencida: no hay NC de la NC. */
+  | { accion: "sin_camino_fuera_de_plazo"; cufe: string; ventana: Ventana; mensaje: string }
+  /** Salió de anular una factura: no hay asiento propio que reversar. */
+  | { accion: "sin_asiento_propio"; mensaje: string }
+  /** Hay un envío en curso: no se sabe si llegó. */
+  | { accion: "esperar_confirmacion"; mensaje: string }
+  /** Ya está anulada. */
+  | { accion: "nada_que_hacer"; mensaje: string }
+  /** Los datos se contradicen. */
+  | { accion: "inconsistente"; mensaje: string };
+
+export type ClaveDeAccionSobreNc = AccionSobreNotaDeCredito["accion"];
+
+/**
+ * @param estado  Lo que la base sabe de la nota de crédito.
+ * @param ahora   El instante contra el que se mide la ventana. **Se pasa
+ *                siempre**, por la misma razón que en `decidirAccionFiscal`.
+ */
+export function decidirAccionSobreNotaDeCredito(
+  estado: EstadoDeNotaDeCredito,
+  ahora: Date
+): AccionSobreNotaDeCredito {
+  const cufe = normalizar(estado.dgiCufe);
+
+  // 0. Ya anulada: no queda nada por hacer, de ningún lado.
+  if (estado.status === "anulada") {
+    return {
+      accion: "nada_que_hacer",
+      mensaje: "Esta nota de crédito ya está anulada.",
+    };
+  }
+
+  // 1. 🔴 La que salió de anular una factura. Va ANTES que todo lo fiscal:
+  //    aunque tuviera CUFE, acá no hay asiento que reversar y el camino es
+  //    otro. Es el mismo orden que usa el RPC.
+  if (!estado.tieneAsientoPropio) {
+    return {
+      accion: "sin_asiento_propio",
+      mensaje:
+        "Esta nota de crédito se generó al anular su factura, así que no tiene asiento " +
+        "propio: la anulación ya reversó el asiento de la factura y no hay nada que " +
+        "deshacer. Si la anulación fue un error, se corrige emitiendo una factura nueva.",
+    };
+  }
+
+  // 2. Un envío en curso gana sobre todo lo demás: `pending` no es "todavía no
+  //    se mandó", es "se mandó y no sabemos cómo terminó".
+  if (estado.feEstado === "pending") {
+    return {
+      accion: "esperar_confirmacion",
+      mensaje:
+        "Esta nota de crédito se envió a la DGI y todavía no se sabe cómo terminó. " +
+        "Hay que consultar el resultado antes de tocarla.",
+    };
+  }
+
+  // 3. Ya anulada ante la DGI pero viva en el libro: el libro manda el trabajo
+  //    que queda, y es una reversión común.
+  if (estado.feEstado === "canceled") {
+    return {
+      accion: "reversar_solo_en_el_libro",
+      mensaje:
+        "Esta nota de crédito ya está anulada ante la DGI, pero sigue viva en el libro " +
+        "contable. Falta reversarla para que la factura recupere su saldo.",
+      advertencia: null,
+    };
+  }
+
+  // 4. Sin CUFE: nunca llegó a la DGI, es un documento interno. Se reversa en
+  //    el libro y listo. Es exactamente lo que hace hoy toda NC, porque todas
+  //    nacen `fe_estado = 'no_emitida'` (D1 del Bloque 5).
+  if (!cufe) {
+    if (estado.feEstado === "authorized") {
+      return {
+        accion: "inconsistente",
+        mensaje:
+          "Esta nota de crédito figura autorizada por la DGI pero no tiene CUFE guardado. " +
+          "No se puede decidir qué hacer sin revisarla.",
+      };
+    }
+    return {
+      accion: "reversar_solo_en_el_libro",
+      mensaje:
+        "Esta nota de crédito no se envió a la DGI, así que se reversa sólo en el libro " +
+        "contable y la factura recupera su saldo.",
+      advertencia: null,
+    };
+  }
+
+  // 5. Con CUFE: es un documento vivo ante la DGI y manda el plazo.
+  const ventana = calcularVentana(estado, ahora);
+  if (!ventana) {
+    return {
+      accion: "inconsistente",
+      mensaje:
+        "Esta nota de crédito tiene CUFE pero no tiene fecha de emisión ni de " +
+        "autorización, así que no se puede calcular el plazo para anularla.",
+    };
+  }
+
+  if (ventana.vencida) {
+    return {
+      accion: "sin_camino_fuera_de_plazo",
+      cufe,
+      ventana,
+      mensaje:
+        `Pasaron ${formatearHoras(ventana.horasTranscurridas)} desde que se emitió esta nota ` +
+        `de crédito y el plazo para anularla ante la DGI son ${HORAS_PARA_ANULAR} horas. ` +
+        "A diferencia de una factura, una nota de crédito no se corrige con otra nota de " +
+        "crédito: hay que resolverlo con el contador.",
+    };
+  }
+
+  return {
+    accion: "anular_en_dgi_y_libro",
+    cufe,
+    ventana,
+    mensaje:
+      "Se anula ante la DGI y se reversa en el libro contable, y la factura recupera su " +
+      `saldo. Quedan ${formatearHoras(ventana.horasRestantes)} de las ` +
+      `${HORAS_PARA_ANULAR} horas del plazo.`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internos
 // ---------------------------------------------------------------------------
 
-function calcularVentana(estado: EstadoDeFactura, ahora: Date): Ventana | null {
+/**
+ * La ventana de 182 h de UN documento fiscal, sea factura o nota de crédito.
+ * Sólo necesita los dos instantes candidatos, así que no pide un
+ * `EstadoDeFactura` entero: así la NC usa exactamente la misma cuenta, con el
+ * mismo `INSTANTE_DE_INICIO` y el mismo criterio conservador. Una segunda
+ * implementación sería una segunda forma de equivocarse.
+ */
+function calcularVentana(
+  estado: { issueDate: string | null; dgiFechaAutorizacion: string | null },
+  ahora: Date
+): Ventana | null {
   const desdeEmision = instanteDeEmision(estado.issueDate);
   const desdeAutorizacion = instanteISO(estado.dgiFechaAutorizacion);
 

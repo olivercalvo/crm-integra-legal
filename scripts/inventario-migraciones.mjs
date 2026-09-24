@@ -242,6 +242,12 @@ const MARCADORES = {
     nota: "Bloque 9B. Espejo de `fe_emisiones`; va después de ella y de la 20260507000001. Existe porque anular es PAC primero y libro después: es lo único que distingue \"nunca preguntamos\" de \"preguntamos y no entendimos la respuesta\".",
   },
 
+  "060_reversion_de_nota_de_credito.sql": {
+    que: "RPC reverse_credit_note + credit_notes.cancelled_at",
+    tipo: "columna", tabla: "credit_notes", columna: "cancelled_at",
+    nota: "Bloque 9C. Era lo único que quedaba sin construir del Bloque 5. El marcador es la COLUMNA y no la función porque la migración también reemplaza `finanzas_credit_note_immutability`, que ya existía: un marcador de función daría positivo sin que la 060 se haya corrido. La reversión NO escribe credited_total — lo recalcula el trigger de la 051.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

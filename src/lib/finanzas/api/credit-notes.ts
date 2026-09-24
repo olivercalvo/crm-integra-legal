@@ -25,6 +25,12 @@ import {
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeNotaDeCredito } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
 import { cargarNotaDeCreditoParaAsiento } from "@/lib/finanzas/queries/nota-credito-para-asiento";
+import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
+import { SOURCE_TYPE_NOTA_CREDITO } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
+import {
+  construirAsientoDeReversion,
+  type AsientoAReversar,
+} from "@/lib/finanzas/contabilidad/reversion";
 
 type DB = SupabaseClient;
 
@@ -451,4 +457,177 @@ export async function listCreditNotesForInvoice(
     grand_total: Number(r.grand_total ?? 0),
     fe_estado: String(r.fe_estado ?? "no_emitida"),
   }));
+}
+
+/**
+ * El asiento PROPIO de una nota de crédito (`source_type = 'nota_credito'`),
+ * con sus líneas y cuentas. `null` si la NC no tiene asiento propio.
+ *
+ * 🔴 Que devuelva `null` NO es un caso de borde: es la NC que sale de ANULAR
+ * una factura. Esa no se contabiliza aparte (D5), porque la anulación ya
+ * reversó el asiento de la factura, y por eso no se puede reversar — ver
+ * `reverseCreditNote`.
+ *
+ * Es la misma carga que usan los cobros y los pagos a proveedor: un asiento
+ * por documento, buscado por (source_type, source_id).
+ */
+export async function getAsientoDeNotaDeCredito(
+  db: DB,
+  tenantId: string,
+  creditNoteId: string
+): Promise<AsientoAReversar | null> {
+  const mapa = await cargarAsientosPorOrigen(db, tenantId, SOURCE_TYPE_NOTA_CREDITO, [creditNoteId]);
+  return mapa.get(creditNoteId) ?? null;
+}
+
+export interface ReverseCreditNoteResult {
+  entry_id: string;
+  entry_number: number;
+  reversed_entry_number: number;
+  transaction_date: string;
+  credit_note_number: string;
+  invoice: {
+    invoice_id: string;
+    invoice_number: string;
+    credited_total: number;
+    balance_due: number;
+    status: string;
+  };
+}
+
+/**
+ * ═════════════════════════════════════════════════════════════════════════════
+ * REVERSAR UNA NOTA DE CRÉDITO (Bloque 9C, migración `060`)
+ * ═════════════════════════════════════════════════════════════════════════════
+ * Era lo único que quedaba sin construir del Bloque 5. Mismo molde que
+ * `reversePayment`: el espejo lo arma `construirAsientoDeReversion` —la MISMA
+ * función que dibuja la vista previa del diálogo— y el RPC no lo recalcula, lo
+ * VERIFICA.
+ *
+ * 🔴 NO SE RESTA NADA. `invoices.credited_total` es derivada desde la `051`, y
+ * `balance_due` y el `status` cuelgan de ella. El RPC cambia un solo estado
+ * (`credit_notes.status = 'anulada'`) y el trigger que ya existía recalcula los
+ * tres, con la misma función que los calculó al emitir. Por eso acá no hay
+ * ninguna aritmética: los números que se devuelven se LEEN después, no se
+ * predicen. La verificación de la 060 falla si aparece una escritura directa.
+ *
+ * 🔴 UNA NC SIN ASIENTO PROPIO NO SE REVERSA. Es la que sale de anular una
+ * factura (D5). Reversarla sería des-anular la factura sin pasar por
+ * `cancelInvoice` ni por el gate de mes cerrado. Se corta acá con un 409 que
+ * dice qué hacer, y el RPC lo vuelve a cortar por si alguien lo llama directo.
+ *
+ * 🔑 `ledgerDb` es el cliente de SERVICIO (SOP-014): el RPC tiene EXECUTE solo
+ * para service_role y confía en el `tenantId` que recibe, que sale del perfil
+ * del usuario autenticado y nunca del body.
+ */
+export async function reverseCreditNote(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  creditNoteId: string,
+  reason: string
+): Promise<ReverseCreditNoteResult> {
+  // 1. La NC existe y es de este tenant. El RPC lo vuelve a chequear con
+  //    candado; acá es para contestar 404 en vez de un error opaco.
+  const { data: nc, error: errFetch } = await db
+    .from("credit_notes")
+    .select("id, credit_note_number, status")
+    .eq("tenant_id", tenantId)
+    .eq("id", creditNoteId)
+    .maybeSingle();
+
+  if (errFetch) {
+    throw new MutationError(pgErrorToMessage(errFetch), 500, errFetch);
+  }
+  if (!nc) {
+    throw new MutationError("Nota de crédito no encontrada", 404);
+  }
+  if ((nc as { status: string }).status === "anulada") {
+    throw new MutationError("Esta nota de crédito ya está anulada.", 409);
+  }
+
+  // 2. Su asiento propio. Sin asiento, no se reversa desde acá.
+  const original = await getAsientoDeNotaDeCredito(db, tenantId, creditNoteId);
+  if (!original) {
+    throw new MutationError(
+      "Esta nota de crédito salió de la anulación de su factura, así que no tiene " +
+        "asiento propio: la anulación ya reversó el asiento de la factura y no hay " +
+        "nada que deshacer acá. Si la anulación fue un error, se corrige emitiendo " +
+        "una factura nueva.",
+      409
+    );
+  }
+
+  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
+  const hoy = new Date().toISOString().slice(0, 10);
+  const armado = construirAsientoDeReversion(original, {
+    hoy,
+    motivo: reason,
+    source_id: creditNoteId,
+  });
+  if (!armado.ok) {
+    throw new MutationError(armado.mensaje, 422);
+  }
+
+  // 4. El RPC: todo o nada.
+  const { data, error } = await ledgerDb.rpc("reverse_credit_note", {
+    p_tenant_id: tenantId,
+    p_credit_note_id: creditNoteId,
+    p_reason: armado.asiento.reversal_reason,
+    p_transaction_date: armado.asiento.transaction_date,
+    p_description: armado.asiento.description,
+    p_lines: armado.asiento.lines.map((l) => ({
+      account_code: l.account_code,
+      debit: l.debit,
+      credit: l.credit,
+      description: l.description ?? null,
+    })),
+    p_created_by: userId,
+  });
+
+  if (error) {
+    console.error("[finanzas/api] reverse_credit_note failed", error);
+    // 422 y no 500: el mensaje del RPC ya viene redactado para que lo lea un
+    // humano (período cerrado, ya reversada, líneas que no son el espejo).
+    throw new MutationError(
+      error.message || "No se pudo reversar la nota de crédito",
+      422,
+      error
+    );
+  }
+
+  const r = data as {
+    entry_id: string;
+    entry_number: number;
+    reversed_entry_number: number;
+    transaction_date: string;
+    credit_note_number: string;
+    invoice: {
+      invoice_id: string;
+      invoice_number: string;
+      credited_total: number | string;
+      balance_due: number | string;
+      status: string;
+    };
+  } | null;
+  if (!r || !r.entry_id) {
+    throw new MutationError(
+      "La nota de crédito se reversó pero no se pudo leer el asiento resultante",
+      500
+    );
+  }
+
+  return {
+    entry_id: r.entry_id,
+    entry_number: Number(r.entry_number),
+    reversed_entry_number: Number(r.reversed_entry_number),
+    transaction_date: r.transaction_date,
+    credit_note_number: r.credit_note_number,
+    invoice: {
+      ...r.invoice,
+      credited_total: Number(r.invoice.credited_total),
+      balance_due: Number(r.invoice.balance_due),
+    },
+  };
 }

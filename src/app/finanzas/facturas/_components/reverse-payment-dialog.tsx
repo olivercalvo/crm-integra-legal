@@ -34,6 +34,13 @@ interface Props {
    * leyendo este archivo.
    */
   variante?: "cobro" | "pago" | "gasto" | "asiento" | "nota_credito";
+  /**
+   * Mínimo del motivo, si es mayor que `MOTIVO_MIN`. Lo usa la NC autorizada:
+   * su motivo viaja a la DGI como `cancellationReason`, que exige 15.
+   */
+  motivoMinimo?: number;
+  /** Texto de la matriz fiscal que explica qué va a pasar (NC). Se muestra tal cual. */
+  aviso?: string;
 }
 
 const TEXTOS = {
@@ -89,8 +96,9 @@ const TEXTOS = {
    * recalcula el trigger de la 051 cuando la NC queda anulada— pero eso es un
    * detalle de implementación y no lo que hay que decir en un modal.
    *
-   * ⚠️ Esto NO anula la nota de crédito ante la DGI. Si ya fue autorizada, hay
-   * que anularla ahí también, y el detalle lo ofrece aparte.
+   * Si la NC está autorizada, la ruta la anula PRIMERO ante la DGI y después
+   * reversa el libro (`reversarNotaDeCredito`, 25/09/2026). El detalle le pasa
+   * a este diálogo el aviso de la matriz y el mínimo de 15 del motivo.
    */
   nota_credito: {
     endpoint: (id: string) => `/api/finanzas/credit-notes/${id}/reverse`,
@@ -128,8 +136,11 @@ export function ReversePaymentDialog({
   invoiceNumber,
   disabled,
   variante = "cobro",
+  motivoMinimo,
+  aviso,
 }: Props) {
   const t = TEXTOS[variante];
+  const minimo = Math.max(MOTIVO_MIN, motivoMinimo ?? 0);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -163,7 +174,7 @@ export function ReversePaymentDialog({
   );
 
   const trimmedLen = reason.trim().length;
-  const meetsMinimum = trimmedLen >= MOTIVO_MIN;
+  const meetsMinimum = trimmedLen >= minimo;
 
   function reset() {
     setReason("");
@@ -176,8 +187,8 @@ export function ReversePaymentDialog({
     setSubmitError(null);
 
     const trimmed = reason.trim();
-    if (trimmed.length < MOTIVO_MIN) {
-      setReasonError(`El motivo debe tener al menos ${MOTIVO_MIN} caracteres.`);
+    if (trimmed.length < minimo) {
+      setReasonError(`El motivo debe tener al menos ${minimo} caracteres.`);
       return;
     }
 
@@ -255,6 +266,12 @@ export function ReversePaymentDialog({
             </div>
           </div>
 
+          {aviso && (
+            <p className="rounded-md border border-integra-navy/20 bg-integra-navy/[0.03] p-3 text-sm text-integra-navy">
+              {aviso}
+            </p>
+          )}
+
           {/* Motivo */}
           <div>
             <Label htmlFor="reverse_reason" className="text-sm">
@@ -282,7 +299,9 @@ export function ReversePaymentDialog({
             <div className="mt-1 flex items-start justify-between gap-3">
               <p className={`text-xs ${reasonError ? "text-red-600" : "text-gray-500"}`}>
                 {reasonError ??
-                  "Queda escrito en el asiento espejo y es obligatorio por ley (DE 34/1998, Art. 5.7)."}
+                  (minimo > MOTIVO_MIN
+                    ? `Mínimo ${minimo} caracteres: lo exige la DGI para anular un documento electrónico.`
+                    : "Queda escrito en el asiento espejo y es obligatorio por ley (DE 34/1998, Art. 5.7).")}
               </p>
               <span
                 aria-live="polite"

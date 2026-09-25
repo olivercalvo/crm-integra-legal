@@ -275,6 +275,12 @@ const MARCADORES = {
     nota: "Corrige la 061: `NULL IN (...)` da NULL y el CHECK aceptaba un CUFE sin origen. En staging dos facturas emitidas por el CRM quedaron asi. Va pegada a la 061 y, en produccion, en la VENTANA: el codigo de main no escribe el origen.",
   },
 
+  "065_fe_anulaciones_de_nota_de_credito.sql": {
+    que: "fe_anulaciones.credit_note_id — el registro de anulaciones tambien guarda NC",
+    tipo: "columna", tabla: "fe_anulaciones", columna: "credit_note_id",
+    nota: "25/09. Arco exclusivo con invoice_id, como la 062 en fe_emisiones. Existe porque una NC autorizada se anula ante la DGI (PAC primero, libro despues) y cada intento queda registrado.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

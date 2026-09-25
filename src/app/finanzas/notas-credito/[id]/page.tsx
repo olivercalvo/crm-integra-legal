@@ -22,6 +22,7 @@ import { NcFeEstadoBadge } from "@/components/finanzas/nc-fe-estado-badge";
 import { CreditNotePdfButton } from "@/components/finanzas/credit-note-pdf-button";
 import { EnviarNcALaDgiButton } from "./_components/enviar-nc-a-la-dgi-button";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { MOTIVO_ANULACION_MIN } from "@/lib/finanzas/validators/cancel-invoice";
 import {
   decidirAccionSobreNotaDeCredito,
   type FeEstado,
@@ -244,6 +245,18 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               paymentLabel={`${nc.credit_note_number} · ${fmtImporte(Number(nc.grand_total))}`}
               asiento={asiento}
               invoiceNumber={nc.invoice?.invoice_number ?? ""}
+              // Si la matriz dice que viaja a la DGI, el motivo es el de la DGI
+              // (15) y el aviso es el texto de la matriz, no uno escrito acá.
+              motivoMinimo={
+                accion.accion === "anular_en_dgi_y_libro" || nc.fe_estado === "canceled"
+                  ? MOTIVO_ANULACION_MIN
+                  : undefined
+              }
+              aviso={
+                accion.accion === "anular_en_dgi_y_libro" || accion.accion === "reversar_solo_en_el_libro"
+                  ? accion.mensaje
+                  : undefined
+              }
             />
           )}
         </div>
@@ -474,8 +487,8 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
           <div className="rounded-lg border bg-white p-4 text-xs text-gray-500">
             <p className="font-semibold text-gray-700 mb-1">Documento inmutable</p>
             <p>
-              Una nota de crédito emitida no se edita ni se elimina. Su reversión contable todavía no está
-              disponible.
+              Una nota de crédito emitida no se edita ni se elimina: se reversa. Si está autorizada por la
+              DGI, «Reversar» la anula primero ante la DGI y después en el libro.
             </p>
           </div>
         </aside>

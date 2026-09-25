@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
-import { reverseCreditNote } from "@/lib/finanzas/api/credit-notes";
+import { reversarNotaDeCredito } from "@/lib/finanzas/efactura/orchestration/anular-nota-de-credito-ante-dgi";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
 
@@ -27,6 +27,16 @@ interface RouteParams {
  * guía de RM: corregir el libro es trabajo del contador. ⚠️ EMITIR una nota de
  * crédito sigue siendo admin + abogada — el contador reversa, no emite, igual
  * que con los cobros. Asistente → 403.
+ *
+ * 🔴 DESDE EL 25/09/2026 UNA NC AUTORIZADA SE ANULA ANTE LA DGI PRIMERO.
+ * La ruta ya no llama a `reverseCreditNote` directo: pasa por
+ * `reversarNotaDeCredito`, que le pregunta a la matriz. Si la NC está viva ante
+ * la DGI (dentro de las 182 h), la anula ahí primero y recién después reversa
+ * el libro, con el orden y los tres caminos de falla de la factura (D3). Antes,
+ * «Reversar» dejaba la NC anulada en el libro y viva ante la DGI.
+ *
+ * Códigos: 200 reversada · 409 anulada en la DGI y falta el libro · 422 la DGI
+ * rechazó · 502 no sabemos si llegó. Los mismos de `…/invoices/[id]/cancel`.
  *
  * Body esperado: { reason }
  */
@@ -58,7 +68,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const result = await reverseCreditNote(
+    const r = await reversarNotaDeCredito(
       ctx.db,
       // 🔑 SOP-014: el RPC va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
@@ -66,12 +76,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      new Date()
     );
-    return NextResponse.json(result);
+    switch (r.estado) {
+      case "reversada":
+        return NextResponse.json(r, { status: 200 });
+      case "anulada_en_dgi_falta_el_libro":
+        console.error("[api] NC anulada en la DGI, falta el libro:", params.id, r.detalle);
+        return NextResponse.json({ error: r.mensaje, ...r }, { status: 409 });
+      case "rechazada_por_la_dgi":
+        return NextResponse.json({ error: r.mensaje, ...r }, { status: 422 });
+      case "no_sabemos":
+        console.error("[api] anulación de NC sin confirmar:", params.id, `intento #${r.intento}`);
+        return NextResponse.json({ error: r.mensaje, ...r }, { status: 502 });
+    }
   } catch (err) {
     if (err instanceof MutationError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      const cuerpo: Record<string, unknown> = { error: err.message };
+      // El 400 del motivo (15 caracteres si viaja a la DGI) va al campo.
+      if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[api] POST credit-notes/[id]/reverse failed", err);
     return NextResponse.json(

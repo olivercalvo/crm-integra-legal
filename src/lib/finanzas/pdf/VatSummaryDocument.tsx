@@ -331,7 +331,7 @@ export function VatSummaryDocument({ result }: VatSummaryDocumentProps) {
             {detail.invoices.map((inv, idx) => (
               <View
                 key={`${inv.id}-${inv.is_cancellation_adjustment ? "neg" : "pos"}-${idx}`}
-                style={[s.detailRow, inv.is_cancellation_adjustment ? s.detailRowAdjustment : {}]}
+                style={[s.detailRow, inv.is_cancellation_adjustment || inv.documento === "nota_credito" ? s.detailRowAdjustment : {}]}
                 wrap={false}
               >
                 <Text style={[s.detailCell, { width: 50 }]}>
@@ -341,7 +341,7 @@ export function VatSummaryDocument({ result }: VatSummaryDocumentProps) {
                 </Text>
                 <Text style={[s.detailCellMono, { width: 70 }]}>
                   {inv.invoice_number}
-                  {inv.is_cancellation_adjustment ? " ⊖" : ""}
+                  {inv.is_cancellation_adjustment || inv.documento === "nota_credito" ? " ⊖" : ""}
                 </Text>
                 <Text style={[s.detailCell, { flex: 1 }]}>
                   {inv.client_name ?? "—"}

@@ -49,7 +49,7 @@ export function generateVatSummaryXlsxBuffer(result: VatSummaryResult): Buffer {
   if (result.detail.invoices.length > 0) {
     const header = [
       "Fecha", "Número", "Tipo", "Cliente", "N° cliente",
-      "Estado", "Es ajuste anulación", "Subtotal", "ITBMS", "Total",
+      "Estado", "Documento", "Subtotal", "ITBMS", "Total",
     ];
     const rows: (string | number | boolean)[][] = [header];
     for (const inv of result.detail.invoices) {
@@ -62,7 +62,9 @@ export function generateVatSummaryXlsxBuffer(result: VatSummaryResult): Buffer {
         inv.client_name ?? "",
         inv.client_number ?? "",
         inv.status,
-        inv.is_cancellation_adjustment,
+        inv.documento === "nota_credito"
+          ? `Nota de crédito${inv.factura_referenciada ? ` de ${inv.factura_referenciada}` : ""}`
+          : inv.is_cancellation_adjustment ? "Ajuste por anulación" : "Factura",
         Number(inv.subtotal_total.toFixed(2)),
         Number(inv.tax_total.toFixed(2)),
         Number(inv.grand_total.toFixed(2)),
@@ -71,7 +73,7 @@ export function generateVatSummaryXlsxBuffer(result: VatSummaryResult): Buffer {
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws["!cols"] = [
       { wch: 11 }, { wch: 18 }, { wch: 10 }, { wch: 30 }, { wch: 14 },
-      { wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
     ];
     XLSX.utils.book_append_sheet(wb, ws, "Facturas");
   }

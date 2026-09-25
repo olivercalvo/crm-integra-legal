@@ -13,16 +13,20 @@
  *   9. Tax payments made this period
  *  10. TOTAL AMOUNT DUE = (7) + (8) - (9)
  *
- * Convenciones (D1-D5, ver Sprint 2F):
+ * Convenciones:
  *   - Devengado por issue_date (no por fecha de pago).
- *   - Anuladas: positivo en mes de emisión, negativo en mes de anulación
- *     (cancelled_at). Mes histórico nunca se modifica retroactivamente.
- *   - Tax rate se respeta por línea — usamos los totales pre-calculados en
+ *   - 🔴 Desde el 25/09/2026 (regla de Oliver, ver `vat-calculo.ts`): las
+ *     facturas ANULADAS no cuentan, y las NOTAS DE CRÉDITO de venta autorizadas
+ *     y vigentes RESTAN, en el mes de la NC. Antes una anulada contaba positivo
+ *     en su mes y negativo en el de la anulación, y las NC no restaban nada.
+ *   - Tax rate se respeta por línea: usamos los totales pre-calculados en
  *     invoices.subtotal_total y invoices.tax_total.
- *   - Status excluidos del cómputo positivo: 'borrador', 'cancelada_pre_emision'.
- *   - Status 'anulada' SÍ se incluye en el cómputo positivo del mes de
- *     emisión (la anulación se contabiliza aparte como ajuste).
  */
+import {
+  comprasDelPeriodo,
+  cuentaLaNotaDeVenta,
+  ventasDelPeriodo,
+} from "@/lib/finanzas/reports/vat-calculo";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -64,6 +68,10 @@ export interface InvoiceDetailRow {
   status: string;
   /** true = es una entrada de ajuste negativo por anulación en el mes consultado. */
   is_cancellation_adjustment: boolean;
+  /** Desde el 25/09/2026 el detalle trae también las NC de venta, en negativo. */
+  documento?: "factura" | "nota_credito";
+  /** Solo en NC: la factura que acredita. */
+  factura_referenciada?: string | null;
   /** Solo presente si is_cancellation_adjustment = true. */
   cancelled_at?: string | null;
   cancellation_reason?: string | null;
@@ -204,7 +212,7 @@ export async function mesesConActividad(
     return /^\d{4}-\d{2}$/.test(s) ? s : null;
   };
 
-  const [facturas, gastos, pagos] = await Promise.all([
+  const [facturas, gastos, pagos, notas] = await Promise.all([
     db
       .from("invoices")
       .select("issue_date")
@@ -212,6 +220,8 @@ export async function mesesConActividad(
       .in("status", ["emitida", "parcialmente_pagada", "pagada", "anulada"]),
     db.from("business_expenses").select("expense_date").eq("tenant_id", tenantId),
     db.from("tax_payments").select("payment_date").eq("tenant_id", tenantId),
+    // Un mes que sólo tiene una NC (de una factura de otro mes) también cuenta.
+    db.from("credit_notes").select("issue_date").eq("tenant_id", tenantId),
   ]);
 
   const meses = new Set<string>();
@@ -225,6 +235,10 @@ export async function mesesConActividad(
   }
   for (const r of (pagos.data ?? []) as { payment_date: string }[]) {
     const m = mes(r.payment_date);
+    if (m) meses.add(m);
+  }
+  for (const r of (notas.data ?? []) as { issue_date: string }[]) {
+    const m = mes(r.issue_date);
     if (m) meses.add(m);
   }
 
@@ -263,26 +277,26 @@ export async function getVatSummary(
     .eq("tenant_id", tenantId)
     .gte("issue_date", from)
     .lte("issue_date", to)
-    .not("status", "in", '("borrador","cancelada_pre_emision")')
+    .in("status", ["emitida", "parcialmente_pagada", "pagada"])
     .order("issue_date", { ascending: true })
     .order("invoice_number", { ascending: true });
 
-  // 2) Facturas ANULADAS en el mes (negativo — ajuste tipo nota crédito).
-  //    Filtro por cancelled_at, sin importar issue_date. Esto incluye
-  //    facturas emitidas en meses anteriores y anuladas ahora.
+  // 2) NOTAS DE CRÉDITO de venta con fecha en el mes (restan). Se traen todas
+  //    las del mes y `cuentaLaNotaDeVenta` decide cuáles cuentan, para que la
+  //    regla viva en un solo lugar (`vat-calculo.ts`).
   const cancellationPromise = db
-    .from("invoices")
+    .from("credit_notes")
     .select(
-      `id, invoice_number, invoice_kind, issue_date,
-       subtotal_total, tax_total, grand_total, status,
-       cancelled_at, cancellation_reason,
-       client:clients!invoices_client_id_fkey(name, client_number)`
+      `id, credit_note_number, issue_date, status, fe_estado,
+       subtotal_total, tax_total, grand_total,
+       invoice:invoices!credit_notes_invoice_id_fkey(invoice_number, invoice_kind, status),
+       client:clients!credit_notes_client_id_fkey(name, client_number)`
     )
     .eq("tenant_id", tenantId)
-    .eq("status", "anulada")
-    .gte("cancelled_at", `${from}T00:00:00Z`)
-    .lte("cancelled_at", `${to}T23:59:59.999Z`)
-    .order("cancelled_at", { ascending: true });
+    .gte("issue_date", from)
+    .lte("issue_date", to)
+    .order("issue_date", { ascending: true })
+    .order("credit_note_number", { ascending: true });
 
   // 3) Compras del bufete (line 4/5/6).
   const expensesPromise = db
@@ -319,7 +333,7 @@ export async function getVatSummary(
     console.error("[finanzas/reports] vat-summary: error invoices+", posRes.error);
   }
   if (cancRes.error) {
-    console.error("[finanzas/reports] vat-summary: error invoices anuladas", cancRes.error);
+    console.error("[finanzas/reports] vat-summary: error credit_notes", cancRes.error);
   }
   if (expRes.error) {
     console.error("[finanzas/reports] vat-summary: error business_expenses", expRes.error);
@@ -340,19 +354,27 @@ export async function getVatSummary(
     client: { name: string; client_number: string } | null;
   }>;
 
-  const cancelledInvoices = (cancRes.data ?? []) as unknown as Array<{
+  const notasDelMes = ((cancRes.data ?? []) as unknown as Array<{
     id: string;
-    invoice_number: string;
-    invoice_kind: string;
+    credit_note_number: string;
     issue_date: string;
+    status: string;
+    fe_estado: string | null;
     subtotal_total: string | number;
     tax_total: string | number;
     grand_total: string | number;
-    status: string;
-    cancelled_at: string;
-    cancellation_reason: string | null;
+    invoice: { invoice_number: string; invoice_kind: string; status: string } | null;
     client: { name: string; client_number: string } | null;
-  }>;
+  }>).map((n) => ({
+    ...n,
+    factura_status: n.invoice?.status ?? "",
+    subtotal: Number(n.subtotal_total),
+    tax: Number(n.tax_total),
+  }));
+  // Las que restan. El resto (internas, anuladas, las de una anulación) no.
+  const notasQueRestan = notasDelMes.filter((n) =>
+    cuentaLaNotaDeVenta({ status: n.status, fe_estado: n.fe_estado, factura_status: n.factura_status })
+  );
 
   const expenses = (expRes.data ?? []) as unknown as Array<{
     id: string;
@@ -434,52 +456,35 @@ export async function getVatSummary(
     }
   }
 
-  // ── Sumatorias positivas (facturas emitidas en el mes) ─────────────────
-  let salesSubtotalPos = 0;
-  let taxableSalesPos = 0;
-  let taxCollectedPos = 0;
-  for (const inv of positiveInvoices) {
-    const sub = Number(inv.subtotal_total);
-    const tax = Number(inv.tax_total);
-    salesSubtotalPos += sub;
-    taxCollectedPos += tax;
-    if (tax > 0) {
-      taxableSalesPos += sub;
-    }
-  }
+  // ── Ventas (líneas 1-3) y compras (4-6): la regla vive en vat-calculo.ts ──
+  const ventas = ventasDelPeriodo(
+    positiveInvoices.map((f) => ({
+      status: f.status,
+      subtotal_total: Number(f.subtotal_total),
+      tax_total: Number(f.tax_total),
+    })),
+    notasDelMes.map((n) => ({
+      status: n.status,
+      fe_estado: n.fe_estado,
+      factura_status: n.factura_status,
+      subtotal_total: n.subtotal,
+      tax_total: n.tax,
+    }))
+  );
 
-  // ── Sumatorias negativas (anulaciones en el mes) ───────────────────────
-  let salesSubtotalNeg = 0;
-  let taxableSalesNeg = 0;
-  let taxCollectedNeg = 0;
-  for (const inv of cancelledInvoices) {
-    const sub = Number(inv.subtotal_total);
-    const tax = Number(inv.tax_total);
-    salesSubtotalNeg += sub;
-    taxCollectedNeg += tax;
-    if (tax > 0) {
-      taxableSalesNeg += sub;
-    }
-  }
-
-  // ── Sumatorias de compras ──────────────────────────────────────────────
-  let purchasesSubtotal = 0;
-  let taxablePurchasesSubtotal = 0;
-  let taxReclaimable = 0;
-  for (const ex of expenses) {
-    const sub = Number(ex.subtotal);
-    const tax = Number(ex.tax_amount);
-    purchasesSubtotal += sub;
-    taxReclaimable += tax;
-    // Solo la parte del subtotal que pagó impuesto (líneas con ITBMS > 0). Una
-    // compra SIN líneas (anterior a la `040`; no debería existir) cae al
-    // criterio viejo para no desaparecer del reporte.
-    if (comprasConLineas.has(ex.id)) {
-      taxablePurchasesSubtotal += baseGravadaPorCompra.get(ex.id) ?? 0;
-    } else if (tax > 0) {
-      taxablePurchasesSubtotal += sub;
-    }
-  }
+  const compras = comprasDelPeriodo(
+    expenses.map((ex) => {
+      const tax = Number(ex.tax_amount);
+      const sub = Number(ex.subtotal);
+      // Solo la parte del subtotal que pagó impuesto (líneas con ITBMS > 0). Una
+      // compra SIN líneas (anterior a la `040`) cae al criterio viejo.
+      const base = comprasConLineas.has(ex.id)
+        ? baseGravadaPorCompra.get(ex.id) ?? 0
+        : tax > 0 ? sub : 0;
+      return { subtotal: sub, tax_amount: tax, base_gravada: base };
+    }),
+    [] // NC de compra: se suman cuando exista la 3.5.
+  );
 
   // ── Sumatoria de pagos al DGI ──────────────────────────────────────────
   let taxPaymentsTotal = 0;
@@ -488,21 +493,21 @@ export async function getVatSummary(
   }
 
   // ── Construcción de las 10 líneas ──────────────────────────────────────
-  const line1 = round2(salesSubtotalPos - salesSubtotalNeg);
-  const line2 = round2(taxableSalesPos - taxableSalesNeg);
-  const line3 = round2(taxCollectedPos - taxCollectedNeg);
-  const line4 = round2(purchasesSubtotal);
-  const line5 = round2(taxablePurchasesSubtotal);
-  const line6 = round2(taxReclaimable);
+  const line1 = ventas.ventas;
+  const line2 = ventas.gravadas;
+  const line3 = ventas.itbms;
+  const line4 = compras.compras;
+  const line5 = compras.gravadas;
+  const line6 = compras.itbms;
   const line7 = round2(line3 - line6);
   const line8 = 0; // TODO: saldo acumulado VAT Control de períodos anteriores.
   const line9 = round2(taxPaymentsTotal);
   const line10 = round2(line7 + line8 - line9);
 
   const lines: VatSummaryLine[] = [
-    { number: 1, label: "Total ventas del período (antes de impuesto)", value: line1, hint: "Suma de subtotales de facturas emitidas en el mes (menos ajustes por anulación)" },
+    { number: 1, label: "Total ventas del período (antes de impuesto)", value: line1, hint: "Facturas emitidas en el mes, menos las notas de crédito autorizadas del mes. Las anuladas no cuentan." },
     { number: 2, label: "Ventas gravadas con ITBMS", value: line2, hint: "Solo las facturas con ITBMS > 0" },
-    { number: 3, label: "ITBMS cobrado sobre ventas", value: line3, hint: "Débito fiscal del período" },
+    { number: 3, label: "ITBMS cobrado sobre ventas", value: line3, hint: "Débito fiscal del período: ITBMS de las facturas menos el de las notas de crédito." },
     { number: 4, label: "Total compras del período", value: line4, hint: "Compras del bufete a proveedores" },
     { number: 5, label: "Compras gravadas con ITBMS", value: line5, hint: "Solo las líneas de compra con ITBMS > 0; en una compra mixta, la parte exenta no cuenta" },
     { number: 6, label: "ITBMS recuperable sobre compras", value: line6, hint: "Crédito fiscal del período" },
@@ -529,21 +534,21 @@ export async function getVatSummary(
       is_cancellation_adjustment: false,
     });
   }
-  for (const inv of cancelledInvoices) {
+  for (const n of notasQueRestan) {
     invoiceDetail.push({
-      id: inv.id,
-      invoice_number: inv.invoice_number,
-      invoice_kind: inv.invoice_kind,
-      issue_date: inv.issue_date,
-      client_name: inv.client?.name ?? null,
-      client_number: inv.client?.client_number ?? null,
-      subtotal_total: -Number(inv.subtotal_total),  // signo negativo
-      tax_total: -Number(inv.tax_total),
-      grand_total: -Number(inv.grand_total),
-      status: inv.status,
-      is_cancellation_adjustment: true,
-      cancelled_at: inv.cancelled_at,
-      cancellation_reason: inv.cancellation_reason,
+      id: n.id,
+      invoice_number: n.credit_note_number,
+      invoice_kind: n.invoice?.invoice_kind ?? "",
+      issue_date: n.issue_date,
+      client_name: n.client?.name ?? null,
+      client_number: n.client?.client_number ?? null,
+      subtotal_total: -n.subtotal,
+      tax_total: -n.tax,
+      grand_total: -Number(n.grand_total),
+      status: n.status,
+      is_cancellation_adjustment: false,
+      documento: "nota_credito",
+      factura_referenciada: n.invoice?.invoice_number ?? null,
     });
   }
 

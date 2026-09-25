@@ -160,7 +160,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
       {result.detail.invoices.length > 0 && (
         <DetailSection
           title="Detalle de facturas"
-          subtitle={`${totalInvoices} factura${totalInvoices === 1 ? "" : "s"} (incluye ajustes por anulación)`}
+          subtitle={`${totalInvoices} documento${totalInvoices === 1 ? "" : "s"}: facturas emitidas y notas de crédito que restan. Las anuladas no cuentan.`}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -179,7 +179,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
                 {result.detail.invoices.map((inv) => (
                   <tr
                     key={`${inv.id}-${inv.is_cancellation_adjustment ? "neg" : "pos"}`}
-                    className={inv.is_cancellation_adjustment ? "bg-red-50/40" : ""}
+                    className={inv.is_cancellation_adjustment || inv.documento === "nota_credito" ? "bg-red-50/40" : ""}
                   >
                     <td className="px-4 py-2 text-gray-700 whitespace-nowrap">
                       {inv.is_cancellation_adjustment
@@ -190,6 +190,11 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
                       {inv.invoice_number}
                       {inv.is_cancellation_adjustment && (
                         <span className="ml-1 text-[10px] text-red-700">(ANULACIÓN)</span>
+                      )}
+                      {inv.documento === "nota_credito" && (
+                        <span className="ml-1 text-[10px] text-red-700">
+                          (NC{inv.factura_referenciada ? ` de ${inv.factura_referenciada}` : ""})
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-2 text-gray-700">

@@ -287,6 +287,12 @@ const MARCADORES = {
     nota: "3.5, 25/09. Una sola transaccion (numero + NC + lineas + asiento). credited_total derivada y balance_due generada en business_expenses; el status se deriva contra el total neto. Defaults de Josuarth (J-2, J-3, J-5, J-10, J-11) en el encabezado.",
   },
 
+  "067_importacion_de_asientos.sql": {
+    que: "Importar asientos desde Excel: lote, vinculo, alta en una transaccion y reversion del lote",
+    tipo: "tabla", tabla: "journal_imports",
+    nota: "7.5, 25/09. Todo o nada: post_journal_entries_batch postea cada asiento por post_journal_entry en una transaccion. reverse_journal_import reversa cada asiento con reverse_journal_entry (055), fecha de hoy, sin borrar nada. Los asientos importados son source_type manual.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

@@ -132,6 +132,7 @@
 | `064_cufe_origen_no_nulo.sql` | **sí** | El CHECK de dgi_cufe_origen exige el origen NO nulo · <sub>marcador: invoices_dgi_cufe_origen_check menciona 'dgi_cufe_origen IS NOT NULL'</sub> Corrige la 061: `NULL IN (...)` da NULL y el CHECK aceptaba un CUFE sin origen. En staging dos facturas emitidas por el CRM quedaron asi. Va pegada a la 061 y, en produccion, en la VENTANA: el codigo de main no escribe el origen. |
 | `065_fe_anulaciones_de_nota_de_credito.sql` | **sí** | fe_anulaciones.credit_note_id — el registro de anulaciones tambien guarda NC · <sub>marcador: fe_anulaciones.credit_note_id</sub> 25/09. Arco exclusivo con invoice_id, como la 062 en fe_emisiones. Existe porque una NC autorizada se anula ante la DGI (PAC primero, libro despues) y cada intento queda registrado. |
 | `066_nc_de_compra.sql` | **sí** | Nota de credito de compra: supplier_credit_notes, saldo derivado, RPC de alta y de reversion · <sub>marcador: tabla supplier_credit_notes</sub> 3.5, 25/09. Una sola transaccion (numero + NC + lineas + asiento). credited_total derivada y balance_due generada en business_expenses; el status se deriva contra el total neto. Defaults de Josuarth (J-2, J-3, J-5, J-10, J-11) en el encabezado. |
+| `067_importacion_de_asientos.sql` | **sí** | Importar asientos desde Excel: lote, vinculo, alta en una transaccion y reversion del lote · <sub>marcador: tabla journal_imports</sub> 7.5, 25/09. Todo o nada: post_journal_entries_batch postea cada asiento por post_journal_entry en una transaccion. reverse_journal_import reversa cada asiento con reverse_journal_entry (055), fecha de hoy, sin borrar nada. Los asientos importados son source_type manual. |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -160,4 +161,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-25 19:08._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-09-25 19:28._

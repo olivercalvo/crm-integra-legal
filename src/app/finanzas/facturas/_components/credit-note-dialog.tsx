@@ -6,7 +6,12 @@ import { FileMinus, AlertCircle, AlertTriangle } from "lucide-react";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
 import { fmtImporte } from "@/lib/utils/importe";
-import { NC_MOTIVO_MAX, NC_MOTIVO_MIN, totalDeLineaDeNc } from "@/lib/finanzas/validators/credit-note";
+import {
+  NC_MOTIVO_MAX,
+  NC_MOTIVO_MIN,
+  errorDeCantidadAcreditable,
+  totalDeLineaDeNc,
+} from "@/lib/finanzas/validators/credit-note";
 
 /** Una línea de la factura, con lo que todavía se puede acreditar. */
 export interface LineaAcreditable {
@@ -45,7 +50,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * detalle de la NC.
  *
  * 🔴 La NC nace como documento INTERNO, sin autorización de la DGI, y el
- * detalle y el PDF lo dicen. El envío al PAC es otro bloque.
+ * detalle y el PDF lo dicen. Se envía a la DGI desde el detalle de la NC.
  */
 export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas, mesCerrado, disabled }: Props) {
   const router = useRouter();
@@ -71,6 +76,31 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
   );
   const excede = total > balanceDue + 0.005;
 
+  // El tope por línea EN VIVO, con la misma función que el servidor: una
+  // cantidad mayor a la disponible se marca en rojo y apaga el botón, en vez
+  // de esperar al 400 del POST.
+  const erroresEnVivo = useMemo(() => {
+    const e: Record<string, string> = {};
+    for (const l of acreditables) {
+      const v = (cantidades[l.invoice_line_id] ?? "").trim();
+      if (v === "") continue;
+      const qty = Number(v.replace(",", "."));
+      if (!isFinite(qty) || qty <= 0) {
+        e[l.invoice_line_id] = "Escribe una cantidad mayor que cero.";
+        continue;
+      }
+      const tope = errorDeCantidadAcreditable({
+        descripcion: l.description,
+        facturado: l.quantity,
+        disponible: l.disponible,
+        cantidad: qty,
+      });
+      if (tope) e[l.invoice_line_id] = tope;
+    }
+    return e;
+  }, [acreditables, cantidades]);
+  const hayErrorEnVivo = excede || Object.keys(erroresEnVivo).length > 0;
+
   function reset() {
     setReason("");
     setCantidades({});
@@ -90,11 +120,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
       errores.reason = `El motivo debe tener entre ${NC_MOTIVO_MIN} y ${NC_MOTIVO_MAX} caracteres.`;
     }
     if (seleccion.length === 0) errores.lineas = "Marque al menos una línea con su cantidad.";
-    for (const x of seleccion) {
-      if (x.qty > x.linea.disponible + 1e-9) {
-        errores[x.linea.invoice_line_id] = `Máximo ${x.linea.disponible} (facturado menos lo ya acreditado).`;
-      }
-    }
+    Object.assign(errores, erroresEnVivo);
     if (excede) {
       errores.lineas = `La nota de crédito (B/. ${fmtImporte(total)}) supera el saldo pendiente (B/. ${fmtImporte(balanceDue)}). Lo ya cobrado no se acredita: reverse el cobro primero, o acredite hasta el saldo.`;
     }
@@ -163,6 +189,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
         }}
         onConfirm={submit}
         loading={isPending}
+        confirmDisabled={hayErrorEnVivo}
         title={`Nota de crédito sobre ${invoiceNumber}`}
         confirmButtonText={isPending ? "Emitiendo…" : "Sí, emitir la nota de crédito"}
         cancelButtonText="Cancelar"
@@ -197,6 +224,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
                 {acreditables.map((l) => {
                   const v = cantidades[l.invoice_line_id] ?? "";
                   const marcada = v.trim() !== "";
+                  const errorLinea = erroresEnVivo[l.invoice_line_id] ?? fieldErrors[l.invoice_line_id];
                   return (
                     <tr key={l.invoice_line_id} className={marcada ? "bg-integra-gold/5" : ""}>
                       <td className="px-2 py-2">
@@ -228,11 +256,11 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
                           aria-label={`Cantidad a acreditar de ${l.description}`}
                           className={
                             "w-24 rounded-md border px-2 py-1 text-right font-mono text-sm min-h-[36px] " +
-                            (fieldErrors[l.invoice_line_id] ? "border-red-300" : "border-gray-300")
+                            (errorLinea ? "border-red-300" : "border-gray-300")
                           }
                         />
-                        {fieldErrors[l.invoice_line_id] && (
-                          <p className="mt-1 text-xs text-red-600">{fieldErrors[l.invoice_line_id]}</p>
+                        {errorLinea && (
+                          <p role="alert" className="mt-1 max-w-[16rem] text-left text-xs text-red-600">{errorLinea}</p>
                         )}
                       </td>
                     </tr>
@@ -242,6 +270,11 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
             </table>
           </div>
           {fieldErrors.lineas && <p className="text-xs text-red-600">{fieldErrors.lineas}</p>}
+          {excede && !fieldErrors.lineas && (
+            <p role="alert" className="text-xs text-red-600">
+              La nota de crédito (B/. {fmtImporte(total)}) supera el saldo pendiente (B/. {fmtImporte(balanceDue)}).
+            </p>
+          )}
 
           <div className={`flex items-center justify-between rounded-md border p-3 ${excede ? "border-red-200 bg-red-50" : "border-integra-gold/40 bg-gray-50"}`}>
             <span className="text-sm font-semibold text-integra-navy">Total de la nota de crédito</span>

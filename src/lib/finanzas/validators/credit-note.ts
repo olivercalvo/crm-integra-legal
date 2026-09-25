@@ -162,11 +162,14 @@ export function validarLineasDeNotaDeCredito(args: {
       return;
     }
     const disponible = round2(f.quantity - (acreditadoPorLinea.get(f.id) ?? 0));
-    if (p.quantity > disponible + 1e-9) {
-      fieldErrors[`lineas.${i}.quantity`] =
-        disponible <= 0
-          ? `La línea "${f.description}" ya está acreditada por completo.`
-          : `La línea "${f.description}" tiene ${disponible} disponible(s) para acreditar (facturado ${f.quantity}, ya acreditado ${round2(f.quantity - disponible)}).`;
+    const excedida = errorDeCantidadAcreditable({
+      descripcion: f.description,
+      facturado: f.quantity,
+      disponible,
+      cantidad: p.quantity,
+    });
+    if (excedida) {
+      fieldErrors[`lineas.${i}.quantity`] = excedida;
       return;
     }
     // 🔴 LA DESCRIPCIÓN SE HEREDA, ASÍ QUE SE HEREDA EL PROBLEMA.
@@ -217,4 +220,28 @@ export function validarLineasDeNotaDeCredito(args: {
   }
 
   return { ok: true, lineas, total };
+}
+
+/**
+ * El tope de UNA línea: no se acredita más de lo facturado menos lo ya
+ * acreditado por NC vigentes. `null` si la cantidad cabe.
+ *
+ * 🔒 Es la MISMA función que usa el diálogo para frenar en pantalla (desde el
+ * 25/09/2026). Antes el diálogo calculaba el total con cualquier cantidad y el
+ * botón seguía activo; el tope solo aparecía al registrar. Una sola función,
+ * un solo texto: `credit-note-tope-en-pantalla.test.ts` falla si el diálogo
+ * vuelve a comparar por su cuenta.
+ */
+export function errorDeCantidadAcreditable(x: {
+  descripcion: string;
+  facturado: number;
+  disponible: number;
+  cantidad: number;
+}): string | null {
+  if (x.cantidad <= x.disponible + 1e-9) return null;
+  if (x.disponible <= 0) return `La línea "${x.descripcion}" ya está acreditada por completo.`;
+  return (
+    `La línea "${x.descripcion}" tiene ${x.disponible} disponible(s) para acreditar ` +
+    `(facturado ${x.facturado}, ya acreditado ${round2(x.facturado - x.disponible)}).`
+  );
 }

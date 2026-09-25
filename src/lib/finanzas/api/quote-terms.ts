@@ -16,7 +16,7 @@ type DB = SupabaseClient;
 
 const FALLBACK_TEMPLATE = `Términos y Condiciones
 
-(Plantilla no configurada — el administrador del bufete debe definirla en
+(Plantilla no configurada: el administrador del bufete debe definirla en
 el módulo de Configuración de Finanzas antes de enviar cotizaciones.)`;
 
 /**

@@ -113,7 +113,7 @@ export default async function EditarCotizacionPage({ params }: PageProps) {
           <p className="text-sm text-gray-500">
             {sourceInfo
               ? "Cotización duplicada. Verifique el cliente y las fechas antes de emitir."
-              : "Cambios permitidos en estado borrador o emitida. El cliente no se puede cambiar — para eso, cancele y cree una cotización nueva."}
+              : "Cambios permitidos en estado borrador o emitida. El cliente no se puede cambiar. Para eso, cancele y cree una cotización nueva."}
           </p>
         </div>
       </div>

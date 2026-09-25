@@ -695,7 +695,7 @@ export function QuoteForm(props: Props) {
           <p>
             Las cotizaciones reciben un número{" "}
             <span className="font-mono">COT-NNNNNN</span> al guardar. La
-            numeración es definitiva — no cambia al enviar ni al convertir
+            numeración es definitiva: no cambia al enviar ni al convertir
             a facturas.
           </p>
         </div>

@@ -68,7 +68,7 @@ export function MarkAcceptedDialog({ quoteId, quoteNumber, disabled }: Props) {
         onClose={() => !isPending && setOpen(false)}
         onConfirm={submit}
         loading={isPending}
-        title={`Marcar como aceptada — ${quoteNumber}`}
+        title={`Marcar como aceptada: ${quoteNumber}`}
         confirmButtonText={isPending ? "Procesando…" : "Sí, marcar aceptada"}
         cancelButtonText="Cancelar"
       >

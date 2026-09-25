@@ -95,14 +95,14 @@ export function MarkRejectedDialog({ quoteId, quoteNumber, disabled }: Props) {
         }}
         onConfirm={submit}
         loading={isPending}
-        title={`Marcar como rechazada — ${quoteNumber}`}
+        title={`Marcar como rechazada: ${quoteNumber}`}
         confirmButtonText={isPending ? "Procesando…" : "Sí, marcar rechazada"}
         cancelButtonText="Cancelar"
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
             ¿El cliente rechazó esta cotización? Esta acción es para tu
-            seguimiento interno — la cotización queda archivada con estado
+            seguimiento interno: la cotización queda archivada con estado
             <span className="mx-1 font-mono">rechazada</span>.
           </p>
 

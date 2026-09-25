@@ -13,7 +13,7 @@ import type { Metadata } from "next";
  *     Google la cachee ni que el contenido aparezca en búsquedas).
  */
 export const metadata: Metadata = {
-  title: "Cotización — Integra Legal",
+  title: "Cotización · Integra Legal",
   description: "Portal de cotizaciones de Integra Legal · Panamá",
   robots: {
     index: false,

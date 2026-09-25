@@ -380,8 +380,8 @@ export function SendQuoteDialog({
                     "El servicio de correo no está configurado: avise a soporte."}
                   {" "}
                   {isResend
-                    ? "El registro de reenvío igual quedó guardado — copie el enlace de abajo y compártalo manualmente con el cliente."
-                    : "La cotización igual quedó marcada como enviada — copie el enlace de abajo y compártalo manualmente con el cliente."}
+                    ? "El registro de reenvío igual quedó guardado. Copie el enlace de abajo y compártalo manualmente con el cliente."
+                    : "La cotización igual quedó marcada como enviada. Copie el enlace de abajo y compártalo manualmente con el cliente."}
                 </p>
               </div>
             </div>

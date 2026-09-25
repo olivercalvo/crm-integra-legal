@@ -3173,6 +3173,23 @@ función que usa el servidor.
 
 ---
 
+### SOP-040 bis: anular una NOTA DE CRÉDITO ante la DGI (25/09/2026)
+
+Mismo orden que la factura y por la misma razón: **PAC primero, libro después**. El botón es
+«Reversar» del detalle de la NC; la ruta `POST /api/finanzas/credit-notes/[id]/reverse` llama
+a `reversarNotaDeCredito`, que le pregunta a `decidirAccionSobreNotaDeCredito`:
+
+| La matriz dice | Qué hace |
+|---|---|
+| `reversar_solo_en_el_libro` (NC interna, sin CUFE) | sólo el RPC `reverse_credit_note`; motivo de 3 |
+| `anular_en_dgi_y_libro` (autorizada, dentro de 182 h) | intento en `fe_anulaciones` → `CreateCancellation` → `fe_estado = 'canceled'` → RPC; motivo de 15 |
+| `reversar_solo_en_el_libro` con `fe_estado = 'canceled'` (quedó a medias) | **vuelve a pedirle la anulación al PAC** (`0622` = ya anulada) y recién después el RPC |
+| cualquier otra | 409 con el mensaje de la matriz |
+
+Códigos de la ruta: 200 · 409 (anulada en la DGI, falta el libro) · 422 (la DGI rechazó) ·
+502 (no sabemos si llegó). Verificado con clics el 25/09 en `NC-000016`: anulada ante la DGI
+(`fe_anulaciones.resultado = 'anulada'`, `i_amb = 2`) y reversada en el libro (asiento 67).
+
 ## SOP-041: Errores de la DGI — prevenirlos antes de enviar, y verlos después
 
 **Desde:** 23/09/2026. Sin migración.

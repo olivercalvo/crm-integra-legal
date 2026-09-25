@@ -1,6 +1,384 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> 25/09/2026 — DÓNDE QUEDÓ <<<
+## >>> 25/09/2026 (tarde) — DÓNDE QUEDÓ <<<
+
+- ✅ **Tarea 1 (clics) completa en el Preview** (`develop`, variables de sandbox cargadas por
+  Oliver solo en Preview). Evidencia paso por paso en `changelog.md` del 25/09.
+- ✅ Cinco cosas que no coincidían, corregidas y re-verificadas con clics: el diálogo de
+  anulación negaba que anulara ante la DGI; «Enviar al PAC» se ofrecía sobre una factura con
+  CUFE del portal; la NC total decía «Parcial»; una NC por líneas pasaba a «Anulación» si su
+  factura se anulaba después; y **«Reversar» una NC autorizada no la anulaba ante la DGI**
+  (orquestador nuevo + migración `065`, SOLO staging).
+- ✅ `064` y `065` aplicadas en staging. La cola de producción pasa a 40 (runbook).
+- ✅ Textos de pantalla sin guion largo (119 cambios en 70 archivos). Quedan unos 140 «—» que
+  son **marcador de celda vacía**: decisión de Oliver si se cambian y por qué.
+- ✅ Caso C: sigue en espera del bufete.
+- ⚠️ `claude/preflight-produccion-2026-09-22.md` vive en el proyecto de Claude, no en git.
+  P-11 a P-14 están listas en §1b del runbook.
+
+---
+
+## >>> FASE 0: 3.5 NC DE COMPRA y 7.5 IMPORTAR ASIENTOS. PLAN, SIN CÓDIGO. 25/09/2026 <<<
+
+**Estado: PLAN. Espera aprobación de Oliver.**
+
+No se escribió código ni se corrió nada contra ninguna base. Lo que se afirma del código actual
+va con `archivo:línea`; lo que no se pudo confirmar dice **no confirmado**. La `056` sigue
+reservada (fecha de corte de RM) y la `065` ya se usó el 25/09 (anulación de NC ante la DGI):
+**las migraciones de este plan van de la `066` a la `069`.**
+
+### 0. Hallazgos que cambian el diseño
+
+1. **Los asientos de documento no llevan tercero en la línea de 200001.** La compra pone solo
+   `supplier_name` como descripción (`contabilidad/asiento-compra.ts:226-231`); lo mismo el
+   trámite y el pago a proveedor. La NC de compra sería el primer asiento de documento con
+   `supplier_id` en la línea (la `054` lo permite, `posting.ts:113-126`, y entra al hash).
+2. **La compra (`business_expenses`) no tiene reversión.** `gateContable` bloquea editar y
+   borrar una compra con asiento (`api/business-expenses.ts:129-148`). Riesgo: que la NC de
+   compra se use como sustituto (R-A1).
+3. **`business_expenses.total` es GENERATED** (`010_create_business_expenses.sql:123`): un
+   `balance_due` generado tiene que escribirse con `subtotal + tax_amount`, no con `total`.
+4. **`expense_lines` no tiene cantidad** (`036_expense_lines.sql:140-145`): la NC de compra va
+   por línea **con monto base**, no con cantidad como la de venta.
+5. 🔴 **El VAT summary no lee `credit_notes`** (`reports/vat-summary.ts:209-301`): **las NC de
+   venta del Bloque 5 hoy no restan ITBMS de ventas.** No es de 3.5, pero es el mismo arreglo.
+   Se propone registrarlo como FND y resolverlo en el paso 3.5-F. **Decide Oliver si entra.**
+6. **El saldo de compra/trámite se calcula a mano como `total − amount_paid` en seis lugares**
+   (`antiguedad-source.ts:256, 340, 477`, `api/supplier-payments.ts:124`,
+   `pdf/supplier-payment-pdf-data.ts:241`, `register-supplier-payment-dialog.tsx:28`).
+7. La "Fase 0 del Bloque 7" con `post_journal_entries_batch` citada en `task_plan.md` **no está
+   en el repo**: este plan la redacta desde cero.
+8. **`parseImporte` devuelve 0 ante texto basura** (`contabilidad/asiento-manual.ts:188-199`).
+   En un importador sería un monto cero silencioso.
+9. **`post_journal_entry` toma `FOR UPDATE` sobre `accounting_sequences`**
+   (`054_tercero_por_linea.sql:295-298`) hasta el COMMIT: un lote grande bloquea todo posteo.
+10. **El RUC de proveedor no es UNIQUE** (`033_proveedores_entidad.sql:28`); de clientes, no
+    confirmado.
+11. **No hay vínculo en el esquema entre un gasto de trámite y la factura `REIM-*`** que lo
+    refactura.
+12. **Hay voseo** en mensajes de `api/finanzas/asientos/route.ts:73-74, 133, 153`,
+    `asiento-manual.ts:302-303, 364-365`, el RPC `054:279` ("Provisionalo") y
+    `gastos-individuales-table.tsx` (~258, "Si dudás"). Corregirlos es un commit aparte.
+
+---
+
+### PARTE A: 3.5 NOTA DE CRÉDITO DE COMPRA (proveedor)
+
+#### A.0 Cómo se reabre D6
+
+D6 ("NC de compra NO va") fue un recorte de alcance del Bloque 5 (`task_plan.md`, D6;
+`CLAUDE.md` bloque NC; SOP-034 §7). Se reabre así: (1) Oliver aprueba esta Fase 0;
+(2) Josuarth contesta las bloqueantes J-2, J-3, J-5 y J-7; (3) en el commit de docs se
+reemplaza la línea de D6 en `CLAUDE.md`, se corrige SOP-034 §7 y nace SOP-044; (4) la pregunta
+vieja de acreditar una factura ya cobrada (venta) se manda junto con J-3, para un solo criterio.
+
+#### A.1 Decisiones de diseño (propuestas)
+
+| # | Decisión | Por qué |
+|---|---|---|
+| A-D1 | **Documento del proveedor que registramos, no que emitimos.** No va a la DGI. Tablas nuevas `supplier_credit_notes` + `supplier_credit_note_lines`; **no** se reutiliza `credit_notes`. | `credit_notes` es de venta (cuelga de `invoices`, 13 columnas fiscales, T6). Mezclarlas repite el bug de dos cosas con un mismo nombre. |
+| A-D2 | **Dos puertas, un creador:** detalle de la compra y detalle contable del trámite, contra `POST /api/finanzas/supplier-credit-notes`. Arco exclusivo `num_nonnulls(business_expense_id, expense_id) = 1`. | Patrón `supplier_payments` (`049`). Una sola `createSupplierCreditNote`, fijada con test. |
+| A-D3 | **Registra y reversa: admin, abogada y contador.** | Mismos `MUTATING_ROLES` de compras y pagos. Difiere de la NC de venta a propósito. **Decide Oliver.** |
+| A-D4 | **Por línea con monto base**, copiando cuenta, `tax_code_id` y `tax_rate`; tope = base original menos lo acreditado por NC **vigentes**; ITBMS = `round2(base × tasa)` ±0,02. | La línea no tiene cantidad (hallazgo 4). |
+| A-D5 | **Trámite: sin ITBMS separado**; acredita el `line_total` contra la cuenta de la línea (130003 o costo). | El trámite nunca toca 200003. |
+| A-D6 | **Tope = `balance_due`** del documento. Compra pagada: no admite NC por más de lo que falta pagar hasta J-3/J-4. **No** se ofrece "reversa el pago primero". | "Ante la duda no se postea" (SOP-031 §3). |
+| A-D7 | **Número y fecha del documento del proveedor obligatorios**, CUFE opcional (J-10). UNIQUE `(tenant, supplier_id, supplier_document_number)`. | Evidencia documental (R-A1). |
+| A-D8 | **Número interno `NCP-000001`**, secuencia `'supplier_credit_note'`, tomado antes del INSERT: huecos aceptados (SOP-031 §2). Prefijo a confirmar (J-11). | Patrón `CE-`. |
+| A-D9 | **Fecha contable:** la del documento del proveedor si su mes está abierto; cerrado, 409 y se ofrece hoy. Nunca en mes cerrado. | Acta del 09/09. Pendiente J-2. |
+| A-D10 | **`source_type` nuevo `nota_credito_proveedor`**, `source_id` = la NC, `reference` = `NCP-…`. | Mayor y Diario resuelven por tipo (`destino-documento.ts:28-66`). |
+| A-D11 | **El asiento invierte el constructor de origen** (`construirAsientoDeCompra` / `construirAsientoDeGastoTramite`) y agrega `supplier_id` en 200001. | Lo mismo que la NC de venta. |
+| A-D12 | **El saldo se deriva:** `credited_total` por trigger + guard; `balance_due` GENERATED en las dos tablas; los recálculos de la `048`/`049` derivan status contra el total neto. Acreditada al 100% sin pagos = `pendiente_pago` con saldo 0 (criterio D3). | Patrón `051` + `060`. Los seis lectores del hallazgo 6 pasan a `balance_due`. |
+| A-D13 | La NC no toca los pagos; el tope de un pago nuevo pasa a `balance_due`. | |
+| A-D14 | **Reversión** `reverse_supplier_credit_note`, calcado de la `060`: fecha de hoy, espejo verificado, una reversión por asiento, `anulada` y el trigger recalcula. No resta nada a mano. | |
+| A-D15 | **`reverse_expense_tramite` rechaza un gasto con NC vigente.** | Si no, se acredita dos veces (lección `053`). |
+| A-D16 | **Compensación** por válvula `finanzas.ncp_compensar`, en la misma transacción. Deja hueco en `NCP-`. | Patrón `052`. |
+| A-D17 | La NC hereda el `supplier_id`; sin proveedor, la línea de 200001 va sin tercero (degradar, no bloquear). | |
+
+**El asiento, con números** (compra de 1.070,00 = base 1.000,00 + ITBMS 70,00; el proveedor
+acredita 200,00 de base):
+
+| Cuenta | Debe | Haber | Tercero |
+|---|---|---|---|
+| 200001 Cuentas por pagar | 214,00 | | proveedor |
+| cuenta de la línea (p. ej. 600001) | | 200,00 | |
+| 200003 ITBMS por pagar | | 14,00 | |
+
+La cuenta de ITBMS es la misma de la compra (`CUENTA_ITBMS = "200003"`, `asiento-compra.ts:74`;
+sin crédito fiscal separado, decisión de Josuarth del 25/08). En un trámite: DEBE 200001, HABER
+la cuenta de cada línea por su `line_total`, sin 200003.
+
+**ITBMS y anexos.** El VAT summary resta la NC en el mes de su **fecha contable**; en el
+detalle y el export va como fila negativa con su `NCP-` y el número del proveedor. RUC y DV en
+dos columnas (nunca concatenados).
+
+**Textos de pantalla propuestos** (tuteo neutro, sin guion largo):
+- «Registrar nota de crédito del proveedor».
+- «La nota de crédito (B/. X) supera lo que falta pagar de esta compra (B/. Y). Si el proveedor
+  te devolvió dinero o te dejó saldo a favor, consulta con el contador antes de registrarla.»
+- «Esta compra ya está pagada. Una nota de crédito sobre una compra pagada deja saldo a favor
+  del proveedor, y eso todavía no está habilitado.»
+- «El mes de la nota de crédito del proveedor (MM/AAAA) está cerrado. Puedes registrarla con
+  fecha de hoy.»
+- «Este gasto tiene notas de crédito vigentes. Primero reversa las notas de crédito y después
+  el gasto.»
+- «Línea N: puedes acreditar hasta B/. X de base; ya se acreditaron B/. Y con otras notas de
+  crédito.»
+
+#### A.2 Migraciones (SOLO staging)
+
+**`066_nc_de_compra_modelo.sql`**
+- `supplier_credit_notes` (número `NCP-`, arco compra/trámite, `supplier_id`, documento del
+  proveedor, `issue_date` contable, `reason` 3..1000, `status` `emitida`/`anulada`, totales,
+  `cancelled_at`) y `supplier_credit_note_lines` (`expense_line_id`, cuenta foto, `amount`,
+  `tax_code_id`, `tax_rate`, `tax_amount`, `line_total` generado). RLS.
+- UNIQUE `(tenant, credit_note_number)`; UNIQUE parcial `(tenant, supplier_id,
+  supplier_document_number)`.
+- Inmutabilidad: única transición `emitida → anulada`; DELETE solo por la válvula y sin asiento.
+- CHECK de `numbering_sequences` re-declarado con los ocho valores de la `048` +
+  `'supplier_credit_note'`; CHECK de `journal_entries.source_type` + `'nota_credito_proveedor'`
+  **con el filtro de dos condiciones de la `042`** (no borrar `je_reversion_requires_ref`).
+- `credited_total` + trigger + guard, y `balance_due` GENERATED en `business_expenses` y
+  `expenses`; `CREATE OR REPLACE` de los recálculos de la `048` y la `049`.
+- Pre-flight de producción: `business_expenses` = 0 filas; `expenses.amount <= 0` = 0.
+
+**`067_reversion_de_nc_de_compra.sql`**
+- RPC `reverse_supplier_credit_note` (`SECURITY DEFINER`, solo `service_role`); aborta si
+  encuentra una escritura directa de `credited_total`/`balance_due` (como la `060`).
+- `CREATE OR REPLACE` de `reverse_expense_tramite` (`050`) para rechazar un gasto con NC
+  vigente.
+
+#### A.3 Archivos
+
+**Nuevos:** `validators/supplier-credit-note.ts` (puro), `contabilidad/asiento-nota-credito-proveedor.ts`
+(puro), `numbering/supplier-credit-note-numbering.ts`, `api/supplier-credit-notes.ts`,
+`queries/supplier-credit-notes.ts` (lo acreditado por línea, una sola consulta para diálogo y
+servidor), rutas `POST /api/finanzas/supplier-credit-notes` y `…/[id]/reverse`, detalle
+`/finanzas/notas-credito-proveedor/[id]` (si es de trámite, del caso solo el NÚMERO, recortado
+en el `select`), y un diálogo único para las dos puertas.
+
+**A tocar:** `route-access.ts` (patrón exacto para el contador), `nav-config.ts` (sin ítem),
+`CLAUDE.md`, `posting.ts` (`SourceType`), `destino-documento.ts`, `libro-mayor-source.ts`,
+`libro-mayor.ts` (etiqueta), `tercero-fiscal.ts`, `vat-summary.ts` + xlsx, los seis lectores del
+saldo, `estado-cuenta-source.ts`, detalles de compra y trámite.
+
+#### A.4 Pruebas
+
+- **Puras:** tope por línea contando solo NC vigentes; tope por `balance_due`; ±0,02; trámite
+  sin ITBMS; arco; mes cerrado. La NC total es el espejo exacto del asiento de compra más
+  `supplier_id`; la de trámite nunca toca 200003.
+- **Leen código:** `balance-due-una-sola-formula.test.ts` (nadie calcula `total − amount_paid`
+  a mano), un solo creador, ninguna escritura directa de `credited_total`,
+  `supplier-payments-dos-destinos` extendido, `nav-guard`, `reverse_expense_tramite` menciona
+  las NC vigentes.
+- **SQL con ROLLBACK:** `verificacion-066-nc-de-compra.sql` y `verificacion-067-…` (falla
+  forzada después del posteo, segunda reversión rechazada, `credited_total` vuelve).
+
+#### A.5 Depende de Josuarth (preguntas cerradas)
+
+- **J-1.** ¿El bufete recibe notas de crédito de proveedores? Sí o no, y cuántas al mes.
+- **J-2 (bloquea).** ¿Qué fecha lleva en el libro? (a) la del documento del proveedor, (b) la
+  del registro. Y con el mes del documento cerrado: (a) fecha de hoy, (b) no se registra.
+- **J-3 (bloquea).** Compra ya pagada y NC por más de lo que falta pagar: (a) no se registra
+  hasta que devuelva el dinero; (b) saldo a favor dentro de 200001; (c) cuenta de activo
+  aparte: ¿qué código?
+- **J-4.** Ese saldo a favor: (a) devuelve el dinero al banco; (b) se descuenta de la próxima
+  compra (excepción a "un pago cubre una compra"): ¿se acepta?
+- **J-5 (bloquea).** ¿La NC resta el ITBMS de compras (HABER 200003) en el mes de su fecha
+  contable? Sí o no.
+- **J-6.** ¿Llegan NC por monto global sin línea (pronto pago)? Si sí: ¿cuenta e ITBMS?
+- **J-7 (bloquea para trámite).** Trámite ya refacturado (`REIM-*`): (a) además NC de venta al
+  cliente; (b) queda en 130003 y se descuenta en la próxima refactura; (c) no se permite.
+- **J-8.** En un trámite, ¿la NC acredita la misma cuenta de cada línea? Sí o no.
+- **J-9.** En los anexos de la DGI, ¿renglón negativo con RUC y DV en el mes de su fecha
+  contable? Sí o no.
+- **J-10.** ¿Número del documento del proveedor obligatorio? ¿Y el CUFE? Sí o no para cada uno.
+- **J-11.** ¿Te sirve «NCP-000001» como número interno?
+
+#### A.6 Riesgos
+
+- **R-A1.** Usar la NC para "corregir" una compra mal cargada, porque la compra no tiene
+  reversión. Mitigación: documento del proveedor obligatorio y el texto del diálogo.
+- **R-A2.** Cambiar la fórmula del status en los recálculos toca todas las compras y trámites:
+  la verificación SQL compara contra el estado previo con 0 NC.
+- **R-A3.** Olvidar uno de los seis lectores del saldo: test de fórmula única.
+- **R-A4.** Cuenta de la línea original desactivada: el RPC rechaza; mensaje con la línea.
+- **R-A5.** Dos CHECK compartidos en la misma migración (el bug de la `028`).
+- **R-A6.** J-7 sin respuesta: el trámite puede salir en una segunda entrega.
+
+---
+
+### PARTE B: 7.5 IMPORTAR ASIENTOS DESDE EXCEL
+
+#### B.1 Decisiones de diseño (propuestas)
+
+**Qué se reutiliza.** El patrón de la carga del plan de cuentas: libro → celdas
+(`import/chart-of-accounts-workbook.ts`), mapeo puro (`chart-of-accounts-mapping.ts`),
+`mode=preview|commit` con **re-parseo del archivo en el commit**
+(`api/finanzas/configuracion/chart-of-accounts/bulk/route.ts:26-30`), tope de 5 MB.
+**NO** se copia su commit parcial (`bulk/route.ts:149-154`).
+
+**Pantallas** (bajo `/finanzas/asientos`, cubiertas por `ADMIN_CONTADOR_ONLY_PREFIXES`):
+`/finanzas/asientos/importar` (plantilla, subir y ver la vista previa, contabilizar),
+`/finanzas/asientos/importaciones` y `/importaciones/[id]` (asientos del lote y «Reversar el
+lote»). En `/finanzas/asientos`: «Importar desde Excel» y «Ver importaciones».
+
+**Plantilla** (hoja «Asientos»):
+
+| Col | Encabezado | Obligatorio | Regla |
+|---|---|---|---|
+| A | `Asiento` | sí | Agrupador. Las filas del mismo asiento **tienen que estar juntas**. |
+| B | `Fecha` | sí | Celda de fecha, `AAAA-MM-DD` o `DD/MM/AAAA` (nunca MM/DD). La misma en todo el asiento. |
+| C | `Descripción del asiento` | sí | 3 caracteres o más; una sola por asiento. |
+| D | `Referencia` | no | Documento de respaldo; una sola por asiento. |
+| E | `Cuenta` | sí | Código del plan. |
+| F | `Descripción de la línea` | no | |
+| G | `Débito` | una de G/H | ≥ 0, máximo 2 decimales. |
+| H | `Crédito` | una de G/H | Ídem. |
+| I | `Tipo de tercero` | no | `Cliente`, `Proveedor` o vacío. |
+| J | `Tercero` | si hay I | Código `CLI-…`/`PRV-…` o RUC (**solo el RUC, sin DV, sin concatenar**). |
+
+Hojas extra: «Instrucciones», «Cuentas» (plan activo). «Terceros»: **decide Oliver** (sería un
+archivo descargable con datos de clientes, y el contador no entra al directorio; Ley 81).
+
+**Validaciones** (todas juntas, no de a una):
+
+| Nivel | Error (bloquea) | Aviso |
+|---|---|---|
+| Archivo | > 5 MB; encabezados faltantes; hoja vacía; > 200 asientos o > 3.000 líneas (tope inicial, a medir) | |
+| Fila | fecha inválida; monto no numérico, negativo o con > 2 decimales; **débito y crédito en la misma línea**; sin monto; cuenta vacía, inexistente o inactiva; tercero incompleto, inexistente o de otro bufete; **RUC que coincide con dos terceros** | cuenta control sin tercero (K-3) |
+| Asiento | no cuadra al centavo (dice cuánto y de qué lado); < 2 líneas; fecha/descripción/referencia distintas; filas no contiguas; mes **cerrado**; período inexistente fuera del año en curso y el siguiente | fecha futura (K-5) |
+| Lote | el archivo ya se importó (hash); el mismo contenido con otro archivo | |
+
+Monto con un **parser estricto que devuelve error, nunca 0** (hallazgo 8), junto a
+`parseImporte` y con un test de que coinciden en toda entrada válida.
+
+**Filas con error: TODO O NADA (recomendado).** El libro es inmutable: un lote a medias no se
+"completa" sin postear dos veces; el contador piensa el archivo como unidad; correlativo y
+hash en una sola transacción; y la vista previa muestra todos los errores, así que corregir
+lleva una vuelta.
+
+**`source_type` se queda `manual` + tabla de lote (recomendado).** Un tipo nuevo
+`'importacion'` obligaría a tocar el CHECK de la `042`, el filtro de `reverse_journal_entry`
+(`055:143, 237`), la antigüedad (`antiguedad-source.ts:144`), `destino-documento.ts:81`,
+etiquetas, clonar y el detalle. Con `manual` no se toca nada: el lote lo marca
+`journal_import_entries`, con badge «Importado» y enlace al lote. `source_id` queda NULL (el
+UNIQUE de la `034` impediría varios asientos por lote).
+
+**Posteo.** Siempre `post_journal_entry`, dentro de un RPC nuevo `post_journal_entries_batch`
+(`SECURITY DEFINER`, solo `service_role`), **una transacción**; ruta con cliente de servicio y
+tenant **del perfil**; orden por fecha y aparición.
+
+**Idempotencia.** SHA-256 del archivo y huella del contenido normalizado, cada uno con UNIQUE
+parcial sobre lotes `contabilizada`; el commit exige el hash de la vista previa; un 23505 se
+traduce a «Este archivo ya se importó el DD/MM/AAAA (lote de N asientos).» Reversar el lote
+libera los hashes.
+
+**Deshacer.** No se borra: se reversa. RPC `reverse_journal_import` que, en una transacción,
+llama a `reverse_journal_entry` por cada asiento no reversado (el filtro `manual` sigue en un
+solo lugar); espejos armados por `construirAsientoDeReversion`; el índice de la `055` sostiene
+"una reversión por asiento".
+
+**Límites.** 5 MB; 200 asientos / 3.000 líneas como tope inicial, a medir en staging por el
+candado del correlativo (hallazgo 9). `statement_timeout` de PostgREST y timeout de Vercel:
+**no confirmados**. **Sin tope por asiento:** `MAX_LINEAS_MANUALES = 100` es del formulario y
+el importador no lo aplica (test que lee los dos lados).
+
+**Roles: admin y contador**, los cuatro lugares juntos (`route-access`, `nav-config`,
+`requireRole` con `ROLES_ASIENTO_MANUAL` exportada, tabla de `CLAUDE.md`).
+
+**Archivo original** en el bucket privado `{tenant}/journal_import/{id}/original.xlsx`, después
+del RPC. **Decide Oliver.**
+
+**Textos propuestos:** «Descarga la plantilla, complétala y súbela. Nada se registra hasta que
+confirmes la vista previa.» · «El archivo tiene N errores. Corrígelos en el Excel y vuelve a
+subirlo: se registra todo o nada.» · «Asiento DEP-SEP: no cuadra, faltan B/. 12,50 en el
+crédito.» · «Fila 14: la línea tiene débito y crédito. Deja solo uno.» · «Fila 3: el mes
+03/2026 está cerrado.» · «Contabilizar N asientos (B/. X)» · «Reversar el lote: se registrarán N
+asientos de reversión con fecha de hoy.»
+
+#### B.2 Migraciones (SOLO staging)
+
+- **`068_importacion_de_asientos.sql`**: `journal_imports` (hashes, conteos, `status`
+  `contabilizada`/`reversada`, sin DELETE), `journal_import_entries` (`entry_id` UNIQUE, NO
+  ACTION), RPC `post_journal_entries_batch` (solo `service_role`). Depende de `039`, `054`,
+  `055`.
+- **`069_reversion_de_importacion.sql`**: RPC `reverse_journal_import`. Depende de `055` y `068`.
+
+#### B.3 Archivos
+
+**Nuevos:** `import/asientos-workbook.ts`, `import/asientos-mapping.ts` (puro),
+`import/asientos-terceros.ts` (puro), `api/importacion-asientos.ts`, rutas
+`/api/finanzas/asientos/importar` (preview/commit), `…/importar/plantilla`,
+`…/importaciones/[id]/reverse`, y las tres pantallas. **A tocar:** `asientos/page.tsx`
+(botones), detalle y Diario (badge), `api/finanzas/asientos/route.ts:66` (roles compartidos),
+`asiento-manual.ts` (parser estricto), docs.
+
+#### B.4 Pruebas
+
+- **Puras:** alias de encabezados; fechas (celda Excel, ISO, DD/MM, rechazo de MM/DD ambiguo);
+  montos ("1.234,56", "1,234.56", 3 decimales, negativo, texto: **nunca 0**); débito y crédito
+  juntos; grupos no contiguos; cuadre al centavo; RUC ambiguo; huella determinista; un asiento
+  de 250 líneas **se acepta**.
+- **Leen código:** no se importa `MAX_LINEAS_MANUALES`; tenant del perfil; el commit re-parsea
+  y exige el hash; nunca `postJournalEntry` en un loop; la reversión usa
+  `construirAsientoDeReversion`; roles = `ADMIN_CONTADOR_ONLY_PREFIXES`; sin voseo ni guion
+  largo en textos nuevos.
+- **SQL con ROLLBACK:** lote de 3 con uno que no cuadra → cero asientos y correlativo sin
+  cambio; hash duplicado; mes cerrado en el asiento 2 rechaza el lote; reversión con falla
+  forzada a mitad → nada reversado; segunda reversión del lote rechazada.
+
+#### B.5 Depende de Josuarth (preguntas cerradas)
+
+- **K-1.** ¿Escribes las fechas DD/MM/AAAA? ¿Usas celdas con formato de fecha?
+- **K-2.** ¿Identificas al tercero por RUC o por código (CLI-/PRV-)?
+- **K-3.** Líneas contra 100004 o 200001: (a) se exige tercero; (b) solo aviso; (c) no se
+  permite.
+- **K-4.** ¿Hay cuentas que no deberían importarse (200003, bancos)? ¿Cuáles?
+- **K-5.** ¿Se permiten fechas futuras dentro del mes siguiente?
+- **K-6.** ¿Cuántos asientos por archivo, y cuántas líneas tiene el más grande?
+- **K-7.** Si una fila tiene error, ¿de acuerdo con que no se registre nada?
+- **K-8.** ¿Piensas usarlo para saldos iniciales o meses cerrados? (Si sí, no aplica.)
+- **K-9.** ¿Referencia obligatoria por asiento? ¿Descripción de línea obligatoria?
+- **K-10.** ¿Montos 1.234,56 o 1,234.56?
+
+#### B.6 Riesgos
+
+- **R-B1.** El candado del correlativo bloquea el posteo del bufete durante el lote: tope,
+  medir, aviso en pantalla.
+- **R-B2.** Timeout a mitad del lote: todo se deshace, mensaje específico.
+- **R-B3.** Fechas de Excel (serial, 1900, huso): tests con celdas reales de `xlsx`.
+- **R-B4.** Período cerrado entre vista previa y commit: se rechaza el lote, el mensaje nombra
+  el mes.
+- **R-B5.** Clonar un asiento importado es posible (sigue siendo `manual`): aceptable.
+- **R-B6.** Importar contra cuentas control alimenta la explicación de la antigüedad, no los
+  tramos.
+
+---
+
+### Decisiones que son de Oliver (no de Josuarth)
+
+1. Roles de la NC de compra (A-D3).
+2. Ruta `/finanzas/notas-credito-proveedor/[id]` con patrón exacto para el contador, o bajo
+   `/finanzas/gastos-bufete`.
+3. 3.5 en dos entregas: compra primero, trámite cuando conteste J-7.
+4. Si el hallazgo 5 (NC de venta fuera del VAT summary) entra en este bloque.
+5. Hoja «Terceros» en la plantilla.
+6. Guardar el Excel original.
+7. `manual` en vez de `'importacion'`.
+8. Commit aparte que quita el voseo (hallazgo 12).
+
+### Orden sugerido
+
+- **3.5:** `066` → validador y asiento puros → creador y diálogo → lectores a `balance_due` →
+  reportes → `067` y reversión → docs.
+- **7.5:** `068` → mapping y workbook puros → vista previa → commit → `069` y reversión del
+  lote → docs.
+- Son independientes. 7.5 arranca con K-3 y K-6; no espera ninguna bloqueante.
+
+
+---
+
+## >>> 25/09/2026 (mañana), superado por el de la tarde <<<
 
 - ⏸️ **Tarea 1 (clics) sin hacer.** La extensión de Chrome no estaba conectada (ningún
   navegador en `list_connected_browsers`). Sigue pendiente completa: 1a Preview (emitir,

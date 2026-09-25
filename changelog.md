@@ -1,5 +1,58 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Verificación con clics de 9B/9C, la anulación de NC ante la DGI y los textos] - 2026-09-25 (tarde)
+
+**Staging (`develop`):** `d3430a2` (log del ambiente) → `7db6e9e` (diálogo de anulación) →
+`424a535` (CUFE del portal) → `b1f8d41` (etiqueta de la NC) → `478dbe6` (`065` + anulación de
+NC) → 10 commits de textos → `bc2213c`. Migración `065` **SOLO staging**. `main` sigue en
+`24b227a`. FAC-HON-000007 no se tocó.
+
+### Tarea 0
+- `vercel env ls` (solo nombres): Preview **18** `EFACTURA_*` (cargadas hace minutos), Production
+  **19** sin cambios (fechas de julio). Falta en Preview sólo `FORMA_PAGO_DEFAULT` (opcional).
+- Deploy arriba: redeploy de `604c440` (14:37Z), después de cargar las variables.
+- `.env.preview-sandbox.local`: no existe.
+- Build logs: los 3 `Dynamic server usage` (`/api/admin/audit`, `/api/search`, `/api/users`) y
+  las advertencias (caché de webpack, browserslist) son **idénticos** al build de ayer
+  (`ec36d83`). Build `Ready`, rutas dinámicas: no afectan.
+
+### Tarea 1: clics en el Preview (sandbox, `i_amb = 2`)
+| Paso | Resultado |
+|---|---|
+| Log del ambiente | nuevo `[efactura] POST … · i_amb=2 · app_env=staging`, uno por llamada al PAC; los 7 envíos del día lo muestran |
+| Emitir FAC-HON-000019 (CLI-001 apuntado al emisor, restaurado en `finally`) | ✅ autorizada, CUFE `FE01…`, origen `'crm'` |
+| Anular FAC-HON-000019 | ✅ Anulada en DGI · NC-000015 interna sin asiento · asiento 62 reversa el 61 con fecha 25/09 |
+| Reenviar FAC-HON-000016 (cliente sin tocar) | ✅ intento 2 rechazado `[1601]/[1602]`, alerta traducida sigue, CLI-005 intacto |
+| «Sin CUFE» (FAC-HON-000002) | ✅ texto del bufete palabra por palabra |
+| Cargar CUFE del portal | ✅ guardado, origen `'portal_050'` |
+| NC total a la DGI (NC-000016 sobre FAC-HON-000020) | ✅ autorizada |
+| NC parcial a la DGI (NC-000017, 1 de 2 unidades de FAC-HON-000021) | ✅ autorizada, etiqueta «Parcial» |
+| Anular NC-000016 | ✅ anulada ante la DGI y reversada (asiento 67 reversa el 64); la factura recupera el saldo |
+| 063: anular FAC-HON-000020 con su única NC anulada | ✅ se ofrece y se anula (asiento 68 reversa el 63), NC-000018 sin asiento |
+| 064: origen del CUFE | ✅ `'crm'` al emitir, `'portal_050'` al cargar a mano |
+
+Un hueco aceptado: FAC-HON-000018 no existe (el primer intento rebotó por HON-FAM → `4101`,
+inactiva a propósito por la `043`, después de tomar el número; SOP-031).
+
+### Lo que no coincidía, corregido y re-verificado
+1. **El diálogo de anulación negaba lo que hace la ruta** («no la anula ante la DGI», casilla
+   de «ya la anulé en el portal»). Texto y casilla nuevos + test que cruza diálogo y ruta.
+2. **«Enviar al PAC» sobre una factura con CUFE del portal** habría emitido un segundo
+   documento fiscal. 409 en el servidor antes de pedir número + mensaje en la tarjeta.
+3. **La NC total decía «Parcial».** Ahora «Total» o «Parcial» según lo acreditado.
+4. **`esAnulacion` miraba sólo la factura**: una NC por líneas se habría mostrado como
+   «Anulación» con el asiento equivocado. Ahora exige no tener asiento propio.
+5. 🔴 **«Reversar» una NC autorizada no la anulaba ante la DGI.** Orquestador nuevo
+   `reversarNotaDeCredito` (PAC → `canceled` → libro) + `065` (`fe_anulaciones.credit_note_id`).
+6. «Vas a reversar **el** nota de crédito» → «la».
+
+### Textos sin guion largo
+119 «—» en 70 archivos (pantallas, mensajes de la API, PDFs, correos). Ej.: «STAGING: DATOS DE
+PRUEBA», «2 facturas con error en la DGI: la DGI no las aceptó…». Quedan ~140 «—» como marcador
+de celda vacía y las descripciones de asientos del libro (decisión pendiente).
+
+Suite **1407/1407**, `tsc` 0, **0 errores de lint nuevos** (20 de la lista base).
+
 ## [El origen del CUFE, la 064 y el runbook con la cola completa] - 2026-09-25
 
 **Staging (`develop`):** `1c846c6` (código) → `a9ca378` / `62d2181` (`064`) → `2589f10`

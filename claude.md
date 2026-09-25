@@ -512,6 +512,20 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   emisión DE LA NC**, no de su factura (`decidirAccionSobreNotaDeCredito()`). 🔴 **Fuera de
   plazo NO hay "NC de la NC"**: la pantalla manda a hablar con el contador en vez de ofrecer un
   botón que la DGI rechaza.
+- 🔴 **«Reversar» una NC AUTORIZADA la anula PRIMERO ante la DGI** (desde el 25/09/2026,
+  migración `065`). Hasta ese día la ruta llamaba a `reverseCreditNote`, que sólo toca el
+  libro: la NC quedaba anulada en nuestros libros y VIVA ante la DGI. Ahora
+  `POST …/credit-notes/[id]/reverse` pasa por `reversarNotaDeCredito`
+  (`anular-nota-de-credito-ante-dgi.ts`) con el orden de la factura: intento en
+  `fe_anulaciones` (arco con `credit_note_id`) → PAC → `fe_estado = 'canceled'` → RPC
+  `reverse_credit_note`. Motivo de 15 si viaja a la DGI. 🔒 Un test exige que la ruta NO
+  llame a `reverseCreditNote` directo.
+- 🔴 **Una factura con CUFE cargado del portal NO ofrece «Enviar al PAC»** (25/09): ya existe
+  ante la DGI y mandarla sería un segundo documento fiscal por la misma venta. 409 en
+  `emitInvoiceToEfactura` antes de pedir número, y la tarjeta lo explica.
+- **Una NC es "de anulación" por NO tener asiento propio** (y factura anulada), no sólo por
+  el estado de su factura: desde la `063` una NC por líneas reversada sobre una factura que
+  después se anula tiene asiento propio.
 - 🔴 **Una factura se bloquea para anular por sus NC VIGENTES, no por su historia** (migración
   `063`). La `053` miraba la EXISTENCIA del asiento de la NC y los asientos no se borran: una NC
   reversada la dejaba sin salida para siempre. Ahora el RPC exige que el asiento **no esté
@@ -599,6 +613,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Formularios tipo wizard, máximo 5 campos por pantalla
 - Responsive — diseñado primero para móvil, funciona en desktop
 - Dark mode NO — paleta corporativa clara
+- 🔴 **Sin guion largo («—») en los textos que ve el usuario** (pedido de Oliver, 25/09/2026):
+  se usa punto, coma o dos puntos. Aplica a pantallas, mensajes de error de la API, PDFs y
+  correos. Quedan fuera los comentarios, los logs y el «—» que marca una celda sin dato
+  (decisión pendiente). Las descripciones de asientos ya escritas en el libro no se tocan.
 
 ## 8. CUENTAS Y PROPIEDAD
 - **GitHub:** cuenta de Oliver (el desarrollador). El repo es propiedad de Oliver.

@@ -1,8 +1,8 @@
 # Runbook del despliegue 025 → 055
 
-**Qué es:** la corrida completa de las **39** migraciones contables pendientes a
+**Qué es:** la corrida completa de las **40** migraciones contables pendientes a
 la base de producción, más el merge de `develop` a `main`:
-**`025` a `055`, `057` y `058` a `064`** — toda la cola que existe hoy en `develop`.
+**`025` a `055`, `057` y `058` a `065`** — toda la cola que existe hoy en `develop`.
 
 > ⚠️ **El nombre del archivo dice `025-055` y ya se quedó corto.** El 23/09/2026
 > se sumó la **`057`** (Bloque 8), y el 23–25/09 las **`058` a `064`** (Bloques
@@ -14,6 +14,10 @@ la base de producción, más el merge de `develop` a `main`:
 > iniciales (§P-2(b)), que depende de la respuesta de Josuarth / RM. Es un
 > **hueco a propósito**, no un olvido: si RM contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
+>
+> 🆕 **La `065` (25/09/2026, tarde):** `fe_anulaciones.credit_note_id`. Una NC autorizada
+> se anula ahora ante la DGI antes de reversarse en el libro, y cada intento queda
+> registrado. Aditiva, va en el Bloque A después de la `059`.
 >
 > 🆕 **La `064` no estaba en el pedido y se agregó el 25/09/2026.** El CHECK de
 > la `061` deja pasar un origen NULL (`NULL IN (…)` es NULL, y un CHECK NULL se
@@ -111,9 +115,8 @@ anulación con 3–14 caracteres desde `main` falla en el `UPDATE` de la factura
 **después** de haber creado la NC total (en `main` no es una transacción): queda
 una NC suelta y la factura sin anular.
 
-**5 · Preview NO tiene ninguna `EFACTURA_*`** (§9). Nada que hable con el PAC se
-puede probar en un deploy de Preview: responde 500. Todo lo del PAC se prueba
-desde `localhost` contra el sandbox, y en producción recién después del merge.
+**5 · Lo del PAC se prueba en Preview o en `localhost`, nunca en producción
+antes del merge.** Desde el 25/09 Preview tiene las variables del sandbox (§9).
 
 ---
 
@@ -130,7 +133,7 @@ los puntos donde **se para**.
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
 | D·1 | 🔴 **Respaldo** (§2), y abrirlo para comprobar que se lee | panel de Supabase | no se puede leer → **se termina el día acá** |
-| D·2 | Bloque A — 27 migraciones con la app arriba (§3) | SQL Editor | cualquier `EXCEPTION` |
+| D·2 | Bloque A, 28 migraciones con la app arriba (§3) | SQL Editor | cualquier `EXCEPTION` |
 | D·3 | `NOTIFY pgrst, 'reload schema'` + verificación del Bloque A (§4, §10.2) | app de prod + SQL | algo distinto de lo anotado |
 | D·4 | **Congelar**: nadie emite, anula ni cobra | aviso | — |
 | D·5 | Bloque B — 12 migraciones (§5), con la `025` al final | SQL Editor | cualquier `EXCEPTION`, o la `025` no coincide con P-1(e) |
@@ -630,14 +633,14 @@ Ninguna se revierte con un `DROP`. Y desde que el motor entra en línea
 
 ---
 
-## 3 · Bloque A — 27 migraciones, con la app arriba
+## 3 · Bloque A: 28 migraciones, con la app arriba
 
 Ninguna de estas altera lo que el código de `main` muestra hoy.
 
 ```
 026 → 027 → 028 → 029 → 030 → 031 → 032 → 033 → 034 → 036 → 038
  → 039 → 041 → 042 → 044 → 046 → 047 → 051 → 052 → 053 → 054 → 055
- → 057 → 059 → 060 → 062 → 063
+ → 057 → 059 → 065 → 060 → 062 → 063
 ```
 
 > **Por qué la `058`, la `061` y la `064` NO están acá**, aunque sean chicas:
@@ -747,6 +750,14 @@ Ninguna de estas altera lo que el código de `main` muestra hoy.
   > la `019`) o si algún contador no coincide. Tabla nueva, vacía: `main` no la
   > conoce.
 
+- [ ] **`065`** · `fe_anulaciones.credit_note_id` · *después de la `059`*
+  ```
+  NOTICE: 065 ✅ fe_anulaciones.credit_note_id + arco exclusivo · 0 fila(s) existentes intactas
+  ```
+  > Parar si aborta con `no existe public.fe_anulaciones` (se saltó la `059`). La tabla
+  > está vacía en producción recién creada por la `059`, así que el `0` es el esperado.
+  > `main` no conoce `fe_anulaciones`: es inerte.
+
 - [ ] **`060`** — reversión de nota de crédito · *después de la `055`*
   ```
   NOTICE: 060 ✅ reverse_credit_note, el status anulada y la inmutabilidad con UNA transición
@@ -793,6 +804,7 @@ exacto sale del pre-flight indicado.
 | **`060`** | `credit_notes.status` admite `anulada`; 2 columnas nuevas; nueva inmutabilidad; RPC `reverse_credit_note` | No | 🟡 0 escrituras; el CHECK se valida contra las **6** NC (P-13) | NOTICE `060 ✅` + sus 7 chequeos internos | Todo en una transacción: no queda nada a medias. Re-correr después de corregir |
 | **`061`** | Columna `invoices.dgi_cufe_origen` + CHECK | **Sí**: todo CUFE existente → `'crm'` | 🟡 las «con CUFE» de P-14 (≤ 102) | NOTICE `061 ✅ … N factura(s) marcadas como 'crm'`; N = «con CUFE» | Aborta sin escribir. **Solo en la ventana** (peligro 3) |
 | **`062`** | `fe_emisiones.credit_note_id`, `invoice_id` deja de ser NOT NULL, CHECK de arco exclusivo | No | 🟡 0 escrituras; valida todas las de P-12 | NOTICE `062 ✅ … N fila(s) existentes intactas`, N = P-12 | Aborta sin escribir |
+| **`065`** | `fe_anulaciones.credit_note_id`, `invoice_id` deja de ser NOT NULL, CHECK de arco exclusivo, índice único de intentos por NC | No | 🟢 **0** (la tabla la crea vacía la `059` en la misma corrida) | NOTICE `065 ✅ … 0 fila(s) existentes intactas` | Aborta sin escribir. Aditiva |
 | **`063`** | Reemplaza `cancel_invoice_with_reversal`: bloquea solo por NC **vigentes** | No | 🟢 **0** (solo función) | NOTICE `063 ✅` + 6 chequeos del cuerpo | Aborta y queda la versión de la `053`, que es más estricta: nada se rompe |
 | **`064`** | Corrige la `061`: CHECK con `IS NOT NULL` explícito; re-marca como `'portal_050'` los CUFE cargados a mano | **Sí**: los «cargados a mano» de P-14 → `'portal_050'` | 🟡 los «cargados a mano» de P-14 | NOTICE con los dos conteos + `064 ✅ … (probado: rechazado)` | Aborta y lista si queda un CUFE sin origen demostrable. **Solo en la ventana**, pegada a la `061` |
 
@@ -999,7 +1011,7 @@ node scripts/inventario-migraciones.mjs --desde salida.json --base produccion
 El modo `--staging` lleva el mismo candado que `run-sql.mjs`: si la connection
 string apunta al project ref de producción, aborta.
 
-- [ ] Las 39 migraciones (`025`–`055`, `057`, `058`–`064`) figuran como **sí**.
+- [ ] Las 40 migraciones (`025`–`055`, `057`, `058`–`065`) figuran como **sí**.
       La `056` no existe todavía: su hueco es a propósito (§P-2(b))
 - [ ] La sección «La cola, en orden» queda vacía o solo con la `022`
       (que es una decisión explícita de no aplicar)
@@ -1079,11 +1091,15 @@ Requiere haber corrido la foto de la Fase 5. Soltar antes el CHECK
 **Solo nombres.** Relevado el 25/09/2026 con `vercel env ls`, que lista nombres
 y entornos, no valores. Nadie leyó ni cargó un valor de producción.
 
+> 🔄 **Actualizado el 25/09 a la tarde:** Oliver cargó en **Preview** las 18 del
+> sandbox (`i_amb = 2`). Falta solo `FORMA_PAGO_DEFAULT`, que es opcional (default
+> `08`). Production no cambió: sus 19 siguen con la fecha de carga de julio.
+
 **Conclusión primero:** el despliegue **no necesita ninguna variable nueva**.
 9B y 9C (anular ante la DGI, NC fiscal) usan las mismas que la emisión, por el
 mismo `loadEmisorConfig()` y el mismo cliente HTTP, y las **19** ya están en
-Production. Lo que falta está en **Preview: no tiene ninguna**, y por eso todo
-lo que habla con el PAC se prueba desde `localhost`.
+Production. Preview no tenía ninguna hasta el 25/09; ahora tiene 18 y el PAC de
+pruebas se puede probar desde un deploy de rama.
 
 > Por qué 19 y no 18: el conteo de `docs/efactura/variables-de-entorno.md` es
 > 16 obligatorias + 2 opcionales. La 19.ª es `EFACTURA_EMISOR_FORMA_PAGO_DEFAULT`,
@@ -1091,24 +1107,24 @@ lo que habla con el PAC se prueba desde `localhost`.
 
 | Variable | Secreta | Production hoy | Preview hoy | ¿Otro valor en Production? |
 |---|---|:---:|:---:|---|
-| `EFACTURA_API_KEY` | 🔴 sí | ✅ | ❌ | 🔴 **Sí** — la key de producción del PAC. La del sandbox no sirve allá, ni al revés |
-| `EFACTURA_API_BASE_URL` | no | ✅ | ❌ | 🔴 **Sí** — la API real (`api.efacturapty.com`, `task_plan.md` 07/07). Local apunta al sandbox (verificado: no es la de producción) |
-| `EFACTURA_I_AMB` | no | ✅ | ❌ | 🔴 **Sí — `1`**. En Preview y local, `2`. El candado de `emisor-config.ts` rechaza `1` si `NEXT_PUBLIC_APP_ENV` no es `production` |
-| `EFACTURA_EMISOR_PUNTO_FACTURACION` | no | ✅ | ❌ | 🔴 **Sí — `051`** (ideati; el `050` es del portal/QuickBooks). Local usa otro punto (verificado: no es `051`) |
-| `EFACTURA_EMISOR_RUC` | no | ✅ | ❌ | Igual: RUC del bufete (*) |
-| `EFACTURA_EMISOR_DV` | no | ✅ | ❌ | Igual (*) |
-| `EFACTURA_EMISOR_RAZON_SOCIAL` | no | ✅ | ❌ | Igual (*). Va también en la referencia de la NC (9C) |
-| `EFACTURA_EMISOR_TIPO_CONTRIBUYENTE` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_SUCURSAL` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_DIRECCION` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_UBICACION_CODIGO` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_CORREGIMIENTO` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_DISTRITO` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_PROVINCIA` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_CPBS_HON` | no | ✅ | ❌ | Igual |
-| `EFACTURA_EMISOR_CPBS_REI` | no | ✅ | ❌ | Igual. ⚠️ El `8012` de reembolsos sigue sin confirmar por el contador |
-| `EFACTURA_EMISOR_TELEFONO` | no | ✅ | ❌ | Igual (opcional) |
-| `EFACTURA_EMISOR_EMAIL` | no | ✅ | ❌ | Igual (opcional) |
+| `EFACTURA_API_KEY` | 🔴 sí | ✅ | ✅ | 🔴 **Sí** — la key de producción del PAC. La del sandbox no sirve allá, ni al revés |
+| `EFACTURA_API_BASE_URL` | no | ✅ | ✅ | 🔴 **Sí** — la API real (`api.efacturapty.com`, `task_plan.md` 07/07). Local apunta al sandbox (verificado: no es la de producción) |
+| `EFACTURA_I_AMB` | no | ✅ | ✅ | 🔴 **Sí — `1`**. En Preview y local, `2`. El candado de `emisor-config.ts` rechaza `1` si `NEXT_PUBLIC_APP_ENV` no es `production` |
+| `EFACTURA_EMISOR_PUNTO_FACTURACION` | no | ✅ | ✅ | 🔴 **Sí — `051`** (ideati; el `050` es del portal/QuickBooks). Local usa otro punto (verificado: no es `051`) |
+| `EFACTURA_EMISOR_RUC` | no | ✅ | ✅ | Igual: RUC del bufete (*) |
+| `EFACTURA_EMISOR_DV` | no | ✅ | ✅ | Igual (*) |
+| `EFACTURA_EMISOR_RAZON_SOCIAL` | no | ✅ | ✅ | Igual (*). Va también en la referencia de la NC (9C) |
+| `EFACTURA_EMISOR_TIPO_CONTRIBUYENTE` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_SUCURSAL` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_DIRECCION` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_UBICACION_CODIGO` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_CORREGIMIENTO` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_DISTRITO` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_PROVINCIA` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_CPBS_HON` | no | ✅ | ✅ | Igual |
+| `EFACTURA_EMISOR_CPBS_REI` | no | ✅ | ✅ | Igual. ⚠️ El `8012` de reembolsos sigue sin confirmar por el contador |
+| `EFACTURA_EMISOR_TELEFONO` | no | ✅ | ✅ | Igual (opcional) |
+| `EFACTURA_EMISOR_EMAIL` | no | ✅ | ✅ | Igual (opcional) |
 | `EFACTURA_EMISOR_FORMA_PAGO_DEFAULT` | no | ✅ | ❌ | Igual (opcional, default `08`) |
 
 (*) Se espera el mismo dato del bufete en los dos ambientes, pero **no se
@@ -1150,6 +1166,8 @@ SELECT
            AND table_name='credit_notes' AND column_name='cancelled_at')   AS "060_cancelled_at",
   EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
            AND table_name='fe_emisiones' AND column_name='credit_note_id') AS "062_credit_note_id",
+  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+           AND table_name='fe_anulaciones' AND column_name='credit_note_id') AS "065_credit_note_id",
   EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
            WHERE n.nspname='public' AND p.proname='cancel_invoice_with_reversal'
              AND position('reverses_entry_id = je.id' IN pg_get_functiondef(p.oid)) > 0) AS "063_filtro",
@@ -1161,7 +1179,7 @@ SELECT
   EXISTS (SELECT 1 FROM pg_constraint WHERE conname='invoices_cancellation_reason_largo') AS "058_todavia_NO",
   EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
            AND table_name='chart_of_accounts' AND column_name='cuenta_control') AS "025_todavia_NO";
--- esperado: cinco TRUE y tres FALSE
+-- esperado: seis TRUE y tres FALSE
 
 -- V-A2 · ningún RPC del libro es ejecutable desde la sesión del usuario
 SELECT p.proname,

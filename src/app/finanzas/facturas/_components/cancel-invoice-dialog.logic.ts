@@ -2,10 +2,11 @@
  * Lógica pura (sin React) del modal de anulación de facturas. Extraída para
  * poder testearla con el runner `node:test` sin montar el componente client.
  *
- * Contexto: `cancelInvoice()` sólo anula LOCAL — no manda evento de anulación
- * a la DGI. Para facturas que ya tienen CUFE autorizado, la anulación real se
- * hace en el portal de eFactura PTY. Por eso el modal muestra un disclaimer +
- * un checkbox de confirmación obligatorio SOLO para esas facturas.
+ * Contexto: desde 9B, para una factura con CUFE la ruta `/cancel` la anula
+ * PRIMERO ante la DGI y después en el libro (`anularFacturaAnteDgi`). Es un
+ * acto fiscal que no se deshace, así que el modal muestra un aviso y un
+ * checkbox obligatorio SOLO para esas facturas. (Hasta el 25/09/2026 el texto
+ * decía lo contrario: que el CRM no anulaba ante la DGI.)
  */
 
 import type { FeEstado } from "@/lib/finanzas/types/invoice";
@@ -18,8 +19,7 @@ import { faltanParaElMinimo } from "@/lib/finanzas/validators/cancel-invoice";
  *   - Registro manual "Camino 1": `dgi_cufe` cargado a mano (el `fe_estado`
  *     puede seguir en `no_emitida`), pero la DGI igual la tiene registrada.
  *
- * En ambos casos, anular en el CRM no notifica a la DGI, así que aplica el
- * disclaimer.
+ * En ambos casos la anulación viaja a la DGI, así que aplica el aviso.
  */
 export function invoiceHasAuthorizedCufe(
   feEstado: FeEstado | null | undefined,
@@ -42,7 +42,7 @@ export function invoiceHasAuthorizedCufe(
  *      entiende mientras se escribe y una que se descubre a los golpes.
  *
  *   2. **El checkbox DGI**, para facturas que ya tienen CUFE: hay que confirmar
- *      que se anuló (o se va a anular) en el portal.
+ *      que se entiende que la anulación va a la DGI y no se deshace.
  *
  * El estado de carga lo maneja el propio `ConfirmationModal`, no esta función.
  */

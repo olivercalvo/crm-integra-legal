@@ -98,8 +98,9 @@ export function CancelInvoiceDialog({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const OBSERVATIONS_MAX = 2000;
 
-  // ¿La factura ya tiene CUFE autorizado por la DGI? Anularla acá NO la anula
-  // ante la DGI (cancelInvoice sólo cambia estado local) → disclaimer + checkbox.
+  // ¿La factura ya tiene CUFE autorizado por la DGI? Desde 9B la ruta la anula
+  // PRIMERO ante la DGI y después en el libro (anularFacturaAnteDgi), así que el
+  // aviso dice eso y el checkbox pide entender que no se puede deshacer.
   // Al COMPLETAR, el checkbox de la DGI no aplica: el documento ya está anulado
   // allá — de eso se trata este estado. Pedir la confirmación otra vez sería
   // pedirle a la persona que prometa algo que ya pasó.
@@ -328,8 +329,8 @@ export function CancelInvoiceDialog({
                 </p>
               )}
 
-              {/* DISCLAIMER DGI: solo para facturas con CUFE autorizado.
-                  Anular en el CRM NO notifica a la DGI. */}
+              {/* AVISO DGI: solo para facturas con CUFE autorizado. La ruta
+                  anula primero ante la DGI y después en el libro (9B, D3). */}
               {hasCufe && (
                 <div
                   role="alert"
@@ -340,12 +341,11 @@ export function CancelInvoiceDialog({
                     className="mt-0.5 shrink-0 text-amber-600"
                   />
                   <p>
-                    Esta factura ya fue autorizada por la DGI. Anularla aquí
-                    solo la marca como anulada en el CRM; no la anula ante la
-                    DGI. Para anularla oficialmente, primero hay que anularla en
-                    el portal de eFactura PTY (admin.efacturapty.com). Ten en
-                    cuenta que la DGI tiene una ventana de tiempo limitada para
-                    anular desde la autorización.
+                    Esta factura está autorizada por la DGI. Al confirmar, el
+                    sistema la anula primero ante la DGI y después en el CRM:
+                    genera la nota de crédito interna y el asiento de reversión
+                    con fecha de hoy. Si la DGI no acepta la anulación, no se
+                    cambia nada.
                   </p>
                 </div>
               )}
@@ -518,8 +518,8 @@ export function CancelInvoiceDialog({
                     className="mt-0.5 h-4 w-4 shrink-0 accent-integra-navy"
                   />
                   <span>
-                    Confirmo que ya anulé esta factura en el portal de la DGI
-                    (o que soy consciente de que debo hacerlo).
+                    Entiendo que la anulación se envía a la DGI y no se puede
+                    deshacer.
                   </span>
                 </label>
               )}

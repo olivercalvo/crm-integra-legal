@@ -281,6 +281,12 @@ const MARCADORES = {
     nota: "25/09. Arco exclusivo con invoice_id, como la 062 en fe_emisiones. Existe porque una NC autorizada se anula ante la DGI (PAC primero, libro despues) y cada intento queda registrado.",
   },
 
+  "066_nc_de_compra.sql": {
+    que: "Nota de credito de compra: supplier_credit_notes, saldo derivado, RPC de alta y de reversion",
+    tipo: "tabla", tabla: "supplier_credit_notes",
+    nota: "3.5, 25/09. Una sola transaccion (numero + NC + lineas + asiento). credited_total derivada y balance_due generada en business_expenses; el status se deriva contra el total neto. Defaults de Josuarth (J-2, J-3, J-5, J-10, J-11) en el encabezado.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

@@ -519,6 +519,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   corre ya existe la NC total de esa misma anulación, `emitida` y sin asiento: un filtro por
   status la haría bloquearse a sí misma. El lado de la app no cambió —`credited_total` ya excluye
   las anuladas— y por eso lleva test.
+- 🔴 **Todo lo que escribe `invoices.dgi_cufe` escribe `dgi_cufe_origen`** (`064`, 25/09). El
+  CHECK de la `061` dejaba pasar un origen NULL (`NULL IN (…)` es NULL) y dos facturas de
+  staging quedaron así. En producción la `061` y la `064` van **en la ventana**: con el CHECK
+  bueno, el código de `main` fallaría al guardar una factura YA autorizada por el PAC.
+  🔒 `cufe-siempre-con-origen.test.ts`. Detalle en `sop.md`, caso B.
 - **`credit_notes.status` admite `emitida` y `anulada`, y la única transición es entre esas dos,
   en ese orden.** Las cantidades acreditadas se liberan solas: `acreditadoPorLineaDeFactura` ya
   filtraba por `status = 'emitida'` desde la `051`.

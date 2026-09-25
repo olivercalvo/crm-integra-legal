@@ -535,7 +535,7 @@ export function TodoList({ initialTodos, teamMembers, currentUserId }: TodoListP
                   onChange={(e) => setAssignedTo(e.target.value)}
                   className="rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:border-integra-gold focus:outline-none"
                 >
-                  <option value="">— Nadie (solo mío) —</option>
+                  <option value="">Nadie (solo mío)</option>
                   {teamMembers
                     .filter((m) => m.id !== currentUserId)
                     .map((m) => (

@@ -117,7 +117,7 @@ export function DocumentUpload({ entityType, entityId }: DocumentUploadProps) {
           Adjuntar Documento
         </Button>
         <p className="text-center text-xs text-gray-400">
-          PDF, Word, Excel, imágenes — máximo 10MB por archivo
+          PDF, Word, Excel, imágenes. Máximo 10MB por archivo
         </p>
       </div>
 

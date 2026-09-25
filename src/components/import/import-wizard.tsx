@@ -218,7 +218,7 @@ export function ImportWizard({ importType = "all" }: ImportWizardProps) {
                 {file ? file.name : "Seleccione un archivo Excel o CSV"}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Formatos: .xlsx, .xls, .csv — Máximo 10 MB
+                Formatos: .xlsx, .xls, .csv. Máximo 10 MB
               </p>
             </div>
             {file && (
@@ -352,7 +352,7 @@ export function ImportWizard({ importType = "all" }: ImportWizardProps) {
                 <ul className="space-y-1 text-sm">
                   {preview.duplicateClients.map((d, i) => (
                     <li key={i} className="text-amber-800">
-                      Fila {d.row}: <strong>{d.name}</strong> — coincide por {d.matchField}
+                      Fila {d.row}: <strong>{d.name}</strong>, coincide por {d.matchField}
                     </li>
                   ))}
                 </ul>

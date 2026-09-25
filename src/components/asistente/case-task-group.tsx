@@ -184,7 +184,7 @@ export function CaseTaskGroup({ caseId, caseCode, clientName, pendientes, cumpli
         <span className="font-mono text-sm font-bold text-integra-navy">
           {caseCode}
         </span>
-        <span className="text-sm text-gray-600 truncate">— {clientName}</span>
+        <span className="text-sm text-gray-600 truncate">· {clientName}</span>
         {pendientes.length > 0 && (
           <Badge className="ml-auto border-transparent bg-amber-100 text-amber-700 text-xs shrink-0">
             {pendientes.length} pendiente{pendientes.length !== 1 ? "s" : ""}

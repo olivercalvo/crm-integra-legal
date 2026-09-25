@@ -72,7 +72,7 @@ export function GlobalSearch() {
           id: cs.id,
           type: "case",
           title: cs.case_code,
-          subtitle: [cs.description, clientName].filter(Boolean).join(" — "),
+          subtitle: [cs.description, clientName].filter(Boolean).join(" · "),
           href: `/legal/casos/${cs.id}`,
         });
       }

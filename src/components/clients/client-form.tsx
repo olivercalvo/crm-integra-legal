@@ -344,7 +344,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   onChange={set("type")}
                   className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">— Seleccionar tipo —</option>
+                  <option value="">Seleccionar tipo</option>
                   <option value="Persona Natural">Persona Natural</option>
                   <option value="Persona Jurídica">Persona Jurídica</option>
                   <option value="Retainer">Retainer</option>
@@ -367,7 +367,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   onChange={setClientType}
                   className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">— Seleccionar —</option>
+                  <option value="">Seleccionar</option>
                   <option value="persona_natural">Persona natural</option>
                   <option value="persona_juridica">Persona jurídica</option>
                 </select>
@@ -388,7 +388,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                   onChange={set("tipo_receptor_fe")}
                   className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  <option value="">— Seleccionar —</option>
+                  <option value="">Seleccionar</option>
                   {TIPO_RECEPTOR_FE_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -434,7 +434,7 @@ export function ClientForm({ mode, client, classifications, lawyers = [] }: Clie
                     onChange={set("responsible_lawyer_id")}
                     className="w-full min-h-[48px] rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">— Sin abogada responsable —</option>
+                    <option value="">Sin abogada responsable</option>
                     {lawyers.map((l) => (
                       <option key={l.id} value={l.id}>{l.name}</option>
                     ))}

@@ -46,7 +46,7 @@ export default async function ImpuestosPage() {
         <p>
           La tasa se aplica a los documentos que se creen <strong>a partir del cambio</strong>.
           Las facturas y cotizaciones ya emitidas conservan la tasa que tenían: cada línea
-          guarda la suya, y así debe ser — un documento refleja la ley vigente el día que se
+          guarda la suya, y así debe ser: un documento refleja la ley vigente el día que se
           emitió.
         </p>
       </div>

@@ -48,8 +48,8 @@ export async function reverseJournalEntry(
   if (original.source_type !== "manual") {
     throw new MutationError(
       `El asiento ${original.entry_number} salió de un documento, no de una carga manual: ` +
-        "desde acá no se reversa. Se corrige por su documento —anulando la factura, reversando " +
-        "el cobro o el gasto—, que además actualiza el estado de ese documento.",
+        "desde acá no se reversa. Se corrige por su documento (anulando la factura, reversando " +
+        "el cobro o el gasto), que además actualiza el estado de ese documento.",
       409
     );
   }

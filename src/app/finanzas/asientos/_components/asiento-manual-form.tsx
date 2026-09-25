@@ -312,7 +312,7 @@ export function AsientoManualForm({
             id="descripcion"
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Ej: Depreciación de mobiliario — marzo"
+            placeholder="Ej: Depreciación de mobiliario, marzo"
             className="min-h-[48px]"
           />
           <p className="mt-1 text-xs text-gray-400">
@@ -356,7 +356,7 @@ export function AsientoManualForm({
                   onChange={(e) => actualizar(i, { account_code: e.target.value })}
                   className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
                 >
-                  <option value="">— Elegir cuenta —</option>
+                  <option value="">Elegir cuenta</option>
                   {cuentas.map((c) => (
                     <option key={c.code} value={c.code}>
                       {c.code} · {c.name}
@@ -375,7 +375,7 @@ export function AsientoManualForm({
                   aria-label={`Tercero de la línea ${i + 1}`}
                   className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
                 >
-                  <option value="">— Sin tercero —</option>
+                  <option value="">Sin tercero</option>
                   {terceros.clientes.length > 0 && (
                     <optgroup label="Clientes">
                       {terceros.clientes.map((c) => (

@@ -303,7 +303,7 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               Un asiento registrado no se edita ni se borra: los triggers del libro rechazan las dos
               cosas. {esManual
                 ? "Si está mal, se reversa: queda el original y su espejo."
-                : "Este asiento salió de un documento, así que se corrige por el documento — anulando la factura o reversando el cobro, no desde acá."}
+                : "Este asiento salió de un documento, así que se corrige por el documento: anulando la factura o reversando el cobro, no desde acá."}
             </p>
           </div>
         </aside>

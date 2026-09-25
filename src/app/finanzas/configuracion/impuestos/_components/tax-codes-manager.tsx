@@ -262,7 +262,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
                   <span className="text-red-600">No es un número.</span>
                 ) : decimalNuevo > 1 ? (
                   <span className="text-red-600">
-                    {formatTaxRate(decimalNuevo)} — no puede superar el 100%.
+                    {formatTaxRate(decimalNuevo)}: no puede superar el 100%.
                   </span>
                 ) : (
                   <>

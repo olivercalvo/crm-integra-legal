@@ -180,8 +180,8 @@ export function PeriodosManager({ periodos }: Props) {
 
           <p className="text-sm text-amber-900">
             Reabrirlo <strong className="font-semibold">permite registrar asientos en un
-            ejercicio ya certificado</strong>. Los estados financieros de ese mes —que el
-            contador pudo haber presentado ante la DGI— dejarían de reproducirse igual que
+            ejercicio ya certificado</strong>. Los estados financieros de ese mes, que el
+            contador pudo haber presentado ante la DGI, dejarían de reproducirse igual que
             cuando se emitieron.
           </p>
 

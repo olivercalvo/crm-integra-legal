@@ -525,9 +525,9 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 {/* En cuentas de resultado NO se ofrece "sin clasificar": desde
                     NIIF 18 la subcategoría es obligatoria ahí. */}
                 {requiereSubcategoria(form.account_type) ? (
-                  <option value="">— Seleccione una —</option>
+                  <option value="">Seleccione una</option>
                 ) : (
-                  <option value="">— Sin clasificar —</option>
+                  <option value="">Sin clasificar</option>
                 )}
                 {subcategoriasParaTipo(form.account_type).map((s) => (
                   <option key={s} value={s}>
@@ -561,7 +561,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                   selectClass + (fieldErrors.cuenta_control ? " border-red-300" : "")
                 }
               >
-                <option value="">— No es cuenta control —</option>
+                <option value="">No es cuenta control</option>
                 {CUENTAS_CONTROL.map((c) => (
                   <option key={c} value={c}>
                     {CUENTA_CONTROL_LABEL_ES[c]}
@@ -846,7 +846,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                                   disabled={isActionLoading || lockDeactivate}
                                   title={
                                     lockDeactivate
-                                      ? "Cuenta del sistema — no se puede desactivar"
+                                      ? "Cuenta del sistema: no se puede desactivar"
                                       : a.active
                                         ? "Desactivar"
                                         : "Activar"

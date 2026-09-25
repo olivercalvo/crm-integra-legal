@@ -101,16 +101,16 @@ export async function resolverLineasParaAsiento(
     new Set(lineasCrudas.map((l) => l.service_id).filter((x): x is string => !!x))
   );
 
-  const servicios = new Map<string, { code: string; revenue_account: string | null }>();
+  const servicios = new Map<string, { code: string; name: string | null; revenue_account: string | null }>();
   if (serviceIds.length > 0) {
     const { data: svc, error: errSvc } = await db
       .from("services_catalog")
-      .select("id, code, revenue_account")
+      .select("id, code, name, revenue_account")
       .eq("tenant_id", tenantId)
       .in("id", serviceIds);
     if (errSvc) throw errSvc;
-    for (const s of (svc ?? []) as { id: string; code: string; revenue_account: string | null }[]) {
-      servicios.set(s.id, { code: s.code, revenue_account: s.revenue_account });
+    for (const s of (svc ?? []) as { id: string; code: string; name: string | null; revenue_account: string | null }[]) {
+      servicios.set(s.id, { code: s.code, name: s.name ?? null, revenue_account: s.revenue_account });
     }
   }
 
@@ -148,6 +148,7 @@ export async function resolverLineasParaAsiento(
       subtotal: num(l.subtotal),
       tax_amount: num(l.tax_amount),
       service_code: svc?.code ?? null,
+      service_name: svc?.name ?? null,
       revenue_account: cuenta,
       cuenta_valida: cuenta !== null && activas.has(cuenta),
     };

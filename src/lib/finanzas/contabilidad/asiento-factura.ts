@@ -86,6 +86,8 @@ export interface LineaFacturaParaAsiento {
   tax_amount: number;
   /** `services_catalog.code`. `null` si la línea no tiene servicio. */
   service_code: string | null;
+  /** `services_catalog.name`, para nombrar el servicio en palabras en un rechazo. */
+  service_name?: string | null;
   /** `services_catalog.revenue_account`. `null` si no hay servicio. */
   revenue_account: string | null;
   /**
@@ -195,18 +197,24 @@ export function construirAsientoDeFactura(
     const pares = Array.from(
       new Map(invalidas.map((l) => [`${l.service_code}|${l.revenue_account}`, l])).values()
     );
-    const detalle = pares
-      .map((l) => `${l.service_code} → cuenta ${l.revenue_account}`)
-      .join(", ");
-    return {
-      ok: false,
-      motivo: "cuenta_invalida",
-      mensaje:
-        `No se puede registrar la factura ${f.invoice_number} en el libro contable: ` +
-        `${detalle} ${pares.length === 1 ? "no existe o está inactiva" : "no existen o están inactivas"} ` +
-        `en el plan de cuentas vigente. Corrija la cuenta de ingreso del servicio en el ` +
-        `catálogo antes de emitir.`,
-    };
+    // En lenguaje simple (25/09/2026): el servicio EN PALABRAS, su código y la
+    // cuenta. "HON-FAM → cuenta 4101" no le dice nada a quien factura.
+    const nombrar = (l: LineaFacturaParaAsiento) =>
+      l.service_name
+        ? `«${l.service_name}» (${l.service_code})`
+        : `${l.service_code}`;
+    const cual = f.invoice_number ? `la factura ${f.invoice_number}` : "esta factura";
+    const mensaje =
+      pares.length === 1
+        ? `No se puede emitir ${cual}: el servicio ${nombrar(pares[0])} usa la cuenta de ` +
+          `ingreso ${pares[0].revenue_account}, que no existe o está desactivada en el plan de ` +
+          `cuentas. Hay que corregir la cuenta de ese servicio en el catálogo de servicios ` +
+          `antes de emitir.`
+        : `No se puede emitir ${cual}: estos servicios usan cuentas de ingreso que no existen ` +
+          `o están desactivadas en el plan de cuentas: ` +
+          pares.map((l) => `${nombrar(l)}, cuenta ${l.revenue_account}`).join("; ") +
+          `. Hay que corregir la cuenta de cada servicio en el catálogo antes de emitir.`;
+    return { ok: false, motivo: "cuenta_invalida", mensaje };
   }
 
   // ---- 3) Agrupar los créditos de ingreso POR CUENTA -----------------------

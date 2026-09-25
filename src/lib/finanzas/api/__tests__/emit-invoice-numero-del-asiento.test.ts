@@ -40,6 +40,8 @@ interface Mundo {
   proximoNumero: number;
   /** El UPDATE final falla con el UNIQUE (la carrera que FND-011 describe). */
   updateChoca?: boolean;
+  /** Cuentas activas del plan. Por defecto, la del servicio (400001). */
+  cuentasActivas?: string[];
   // — registro —
   orden: string[];
   posteado: { reference: string | null; description: string } | null;
@@ -124,7 +126,10 @@ function fake(w: Mundo) {
           error: null,
         };
       case "chart_of_accounts":
-        return { data: [{ code: "400001" }], error: null };
+        return {
+          data: (w.cuentasActivas ?? ["400001"]).map((code) => ({ code })),
+          error: null,
+        };
       default:
         return { data: null, error: null };
     }
@@ -264,4 +269,29 @@ test("el camino normal sigue igual: correlativo → guard → asiento → emisi�
   );
   assert.equal(w.posteado?.reference, "FAC-HON-000012");
   assert.ok(asientoYFacturaDicenLoMismo(w));
+});
+
+test("🔴 cuenta de ingreso inactiva: 422 ANTES de pedir el número, el correlativo queda intacto", async () => {
+  // FAC-HON-000018 en staging (25/09/2026): HON-FAM → 4101, inactiva por la
+  // 043. El asiento se armaba después de consumir el número y quedaba un hueco.
+  const w = mundo({ proximoNumero: 18, cuentasActivas: [] });
+  const db = fake(w);
+
+  await assert.rejects(
+    () => emitInvoice(db as never, TENANT, BORRADOR, db as never, USER),
+    (err: unknown) => {
+      const e = err as { status?: number; message?: string };
+      assert.equal(e.status, 422);
+      // En lenguaje simple: el servicio en palabras, su código y la cuenta.
+      assert.match(String(e.message), /el servicio «Honorarios corporativos» \(HON-COR\) usa la cuenta de ingreso 400001/);
+      assert.match(String(e.message), /desactivada/);
+      assert.match(String(e.message), /catálogo de servicios/);
+      return true;
+    }
+  );
+
+  assert.ok(!w.orden.includes("correlativo"), `se pidió un número: ${w.orden.join(" → ")}`);
+  assert.equal(w.proximoNumero, 18, "la secuencia no se movió");
+  assert.equal(w.posteado, null, "no se posteó nada");
+  assert.equal(w.emitidaComo, null, "la factura sigue en borrador");
 });

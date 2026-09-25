@@ -598,6 +598,25 @@ export async function emitInvoice(
   //    factura YA tiene asiento: sería el reintento de una emisión que posteó y
   //    no llegó al UPDATE, y su número es el que está en el libro (FND-011).
   const asientoPrevio = await asientoDeFacturaExistente(ledgerDb, tenantId, invoiceId);
+
+  // 3·0. 🔴 LAS CUENTAS, ANTES DE PEDIR EL NÚMERO (25/09/2026).
+  //      El asiento se armaba DESPUÉS de consumir el correlativo, así que un
+  //      servicio con la cuenta de ingreso desactivada quemaba un número y
+  //      dejaba un hueco (FAC-HON-000018 en staging, por HON-FAM → 4101). Se
+  //      arma primero sin número —las cuentas no dependen de él— y recién si
+  //      sale bien se pide el número; en el paso 3b se vuelve a armar con él.
+  //      El reintento (asiento previo) no pasa por acá: su asiento ya existe.
+  if (!asientoPrevio) {
+    const previa = await cargarFacturaParaAsiento(ledgerDb, tenantId, invoiceId, "");
+    if (!previa) {
+      throw new InvoiceMutationError("Factura no encontrada", 404);
+    }
+    const prueba = construirAsientoDeFactura(previa);
+    if (!prueba.ok) {
+      throw new InvoiceMutationError(prueba.mensaje, 422);
+    }
+  }
+
   let formatted: string;
   if (asientoPrevio) {
     formatted = numeroDelAsiento(asientoPrevio);

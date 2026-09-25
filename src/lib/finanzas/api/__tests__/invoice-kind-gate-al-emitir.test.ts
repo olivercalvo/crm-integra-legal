@@ -138,7 +138,7 @@ test("el caso espejo: borrador HONORARIOS con una línea REIM-JUD también se re
   assert.deepEqual(reg.rpcs, []);
 });
 
-test("todo combina (o la línea es Personalizada): el gate deja pasar y recién ahí se pide el correlativo", async () => {
+test("todo combina (o la línea es Personalizada): el gate de tipo deja pasar", async () => {
   const { db, reg } = fake({
     kind: "REEMBOLSO",
     lineas: [
@@ -147,9 +147,14 @@ test("todo combina (o la línea es Personalizada): el gate deja pasar y recién 
     ],
   });
   const e = await rechazo(emitInvoice(db as never, TENANT, INVOICE, db as never, USER));
-  // Llegó al RPC del correlativo (el fake lo corta a propósito): el gate no lo frenó.
-  assert.deepEqual(reg.rpcs, ["get_next_sequence_number"]);
+  // El gate de tipo no lo frenó...
   assert.doesNotMatch(e.message, /solo puede llevar líneas/);
+  // ...y desde el 25/09/2026 lo que sigue es armar el asiento SIN número: la
+  // línea Personalizada no tiene servicio (no se sabe a qué cuenta de ingreso
+  // va), así que se rechaza ANTES del correlativo. Antes se descubría después
+  // de quemar el número.
+  assert.match(e.message, /no tiene un servicio del catálogo/);
+  assert.deepEqual(reg.rpcs, [], "el rechazo no quema un número");
 });
 
 test("sin líneas sigue siendo el rechazo de siempre, antes del gate y del correlativo", async () => {

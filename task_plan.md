@@ -323,6 +323,15 @@ Revisado antes de anotarlas: el swagger completo, `docs/efactura/`, y las respue
 > corrección del 23/09, las anteriores al 8 de julio **tienen CUFE** y entran por el caso B,
 > que funciona — así que el caso C puede no tener ningún documento real, y preguntar por algo
 > que no existe gasta una consulta que después hace falta para algo que sí.
+>
+> 🔁 **Reconfirmado por Oliver el 25/09/2026: NO se le pregunta a ideati.** Queda en espera
+> hasta que **el bufete** confirme si existe alguna factura en papel que acreditar.
+> - Si el bufete dice **que no hay ninguna**: P1 se cierra sin mandarse y el caso C queda
+>   documentado como «sin camino y sin documentos» (la pantalla ya dice «consulte con
+>   administración» y no deja emitir).
+> - Si dice **que sí hay**: recién ahí se manda P1 tal como está abajo, con el número de la
+>   factura en papel en la mano.
+> - **Quién destraba:** el bufete, no ideati ni el desarrollo.
 
 Medido el 24/09/2026 en el sandbox, con el código en la mano:
 
@@ -3808,5 +3817,6 @@ y qué no se vuelve a derivar en el JSX. **No reemplaza abrir la pantalla.**
 
 ### Pregunta a ideati: sigue EN ESPERA
 
-La del caso C (referenciar una factura en papel rompe el PAC). Espera a que el bufete confirme
+La del caso C (referenciar una factura en papel rompe el PAC). **Reconfirmado el 25/09: no se
+pregunta.** Espera a que el bufete confirme
 si existe alguna factura en papel que acreditar.

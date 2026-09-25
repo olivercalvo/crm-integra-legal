@@ -454,7 +454,7 @@ del seed y se pueda validar a mano.
 | abogada | `abogada@staging.test` | `Staging2026$Abogada` |
 | abogada | `abogada2@staging.test` | `Staging2026$Abogada2` |
 | asistente | `asistente@staging.test` | `Staging2026$Asistente` |
-| contador | `contador@staging.test` | `Staging2026$Contador` |
+| contador | `contador@staging.test` | Rotada el 26/09/2026: en `.credencial-contador-staging.local` (ignorado por git). La de esta tabla ya no sirve |
 
 Nombres inventados a propósito — ninguno es el de una licenciada. El dominio `.test` está
 reservado por RFC 2606: no resuelve, así que ningún correo puede salir hacia una persona real.
@@ -1386,7 +1386,9 @@ Hay tests que lo fijan: `src/lib/email/__tests__/candado-ambiente.test.ts`.
 
 ## SOP-019: Congelar staging mientras alguien de afuera lo revisa
 
-**Desde:** 2026-09-01, primera revisión de Josuarth (contador de RM).
+**Desde:** 2026-09-01, primera revisión de Josuarth Torres. Desde el 26/09/2026 Josuarth
+ya no es de RM Consultores: tiene una alianza con Integra y es el revisor contable del
+proyecto. Rose Molina salió del proyecto.
 
 ### El problema
 
@@ -1613,7 +1615,7 @@ excluyeron 244.476,91 de saldos de apertura…"*. Con el número el contador lo 
 el número es una disculpa. El valor se suma de `aperturaExcluida` de las cuentas —el mismo
 dato que el reporte no usó— y nunca de un cálculo paralelo.
 
-Ese número, además, es hoy una pregunta abierta para RM: ver `task_plan.md` **A-quinquies**.
+Ese número, además, es hoy una pregunta abierta para Josuarth: ver `task_plan.md` **A-quinquies**.
 
 ### Lo que NO tiene corte de fechas
 
@@ -1934,8 +1936,8 @@ computadora contra `110001`.
 **Lo que NO se hizo:** una lista corta para compras. El recorte útil sería sacar las 8 cuentas
 de planilla (`600001 Sueldos`, `600004 Décimo Tercer Mes`…), y ahí hay una pregunta que no es
 de diseño: **¿`600006 CSS Patronal` y `600007 Seguro Educativo` se registran como una compra
-con proveedor, o salen de la planilla y nunca pasan por este módulo?** Va a RM —son los
-contadores del bufete y saben cómo se asienta la planilla—; está anotado en `task_plan.md`.
+con proveedor, o salen de la planilla y nunca pasan por este módulo?** Va a Josuarth —es el
+contador del bufete y sabe cómo se asienta la planilla—; está anotado en `task_plan.md`.
 
 ---
 

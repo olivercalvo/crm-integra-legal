@@ -11,8 +11,8 @@ la base de producción, más el merge de `develop` a `main`:
 > inventario y la versión en página. Renombrarlo es una decisión de Oliver.
 >
 > 🔒 **La `056` está RESERVADA** para la corrección de la fecha de los saldos
-> iniciales (§P-2(b)), que depende de la respuesta de Josuarth / RM. Es un
-> **hueco a propósito**, no un olvido: si RM contesta después del despliegue, la
+> iniciales (§P-2(b)), que depende de la respuesta de Josuarth Torres. Es un
+> **hueco a propósito**, no un olvido: si Josuarth contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
 >
 > 🆕 **La `066` (NC de compra) y la `067` (importar asientos), 25/09/2026, noche.**
@@ -133,7 +133,7 @@ los puntos donde **se para**.
 |---|---|---|---|
 | −2 | Pre-flight P-1 a P-16 (§1 y §1b), solo SELECT | SQL Editor de prod | cualquier «Parar si» |
 | −2 | Josuarth elige la cuenta de los servicios de P-15 | correo | si no decide: esos servicios quedan sin facturar |
-| −2 | Respuestas por escrito de RM: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
+| −2 | Respuestas por escrito de Josuarth: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
@@ -192,13 +192,14 @@ pensar; el día D solo se comparan números.
 > 🔴 **Dos de estas no las decide el desarrollo.**
 > **P‑1(b)** (en qué actividad NIIF 18 cae cada cuenta de resultado sin clasificar)
 > y **P‑2** (a qué fecha corresponden los saldos iniciales) son **decisiones
-> contables de RM Consultores**. El pre-flight las *consulta*; no las resuelve.
+> contables de Josuarth Torres**, el contador del proyecto (desde el 26/09/2026 ya
+> no por RM Consultores: tiene una alianza con Integra). El pre-flight las *consulta*; no las resuelve.
 > Las dos tienen que estar respondidas **antes del día D, por escrito**. Si llega
 > el día y alguna sigue abierta, **no se corre el despliegue**: la 025 y la 027
 > escriben esas decisiones en la base, y después se corrigen editando filas que ya
 > alimentaron un reporte.
 
-### P-1 · Qué reclasifica la `025`  ·  🟡 (b) DECIDE RM
+### P-1 · Qué reclasifica la `025`  ·  🟡 (b) DECIDE JOSUARTH
 
 ```sql
 -- (a) las que pasan a 'cost' y desaparecen del P&L de main
@@ -233,14 +234,14 @@ SELECT code, name FROM public.chart_of_accounts
 >
 > ⚠️ Con 97 cuentas, (b) puede devolver varias decenas de filas.
 >
-> 🟡 **REQUIERE DECISIÓN DE RM CONSULTORES ANTES DEL DÍA D.**
+> 🟡 **REQUIERE DECISIÓN DE JOSUARTH ANTES DEL DÍA D.**
 > La 025 clasifica **toda** cuenta de resultado activa sin subcategoría válida como
 > **operativa** de su tipo. Es el default correcto —hoy todo lo que existe es
 > operativo— pero es un supuesto, no un dato: las otras seis actividades NIIF 18
 > (inversión y financiamiento) quedan disponibles y nadie dijo que ninguna cuenta
 > caiga ahí.
 >
-> **Lo que hay que preguntarle a RM:** ejecutar
+> **Lo que hay que preguntarle a Josuarth:** ejecutar
 > **`sql/verificacion/cuentas_para_rm_niif18.sql`** —no la (b) cruda, que cuenta de
 > más porque incluye las que los pasos C y D mapean solos— pegar el resultado en
 > Excel y mandárselo al contador. Trae tres columnas vacías para que marque cuenta
@@ -254,8 +255,8 @@ SELECT code, name FROM public.chart_of_accounts
 > UPDATE puntual de `subcategoria`. Después también se puede, pero ya habrá salido
 > en un Estado de Resultado.
 >
-> - [ ] Fecha en que RM respondió: `__________`
-> - [ ] Cuentas que RM movió de operativa: `________________________`
+> - [ ] Fecha en que Josuarth respondió: `__________`
+> - [ ] Cuentas que Josuarth movió de operativa: `________________________`
 
 ### P-1(e) · 🔴 Los «esperado» del POST-CHECK, calculados contra PRODUCCIÓN
 
@@ -308,7 +309,7 @@ SELECT count(*) FILTER (WHERE at  = 'cost')                 AS esperado_cost,
 > con el texto de la migración (`6 / 9 / 30 / 6`), **eso no es motivo de parar**:
 > son los de staging. Si no coincide con **estos cuatro**, ahí sí se para.
 
-### P-2 · La fecha de los saldos iniciales (`027`)  ·  🟡 DECIDE RM
+### P-2 · La fecha de los saldos iniciales (`027`)  ·  🟡 DECIDE JOSUARTH
 
 ```sql
 SELECT count(*) AS con_saldo, min(saldo_inicial) AS menor,
@@ -319,7 +320,7 @@ SELECT count(*) AS con_saldo, min(saldo_inicial) AS menor,
 - [ ] cuentas con saldo: `____`
 - [ ] ¿`2026-01-01` es la fecha de corte correcta? **SI / la correcta es `________`**
 
-> 🟡 **REQUIERE DECISIÓN DE RM CONSULTORES ANTES DEL DÍA D.**
+> 🟡 **REQUIERE DECISIÓN DE JOSUARTH ANTES DEL DÍA D.**
 >
 > 🔴 **En la reunión del 09/09 se habló de cortar el balance al 30 de junio de
 > 2026, no al 1 de enero.** Eso todavía no está confirmado por escrito, y es
@@ -334,10 +335,10 @@ SELECT count(*) AS con_saldo, min(saldo_inicial) AS menor,
 > apertura al 1 de enero tendría las de resultado en 0 y el patrimonio cuadrando;
 > lo que hay es el movimiento de enero a agosto.
 >
-> **Lo que hay que preguntarle a RM:** la fecha de corte de los saldos cargados,
+> **Lo que hay que preguntarle a Josuarth:** la fecha de corte de los saldos cargados,
 > por escrito.
 >
-> - [ ] Fecha de corte que confirmó RM: `__________`
+> - [ ] Fecha de corte que confirmó Josuarth: `__________`
 > - [ ] Fecha en que respondieron: `__________`
 
 > **Parar si:** la fecha sigue sin confirmarse el día D. No se corre la `027` con
@@ -357,12 +358,12 @@ La `027` es un `.sql` que se pega en el SQL Editor: **no admite parámetros**. E
 | **C** | **Dejar la `027` intacta y agregar una `056`** que haga el `UPDATE` a la fecha confirmada | Producción tiene la fecha vieja entre dos migraciones de la misma corrida. Nada la lee todavía |
 
 **Recomendado: C.** La `027` queda byte a byte igual a lo que corrió en staging; la
-decisión de RM entra con su propia migración, con el acta del 09/09 en el encabezado
+decisión de Josuarth entra con su propia migración, con el acta del 09/09 en el encabezado
 y auditable; y la misma `056` corrige staging, que hoy también tiene la fecha
 equivocada. El riesgo es nulo porque **nadie lee `saldo_inicial_fecha` todavía**: el
 asiento de apertura es de la Fase 2 y no existe.
 
-⚠️ **La `056` se escribe cuando RM confirme, no antes.** Con una fecha puesta «a ver
+⚠️ **La `056` se escribe cuando Josuarth confirme, no antes.** Con una fecha puesta «a ver
 si es esa», el problema es el mismo que hoy.
 
 ### P-3 · Que el motor no pise nada (`028` / `030`)

@@ -2,6 +2,10 @@
 
 ## >>> 🔒 DEVELOP CONGELADO — REVISIÓN CON JOSUARTH EN CURSO <<<
 
+- 26/09/2026: **Josuarth Torres pasa al equipo** (alianza con Integra; ya no es de RM). Rose
+  Molina sale del proyecto. Contraseña del contador de staging rotada; el Excel de la decisión
+  11 va adjunto al correo. Push autorizado por Oliver; después, congelado otra vez.
+
 - Desde el push de las correcciones de la agenda (25/09/2026), **no se hace push a `develop`**
   hasta que Oliver diga que terminó la revisión (SOP-019). Lo que haga falta va en una rama
   aparte, y su Preview comparte la base de staging: no tocar los documentos de la agenda.
@@ -1076,7 +1080,10 @@ no hay nadie.
   de `sql/pending/` no tiene marcador. El script aborta también, pero el script solo corre
   cuando alguien decide correrlo; `npm test` se corre siempre.
 
-### 🔴 DOS DECISIONES DE RM CONSULTORES QUE BLOQUEAN EL DÍA D
+### 🔴 DOS DECISIONES DEL CONTADOR QUE BLOQUEAN EL DÍA D
+
+> Desde el 26/09/2026 las decide **Josuarth Torres** (alianza con Integra). Rose Molina y
+> RM Consultores salieron del proyecto. Donde abajo dice «RM», hoy es Josuarth.
 
 **No son preguntas "que no bloquean". Sin estas dos respuestas, por escrito, el despliegue no
 se corre:** la `025` y la `027` las escriben en la base, y después se corrigen editando filas
@@ -1102,7 +1109,7 @@ que ya alimentaron un reporte.
 
 ### Lo que queda por hacer, en orden
 
-1. Mandarle a RM las dos preguntas de arriba. **Bloquea todo lo demás.**
+1. Mandarle a Josuarth las dos preguntas de arriba. **Bloquea todo lo demás.**
 2. Correr el pre-flight completo (P-0 a P-10 + P-1(e)) contra producción, solo lectura.
 3. Con la respuesta de RM sobre la fecha: escribir la `056` y probarla en staging.
 4. Regenerar el inventario de PRODUCCIÓN: `--sql` → SQL Editor → `--desde`. Hoy el único

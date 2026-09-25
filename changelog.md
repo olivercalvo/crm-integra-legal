@@ -1,5 +1,27 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Josuarth pasa al equipo: contraseña rotada, agenda y Excel NIIF] - 2026-09-26
+
+Josuarth Torres dejó RM Consultores y tiene una alianza con Integra; Rose Molina sale del
+proyecto. Último push autorizado a `develop` antes de mandarle el enlace: después queda
+congelado (SOP-019). Solo staging; `main` sigue en `24b227a`.
+
+- **Contraseña de `contador@staging.test` rotada en staging** (API de administración de
+  Supabase, 24 caracteres aleatorios). La vieja, enviada a RM el 15/09, devuelve
+  `400 invalid_credentials`; la nueva entra. Vive en `.credencial-contador-staging.local`,
+  ignorado por git con la regla nueva `.credencial-*.local`. Se sacó la contraseña vieja de la
+  tabla de usuarios de `sop.md`. ⚠️ `STAGING_UI_PASSWORD` de `.env.local` quedó con la vieja.
+- **Usuarios de RM o de Rose en staging: ninguno.** Solo los cinco `@staging.test`.
+- **Agenda:** «Para: Josuarth Torres», sin RM; su usuario queda activo después de la revisión.
+  `notas-oliver.md` en el mismo sentido.
+- **Revisor contable = Josuarth** en SOP-019, el runbook (P-1(b), P-2, fila −2, la `056`),
+  `sop.md` y el bloque de decisiones de `task_plan.md`. Actas, transcripciones y «la guía de
+  RM» (documento de origen) no se tocaron.
+- **`docs/revision-josuarth/cuentas-de-resultado-niif.xlsx`:** 45 cuentas (9 ingreso, 6 costo,
+  30 gasto) con lista desplegable «Tu clasificación». Las 45 de staging coinciden con el
+  fixture exportado de producción (código, nombre, tipo, subcategoría), sin consultar
+  producción. Decisión 11 de la agenda: «va adjunta al correo».
+
 ## [Correcciones de la agenda y congelamiento de develop] - 2026-09-25 (cierre, segunda parte)
 
 Solo staging; `main` sigue en `24b227a`. Después de este push `develop` queda **congelado**

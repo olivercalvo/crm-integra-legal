@@ -9,15 +9,39 @@ este paso"; acá está qué hacer en cada caso. Nada de esto se le manda a Josua
 
 - **Acceso:** Shareable Link de Vercel del deploy de `develop` ("Anyone with the link", creado el
   15/09). El token va solo en el correo: **nunca** en un archivo del repo.
-- **Contraseña** de `contador@staging.test`: en el correo, aparte del enlace. Tampoco en el repo.
+- **Contraseña** de `contador@staging.test`: **rotada el 26/09/2026** (la anterior se le había
+  mandado a RM el 15/09 y ya no sirve). La nueva está en `.credencial-contador-staging.local`,
+  en la raíz del repo, ignorado por git (`.credencial-*.local`). Va en el correo, aparte del
+  enlace. Nunca en un archivo del repo.
+- ⚠️ `STAGING_UI_PASSWORD` de `.env.local` todavía tiene la contraseña vieja: las
+  verificaciones por API con ese usuario (`scripts/render-pantalla.mts`) fallan hasta que la
+  actualices a mano con la del archivo nuevo.
 - **Ventana de revisión abierta (SOP-019):** desde que sale el correo hasta que Josuarth confirma
   que terminó:
   - **No se hace push a `develop`.** El enlace compartido siempre muestra la última versión de la
     rama: un push le cambia el sistema en medio de la revisión.
   - Nada de `apply-staging-sql.mjs --reset`, `run-sql.mjs` con migraciones ni `seed:staging`.
   - El trabajo que haga falta va en una **rama aparte** y se integra cuando cierre la ventana.
-- **Cerrar el acceso** al terminar: Administración, Usuarios, `contador@staging.test`, Desactivar
-  (`docs/USUARIOS.md` §4). Si hace falta, revocar también el Shareable Link desde Vercel.
+- **El acceso NO se cierra al terminar la revisión.** Josuarth sigue en el proyecto (alianza con
+  Integra desde el 26/09/2026): su usuario queda activo. Lo que sí se cierra es la ventana de
+  revisión de SOP-019, que es la que congela `develop`. Si alguna vez hay que cortarle el acceso
+  al Preview, se revoca el Shareable Link desde Vercel.
+
+## El Excel de la decisión 11
+
+`cuentas-de-resultado-niif.xlsx` va **adjunto al correo**. Tiene las 45 cuentas de resultado
+activas (9 ingreso, 6 costo, 30 gasto) con la columna «Tu clasificación» como lista
+desplegable. Se comprobó el 26/09 que son las mismas de producción **sin consultar
+producción**: las 45 de staging coinciden en código, nombre, tipo y subcategoría con
+`src/lib/finanzas/reports/__tests__/josuar-accounts.fixture.ts` (exportado de producción el
+14/08, ya con la clasificación de la `025`), y el smoke de producción registró 62 activas / 97
+en total, igual que el fixture. ⚠️ En producción la `025` todavía no corrió: allá la columna
+subcategoría todavía dice `ingreso` / `costo` / `gasto_operativo`. La planilla muestra cómo
+van a quedar después de la `025`, que es lo que Josuarth tiene que confirmar (P-1(b)).
+
+⚠️ La lista incluye «Impuestos» y «Operaciones discontinuadas» por pedido de Oliver. El acta
+del 09/09 dice que con las nueve subcategorías alcanza; si Josuarth marca una de esas dos,
+hay que definir dónde va antes de aplicarla.
 
 ## Números de control (antes de la reunión)
 

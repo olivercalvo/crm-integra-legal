@@ -1,6 +1,6 @@
 # Revisión del sistema contable con Josuarth
 
-**Para:** Josuarth Torres (RM Consultores)
+**Para:** Josuarth Torres
 **Preparó:** Oliver Calvo
 **Fecha de preparación:** 25/09/2026
 
@@ -28,9 +28,8 @@ haga en esta revisión llega a los libros del bufete ni a la DGI real.
 5. Lo que tu rol **no** ve (facturar, emitir notas de crédito de venta, registrar cobros,
    clientes y casos) lo muestra Oliver en su pantalla durante la reunión, con un usuario
    administrador.
-6. **Cómo se cierra el acceso:** cuando nos confirmes que terminaste, o cuando tengamos tus
-   comentarios por escrito, Oliver desactiva tu usuario desde Administración, Usuarios. Si
-   quieres volver a entrar después, se reactiva.
+6. **Tu usuario queda activo después de la revisión.** Sigues en el proyecto, así que es el
+   mismo acceso que vas a usar de aquí en adelante en el ambiente de pruebas.
 
 ---
 
@@ -704,6 +703,7 @@ quieras.
 | **Agosto 2026** | 14 | Mes sin asientos para cerrar y reabrir |
 | **PRV-001 CABLE ONDA S.A** | 9 | Cuenta por defecto 610005 y plazo 30 días |
 | `asientos-validos.xlsx` y `asientos-con-errores.xlsx` | 13 | Archivos de la importación |
+| `cuentas-de-resultado-niif.xlsx` | decisión 11 | Las 45 cuentas de resultado para que las clasifiques |
 
 Números de control al 25/09/2026, para saber si alguien tocó el ambiente: último asiento
 **75**, próximo recibo **REC-000008**, próxima factura de honorarios **FAC-HON-000022**,
@@ -843,8 +843,9 @@ a la próxima factura.
 **Hoy:** toda cuenta de ingreso, costo y gasto que no tenía subcategoría quedó como
 **operativa**. El Estado de Resultado del 25/09 no tiene ningún bloque de inversión ni de
 financiamiento.
-**Necesitamos:** que revises la lista de las 45 cuentas (te la mandamos en Excel) y marques las
-que sean de **inversión** o de **financiamiento**. Por ejemplo: 700001 Gastos Bancarios.
+**Necesitamos:** que revises la lista de las 45 cuentas (va adjunta al correo:
+`cuentas-de-resultado-niif.xlsx`) y marques en cada una su clasificación en la columna «Tu
+clasificación». Por ejemplo: 700001 Gastos Bancarios.
 **Cambia:** los subtotales del Estado de Resultado.
 
 ### 12. Detalle de los saldos de apertura de clientes y proveedores (punto 8.4)

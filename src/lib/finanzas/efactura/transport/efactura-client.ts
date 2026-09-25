@@ -49,6 +49,13 @@ async function request(
   const { baseUrl, apiKey } = loadConfig();
   const url = `${baseUrl}${path}`;
 
+  // Una línea por llamada al PAC con el AMBIENTE, para poder confirmar en los
+  // logs de Vercel contra qué DGI habló cada deploy (sandbox = 2, real = 1).
+  // Sin host ni headers: la URL base y la key no salen al log.
+  console.info(
+    `[efactura] ${method} ${path} · i_amb=${process.env.EFACTURA_I_AMB ?? "(sin definir)"} · app_env=${process.env.NEXT_PUBLIC_APP_ENV ?? "(sin definir)"}`,
+  );
+
   const res = await fetch(url, {
     method,
     headers: buildHeaders(apiKey),

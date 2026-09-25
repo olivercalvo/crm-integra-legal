@@ -32,10 +32,18 @@
 -- 1. Marca `'crm'` SÓLO las facturas con CUFE y sin origen cuyo CUFE aparece
 --    en una fila de `fe_emisiones` autorizada. Eso es evidencia de que lo
 --    devolvió el PAC a este sistema, no una suposición.
--- 2. Si queda alguna con CUFE, sin origen y SIN esa evidencia, ABORTA y las
+-- 2. Corrige el backfill ciego de la 061. La 061 marcó `'crm'` TODO CUFE que
+--    ya existía, suponiendo que lo había devuelto el PAC. En staging es cierto
+--    (medido: las 3 tienen su emisión). En PRODUCCIÓN no tiene por qué serlo:
+--    antes de julio la tarjeta legacy (`DgiDataCard`) dejaba CARGAR A MANO el
+--    CUFE de una factura emitida en el portal de ideati. Esas facturas no
+--    tienen NINGUNA fila en `fe_emisiones` —el flujo del CRM la inserta antes
+--    de salir a la red, siempre—, así que pasan a `'portal_050'`, que es lo que
+--    son. En staging esto toca 0 filas.
+-- 3. Si queda alguna con CUFE, sin origen y SIN evidencia, ABORTA y las
 --    lista. No se les inventa un origen: decidir si se copió del portal es de
 --    una persona.
--- 3. Re-declara el CHECK con `dgi_cufe_origen IS NOT NULL` explícito.
+-- 4. Re-declara el CHECK con `dgi_cufe_origen IS NOT NULL` explícito.
 --
 -- 🔴 ORDEN EN PRODUCCIÓN: va pegada a la `061` y las dos van en la VENTANA
 --    (Bloque B), con la emisión congelada. El código de `main` no escribe el
@@ -79,7 +87,28 @@ BEGIN
   RAISE NOTICE '064: % factura(s) con CUFE del PAC marcadas como ''crm''', v_n;
 END $$;
 
--- ── 2. Las que quedan sin evidencia: se listan y se aborta ─────────────────
+-- ── 2. 'crm' sin una sola emisión del CRM: eran copias del portal ─────────
+DO $$
+DECLARE v_n int; r record;
+BEGIN
+  FOR r IN
+    SELECT i.invoice_number FROM public.invoices i
+     WHERE i.dgi_cufe_origen = 'crm'
+       AND NOT EXISTS (SELECT 1 FROM public.fe_emisiones e WHERE e.invoice_id = i.id)
+     ORDER BY i.invoice_number LIMIT 200
+  LOOP
+    RAISE NOTICE '  % — CUFE sin ninguna emisión del CRM: pasa a portal_050', r.invoice_number;
+  END LOOP;
+
+  UPDATE public.invoices i
+     SET dgi_cufe_origen = 'portal_050'
+   WHERE i.dgi_cufe_origen = 'crm'
+     AND NOT EXISTS (SELECT 1 FROM public.fe_emisiones e WHERE e.invoice_id = i.id);
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RAISE NOTICE '064: % factura(s) con CUFE cargado a mano re-marcadas como ''portal_050''', v_n;
+END $$;
+
+-- ── 3. Las que quedan sin evidencia: se listan y se aborta ─────────────────
 DO $$
 DECLARE v_malas int; r record;
 BEGIN
@@ -98,7 +127,7 @@ BEGIN
   END IF;
 END $$;
 
--- ── 3. El CHECK, sin el agujero ────────────────────────────────────────────
+-- ── 4. El CHECK, sin el agujero ────────────────────────────────────────────
 ALTER TABLE public.invoices DROP CONSTRAINT IF EXISTS invoices_dgi_cufe_origen_check;
 ALTER TABLE public.invoices
   ADD CONSTRAINT invoices_dgi_cufe_origen_check

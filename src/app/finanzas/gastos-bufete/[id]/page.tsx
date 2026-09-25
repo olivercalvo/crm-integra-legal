@@ -16,6 +16,8 @@ import { SupplierPaymentsSection } from "../_components/supplier-payments-sectio
 import { SupplierPaymentSuccessToast } from "../_components/supplier-payment-success-toast";
 import { getSupplierPaymentsForExpense } from "@/lib/finanzas/queries/supplier-payments";
 import { ReceiptUploader } from "../_components/receipt-uploader";
+import { SupplierCreditNotesSection } from "../_components/supplier-credit-notes-section";
+import { cargarCompraParaNc, listSupplierCreditNotesForExpense } from "@/lib/finanzas/api/supplier-credit-notes";
 
 
 /**
@@ -52,6 +54,11 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   const expense = await getBusinessExpenseById(ctx.db, ctx.tenantId, params.id);
   if (!expense) notFound();
   const pagos = await getSupplierPaymentsForExpense(ctx.db, ctx.tenantId, params.id);
+  // NC del proveedor (3.5, 066): la lista y las líneas con lo ya acreditado.
+  const [notasProveedor, compraParaNc] = await Promise.all([
+    listSupplierCreditNotesForExpense(ctx.db, ctx.tenantId, params.id),
+    cargarCompraParaNc(ctx.db, ctx.tenantId, params.id),
+  ]);
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
 
@@ -268,10 +275,22 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             expenseLabel={expense.description}
             total={Number(expense.total)}
             amountPaid={Number(expense.amount_paid)}
+            creditedTotal={Number(expense.credited_total ?? 0)}
             payments={pagos}
             bancos={bancos}
             canMutate={canMutate}
           />
+
+          {compraParaNc && (
+            <SupplierCreditNotesSection
+              compraId={expense.id}
+              compraLabel={expense.description}
+              notas={notasProveedor}
+              lineas={compraParaNc.lineas}
+              saldo={compraParaNc.balance_due}
+              canMutate={canMutate}
+            />
+          )}
 
           {/* Notas */}
           {expense.notes && (

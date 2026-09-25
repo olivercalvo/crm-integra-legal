@@ -33,7 +33,7 @@ interface Props {
    * función para las cinco: `reversion-una-sola-implementacion` lo vigila
    * leyendo este archivo.
    */
-  variante?: "cobro" | "pago" | "gasto" | "asiento" | "nota_credito";
+  variante?: "cobro" | "pago" | "gasto" | "asiento" | "nota_credito" | "nota_credito_proveedor";
   /**
    * Mínimo del motivo, si es mayor que `MOTIVO_MIN`. Lo usa la NC autorizada:
    * su motivo viaja a la DGI como `cancellationReason`, que exige 15.
@@ -120,6 +120,20 @@ const TEXTOS = {
     placeholder: "Ej: Nota de crédito emitida a la factura equivocada, monto mal tipeado…",
     error: "No se pudo reversar la nota de crédito.",
     enCurso: "Posteando el espejo y devolviendo el saldo a la factura…",
+  },
+  /** NC de COMPRA (3.5, 066): el proveedor nos acreditó parte de una compra. */
+  nota_credito_proveedor: {
+    endpoint: (id: string) => `/api/finanzas/supplier-credit-notes/${id}/reverse`,
+    cosa: "nota de crédito del proveedor",
+    el: "la",
+    este: "esta",
+    aplicadoA: "de la compra",
+    consecuencia: "la nota de crédito queda anulada y la compra vuelve a mostrar el saldo que tenía",
+    siOcurrio: "si el proveedor sí acreditó, hay que registrar la nota de crédito de nuevo",
+    titulo: "Reversar nota de crédito del proveedor",
+    placeholder: "Ej: Nota de crédito registrada en la compra equivocada, monto mal tipeado…",
+    error: "No se pudo reversar la nota de crédito.",
+    enCurso: "Posteando el espejo y devolviendo el saldo a la compra…",
   },
 } as const;
 

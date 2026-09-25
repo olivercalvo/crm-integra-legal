@@ -15,6 +15,8 @@ interface Props {
   expenseLabel: string;
   total: number;
   amountPaid: number;
+  /** Lo acreditado por NC del proveedor (066). 0 en gastos de trámite. */
+  creditedTotal?: number;
   payments: SupplierPaymentForExpense[];
   bancos: { code: string; name: string }[];
   /** Admin, abogada y contador (los que mutan compras). */
@@ -38,8 +40,8 @@ interface Props {
  *     documentar algo que no pasó.
  *   - Un pago reversado sigue en la lista, tachado, con "Reversado · asiento N".
  */
-export function SupplierPaymentsSection({ expenseId, destino = "compra", expenseLabel, total, amountPaid, payments, bancos, canMutate }: Props) {
-  const saldo = Math.round((total - amountPaid) * 100) / 100;
+export function SupplierPaymentsSection({ expenseId, destino = "compra", expenseLabel, total, amountPaid, creditedTotal = 0, payments, bancos, canMutate }: Props) {
+  const saldo = Math.round((total - amountPaid - creditedTotal) * 100) / 100;
   const vigentes = payments.filter((p) => p.status === "registrado");
   const reversados = payments.filter((p) => p.status === "anulado").length;
   const heredados = vigentes.filter((p) => p.kind === "migrated_balance").length;
@@ -85,6 +87,12 @@ export function SupplierPaymentsSection({ expenseId, destino = "compra", expense
           </div>
         </div>
       </div>
+
+      {creditedTotal > 0.001 && (
+        <p className="-mt-2 mb-4 text-xs text-gray-600">
+          El saldo descuenta B/. {fmtImporte(creditedTotal)} acreditados por notas de crédito del proveedor.
+        </p>
+      )}
 
       {payments.length === 0 ? (
         <div className="rounded-md border border-dashed bg-gray-50/40 p-6 text-center text-sm text-gray-500">

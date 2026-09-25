@@ -38,7 +38,7 @@ export function renderClientRejectionHtml(
     <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:${GRAY_700};">
       Agradecemos el tiempo que dedicaste a revisarla. Si en el futuro tu
       situación cambia o desea otra propuesta, quedamos a su
-      disposición — responder a este correo es la vía más rápida para
+      disposición. Responder a este correo es la vía más rápida para
       retomar el contacto.
     </p>
     <p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:${GRAY_500};">

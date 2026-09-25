@@ -147,7 +147,7 @@ export function renderLawyerAcceptanceText(
     "El PDF firmado ya está disponible en Documentos del cliente",
     props.invoice_count > 0 ? "y del caso asociado." : ".",
     "",
-    "— CRM Integra Legal",
+    "CRM Integra Legal",
   ]
     .filter((l) => l !== null)
     .join("\n");

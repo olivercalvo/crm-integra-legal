@@ -249,7 +249,7 @@ export function renderQuoteEmailText(props: QuoteEmailProps): string {
   if (line_summary && line_summary.length > 0) {
     lines.push("", "Resumen:");
     for (const ln of line_summary.slice(0, 5)) {
-      lines.push(`  • ${ln.description} — ${ln.amount_label}`);
+      lines.push(`  • ${ln.description}: ${ln.amount_label}`);
     }
     if (extra_lines_count && extra_lines_count > 0) {
       lines.push(

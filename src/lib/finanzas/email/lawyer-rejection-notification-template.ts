@@ -109,7 +109,7 @@ export function renderLawyerRejectionText(
     "",
     `Ver en el CRM: ${props.crm_link}`,
     "",
-    "— CRM Integra Legal",
+    "CRM Integra Legal",
   ]
     .filter((l) => l !== null)
     .join("\n");

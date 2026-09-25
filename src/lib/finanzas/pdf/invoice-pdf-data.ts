@@ -343,7 +343,7 @@ export function buildInvoiceDocumentProps(
  * panameño. Borrador lleva sufijo aclaratorio.
  */
 function mapStatusLabel(status: InvoiceStatus): string {
-  if (status === "borrador") return "Borrador — documento no emitido";
+  if (status === "borrador") return "Borrador: documento no emitido";
   return INVOICE_STATUS_LABEL[status] ?? status;
 }
 

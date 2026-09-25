@@ -69,7 +69,7 @@ export function assertRealEmailAllowed(): void {
   throw new Error(
     `Envío de correo desactivado en el ambiente de pruebas (entorno "${env}"). ` +
       `Todo lo demás funciona: el documento quedó registrado y el enlace público es válido, ` +
-      `pero no se envió ningún correo real. Es a propósito — el remitente configurado es una ` +
+      `pero no se envió ningún correo real. Es a propósito: el remitente configurado es una ` +
       `dirección del bufete y un correo desde pruebas llegaría como si fuera auténtico.`
   );
 }

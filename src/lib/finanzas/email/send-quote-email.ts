@@ -104,7 +104,7 @@ export async function sendQuoteEmail(
       );
       return {
         ok: false,
-        error: "Resend no devolvió un id de envío — no podemos confirmar entrega",
+        error: "Resend no devolvió un id de envío: no podemos confirmar entrega",
       };
     }
 

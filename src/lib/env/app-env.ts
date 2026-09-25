@@ -92,13 +92,13 @@ export interface EnvBadge {
 
 const BADGES: Record<Exclude<AppEnv, "production">, EnvBadge> = {
   staging: {
-    label: "STAGING — DATOS DE PRUEBA",
+    label: "STAGING: DATOS DE PRUEBA",
     detail: "Esta NO es la base del bufete. Nada de lo que hagas acá es real.",
     background: "#B45309", // ámbar oscuro: no se parece a nada de la paleta Integra
     foreground: "#FFFFFF",
   },
   local: {
-    label: "LOCAL — DATOS DE PRUEBA",
+    label: "LOCAL: DATOS DE PRUEBA",
     detail: "Desarrollo en tu máquina, contra la base de staging.",
     background: "#4C1D95", // violeta
     foreground: "#FFFFFF",

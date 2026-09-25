@@ -143,14 +143,14 @@ test("el detalle de la NC: admin, abogada y contador; el contador abre el detall
   );
   assert.match(src, /cargarAsientosPorOrigen\(db, tenantId, SOURCE_TYPE_NOTA_CREDITO, \[nc\.id\]\)/, "su asiento propio");
   assert.match(src, /cargarAsientosPorOrigen\(db, tenantId, "reversion", \[nc\.invoice\.id\]\)/, "o la reversión de la anulación (D5)");
-  assert.match(src, /DOCUMENTO INTERNO|Documento interno — sin autorización de la DGI/i);
+  assert.match(src, /DOCUMENTO INTERNO|Documento interno: sin autorización de la DGI/i);
 });
 
 test("🔒 D1: el PDF marca DOCUMENTO INTERNO cuando fe_estado es no_emitida, y la ruta se lo pasa", () => {
   const doc = leer(PDF_DOC);
   assert.match(doc, /const noEmitida = fe_estado === "no_emitida";/);
   assert.match(doc, /\{noEmitida && \(\s*<View style=\{styles\.internalBand\} fixed>/);
-  assert.match(doc, /DOCUMENTO INTERNO — SIN AUTORIZACIÓN DE LA DGI/);
+  assert.match(doc, /DOCUMENTO INTERNO: SIN AUTORIZACIÓN DE LA DGI/);
   assert.match(doc, /fe_estado: string;/);
   assert.match(doc, /es_anulacion: boolean;/);
   const ruta = leer(PDF_ROUTE);

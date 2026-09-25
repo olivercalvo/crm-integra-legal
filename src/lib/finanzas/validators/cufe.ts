@@ -126,8 +126,8 @@ export function validarCufe(entrada: string | null | undefined): ResultadoDeCufe
   if (valor.length !== CUFE_LARGO_TIPICO) {
     avisos.push(
       `Este CUFE tiene ${valor.length} caracteres y los que emitió el sistema tienen ` +
-        `${CUFE_LARGO_TIPICO}. Puede ser correcto —las facturas del portal son de otro punto ` +
-        "de facturación—, pero conviene compararlo con el del portal antes de guardar."
+        `${CUFE_LARGO_TIPICO}. Puede ser correcto (las facturas del portal son de otro punto ` +
+        "de facturación), pero conviene compararlo con el del portal antes de guardar."
     );
   }
 

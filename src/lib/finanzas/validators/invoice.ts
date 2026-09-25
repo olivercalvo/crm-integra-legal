@@ -308,7 +308,7 @@ export function motivoDeInconsistenciaDeKind(
 
     return (
       `No se puede guardar: la línea ${i + 1} (${svc.code} · ${svc.name}) es un servicio de ` +
-      `${INVOICE_KIND_LABEL[otroKind]}, y esta factura es de ${kindLabel} — una factura de ` +
+      `${INVOICE_KIND_LABEL[otroKind]}, y esta factura es de ${kindLabel}: una factura de ` +
       `${kindLabel.toLowerCase()} solo puede llevar líneas de ${kindLabel.toLowerCase()}. ` +
       `Cambie el servicio de esa línea, o cambie el Tipo de documento a ${INVOICE_KIND_LABEL[otroKind]}.`
     );

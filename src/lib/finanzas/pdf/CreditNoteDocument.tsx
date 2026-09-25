@@ -481,7 +481,7 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
         {noEmitida && (
           <View style={styles.internalBand} fixed>
             <Text style={styles.internalBandTitle}>
-              DOCUMENTO INTERNO — SIN AUTORIZACIÓN DE LA DGI
+              DOCUMENTO INTERNO: SIN AUTORIZACIÓN DE LA DGI
             </Text>
             <Text style={styles.internalBandText}>
               Esta nota de crédito consta en los libros del bufete pero todavía no fue

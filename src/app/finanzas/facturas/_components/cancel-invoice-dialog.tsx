@@ -432,7 +432,7 @@ export function CancelInvoiceDialog({
                         ? completando
                           ? "Es el motivo que ya se le envió a la DGI. Déjelo igual para que el documento y el libro digan lo mismo."
                           : "Esta razón se incluye en la nota de crédito y queda registrada permanentemente."
-                        : `Mínimo ${MOTIVO_ANULACION_MIN} caracteres — lo exige la DGI para anular un ` +
+                        : `Mínimo ${MOTIVO_ANULACION_MIN} caracteres: lo exige la DGI para anular un ` +
                           `documento electrónico. ${
                             trimmedLen === 0
                               ? ""

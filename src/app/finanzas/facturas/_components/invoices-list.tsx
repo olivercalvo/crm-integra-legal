@@ -50,7 +50,7 @@ export function InvoicesList({ invoices }: Props) {
                     className="font-mono text-sm font-medium text-integra-navy hover:underline"
                   >
                     {inv.invoice_number || (
-                      <span className="italic text-gray-400">— sin número —</span>
+                      <span className="italic text-gray-400">Sin número</span>
                     )}
                   </Link>
                 </td>
@@ -122,7 +122,7 @@ export function InvoicesList({ invoices }: Props) {
                 <div className="flex items-center gap-2">
                   <FileText size={16} className="text-integra-gold shrink-0" />
                   <span className="font-mono text-sm font-medium text-integra-navy">
-                    {inv.invoice_number || "— sin número —"}
+                    {inv.invoice_number || "Sin número"}
                   </span>
                 </div>
                 <p className="mt-2 text-sm font-medium text-gray-900 truncate">

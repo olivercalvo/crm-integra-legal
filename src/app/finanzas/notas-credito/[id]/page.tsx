@@ -306,7 +306,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
         >
           <AlertTriangle size={18} className="mt-0.5 shrink-0 text-red-600" />
           <div>
-            <p className="font-semibold uppercase tracking-wide">Documento interno — sin autorización de la DGI</p>
+            <p className="font-semibold uppercase tracking-wide">Documento interno: sin autorización de la DGI</p>
             <p className="mt-1">
               Esta nota de crédito consta en los libros del bufete pero todavía no fue enviada ni autorizada
               por la DGI. No tiene CUFE ni vale como comprobante fiscal electrónico; el PDF lleva la misma

@@ -92,10 +92,10 @@ export default async function FacturasListPage({ searchParams }: PageProps) {
           <AlertTriangle size={18} className="shrink-0 text-red-600" />
           <span className="flex-1">
             <span className="font-semibold">
-              {conErrorDgi} factura{conErrorDgi === 1 ? "" : "s"} con error en la DGI
+              {conErrorDgi} factura{conErrorDgi === 1 ? "" : "s"} con error en la DGI:
             </span>
             <span className="ml-1">
-              — la DGI no {conErrorDgi === 1 ? "la aceptó" : "las aceptó"} y siguen sin
+              la DGI no {conErrorDgi === 1 ? "la aceptó" : "las aceptó"} y siguen sin
               reenviarse.
             </span>
           </span>

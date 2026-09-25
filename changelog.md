@@ -22,7 +22,9 @@ el enlace; después, `develop` congelado otra vez (SOP-019).
   sobreprecio (con la regla de que una factura de reembolso no mezcla honorarios: la opción (a)
   son dos facturas), 17 depósitos de fondos del caso sin asiento, 18 facturar algo que no es
   un servicio legal. **18 decisiones en total.**
-- Decisión 3 solo HON-OTROS; decisión 4 con el mayor de QuickBooks de enero a julio.
+- Decisión 3 solo HON-OTROS. Decisión 4: Josuarth **ya tiene** el Libro Mayor de QuickBooks
+  (desde hace unas dos semanas); con él confirma por escrito la fecha de corte y los saldos
+  iniciales. No se le manda nada (corregido en un segundo push el mismo día).
 - Sección nueva **18. Preguntas para las licenciadas**: HON-FAM, tarjeta de crédito (no hay
   cuenta de tarjeta por pagar en el plan), reembolsos con sobreprecio.
 - Tiempos: 4 h en total, sesiones de 1 h 55 y 2 h 05.

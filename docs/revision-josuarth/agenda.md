@@ -790,9 +790,8 @@ viejo que está desactivada, y **no se deja facturar**.
 
 **Hoy:** el acta del 09/09 dice *al 30 de junio de 2026; el sistema arranca a registrar desde
 julio*, pero no lo tenemos confirmado por escrito, y las cuentas cargadas llevan otra fecha.
-**Necesitamos:** que lo confirmes por escrito.
-**Te vamos a mandar:** el mayor de QuickBooks de enero a julio de 2026, que pediste el 09/09
-para decidir la fecha.
+**Necesitamos:** Ya tienes el Libro Mayor de QuickBooks. Con él, confírmanos por escrito la
+fecha de corte y los saldos iniciales.
 **Cambia:** la fecha que muestra el mayor en la fila de saldo inicial, el primer mes que se
 puede cerrar, y la fecha del asiento de apertura (decisión 5).
 

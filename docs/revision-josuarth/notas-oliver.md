@@ -45,8 +45,9 @@ acordó que con esas tres alcanza.
 ## Para mandar junto con el correo
 
 - `cuentas-de-resultado-niif.xlsx` (decisión 11).
-- **El mayor de QuickBooks de enero a julio de 2026** (decisión 4): Josuarth lo pidió el 09/09
-  para decidir la fecha de corte. No está en el repo; sale de QuickBooks.
+- Nada más. **El Libro Mayor de QuickBooks NO se manda:** Josuarth ya lo tiene desde hace unas
+  dos semanas (dato de Oliver, 26/09). La decisión 4 le pide que, con él, confirme por escrito la
+  fecha de corte y los saldos iniciales.
 
 ## Números de control (antes de la reunión)
 

@@ -479,6 +479,8 @@ async function persistAuthorized(
     .update({
       fe_estado: "authorized",
       dgi_cufe: parsed.cufe,
+      // 061/064: un CUFE sin origen no se sabe leer. Éste lo devolvió el PAC.
+      dgi_cufe_origen: "crm",
       dgi_protocolo_autorizacion: parsed.protocoloAutorizacion,
       dgi_fecha_autorizacion: parsed.fechaAutorizacion,
       qr_content: parsed.qrContent,

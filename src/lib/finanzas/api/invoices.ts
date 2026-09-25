@@ -843,6 +843,23 @@ export function validateDgiInput(
 }
 
 /**
+ * El origen del CUFE que se guarda desde la captura manual (legacy).
+ *
+ * 061/064: un CUFE sin origen no se sabe leer. El que entra por esta pantalla
+ * lo copió una persona, así que es `'portal_050'` — salvo que sea el MISMO que
+ * ya estaba guardado, que conserva el origen que tenía (reguardar la tarjeta
+ * no puede convertir en "copiado a mano" un CUFE que devolvió el PAC).
+ */
+export function origenDelCufeManual(
+  actual: { dgi_cufe: string | null; dgi_cufe_origen: string | null },
+  cufeNuevo: string | null
+): "crm" | "portal_050" | null {
+  if (cufeNuevo === null) return null;
+  if (cufeNuevo === actual.dgi_cufe && actual.dgi_cufe_origen === "crm") return "crm";
+  return "portal_050";
+}
+
+/**
  * Actualiza los 4 campos DGI de una factura. SOLO debe llamarse para
  * facturas en status='emitida' — ni borrador (no tiene sentido) ni anulada
  * (cerrada). El handler debe gate-ear ese estado antes de llamar.
@@ -862,7 +879,7 @@ export async function updateInvoiceDgiData(
   // cancelada_pre_emision, no hay nada que registrar.
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number")
+    .select("id, status, invoice_number, dgi_cufe, dgi_cufe_origen")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -885,6 +902,7 @@ export async function updateInvoiceDgiData(
     .update({
       dgi_numero_documento: input.dgi_numero_documento,
       dgi_cufe: input.dgi_cufe,
+      dgi_cufe_origen: origenDelCufeManual(inv, input.dgi_cufe),
       dgi_fecha_autorizacion: input.dgi_fecha_autorizacion,
       dgi_cafe_url: input.dgi_cafe_url,
     })

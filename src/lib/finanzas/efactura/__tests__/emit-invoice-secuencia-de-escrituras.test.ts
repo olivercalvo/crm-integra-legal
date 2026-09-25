@@ -423,10 +423,13 @@ test("🔒 camino AUTORIZADA: la secuencia completa", async () => {
     // en la base y la factura queda 'pending' — recuperable. Al revés se
     // perdería la respuesta del PAC, que es lo único que no se puede rehacer.
     "UPDATE fe_emisiones {autorizada, cod_res, cufe, fecha_autorizacion, protocolo_autorizacion, response_payload}",
-    "UPDATE invoices {dgi_cufe, dgi_fecha_autorizacion, dgi_protocolo_autorizacion, ef_invoice_uuid, fe_estado, qr_content}",
+    "UPDATE invoices {dgi_cufe, dgi_cufe_origen, dgi_fecha_autorizacion, dgi_protocolo_autorizacion, ef_invoice_uuid, fe_estado, qr_content}",
   ]);
   assert.equal(b.invoice.fe_estado, "authorized");
   assert.equal(b.invoice.dgi_cufe, RESPUESTA_AUTORIZADA.cufe);
+  // 061/064: el CUFE que devolvió el PAC se marca como tal. Sin esto la
+  // factura queda igual a una cuyo CUFE se copió del portal.
+  assert.equal(b.invoice.dgi_cufe_origen, "crm");
 });
 
 test("🔒 camino RECHAZADA por el PAC: la secuencia completa", async () => {

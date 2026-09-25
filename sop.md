@@ -3371,6 +3371,19 @@ facturas, y decir que sí sería ensuciar el registro de envíos con un envío q
 Sin esa columna, un CUFE del PAC y uno tecleado son **idénticos** en la base, y la
 combinación "con CUFE y `fe_estado = 'no_emitida'`" va a ser la normal en estas facturas.
 
+🔴 **Todo camino que escribe `invoices.dgi_cufe` escribe también `dgi_cufe_origen`** (desde
+el 25/09/2026, migración `064`). Son tres: el PAC al autorizar (`'crm'`), el caso B
+(`'portal_050'`) y la tarjeta legacy (`'portal_050'`, salvo reguardar el mismo CUFE del PAC,
+que conserva `'crm'`: `origenDelCufeManual`). El CHECK de la `061` **dejaba pasar un origen
+NULL** —`NULL IN (…)` es NULL y un CHECK NULL se acepta— y dos facturas de staging quedaron
+así. La `064` lo cierra con `IS NOT NULL` explícito, y `cufe-siempre-con-origen.test.ts`
+lee el código y falla si un `.from('invoices').update({ dgi_cufe })` no trae el origen.
+⚠️ Con el CHECK bueno, un camino que olvide el origen **falla DESPUÉS de que el PAC
+autorizó**: factura viva ante la DGI y sin CUFE en la base. Por eso la `061`/`064` van en la
+ventana del despliegue y no con la app vieja arriba.
+**Lección general:** un CHECK del tipo `col IN (…)` sobre una columna nullable no prohíbe el
+NULL. Si la regla es «tiene que haber valor», se escribe `IS NOT NULL`.
+
 Del CUFE se valida la **forma mínima**, no un patrón cerrado — mismo criterio que el RUC. Las
 facturas del caso B son de otro punto y otro año: un patrón calcado sobre los CUFE de hoy
 rechazaría justo los que hacen falta cargar. Y los **saltos de línea del copiar-pegar se

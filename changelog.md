@@ -1,5 +1,35 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [El origen del CUFE, la 064 y el runbook con la cola completa] - 2026-09-25
+
+**Staging (`develop`):** `1c846c6` (código) → `a9ca378` / `62d2181` (`064`) → `2589f10`
+(aplicada) → `01f1e12` (caso C) → `226ce78` (runbook). Migración `064`, **SOLO staging**.
+`main` sigue en `24b227a`. FAC-HON-000007 no se tocó.
+
+> ⚠️ **Tarea 1 (clics) NO se hizo.** La extensión de Chrome no estaba conectada
+> (`list_connected_browsers` → vacío). Además, **Preview no tiene ninguna `EFACTURA_*`**
+> (`vercel env ls`, solo nombres): emitir o anular desde un deploy de Preview da 500 aunque
+> el navegador ande. Lo del PAC se prueba desde `localhost`.
+
+### 🔴 Encontrado leyendo la `061` para el runbook: CUFE sin origen
+- El CHECK de la `061` acepta `dgi_cufe` con `dgi_cufe_origen` NULL (`NULL IN (…)` = NULL).
+- `persistAuthorized` no escribía el origen. En staging, **FAC-HON-000003 y FAC-HON-000017**
+  (emitidas por el CRM el 24/09) quedaron con CUFE y sin origen.
+- **Código:** el PAC escribe `'crm'`; la tarjeta legacy `'portal_050'` (`origenDelCufeManual`).
+  Test nuevo `cufe-siempre-con-origen.test.ts` (lee el código).
+- **`064`:** marca `'crm'` solo con evidencia (emisión autorizada con ese CUFE); re-marca
+  `'portal_050'` los CUFE sin ninguna emisión (en producción, los cargados a mano antes de
+  julio: la `061` los habría llamado `'crm'`); aborta si queda alguno sin origen; CHECK con
+  `IS NOT NULL`. Aplicada en staging **después** del deploy de Preview del código: 2 → `'crm'`,
+  0 → `'portal_050'`, «probado: rechazado». Segunda pasada 0/0.
+
+### Runbook `despliegue-025-055.md`
+39 migraciones. `058`, `061` y `064` pasan a la ventana (rompen la emisión o la anulación de
+`main`). Pre-flight P-11 a P-14, ficha por migración, las 19 `EFACTURA_`, consultas SELECT en
+orden (probadas en staging en `BEGIN READ ONLY`) y el día D en una página.
+
+Suite **1395/1395**, `tsc` 0, **0 errores de lint nuevos** (20 de la lista base).
+
 ## [9C — el tope de la DGI, la 063 y las cuatro pantallas] - 2026-09-24
 
 **Staging (`develop`):** `30c0980` (tope `[1717]`) → `4cebc9e` (`063`) → `98b1997` (pantallas).

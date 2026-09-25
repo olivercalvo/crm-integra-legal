@@ -1,5 +1,19 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 25/09/2026 — DÓNDE QUEDÓ <<<
+
+- ⏸️ **Tarea 1 (clics) sin hacer.** La extensión de Chrome no estaba conectada (ningún
+  navegador en `list_connected_browsers`). Sigue pendiente completa: 1a Preview (emitir,
+  anular, reenviar FAC-HON-000016), 1b las 4 pantallas de 9C, 1c la `063` con clics.
+- 🔴 **1a no se puede hacer en Preview tal como está:** Preview no tiene ninguna de las 19
+  `EFACTURA_*` (`vercel env ls`, solo nombres) → 500 al emitir o anular. O se hace desde
+  `localhost` (que sí las tiene, sandbox `i_amb = 2`), o Oliver decide cargarlas en Preview.
+- ✅ **`064` aplicada en staging** (CUFE sin origen). Ver `changelog.md` del 25/09.
+- ✅ Caso C: sigue en espera del bufete (§ «Pregunta a ideati»).
+- ✅ Runbook con la cola completa: `docs/runbooks/despliegue-025-055.md` (39 migraciones).
+- ⚠️ `claude/preflight-produccion-2026-09-22.md` **no existe en el repo**; los números del
+  22/09 están solo en la tabla del runbook. P-11 a P-14 hay que correrlos antes del día D.
+
 ## >>> BLOQUE 9C: NOTA DE CRÉDITO FISCAL — FASE 0, SIN CÓDIGO — 23/09/2026 <<<
 
 **Estado: PLAN. No se escribió una línea de código.** Espera aprobación.

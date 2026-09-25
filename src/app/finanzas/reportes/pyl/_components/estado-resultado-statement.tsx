@@ -122,7 +122,7 @@ function Fila({ fila }: { fila: FilaER }) {
               <Link
                 href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`}
                 className="inline-block underline decoration-dotted decoration-gray-400 underline-offset-4 hover:decoration-integra-navy"
-                title={`Ver de dónde sale este número — Libro Mayor de ${fila.code} ${fila.name}`}
+                title={`Ver de dónde sale este número: Libro Mayor de ${fila.code} ${fila.name}`}
               >
                 <Monto valor={fila.valor} />
               </Link>

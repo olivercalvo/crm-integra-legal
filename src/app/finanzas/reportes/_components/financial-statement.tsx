@@ -221,7 +221,7 @@ export function AccountRow({ code, name, amount }: { code: string; name: string;
         <Link
           href={`/finanzas/reportes/mayor?cuenta=${encodeURIComponent(code)}`}
           className="inline-block underline decoration-dotted decoration-gray-400 underline-offset-4 hover:decoration-integra-navy"
-          title={`Ver de dónde sale este número — Libro Mayor de ${code} ${name}`}
+          title={`Ver de dónde sale este número: Libro Mayor de ${code} ${name}`}
         >
           <Amount value={amount} />
         </Link>
@@ -356,7 +356,7 @@ export function SignConventionNote() {
   return (
     <p className="text-xs text-gray-500">
       <strong>Convención de signos:</strong> los saldos se presentan como en la balanza de
-      comprobación — débitos (activos, costos, gastos) en positivo y créditos (pasivos, patrimonio,
+      comprobación: débitos (activos, costos, gastos) en positivo y créditos (pasivos, patrimonio,
       ingresos) en negativo. Por eso una <strong>ganancia aparece en negativo</strong> y el Total
       Pasivo + Patrimonio es igual y opuesto al Total de Activo.
     </p>

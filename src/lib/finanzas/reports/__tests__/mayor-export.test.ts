@@ -251,7 +251,7 @@ test("sin ficha, queda el nombre que muestra la pantalla", () => {
 test("el encabezado nombra la cuenta y cuántos movimientos trae", () => {
   const hoja = hojaDelMayor(mayor([fila()]), new Map(), CTX);
   const plano = (hoja.encabezado ?? []).flat().join(" | ");
-  assert.match(plano, /610009 — Combustible/);
+  assert.match(plano, /610009 · Combustible/);
   assert.match(plano, /Movimientos/);
   assert.doesNotMatch(plano, /Período/, "sin rango no debería aparecer la línea de período");
 });

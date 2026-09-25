@@ -73,7 +73,7 @@ export function MayorFiltros({
             }}
             className={selectClass}
           >
-            <option value="">— Seleccione una cuenta —</option>
+            <option value="">Seleccione una cuenta</option>
             {conMov.length > 0 && (
               <optgroup label="Con movimientos">
                 {conMov.map((c) => (

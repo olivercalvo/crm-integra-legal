@@ -79,8 +79,8 @@ export default async function BalanceComprobacionPage({
       <p className="rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-600">
         Los <strong>saldos finales</strong> de esta tabla son exactamente los que muestran el{" "}
         <strong>Balance General</strong> y el <strong>Estado de Resultado</strong>: los tres
-        reportes leen la misma fuente. Los saldos van en convención de balanza —débito positivo,
-        crédito negativo—, así que un pasivo con saldo se ve en negativo.
+        reportes leen la misma fuente. Los saldos van en convención de balanza (débito positivo,
+        crédito negativo), así que un pasivo con saldo se ve en negativo.
       </p>
 
       {inactivas.length > 0 && (

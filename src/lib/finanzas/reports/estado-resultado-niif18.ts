@@ -501,9 +501,9 @@ function ordenar(accounts: ReportAccount[]): ReportAccount[] {
 
 function notaImpuesto(rate: number, hayUtilidad: boolean): string {
   if (rate === 0) {
-    return "sociedad civil: no paga a nivel de empresa — cada socia paga su renta personal";
+    return "sociedad civil: no paga a nivel de empresa. Cada socia paga su renta personal";
   }
   if (!hayUtilidad) return "no aplica: el período no cerró con utilidad";
   const pct = (rate * 100).toLocaleString("es-PA", { maximumFractionDigits: 2 });
-  return `tasa ${pct}% — a confirmar con el contador`;
+  return `tasa ${pct}%, a confirmar con el contador`;
 }

@@ -118,7 +118,7 @@ export default async function EstadoResultadoPage({
       <div className="space-y-2">
         <p className="text-xs text-gray-500">
           <strong>Convención de signos:</strong> este reporte se lee como el modelo del
-          contador — los ingresos en positivo y los costos y gastos{" "}
+          contador: los ingresos en positivo y los costos y gastos{" "}
           <strong>entre paréntesis</strong>, porque restan. Es la convención inversa a la de la
           balanza de comprobación y a la del Balance General, donde los saldos van tal cual y
           los créditos salen negativos.

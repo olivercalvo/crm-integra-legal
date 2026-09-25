@@ -99,7 +99,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
               Resumen de ITBMS
             </h1>
             <p className="text-sm text-gray-500">
-              Resumen mensual de ITBMS — período {result.period.label}
+              Resumen mensual de ITBMS, período {result.period.label}
             </p>
           </div>
         </div>

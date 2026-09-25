@@ -63,7 +63,7 @@ export function ReportCard({
           </p>
           {pendiente && (
             <p className="mt-1 text-xs text-amber-700">
-              Planificado — todavía no hay datos que revisar.
+              Planificado: todavía no hay datos que revisar.
             </p>
           )}
         </div>

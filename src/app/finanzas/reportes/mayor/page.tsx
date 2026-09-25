@@ -87,7 +87,7 @@ export default async function LibroMayorPage({
         <strong>leído según la naturaleza de la cuenta</strong>: un ingreso o un pasivo se
         muestran en positivo cuando su saldo es acreedor, que es como los lee el modelo del
         contador. El Balance General usa la convención de balanza y los saca con el signo
-        opuesto — es el mismo número.{" "}
+        opuesto. Es el mismo número.{" "}
         {/* Acá decía «Todavía no hay corte por período», con el filtro de fechas
             renderizado inmediatamente abajo. Ver la nota de
             `OpeningBalancesNotice` en `_components/financial-statement.tsx`. */}
@@ -153,7 +153,7 @@ export default async function LibroMayorPage({
       <div className="space-y-2">
         <p className="text-xs text-gray-500">
           <strong>Convención de signos:</strong> el importe va con signo, en convención de
-          balanza — débito positivo, crédito negativo — igual que el Balance General. El saldo
+          balanza (débito positivo, crédito negativo), igual que el Balance General. El saldo
           es corrido: arranca en el saldo inicial y acumula los movimientos.
         </p>
         <p className="text-xs text-gray-500">

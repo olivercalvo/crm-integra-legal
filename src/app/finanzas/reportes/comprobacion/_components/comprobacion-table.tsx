@@ -95,7 +95,7 @@ function Saldo({ value, bold }: { value: number; bold?: boolean }) {
  */
 function Fila({ fila }: { fila: FilaComprobacion }) {
   const alMayor = `/finanzas/reportes/mayor?cuenta=${encodeURIComponent(fila.code)}`;
-  const titulo = `Ver de dónde sale este número — Libro Mayor de ${fila.code} ${fila.name}`;
+  const titulo = `Ver de dónde sale este número: Libro Mayor de ${fila.code} ${fila.name}`;
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50">
       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">

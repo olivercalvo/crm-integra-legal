@@ -86,7 +86,7 @@ export function hojaDelMayor(
   const encabezado: string[][] = [
     [ctx.bufete],
     ["Libro Mayor"],
-    ["Cuenta", `${mayor.cuenta.code} — ${mayor.cuenta.name}`],
+    ["Cuenta", `${mayor.cuenta.code} · ${mayor.cuenta.name}`],
     ["Generado", ctx.generadoEl],
   ];
   if (ctx.desde || ctx.hasta) {

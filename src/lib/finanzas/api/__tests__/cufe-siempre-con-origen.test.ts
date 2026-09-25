@@ -69,6 +69,11 @@ test("🔒 cada `.from('invoices').update({ dgi_cufe })` escribe también dgi_cu
   assert.deepEqual(faltan, [], `escriben dgi_cufe sin dgi_cufe_origen: ${faltan.join(", ")}`);
 });
 
+test("🔒 la 064 cierra el agujero del NULL: el CHECK exige el origen NO nulo", () => {
+  const sql = readFileSync(path.join(RAIZ, "sql/pending/064_cufe_origen_no_nulo.sql"), "utf8");
+  assert.match(sql, /dgi_cufe IS NOT NULL\s+AND dgi_cufe_origen IS NOT NULL\s+AND dgi_cufe_origen IN/);
+});
+
 test("origenDelCufeManual: copiado a mano es portal_050; reguardar el del PAC no lo cambia", () => {
   const delPac = { dgi_cufe: "FE01-X", dgi_cufe_origen: "crm" };
   assert.equal(origenDelCufeManual(delPac, "FE01-X"), "crm");

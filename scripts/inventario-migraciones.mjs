@@ -269,6 +269,12 @@ const MARCADORES = {
     nota: "Bloque 9C. La 053 miraba la EXISTENCIA del asiento de la NC, y los asientos no se borran: una NC reversada bloqueaba la factura para siempre. El marcador es `dato` porque la 063 no crea ningun objeto nuevo -- reemplaza el cuerpo de una funcion que ya existia desde la 052.",
   },
 
+  "064_cufe_origen_no_nulo.sql": {
+    que: "El CHECK de dgi_cufe_origen exige el origen NO nulo",
+    tipo: "check_contiene", nombre: "invoices_dgi_cufe_origen_check", contiene: "dgi_cufe_origen IS NOT NULL",
+    nota: "Corrige la 061: `NULL IN (...)` da NULL y el CHECK aceptaba un CUFE sin origen. En staging dos facturas emitidas por el CRM quedaron asi. Va pegada a la 061 y, en produccion, en la VENTANA: el codigo de main no escribe el origen.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

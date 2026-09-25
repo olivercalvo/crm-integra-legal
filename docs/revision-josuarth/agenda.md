@@ -696,9 +696,10 @@ quieras.
 | **FAC-HON-000016** | 5 | Segundo error de la DGI; el contador de "2 facturas" depende de ella |
 | **DRAFT-ad8142bceaa8** | 4.1 y 6 | Es la factura que se emite y después se anula |
 | **DRAFT-d9b78ce42314** | 4.2 | HON-OTROS con la cuenta desactivada |
-| **FAC-REI-000002** | 2.2, 6, 7 | Plazo de 182 horas vencido, saldo 400.00 para la nota de crédito |
+| **FAC-REI-000002** | 6 y 15 | Plazo de 182 horas vencido; 400.00 en el tramo 61 a 90 |
+| **FAC-REI-000004** | 3 | El reembolso que va a 130003 (asiento 56) |
 | **FAC-HON-000009** y **FAC-HON-000012** | 8 | El cobro repartido (saldo 1,519.00) |
-| **FAC-HON-000021** y **NC-000017** | 7 | Reversar una nota de crédito autorizada (hasta el 02/10) |
+| **FAC-HON-000021** y **NC-000017** | 7 | Nota de crédito de la unidad que falta y reversar una autorizada (hasta el 01/10) |
 | **Compra `desarrollo crm fase 1`** | 9, 10, 11 | NC de compra y pago parcial (saldo 117.00) |
 | **Gasto de trámite de B/. 32.34, asiento 34** | 11 | Detalle desde el mayor de 130003 |
 | **Asientos 15 y 50** | 13 y 14 | Clonar y reversar |

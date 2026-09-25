@@ -127,7 +127,8 @@ los puntos donde **se para**.
 
 | # | Paso | Dónde | Para si… |
 |---|---|---|---|
-| −2 | Pre-flight P-1 a P-14 (§1 y §1b), solo SELECT | SQL Editor de prod | cualquier «Parar si» |
+| −2 | Pre-flight P-1 a P-15 (§1 y §1b), solo SELECT | SQL Editor de prod | cualquier «Parar si» |
+| −2 | Josuarth elige la cuenta de los servicios de P-15 | correo | si no decide: esos servicios quedan sin facturar |
 | −2 | Respuestas por escrito de RM: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
@@ -601,6 +602,52 @@ SELECT count(*) FILTER (WHERE i.dgi_cufe IS NOT NULL) AS con_cufe,
 > del CRM pero ninguno autorizado con ese CUFE) queda como `'crm'`. Si aparece
 > alguno, anotarlo y revisarlo a mano después del despliegue.
 
+### P-15 · Servicios que quedan con una cuenta inactiva después de la `043`  ·  🟡 DECIDE JOSUARTH
+
+Agregada el 25/09/2026. La `043` reasigna solo los cinco `HON-*` que Josuarth
+confirmó y deja **HON-FAM y HON-OTROS en `4101`**, que en el plan nuevo está
+**inactiva**, a propósito. Toda factura con esos servicios **se rechaza al emitir**.
+Desde el 25/09 el rechazo ocurre antes de tomar el número (no deja huecos), pero
+**no se puede facturar ese servicio** hasta reasignarlo. Esta consulta simula la
+`043` y lista lo que va a quedar mal:
+
+```sql
+WITH despues_de_la_043 AS (
+  SELECT s.tenant_id, s.code, s.name, s.service_type, s.active,
+         CASE s.code
+           WHEN 'HON-COR' THEN '400001' WHEN 'HON-LAB' THEN '400003'
+           WHEN 'HON-CIV' THEN '400004' WHEN 'HON-PEN' THEN '400005'
+           WHEN 'HON-MIG' THEN '400007' ELSE s.revenue_account
+         END AS cuenta
+    FROM public.services_catalog s
+)
+SELECT d.code, d.name, d.service_type, d.cuenta,
+       c.name        AS nombre_cuenta,
+       c.code IS NULL AS no_existe,
+       c.active      AS activa,
+       c.account_type
+  FROM despues_de_la_043 d
+  LEFT JOIN public.chart_of_accounts c
+         ON c.tenant_id = d.tenant_id AND c.code = d.cuenta
+ WHERE d.active
+   AND (d.cuenta IS NULL
+        OR c.code IS NULL
+        OR NOT c.active
+        OR c.account_type NOT IN ('income', 'asset'))
+ ORDER BY d.code;
+```
+
+- [ ] Servicios que van a quedar mal: `________________________` (esperado: HON-FAM y
+      HON-OTROS si existen en producción; probada en staging el 25/09, donde da HON-OTROS)
+- [ ] Cuenta que Josuarth eligió para cada uno: `________________________`
+
+> **No es motivo de parar el despliegue**, pero sí de **no reabrir la facturación**
+> hasta reasignarlos: ver el paso «Reasignar» del Bloque B.
+> En staging se usó **400004 Derecho Civil** para HON-FAM (el plan no tiene una
+> cuenta de Familia y el derecho de familia es una rama del civil;
+> `sql/datos-staging/2026-09-25_hon_fam_a_derecho_civil.sql`). **Es una propuesta, no la
+> decisión:** en producción manda Josuarth. HON-OTROS no tiene candidata obvia.
+
 ---
 
 ## 2 · El backup — acá es bloqueante
@@ -859,6 +906,28 @@ con el Estado de Resultado mal.
   NOTICE:   HON-LAB → 400003   … (una por servicio cambiado)
   ```
   > Parar si: `ABORTADO sin escribir nada…` — debería haberlo atrapado P-6.
+
+- [ ] **Reasignar los servicios de P-15** · *antes de reabrir la facturación*
+  Con la cuenta que eligió Josuarth, una línea por servicio (es una escritura de
+  datos: la corre Oliver en el SQL Editor, como el resto de la ventana):
+  ```sql
+  UPDATE public.services_catalog
+     SET revenue_account = '<cuenta elegida>'
+   WHERE code = '<SERVICIO>'
+     AND tenant_id = 'a0000000-0000-0000-0000-000000000001';
+  ```
+  Y se verifica con la consulta de P-15 **sin el CTE** (la `043` ya corrió):
+  ```sql
+  SELECT s.code, s.name, s.revenue_account, c.active
+    FROM public.services_catalog s
+    LEFT JOIN public.chart_of_accounts c
+           ON c.tenant_id = s.tenant_id AND c.code = s.revenue_account
+   WHERE s.active AND (c.code IS NULL OR NOT c.active);
+  -- esperado: 0 filas
+  ```
+  > Si Josuarth todavía no decidió alguno: **no se inventa la cuenta**. El servicio
+  > queda rechazando al emitir (sin quemar número) y se avisa al bufete que ese
+  > servicio no se puede facturar hasta la decisión.
 
 - [ ] **`040` · `037` · `045`** — líneas de compra sobre una tabla vacía
   ```
@@ -1153,7 +1222,7 @@ Ninguna escribe. Van en el orden en que se corren.
 En este orden, copiándolas de su sección, donde ya están listas:
 **P-0** (§0) → **P-1 (a–d)** → **P-1(e)** → **P-2** → **P-3** → **P-4** →
 **P-5** → **P-6** → **P-7** → **P-8** → **P-9** → **P-10** (§1) →
-**P-11** → **P-12** → **P-13** → **P-14** (§1b).
+**P-11** → **P-12** → **P-13** → **P-14** → **P-15** (§1b).
 No se duplican acá para que no haya dos copias que puedan divergir.
 
 ### 10.2 · Después del Bloque A (con `main` arriba)

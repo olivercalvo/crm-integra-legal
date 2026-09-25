@@ -17,7 +17,7 @@ haga en esta revisión llega a los libros del bufete ni a la DGI real.
 
 ## 0. Cómo entrar
 
-1. Abre el enlace del ambiente de pruebas que te manda Oliver por correo.
+1. Abre el enlace que te manda Oliver por correo (ábrelo completo, tal como llega).
 2. Arriba de todo tiene que aparecer una banda naranja que dice **STAGING: DATOS DE PRUEBA**.
    Si no la ves, no sigas: estás en otro lugar.
 3. Entra con el usuario **contador@staging.test**. La contraseña te la manda Oliver aparte.
@@ -31,10 +31,6 @@ haga en esta revisión llega a los libros del bufete ni a la DGI real.
 6. **Cómo se cierra el acceso:** cuando nos confirmes que terminaste, o cuando tengamos tus
    comentarios por escrito, Oliver desactiva tu usuario desde Administración, Usuarios. Si
    quieres volver a entrar después, se reactiva.
-
-> ⚠️ **Pendiente de Oliver antes de mandarte el enlace:** hoy el enlace pide iniciar sesión en
-> Vercel, y tú no tienes cuenta. Oliver te confirma por correo cómo abrirlo sin cuenta. Si no
-> se resuelve antes de la reunión, la revisión se hace con la pantalla de Oliver compartida.
 
 ---
 
@@ -139,18 +135,15 @@ quieras.
   se emitió una factura y el movimiento no apareció*).
 - **Estado:** ✅ Listo.
 - **Ruta:** Finanzas, Facturas, `DRAFT-ad8142bceaa8`. (Pantalla de Oliver.)
-- **Preparación:** la DGI de pruebas rechaza cualquier RUC de cliente inventado. Antes del
-  paso 3, Oliver deja a Ferretería Vallarino con el RUC del bufete por diez minutos con
-  `npx tsx scripts/efactura/sostener-receptor-emisor.ts CLI-001 FAC-HON-000022`. Al terminar
-  se restaura solo.
 - **Script de prueba:**
   1. Abre el borrador `DRAFT-ad8142bceaa8`: Ferretería Vallarino, 3 × B/. 100.00 de
      honorarios corporativos con ITBMS 7 %, total **B/. 321.00**.
-  2. Aprieta **Emitir factura interna** y confirma. Resultado: la factura pasa a
-     **FAC-HON-000022**, estado Emitida.
-  3. En la tarjeta de Facturación Electrónica aprieta **Enviar al PAC** y confirma. (El PAC
-     es el proveedor autorizado que le entrega la factura a la DGI.) Resultado: **Autorizada
-     DGI**, con CUFE y protocolo.
+  2. Aprieta **Emitir factura interna**. Resultado: el diálogo avisa *Todavía no vale ante la
+     DGI. Después de emitirla, envíala a la DGI desde esta misma factura con el botón «Enviar a
+     la DGI».* Confirma. Resultado: la factura pasa a **FAC-HON-000022**, estado Emitida.
+  3. Oliver prepara el ambiente antes de este paso. En la tarjeta de Facturación Electrónica
+     aprieta **Enviar a la DGI** y confirma. Resultado: **Autorizada DGI**, con CUFE y
+     protocolo.
   4. Ve a Reportes, Libro Mayor, cuenta `100004`. Resultado: aparece FAC-HON-000022 con
      fecha de hoy, débito **321.00**. En el mayor de `400001` aparece con crédito **300.00**
      y en el de `200003` con crédito **21.00**.
@@ -278,17 +271,20 @@ quieras.
      La línea *Honorarios corporativos · ITBMS 7 %* muestra disponible **1 de 2**: la otra
      unidad ya la acreditó NC-000017. No aparece **Anular**: una factura con una nota de
      crédito ya no se anula, se sigue acreditando.
-  2. Marca la línea y escribe cantidad `1`. Resultado: *Total de la nota de crédito
-     B/. 10.70*.
-  3. Motivo: `Descuento acordado con el cliente`. Aprieta **Sí, emitir la nota de crédito**.
-  4. Resultado: nota de crédito **NC-000020** (la NC-000019 la toma la anulación del script 6)
+  2. Marca la línea y escribe cantidad `2`. Resultado: en rojo, *La línea "Honorarios
+     corporativos" tiene 1 disponible(s) para acreditar (facturado 2, ya acreditado 1).*, y el
+     botón **Sí, emitir la nota de crédito** se apaga.
+  3. Cambia la cantidad a `1`. Resultado: *Total de la nota de crédito B/. 10.70* y el botón
+     se vuelve a encender.
+  4. Motivo: `Descuento acordado con el cliente`. Aprieta **Sí, emitir la nota de crédito**.
+  5. Resultado: nota de crédito **NC-000020** (la NC-000019 la toma la anulación del script 6)
      con fecha de hoy. Asiento propio igual al de NC-000017. La factura queda con saldo 0.00 y
      la marca *Acreditada total*.
-  5. (Opcional, con la preparación del script 4.1 para CLI-001 y NC-000020.) En la nota de
-     crédito aprieta **Enviar a la DGI**. Resultado: **Autorizada DGI**, con CUFE que empieza
+  6. (Opcional. Oliver prepara el ambiente antes de este paso.) En la nota de crédito aprieta
+     **Enviar a la DGI**. Resultado: **Autorizada DGI**, con CUFE que empieza
      con `FE04`.
-- **Probado:** ✅ hasta el total de B/. 10.70 en el diálogo. No se confirmó para no gastar la
-  factura. El envío de una nota de crédito a la DGI se probó el 24/09 y el 25/09 (NC-000014 y
+- **Probado:** ✅ pasos 1 a 3 (el freno en rojo y el total de B/. 10.70). No se confirmó para no
+  gastar la factura. El envío de una nota de crédito a la DGI se probó el 24/09 y el 25/09 (NC-000014 y
   NC-000017).
 - **Pregunta para ti:** ¿te sirve que la nota de crédito se emita desde la factura, en lugar
   de un desplegable de tipo de documento?
@@ -392,11 +388,12 @@ quieras.
 - **Estado:** ✅ Listo.
 - **Ruta:** Finanzas, Gastos del Bufete, `desarrollo crm fase 1`.
 - **Script de prueba:**
-  1. Abre la compra `desarrollo crm fase 1` (PRV-002, factura del proveedor 123456).
-     Resultado: dos líneas, una de 100.00 con ITBMS 7 % (7.00) y una de 10.00 exenta. Total
+  1. Abre la compra `desarrollo crm fase 1`. Resultado: **Proveedor** *PRV-002 Cliente en el
+     Centro*, **RUC proveedor** `123456` y **DV** `05` en campos separados, y **N.º factura
+     proveedor** `123456`.
+  2. Resultado: dos líneas, una de 100.00 con ITBMS 7 % (7.00) y una de 10.00 exenta. Total
      **B/. 117.00**, *ITBMS (7 % sobre B/. 100.00) B/. 7.00*.
-- **Probado:** ✅. ⚠️ Ver hallazgo 1 de la sección 16: en este detalle el campo **Proveedor**
-  sale vacío aunque la compra tiene proveedor.
+- **Probado:** ✅.
 
 ### 3.3 · Ítem en la línea de compra
 
@@ -716,22 +713,10 @@ próximo comprobante de egreso **CE-000006**, próxima nota de crédito de compr
 Ninguno: todo lo que usan los scripts ya estaba. Lo único que se movió en el ambiente al
 probar fue **cerrar y reabrir enero 2026**.
 
-### Lo que encontramos al probar, sin corregir todavía
+### Un dato de prueba que vas a ver
 
-1. **El detalle de una compra deja vacíos "Proveedor" y "RUC proveedor"** aunque la compra
-   tenga proveedor elegido de la lista. Pasa en `desarrollo crm fase 1` (PRV-002) y en
-   `prueba` (PRV-001). El listado de proveedores sí los cuenta bien.
-2. **El diálogo "Emitir factura interna" todavía dice** *Esta factura interna no es válida
-   fiscalmente. Recuerda replicarla en eFactura para emitir la factura electrónica oficial.*
-   Hoy el envío a la DGI se hace desde el mismo sistema, así que el texto confunde.
-3. En la ficha de la nota de crédito **NC-000014** la línea dice *ITBMS_7 (0%)*. Es un dato de
-   una prueba del 24/09, no del cálculo; por eso esta agenda usa NC-000017.
-4. **El mismo envío tiene tres nombres:** en la factura el botón dice *Enviar al PAC* la
-   primera vez y *Reenviar a la DGI* después de un rechazo; en la nota de crédito dice *Enviar
-   a la DGI*.
-5. **El diálogo de nota de crédito no frena en pantalla una cantidad mayor a la disponible.**
-   En FAC-HON-000021 (disponible 1 de 2), escribir `2` muestra un total de B/. 21.40 y el botón
-   sigue activo. No lo confirmamos; el tope sí existe al registrar, pero el aviso llega tarde.
+En la ficha de la nota de crédito **NC-000014** la línea dice *ITBMS_7 (0%)*. Es un dato de una
+prueba del 24/09, no del cálculo; por eso esta agenda usa NC-000017.
 
 ---
 

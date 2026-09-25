@@ -19,6 +19,10 @@ import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/revers
  */
 const ROLES = ["admin", "abogada", "contador"];
 
+export const metadata = {
+  title: "Nota de crédito de proveedor · Finanzas",
+};
+
 interface PageProps {
   params: { id: string };
   searchParams?: { registrada?: string };

@@ -121,20 +121,31 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
   if (!raw) notFound();
   const nc = raw as unknown as NcDetalle;
 
-  const esAnulacion = nc.invoice?.status === "anulada";
   const noEmitida = nc.fe_estado === "no_emitida";
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
 
-  // Su asiento propio (NC parcial/posterior, D5) o, si acompaña una
+  // Su asiento propio (NC posterior o parcial, D5) o, si acompaña una
   // anulación, la reversión del asiento de la factura.
-  const [propios, reversiones] = await Promise.all([
-    cargarAsientosPorOrigen(db, tenantId, SOURCE_TYPE_NOTA_CREDITO, [nc.id]),
-    esAnulacion && nc.invoice
-      ? cargarAsientosPorOrigen(db, tenantId, "reversion", [nc.invoice.id])
-      : Promise.resolve(new Map()),
-  ]);
+  const propios = await cargarAsientosPorOrigen(db, tenantId, SOURCE_TYPE_NOTA_CREDITO, [nc.id]);
   const asiento = propios.get(nc.id) ?? null;
+
+  // 🔴 Una NC es "de anulación" cuando NO tiene asiento propio y su factura
+  //    está anulada (D5). Mirar solo la factura no alcanza: una NC por líneas,
+  //    reversada, sobre una factura que DESPUÉS se anuló (063) tiene asiento
+  //    propio y no es de anulación. Hasta el 25/09/2026 se mostraba como tal y
+  //    cargaba la reversión de la factura como si fuera suya.
+  const esAnulacion = nc.invoice?.status === "anulada" && asiento === null;
+  const reversiones =
+    esAnulacion && nc.invoice
+      ? await cargarAsientosPorOrigen(db, tenantId, "reversion", [nc.invoice.id])
+      : new Map();
   const reversion = nc.invoice ? reversiones.get(nc.invoice.id) ?? null : null;
+
+  // Una NC por líneas puede acreditar la factura entera. "Parcial" solo
+  // cuando acredita menos que el total de la factura.
+  const acreditaElTotal =
+    nc.invoice !== null && nc.invoice !== undefined &&
+    Number(nc.grand_total) >= Number(nc.invoice.grand_total) - 0.005;
 
   const recienEmitida = searchParams?.emitida === "1";
 
@@ -208,7 +219,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                 </span>
               ) : (
                 <span className="inline-flex items-center rounded-full border border-integra-gold/60 bg-integra-gold/10 px-2.5 py-0.5 text-xs font-semibold text-integra-navy">
-                  Parcial
+                  {acreditaElTotal ? "Total" : "Parcial"}
                 </span>
               )}
             </div>

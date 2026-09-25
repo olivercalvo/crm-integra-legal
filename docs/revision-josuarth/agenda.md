@@ -272,8 +272,9 @@ quieras.
      unidad ya la acreditó NC-000017. No aparece **Anular**: una factura con una nota de
      crédito ya no se anula, se sigue acreditando.
   2. Marca la línea y escribe cantidad `2`. Resultado: en rojo, *La línea "Honorarios
-     corporativos" tiene 1 disponible(s) para acreditar (facturado 2, ya acreditado 1).*, y el
-     botón **Sí, emitir la nota de crédito** se apaga.
+     corporativos" tiene 1 disponible(s) para acreditar (facturado 2, ya acreditado 1).* y *La
+     nota de crédito (B/. 21.40) supera el saldo pendiente (B/. 10.70).* El botón **Sí, emitir
+     la nota de crédito** se apaga.
   3. Cambia la cantidad a `1`. Resultado: *Total de la nota de crédito B/. 10.70* y el botón
      se vuelve a encender.
   4. Motivo: `Descuento acordado con el cliente`. Aprieta **Sí, emitir la nota de crédito**.

@@ -1,13 +1,19 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 🔒 DEVELOP CONGELADO — REVISIÓN CON JOSUARTH EN CURSO <<<
+
+- Desde el push de las correcciones de la agenda (25/09/2026), **no se hace push a `develop`**
+  hasta que Oliver diga que terminó la revisión (SOP-019). Lo que haga falta va en una rama
+  aparte, y su Preview comparte la base de staging: no tocar los documentos de la agenda.
+- ✅ Hallazgos 1, 2, 4 y 5 de la agenda corregidos y probados con clics. El 3 es dato de prueba.
+- Preparación técnica por script: `docs/revision-josuarth/notas-oliver.md`.
+
 ## >>> 25/09/2026 (cierre) — REVISIÓN CON JOSUARTH PREPARADA <<<
 
 - ✅ Agenda en `docs/revision-josuarth/agenda.md`: 49 puntos + lo nuevo, 29 scripts probados con
   clics, 15 decisiones, dos sesiones (1 h 40 y 2 h).
-- 🔴 **Antes de mandar el correo (Oliver):** cómo entra Josuarth al Preview sin cuenta de Vercel
-  (hoy 302 a SSO). Y abrir la ventana de revisión de SOP-019: no resetear, no migrar, no sembrar.
-- 🟡 Hallazgos de la agenda §16 (proveedor vacío en el detalle de compra, texto de "replicarla en
-  eFactura", nombres del envío, tope de cantidad en el diálogo de NC): esperan decisión de Oliver.
+- ✅ Acceso resuelto por Oliver: Shareable Link de Vercel (el token va solo en el correo).
+- ✅ Hallazgos de la agenda §16: corregidos (ver arriba).
 - ⏳ NC-000017 deja de poder anularse ante la DGI el 02/10: el script 7 sirve hasta el 01/10.
 
 ## >>> 25/09/2026 (noche) — DÓNDE QUEDÓ <<<

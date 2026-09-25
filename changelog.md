@@ -1,5 +1,40 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Correcciones de la agenda y congelamiento de develop] - 2026-09-25 (cierre, segunda parte)
+
+Solo staging; `main` sigue en `24b227a`. Después de este push `develop` queda **congelado**
+hasta que Oliver cierre la revisión con Josuarth (SOP-019 corregido).
+
+### Cuatro hallazgos de la agenda, corregidos
+- **Detalle de compra:** muestra el proveedor de la ficha (`proveedorDelDetalle()`), con
+  número, RUC y DV en campos separados. Antes leía `supplier_name` y salía vacío (`cf1f710`).
+- **Un solo nombre para el envío:** «Enviar a la DGI» / «Reenviar a la DGI» en facturas y NC,
+  desde `efactura/etiquetas-de-envio.ts`. Sale «Enviar al PAC» y «Reintentar envío»; el
+  diálogo de emitir ya no manda a replicar en eFactura y el de enviar ya no dice que la
+  corrección se hace en eFactura (`1c7c733`).
+- **Tope de la NC en pantalla:** `errorDeCantidadAcreditable()` es la misma en el diálogo y en
+  el servidor; mensaje en rojo y botón apagado (`5baf1d8`).
+- El hallazgo 3 (NC-000014 con ITBMS_7 en 0 %) es un dato de prueba: no se tocó.
+- Tests nuevos: `proveedor-del-detalle`, `etiquetas-de-envio`, `credit-note-tope-en-pantalla`;
+  `alerta-de-rechazo` apunta a la fuente única. Suite **1448/1448**, `tsc` 0, lint 0 nuevos.
+
+### Clics en el Preview (sesión admin)
+- `desarrollo crm fase 1`: Proveedor *PRV-002 Cliente en el Centro*, RUC `123456`, DV `05`.
+  `prueba`: *PRV-001 CABLE ONDA S.A*, RUC `12314-5-8858787`, DV `67`.
+- `DRAFT-ad8142bceaa8` → diálogo: *Todavía no vale ante la DGI. Después de emitirla, envíala a
+  la DGI desde esta misma factura…* (cancelado).
+- FAC-HON-000012: botón **Enviar a la DGI**. FAC-HON-000016: **Reenviar a la DGI**, confirmar
+  *Sí, reenviar a la DGI* (cerrado sin enviar). NC-000010: **Reenviar a la DGI**.
+- FAC-HON-000021, NC con cantidad 2: los dos avisos en rojo y el botón apagado; con 1, sin
+  avisos y el botón activo (cancelado).
+
+### Agenda
+- Sin el aviso de Vercel; el acceso es el enlace del correo. Lo técnico pasó a
+  `docs/revision-josuarth/notas-oliver.md`; la agenda dice "Oliver prepara el ambiente".
+- Scripts 4.1, 7 y 9 con los textos nuevos; fuera de la lista los hallazgos corregidos.
+- **SOP-019:** durante la revisión no se hace push a `develop` (el Shareable Link muestra
+  siempre la última versión); el trabajo va en una rama aparte.
+
 ## [Agenda de revisión con Josuarth] - 2026-09-25 (cierre)
 
 Sin código. `docs/revision-josuarth/agenda.md` + los dos Excel de la importación. Solo staging;

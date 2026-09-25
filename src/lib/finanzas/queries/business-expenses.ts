@@ -75,7 +75,7 @@ async function hidratarProveedores(
 
   const { data } = await db
     .from("suppliers")
-    .select("id, supplier_number, legal_name, trade_name, payment_terms_days")
+    .select("id, supplier_number, legal_name, trade_name, payment_terms_days, ruc, dv")
     .eq("tenant_id", tenantId)
     .in("id", ids);
 

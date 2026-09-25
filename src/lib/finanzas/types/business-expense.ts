@@ -104,6 +104,9 @@ export interface SupplierSnapshot {
   payment_terms_days: number;
   /** Cuenta por defecto para las líneas de COMPRA (4.4). Opcional. */
   default_chart_account_code?: string | null;
+  /** RUC y DV de la ficha. Dos campos, nunca uno (SOP-020). */
+  ruc?: string | null;
+  dv?: string | null;
 }
 
 /** Snapshot mínimo de la cuenta contable para joins. */
@@ -132,6 +135,34 @@ export function nombreProveedorDeGasto(
     return g.supplier.trade_name?.trim() || g.supplier.legal_name;
   }
   return g.supplier_name;
+}
+
+/**
+ * El proveedor que muestra el DETALLE de una compra.
+ *
+ * Hasta el 25/09/2026 el detalle leía solo `supplier_name`/`supplier_ruc`, el
+ * texto libre de respaldo de la `033`, y una compra con proveedor elegido de la
+ * lista mostraba los dos campos vacíos. Manda la ficha; el texto viejo queda
+ * solo para las compras que no están enlazadas. El DV sale únicamente de la
+ * ficha: el respaldo nunca lo tuvo. RUC y DV se devuelven separados.
+ */
+export function proveedorDelDetalle(
+  g: Pick<BusinessExpenseListItem, "supplier" | "supplier_name" | "supplier_ruc">
+): { nombre: string | null; numero: string | null; ruc: string | null; dv: string | null } {
+  if (g.supplier) {
+    return {
+      nombre: nombreProveedorDeGasto(g),
+      numero: g.supplier.supplier_number,
+      ruc: g.supplier.ruc?.trim() || null,
+      dv: g.supplier.dv?.trim() || null,
+    };
+  }
+  return {
+    nombre: g.supplier_name?.trim() || null,
+    numero: null,
+    ruc: g.supplier_ruc?.trim() || null,
+    dv: null,
+  };
 }
 
 /**

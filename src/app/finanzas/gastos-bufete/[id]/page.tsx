@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils/format-date";
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
 import {
+  proveedorDelDetalle,
   taxRateLabel,
 } from "@/lib/finanzas/types/business-expense";
 import { cuentaLabel } from "@/lib/finanzas/types/expense-line";
@@ -61,6 +62,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   ]);
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
+  const proveedor = proveedorDelDetalle(expense);
 
   // El comprobante YA NO se firma acá.
   //
@@ -163,16 +165,27 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                   )
                 }
               />
-              <Item label="Proveedor" value={expense.supplier_name ?? "—"} />
               <Item
-                label="RUC proveedor"
+                label="Proveedor"
                 value={
-                  expense.supplier_ruc ? (
-                    <span className="font-mono">{expense.supplier_ruc}</span>
+                  proveedor.nombre ? (
+                    <span>
+                      {proveedor.numero && <span className="mr-1 font-mono text-gray-500">{proveedor.numero}</span>}
+                      {proveedor.nombre}
+                    </span>
                   ) : (
                     "—"
                   )
                 }
+              />
+              {/* RUC y DV en dos campos, como en la ficha y en los anexos de la DGI (SOP-020). */}
+              <Item
+                label="RUC proveedor"
+                value={proveedor.ruc ? <span className="font-mono">{proveedor.ruc}</span> : "—"}
+              />
+              <Item
+                label="DV"
+                value={proveedor.dv ? <span className="font-mono">{proveedor.dv}</span> : "—"}
               />
               {/* El comprobante que respalda la compra (migración `044`): es lo
                   que se busca al conciliar contra el proveedor. */}

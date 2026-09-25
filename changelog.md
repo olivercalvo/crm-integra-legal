@@ -1,5 +1,41 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Número sin quemar, ITBMS con NC, NC de compra e importar asientos] - 2026-09-25 (noche)
+
+**Staging (`develop`):** `195272f` → `46fd6ec` → `410d45f` → `fe6359e` → `be5745f` → `38098d3`
+→ `a45c69a` → `52de8cf` → `395eb4a` → `02389b1`. Migraciones `066` y `067` **SOLO staging**.
+`main` sigue en `24b227a`. FAC-HON-000007 no se tocó. Decisiones de Oliver aplicadas: `065`
+aprobada para producción; los «—» de celda vacía se quedan.
+
+### Tarea 1: la cuenta inactiva ya no quema el número
+- `emitInvoice` valida las cuentas del asiento antes del correlativo. Mensaje en palabras.
+- Clic: borrador con HON-OTROS (4101) → «No se puede emitir esta factura: el servicio
+  «Honorarios — otros» (HON-OTROS) usa la cuenta de ingreso 4101, que no existe o está
+  desactivada…». Secuencia `invoice_hon` **21 antes y 21 después**; la factura sigue en borrador.
+- HON-FAM → 400004 Derecho Civil en staging (no hay cuenta de Familia; el derecho de familia es
+  rama del civil). Runbook P-15 + paso «Reasignar» en la ventana.
+
+### Tarea 2: el resumen de ITBMS resta las NC
+- `vat-calculo.ts` (puro) + 9 tests (NC total, parcial, anulada, de otro mes, de anulación,
+  interna). Clic: septiembre, línea 3 = **1.40** (142.10 − 140.70), con NC-000012 (factura de
+  junio) restando en septiembre. Con la 3.5: línea 4 = **83.60** (330.00 − 246.40 de NCP-000001,
+  compra de febrero); la línea 6 no cambia porque NCP-000002 está anulada.
+
+### Tarea 3: NC de compra (066)
+- Clics: **total** NCP-000001 sobre «Combustible de la flota» (asiento 69, saldo 246.40 → 0.00);
+  **parcial** NCP-000002 sobre «desarrollo crm fase 1», 30.00 + ITBMS 2.10 (asiento 70, saldo
+  117.00 → 84.90); **anulada** NCP-000002 (asiento 71, saldo vuelve a 117.00).
+- Verificación SQL de 9 pasos en ROLLBACK (topes, guard, no se borra, una sola reversión).
+
+### Tarea 4: importar asientos desde Excel (067)
+- Clics: plantilla (200, xlsx de 30 KB, sin guardar en disco); archivo con errores → **8
+  errores por fila y columna** y el botón deshabilitado, sin escribir nada; archivo válido → lote
+  `cb0ae5cb-…` con asientos 72 y 73; **deshacer** → asientos 75 y 74 (reversiones con fecha de
+  hoy), lote `reversada`, nada borrado.
+- Verificación SQL de 7 pasos en ROLLBACK (todo o nada sin consumir números, hash, deshacer).
+
+Suite **1436/1436**, `tsc` 0, **0 errores de lint nuevos** (20 de la lista base).
+
 ## [Verificación con clics de 9B/9C, la anulación de NC ante la DGI y los textos] - 2026-09-25 (tarde)
 
 **Staging (`develop`):** `d3430a2` (log del ambiente) → `7db6e9e` (diálogo de anulación) →

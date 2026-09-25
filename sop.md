@@ -3442,3 +3442,20 @@ misma factura del sandbox.
 - 🔴 `invoice_kind` **se hereda de la factura original**: de ahí sale el CPBS, y una NC sobre un
   reembolso tiene que llevar el del reembolso. Es un dato que la NC no tiene por su cuenta y
   que es fácil dejar en HONORARIOS sin que nada falle hasta que la DGI observa el anexo.
+
+
+## SOP-044: NC de compra, resumen de ITBMS e importación de asientos (25/09/2026)
+
+**NC de compra (066).** Se registra desde el detalle de la compra. Una transacción en la base
+(`create_supplier_credit_note`). El asiento es el de la compra al revés y la base lo verifica.
+El saldo de la compra es `balance_due` (derivado): nadie calcula `total − amount_paid` a mano.
+Se anula con Reversar (fecha de hoy). Defaults de Josuarth en el encabezado de la `066`.
+
+**Resumen de ITBMS.** La regla está en `reports/vat-calculo.ts`: facturas emitidas no anuladas
+menos NC de venta autorizadas y vigentes (mes de la NC); compras menos NC de compra vigentes.
+Las anuladas no cuentan.
+
+**Importar asientos (067).** Vista previa obligatoria, todo o nada, deshacer completo con
+reversiones fechadas hoy. Si un lote falla a mitad, no queda nada: no hay que limpiar.
+
+**Emisión.** Las cuentas del asiento se validan antes de pedir el número de factura.

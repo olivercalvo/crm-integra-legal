@@ -1,5 +1,20 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 25/09/2026 (noche) — DÓNDE QUEDÓ <<<
+
+- ✅ Tarea 1 (número sin quemar + HON-FAM en staging + P-15), Tarea 2 (ITBMS con NC), Tarea 3
+  (NC de compra, `066`) y Tarea 4 (importar asientos, `067`): construidas y verificadas con
+  clics. Evidencia en `changelog.md`.
+- ✅ `065` aprobada por Oliver para la cola de producción. La cola es de **42** (runbook).
+- 🟡 **3.5 corre con valores por defecto hasta que conteste Josuarth.** Las preguntas J-1 a
+  J-11 del plan de abajo siguen abiertas. Hoy: fecha contable = hoy (J-2); sin saldo a favor,
+  tope = lo que falta pagar (J-3); resta ITBMS en el mes de la NC (J-5); número del documento
+  obligatorio y CUFE opcional (J-10); `NCP-` (J-11); sólo compras, no trámites (J-7).
+- 🟡 **7.5**: K-1 a K-10 abiertas. Hoy: fechas DD/MM/AAAA o AAAA-MM-DD, terceros no se importan
+  (la plantilla no trae la columna), cuentas control se permiten sin aviso, sin fechas futuras
+  especiales, todo o nada (K-7 ya lo pidió Oliver), tope 200 asientos / 3.000 líneas.
+- 🟡 **HON-FAM / HON-OTROS en producción**: la cuenta la decide Josuarth (runbook P-15).
+
 ## >>> 25/09/2026 (tarde) — DÓNDE QUEDÓ <<<
 
 - ✅ **Tarea 1 (clics) completa en el Preview** (`develop`, variables de sandbox cargadas por
@@ -20,7 +35,7 @@
 
 ## >>> FASE 0: 3.5 NC DE COMPRA y 7.5 IMPORTAR ASIENTOS. PLAN, SIN CÓDIGO. 25/09/2026 <<<
 
-**Estado: PLAN. Espera aprobación de Oliver.**
+**Estado: APROBADO el 25/09 y CONSTRUIDO (3.5 → `066`, 7.5 → `067`, no 066 a 069 como decía el plan). Ver el estado de la noche arriba.**
 
 No se escribió código ni se corrió nada contra ninguna base. Lo que se afirma del código actual
 va con `archivo:línea`; lo que no se pudo confirmar dice **no confirmado**. La `056` sigue

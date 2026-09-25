@@ -375,6 +375,57 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - ⚠️ `services_catalog.default_tax_code` la referencia con un FK compuesto `ON UPDATE CASCADE`:
   editar un código lo renombra también allá. Detalle en `sop.md` SOP-037.
 
+### Emisión: las cuentas se validan ANTES de tomar el número (desde 2026-09-25)
+- 🔴 `emitInvoice` arma el asiento una vez **sin número** antes de pedir el correlativo. Una
+  cuenta de ingreso inactiva se rechaza (422) **sin consumir número**. Antes quemaba uno
+  (FAC-HON-000018 en staging). El mensaje dice el servicio en palabras: «el servicio
+  «Honorarios familia» (HON-FAM) usa la cuenta de ingreso 4101, que no existe o está
+  desactivada…». 🔒 Test en `emit-invoice-numero-del-asiento.test.ts`.
+- **HON-FAM → 400004 Derecho Civil SOLO en staging** (`sql/datos-staging/`, no es
+  migración). En producción decide Josuarth: runbook P-15 y paso «Reasignar» en la ventana.
+
+### Resumen de ITBMS: las NC restan (desde 2026-09-25)
+- 🔴 **Débito = facturas emitidas no anuladas − NC de venta autorizadas por la DGI y
+  vigentes** (con su factura no anulada), en el mes **de la NC**. **Crédito = compras − NC de
+  compra vigentes.** Las anuladas no cuentan. La regla vive en `reports/vat-calculo.ts`
+  (pura, con tests) y el reporte no suma por su cuenta.
+- "Autorizada" en una FACTURA = emitida y no anulada: las anteriores al 8/7 se autorizaron
+  en el portal y el CRM no guardó su CUFE. En una NC de venta sí se exige
+  `fe_estado = 'authorized'`: una NC interna no vale ante la DGI.
+- ⚠️ Cambia meses viejos si hubo anulaciones entre meses (runbook P-16).
+
+### Nota de crédito de COMPRA (desde 2026-09-25, 3.5, migración `066` SOLO staging)
+- Documento del proveedor que **registramos** (no va a la DGI). `NCP-000001`. Desde el
+  detalle de la compra: base a acreditar por línea; el ITBMS sale de la tasa de la línea (o
+  el remanente exacto si se acredita todo lo que queda).
+- 🔴 **Una sola transacción en la base** (`create_supplier_credit_note`): número, NC,
+  líneas y asiento, con la compra bloqueada. Sin compensación y sin huecos.
+- 🔴 **El asiento es el de la compra al revés** (`construirAsientoDeNotaDeCompra` sobre
+  `construirAsientoDeCompra`), con el proveedor en la línea de 200001. La base lo VERIFICA
+  contra sus propios montos.
+- 🔴 **El saldo se deriva**: `business_expenses.credited_total` (trigger desde NC `emitida`,
+  con guard) y `balance_due` GENERATED. El status se deriva contra el total NETO. Toda
+  lectura del saldo de una compra usa `balance_due` (pago, antigüedad, PDF, sección de pagos).
+- Se anula con «Reversar» (`reverse_supplier_credit_note`, calco de la `060`): fecha de hoy,
+  espejo verificado, un estado, y el trigger recalcula.
+- **Registra y reversa: admin, abogada y contador** (las compras son CRUD del contador).
+- 🟡 **Valores por defecto que decide Josuarth** (encabezado de la `066`, preguntas J-1 a
+  J-11 en `task_plan.md`): fecha contable = hoy (J-2); tope = lo que falta pagar, sin saldo
+  a favor (J-3); resta el ITBMS en el mes de la NC (J-5); número del documento obligatorio,
+  CUFE opcional (J-10); prefijo `NCP-` (J-11); **sólo compras, no gastos de trámite** (J-7).
+
+### Importar asientos desde Excel (desde 2026-09-25, 7.5, migración `067` SOLO staging)
+- `/finanzas/asientos/importar`: plantilla descargable → subir → **vista previa
+  obligatoria** con errores por fila y columna → contabilizar. Admin y contador.
+- 🔴 **Todo o nada**: `post_journal_entries_batch` postea cada asiento por
+  `post_journal_entry` en UNA transacción. Un error y no queda ni el lote, ni asientos, ni
+  números. El commit re-lee el archivo y exige el hash de la vista previa.
+- Validación pura en `import/asientos-import.ts`: cuadre, cuentas existentes y activas, mes
+  abierto, montos positivos con dos decimales (parser estricto: texto es error, nunca 0).
+- **Cada importación tiene identificador y se deshace completa** (`reverse_journal_import`):
+  cada asiento se reversa con fecha de hoy por `reverse_journal_entry`; nada se borra.
+- Los asientos importados son `source_type = 'manual'`. `MAX_LINEAS_MANUALES` no aplica.
+
 ### Qué se puede hacer ante la DGI con una factura emitida (desde 2026-09-23, Bloque 9A)
 - 🔴 **La matriz es una FUNCIÓN, no una tabla en un .md**: `decidirAccionFiscal()` en
   `efactura/orchestration/decidir-accion-fiscal.ts`, pura, sin I/O y **sin reloj propio**

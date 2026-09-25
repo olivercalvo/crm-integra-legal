@@ -1,8 +1,8 @@
 # Runbook del despliegue 025 → 055
 
-**Qué es:** la corrida completa de las **40** migraciones contables pendientes a
+**Qué es:** la corrida completa de las **42** migraciones contables pendientes a
 la base de producción, más el merge de `develop` a `main`:
-**`025` a `055`, `057` y `058` a `065`** — toda la cola que existe hoy en `develop`.
+**`025` a `055`, `057` y `058` a `067`** — toda la cola que existe hoy en `develop`.
 
 > ⚠️ **El nombre del archivo dice `025-055` y ya se quedó corto.** El 23/09/2026
 > se sumó la **`057`** (Bloque 8), y el 23–25/09 las **`058` a `064`** (Bloques
@@ -14,6 +14,10 @@ la base de producción, más el merge de `develop` a `main`:
 > iniciales (§P-2(b)), que depende de la respuesta de Josuarth / RM. Es un
 > **hueco a propósito**, no un olvido: si RM contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
+>
+> 🆕 **La `066` (NC de compra) y la `067` (importar asientos), 25/09/2026, noche.**
+> La `066` toca `business_expenses` (saldo derivado, guard, recálculo de la `048`):
+> va en el Bloque B después de la `050`. La `067` es aditiva y va al final del A.
 >
 > 🆕 **La `065` (25/09/2026, tarde):** `fe_anulaciones.credit_note_id`. Una NC autorizada
 > se anula ahora ante la DGI antes de reversarse en el libro, y cada intento queda
@@ -127,14 +131,14 @@ los puntos donde **se para**.
 
 | # | Paso | Dónde | Para si… |
 |---|---|---|---|
-| −2 | Pre-flight P-1 a P-15 (§1 y §1b), solo SELECT | SQL Editor de prod | cualquier «Parar si» |
+| −2 | Pre-flight P-1 a P-16 (§1 y §1b), solo SELECT | SQL Editor de prod | cualquier «Parar si» |
 | −2 | Josuarth elige la cuenta de los servicios de P-15 | correo | si no decide: esos servicios quedan sin facturar |
 | −2 | Respuestas por escrito de RM: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
 | D·1 | 🔴 **Respaldo** (§2), y abrirlo para comprobar que se lee | panel de Supabase | no se puede leer → **se termina el día acá** |
-| D·2 | Bloque A, 28 migraciones con la app arriba (§3) | SQL Editor | cualquier `EXCEPTION` |
+| D·2 | Bloque A, 29 migraciones con la app arriba (§3) | SQL Editor | cualquier `EXCEPTION` |
 | D·3 | `NOTIFY pgrst, 'reload schema'` + verificación del Bloque A (§4, §10.2) | app de prod + SQL | algo distinto de lo anotado |
 | D·4 | **Congelar**: nadie emite, anula ni cobra | aviso | — |
 | D·5 | Bloque B — 12 migraciones (§5), con la `025` al final | SQL Editor | cualquier `EXCEPTION`, o la `025` no coincide con P-1(e) |
@@ -648,6 +652,26 @@ SELECT d.code, d.name, d.service_type, d.cuenta,
 > `sql/datos-staging/2026-09-25_hon_fam_a_derecho_civil.sql`). **Es una propuesta, no la
 > decisión:** en producción manda Josuarth. HON-OTROS no tiene candidata obvia.
 
+### P-16 · Facturas anuladas en un mes distinto al de su emisión (resumen de ITBMS)
+
+Agregada el 25/09/2026. Desde ese día el resumen de ITBMS **no cuenta las
+facturas anuladas** (regla de Oliver). Antes contaban positivo en su mes y
+negativo en el de la anulación. Desde la `052` sólo se anula dentro del mismo
+mes, así que las dos cosas se compensaban; pero una anulación VIEJA entre meses
+hace que el resumen de esos meses **cambie** después del despliegue. Esta
+consulta dice si hay alguna:
+
+```sql
+SELECT invoice_number, issue_date, cancelled_at::date AS anulada_el, tax_total
+  FROM public.invoices
+ WHERE status = 'anulada'
+   AND date_trunc('month', issue_date) <> date_trunc('month', cancelled_at)
+ ORDER BY issue_date;
+```
+
+- [ ] Facturas anuladas entre meses: `____` (si hay: avisar al contador qué meses
+      cambian en el resumen antes de que lo abra)
+
 ---
 
 ## 2 · El backup — acá es bloqueante
@@ -680,14 +704,14 @@ Ninguna se revierte con un `DROP`. Y desde que el motor entra en línea
 
 ---
 
-## 3 · Bloque A: 28 migraciones, con la app arriba
+## 3 · Bloque A: 29 migraciones, con la app arriba
 
 Ninguna de estas altera lo que el código de `main` muestra hoy.
 
 ```
 026 → 027 → 028 → 029 → 030 → 031 → 032 → 033 → 034 → 036 → 038
  → 039 → 041 → 042 → 044 → 046 → 047 → 051 → 052 → 053 → 054 → 055
- → 057 → 059 → 065 → 060 → 062 → 063
+ → 057 → 059 → 065 → 060 → 062 → 063 → 067
 ```
 
 > **Por qué la `058`, la `061` y la `064` NO están acá**, aunque sean chicas:
@@ -830,6 +854,12 @@ Ninguna de estas altera lo que el código de `main` muestra hoy.
   > gate de pagos, gate de período). Es un `CREATE OR REPLACE` de una función
   > que `main` no llama.
 
+- [ ] **`067`** · importar asientos desde Excel · *después de la `055`*
+  ```
+  NOTICE: 067 ✅ importación de asientos: lote, vínculo, alta en una transacción y reversión del lote
+  ```
+  > Tablas nuevas y dos RPC sólo para `service_role`. `main` no las conoce: inerte.
+
 - [ ] **Recargar el esquema de PostgREST**
   ```sql
   NOTIFY pgrst, 'reload schema';
@@ -852,6 +882,8 @@ exacto sale del pre-flight indicado.
 | **`061`** | Columna `invoices.dgi_cufe_origen` + CHECK | **Sí**: todo CUFE existente → `'crm'` | 🟡 las «con CUFE» de P-14 (≤ 102) | NOTICE `061 ✅ … N factura(s) marcadas como 'crm'`; N = «con CUFE» | Aborta sin escribir. **Solo en la ventana** (peligro 3) |
 | **`062`** | `fe_emisiones.credit_note_id`, `invoice_id` deja de ser NOT NULL, CHECK de arco exclusivo | No | 🟡 0 escrituras; valida todas las de P-12 | NOTICE `062 ✅ … N fila(s) existentes intactas`, N = P-12 | Aborta sin escribir |
 | **`065`** | `fe_anulaciones.credit_note_id`, `invoice_id` deja de ser NOT NULL, CHECK de arco exclusivo, índice único de intentos por NC | No | 🟢 **0** (la tabla la crea vacía la `059` en la misma corrida) | NOTICE `065 ✅ … 0 fila(s) existentes intactas` | Aborta sin escribir. Aditiva |
+| **`066`** | NC de compra: `supplier_credit_notes` + líneas (inmutables), `business_expenses.credited_total` derivada y `balance_due` GENERATED, status contra el total neto, RPC de alta y de reversión, `source_type` y secuencia nuevos | No (credited_total nace en 0) | 🟢 **0** compras el 22/09 | NOTICE `066 ✅ … N compra(s) intactas` | Aborta sin escribir |
+| **`067`** | Importar asientos: `journal_imports`, `journal_import_entries`, RPC en lote y reversión del lote | No | 🟢 **0** (tablas nuevas) | NOTICE `067 ✅` | Aborta sin escribir. Aditiva |
 | **`063`** | Reemplaza `cancel_invoice_with_reversal`: bloquea solo por NC **vigentes** | No | 🟢 **0** (solo función) | NOTICE `063 ✅` + 6 chequeos del cuerpo | Aborta y queda la versión de la `053`, que es más estricta: nada se rompe |
 | **`064`** | Corrige la `061`: CHECK con `IS NOT NULL` explícito; re-marca como `'portal_050'` los CUFE cargados a mano | **Sí**: los «cargados a mano» de P-14 → `'portal_050'` | 🟡 los «cargados a mano» de P-14 | NOTICE con los dos conteos + `064 ✅ … (probado: rechazado)` | Aborta y lista si queda un CUFE sin origen demostrable. **Solo en la ventana**, pegada a la `061` |
 
@@ -881,10 +913,10 @@ Bloque B».
 
 ---
 
-## 5 · La ventana — Bloque B, 12 migraciones y el merge
+## 5 · La ventana: Bloque B, 13 migraciones y el merge
 
 ```
-035 → 043 → 040 → 037 → 045 → 048 → 049 → 050 → 058 → 061 → 064 → 025 → merge
+035 → 043 → 040 → 037 → 045 → 048 → 049 → 050 → 066 → 058 → 061 → 064 → 025 → merge
 ```
 
 > 🔴 **Antes de la `058`: congelamiento.** Desde la `058` y hasta que el deploy
@@ -952,6 +984,16 @@ con el Estado de Resultado mal.
   > `048` esa tabla no existe.
   > Parar si N ≠ 0, o si aparece `La compra no puede nacer con status = …`
   > (algo que no es la migración está escribiendo en `business_expenses`).
+
+- [ ] **`066`** · NC de compra · *después de la `048` → `049` → `050`*
+  ```
+  NOTICE: 066 ✅ NC de compra: tablas, saldo derivado, RPC de alta y de reversión · N compra(s) intactas
+  ```
+  > N = compras en producción (**0** el 22/09). La verificación interna aborta si
+  > alguna compra queda con `balance_due` distinto de `total − amount_paid`, o si
+  > se perdió `je_reversion_requires_ref` al re-declarar el CHECK de `source_type`.
+  > Va en la ventana porque reemplaza el recálculo y el guard de la `048`, que el
+  > código de `main` no usa pero que no conviene cambiar con la app vieja arriba.
 
 - [ ] **`058`** — el motivo de anulación exige 15 caracteres
   ```
@@ -1080,7 +1122,7 @@ node scripts/inventario-migraciones.mjs --desde salida.json --base produccion
 El modo `--staging` lleva el mismo candado que `run-sql.mjs`: si la connection
 string apunta al project ref de producción, aborta.
 
-- [ ] Las 40 migraciones (`025`–`055`, `057`, `058`–`065`) figuran como **sí**.
+- [ ] Las 42 migraciones (`025`–`055`, `057`, `058`–`067`) figuran como **sí**.
       La `056` no existe todavía: su hueco es a propósito (§P-2(b))
 - [ ] La sección «La cola, en orden» queda vacía o solo con la `022`
       (que es una decisión explícita de no aplicar)
@@ -1222,7 +1264,7 @@ Ninguna escribe. Van en el orden en que se corren.
 En este orden, copiándolas de su sección, donde ya están listas:
 **P-0** (§0) → **P-1 (a–d)** → **P-1(e)** → **P-2** → **P-3** → **P-4** →
 **P-5** → **P-6** → **P-7** → **P-8** → **P-9** → **P-10** (§1) →
-**P-11** → **P-12** → **P-13** → **P-14** → **P-15** (§1b).
+**P-11** → **P-12** → **P-13** → **P-14** → **P-15** → **P-16** (§1b).
 No se duplican acá para que no haya dos copias que puedan divergir.
 
 ### 10.2 · Después del Bloque A (con `main` arriba)

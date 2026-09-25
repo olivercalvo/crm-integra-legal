@@ -1,5 +1,15 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 25/09/2026 (cierre) — REVISIÓN CON JOSUARTH PREPARADA <<<
+
+- ✅ Agenda en `docs/revision-josuarth/agenda.md`: 49 puntos + lo nuevo, 24 scripts probados con
+  clics, 15 decisiones, dos sesiones (1 h 40 y 2 h).
+- 🔴 **Antes de mandar el correo (Oliver):** cómo entra Josuarth al Preview sin cuenta de Vercel
+  (hoy 302 a SSO). Y abrir la ventana de revisión de SOP-019: no resetear, no migrar, no sembrar.
+- 🟡 Hallazgos de la agenda §16 (proveedor vacío en el detalle de compra, texto de "replicarla en
+  eFactura", nombres del envío, tope de cantidad en el diálogo de NC): esperan decisión de Oliver.
+- ⏳ NC-000017 deja de poder anularse ante la DGI el 02/10: el script 7 sirve hasta el 01/10.
+
 ## >>> 25/09/2026 (noche) — DÓNDE QUEDÓ <<<
 
 - ✅ Tarea 1 (número sin quemar + HON-FAM en staging + P-15), Tarea 2 (ITBMS con NC), Tarea 3

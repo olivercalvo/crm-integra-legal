@@ -1,5 +1,26 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Agenda de revisión con Josuarth] - 2026-09-25 (cierre)
+
+Sin código. `docs/revision-josuarth/agenda.md` + los dos Excel de la importación. Solo staging;
+`main` sigue en `24b227a`; FAC-HON-000007 no se tocó.
+
+- Base: la auditoría de 49 puntos del 21/09 (bloques 1 a 8) cruzada con lo construido después.
+- **Scripts recorridos con clics en el Preview (usuario admin):** 24 de 24 pasaron. 12 completos
+  (errores DGI, cuenta inactiva sin quemar número, tope de 182 h, excedente rechazado, precarga
+  del proveedor, clonar y descuadre, importación con errores y vista previa válida, cierre y
+  reapertura de enero 2026, ITBMS, ER, balance, antigüedad, mayor 130003). El resto hasta el
+  botón de confirmar, para no gastar los documentos de la demostración.
+- Verificado en la base después: `invoice_hon` 21, recibos 7, pagos a proveedor 7, NCP 2, último
+  asiento 75, enero 2026 `abierto` (la pantalla lo marca "Reabierto").
+- **Hallazgos sin corregir** (agenda §16): el detalle de compra deja vacío el proveedor
+  (`gastos-bufete/[id]/page.tsx:166` lee `supplier_name`); el diálogo de emitir todavía manda a
+  "replicarla en eFactura"; tres nombres para el mismo envío (Enviar al PAC / Reenviar a la DGI /
+  Enviar a la DGI); el diálogo de NC no frena en pantalla una cantidad mayor a la disponible
+  (el validador sí); `FAC-REI-000002` no tiene asiento (anterior al cableado).
+- 🔴 **Acceso:** el Preview responde 302 a `vercel.com/sso-api` (Deployment Protection). Josuarth
+  no puede entrar solo. Decide Oliver.
+
 ## [Número sin quemar, ITBMS con NC, NC de compra e importar asientos] - 2026-09-25 (noche)
 
 **Staging (`develop`):** `195272f` → `46fd6ec` → `410d45f` → `fe6359e` → `be5745f` → `38098d3`

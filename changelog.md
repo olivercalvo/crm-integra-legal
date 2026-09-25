@@ -1,5 +1,35 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Agenda: lo que faltaba de las transcripciones del 25/08 y el 09/09] - 2026-09-26 (tarde)
+
+Solo documentación y el Excel; ningún cambio de código. Último push autorizado antes de mandar
+el enlace; después, `develop` congelado otra vez (SOP-019).
+
+### Verificado en el código (solo lectura)
+- **Cobros de los fondos del caso** (`client_payments`, `/api/payments`): **no generan
+  asiento**, a propósito (`contabilidad/asiento-tesoreria.ts`): no tienen banco ni cuenta. Lo
+  contable es la factura de reembolso y su cobro.
+- **Cierre anual del ejercicio: no existe.** Ningún proceso lleva las cuentas de resultado a
+  cero. El 1 de enero los períodos del año nuevo ya están abiertos (`ensure_accounting_periods`)
+  y todo sigue acumulando; el Balance muestra la utilidad como renglón calculado y la
+  distribución a socias es un cálculo del reporte (`accounting-reports.ts`).
+- **Facturar algo que no es un servicio legal: no se puede.** Toda línea necesita un servicio
+  del catálogo (`asiento-factura.ts`, `sin_servicio`); el catálogo solo tiene HON-* y REIM-*,
+  HON-OTROS apunta a 4101 inactiva, y no hay pantalla ni API para agregar servicios.
+
+### Agenda
+- Decisiones nuevas: 15 ampliada (cierre anual + distribución a socias), 16 reembolsos con
+  sobreprecio (con la regla de que una factura de reembolso no mezcla honorarios: la opción (a)
+  son dos facturas), 17 depósitos de fondos del caso sin asiento, 18 facturar algo que no es
+  un servicio legal. **18 decisiones en total.**
+- Decisión 3 solo HON-OTROS; decisión 4 con el mayor de QuickBooks de enero a julio.
+- Sección nueva **18. Preguntas para las licenciadas**: HON-FAM, tarjeta de crédito (no hay
+  cuenta de tarjeta por pagar en el plan), reembolsos con sobreprecio.
+- Tiempos: 4 h en total, sesiones de 1 h 55 y 2 h 05.
+
+### Excel NIIF
+- La lista desplegable queda con **Operación, Inversión y Financiamiento** (acta del 09/09).
+
 ## [Josuarth pasa al equipo: contraseña rotada, agenda y Excel NIIF] - 2026-09-26
 
 Josuarth Torres dejó RM Consultores y tiene una alianza con Integra; Rose Molina sale del

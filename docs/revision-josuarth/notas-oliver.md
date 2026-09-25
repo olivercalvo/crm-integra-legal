@@ -39,9 +39,14 @@ en total, igual que el fixture. ⚠️ En producción la `025` todavía no corri
 subcategoría todavía dice `ingreso` / `costo` / `gasto_operativo`. La planilla muestra cómo
 van a quedar después de la `025`, que es lo que Josuarth tiene que confirmar (P-1(b)).
 
-⚠️ La lista incluye «Impuestos» y «Operaciones discontinuadas» por pedido de Oliver. El acta
-del 09/09 dice que con las nueve subcategorías alcanza; si Josuarth marca una de esas dos,
-hay que definir dónde va antes de aplicarla.
+La lista desplegable tiene solo **Operación, Inversión y Financiamiento** (26/09): el 09/09 se
+acordó que con esas tres alcanza.
+
+## Para mandar junto con el correo
+
+- `cuentas-de-resultado-niif.xlsx` (decisión 11).
+- **El mayor de QuickBooks de enero a julio de 2026** (decisión 4): Josuarth lo pidió el 09/09
+  para decidir la fecha de corte. No está en el repo; sale de QuickBooks.
 
 ## Números de control (antes de la reunión)
 

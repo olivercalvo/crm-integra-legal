@@ -68,15 +68,16 @@ haga en esta revisión llega a los libros del bufete ni a la DGI real.
 | 13 | Asientos manuales e importación | 20 |
 | 14 | Cierre de mes | 10 |
 | 15 | Reportes | 25 |
-| 17 | Decisiones que necesitamos de ti | 30 |
-| | **Total** | **3 h 40 min** |
+| 17 | Decisiones que necesitamos de ti | 40 |
+| 18 | Preguntas para las licenciadas | 10 |
+| | **Total** | **4 h** |
 
 Pasa de dos horas, así que proponemos **dos sesiones**:
 
-- **Sesión 1: ventas (1 h 40 min).** Bloques 3 a 8 (80 min), más las decisiones de ventas:
-  3, 10, 13 y 14 (20 min).
-- **Sesión 2: compras, libro y reportes (2 h).** Bloques 9 a 15 (110 min), más el resto de
-  las decisiones. Si alguna queda sin contestar, se responde por correo.
+- **Sesión 1: ventas (1 h 55 min).** Bloques 3 a 8 (80 min), más las decisiones de ventas:
+  3, 10, 13, 14, 16, 17 y 18 (25 min), y las preguntas para las licenciadas (10 min).
+- **Sesión 2: compras, libro y reportes (2 h 05 min).** Bloques 9 a 15 (110 min), más el resto
+  de las decisiones (15 min). Si alguna queda sin contestar, se responde por correo.
 
 Entre una sesión y la otra puedes entrar solo con tu usuario y repetir los scripts que
 quieras.
@@ -91,8 +92,9 @@ quieras.
 - **Estado:** 🟡 Listo con valor por defecto. Cinco servicios de honorarios tienen su cuenta
   (Corporativo 400001, Laboral 400003, Civil 400004, Penal 400005, Migratorio 400007). Los
   seis de reembolso van a 130003. **HON-FAM (Familia)** está en 400004 Derecho Civil como
-  propuesta nuestra, y **HON-OTROS** sigue en la cuenta vieja 4101, que está desactivada: por
-  eso esa factura no se deja emitir. Ver decisión 3.
+  propuesta nuestra; separarla de Civil lo deciden las licenciadas (sección 18). **HON-OTROS**
+  sigue en la cuenta vieja 4101, que está desactivada: por eso esa factura no se deja emitir.
+  Ver decisión 3.
 - **Ruta:** no tiene pantalla propia. Se ve en el asiento de cada factura, en el Libro Mayor.
 - **Script de prueba:** es el script 4.2 (cuenta desactivada) y el asiento del 4.1.
 - **Probado:** ✅ con el 4.1 y el 4.2.
@@ -776,20 +778,21 @@ asientos y 3.000 líneas por archivo.
 - **K-10.** ¿Montos con coma decimal (1.234,56) o con punto (1,234.56)? *Cambia:* hoy se
   aceptan los dos, y se rechaza lo ambiguo como `12.345`.
 
-### 3. Cuenta de ingreso de HON-FAM y HON-OTROS (punto 2.1)
+### 3. Cuenta de ingreso de HON-OTROS (punto 2.1)
 
-**Hoy:** HON-FAM (Honorarios de familia) va a **400004 Derecho Civil**, propuesta nuestra
-porque no hay cuenta de Familia y el derecho de familia es parte del derecho civil. HON-OTROS sigue en
-4101, desactivada, y **no se deja facturar**.
-**Cambia:** si confirmas 400004 para Familia, queda así; si quieres una cuenta propia, hay que
-crearla en el plan. Para HON-OTROS, la cuenta que elijas es la que queda; hasta entonces esa
-factura no sale.
+**Hoy:** el servicio *Honorarios, otros* (HON-OTROS) sigue apuntando a 4101, una cuenta del plan
+viejo que está desactivada, y **no se deja facturar**.
+**Pregunta:** ¿a qué cuenta de ingreso va?
+**Cambia:** la cuenta que elijas es la que queda; hasta entonces esa factura no sale.
+(HON-FAM, Familia, la deciden las licenciadas: sección 18.)
 
 ### 4. Fecha de corte de los saldos iniciales
 
 **Hoy:** el acta del 09/09 dice *al 30 de junio de 2026; el sistema arranca a registrar desde
 julio*, pero no lo tenemos confirmado por escrito, y las cuentas cargadas llevan otra fecha.
 **Necesitamos:** que lo confirmes por escrito.
+**Te vamos a mandar:** el mayor de QuickBooks de enero a julio de 2026, que pediste el 09/09
+para decidir la fecha.
 **Cambia:** la fecha que muestra el mayor en la fila de saldo inicial, el primer mes que se
 puede cerrar, y la fecha del asiento de apertura (decisión 5).
 
@@ -871,10 +874,93 @@ criterio para las dos.
 **Pregunta:** ¿el bufete emite notas de débito (por ejemplo, para cobrar un recargo sobre una
 factura ya emitida)? Si no, se deja fuera.
 
-### 15. Distribución a socias como asiento
+### 15. Cierre anual del ejercicio y distribución a socias
 
-**Hoy:** la línea *Distribución a Socias* del Estado de Resultado es un **cálculo** para que
-el resultado cierre en cero. La cuenta 300004 no tiene movimientos.
-**Pregunta:** ¿el cierre del ejercicio lleva un asiento real contra 300004? ¿En qué fecha y con
-qué periodicidad (anual, mensual)?
-**Cambia:** con asiento, el número sale del Diario y no del reporte.
+**Hoy:** no existe un cierre del ejercicio. El 1 de enero no pasa nada automático: los meses
+del año nuevo ya están abiertos y se sigue registrando, pero las cuentas de ingreso, costo y
+gasto **no vuelven a cero**. Siguen acumulando lo de todos los años.
+- El Estado de Resultado sin fechas suma todo lo registrado; con fechas, muestra solo ese
+  rango.
+- El Balance muestra el resultado como un renglón calculado, *Utilidad del Ejercicio*, con
+  todo lo acumulado.
+- La línea *Distribución a Socias* del Estado de Resultado también es un **cálculo** para que
+  el resultado cierre en cero. La cuenta 300004 no tiene movimientos.
+- Hoy el cierre se podría hacer a mano con un asiento de diario al 31/12, pero el sistema no
+  lo arma.
+
+**Pregunta:** ¿el cierre del ejercicio lleva un asiento real que deje las cuentas de resultado
+en cero? ¿Contra qué cuenta: 300003 Utilidad del Ejercicio, 300004 Distribución a Socias, o
+primero una y después la otra? ¿Con qué fecha, y la distribución a socias es anual o mensual?
+**Cambia:** con asiento, el Estado de Resultado del año nuevo arranca en cero, el número de la
+distribución sale del Diario y no del reporte, y el sistema puede armar ese asiento solo al
+cerrar diciembre.
+
+### 16. Reembolsos con sobreprecio
+
+**Hoy:** en la reunión del 09/09 se vio que al cliente a veces se le cobra más que el gasto
+real, y esa diferencia es ingreso del bufete: el cliente la reporta a la DGI como pago a
+Integra. El sistema hoy manda **toda** la línea de reembolso a 130003, exenta. Si se factura
+100 por un gasto de 80, en 130003 quedan 20 a favor que nadie pasa a ingreso. Además, una
+factura de reembolso **no puede llevar líneas de honorarios** (lo pediste el 17/09).
+
+**Opciones:**
+- **(a)** Facturar el reembolso por el monto exacto (exento, contra 130003) y la diferencia
+  como "gestión", ingreso con ITBMS. Como no se mezclan, son **dos facturas**: una de
+  reembolso y otra de honorarios. Hace falta crear el servicio "gestión" con su cuenta de
+  ingreso.
+- **(b)** Facturar todo como reembolso y que tú pases cada mes el sobrante de 130003 a
+  ingreso con un asiento de diario. No cambia nada en el sistema, pero ese ingreso queda sin
+  ITBMS y sin factura que lo respalde.
+
+**Pregunta:** ¿cuál usamos? Se decide junto con las licenciadas (sección 18).
+
+### 17. El dinero que el cliente deposita para los gastos del trámite
+
+**Hoy:** en cada caso, la sección **Cobros** registra lo que el cliente entrega para pagar los
+gastos del trámite. Ese registro **no genera asiento**: no tiene banco ni cuenta, y el dinero
+no entra al libro. Al libro llega después, cuando se factura el reembolso y se cobra esa
+factura.
+**Pregunta:** ¿ese depósito tiene que registrarse en el libro cuando entra? Si sí, ¿contra qué
+cuentas? Por ejemplo: debe 100003 Banco General Saldo Clientes, haber 200004 Anticipo de
+Clientes (o haber 130003). ¿Y en qué banco entra normalmente?
+**Cambia:** con asiento, cada depósito pediría el banco y dejaría su asiento. La factura de
+reembolso tendría que descontar ese anticipo en vez de dejar una cuenta por cobrar nueva.
+
+### 18. Facturar algo que no es un servicio legal
+
+**Hoy:** no se puede. Cada línea de una factura necesita un servicio del catálogo, que dice a
+qué cuenta de ingreso va. El catálogo solo tiene honorarios y reembolsos, y no hay pantalla
+para agregar un servicio: se hace por fuera del sistema. Por ejemplo, la venta de un equipo de
+la oficina hoy no se puede facturar desde aquí.
+**Pregunta:** ¿el bufete factura cosas que no son servicios legales? ¿Con qué frecuencia? En la
+venta de un activo, ¿cómo quieres el asiento (baja del activo y su depreciación, ganancia o
+pérdida)?
+**Cambia:** según la respuesta, se agrega al catálogo un servicio "otros ingresos" con su
+cuenta, o se arma un camino aparte para la venta de activos.
+
+---
+
+## 18. Preguntas para las licenciadas
+
+Estas no son del contador: las decide el bufete. Las repasamos contigo para que sepas qué se
+les va a preguntar.
+
+### L1. ¿Honorarios de familia separados de civil?
+
+**Hoy:** el servicio *Honorarios familia* (HON-FAM) va a **400004 Derecho Civil**, como
+propuesta nuestra. El 09/09 dijiste que separar Familia de Civil lo decide la dueña.
+**Cambia:** si lo quieren separado, se crea una cuenta de ingreso de Familia y el servicio pasa
+a esa cuenta. Si no, queda como está.
+
+### L2. ¿Pagan trámites con tarjeta de crédito?
+
+**Hoy:** un pago a proveedor o de un gasto de trámite sale siempre de un **banco**. No hay una
+cuenta de tarjeta de crédito por pagar en el plan.
+**Cambia:** si pagan con tarjeta, hace falta crear esa cuenta de pasivo y permitir elegirla como
+medio de pago. Después, el pago de la tarjeta al banco es otro movimiento.
+
+### L3. Reembolsos con sobreprecio: ¿cómo quieren facturarlo?
+
+Es la decisión 16, vista desde el bufete: ¿dos facturas (reembolso exacto y gestión aparte con
+ITBMS) o una sola de reembolso con el ajuste que hace el contador cada mes? Se decide junto con
+Josuarth.

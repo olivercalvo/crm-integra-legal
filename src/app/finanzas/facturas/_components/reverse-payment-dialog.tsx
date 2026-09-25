@@ -47,6 +47,8 @@ const TEXTOS = {
   cobro: {
     endpoint: (id: string) => `/api/finanzas/payments/${id}/reverse`,
     cosa: "cobro",
+    el: "el",
+    este: "este",
     aplicadoA: "aplicado a",
     consecuencia: "el cobro queda anulado y la factura vuelve a mostrar el saldo pendiente",
     siOcurrio: "si el cobro sí ocurrió, hay que registrarlo de nuevo",
@@ -58,6 +60,8 @@ const TEXTOS = {
   pago: {
     endpoint: (id: string) => `/api/finanzas/supplier-payments/${id}/reverse`,
     cosa: "pago",
+    el: "el",
+    este: "este",
     aplicadoA: "aplicado a",
     consecuencia: "el pago queda anulado y la compra vuelve a mostrar el saldo pendiente",
     siOcurrio: "si el pago sí ocurrió, hay que registrarlo de nuevo",
@@ -69,6 +73,8 @@ const TEXTOS = {
   gasto: {
     endpoint: (id: string) => `/api/expenses/${id}/reverse`,
     cosa: "gasto de trámite",
+    el: "el",
+    este: "este",
     aplicadoA: "del caso",
     consecuencia: "el gasto queda anulado y sale de la cuenta por pagar",
     siOcurrio: "si el gasto sí ocurrió, hay que registrarlo de nuevo desde el caso",
@@ -80,6 +86,8 @@ const TEXTOS = {
   asiento: {
     endpoint: (id: string) => `/api/finanzas/asientos/${id}/reverse`,
     cosa: "asiento",
+    el: "el",
+    este: "este",
     aplicadoA: "del libro",
     // Un asiento manual no tiene documento que actualizar: el efecto empieza y
     // termina en el libro, y decirlo así evita que alguien espere otra cosa.
@@ -103,6 +111,8 @@ const TEXTOS = {
   nota_credito: {
     endpoint: (id: string) => `/api/finanzas/credit-notes/${id}/reverse`,
     cosa: "nota de crédito",
+    el: "la",
+    este: "esta",
     aplicadoA: "de la factura",
     consecuencia: "la nota de crédito queda anulada y la factura recupera su saldo",
     siOcurrio: "si había que acreditar, hay que emitir otra nota de crédito",
@@ -225,7 +235,7 @@ export function ReversePaymentDialog({
         disabled={disabled || isPending}
         className="inline-flex min-h-[40px] items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={`Reversar ${t.cosa} de ${paymentLabel}`}
-        title={`Reversar este ${t.cosa} (asiento ${asiento.entry_number})`}
+        title={`Reversar ${t.este} ${t.cosa} (asiento ${asiento.entry_number})`}
       >
         <Undo2 size={14} />
         Reversar
@@ -254,7 +264,7 @@ export function ReversePaymentDialog({
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
             <div className="space-y-1">
               <p>
-                Vas a reversar el {t.cosa} de{" "}
+                Vas a reversar {t.el} {t.cosa} de{" "}
                 <span className="font-semibold text-integra-navy">{paymentLabel}</span>{" "}
                 {t.aplicadoA} <span className="font-mono font-semibold">{invoiceNumber}</span>.
               </p>

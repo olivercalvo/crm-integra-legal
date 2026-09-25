@@ -409,7 +409,7 @@ export function SectionExpenseForm({
                 onChange={(e) => elegirProveedor(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[48px] text-sm focus:border-integra-navy focus:outline-none"
               >
-                <option value="">— Sin proveedor —</option>
+                <option value="">Sin proveedor</option>
                 {proveedores.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.legal_name}
@@ -480,7 +480,7 @@ export function SectionExpenseForm({
                     <option value="">Elija la cuenta…</option>
                     {bancos.map((b) => (
                       <option key={b.code} value={b.code}>
-                        {b.code} — {b.name}
+                        {b.code} · {b.name}
                       </option>
                     ))}
                   </select>

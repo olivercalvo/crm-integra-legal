@@ -382,7 +382,7 @@ export function BusinessExpenseForm(props: Props) {
               <option value="">Sin ficha de proveedor</option>
               {props.suppliers.map((sp) => (
                 <option key={sp.id} value={sp.id}>
-                  {sp.supplier_number} — {sp.trade_name?.trim() || sp.legal_name}
+                  {sp.supplier_number} · {sp.trade_name?.trim() || sp.legal_name}
                 </option>
               ))}
             </select>
@@ -780,7 +780,7 @@ export function BusinessExpenseForm(props: Props) {
                 <option value="">Elija la cuenta…</option>
                 {props.bancos.map((b) => (
                   <option key={b.code} value={b.code}>
-                    {b.code} — {b.name}
+                    {b.code} · {b.name}
                   </option>
                 ))}
               </select>

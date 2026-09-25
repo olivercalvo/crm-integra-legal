@@ -192,7 +192,7 @@ export function BusinessExpenseList({ expenses }: Props) {
                 {e.account && (
                   <p className="mt-1 text-[11px] text-gray-500">
                     <span className="font-mono">{e.account.code}</span>{" "}
-                    <span className="text-gray-400">— {e.account.name}</span>
+                    <span className="text-gray-400">· {e.account.name}</span>
                   </p>
                 )}
               </div>

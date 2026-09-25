@@ -252,9 +252,9 @@ export function GastosIndividualesTable({
       {verTodas && (
         <p className="text-xs text-gray-500">
           Un gasto de trámite casi siempre va al{" "}
-          <span className="font-medium">fondo del cliente</span> —si se le refactura— o a
-          una <span className="font-medium">cuenta de costo</span> —si lo absorbe el
-          bufete—. Las demás son para casos puntuales: un viaje a una audiencia va a{" "}
+          <span className="font-medium">fondo del cliente</span>, si se le refactura, o a
+          una <span className="font-medium">cuenta de costo</span>, si lo absorbe el
+          bufete. Las demás son para casos puntuales: un viaje a una audiencia va a{" "}
           <span className="font-medium">Gastos de viajes</span>. Si dudás, es una de las
           habituales.
         </p>
@@ -439,7 +439,7 @@ export function GastosIndividualesTable({
                             onChange={(e) => clasificarUna(lineaId, e.target.value)}
                             className="block min-w-[13rem] rounded-md border border-amber-300 bg-amber-50 px-2 min-h-[40px] text-xs text-amber-900 focus:border-integra-navy focus:outline-none"
                           >
-                            <option value="">Sin clasificar — elegir cuenta</option>
+                            <option value="">Sin clasificar: elegir cuenta</option>
                             {opciones.map((c) => (
                               <option key={c.code} value={c.code}>
                                 {c.code} · {c.name}
@@ -460,7 +460,7 @@ export function GastosIndividualesTable({
                           href={`/finanzas/gastos-tramite/${r.id}`}
                           className="text-xs font-semibold text-amber-700 hover:underline"
                         >
-                          {r.lineas_sin_clasificar} líneas sin clasificar — abrir
+                          {r.lineas_sin_clasificar} líneas sin clasificar: abrir
                         </Link>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs text-green-700">

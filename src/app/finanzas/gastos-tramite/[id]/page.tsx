@@ -279,7 +279,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
         <SupplierPaymentsSection
           expenseId={gasto.id}
           destino="tramite"
-          expenseLabel={`${gasto.concept}${gasto.case_code ? ` — ${gasto.case_code}` : ""}`}
+          expenseLabel={`${gasto.concept}${gasto.case_code ? ` · ${gasto.case_code}` : ""}`}
           total={gasto.amount}
           amountPaid={gasto.amount_paid}
           payments={pagos}

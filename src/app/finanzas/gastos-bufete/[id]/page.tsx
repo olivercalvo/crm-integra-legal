@@ -149,7 +149,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                   expense.account ? (
                     <span>
                       <span className="font-mono">{expense.account.code}</span>
-                      <span className="ml-1 text-gray-500">— {expense.account.name}</span>
+                      <span className="ml-1 text-gray-500">· {expense.account.name}</span>
                     </span>
                   ) : (
                     <span className="text-gray-400">Sin clasificar</span>
@@ -216,7 +216,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                             <span>
                               <span className="font-mono">{l.chart_account_code}</span>
                               {l.chart_account_name && (
-                                <span className="ml-1 text-gray-500">— {l.chart_account_name}</span>
+                                <span className="ml-1 text-gray-500">· {l.chart_account_name}</span>
                               )}
                             </span>
                           ) : (

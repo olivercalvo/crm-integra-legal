@@ -237,7 +237,7 @@ export function ExpenseLinesEditor({
           sin cuenta y suponga que es opcional. */}
       <p className="text-xs text-gray-500">
         Cada línea necesita su cuenta contable. Los gastos anteriores a esta pantalla
-        pueden no tenerla —se cargaron antes de que el sistema la pidiera— pero un gasto
+        pueden no tenerla (se cargaron antes de que el sistema la pidiera), pero un gasto
         nuevo no se guarda sin ella.
       </p>
 
@@ -313,7 +313,7 @@ export function ExpenseLinesEditor({
                       (e("chart_account_code") ? "border-red-300" : "border-gray-300")
                     }
                   >
-                    <option value="">— Elija una —</option>
+                    <option value="">Elija una</option>
                     {sugeridas.length > 0 && (
                       <optgroup label="Habituales">
                         {sugeridas.map((c) => (

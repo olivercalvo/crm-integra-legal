@@ -139,7 +139,7 @@ export function BusinessExpenseFilters({ accounts, initial }: Props) {
           <option value="">Todas las cuentas</option>
           {accounts.map((a) => (
             <option key={a.code} value={a.code}>
-              {a.code} — {a.name}
+              {a.code} · {a.name}
             </option>
           ))}
         </select>

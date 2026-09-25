@@ -102,8 +102,8 @@ export function PostToLedgerButton({ expenseId, total }: Props) {
       <p className="text-xs text-gray-600">
         <strong className="font-semibold">Un asiento no se borra.</strong> Desde ese momento
         el gasto queda inmutable: no se le puede cambiar el monto, la fecha, el proveedor ni
-        las líneas. Si queda mal se <strong className="font-semibold">reversa</strong> —queda
-        el asiento y su espejo, los dos en el libro—, así que revise el detalle antes de
+        las líneas. Si queda mal se <strong className="font-semibold">reversa</strong> (queda
+        el asiento y su espejo, los dos en el libro), así que revise el detalle antes de
         confirmar. El comprobante sí se puede seguir adjuntando.
       </p>
       {error && (

@@ -38,7 +38,7 @@ export function TaxCodeSelect({
           error ? "border-red-300" : "border-gray-300"
         } ${disabled ? "opacity-50 cursor-not-allowed" : "hover:border-integra-navy focus:border-integra-navy focus:outline-none"}`}
       >
-        {!value && <option value="">— impuesto —</option>}
+        {!value && <option value="">Impuesto</option>}
         {taxCodes.map((t) => (
           <option key={t.id} value={t.id}>
             {t.name} ({(t.rate * 100).toFixed(t.rate * 100 === 0 ? 0 : 1)}%)

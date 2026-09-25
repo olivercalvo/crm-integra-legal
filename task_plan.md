@@ -2,7 +2,7 @@
 
 ## >>> 25/09/2026 (cierre) — REVISIÓN CON JOSUARTH PREPARADA <<<
 
-- ✅ Agenda en `docs/revision-josuarth/agenda.md`: 49 puntos + lo nuevo, 24 scripts probados con
+- ✅ Agenda en `docs/revision-josuarth/agenda.md`: 49 puntos + lo nuevo, 29 scripts probados con
   clics, 15 decisiones, dos sesiones (1 h 40 y 2 h).
 - 🔴 **Antes de mandar el correo (Oliver):** cómo entra Josuarth al Preview sin cuenta de Vercel
   (hoy 302 a SSO). Y abrir la ventana de revisión de SOP-019: no resetear, no migrar, no sembrar.

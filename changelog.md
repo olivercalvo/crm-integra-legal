@@ -6,11 +6,13 @@ Sin código. `docs/revision-josuarth/agenda.md` + los dos Excel de la importaci�
 `main` sigue en `24b227a`; FAC-HON-000007 no se tocó.
 
 - Base: la auditoría de 49 puntos del 21/09 (bloques 1 a 8) cruzada con lo construido después.
-- **Scripts recorridos con clics en el Preview (usuario admin):** 24 de 24 pasaron. 12 completos
-  (errores DGI, cuenta inactiva sin quemar número, tope de 182 h, excedente rechazado, precarga
-  del proveedor, clonar y descuadre, importación con errores y vista previa válida, cierre y
-  reapertura de enero 2026, ITBMS, ER, balance, antigüedad, mayor 130003). El resto hasta el
-  botón de confirmar, para no gastar los documentos de la demostración.
+- **Scripts recorridos con clics en el Preview (usuario admin): 29, ninguno falló.** 18 completos
+  (errores DGI, cuenta inactiva sin quemar número, tope de 182 h, reembolso a 130003, RUC del
+  cliente, excedente rechazado, precarga del proveedor, clonar y descuadre, importación con
+  errores y vista previa válida, cierre y reapertura de enero 2026, ITBMS, ER, balance,
+  antigüedad, mayor 130003, entre otros). 9 hasta el botón de confirmar, para no gastar los
+  documentos de la demostración. 2 sin repetir hoy (anular ante la DGI y reenviar), probados
+  completos el 25/09 por la tarde.
 - Verificado en la base después: `invoice_hon` 21, recibos 7, pagos a proveedor 7, NCP 2, último
   asiento 75, enero 2026 `abierto` (la pantalla lo marca "Reabierto").
 - **Hallazgos sin corregir** (agenda §16): el detalle de compra deja vacío el proveedor

@@ -117,13 +117,13 @@ export async function fetchCreditNoteEfacturaBundle(
 
   if (!clientRow) {
     throw new MutationError(
-      "La nota de crédito no tiene cliente asociado. Esto es inesperado — comuníquese con soporte.",
+      "La nota de crédito no tiene cliente asociado. Esto es inesperado: comuníquese con soporte.",
       500
     );
   }
   if (!invoiceRow) {
     throw new MutationError(
-      "La nota de crédito no tiene factura asociada. Esto es inesperado — comuníquese con soporte.",
+      "La nota de crédito no tiene factura asociada. Esto es inesperado: comuníquese con soporte.",
       500
     );
   }

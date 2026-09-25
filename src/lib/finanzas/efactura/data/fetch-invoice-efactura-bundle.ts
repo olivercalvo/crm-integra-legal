@@ -88,7 +88,7 @@ export async function fetchInvoiceEfacturaBundle(
     | undefined;
   if (!clientRow) {
     throw new MutationError(
-      "La factura no tiene cliente asociado. Esto es inesperado — comuníquese con soporte.",
+      "La factura no tiene cliente asociado. Esto es inesperado: comuníquese con soporte.",
       500
     );
   }

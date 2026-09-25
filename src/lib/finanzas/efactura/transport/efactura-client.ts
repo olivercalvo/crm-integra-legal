@@ -68,7 +68,7 @@ async function request(
     // Importante: NO incluir el API Key en el mensaje de error.
     const text = await res.text().catch(() => "");
     throw new Error(
-      `eFactura ${method} ${path} fallo: HTTP ${res.status} ${res.statusText} — ${trimBody(text)}`,
+      `eFactura ${method} ${path} fallo: HTTP ${res.status} ${res.statusText}: ${trimBody(text)}`,
     );
   }
 

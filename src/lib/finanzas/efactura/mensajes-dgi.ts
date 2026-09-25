@@ -63,7 +63,7 @@ const CATALOGO: Record<string, TraduccionDgi> = {
   "1602": {
     queePaso: "La DGI no encuentra el RUC del cliente en su registro de contribuyentes.",
     queHacer:
-      "Verifique el RUC con el cliente — puede estar mal copiado, o el cliente puede no estar " +
+      "Verifique el RUC con el cliente: puede estar mal copiado, o el cliente puede no estar " +
       "inscrito ante la DGI. Corríjalo en la ficha del cliente y vuelva a enviar.",
     donde: "ficha del cliente",
   },

@@ -319,7 +319,7 @@ export async function anularFacturaAnteDgi(
       intento,
       mensaje:
         "La DGI contestó algo que el sistema no puede interpretar, así que NO se modificó " +
-        "nada: la factura sigue emitida y el libro sin tocar. Puede volver a intentarlo — si " +
+        "nada: la factura sigue emitida y el libro sin tocar. Puede volver a intentarlo: si " +
         "el documento ya hubiera quedado anulado, la DGI lo informa y la anulación sigue " +
         "desde donde quedó. Si vuelve a pasar, avise a soporte con el número de esta factura. " +
         clasificacion.mensaje,

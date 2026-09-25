@@ -157,8 +157,8 @@ export interface PacErrorClassification {
 }
 
 const DUPLICATE_MESSAGE =
-  "El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado — " +
-  "revise en el portal del PAC antes de reintentar.";
+  "El PAC indicó que el documento ya existe. Posiblemente ya fue autorizado. " +
+  "Revise en el portal del PAC antes de reintentar.";
 
 /**
  * Clasifica un rechazo del PAC. `fallbackSummary` se usa cuando no hay códigos

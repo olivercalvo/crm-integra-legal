@@ -1403,12 +1403,12 @@ Mientras haya una revisión abierta con alguien de afuera del equipo:
 | 🔴 **Prohibido** | `node scripts/apply-staging-sql.mjs --reset`. Borra la base entera. Es lo único que de verdad no se puede hacer |
 | 🔴 **Prohibido** | Aplicar migraciones a staging (`run-sql.mjs`) |
 | 🔴 **Prohibido** | Correr los seeds. Son idempotentes, pero `seed:staging` alinea el catálogo de impuestos y puede pisar algo que el revisor cambió a propósito |
-| 🟡 **Con aviso** | Deploys de Preview desde `develop`. El código cambia bajo sus pies. Si es necesario, se le avisa y se anota qué cambió |
-| ✅ **Libre** | Commitear en `develop` sin desplegar. Trabajar en local contra… (ver abajo) |
+| 🔴 **Prohibido** | **Push a `develop`** (corregido el 25/09/2026). El revisor entra por un Shareable Link de Vercel del deploy de `develop`, y ese enlace **siempre muestra la última versión de la rama**: cualquier push le cambia el sistema en medio de la revisión. Antes esta fila decía "con aviso"; no alcanza |
+| ✅ **Libre** | Trabajar en una **rama aparte** (`revision/<tema>`), con sus propios pushes y su Preview. Se integra a `develop` cuando cierra la ventana. ⚠️ Ese Preview usa la **misma base de staging**: ahí no se tocan los documentos que usa la revisión |
 
 **El trabajo NO se detiene.** Lo que se detiene es tocar *ese* ambiente. Durante una ventana de
-revisión se sigue commiteando en `develop`, y las pruebas locales que necesiten resetear la base
-esperan a que cierre la ventana. Si hay que probar algo destructivo antes, se pide explícitamente
+revisión se trabaja en una rama aparte (no en `develop`, que es lo que ve el revisor), y las
+pruebas locales que necesiten resetear la base esperan a que cierre la ventana. Si hay que probar algo destructivo antes, se pide explícitamente
 la interrupción de la ventana — no se hace y se avisa después.
 
 ### Cómo se abre y se cierra
@@ -1416,7 +1416,8 @@ la interrupción de la ventana — no se hace y se avisa después.
 1. **Antes de abrir:** dejar staging en un estado reproducible desde cero
    (`--reset` + `seed:staging` + `seed:asientos`) y anotar en `changelog.md` los números de
    control con los que queda. Sin eso no hay a qué volver.
-2. **Se abre** cuando se manda el correo con el acceso.
+2. **Se abre** cuando se manda el correo con el acceso. Desde ese momento `develop` queda
+   congelado: ni un push hasta que cierre.
 3. **Se cierra** cuando el revisor confirma que terminó, o cuando su feedback ya está recibido
    por escrito.
 4. **Al cerrar:** se aplica el feedback, se resetea, se vuelve a sembrar, y recién ahí se abre la

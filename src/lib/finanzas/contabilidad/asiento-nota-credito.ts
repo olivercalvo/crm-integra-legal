@@ -68,7 +68,10 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     // Los mensajes de la factura nombran "la factura NC-…": se dicen para la NC.
     return {
       ...comoFactura,
-      mensaje: comoFactura.mensaje.replace(/registrar la factura/g, "registrar la nota de crédito"),
+      mensaje: comoFactura.mensaje
+        .replace(/registrar la factura/g, "registrar la nota de crédito")
+        // Desde el 25/09 el rechazo por cuenta inactiva dice "emitir la factura".
+        .replace(/emitir (la factura|esta factura)/g, "registrar la nota de crédito"),
     };
   }
 

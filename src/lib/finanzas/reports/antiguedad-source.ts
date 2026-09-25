@@ -232,7 +232,7 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
   // `total − amount_paid`, no el total, y entran las dos que no están `pagado`.
   const { data, error } = await db
     .from("business_expenses")
-    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total, amount_paid")
+    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total, amount_paid, balance_due")
     .eq("tenant_id", tenantId)
     .neq("status", "pagado")
     .order("due_date");
@@ -251,9 +251,11 @@ async function gastosPendientes(db: DB, tenantId: string): Promise<DocumentoPend
     due_date: string | null;
     total: number | string;
     amount_paid: number | string;
+    balance_due: number | string;
   };
 
-  const saldoDe = (g: Fila) => round2(Number(g.total) - Number(g.amount_paid ?? 0));
+  // `balance_due` (066): total − pagado − acreditado por NC del proveedor.
+  const saldoDe = (g: Fila) => round2(Number(g.balance_due));
   const filas = ((data ?? []) as unknown as Fila[]).filter((g) => saldoDe(g) > 0.005);
 
   // El nombre sale de la ficha, en una query aparte. Así dos gastos del mismo
@@ -468,13 +470,13 @@ async function sinAsientoPagar(db: DB, tenantId: string): Promise<SinAsiento> {
 
   const { data } = await db
     .from("business_expenses")
-    .select("id, total, amount_paid")
+    .select("id, balance_due")
     .eq("tenant_id", tenantId)
     .neq("status", "pagado");
 
   const documentos = { cantidad: 0, monto: 0 };
-  for (const g of (data ?? []) as { id: string; total: number | string; amount_paid: number | string }[]) {
-    const saldo = Number(g.total) - Number(g.amount_paid ?? 0);
+  for (const g of (data ?? []) as { id: string; balance_due: number | string }[]) {
+    const saldo = Number(g.balance_due);
     if (saldo > 0.005 && !conAsientoGasto.has(g.id)) {
       documentos.cantidad += 1;
       documentos.monto += saldo;

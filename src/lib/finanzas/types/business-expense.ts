@@ -80,6 +80,10 @@ export interface BusinessExpenseRow {
   total: string | number;          // GENERATED ALWAYS AS (subtotal + tax_amount)
   /** Derivado por el trigger de la 048 desde `supplier_payments`. No se escribe. */
   amount_paid: string | number;
+  /** Derivado (066) desde las NC del proveedor vigentes. No se escribe. */
+  credited_total?: string | number;
+  /** GENERATED (066): total − amount_paid − credited_total. */
+  balance_due?: string | number;
   status: BusinessExpenseStatus;
   payment_date: string | null;
   payment_method: BusinessExpensePaymentMethod | null;

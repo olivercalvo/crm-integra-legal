@@ -24,6 +24,7 @@
  */
 import {
   comprasDelPeriodo,
+  cuentaLaNotaDeCompra,
   cuentaLaNotaDeVenta,
   ventasDelPeriodo,
 } from "@/lib/finanzas/reports/vat-calculo";
@@ -212,7 +213,7 @@ export async function mesesConActividad(
     return /^\d{4}-\d{2}$/.test(s) ? s : null;
   };
 
-  const [facturas, gastos, pagos, notas] = await Promise.all([
+  const [facturas, gastos, pagos, notas, notasCompra] = await Promise.all([
     db
       .from("invoices")
       .select("issue_date")
@@ -222,6 +223,7 @@ export async function mesesConActividad(
     db.from("tax_payments").select("payment_date").eq("tenant_id", tenantId),
     // Un mes que sólo tiene una NC (de una factura de otro mes) también cuenta.
     db.from("credit_notes").select("issue_date").eq("tenant_id", tenantId),
+    db.from("supplier_credit_notes").select("issue_date").eq("tenant_id", tenantId),
   ]);
 
   const meses = new Set<string>();
@@ -237,7 +239,7 @@ export async function mesesConActividad(
     const m = mes(r.payment_date);
     if (m) meses.add(m);
   }
-  for (const r of (notas.data ?? []) as { issue_date: string }[]) {
+  for (const r of [...(notas.data ?? []), ...(notasCompra.data ?? [])] as { issue_date: string }[]) {
     const m = mes(r.issue_date);
     if (m) meses.add(m);
   }
@@ -322,12 +324,56 @@ export async function getVatSummary(
     .lte("payment_date", to)
     .order("payment_date", { ascending: true });
 
-  const [posRes, cancRes, expRes, payRes] = await Promise.all([
+  // 5) NOTAS DE CRÉDITO DE COMPRA del mes (3.5, 066): bajan el crédito fiscal
+  //    en el mes DE LA NC. Las anuladas no cuentan (lo decide
+  //    `cuentaLaNotaDeCompra` en vat-calculo.ts).
+  const ncCompraPromise = db
+    .from("supplier_credit_notes")
+    .select(
+      `id, credit_note_number, supplier_document_number, issue_date, status,
+       subtotal_total, tax_total, grand_total,
+       compra:business_expenses!supplier_credit_notes_business_expense_id_fkey(supplier_name, description)`
+    )
+    .eq("tenant_id", tenantId)
+    .gte("issue_date", from)
+    .lte("issue_date", to)
+    .order("issue_date", { ascending: true });
+
+  const [posRes, cancRes, expRes, payRes, ncCompraRes] = await Promise.all([
     positivePromise,
     cancellationPromise,
     expensesPromise,
     paymentsPromise,
+    ncCompraPromise,
   ]);
+  if (ncCompraRes.error) {
+    console.error("[finanzas/reports] vat-summary: error supplier_credit_notes", ncCompraRes.error);
+  }
+  const notasDeCompra = (ncCompraRes.data ?? []) as unknown as Array<{
+    id: string;
+    credit_note_number: string;
+    supplier_document_number: string;
+    issue_date: string;
+    status: string;
+    subtotal_total: string | number;
+    tax_total: string | number;
+    grand_total: string | number;
+    compra: { supplier_name: string | null; description: string } | null;
+  }>;
+  // Base gravada de cada NC de compra: sus líneas con ITBMS > 0.
+  const baseGravadaPorNc = new Map<string, number>();
+  if (notasDeCompra.length > 0) {
+    const { data: lns } = await db
+      .from("supplier_credit_note_lines")
+      .select("credit_note_id, amount, tax_amount")
+      .eq("tenant_id", tenantId)
+      .in("credit_note_id", notasDeCompra.map((n) => n.id));
+    for (const l of (lns ?? []) as { credit_note_id: string; amount: number | string; tax_amount: number | string }[]) {
+      if (Number(l.tax_amount) > 0) {
+        baseGravadaPorNc.set(l.credit_note_id, (baseGravadaPorNc.get(l.credit_note_id) ?? 0) + Number(l.amount));
+      }
+    }
+  }
 
   if (posRes.error) {
     console.error("[finanzas/reports] vat-summary: error invoices+", posRes.error);
@@ -483,7 +529,12 @@ export async function getVatSummary(
         : tax > 0 ? sub : 0;
       return { subtotal: sub, tax_amount: tax, base_gravada: base };
     }),
-    [] // NC de compra: se suman cuando exista la 3.5.
+    notasDeCompra.map((n) => ({
+      status: n.status,
+      subtotal_total: Number(n.subtotal_total),
+      tax_total: Number(n.tax_total),
+      base_gravada: baseGravadaPorNc.get(n.id) ?? 0,
+    }))
   );
 
   // ── Sumatoria de pagos al DGI ──────────────────────────────────────────
@@ -510,7 +561,7 @@ export async function getVatSummary(
     { number: 3, label: "ITBMS cobrado sobre ventas", value: line3, hint: "Débito fiscal del período: ITBMS de las facturas menos el de las notas de crédito." },
     { number: 4, label: "Total compras del período", value: line4, hint: "Compras del bufete a proveedores" },
     { number: 5, label: "Compras gravadas con ITBMS", value: line5, hint: "Solo las líneas de compra con ITBMS > 0; en una compra mixta, la parte exenta no cuenta" },
-    { number: 6, label: "ITBMS recuperable sobre compras", value: line6, hint: "Crédito fiscal del período" },
+    { number: 6, label: "ITBMS recuperable sobre compras", value: line6, hint: "Crédito fiscal del período: ITBMS de las compras menos el de las notas de crédito de proveedores." },
     { number: 7, label: "Saldo del período (débito − crédito)", value: line7, is_total: true, hint: "Línea 3 − Línea 6" },
     { number: 8, label: "ITBMS adeudado de períodos anteriores", value: line8, hint: "ITBMS que quedó debiéndose de meses anteriores. Está en cero porque todavía no se ha cerrado ningún período." },
     { number: 9, label: "Pagos a DGI realizados este período", value: line9, hint: "Suma de los pagos a la DGI con fecha dentro del mes." },
@@ -573,6 +624,23 @@ export async function getVatSummary(
     total: Number(e.total),
     status: e.status,
   }));
+
+  // Las NC de compra vigentes van al detalle de compras, en negativo.
+  for (const n of notasDeCompra.filter((x) => cuentaLaNotaDeCompra(x))) {
+    expenseDetail.push({
+      id: n.id,
+      expense_date: n.issue_date,
+      supplier_name: n.compra?.supplier_name ?? null,
+      description: `Nota de crédito ${n.credit_note_number} (documento del proveedor ${n.supplier_document_number}) sobre: ${n.compra?.description ?? ""}`,
+      account_code: null,
+      account_name: null,
+      subtotal: -Number(n.subtotal_total),
+      tax_rate: 0,
+      tax_amount: -Number(n.tax_total),
+      total: -Number(n.grand_total),
+      status: "nota_credito",
+    });
+  }
 
   const paymentDetail: TaxPaymentDetailRow[] = payments.map((p) => ({
     id: p.id,

@@ -79,6 +79,8 @@ export type SourceType =
    */
   | "pago_proveedor"
   | "nota_credito"
+  /** NC de COMPRA (3.5, migración `066`). `source_id` = la NC del proveedor. */
+  | "nota_credito_proveedor"
   | "manual"
   | "reversion"
   | "apertura";
@@ -90,6 +92,7 @@ export const SOURCE_TYPES: SourceType[] = [
   "pago",
   "pago_proveedor",
   "nota_credito",
+  "nota_credito_proveedor",
   "manual",
   "reversion",
   "apertura",

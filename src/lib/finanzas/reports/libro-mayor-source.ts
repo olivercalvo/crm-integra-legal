@@ -345,6 +345,7 @@ export async function loadDestinosDeOrigen(
     // tiene pantalla propia. Antes se comprobaba en `invoices`, lo que con el
     // source_id de una NC no encontraba nada y dejaba el renglón sin enlace.
     nota_credito: { tabla: "credit_notes", ruta: RUTA_DEL_DOCUMENTO.nota_credito },
+    nota_credito_proveedor: { tabla: "supplier_credit_notes", ruta: RUTA_DEL_DOCUMENTO.nota_credito_proveedor },
     gasto: { tabla: "business_expenses", ruta: RUTA_DEL_DOCUMENTO.gasto },
     // Bloque 4 (D4): el gasto de trámite se abre desde el Mayor. Faltaba desde
     // el 03/09 y salía sin "Abrir el documento" (1.7 de la auditoría).
@@ -419,10 +420,13 @@ export async function loadDestinosDeOrigen(
   //    que exista y se enlaza a su pantalla, igual que el asiento original.
   const idsReversion = Array.from(idsPorTipo.get("reversion") ?? []).filter((id) => !destinos.has(id));
   if (idsReversion.length > 0) {
-    const [facs, tramites] = await Promise.all([
+    const [facs, tramites, ncps] = await Promise.all([
       db.from("invoices").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
       db.from("expenses").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
+      // La reversión de una NC de compra (066) lleva el source_id de la NC.
+      db.from("supplier_credit_notes").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
     ]);
+    for (const row of (ncps.data ?? []) as { id: string }[]) destinos.set(row.id, RUTA_DEL_DOCUMENTO.nota_credito_proveedor(row.id));
     if (facs.error) console.error("[finanzas/mayor] loadDestinosDeOrigen(invoices/reversion) failed", facs.error);
     if (tramites.error) console.error("[finanzas/mayor] loadDestinosDeOrigen(expenses/reversion) failed", tramites.error);
     for (const row of (facs.data ?? []) as { id: string }[]) destinos.set(row.id, RUTA_DEL_DOCUMENTO.factura(row.id));

@@ -63,7 +63,7 @@ test("🔒 Antigüedad por pagar: entran las compras y los gastos de trámite EN
     journal_entry_lines: [],
     journal_entries: [],
     business_expenses: [
-      { id: "c1", supplier_id: "prov-1", supplier_name: null, description: "Alquiler", expense_date: "2026-02-01", due_date: "2026-03-01", total: 1000, amount_paid: 400 },
+      { id: "c1", supplier_id: "prov-1", supplier_name: null, description: "Alquiler", expense_date: "2026-02-01", due_date: "2026-03-01", total: 1000, amount_paid: 400, balance_due: 600 },
     ],
     // El loader filtra por posted_entry_id/status en la base; el fake devuelve
     // todo y acá se comprueba que el saldo y el tercero salen bien.
@@ -77,7 +77,7 @@ test("🔒 Antigüedad por pagar: entran las compras y los gastos de trámite EN
   const { documentos } = await loadAntiguedad(db as never, TENANT, "pagar");
   const porId = new Map(documentos.map((d) => [d.id, d]));
 
-  assert.equal(porId.get("c1")?.saldo, 600, "la compra: total − pagado");
+  assert.equal(porId.get("c1")?.saldo, 600, "la compra: balance_due (total − pagado − acreditado por NC, 066)");
   assert.equal(porId.get("t1")?.saldo, 200, "el trámite: amount − amount_paid");
   assert.equal(porId.get("t1")?.sourceType, "gasto_tramite");
   assert.equal(porId.get("t1")?.tercero, "REGISTRO PÚBLICO", "agrupa por la ficha del proveedor");

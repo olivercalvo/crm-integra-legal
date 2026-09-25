@@ -33,6 +33,9 @@ export const RUTA_DEL_DOCUMENTO: Record<string, (id: string) => string> = {
   // movimiento. Antes apuntaba a `/finanzas/facturas/{id}` asumiendo que el
   // source_id era la factura — con la NC parcial habría sido un 404.
   nota_credito: (id) => `/finanzas/notas-credito/${id}`,
+  // NC de COMPRA (3.5, 25/09/2026): otra tabla (`supplier_credit_notes`) y otra
+  // pantalla. Su asiento lleva `source_id` = la NC del proveedor.
+  nota_credito_proveedor: (id) => `/finanzas/notas-credito-proveedor/${id}`,
   gasto: (id) => `/finanzas/gastos-bufete/${id}`,
   // ───────────────────────────────────────────────────────────────────────────
   // `gasto_tramite` es un source_type APARTE de `gasto`, y no por prolijidad

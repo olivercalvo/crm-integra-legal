@@ -346,6 +346,7 @@ const TIPO_TRANSACCION_ES: Record<string, string> = {
   pago: "Cobro",
   pago_proveedor: "Pago a proveedor",
   nota_credito: "Nota de crédito",
+  nota_credito_proveedor: "Nota de crédito de proveedor",
   manual: "Asiento de diario",
   reversion: "Reversión",
   apertura: "Asiento de apertura",

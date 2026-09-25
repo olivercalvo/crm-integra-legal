@@ -78,7 +78,7 @@ export async function createSupplierPayment(
   if (destino.kind === "compra") {
     const { data: compra, error: errCompra } = await db
       .from("business_expenses")
-      .select("id, description, status, total, amount_paid")
+      .select("id, description, status, total, amount_paid, credited_total")
       .eq("tenant_id", tenantId)
       .eq("id", destino.id)
       .maybeSingle();
@@ -88,7 +88,10 @@ export async function createSupplierPayment(
     if (!compra) {
       throw new MutationError("Compra no encontrada", 404);
     }
-    total = Number(compra.total);
+    // Desde la 066 el saldo descuenta lo que el proveedor acreditó con NC: se
+    // paga el total NETO, no el total. (saldo = total − acreditado − pagado =
+    // balance_due.)
+    total = Number(compra.total) - Number(compra.credited_total ?? 0);
     pagado = Number(compra.amount_paid);
     status = String(compra.status);
   } else {

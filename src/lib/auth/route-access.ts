@@ -204,6 +204,9 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   // Emitir una NC es de admin y abogada (`POST /api/finanzas/credit-notes`),
   // y se hace desde el detalle de la factura, no desde una ruta propia.
   /^\/finanzas\/notas-credito\/[^/]+$/,
+  // NC de COMPRA (3.5, 25/09/2026): el contador tiene CRUD de compras, así que
+  // registra y reversa la NC del proveedor, y entra a su detalle. Sin listado.
+  /^\/finanzas\/notas-credito-proveedor\/[^/]+$/,
 ];
 
 /**

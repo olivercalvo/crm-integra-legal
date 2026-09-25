@@ -90,7 +90,7 @@ export async function fetchSupplierPaymentPdfBundle(
         id, kind, payment_number, payment_date, amount, method, reference, notes, status,
         payment_account_code, created_by, business_expense_id, expense_id,
         compra:business_expenses!supplier_payments_business_expense_id_fkey(
-          id, description, expense_date, supplier_invoice_number, total, amount_paid,
+          id, description, expense_date, supplier_invoice_number, total, amount_paid, balance_due,
           supplier_name, supplier_ruc,
           supplier:suppliers!business_expenses_supplier_id_fkey(
             supplier_number, legal_name, trade_name, ruc, dv, email, phone
@@ -124,7 +124,7 @@ export async function fetchSupplierPaymentPdfBundle(
   };
   type Compra = {
     id: string; description: string; expense_date: string; supplier_invoice_number: string | null;
-    total: string | number; amount_paid: string | number | null;
+    total: string | number; amount_paid: string | number | null; balance_due?: string | number | null;
     supplier_name: string | null; supplier_ruc: string | null; supplier: Uno<Proveedor>;
   };
   // Arco exclusivo (049): el pago es de una compra O de un gasto de trámite.
@@ -238,7 +238,8 @@ export async function fetchSupplierPaymentPdfBundle(
         expense_date: compra.expense_date,
         supplier_invoice_number: compra.supplier_invoice_number,
         total,
-        saldo_actual: Math.round((total - num(compra.amount_paid)) * 100) / 100,
+        // `balance_due` (066) ya descuenta lo acreditado por NC del proveedor.
+        saldo_actual: Math.round((compra.balance_due != null ? num(compra.balance_due) : total - num(compra.amount_paid)) * 100) / 100,
       },
       banco,
       asiento: je

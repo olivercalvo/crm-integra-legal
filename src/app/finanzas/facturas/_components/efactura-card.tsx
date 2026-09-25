@@ -99,6 +99,7 @@ export function EfacturaCard({
 
       {feEstado === "no_emitida" && (
         <NoEmitidaSection
+          yaExisteAnteLaDgi={!!cufe && cufe.trim().length > 0}
           invoiceId={invoiceId}
           invoiceNumber={invoiceNumber}
           grandTotal={grandTotal}
@@ -143,6 +144,7 @@ export function EfacturaCard({
 // ---------------------------------------------------------------------------
 
 function NoEmitidaSection({
+  yaExisteAnteLaDgi,
   invoiceId,
   invoiceNumber,
   grandTotal,
@@ -150,6 +152,7 @@ function NoEmitidaSection({
   receptorNombre,
   canEmitToPac,
 }: {
+  yaExisteAnteLaDgi: boolean;
   invoiceId: string;
   invoiceNumber: string;
   grandTotal: number;
@@ -157,6 +160,21 @@ function NoEmitidaSection({
   receptorNombre: string | null;
   canEmitToPac: boolean;
 }) {
+  // Caso B de 9C: CUFE cargado del portal. La factura ya existe ante la DGI y
+  // `fe_estado` sigue en `no_emitida` a propósito. Ofrecer «Enviar al PAC» acá
+  // emitía un segundo documento fiscal por la misma venta. El servidor también
+  // lo rechaza (409 en emitInvoiceToEfactura).
+  if (yaExisteAnteLaDgi) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5 text-center">
+        <p className="text-sm text-gray-700">
+          Esta factura ya existe ante la DGI: su CUFE se cargó del portal. No
+          se envía al PAC desde acá, porque sería un segundo documento fiscal
+          por la misma venta.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-dashed border-integra-gold/40 bg-integra-navy/[0.02] p-5 text-center">
       <p className="mb-4 text-sm text-gray-700">

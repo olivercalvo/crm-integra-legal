@@ -116,6 +116,7 @@ interface InvoiceMeta {
   fe_estado: FeEstado;
   punto_facturacion: string | null;
   numero_documento: number | null;
+  dgi_cufe: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +147,20 @@ export async function emitInvoiceToEfactura(
         : inv.fe_estado === "pending"
           ? "Esta factura ya tiene un envío en curso al PAC. Espere a que se resuelva o reintente luego."
           : `No se puede reenviar: estado fiscal "${inv.fe_estado}".`,
+      409
+    );
+  }
+
+  // 🔴 Una factura que YA existe ante la DGI no se vuelve a mandar. Es el
+  //    caso B de 9C: el CUFE se copió del portal (`dgi_cufe_origen =
+  //    'portal_050'`) y `fe_estado` sigue en `no_emitida` a propósito, porque
+  //    este sistema no la emitió. Sin este corte, «Enviar al PAC» emitía un
+  //    SEGUNDO documento fiscal por la misma venta y, al autorizarse, pisaba el
+  //    CUFE del portal con el nuevo. Encontrado con clics el 25/09/2026.
+  if (inv.dgi_cufe && inv.dgi_cufe.trim().length > 0) {
+    throw new MutationError(
+      "Esta factura ya existe ante la DGI: tiene un CUFE cargado del portal. " +
+        "No se vuelve a enviar, porque sería un segundo documento fiscal por la misma venta.",
       409
     );
   }
@@ -401,7 +416,7 @@ async function loadInvoiceMeta(
 ): Promise<InvoiceMeta> {
   const { data, error } = await db
     .from("invoices")
-    .select("id, status, fe_estado, punto_facturacion, numero_documento")
+    .select("id, status, fe_estado, punto_facturacion, numero_documento, dgi_cufe")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -418,6 +433,7 @@ async function loadInvoiceMeta(
     status: data.status as string,
     fe_estado: (data.fe_estado as FeEstado) ?? "no_emitida",
     punto_facturacion: (data.punto_facturacion as string | null) ?? null,
+    dgi_cufe: (data.dgi_cufe as string | null) ?? null,
     numero_documento:
       data.numero_documento !== null && data.numero_documento !== undefined
         ? Number(data.numero_documento)

@@ -2,7 +2,11 @@
  * Apunta UN cliente de staging al RUC/DV del emisor MIENTRAS se emite desde la
  * PANTALLA, y lo restaura en un `finally`.
  *
- *   npx tsx scripts/efactura/sostener-receptor-emisor.ts <client_number> <invoice_number> [minutos=10]
+ *   npx tsx scripts/efactura/sostener-receptor-emisor.ts <client_number> <FAC-… | NC-…> [minutos=10]
+ *
+ * Sirve igual para una FACTURA que para una NOTA DE CRÉDITO: la NC lleva como
+ * receptor al cliente de la factura, así que el sandbox la rechaza por el mismo
+ * 1601/1602 si el cliente es ficticio.
  *
  * Es el mismo procedimiento que `prueba5-emitir-con-receptor-valido.ts` (el
  * sandbox rechaza con 1601/1602 todo RUC de receptor ficticio; emisor =
@@ -55,11 +59,14 @@ async function main() {
     .maybeSingle();
   if (!cli) throw new Error(`No existe el cliente ${CLIENT_NUMBER}.`);
 
+  const esNc = INVOICE_NUMBER.startsWith("NC-");
+  const tabla = esNc ? "credit_notes" : "invoices";
+  const columnaNumero = esNc ? "credit_note_number" : "invoice_number";
   const { data: inv } = await db
-    .from("invoices")
-    .select("id, invoice_number, fe_estado, client_id")
+    .from(tabla)
+    .select("id, fe_estado, client_id")
     .eq("tenant_id", cli.tenant_id)
-    .eq("invoice_number", INVOICE_NUMBER)
+    .eq(columnaNumero, INVOICE_NUMBER)
     .maybeSingle();
   if (!inv) throw new Error(`No existe la factura ${INVOICE_NUMBER}.`);
   if (inv.client_id !== cli.id) throw new Error(`${INVOICE_NUMBER} no es de ${CLIENT_NUMBER}.`);
@@ -67,7 +74,7 @@ async function main() {
 
   const original = { tax_id: cli.tax_id, ruc: cli.ruc, digito_verificador: cli.digito_verificador };
   console.log(`Cliente ${CLIENT_NUMBER} (${cli.name}) · original tax_id ${enmascarar(cli.tax_id as string)} · dv ${cli.digito_verificador}`);
-  console.log(`Factura ${INVOICE_NUMBER} · fe_estado inicial: ${estadoInicial}`);
+  console.log(`Documento ${INVOICE_NUMBER} · fe_estado inicial: ${estadoInicial}`);
 
   let restaurado = false;
   const restaurar = async () => {
@@ -96,7 +103,7 @@ async function main() {
     let visto = estadoInicial;
     while (Date.now() < limite) {
       await new Promise((r) => setTimeout(r, 3000));
-      const { data } = await db.from("invoices").select("fe_estado").eq("id", inv.id).maybeSingle();
+      const { data } = await db.from(tabla).select("fe_estado").eq("id", inv.id).maybeSingle();
       const ahora = (data?.fe_estado as string) ?? visto;
       if (ahora !== visto) console.log(`  fe_estado: ${visto} → ${ahora}`);
       visto = ahora;

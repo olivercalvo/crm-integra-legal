@@ -188,6 +188,7 @@ class FakeQuery {
           fe_estado: b.invoice.fe_estado,
           punto_facturacion: b.invoice.punto_facturacion,
           numero_documento: b.invoice.numero_documento,
+          dgi_cufe: b.invoice.dgi_cufe ?? null,
         },
         error: null,
       };
@@ -630,4 +631,35 @@ test("una emisión que arranca en 'error' REUSA el número y no llama al allocat
   assert.equal(b.seq.ultimo, 5, "la secuencia no se movió");
   assert.equal(b.invoice.numero_documento, 4, "se reusó el 4");
   assert.equal(b.invoice.fe_estado, "authorized");
+});
+
+test("🔴 una factura con CUFE cargado del portal NO se manda: 409 sin tocar nada ni salir a la red", async () => {
+  // Caso B de 9C: el CUFE se copió del portal y fe_estado sigue en
+  // 'no_emitida' a propósito. Mandarla emitiría un SEGUNDO documento fiscal
+  // por la misma venta y pisaría el CUFE del portal (encontrado con clics el
+  // 25/09/2026 en FAC-HON-000002).
+  const b = makeBackend({
+    invoice: {
+      id: INVOICE_ID,
+      invoice_number: "FAC-HON-000123",
+      invoice_kind: "HONORARIOS",
+      status: "emitida",
+      fe_estado: "no_emitida",
+      punto_facturacion: null,
+      numero_documento: null,
+      dgi_cufe: "FE0120000000000000-0-0000-0500000000000000000000000000000000000000",
+    },
+  });
+  const db = makeDb(b);
+  const restore = stubFetch(b, () => RESPUESTA_AUTORIZADA);
+  try {
+    await assert.rejects(
+      () => emitInvoiceToEfactura(db as never, TENANT, USER, INVOICE_ID),
+      (err: unknown) => (err as { status?: number }).status === 409
+    );
+  } finally {
+    restore();
+  }
+  assert.deepEqual(b.diario, ["SELECT invoices (meta: status y fe_estado)"]);
+  assert.equal(b.seq.ultimo, 5, "no se quemó ningún número");
 });

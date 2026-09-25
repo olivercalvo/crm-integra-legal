@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { BookOpenCheck, CalendarDays } from "lucide-react";
+import { BookOpenCheck, CalendarDays, FileSpreadsheet, History } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
@@ -137,6 +137,24 @@ export default async function AsientosPage({
           <CalendarDays size={16} />
           Ver los asientos registrados
         </Link>
+        {/* 7.5: importar desde Excel. Mismas rutas bajo /finanzas/asientos, que
+            sólo abren admin y contador (ADMIN_CONTADOR_ONLY_PREFIXES). */}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/finanzas/asientos/importar"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md bg-integra-navy px-4 text-sm font-semibold text-white hover:bg-integra-navy/90"
+          >
+            <FileSpreadsheet size={16} />
+            Importar desde Excel
+          </Link>
+          <Link
+            href="/finanzas/asientos/importaciones"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+          >
+            <History size={16} />
+            Ver importaciones
+          </Link>
+        </div>
       </div>
 
       {avisoDelClon && (

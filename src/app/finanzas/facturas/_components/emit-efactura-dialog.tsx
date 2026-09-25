@@ -1,5 +1,6 @@
 "use client";
 
+import { etiquetaDeEnvio } from "@/lib/finanzas/efactura/etiquetas-de-envio";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, AlertCircle, RotateCw } from "lucide-react";
@@ -41,7 +42,7 @@ interface Props {
   isRetry: boolean;
   /**
    * Rótulo del botón, cuando quien lo usa sabe algo que este componente no.
-   * El detalle de la factura lo usa para distinguir "Reenviar a la DGI" de
+   * El detalle de la factura lo usa para distinguir «Reenviar a la DGI» de
    * "Consultar y reenviar" cuando el envío anterior quedó INCIERTO — ahí no
    * hubo rechazo y decir "reintentar" sugiere que algo falló.
    */
@@ -50,7 +51,7 @@ interface Props {
 }
 
 /**
- * Botón "Enviar al PAC" + modal de confirmación con preview de receptor/total
+ * Botón «Enviar a la DGI» + modal de confirmación con preview de receptor/total
  * y advertencia fiscal. Dispara POST /api/finanzas/invoices/[id]/emit-efactura.
  *
  * Comportamiento por feEstado de la respuesta:
@@ -83,7 +84,7 @@ export function EmitEfacturaDialog({
     "pac_rejected" | "pac_duplicate" | "transport" | "incierto" | null
   >(null);
 
-  const ctaLabel = etiqueta ?? (isRetry ? "Reenviar a la DGI" : "Enviar al PAC");
+  const ctaLabel = etiqueta ?? etiquetaDeEnvio(isRetry);
   const ctaIcon = isRetry ? RotateCw : Send;
   const Icon = ctaIcon;
 
@@ -104,7 +105,7 @@ export function EmitEfacturaDialog({
         // 400/403/409/500 — error de pre-condición o sistémico (NO es
         // "PAC rechazó"). El backend devuelve { error: string }.
         if (!res.ok) {
-          setError(data.error ?? "No se pudo enviar al PAC.");
+          setError(data.error ?? "No se pudo enviar a la DGI.");
           return;
         }
 
@@ -130,7 +131,7 @@ export function EmitEfacturaDialog({
         }
 
         // result.feEstado === 'error' → dejar modal abierto con detalles
-        setError(result.errorMessage ?? "El PAC rechazó la factura.");
+        setError(result.errorMessage ?? "La DGI no aceptó la factura.");
         setErrorHint(result.errorHint ?? null);
         setCodRes(result.codRes ?? []);
         setErrorKind(result.errorKind);
@@ -166,9 +167,9 @@ export function EmitEfacturaDialog({
         onClose={() => !isPending && setOpen(false)}
         onConfirm={submit}
         loading={isPending}
-        title={isRetry ? "Reintentar envío al PAC" : "Enviar al PAC eFactura"}
+        title={etiquetaDeEnvio(isRetry)}
         confirmButtonText={
-          isRetry ? "Sí, reintentar envío" : "Sí, enviar al PAC"
+          isRetry ? "Sí, reenviar a la DGI" : "Sí, enviar a la DGI"
         }
         cancelButtonText="Cerrar"
       >
@@ -182,8 +183,8 @@ export function EmitEfacturaDialog({
           <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
             <p>
               <span className="font-semibold">Verifique antes de enviar.</span>{" "}
-              Si el receptor o los montos están incorrectos, la corrección
-              tendrá que hacerse en eFactura (no en el CRM).
+              Si el receptor o los montos están incorrectos, una vez autorizada
+              la corrección es anularla o emitir una nota de crédito.
             </p>
           </div>
 
@@ -261,7 +262,7 @@ export function EmitEfacturaDialog({
           {isPending && (
             <p className="text-xs text-gray-500 inline-flex items-center gap-1">
               <Loader2 size={12} className="animate-spin" />
-              Enviando al PAC…
+              Enviando a la DGI…
             </p>
           )}
         </div>

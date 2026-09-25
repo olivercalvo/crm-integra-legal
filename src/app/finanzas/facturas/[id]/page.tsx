@@ -207,7 +207,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // la orquestación T2). Esto cubre el caso "factura legacy con CUFE
   // capturado a mano" como puente — para facturas nuevas que arrancan
   // en no_emitida sin manual data, NO se renderiza (sería ruido frente
-  // a la card nueva que ya tiene el CTA "Enviar al PAC"). Una vez que
+  // a la card nueva que ya tiene el CTA "Enviar a la DGI"). Una vez que
   // la factura entra al flujo automático (T2 asigna punto+número), este
   // fallback se oculta y la card EfacturaCard toma el relevo.
   const hasLegacyDgiData =
@@ -536,7 +536,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
 
           {/* Facturación Electrónica (orquestación PAC eFactura PTY).
               Muestra el estado fiscal real (no_emitida / pending / authorized /
-              error / canceled) y el CTA "Enviar al PAC" o "Reintentar" según
+              error / canceled) y el CTA "Enviar a la DGI" o "Reintentar" según
               corresponda. */}
           {showEfacturaCard && (
             <EfacturaCard

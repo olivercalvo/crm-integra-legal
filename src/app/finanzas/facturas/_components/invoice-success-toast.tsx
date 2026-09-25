@@ -84,7 +84,7 @@ export function InvoiceSuccessToast() {
     palette = "warning";
   } else if (fe === "error") {
     icon = <AlertCircle size={18} className="text-red-600 shrink-0" />;
-    message = "El PAC rechazó la factura. Revise el detalle.";
+    message = "La DGI no aceptó la factura. Revise el detalle.";
     palette = "danger";
   } else if (converted) {
     const count = parseInt(converted, 10);

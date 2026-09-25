@@ -155,8 +155,13 @@ test("🔴 el aviso le DICE a la persona que corregir no lo borra", () => {
 test("el botón dice REENVIAR, no 'reintentar'", () => {
   // "Reintentar" suena a que falló el sistema. Lo que falló fue el documento
   // ante la DGI, y lo que hay que hacer es mandarlo de nuevo ya corregido.
+  // Desde el 25/09/2026 el texto vive en UN lugar (etiquetas-de-envio.ts) y el
+  // diálogo lo toma de ahí: ver etiquetas-de-envio.test.ts.
   const src = leer("src/app/finanzas/facturas/_components/emit-efactura-dialog.tsx");
-  assert.match(src, /"Reenviar a la DGI"/);
+  const etiquetas = leer("src/lib/finanzas/efactura/etiquetas-de-envio.ts");
+  assert.match(src, /etiquetaDeEnvio\(isRetry\)/);
+  assert.match(etiquetas, /"Reenviar a la DGI"/);
+  assert.doesNotMatch(src, /[Rr]eintentar env[ií]o/);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 "use client";
 
+import { REENVIAR_A_LA_DGI } from "@/lib/finanzas/efactura/etiquetas-de-envio";
 import { useState } from "react";
 import {
   Zap,
@@ -53,13 +54,13 @@ interface Props {
 /**
  * Card "Facturación Electrónica" en el detalle de factura. Render por
  * fe_estado:
- *   - no_emitida → CTA "Enviar al PAC" (gated por canEmitToPac).
+ *   - no_emitida → CTA «Enviar a la DGI» (gated por canEmitToPac).
  *   - pending    → indicador "Pendiente PAC", sin CTA. La transición la
  *                  hace la respuesta T4 del orquestador o un reconciliador
  *                  futuro.
  *   - authorized → datos oficiales DGI (CUFE, protocolo, fecha, punto+nro,
  *                  link QR si vino).
- *   - error      → mensaje genérico + CTA "Reintentar". El detalle de
+ *   - error      → mensaje genérico + CTA «Reenviar a la DGI». El detalle de
  *                  códigos vive en el dialog cuando se reintenta y falla
  *                  nuevamente, o en fe_emisiones (consulta manual).
  *   - canceled   → leyenda "Anulada en DGI" (lectura).
@@ -161,7 +162,7 @@ function NoEmitidaSection({
   canEmitToPac: boolean;
 }) {
   // Caso B de 9C: CUFE cargado del portal. La factura ya existe ante la DGI y
-  // `fe_estado` sigue en `no_emitida` a propósito. Ofrecer «Enviar al PAC» acá
+  // `fe_estado` sigue en `no_emitida` a propósito. Ofrecer «Enviar a la DGI» acá
   // emitía un segundo documento fiscal por la misma venta. El servidor también
   // lo rechaza (409 en emitInvoiceToEfactura).
   if (yaExisteAnteLaDgi) {
@@ -169,7 +170,7 @@ function NoEmitidaSection({
       <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5 text-center">
         <p className="text-sm text-gray-700">
           Esta factura ya existe ante la DGI: su CUFE se cargó del portal. No
-          se envía al PAC desde acá, porque sería un segundo documento fiscal
+          se envía a la DGI desde acá, porque sería un segundo documento fiscal
           por la misma venta.
         </p>
       </div>
@@ -178,7 +179,7 @@ function NoEmitidaSection({
   return (
     <div className="rounded-lg border border-dashed border-integra-gold/40 bg-integra-navy/[0.02] p-5 text-center">
       <p className="mb-4 text-sm text-gray-700">
-        Esta factura todavía no fue enviada al PAC. Al enviar, la DGI emite
+        Esta factura todavía no fue enviada a la DGI. Al enviarla, la DGI emite
         el CUFE oficial y los datos quedan registrados aquí.
       </p>
       {canEmitToPac ? (
@@ -192,7 +193,7 @@ function NoEmitidaSection({
         />
       ) : (
         <p className="text-xs italic text-gray-500">
-          Solo admin o abogada pueden enviar facturas al PAC.
+          Solo admin o abogada pueden enviar facturas a la DGI.
         </p>
       )}
     </div>
@@ -341,7 +342,7 @@ function ErrorSection({
           <p className="font-semibold">
             {rechazo
               ? "La DGI no aceptó esta factura"
-              : "El último envío al PAC falló"}
+              : "El último envío a la DGI falló"}
           </p>
 
           {rechazo ? (
@@ -390,7 +391,7 @@ function ErrorSection({
           receptorRuc={receptorRuc}
           receptorNombre={receptorNombre}
           isRetry
-          etiqueta={incierto ? "Consultar y reenviar a la DGI" : "Reenviar a la DGI"}
+          etiqueta={incierto ? "Consultar y reenviar a la DGI" : REENVIAR_A_LA_DGI}
         />
       ) : (
         <p className="text-xs italic text-gray-500">

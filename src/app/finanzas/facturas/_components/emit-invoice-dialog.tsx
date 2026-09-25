@@ -96,9 +96,9 @@ export function EmitInvoiceDialog({
 
           <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
             <p>
-              <span className="font-semibold">Esta factura interna no es válida fiscalmente.</span>{" "}
-              Recuerda replicarla en eFactura para emitir la factura electrónica
-              oficial.
+              <span className="font-semibold">Todavía no vale ante la DGI.</span>{" "}
+              Después de emitirla, envíala a la DGI desde esta misma factura con el
+              botón «Enviar a la DGI».
             </p>
           </div>
 

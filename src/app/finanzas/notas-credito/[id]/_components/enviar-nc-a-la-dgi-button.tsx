@@ -1,5 +1,6 @@
 "use client";
 
+import { etiquetaDeEnvio } from "@/lib/finanzas/efactura/etiquetas-de-envio";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, AlertCircle, Loader2 } from "lucide-react";
@@ -91,7 +92,7 @@ export function EnviarNcALaDgiButton({
         className="inline-flex min-h-[48px] items-center gap-2 rounded-md bg-integra-navy px-4 py-2 text-sm font-medium text-white hover:bg-integra-navy/90"
       >
         <Send size={16} />
-        {esReintento ? "Reintentar envío a la DGI" : "Enviar a la DGI"}
+        {etiquetaDeEnvio(esReintento)}
       </button>
 
       <ConfirmationModal
@@ -104,8 +105,8 @@ export function EnviarNcALaDgiButton({
           }
         }}
         onConfirm={enviar}
-        title={esReintento ? "Reintentar el envío a la DGI" : "Enviar la nota de crédito a la DGI"}
-        confirmButtonText={isPending ? "Enviando…" : "Enviar a la DGI"}
+        title={esReintento ? "Reenviar la nota de crédito a la DGI" : "Enviar la nota de crédito a la DGI"}
+        confirmButtonText={isPending ? "Enviando…" : etiquetaDeEnvio(esReintento)}
         loading={isPending}
       >
         <div className="space-y-3 text-sm text-gray-700">

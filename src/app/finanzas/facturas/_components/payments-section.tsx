@@ -194,7 +194,7 @@ export function PaymentsSection({
                       {reversado && p.reversion ? (
                         <span
                           className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800"
-                          title={`${p.reversion.reason} — ${formatDateTime(p.reversion.reversed_at)}${
+                          title={`${p.reversion.reason} · ${formatDateTime(p.reversion.reversed_at)}${
                             p.reversion.reversed_by_name ? ` · ${p.reversion.reversed_by_name}` : ""
                           }`}
                         >

@@ -255,7 +255,7 @@ export function PaymentFormFields({
           <option value="">Elija la cuenta…</option>
           {bancos.map((b) => (
             <option key={b.code} value={b.code}>
-              {b.code} — {b.name}
+              {b.code} · {b.name}
             </option>
           ))}
         </select>

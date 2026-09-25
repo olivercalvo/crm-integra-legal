@@ -225,7 +225,7 @@ export async function fetchSupplierPaymentPdfBundle(
         : {
             // Sin ficha ni texto libre: se dice, no se deja en blanco (D2 de
             // Oliver: el aviso de que falta la ficha tiene que ser visible).
-            name: compra.supplier_name ?? "(sin proveedor — cargue la ficha para los anexos de renta)",
+            name: compra.supplier_name ?? "(sin proveedor: cargue la ficha para los anexos de renta)",
             supplier_number: null,
             ruc: compra.supplier_ruc,
             dv: null,

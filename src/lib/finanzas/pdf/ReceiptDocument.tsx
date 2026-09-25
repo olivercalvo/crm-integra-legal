@@ -210,7 +210,7 @@ export function ReceiptDocument(props: ReceiptDocumentProps) {
             <Text style={styles.infoColHeading}>DATOS DEL COBRO</Text>
             <InfoLine label="Fecha" value={formatDateEs(payment_date)} bold />
             <InfoLine label="Método" value={method_label} bold />
-            <InfoLine label="Banco" value={banco ? `${banco.code} — ${banco.name}` : null} />
+            <InfoLine label="Banco" value={banco ? `${banco.code} · ${banco.name}` : null} />
             <InfoLine label="Referencia" value={reference} />
             <InfoLine label="Moneda" value="USD (B/.)" />
             <InfoLine label="Asiento" value={asiento ? `N° ${asiento.entry_number} · ${formatDateEs(asiento.transaction_date)}` : null} />

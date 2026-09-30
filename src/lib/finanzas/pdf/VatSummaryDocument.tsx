@@ -274,7 +274,7 @@ export function VatSummaryDocument({ result }: VatSummaryDocumentProps) {
         {/* Title */}
         <Text style={s.title}>Resumen mensual de ITBMS</Text>
         <Text style={s.subtitle}>
-          Devengado por fecha de emisión · {fmtDateEs(period.from)} al {fmtDateEs(period.to)}
+          Devengado por fecha de registro · {fmtDateEs(period.from)} al {fmtDateEs(period.to)}
         </Text>
 
         {/* Tabla principal: 10 líneas */}

@@ -114,7 +114,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
           currentMonth={currentMonth}
         />
         <p className="text-xs text-gray-500">
-          Reporte generado {formatDate(result.generated_at)} · Devengado por fecha de emisión
+          Reporte generado {formatDate(result.generated_at)} · Devengado por fecha de registro
         </p>
       </div>
 

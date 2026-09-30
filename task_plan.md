@@ -3,19 +3,32 @@
 ## >>> 30/09/2026 — BLOQUE 1, E1 (FECHAS) EN LA RAMA `feat/bloque1-contable` <<<
 
 - ✅ Código y tests de E1 (plan §1). Commits locales, sin push.
-- ⏳ **Migraciones `068` y `069` sin aplicar**: esperan el «aplica» de Oliver. Son compatibles con
-  el código de `develop` (el trigger completa `accounting_date`; `develop` sigue mandando la
-  fecha de hoy, que la 069 también acepta), pero aplicarlas en staging es tocar la base que usa
-  el Preview de la revisión: decidir contra SOP-019.
-- ⏳ Recorrido en staging después de aplicar: factura de septiembre con registro en octubre, NC
-  con fecha elegida, reversión anterior al original (rechazo).
+- ✅ **Migraciones `068` y `069` aplicadas en staging** el 30/09/2026, con la ventana de SOP-019
+  cerrada. Verificación `068-069`: 6/6; las de la 046, 050, 055 y 060 en verde. En producción
+  van en la ventana del despliegue, después de la `067`.
+- ✅ Recorrido en localhost:3002 contra staging (30/09, sesión admin):
+  · Factura con documento 30/09 y registro 01/10 → FAC-HON-000025, asiento 93 en 2026-10; el
+    resumen de ITBMS de octubre la suma (100.00 / 7.00), septiembre no.
+  · NC con registro elegido 02/10 → NC-000020 (B/. 53.50), documento 30/09, asiento 94 en 2026-10.
+  · Reversión anterior al original (asiento 88, 29/09) → rechazo en pantalla y 422 en la ruta.
+  · Reversión en agosto cerrado (asiento 4, 15/08) → «El período 2026-08 está cerrado», sin
+    asiento ni correlativo. NC-000017 autorizada con fecha 31/08 → 422 sin intento ante la DGI.
+  · ⏳ La de las 19:00 (fecha propuesta = hoy en Panamá) se corre a esa hora.
+- 📋 Para E2 (pantalla): detalle del asiento con las fechas al revés, detalle de factura sin la
+  fecha de registro, detalle de NC sin rotular la de registro.
 - ⏳ Pregunta 5 de Josuarth (fechas futuras): hoy permitidas, `PERMITIR_FECHA_DE_REGISTRO_FUTURA`.
 - ⏳ P-1b (registro antes que el documento) y P-1e (vencimiento desde el documento) siguen
   abiertas; el código asume: sí se permite, y sí, desde el documento.
 - 📋 Fuera de E1: ~25 cálculos de «hoy» en UTC en el módulo Legal (tareas, comentarios, casos,
   prospectos, dashboard). No fechan asientos; FND-012.
 
-## >>> 🔒 DEVELOP CONGELADO — REVISIÓN CON JOSUARTH EN CURSO <<<
+## >>> ✅ VENTANA DE REVISIÓN CERRADA (30/09/2026) <<<
+
+- La revisión de Josuarth terminó el 28/09 y la reunión fue el 30/09. Oliver cerró la ventana
+  de SOP-019 el 30/09. Staging NO se reseteó. Con la ventana cerrada se aplicaron la `068` y la
+  `069` en staging (E1 del Bloque 1).
+
+## >>> (histórico) DEVELOP CONGELADO — REVISIÓN CON JOSUARTH <<<
 
 - 26/09/2026: **Josuarth Torres pasa al equipo** (alianza con Integra; ya no es de RM). Rose
   Molina sale del proyecto. Contraseña del contador de staging rotada; el Excel de la decisión

@@ -38,7 +38,12 @@ test("🔴 reversión anterior al original: se rechaza, nombrando el asiento y s
     que: "la reversión",
   });
   assert.ok(e);
-  assert.match(e!, /no puede ser anterior a la de el asiento 42 \(10\/09\/2026\)/);
+  assert.match(e!, /no puede ser anterior a la fecha del asiento 42 \(10\/09\/2026\)/);
+  const f = errorDeFechaDeRegistro({
+    fecha: "2026-09-01", hoy: HOY, periodoCerrado: false,
+    noAntesDe: { fecha: "2026-09-10", etiqueta: "la factura FAC-HON-000009" },
+  });
+  assert.match(f!, /anterior a la fecha de la factura FAC-HON-000009/);
 });
 
 test("la reversión el mismo día del original, o después, se acepta", () => {

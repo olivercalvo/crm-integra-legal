@@ -97,9 +97,12 @@ export function errorDeFechaDeRegistro(r: ReglaFechaDeRegistro): string | null {
     return `La fecha de registro (${dmy(fecha)}) no puede ser posterior a hoy (${dmy(r.hoy)}).`;
   }
   if (r.noAntesDe && fecha < r.noAntesDe.fecha) {
+    // "de" + "el asiento 88" se contrae: "del asiento 88".
+    const e = r.noAntesDe.etiqueta;
+    const deLo = e.startsWith("el ") ? `del ${e.slice(3)}` : `de ${e}`;
     return (
-      `La fecha de registro de ${que} (${dmy(fecha)}) no puede ser anterior a la de ` +
-      `${r.noAntesDe.etiqueta} (${dmy(r.noAntesDe.fecha)}).`
+      `La fecha de registro de ${que} (${dmy(fecha)}) no puede ser anterior a la fecha ` +
+      `${deLo} (${dmy(r.noAntesDe.fecha)}).`
     );
   }
   if (r.periodoCerrado) {

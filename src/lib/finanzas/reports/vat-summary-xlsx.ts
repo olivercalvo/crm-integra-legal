@@ -27,7 +27,7 @@ export function generateVatSummaryXlsxBuffer(result: VatSummaryResult): Buffer {
     ["Desde", result.period.from],
     ["Hasta", result.period.to],
     ["Generado", result.generated_at],
-    ["Criterio", "Devengado por fecha de emisión"],
+    ["Criterio", "Devengado por fecha de registro"],
     [],
     ["#", "Concepto", "Monto (B/.)"],
   ];

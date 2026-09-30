@@ -1440,6 +1440,12 @@ Números con los que quedó staging. Si alguno no coincide, el ambiente se tocó
 | Plan de cuentas | 64 activas |
 | Desfases de `amount_paid` | 0 |
 
+### Registro de ventanas
+
+| Ventana | Se abrió | Se cerró | Nota |
+|---|---|---|---|
+| Revisión de Josuarth del sistema contable | Correo con el acceso (26/09/2026) | **30/09/2026, formalmente, por Oliver.** La revisión terminó el 28/09 y la reunión fue el 30/09 | El paso 4 («resetear y volver a sembrar») **no se hizo**: staging conserva los datos de la revisión. Con la ventana ya cerrada, el mismo 30/09 se aplicaron en staging la `068` (fecha de registro) y la `069` (reversiones con fecha elegida) del Bloque 1, E1. `develop` sigue sin push: E1 vive en la rama `feat/bloque1-contable` |
+
 ---
 
 ## SOP-020: Proveedores — el RUC, el DV y el plazo de pago

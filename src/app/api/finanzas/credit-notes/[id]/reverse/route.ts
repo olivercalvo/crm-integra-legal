@@ -15,7 +15,7 @@ interface RouteParams {
  * POST /api/finanzas/credit-notes/[id]/reverse
  *
  * Reversa una nota de crédito contabilizada: asiento espejo con la fecha de
- * hoy y la NC marcada `anulada`, las dos en UNA transacción dentro del RPC
+ * registro elegida (hoy en Panamá si no viene) y la NC marcada `anulada`, las dos en UNA transacción dentro del RPC
  * `reverse_credit_note` (migración `060`).
  *
  * 🔴 El saldo de la factura NO se toca acá ni en el RPC: `credited_total` es
@@ -38,7 +38,7 @@ interface RouteParams {
  * Códigos: 200 reversada · 409 anulada en la DGI y falta el libro · 422 la DGI
  * rechazó · 502 no sabemos si llegó. Los mismos de `…/invoices/[id]/cancel`.
  *
- * Body esperado: { reason }
+ * Body esperado: { reason, fecha_registro? }
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
@@ -77,7 +77,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.userId,
       params.id,
       reason,
-      new Date()
+      new Date(),
+      undefined,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     switch (r.estado) {
       case "reversada":
@@ -96,6 +98,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const cuerpo: Record<string, unknown> = { error: err.message };
       // El 400 del motivo (15 caracteres si viaja a la DGI) va al campo.
       if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      // El 422 de la fecha de registro, a su campo.
+      if (err.fieldErrors) cuerpo.fieldErrors = err.fieldErrors;
       return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[api] POST credit-notes/[id]/reverse failed", err);

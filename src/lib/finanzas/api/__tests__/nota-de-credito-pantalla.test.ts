@@ -78,7 +78,9 @@ test("el detalle de la factura: Anular solo sin NC parcial y con el mes abierto;
     "si vuelve a armarse con condiciones sueltas, se desincroniza del servidor"
   );
   assert.match(src, /\{showCancel && \(\s*<CancelInvoiceDialog/);
-  assert.match(src, /periodoDeLaFacturaCerrado\(db, tenantId, String\(invoice\.issue_date\)\)/, "el MES de la factura (D4)");
+  // "El mes de la factura" es el de su fecha de REGISTRO desde la `068` (E1).
+  assert.match(src, /const registroDeLaFactura = String\(invoice\.accounting_date \?\? invoice\.issue_date\);/);
+  assert.match(src, /periodoDeLaFacturaCerrado\(db, tenantId, registroDeLaFactura\)/, "el MES de la factura (D4)");
   assert.match(src, /acreditadoPorLineaDeFactura\(db, tenantId, invoice\.id\)/);
   assert.match(src, /const acreditadaTotal = !isAnulada && grandTotal > 0 && creditedTotal >= grandTotal - 0\.005;/, "D3: derivado, no un status");
   assert.match(src, /\{acreditadaTotal && <AcreditadaTotalBadge \/>\}/);
@@ -94,7 +96,10 @@ test("cancelInvoice rechaza una factura con NC parcial (053) antes de crear la N
   const gate = fn.indexOf("MENSAJE_YA_ACREDITADA(creditedTotal)");
   const nc = fn.indexOf("createCreditNoteFromInvoice(");
   assert.ok(gate > 0 && nc > 0 && gate < nc, "el gate va antes de crear la NC total");
-  assert.match(fn, /select\("id, status, invoice_number, amount_paid, credited_total, issue_date"\)/);
+  assert.match(fn, /select\("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date"\)/);
+  // E1: la fecha de registro de la anulación se valida ANTES de crear la NC total.
+  const fecha = fn.indexOf("resolverFechaDeAnulacion(");
+  assert.ok(fecha > 0 && fecha < nc, "la fecha se valida antes de crear la NC total");
   const sql = leer("sql/pending/053_anulacion_rechaza_nc_parcial.sql");
   assert.match(sql, /je\.source_type = 'nota_credito' AND je\.source_id = cn\.id/, "el RPC mira el ASIENTO, no credited_total");
 });

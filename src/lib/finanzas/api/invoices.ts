@@ -24,6 +24,7 @@ import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invo
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createCreditNoteFromInvoice, compensarNotaDeCredito } from "@/lib/finanzas/api/credit-notes";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
@@ -200,6 +201,7 @@ export async function createInvoice(
       client_id: input.client_id,
       case_id: input.case_id,
       issue_date: input.issue_date,
+      accounting_date: input.accounting_date ?? input.issue_date,
       due_date: input.due_date,
       status: "borrador",
       currency: "USD",
@@ -279,6 +281,7 @@ export async function updateInvoice(
       client_id: input.client_id,
       case_id: input.case_id,
       issue_date: input.issue_date,
+      accounting_date: input.accounting_date ?? input.issue_date,
       due_date: input.due_date,
       notes: input.notes,
     })
@@ -615,6 +618,15 @@ export async function emitInvoice(
     if (!prueba.ok) {
       throw new InvoiceMutationError(prueba.mensaje, 422);
     }
+
+    // 3·0.b LA FECHA DE REGISTRO, TAMBIÉN ANTES DEL NÚMERO (Bloque 1, E1).
+    //       Es la del asiento y define el período. Si el mes está cerrado, el
+    //       RPC lo rechazaría DESPUÉS de consumir el correlativo. Mismo
+    //       criterio que las cuentas: el 422 va primero y no quema número.
+    await resolverFechaDeRegistro(db, tenantId, previa.accounting_date, {
+      que: "la factura",
+      campo: "accounting_date",
+    });
   }
 
   let formatted: string;
@@ -957,12 +969,17 @@ export async function updateInvoiceDgiData(
  * ANULAR una factura emitida (Bloque 5, 22/09/2026 — D4, D5).
  *
  *   1. Gates de status y de pagos (como antes: sin pagos, no anulada, emitida).
- *   2. 🔴 El MES DE LA FACTURA cerrado → 409: "no se anula, se emite una nota
- *      de crédito con fecha de hoy" (Josuarth). La pantalla cambia el botón.
+ *   2. 🔴 El MES DE LA FACTURA cerrado → 409: "no se anula, se corrige con una
+ *      nota de crédito" (Josuarth). Desde la `068` es el mes de su fecha de
+ *      REGISTRO (`accounting_date`), el período de su asiento. La pantalla
+ *      cambia el botón.
+ *   2.b La fecha de registro de la anulación: la elige el contador (revisión
+ *      del 28/09 y reunión del 30/09), en un período abierto y nunca antes del
+ *      asiento de la factura. Se valida ANTES de crear la NC.
  *   3. La NC TOTAL automática (`createCreditNoteFromInvoice`: la misma función
- *      que la NC manual, con todas las líneas). Fecha de hoy.
+ *      que la NC manual, con todas las líneas), con esa fecha de registro.
  *   4. RPC `cancel_invoice_with_reversal` (052), UNA transacción: si la factura
- *      está en el libro, postea la REVERSIÓN de su asiento con la fecha de hoy
+ *      está en el libro, postea la REVERSIÓN de su asiento con esa fecha
  *      (el espejo lo arma `construirAsientoDeReversion`, la misma función que
  *      dibuja la vista previa; el RPC lo verifica), y marca `anulada`. La NC NO
  *      se postea aparte: el libro cierra con el espejo (D5).
@@ -981,12 +998,14 @@ export async function cancelInvoice(
   userId: string,
   invoiceId: string,
   reason: string,
-  observations: string | null = null
+  observations: string | null = null,
+  /** Fecha de registro de la anulación. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ) {
   // 1. Status y pagos
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number, amount_paid, credited_total, issue_date")
+    .select("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -1024,20 +1043,24 @@ export async function cancelInvoice(
 
   // 2. 🔴 El mes de la factura (D4). Se mira acá, con el mensaje para la
   //    persona, y el RPC lo vuelve a verificar (es el permiso).
-  if (await periodoDeLaFacturaCerrado(db, tenantId, String(inv.issue_date))) {
-    throw new InvoiceMutationError(MENSAJE_MES_CERRADO(String(inv.issue_date)), 409);
+  const registroDeLaFactura = String(inv.accounting_date ?? inv.issue_date);
+  if (await periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)) {
+    throw new InvoiceMutationError(MENSAJE_MES_CERRADO(registroDeLaFactura), 409);
   }
 
+  // 2.b La fecha de registro de la anulación, ANTES de crear la NC: un 422 acá
+  //     no deja una NC que después haya que compensar.
+  const fecha = await resolverFechaDeAnulacion(db, ledgerDb, tenantId, invoiceId, fechaDeRegistro);
+
   // 3. La NC total, con la MISMA función que la NC manual.
-  const cn = await createCreditNoteFromInvoice(db, tenantId, userId, invoiceId, reason, observations);
+  const cn = await createCreditNoteFromInvoice(db, tenantId, userId, invoiceId, reason, observations, fecha);
 
   // 4. El espejo del asiento de la factura, si lo hay, y la anulación en el RPC.
   const original = await getAsientoDeFactura(ledgerDb, tenantId, invoiceId);
   let lines: { account_code: string; debit: number; credit: number; description: string | null }[] | null = null;
   let description = `Anulación de la factura ${inv.invoice_number}`;
-  const hoy = new Date().toISOString().slice(0, 10);
   if (original) {
-    const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: invoiceId });
+    const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: invoiceId });
     if (!armado.ok) {
       await compensarNotaDeCredito(ledgerDb, tenantId, cn.id, new MutationError(armado.mensaje, 422));
       throw new MutationError(armado.mensaje, 422); // inalcanzable: compensar lanza
@@ -1058,7 +1081,7 @@ export async function cancelInvoice(
     p_invoice_id: invoiceId,
     p_reason: reason,
     p_observations: observations,
-    p_transaction_date: hoy,
+    p_transaction_date: fecha,
     p_description: description,
     p_lines: lines,
     p_created_by: userId,
@@ -1091,14 +1114,52 @@ export function MENSAJE_YA_ACREDITADA(creditedTotal: number): string {
   );
 }
 
-export function MENSAJE_MES_CERRADO(issueDate: string): string {
+export function MENSAJE_MES_CERRADO(fechaDeRegistro: string): string {
   return (
-    `El mes de esta factura (${issueDate.slice(0, 7)}) está cerrado: no se anula, ` +
-    `se emite una nota de crédito con fecha de hoy.`
+    `El mes de esta factura (${fechaDeRegistro.slice(0, 7)}) está cerrado: no se anula, ` +
+    `se corrige con una nota de crédito.`
   );
 }
 
-/** ¿El período contable del mes de `issueDate` está cerrado? */
+/**
+ * La fecha de registro de la ANULACIÓN de una factura, validada: período
+ * abierto y nunca antes del asiento de la factura (o, si la factura no está en
+ * el libro, de su fecha de registro). Sin fecha pedida, hoy en Panamá.
+ *
+ * Exportada porque la anulación ante la DGI la valida ANTES de hablar con el
+ * PAC (`anular-factura-ante-dgi.ts`): validarla recién en el libro dejaría una
+ * factura anulada ante la DGI por un error que se veía de entrada.
+ */
+export async function resolverFechaDeAnulacion(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  invoiceId: string,
+  pedida: unknown
+): Promise<string> {
+  const original = await getAsientoDeFactura(ledgerDb, tenantId, invoiceId);
+  let noAntesDe: { fecha: string; etiqueta: string } | null = original
+    ? { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number} de la factura` }
+    : null;
+  if (!noAntesDe) {
+    const { data } = await db
+      .from("invoices")
+      .select("issue_date, accounting_date")
+      .eq("tenant_id", tenantId)
+      .eq("id", invoiceId)
+      .maybeSingle();
+    const f = (data as { accounting_date?: string | null; issue_date?: string | null } | null) ?? null;
+    const registro = f?.accounting_date ?? f?.issue_date ?? null;
+    noAntesDe = registro ? { fecha: String(registro), etiqueta: "la factura" } : null;
+  }
+  return resolverFechaDeRegistro(db, tenantId, pedida, {
+    noAntesDe,
+    que: "la anulación",
+    campo: "fecha_registro",
+  });
+}
+
+/** ¿El período contable del mes de esa fecha (la de REGISTRO de la factura) está cerrado? */
 export async function periodoDeLaFacturaCerrado(db: DB, tenantId: string, issueDate: string): Promise<boolean> {
   const year = Number(issueDate.slice(0, 4));
   const month = Number(issueDate.slice(5, 7));

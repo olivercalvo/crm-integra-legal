@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import {
   calcularNcDeCompra,
   disponibleEnLinea,
@@ -44,9 +46,12 @@ export function SupplierCreditNotesSection({ compraId, compraLabel, notas, linea
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyEnPanama();
   const [doc, setDoc] = useState("");
   const [docFecha, setDocFecha] = useState(hoy);
+  // Fecha de REGISTRO (la del asiento): la elige el contador, hoy por defecto.
+  // La del documento del proveedor es aparte e informativa.
+  const [fechaRegistro, setFechaRegistro] = useState(hoy);
   const [cufe, setCufe] = useState("");
   const [motivo, setMotivo] = useState("");
   const [montos, setMontos] = useState<Record<string, string>>({});
@@ -58,12 +63,13 @@ export function SupplierCreditNotesSection({ compraId, compraLabel, notas, linea
   );
   const calculo = useMemo(() => calcularNcDeCompra(lineas, pedido, saldo), [lineas, pedido, saldo]);
   const hayMontos = pedido.some((p) => p.amount > 0);
-  const faltaDato = doc.trim().length === 0 || motivo.trim().length < 3 || !docFecha;
+  const faltaDato = doc.trim().length === 0 || motivo.trim().length < 3 || !docFecha || !fechaRegistro;
   const puedeConfirmar = hayMontos && calculo.ok && !faltaDato;
 
   function reset() {
     setDoc("");
     setDocFecha(hoy);
+    setFechaRegistro(hoy);
     setCufe("");
     setMotivo("");
     setMontos({});
@@ -81,6 +87,7 @@ export function SupplierCreditNotesSection({ compraId, compraLabel, notas, linea
             business_expense_id: compraId,
             supplier_document_number: doc,
             supplier_document_date: docFecha,
+            fecha_registro: fechaRegistro,
             supplier_cufe: cufe || null,
             reason: motivo,
             lineas: pedido.filter((p) => p.amount > 0),
@@ -169,8 +176,8 @@ export function SupplierCreditNotesSection({ compraId, compraLabel, notas, linea
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
             Escribe cuánto acreditó el proveedor en cada línea (la base, sin ITBMS). El ITBMS se calcula
-            con la tasa de la línea. Se registra con la fecha de hoy y baja el saldo de la compra y el
-            ITBMS de compras del mes.
+            con la tasa de la línea. Se registra con la fecha de registro que elijas y baja el saldo de
+            la compra y el ITBMS de compras de ese mes.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -194,6 +201,13 @@ export function SupplierCreditNotesSection({ compraId, compraLabel, notas, linea
               />
             </label>
           </div>
+          <CampoFechaDeRegistro
+            id="ncp_fecha_registro"
+            value={fechaRegistro}
+            onChange={setFechaRegistro}
+            disabled={isPending}
+            ayuda="Es la fecha contable: define el mes del asiento y del resumen de ITBMS. La del documento del proveedor queda como referencia."
+          />
           <label className="block text-sm">
             CUFE (opcional, si el proveedor emitió factura electrónica)
             <input

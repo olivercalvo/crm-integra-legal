@@ -1,7 +1,7 @@
 /**
  * POST /api/expenses/[id]/reverse — reversa un GASTO DE TRÁMITE contabilizado.
  *
- * Bloque 4 (21/09/2026). Body: `{ reason }`. Delega en `reverseExpenseTramite`
+ * Bloque 4 (21/09/2026). Body: `{ reason, fecha_registro? }`. Delega en `reverseExpenseTramite`
  * → RPC `reverse_expense_tramite` (050): espejo con la fecha de hoy + gasto
  * `anulado`, una transacción. Esta ruta no arma líneas.
  *
@@ -63,13 +63,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] reverseExpenseTramite failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] reverseExpenseTramite unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

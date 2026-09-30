@@ -8,6 +8,7 @@ import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
 
     const body = await request.json();
-    const { case_id, concept, date, expense_type, supplier_id, due_date } = body;
+    const { case_id, concept, date, expense_type, supplier_id, due_date, accounting_date } = body;
     const lineasRaw = body?.lines;
 
     if (!case_id || !concept || !date) {
@@ -176,6 +177,24 @@ export async function POST(request: NextRequest) {
     // es el detalle: nunca se toma un monto que venga del request.
     const total = validadas.data.totales.total;
 
+    // La fecha de REGISTRO (Bloque 1, E1): la del asiento, que define el
+    // período. Si no viene, la del documento. Se valida ANTES del insert: un
+    // mes cerrado no tiene que llegar al DELETE compensatorio de más abajo.
+    let fechaDeRegistro: string;
+    try {
+      fechaDeRegistro = await resolverFechaDeRegistro(
+        admin,
+        profile.tenant_id,
+        typeof accounting_date === "string" && accounting_date ? accounting_date : date,
+        { que: "el gasto", campo: "accounting_date" }
+      );
+    } catch (err) {
+      if (err instanceof MutationError) {
+        return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
+      }
+      throw err;
+    }
+
     const { data: expense, error: insertError } = await admin
       .from("expenses")
       .insert({
@@ -184,6 +203,7 @@ export async function POST(request: NextRequest) {
         amount: total,
         concept: concept.trim(),
         date,
+        accounting_date: fechaDeRegistro,
         expense_type: expense_type === "administrativo" ? "administrativo" : "tramite",
         registered_by: user.id,
         supplier_id: typeof supplier_id === "string" && supplier_id ? supplier_id : null,

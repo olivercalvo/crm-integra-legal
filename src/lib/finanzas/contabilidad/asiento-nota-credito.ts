@@ -40,8 +40,10 @@ export const SOURCE_TYPE_NOTA_CREDITO = "nota_credito" as const;
 export interface NotaDeCreditoParaAsiento {
   id: string;
   credit_note_number: string;
-  /** La fecha de la NC: HOY, nunca la de la factura. */
+  /** Fecha del DOCUMENTO de la NC: el día en que se emite (hoy en Panamá). */
   issue_date: string;
+  /** Fecha de REGISTRO: la elige el contador, define el período (`068`). */
+  accounting_date: string;
   grand_total: number;
   invoice_number: string;
   client_name: string;
@@ -60,6 +62,7 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     id: nc.id,
     invoice_number: nc.credit_note_number,
     issue_date: nc.issue_date,
+    accounting_date: nc.accounting_date,
     grand_total: nc.grand_total,
     client_name: nc.client_name,
     lineas: nc.lineas,

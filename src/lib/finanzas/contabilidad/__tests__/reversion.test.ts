@@ -35,7 +35,7 @@ function ok(r: ReturnType<typeof construirAsientoDeReversion>) {
 }
 
 test("el espejo intercambia débito y crédito, cuenta por cuenta y en el mismo orden", () => {
-  const a = ok(construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
+  const a = ok(construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
   assert.deepEqual(
     a.lines.map((l) => [l.account_code, l.debit, l.credit]),
     [
@@ -45,14 +45,14 @@ test("el espejo intercambia débito y crédito, cuenta por cuenta y en el mismo 
   );
 });
 
-test("lleva la fecha de HOY, nunca la del original (acta del 09/09/2026)", () => {
-  const a = ok(construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
+test("lleva la fecha de registro ELEGIDA, no la del original (revisión 28/09 y reunión 30/09)", () => {
+  const a = ok(construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
   assert.equal(a.transaction_date, HOY);
   assert.notEqual(a.transaction_date, COBRO.transaction_date);
 });
 
 test("apunta al original, es de tipo reversion, lleva el motivo y hereda la referencia", () => {
-  const a = ok(construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "  Cheque devuelto  ", source_id: PAGO }));
+  const a = ok(construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "  Cheque devuelto  ", source_id: PAGO }));
   assert.equal(a.source_type, "reversion");
   assert.equal(a.reverses_entry_id, COBRO.id);
   assert.equal(a.reversal_reason, "Cheque devuelto", "el motivo va trimeado");
@@ -62,11 +62,11 @@ test("apunta al original, es de tipo reversion, lleva el motivo y hereda la refe
 });
 
 test("las descripciones de línea dicen que son una reversión, pero no entran en el cuadre", () => {
-  const a = ok(construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
+  const a = ok(construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
   assert.equal(a.lines[0].description, "Reversión: Cobro FAC-HON-000002");
   assert.equal(a.lines[1].description, "Reversión: Corporación Andes");
   const sinDescr = { ...COBRO, lines: COBRO.lines.map((l) => ({ ...l, description: null })) };
-  const b = ok(construirAsientoDeReversion(sinDescr, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
+  const b = ok(construirAsientoDeReversion(sinDescr, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
   assert.equal(b.lines[0].description, "Reversión");
 });
 
@@ -79,7 +79,7 @@ test("el espejo de algo que cuadra, cuadra", () => {
       { account_code: "200003", debit: 0, credit: 7, description: null },
     ],
   };
-  const a = ok(construirAsientoDeReversion(original, { hoy: HOY, motivo: "Error de carga", source_id: PAGO }));
+  const a = ok(construirAsientoDeReversion(original, { fecha: HOY, motivo: "Error de carga", source_id: PAGO }));
   const deb = a.lines.reduce((s, l) => s + l.debit, 0);
   const cre = a.lines.reduce((s, l) => s + l.credit, 0);
   assert.equal(deb, cre);
@@ -87,36 +87,45 @@ test("el espejo de algo que cuadra, cuadra", () => {
 });
 
 test("rechaza un motivo de menos de 3 caracteres, o de más de 1000", () => {
-  const corto = construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: " no ", source_id: PAGO });
+  const corto = construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: " no ", source_id: PAGO });
   assert.equal(corto.ok, false);
   assert.equal(!corto.ok && corto.motivo, "motivo_corto");
 
-  const largo = construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "x".repeat(MOTIVO_MAX + 1), source_id: PAGO });
+  const largo = construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "x".repeat(MOTIVO_MAX + 1), source_id: PAGO });
   assert.equal(largo.ok, false);
   assert.equal(!largo.ok && largo.motivo, "motivo_largo");
 });
 
 test("rechaza una fecha anterior al asiento que revierte, o mal formada", () => {
-  const antes = construirAsientoDeReversion(COBRO, { hoy: "2026-06-14", motivo: "Cheque devuelto", source_id: PAGO });
+  const antes = construirAsientoDeReversion(COBRO, { fecha: "2026-06-14", motivo: "Cheque devuelto", source_id: PAGO });
   assert.equal(antes.ok, false);
   assert.equal(!antes.ok && antes.motivo, "fecha_anterior");
 
-  const mismoDia = construirAsientoDeReversion(COBRO, { hoy: "2026-06-15", motivo: "Cheque devuelto", source_id: PAGO });
+  const mismoDia = construirAsientoDeReversion(COBRO, { fecha: "2026-06-15", motivo: "Cheque devuelto", source_id: PAGO });
   assert.equal(mismoDia.ok, true, "el mismo día del original sí vale");
 
-  const rota = construirAsientoDeReversion(COBRO, { hoy: "17/09/2026", motivo: "Cheque devuelto", source_id: PAGO });
+  const rota = construirAsientoDeReversion(COBRO, { fecha: "17/09/2026", motivo: "Cheque devuelto", source_id: PAGO });
   assert.equal(rota.ok, false);
   assert.equal(!rota.ok && rota.motivo, "fecha_invalida");
 });
 
 test("rechaza un asiento sin líneas suficientes", () => {
-  const r = construirAsientoDeReversion({ ...COBRO, lines: [COBRO.lines[0]] }, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO });
+  const r = construirAsientoDeReversion({ ...COBRO, lines: [COBRO.lines[0]] }, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO });
   assert.equal(r.ok, false);
   assert.equal(!r.ok && r.motivo, "sin_lineas");
 });
 
 test("no muta el asiento original", () => {
   const copia = JSON.parse(JSON.stringify(COBRO));
-  construirAsientoDeReversion(COBRO, { hoy: HOY, motivo: "Cheque devuelto", source_id: PAGO });
+  construirAsientoDeReversion(COBRO, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO });
   assert.deepEqual(COBRO, copia);
+});
+
+test("E1: la fecha elegida puede ser cualquiera desde la del original (otro mes abierto, incluso)", () => {
+  // El original es del 15/06; el contador reversa con fecha 01/07.
+  const a = ok(construirAsientoDeReversion(COBRO, { fecha: "2026-07-01", motivo: "Cheque devuelto", source_id: PAGO }));
+  assert.equal(a.transaction_date, "2026-07-01");
+  // …y el mismo día del original también vale.
+  const b = ok(construirAsientoDeReversion(COBRO, { fecha: COBRO.transaction_date, motivo: "Cheque devuelto", source_id: PAGO }));
+  assert.equal(b.transaction_date, COBRO.transaction_date);
 });

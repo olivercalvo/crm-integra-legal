@@ -29,6 +29,7 @@ import type { ExpenseLineRow } from "@/lib/finanzas/types/expense-line";
 const GASTO: GastoParaAsiento = {
   id: "e1",
   date: "2026-03-15",
+  accounting_date: "2026-03-15",
   concept: "Trámites Registro Público",
   case_code: "CIV-014",
   supplier_legal_name: "MICROSISTEMAS S.A.",

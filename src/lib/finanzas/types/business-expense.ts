@@ -49,7 +49,10 @@ export type BusinessExpenseTaxRate = (typeof VALID_TAX_RATES)[number];
 export interface BusinessExpenseRow {
   id: string;
   tenant_id: string;
+  /** Fecha del DOCUMENTO (la factura del proveedor). */
   expense_date: string;            // YYYY-MM-DD
+  /** Fecha de REGISTRO (`068`): la del asiento. */
+  accounting_date?: string | null;
   /**
    * Vencimiento del gasto. Default = expense_date + plazo del proveedor,
    * editable. Es la fecha con la que la antigüedad calcula los tramos; antes de
@@ -224,7 +227,13 @@ export interface LineaDeCompraInput {
 }
 
 export interface CreateBusinessExpenseInput {
+  /** Fecha del DOCUMENTO (la factura del proveedor). Base del vencimiento. */
   expense_date: string;            // YYYY-MM-DD
+  /**
+   * Fecha de REGISTRO: la del asiento, define el período (`068`). Si no viene,
+   * es la del documento.
+   */
+  accounting_date?: string;
   /**
    * Vencimiento del gasto. Default = expense_date + plazo del proveedor,
    * editable. Es la fecha con la que la antigüedad calcula los tramos; antes de

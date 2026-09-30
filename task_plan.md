@@ -1,5 +1,20 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 30/09/2026 — BLOQUE 1, E1 (FECHAS) EN LA RAMA `feat/bloque1-contable` <<<
+
+- ✅ Código y tests de E1 (plan §1). Commits locales, sin push.
+- ⏳ **Migraciones `068` y `069` sin aplicar**: esperan el «aplica» de Oliver. Son compatibles con
+  el código de `develop` (el trigger completa `accounting_date`; `develop` sigue mandando la
+  fecha de hoy, que la 069 también acepta), pero aplicarlas en staging es tocar la base que usa
+  el Preview de la revisión: decidir contra SOP-019.
+- ⏳ Recorrido en staging después de aplicar: factura de septiembre con registro en octubre, NC
+  con fecha elegida, reversión anterior al original (rechazo).
+- ⏳ Pregunta 5 de Josuarth (fechas futuras): hoy permitidas, `PERMITIR_FECHA_DE_REGISTRO_FUTURA`.
+- ⏳ P-1b (registro antes que el documento) y P-1e (vencimiento desde el documento) siguen
+  abiertas; el código asume: sí se permite, y sí, desde el documento.
+- 📋 Fuera de E1: ~25 cálculos de «hoy» en UTC en el módulo Legal (tareas, comentarios, casos,
+  prospectos, dashboard). No fechan asientos; FND-012.
+
 ## >>> 🔒 DEVELOP CONGELADO — REVISIÓN CON JOSUARTH EN CURSO <<<
 
 - 26/09/2026: **Josuarth Torres pasa al equipo** (alianza con Integra; ya no es de RM). Rose

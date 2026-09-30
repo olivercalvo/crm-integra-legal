@@ -22,6 +22,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
 
 type DB = SupabaseClient;
@@ -39,7 +40,9 @@ export async function reverseJournalEntry(
   tenantId: string,
   userId: string,
   entryId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseJournalEntryResult> {
   const original = await getAsientoDelLibro(db, tenantId, entryId);
   if (!original) {
@@ -61,7 +64,13 @@ export async function reverseJournalEntry(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(
     {
       id: original.id,
@@ -79,7 +88,7 @@ export async function reverseJournalEntry(
     },
     // `source_id` null: el vínculo con el original es `reverses_entry_id`, y
     // poner ahí el id del asiento haría que el Mayor lo tratara como documento.
-    { hoy, motivo: reason, source_id: null }
+    { fecha, motivo: reason, source_id: null }
   );
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);

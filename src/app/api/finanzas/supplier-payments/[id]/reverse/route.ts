@@ -15,7 +15,7 @@ interface RouteParams {
  * POST /api/finanzas/supplier-payments/[id]/reverse — reversa un pago a
  * proveedor contabilizado (RPC `reverse_supplier_payment`, 048): espejo con la
  * fecha de hoy + pago anulado, una transacción; el trigger devuelve la compra.
- * Body: { reason }. Permisos: los de mutar compras (admin, abogada, contador).
+ * Body: { reason, fecha_registro? }. Permisos: los de mutar compras (admin, abogada, contador).
  */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
@@ -53,13 +53,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] reverseSupplierPayment failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] reverseSupplierPayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

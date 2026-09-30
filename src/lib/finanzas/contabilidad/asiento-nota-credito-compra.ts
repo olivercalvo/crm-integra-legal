@@ -139,12 +139,14 @@ export interface CompraParaNc {
  */
 export function construirAsientoDeNotaDeCompra(
   compra: CompraParaNc,
-  hoy: string,
+  /** Fecha de REGISTRO de la NC (la elige el contador; ver `fecha-de-registro.ts`). */
+  fechaDeRegistro: string,
   calculo: Extract<ResultadoCalculo, { ok: true }>
 ): ResultadoAsientoCompra {
   const comoCompra = construirAsientoDeCompra({
     id: compra.id,
-    expense_date: hoy,
+    expense_date: fechaDeRegistro,
+    accounting_date: fechaDeRegistro,
     description: compra.description,
     total: calculo.total,
     supplier_name: compra.supplier_name,

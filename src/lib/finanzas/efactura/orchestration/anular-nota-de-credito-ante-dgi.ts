@@ -31,6 +31,12 @@
  *
  * 🔴 El motivo: 15 caracteres cuando viaja a la DGI (`cancellationReason`, el
  *    mismo validador que la factura), 3 cuando la reversión es sólo contable.
+ *
+ * 🔴 La FECHA DE REGISTRO (la elige el contador desde el 30/09) se valida en T0,
+ *    ANTES de registrar el intento y de hablar con el PAC. Validarla recién en
+ *    T4 permitiría anular ante la DGI una NC cuyo libro después rechaza la
+ *    fecha (mes cerrado, anterior al original): el estado intermedio, fabricado
+ *    por un error que se podía ver de entrada.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -41,6 +47,7 @@ import {
   type ReverseCreditNoteResult,
 } from "@/lib/finanzas/api/credit-notes";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { loadEmisorConfig } from "@/lib/finanzas/efactura/config/emisor-config";
 import {
   decidirAccionSobreNotaDeCredito,
@@ -71,8 +78,10 @@ export type ResultadoDeReversionDeNc =
 /** El PAC y el libro, inyectables para poder congelar el orden en un test. */
 export interface Dependencias {
   anularEnPac: (pedido: PedidoDeAnulacion) => Promise<unknown>;
-  reversarEnElLibro: (motivo: string) => Promise<ReverseCreditNoteResult>;
+  reversarEnElLibro: (motivo: string, fecha: string) => Promise<ReverseCreditNoteResult>;
   tieneAsientoPropio: () => Promise<boolean>;
+  /** La fecha de registro validada (período abierto, no antes del original), o 422. */
+  resolverFecha: (pedida: unknown) => Promise<string>;
 }
 
 export async function reversarNotaDeCredito(
@@ -83,16 +92,30 @@ export async function reversarNotaDeCredito(
   creditNoteId: string,
   motivoCrudo: unknown,
   ahora: Date,
-  deps?: Partial<Dependencias>
+  deps?: Partial<Dependencias>,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ResultadoDeReversionDeNc> {
   const d: Dependencias = {
     anularEnPac: deps?.anularEnPac ?? anularEnPac,
     reversarEnElLibro:
       deps?.reversarEnElLibro ??
-      ((motivo) => reverseCreditNote(db, ledgerDb, tenantId, userId, creditNoteId, motivo)),
+      ((motivo, fecha) => reverseCreditNote(db, ledgerDb, tenantId, userId, creditNoteId, motivo, fecha)),
     tieneAsientoPropio:
       deps?.tieneAsientoPropio ??
       (async () => (await getAsientoDeNotaDeCredito(db, tenantId, creditNoteId)) !== null),
+    resolverFecha:
+      deps?.resolverFecha ??
+      (async (pedida) => {
+        const original = await getAsientoDeNotaDeCredito(db, tenantId, creditNoteId);
+        return resolverFechaDeRegistro(db, tenantId, pedida, {
+          noAntesDe: original
+            ? { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` }
+            : null,
+          que: "la reversión",
+          campo: "fecha_registro",
+        });
+      }),
   };
 
   // ── T0: la matriz, otra vez acá ───────────────────────────────────────────
@@ -122,10 +145,12 @@ export async function reversarNotaDeCredito(
   const esReintento = accion.accion === "reversar_solo_en_el_libro" && nc.fe_estado === "canceled" && cufe !== "";
 
   const motivo = validarMotivo(motivoCrudo, viajaALaDgi || esReintento);
+  // La fecha, también ANTES del PAC (ver el encabezado).
+  const fecha = await d.resolverFecha(fechaDeRegistro);
 
   // ── Sin DGI de por medio: sólo el libro ──────────────────────────────────
   if (!viajaALaDgi && !esReintento) {
-    const r = await d.reversarEnElLibro(motivo);
+    const r = await d.reversarEnElLibro(motivo, fecha);
     return {
       estado: "reversada",
       anuladaAnteLaDgi: false,
@@ -189,7 +214,7 @@ export async function reversarNotaDeCredito(
 
   // ── T4: el libro ─────────────────────────────────────────────────────────
   try {
-    const r = await d.reversarEnElLibro(motivo);
+    const r = await d.reversarEnElLibro(motivo, fecha);
     return {
       estado: "reversada",
       anuladaAnteLaDgi: true,

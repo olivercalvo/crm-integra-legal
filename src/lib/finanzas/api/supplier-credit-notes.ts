@@ -22,6 +22,7 @@ import {
   type LineaPedida,
 } from "@/lib/finanzas/contabilidad/asiento-nota-credito-compra";
 import { construirAsientoDeReversion, MOTIVO_MAX, MOTIVO_MIN, type AsientoAReversar } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { esTipoValidoParaGasto } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
@@ -132,6 +133,8 @@ export interface CrearNcDeCompraInput {
   supplier_cufe?: string | null;
   reason: string;
   lineas: LineaPedida[];
+  /** Fecha de REGISTRO (contable). La elige el contador; sin ella, hoy en Panamá. */
+  fecha_registro?: string | null;
 }
 
 /** La forma del pedido. Los montos los valida `calcularNcDeCompra` y la base. */
@@ -169,6 +172,7 @@ export function validarPedidoDeNcDeCompra(raw: unknown):
       supplier_cufe: s(b.supplier_cufe) || null,
       reason: motivo,
       lineas,
+      fecha_registro: s(b.fecha_registro) || null,
     },
   };
 }
@@ -185,11 +189,19 @@ export async function createSupplierCreditNote(
   ledgerDb: DB,
   tenantId: string,
   userId: string,
-  input: CrearNcDeCompraInput,
-  hoy: string = new Date().toISOString().slice(0, 10)
+  input: CrearNcDeCompraInput
 ): Promise<NcDeCompraCreada> {
   const compra = await cargarCompraParaNc(db, tenantId, input.business_expense_id);
   if (!compra) throw new MutationError("Compra no encontrada", 404);
+
+  // La fecha de REGISTRO (revisión del 28/09 y reunión del 30/09): la elige el
+  // contador, en un período abierto. La del documento del proveedor es aparte
+  // (`supplier_document_date`) e informativa. Se valida antes del RPC, que toma
+  // el número `NCP-`: así un mes cerrado no llega a la base.
+  const hoy = await resolverFechaDeRegistro(db, tenantId, input.fecha_registro, {
+    que: "la nota de crédito",
+    campo: "fecha_registro",
+  });
 
   const calculo = calcularNcDeCompra(compra.lineas, input.lineas, compra.balance_due);
   if (!calculo.ok) throw new MutationError(calculo.mensaje, 422);
@@ -240,7 +252,9 @@ export async function reverseSupplierCreditNote(
   tenantId: string,
   userId: string,
   ncId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<{ entry_number: number; reversed_entry_number: number; credit_note_number: string }> {
   const motivo = reason.trim();
   if (motivo.length < MOTIVO_MIN || motivo.length > MOTIVO_MAX) {
@@ -261,9 +275,15 @@ export async function reverseSupplierCreditNote(
   const original = await getAsientoDeNotaDeCompra(db, tenantId, ncId);
   if (!original) throw new MutationError("La nota de crédito no tiene asiento: no hay nada que reversar.", 409);
 
+  // La fecha de registro elegida: período abierto y nunca antes del original.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   // El espejo: la MISMA función que dibuja la vista previa del diálogo.
   const armado = construirAsientoDeReversion(original, {
-    hoy: new Date().toISOString().slice(0, 10),
+    fecha,
     motivo,
     source_id: ncId,
   });

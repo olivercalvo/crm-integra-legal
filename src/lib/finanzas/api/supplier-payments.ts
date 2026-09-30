@@ -36,6 +36,7 @@ import {
 } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
 import { cargarPagoProveedorParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { allocateSupplierPaymentNumber } from "@/lib/finanzas/numbering/supplier-payment-numbering";
 import { getAsientoDePagoProveedor, getSupplierPayment } from "@/lib/finanzas/queries/supplier-payments";
 
@@ -283,7 +284,9 @@ export async function reverseSupplierPayment(
   tenantId: string,
   userId: string,
   pagoId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseSupplierPaymentResult> {
   const pago = await getSupplierPayment(db, tenantId, pagoId);
   if (!pago) {
@@ -309,8 +312,14 @@ export async function reverseSupplierPayment(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: pagoId });
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
+  const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: pagoId });
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);
   }

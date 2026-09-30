@@ -89,6 +89,12 @@ export function validateCreateInvoice(
     errors.issue_date = "Fecha de emisión inválida";
   }
 
+  // La fecha de REGISTRO es opcional: si no viene, es la del documento. Que su
+  // período esté abierto lo decide el servidor contra la base (al emitir).
+  if (raw.accounting_date && !DATE_RE.test(String(raw.accounting_date))) {
+    errors.accounting_date = "Fecha de registro inválida";
+  }
+
   if (!raw.due_date || !DATE_RE.test(String(raw.due_date))) {
     errors.due_date = "Fecha de vencimiento inválida";
   }
@@ -125,6 +131,7 @@ export function validateCreateInvoice(
       client_id: raw.client_id as string,
       case_id: raw.case_id ?? null,
       issue_date: raw.issue_date as string,
+      accounting_date: (raw.accounting_date || raw.issue_date) as string,
       due_date: raw.due_date as string,
       notes: raw.notes ?? null,
       lines: lines.map((ln) => ({

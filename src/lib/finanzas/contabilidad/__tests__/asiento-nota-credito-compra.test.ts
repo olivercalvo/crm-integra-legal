@@ -80,7 +80,7 @@ test("🔒 el asiento de una NC TOTAL es exactamente el de la compra al revés",
   if (!calc.ok) return;
   const nc = construirAsientoDeNotaDeCompra(COMPRA, HOY, calc);
   const compra = construirAsientoDeCompra({
-    id: "c1", expense_date: HOY, description: COMPRA.description, total: 157, supplier_name: COMPRA.supplier_name,
+    id: "c1", expense_date: HOY, accounting_date: HOY, description: COMPRA.description, total: 157, supplier_name: COMPRA.supplier_name,
     lineas: lineas.map((l) => ({ line_order: l.line_order, description: l.description, amount: l.amount, tax_amount: l.tax_amount, chart_account_code: l.chart_account_code, cuenta_valida: true })),
   });
   assert.ok(nc.ok && compra.ok);

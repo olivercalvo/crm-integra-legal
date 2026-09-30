@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
@@ -91,7 +93,11 @@ export function SectionExpenseForm({
 
   // Expense fields
   const [expConcept, setExpConcept] = useState("");
-  const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expDate, setExpDate] = useState(hoyEnPanama());
+  // Fecha de REGISTRO (la del asiento, define el período). Sigue a la del
+  // documento hasta que alguien la elige a mano (Bloque 1, E1).
+  const [expRegistro, setExpRegistro] = useState(hoyEnPanama());
+  const [registroElegido, setRegistroElegido] = useState(false);
   const [expFile, setExpFile] = useState<File | null>(null);
   const expFileRef = useRef<HTMLInputElement>(null);
   const [expSupplier, setExpSupplier] = useState("");
@@ -104,7 +110,7 @@ export function SectionExpenseForm({
   const [yaPagado, setYaPagado] = useState(false);
   const [pagoBanco, setPagoBanco] = useState("");
   const [pagoMetodo, setPagoMetodo] = useState<PaymentMethod>("transferencia");
-  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [pagoFecha, setPagoFecha] = useState(hoyEnPanama());
   const [pagoReferencia, setPagoReferencia] = useState("");
   // Aviso que sobrevive al reset del formulario: el gasto quedó, el pago no.
   const [avisoPago, setAvisoPago] = useState<string | null>(null);
@@ -136,14 +142,16 @@ export function SectionExpenseForm({
 
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(hoyEnPanama());
   const [payDescription, setPayDescription] = useState("");
 
   const isTramite = sectionType === "tramite";
 
   const resetExpense = () => {
     setExpConcept("");
-    setExpDate(new Date().toISOString().split("T")[0]);
+    setExpDate(hoyEnPanama());
+    setExpRegistro(hoyEnPanama());
+    setRegistroElegido(false);
     setExpFile(null);
     if (expFileRef.current) expFileRef.current.value = "";
     setExpSupplier("");
@@ -159,13 +167,13 @@ export function SectionExpenseForm({
     setYaPagado(false);
     setPagoBanco("");
     setPagoMetodo("transferencia");
-    setPagoFecha(new Date().toISOString().split("T")[0]);
+    setPagoFecha(hoyEnPanama());
     setPagoReferencia("");
   };
 
   const resetPayment = () => {
     setPayAmount("");
-    setPayDate(new Date().toISOString().split("T")[0]);
+    setPayDate(hoyEnPanama());
     setPayDescription("");
     setShowPaymentForm(false);
     setError(null);
@@ -205,6 +213,7 @@ export function SectionExpenseForm({
             case_id: caseId,
             concept: expConcept.trim(),
             date: expDate,
+            accounting_date: expRegistro,
             expense_type: sectionType,
             supplier_id: expSupplier || null,
             due_date: expDueDate || null,
@@ -385,18 +394,32 @@ export function SectionExpenseForm({
               <Input value={expConcept} onChange={(e) => setExpConcept(e.target.value)} placeholder="Ej: Trámite Registro Público" className="min-h-[48px]" />
             </div>
             <div className="space-y-1.5">
-              <Label>Fecha del gasto</Label>
+              <Label>Fecha del documento</Label>
               <Input
                 type="date"
                 value={expDate}
                 onChange={(e) => {
                   setExpDate(e.target.value);
+                  if (!registroElegido) setExpRegistro(e.target.value);
                   // Si ya hay proveedor, el vencimiento se recalcula: el plazo
                   // corre desde la fecha del gasto, no desde la de hoy.
                   const p = proveedores.find((x) => x.id === expSupplier);
                   if (p) setExpDueDate(sumarDias(e.target.value, p.payment_terms_days));
                 }}
                 className="min-h-[48px]"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <CampoFechaDeRegistro
+                id="gasto_fecha_registro"
+                value={expRegistro}
+                onChange={(v) => {
+                  setExpRegistro(v);
+                  setRegistroElegido(true);
+                }}
+                error={fieldErrors.accounting_date}
+                disabled={isPending}
+                ayuda="Es la fecha contable del gasto: define el mes en que entra al libro. El vencimiento se cuenta desde la fecha del documento."
               />
             </div>
           </div>

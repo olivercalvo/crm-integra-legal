@@ -4,16 +4,31 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Undo2 } from "lucide-react";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 
 /**
  * Deshacer una importación COMPLETA: cada asiento se reversa con la fecha de
- * hoy (067, `reverse_journal_import`). Nada se borra. Una sola transacción.
+ * registro que elige el contador (hoy en Panamá por defecto), en un período
+ * abierto y nunca antes del último asiento de la importación (067,
+ * `reverse_journal_import`). Nada se borra. Una sola transacción.
  */
-export function DeshacerImportacion({ importId, cantidad }: { importId: string; cantidad: number }) {
+export function DeshacerImportacion({
+  importId,
+  cantidad,
+  ultimaFecha,
+}: {
+  importId: string;
+  cantidad: number;
+  /** La fecha del último asiento vigente de la importación: la reversión no va antes. */
+  ultimaFecha?: string | null;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [fecha, setFecha] = useState(() => hoyEnPanama());
+  const [fechaError, setFechaError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function submit() {
@@ -22,11 +37,12 @@ export function DeshacerImportacion({ importId, cantidad }: { importId: string; 
       const res = await fetch(`/api/finanzas/asientos/importaciones/${importId}/reverse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: motivo }),
+        body: JSON.stringify({ reason: motivo, fecha_registro: fecha }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "No se deshizo nada.");
+        if (data.fieldErrors?.fecha_registro) setFechaError(data.fieldErrors.fecha_registro);
         return;
       }
       setOpen(false);
@@ -41,6 +57,8 @@ export function DeshacerImportacion({ importId, cantidad }: { importId: string; 
         onClick={() => {
           setMotivo("");
           setError(null);
+          setFecha(hoyEnPanama());
+          setFechaError(null);
           setOpen(true);
         }}
         className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-50"
@@ -62,10 +80,22 @@ export function DeshacerImportacion({ importId, cantidad }: { importId: string; 
       >
         <div className="space-y-3">
           <p>
-            Se registrarán {cantidad} asiento{cantidad === 1 ? "" : "s"} de reversión con la fecha de hoy. Los asientos
+            Se registrarán {cantidad} asiento{cantidad === 1 ? "" : "s"} de reversión con la fecha de registro que elijas. Los asientos
             importados no se borran: quedan en el libro junto con su espejo. Si alguno ya se había reversado a mano, se
             deja como está.
           </p>
+          <CampoFechaDeRegistro
+            id="deshacer_fecha_registro"
+            value={fecha}
+            onChange={(v) => {
+              setFecha(v);
+              if (fechaError) setFechaError(null);
+            }}
+            min={ultimaFecha ?? undefined}
+            error={fechaError}
+            disabled={isPending}
+            ayuda="Todas las reversiones llevan esta fecha. Tiene que caer en un período abierto y no puede ser anterior al último asiento de la importación."
+          />
           <label className="block text-sm">
             Motivo *
             <textarea

@@ -98,6 +98,11 @@ export function validateCreateBusinessExpense(
   if (!raw.expense_date || !DATE_RE.test(String(raw.expense_date))) {
     errors.expense_date = "Fecha del gasto inválida (esperado YYYY-MM-DD)";
   }
+  // Fecha de REGISTRO: opcional (si no viene, la del documento). Que su período
+  // esté abierto lo decide el servidor contra la base.
+  if (raw.accounting_date && !DATE_RE.test(String(raw.accounting_date))) {
+    errors.accounting_date = "Fecha de registro inválida (esperado YYYY-MM-DD)";
+  }
 
   // description
   const description = String(raw.description ?? "").trim();
@@ -349,6 +354,7 @@ export function validateCreateBusinessExpense(
     errors: null,
     data: {
       expense_date: raw.expense_date as string,
+      accounting_date: (raw.accounting_date || raw.expense_date) as string,
       due_date: dueDate,
       supplier_id: supplierId,
       supplier_name: supplierName,

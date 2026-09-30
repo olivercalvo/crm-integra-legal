@@ -14,6 +14,7 @@ import type {
   UpdateBusinessExpenseInput,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { formatTaxRate } from "@/lib/finanzas/types/tax-code";
 import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
@@ -248,6 +249,15 @@ export async function createBusinessExpense(
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);
 
+  // La fecha de REGISTRO (la del asiento): período abierto. Se valida antes de
+  // insertar para que un mes cerrado no llegue a un DELETE compensatorio.
+  const fechaDeRegistro = await resolverFechaDeRegistro(
+    db,
+    tenantId,
+    input.accounting_date ?? input.expense_date,
+    { que: "la compra", campo: "accounting_date" }
+  );
+
   // 🔴 LA TASA DE CADA LÍNEA SALE DEL CATÁLOGO, NO DEL BODY (migración `045`).
   //    El body trae `tax_code_id` (qué eligió la persona) y `tax_rate` (lo que
   //    la pantalla usó para mostrar el total). Se le cree al id, nunca a la
@@ -289,6 +299,7 @@ export async function createBusinessExpense(
     .insert({
       tenant_id: tenantId,
       expense_date: input.expense_date,
+      accounting_date: fechaDeRegistro,
       due_date: dueDate,
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
@@ -466,7 +477,7 @@ export async function updateBusinessExpense(
   const { data: existing, error: errExisting } = await db
     .from("business_expenses")
     .select(
-      `id, expense_date, due_date, supplier_id, supplier_name, supplier_ruc,
+      `id, expense_date, accounting_date, due_date, supplier_id, supplier_name, supplier_ruc,
        supplier_invoice_number,
        chart_account_code, description, subtotal, tax_rate, tax_amount,
        status, payment_date, payment_method, notes`
@@ -500,6 +511,7 @@ export async function updateBusinessExpense(
     .from("business_expenses")
     .update({
       expense_date: input.expense_date,
+      accounting_date: input.accounting_date ?? input.expense_date,
       due_date: dueDateUpdate,
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
@@ -527,7 +539,7 @@ export async function updateBusinessExpense(
 
   // Audit log: diff de campos modificados
   const fields = [
-    "expense_date", "supplier_name", "supplier_ruc", "supplier_invoice_number",
+    "expense_date", "accounting_date", "supplier_name", "supplier_ruc", "supplier_invoice_number",
     "chart_account_code",
     "description", "subtotal", "tax_rate", "tax_amount",
     "status", "payment_date", "payment_method", "notes",

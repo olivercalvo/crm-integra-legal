@@ -108,6 +108,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const creditedTotal = Number(invoice.credited_total ?? 0);
   const acreditadaTotal = !isAnulada && grandTotal > 0 && creditedTotal >= grandTotal - 0.005;
   const puedeTenerNc = cancellable || isAnulada;
+  // La fecha de REGISTRO de la factura (su asiento, `068`). Es la que define "el
+  // mes de la factura" para anular, y el mínimo de la anulación y de sus NC.
+  const registroDeLaFactura = String(invoice.accounting_date ?? invoice.issue_date);
 
   // Cargar pagos, NC, lo ya acreditado por línea y el período, en paralelo.
   // El período solo importa si esta persona puede anular (D4: cerrado el mes
@@ -121,7 +124,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       ? acreditadoPorLineaDeFactura(db, tenantId, invoice.id)
       : Promise.resolve(new Map<string, number>()),
     cancellable && canMutate
-      ? periodoDeLaFacturaCerrado(db, tenantId, String(invoice.issue_date))
+      ? periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)
       : Promise.resolve(false),
   ]);
 
@@ -297,6 +300,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               balanceDue={Number(invoice.balance_due)}
               lineas={lineasAcreditables}
               mesCerrado={mesCerrado}
+              fechaMinima={registroDeLaFactura}
             />
           )}
           {showCancel && (
@@ -313,6 +317,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   ? accionFiscal.ventana.horasRestantes
                   : null
               }
+              fechaMinima={registroDeLaFactura}
             />
           )}
           {/* 🔴 D4: la factura está anulada ante la DGI y falta el libro. */}
@@ -327,6 +332,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               amountPaid={Number(invoice.amount_paid)}
               feEstado={invoice.fe_estado}
               dgiCufe={invoice.dgi_cufe}
+              fechaMinima={registroDeLaFactura}
             />
           )}
         </div>

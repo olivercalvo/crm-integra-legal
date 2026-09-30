@@ -47,16 +47,21 @@ test("cancelInvoice no arma líneas: delega en createCreditNoteFromInvoice", () 
   assert.doesNotMatch(fn, /get_next_sequence_number/, "el número NC- lo toma el creador, no la anulación");
 });
 
-test("🔴 la NC lleva la fecha de HOY, nunca la de la factura", () => {
+test("🔴 la NC: documento con fecha de HOY en Panamá, registro ELEGIDO y nunca antes de la factura (E1)", () => {
   const src = leer(CREADOR);
   const fn = src.slice(src.indexOf("export async function createCreditNote("), src.indexOf("export async function createCreditNoteFromInvoice"));
-  assert.match(fn, /const issueDateIso = new Date\(\)\.toISOString\(\)\.slice\(0, 10\);/);
+  // La fecha del DOCUMENTO es el día en que se emite, en Panamá (no UTC).
+  assert.match(fn, /const issueDateIso = hoyEnPanama\(\);/);
   assert.match(fn, /issue_date: issueDateIso,/);
-  // El select de la factura que alimenta el creador no trae su issue_date:
-  // no hay de dónde copiarla por error.
-  const selectFactura = fn.match(/\.from\("invoices"\)\s*\.select\(\s*"([^"]+)"/)?.[1] ?? "";
-  assert.ok(selectFactura.length > 0, "se esperaba el select de la factura");
-  assert.doesNotMatch(selectFactura, /issue_date/);
+  // La de REGISTRO la elige el contador y se valida contra la base…
+  assert.match(fn, /accounting_date: fechaDeRegistro,/);
+  assert.match(fn, /resolverFechaDeRegistro\(db, tenantId, input\.fecha_registro,/);
+  // …con la factura como mínimo (una NC no corrige algo que todavía no existía)…
+  assert.match(fn, /noAntesDe: \{ fecha: registroDeLaFactura,/);
+  // …y ANTES de tomar el número: un mes cerrado no quema correlativo.
+  const iFecha = fn.indexOf("resolverFechaDeRegistro(");
+  const iNumero = fn.indexOf('"get_next_sequence_number"');
+  assert.ok(iFecha > 0 && iNumero > 0 && iFecha < iNumero, "la fecha se valida antes del número");
 });
 
 test("el creador valida con la regla pura antes de tomar el número (un 400 no quema correlativo)", () => {

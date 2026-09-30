@@ -26,6 +26,7 @@ import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 
 import { construirAsientoDeReversion } from "../src/lib/finanzas/contabilidad/reversion";
+import { hoyEnPanama } from "../src/lib/utils/hoy-en-panama";
 import { postJournalEntry } from "../src/lib/finanzas/contabilidad/posting";
 
 const PROD_REF = "uqmmkklbhzxqybljiecs";
@@ -119,7 +120,7 @@ async function main() {
       })),
     },
     {
-      hoy: new Date().toISOString().slice(0, 10),
+      fecha: hoyEnPanama(),
       motivo: motivo.trim(),
       // El espejo apunta al mismo documento que el original, como en los cobros.
       source_id: (original.source_id as string | null) ?? null,

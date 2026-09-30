@@ -54,7 +54,7 @@ test("🔴 el filtro a `manual` está en las TRES capas", () => {
 
 test("source_id va NULL: el vínculo es reverses_entry_id", () => {
   const src = leer(HELPER);
-  assert.match(src, /\{ hoy, motivo: reason, source_id: null \}/);
+  assert.match(src, /\{ fecha, motivo: reason, source_id: null \}/);
   const sql = leer(SQL);
   assert.match(sql, /NULL, NULL, p_entry_id, btrim\(p_reason\)/);
 });

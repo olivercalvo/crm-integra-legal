@@ -56,6 +56,12 @@ export interface CreateCreditNoteInput {
   reason: string;
   observations: string | null;
   lineas: { invoice_line_id: string; quantity: number }[];
+  /**
+   * Fecha de REGISTRO (contable) de la NC. La elige el contador (revisión del
+   * 28/09 y reunión del 30/09); sin ella, hoy en Panamá. La valida el servidor
+   * contra la base (período abierto): acá solo se transporta.
+   */
+  fecha_registro?: string | null;
 }
 
 export function validateCreateCreditNoteInput(raw: unknown): ValidationResult<CreateCreditNoteInput> {
@@ -96,7 +102,15 @@ export function validateCreateCreditNoteInput(raw: unknown): ValidationResult<Cr
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, data: null, errors };
-  return { ok: true, errors: null, data: { invoice_id: invoiceId, reason, observations, lineas } };
+  const fechaRegistro = typeof r.fecha_registro === "string" && r.fecha_registro.trim() !== ""
+    ? r.fecha_registro.trim()
+    : null;
+
+  return {
+    ok: true,
+    errors: null,
+    data: { invoice_id: invoiceId, reason, observations, lineas, fecha_registro: fechaRegistro },
+  };
 }
 
 // ---------------------------------------------------------------------------

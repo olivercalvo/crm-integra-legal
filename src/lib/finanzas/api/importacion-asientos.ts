@@ -18,6 +18,7 @@ import {
 } from "@/lib/finanzas/import/asientos-import";
 import { leerHojaDeAsientos } from "@/lib/finanzas/import/asientos-workbook";
 import { construirAsientoDeReversion, type AsientoAReversar } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 
 type DB = SupabaseClient;
 
@@ -171,7 +172,9 @@ export async function deshacerImportacion(
   tenantId: string,
   userId: string,
   importId: string,
-  motivo: string
+  motivo: string,
+  /** Fecha de registro elegida para todas las reversiones. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<{ reversados: number; ya_reversados: number }> {
   const m = motivo.trim();
   if (m.length < 3 || m.length > 1000) {
@@ -188,13 +191,28 @@ export async function deshacerImportacion(
     throw new MutationError("Esta importación ya se deshizo.", 409);
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
   const asientos = await cargarAsientosDeImportacion(db, tenantId, importId);
+  // Una sola fecha para todas las reversiones: la elegida, en un período
+  // abierto y nunca antes del ÚLTIMO asiento vigente de la importación (cada
+  // reversión tiene que caer en o después de su original; el RPC lo exige uno
+  // por uno a través de `reverse_journal_entry`).
+  const vigentes = asientos.filter((a) => a.reversado_por === null);
+  const ultimo = vigentes.reduce<(typeof vigentes)[number] | null>(
+    (max, a) => (!max || a.asiento.transaction_date > max.asiento.transaction_date ? a : max),
+    null
+  );
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: ultimo
+      ? { fecha: ultimo.asiento.transaction_date, etiqueta: `el asiento ${ultimo.asiento.entry_number}, el último de la importación` }
+      : null,
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const espejos = [];
   for (const a of asientos) {
     if (a.reversado_por !== null) continue;
     // La MISMA función que arma todas las reversiones del libro.
-    const armado = construirAsientoDeReversion(a.asiento, { hoy, motivo: m, source_id: null });
+    const armado = construirAsientoDeReversion(a.asiento, { fecha, motivo: m, source_id: null });
     if (!armado.ok) throw new MutationError(armado.mensaje, 422);
     espejos.push({
       entry_id: a.asiento.id,
@@ -207,7 +225,7 @@ export async function deshacerImportacion(
     p_tenant_id: tenantId,
     p_import_id: importId,
     p_reason: m,
-    p_transaction_date: hoy,
+    p_transaction_date: fecha,
     p_mirrors: espejos,
     p_created_by: userId,
   });

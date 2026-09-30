@@ -71,8 +71,10 @@ export const SOURCE_TYPE_GASTO_TRAMITE = "gasto_tramite" as const;
 /** Lo que hace falta del encabezado para armar el asiento. */
 export interface GastoParaAsiento {
   id: string;
-  /** Fecha de la OPERACIÓN (Art. 5.1). Define el período contable. */
+  /** Fecha del DOCUMENTO (Art. 5.1). Informativa desde la `068`. */
   date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   concept: string;
   /** Código del caso, para que la naturaleza del asiento sea identificable. */
   case_code: string | null;
@@ -191,7 +193,7 @@ export function construirAsientoDeGastoTramite(
   return {
     ok: true,
     asiento: {
-      transaction_date: gasto.date,
+      transaction_date: gasto.accounting_date,
       description: descripcionDelAsiento(gasto),
       source_type: SOURCE_TYPE_GASTO_TRAMITE,
       source_id: gasto.id,

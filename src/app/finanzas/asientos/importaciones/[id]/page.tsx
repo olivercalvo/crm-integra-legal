@@ -55,7 +55,19 @@ export default async function ImportacionPage({
             </p>
           </div>
         </div>
-        {!deshecha && <DeshacerImportacion importId={imp.id} cantidad={asientos.filter((a) => a.reversado_por === null).length} />}
+        {!deshecha && (
+          <DeshacerImportacion
+            importId={imp.id}
+            cantidad={asientos.filter((a) => a.reversado_por === null).length}
+            ultimaFecha={
+              asientos
+                .filter((a) => a.reversado_por === null)
+                .map((a) => a.asiento.transaction_date)
+                .sort()
+                .at(-1) ?? null
+            }
+          />
+        )}
       </div>
 
       {deshecha && (

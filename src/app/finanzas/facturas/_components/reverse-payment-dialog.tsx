@@ -7,6 +7,8 @@ import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
 import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import type { AsientoDeCobro } from "@/lib/finanzas/types/payment";
 import {
   construirAsientoDeReversion,
@@ -144,11 +146,12 @@ const TEXTOS = {
  * 🔴 LA VISTA PREVIA SALE DE `construirAsientoDeReversion`, LA MISMA FUNCIÓN
  * QUE USA EL SERVIDOR. NO SE REIMPLEMENTA ACÁ.
  * ═════════════════════════════════════════════════════════════════════════════
- * Este componente no intercambia débito y crédito por su cuenta, no arma la
- * descripción, no decide la fecha: le pasa el asiento original y el motivo a
- * la función pura de `contabilidad/reversion.ts` y dibuja lo que devuelve. La
- * ruta `/api/finanzas/payments/[id]/reverse` le pasa lo mismo a la misma
- * función y postea el resultado. Lo que se ve es lo que se postea.
+ * Este componente no intercambia débito y crédito por su cuenta ni arma la
+ * descripción: le pasa el asiento original, la fecha de registro elegida y el
+ * motivo a la función pura de `contabilidad/reversion.ts` y dibuja lo que
+ * devuelve. La ruta le pasa lo mismo a la misma función y postea el resultado.
+ * Lo que se ve es lo que se postea. El período de la fecha lo decide el
+ * servidor (y la base), no esta pantalla.
  *
  * Hay un test que lee este archivo y falla si deja de ser así
  * (`reversion-una-sola-implementacion.test.ts`).
@@ -171,15 +174,17 @@ export function ReversePaymentDialog({
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fechaError, setFechaError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // "Hoy" con la misma fórmula del servidor (UTC, ISO). Se recalcula al abrir
-  // el modal, no al renderizar la página: la pestaña puede llevar horas abierta.
-  const [hoy, setHoy] = useState(() => new Date().toISOString().slice(0, 10));
+  // La FECHA DE REGISTRO la elige el contador (revisión del 28/09 y reunión del
+  // 30/09); se propone hoy en Panamá. Se reinicia al abrir el modal, no al
+  // renderizar la página: la pestaña puede llevar horas abierta.
+  const [fecha, setFecha] = useState(() => hoyEnPanama());
 
   useEffect(() => {
     if (!open) return;
-    setHoy(new Date().toISOString().slice(0, 10));
+    setFecha(hoyEnPanama());
     const t = setTimeout(() => textareaRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open]);
@@ -190,11 +195,11 @@ export function ReversePaymentDialog({
   const preview = useMemo(
     () =>
       construirAsientoDeReversion(asiento, {
-        hoy,
+        fecha,
         motivo: "(vista previa)",
         source_id: paymentId,
       }),
-    [asiento, hoy, paymentId]
+    [asiento, fecha, paymentId]
   );
 
   const trimmedLen = reason.trim().length;
@@ -204,6 +209,7 @@ export function ReversePaymentDialog({
     setReason("");
     setReasonError(null);
     setSubmitError(null);
+    setFechaError(null);
   }
 
   function submit() {
@@ -221,11 +227,12 @@ export function ReversePaymentDialog({
         const res = await fetch(t.endpoint(paymentId), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: trimmed }),
+          body: JSON.stringify({ reason: trimmed, fecha_registro: fecha }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           if (data.fieldErrors?.reason) setReasonError(data.fieldErrors.reason);
+          if (data.fieldErrors?.fecha_registro) setFechaError(data.fieldErrors.fecha_registro);
           setSubmitError(data.error ?? t.error);
           return;
         }
@@ -285,7 +292,7 @@ export function ReversePaymentDialog({
               <p>
                 El asiento <span className="font-mono">{asiento.entry_number}</span> no se
                 borra: se postea su <span className="font-semibold">espejo</span> con la
-                fecha de hoy, {t.consecuencia}. Es irreversible: {t.siOcurrio}.
+                fecha de registro que elijas abajo, {t.consecuencia}. Es irreversible: {t.siOcurrio}.
               </p>
             </div>
           </div>
@@ -295,6 +302,20 @@ export function ReversePaymentDialog({
               {aviso}
             </p>
           )}
+
+          {/* Fecha de registro: la elige el contador, nunca antes del original */}
+          <CampoFechaDeRegistro
+            id="reverse_fecha_registro"
+            value={fecha}
+            onChange={(v) => {
+              setFecha(v);
+              if (fechaError) setFechaError(null);
+            }}
+            min={asiento.transaction_date}
+            error={fechaError}
+            disabled={isPending}
+            ayuda={`Define el mes en que entra la reversión. Tiene que caer en un período abierto y no puede ser anterior al asiento ${asiento.entry_number} (${formatDate(asiento.transaction_date)}).`}
+          />
 
           {/* Motivo */}
           <div>
@@ -349,7 +370,7 @@ export function ReversePaymentDialog({
                 Asiento que se va a postear
               </span>
               <span className="text-xs text-gray-500">
-                Fecha: <span className="font-mono text-gray-700">{formatDate(hoy)}</span>
+                Fecha de registro: <span className="font-mono text-gray-700">{formatDate(fecha)}</span>
               </span>
             </div>
             {preview.ok ? (

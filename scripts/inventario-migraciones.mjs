@@ -293,6 +293,17 @@ const MARCADORES = {
     nota: "7.5, 25/09. Todo o nada: post_journal_entries_batch postea cada asiento por post_journal_entry en una transaccion. reverse_journal_import reversa cada asiento con reverse_journal_entry (055), fecha de hoy, sin borrar nada. Los asientos importados son source_type manual.",
   },
 
+  "068_fechas_de_registro.sql": {
+    que: "Fecha de registro (accounting_date) en facturas, compras, gastos de tramite y NC de venta; backfill desde el libro; congelada al emitir",
+    tipo: "columna", tabla: "invoices", columna: "accounting_date",
+    nota: "Bloque 1, E1, 30/09. La fecha del documento sigue siendo la que ya existia (issue_date, expense_date, date); la de registro es la del asiento y define el periodo. No toca el libro: solo lo LEE para el backfill.",
+  },
+  "069_reversion_con_fecha_elegida.sql": {
+    que: "Reversiones, anulaciones y NC de compra sin el candado de 'hoy +/-1 dia': el contador elige la fecha de registro",
+    tipo: "cuerpo_funcion", nombre: "reverse_payment", contiene: "La reversión necesita una fecha de registro",
+    nota: "Bloque 1, E1, 30/09. Parche verificado sobre la definicion vigente de nueve funciones (no copias). Depende de la 068 (cancel_invoice_with_reversal mide el mes por accounting_date). Se mira el cuerpo: el nombre de la funcion no cambia.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

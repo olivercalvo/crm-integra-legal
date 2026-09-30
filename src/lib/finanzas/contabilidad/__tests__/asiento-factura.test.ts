@@ -44,6 +44,7 @@ function factura(p: Partial<FacturaParaAsiento> = {}): FacturaParaAsiento {
     id: INVOICE_ID,
     invoice_number: "FAC-HON-000009",
     issue_date: "2026-09-04",
+    accounting_date: "2026-09-04",
     grand_total: 1070,
     client_name: "Cliente S.A.",
     lineas: [linea()],
@@ -283,4 +284,11 @@ test("centavos: tres líneas que suman con decimales cuadran igual", () => {
   const d = r.asiento.lines.reduce((s, l) => s + l.debit, 0);
   const c = r.asiento.lines.reduce((s, l) => s + l.credit, 0);
   assert.equal(Math.round(d * 100), Math.round(c * 100));
+});
+
+test("E1: el asiento lleva la fecha de REGISTRO, no la del documento", () => {
+  const r = construirAsientoDeFactura(factura({ issue_date: "2026-09-28", accounting_date: "2026-10-01" }));
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.asiento.transaction_date, "2026-10-01");
 });

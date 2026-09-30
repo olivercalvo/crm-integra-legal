@@ -1,5 +1,40 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, E1: fecha de documento y fecha de registro] - 2026-09-30
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1. Respuestas de
+Josuarth del 28/09 y 30/09 (P-1a, P-1d). ⚠️ Migraciones `068` y `069` **escritas y SIN APLICAR**.
+
+### Qué cambia
+- **Dos fechas en todo documento tipo factura**: la del documento (informativa) y la de
+  REGISTRO (`accounting_date`, la del asiento, define el período). Facturas HON/REI, compras,
+  gastos de trámite y NC de venta. En la NC de compra la de registro ya era `issue_date`.
+  Formularios con el campo nuevo «Fecha de registro», que sigue a la del documento hasta que
+  alguien la cambia.
+- **Reversiones, anulaciones y notas: el contador elige la fecha de registro.** Hoy en Panamá
+  por defecto, período abierto, nunca antes del original. Ocho RPC sin el candado de «hoy ±1
+  día» (`069`). Reemplaza la segunda frase del acta del 09/09 (`CLAUDE.md`, `sop.md` SOP-045).
+- **El período se valida antes de tomar un número y antes de hablar con la DGI.** Anular una
+  factura o reversar una NC autorizada con una fecha en un mes cerrado se corta antes del PAC.
+- **Resumen de ITBMS por fecha de registro** (P-1a).
+- **«El mes de la factura»** para anular es el de su fecha de registro.
+- **Fechas futuras en mes abierto**: permitidas detrás de una sola constante hasta que Josuarth
+  conteste la pregunta 5.
+- **FND-012**: «hoy» se calculaba en UTC. `hoyEnPanama()` en un solo lugar.
+
+### Base (sin aplicar)
+- `068_fechas_de_registro.sql`: `accounting_date` en cuatro tablas, backfill desde la fecha del
+  asiento (o del documento si no hay asiento), valor por defecto por trigger, y la columna entra a
+  las listas congeladas de T4, T5 y la 049. No toca el libro.
+- `069_reversion_con_fecha_elegida.sql`: parche verificado sobre la definición vigente de nueve
+  funciones. Los 12 patrones se contaron en staging en solo lectura: una coincidencia cada uno.
+
+### Pruebas
+- `npm test`: todo en verde (tests nuevos de fecha de registro, período cerrado, reversión con
+  fecha elegida, ITBMS por registro, orden fecha→PAC en factura y NC, y `hoyEnPanama()` a las 19:00).
+- Cinco tests que fijaban la regla vieja se reescribieron en el mismo commit, y cuatro
+  verificaciones SQL (046, 050, 055, 060). Nueva: `verificacion-068-069-fecha-de-registro.sql`.
+
 ## [Agenda: lo que faltaba de las transcripciones del 25/08 y el 09/09] - 2026-09-26 (tarde)
 
 Solo documentación y el Excel; ningún cambio de código. Último push autorizado antes de mandar

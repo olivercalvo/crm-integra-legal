@@ -85,6 +85,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
         initial={{
           id: expense.id,
           expense_date: expense.expense_date,
+          accounting_date: expense.accounting_date ?? expense.expense_date,
           due_date: expense.due_date,
           supplier_id: expense.supplier_id,
           supplier_name: expense.supplier_name,

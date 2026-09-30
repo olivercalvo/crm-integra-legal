@@ -172,7 +172,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   reflejo exacto del original. Hay un test que lee el diálogo y el helper y falla si alguno
   reimplementa el cálculo (`reversion-una-sola-implementacion.test.ts`). Es la lección de
   `validarConsistenciaDeKind`: si el cliente reimplementa, algún día la vista previa miente.
-- **La fecha es la de la reversión, nunca la del original** (acta del 09/09). El RPC la exige.
+- **La fecha la elige el contador, dentro de un período abierto, y nunca es anterior a la del
+  original** (revisión de Josuarth del 28/09 y reunión del 30/09, que reemplazan al acta del
+  09/09). Detalle y estado de la implementación en «Regla de la fecha de registro», al pie.
 - ✅ **Ya existen las otras dos reversiones**, y los avisos que decían lo contrario se
   corrigieron el 22/09/2026: el **gasto de trámite** desde la `050` (Bloque 4) y el **asiento
   manual** desde la `055` (Bloque 7). Tres pantallas seguían prometiendo que "todavía no está
@@ -239,7 +241,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   "pagada" antes de la 048: sin número, banco, método, asiento ni comprobante (el CHECK lo impide).
   Se elimina (la compra vuelve a pendiente); no se reversa (409) ni tiene PDF (409). No se le
   inventa un `CE-`.
-- **Reversión por RPC `reverse_supplier_payment`** (048), una transacción, fecha de hoy; el
+- **Reversión por RPC `reverse_supplier_payment`** (048), una transacción, fecha de registro elegida (069); el
   diálogo es el de cobros con `variante="pago"`. Un pago sin asiento se elimina; con asiento, 409.
 - **Huecos en `CE-`:** mismo criterio que SOP-031 §2. Detalle en `sop.md` SOP-032.
 - **Vocabulario del Diario/Mayor:** `pago` = "Cobro", `pago_proveedor` = "Pago a proveedor".
@@ -253,17 +255,19 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   Tope (D7): **no se acredita más que `balance_due`**; lo cobrado se reversa primero.
 - 🔴 **Dos caminos, dos asientos distintos (D5):**
   - **Anular dentro del mes** = NC total automática (`createCreditNoteFromInvoice`) + REVERSIÓN
-    del asiento de la factura con fecha de hoy + `anulada`, en UNA transacción
+    del asiento de la factura con la fecha de registro elegida + `anulada`, en UNA transacción
     (RPC `cancel_invoice_with_reversal`, 052). La NC de una anulación **NO tiene asiento propio**:
     contabilizarla aparte sería contar dos veces.
   - **NC posterior o parcial** = asiento PROPIO `source_type = 'nota_credito'` con
     **`source_id = la NC`** (no la factura), construido por `asiento-nota-credito.ts` (la factura
     al revés, con `construirAsientoDeFactura` e invirtiendo). Mayor y Diario llegan a
     `/finanzas/notas-credito/{id}`.
-- 🔴 **Cerrado el MES DE LA FACTURA no se anula: se emite NC con fecha de hoy** (Josuarth, acta
-  del 09/09). Lo verifica `cancelInvoice` (409) Y el RPC contra `accounting_periods` por
-  `issue_date`. La pantalla reemplaza "Anular" por "Nota de crédito" (D4). Es distinto del
-  control de `post_journal_entry`, que mira el mes de HOY.
+- 🔴 **Cerrado el MES DE LA FACTURA no se anula: se emite NC** (Josuarth, acta del 09/09), con
+  la fecha de registro que elija el contador en un período abierto (revisión del 28/09 y
+  reunión del 30/09; ver «Regla de la fecha de registro», al pie). Lo verifica `cancelInvoice` (409) Y el RPC contra `accounting_periods` por
+  la fecha de REGISTRO de la factura (`accounting_date`, 068/069; antes `issue_date`). La
+  pantalla reemplaza "Anular" por "Nota de crédito" (D4). Es distinto del control de
+  `post_journal_entry`, que mira el mes de la fecha de registro de la ANULACIÓN.
 - 🔴 **Una factura con una NC en el libro ya NO se anula (053).** La anulación espeja el asiento
   original COMPLETO y la NC parcial ya debitó su parte: descuadre de 1.200 sobre 1.000. Lo que
   falta se acredita con OTRA NC. `cancelInvoice` rechaza por `credited_total > 0`; el RPC por la
@@ -386,7 +390,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 
 ### Resumen de ITBMS: las NC restan (desde 2026-09-25)
 - 🔴 **Débito = facturas emitidas no anuladas − NC de venta autorizadas por la DGI y
-  vigentes** (con su factura no anulada), en el mes **de la NC**. **Crédito = compras − NC de
+  vigentes** (con su factura no anulada), en el mes **de la NC**. 🔴 **El mes de cada documento
+  es el de su FECHA DE REGISTRO (`accounting_date`)**, no el del documento (Josuarth, P-1a,
+  30/09/2026; E1). **Crédito = compras − NC de
   compra vigentes.** Las anuladas no cuentan. La regla vive en `reports/vat-calculo.ts`
   (pura, con tests) y el reporte no suma por su cuenta.
 - "Autorizada" en una FACTURA = emitida y no anulada: las anteriores al 8/7 se autorizaron
@@ -406,7 +412,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **El saldo se deriva**: `business_expenses.credited_total` (trigger desde NC `emitida`,
   con guard) y `balance_due` GENERATED. El status se deriva contra el total NETO. Toda
   lectura del saldo de una compra usa `balance_due` (pago, antigüedad, PDF, sección de pagos).
-- Se anula con «Reversar» (`reverse_supplier_credit_note`, calco de la `060`): fecha de hoy,
+- Se anula con «Reversar» (`reverse_supplier_credit_note`, calco de la `060`): fecha de registro elegida,
   espejo verificado, un estado, y el trigger recalcula.
 - **Registra y reversa: admin, abogada y contador** (las compras son CRUD del contador).
 - 🟡 **Valores por defecto que decide Josuarth** (encabezado de la `066`, preguntas J-1 a
@@ -423,7 +429,8 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Validación pura en `import/asientos-import.ts`: cuadre, cuentas existentes y activas, mes
   abierto, montos positivos con dos decimales (parser estricto: texto es error, nunca 0).
 - **Cada importación tiene identificador y se deshace completa** (`reverse_journal_import`):
-  cada asiento se reversa con fecha de hoy por `reverse_journal_entry`; nada se borra.
+  cada asiento se reversa con la fecha de registro elegida (no antes del último asiento del lote)
+  por `reverse_journal_entry`; nada se borra.
 - Los asientos importados son `source_type = 'manual'`. `MAX_LINEAS_MANUALES` no aplica.
 
 ### Qué se puede hacer ante la DGI con una factura emitida (desde 2026-09-23, Bloque 9A)
@@ -741,18 +748,48 @@ Acta de la reunión con RM:
 > corrección es **nota de crédito con fecha del día** — nunca con la fecha del
 > documento original.
 
-Y su par, que aplica a todo el módulo contable:
+Y su par, que aplicaba a todo el módulo contable y **ya no rige** (ver abajo):
 
-> **La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
-> que revierte.
+> ~~**La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
+> que revierte.~~
+
+### Regla de la fecha de registro (revisión del 28/09/2026 y reunión del 30/09/2026)
+
+Josuarth la confirmó por escrito en la revisión del 28/09 y en la reunión del 30/09.
+**Reemplaza la segunda frase del acta del 09/09:**
+
+> **Reversiones, anulaciones y notas de crédito dejan de llevar siempre la fecha de hoy.**
+> El contador elige la **fecha de registro** (la contable, `journal_entries.transaction_date`),
+> **siempre dentro de un período abierto**. La pantalla propone por defecto **la fecha de hoy
+> en Panamá** (no la de UTC).
+
+- La fecha de registro de una reversión **nunca es anterior** a la del asiento que revierte.
+- La primera frase del acta sigue: una factura se anula sólo dentro del mismo mes; cerrado el
+  mes, se corrige con nota de crédito.
+- **Implementada en E1** (rama `feat/bloque1-contable`, 30/09/2026). ⚠️ Las migraciones
+  `068` (columna `accounting_date` en facturas, compras, gastos de trámite y NC de venta) y
+  `069` (los ocho RPC sin el candado de «hoy ±1 día») están **escritas y SIN APLICAR** en
+  staging hasta que Oliver diga «aplica»; en producción van en la ventana del despliegue.
+- **Dos fechas en todo documento tipo factura:** la del DOCUMENTO (informativa: la que va a la
+  DGI, base del vencimiento y de las 182 h) y la de REGISTRO (`accounting_date`, la del asiento).
+  En la NC de compra la de registro es `issue_date` y la del proveedor `supplier_document_date`.
+- 🔴 **El período se valida ANTES de tomar un correlativo y ANTES de hablar con el PAC**
+  (`api/fecha-de-registro.ts`). Validarla recién en el libro dejaría una factura o una NC
+  anulada ante la DGI y viva en el libro. La base lo vuelve a exigir.
+- **Fechas futuras en un mes abierto: detrás de UNA constante**,
+  `PERMITIR_FECHA_DE_REGISTRO_FUTURA` (`contabilidad/fecha-de-registro.ts`), hoy `true`
+  mientras Josuarth contesta la pregunta 5. La base no mira el futuro.
+- **«Hoy» se calcula con `hoyEnPanama()`** (`lib/utils/hoy-en-panama.ts`), nunca con
+  `toISOString()`: desde las 19:00 de Panamá el día UTC ya es mañana. Hay un test que lo fija.
+  Detalle en `sop.md` SOP-045.
 
 ### Estado actual (desde `794e686` / `dcbdd23`, staging)
 
 Las abogadas y admins anulan y emiten notas de crédito desde el detalle de la factura:
 - **"Anular factura"** visible cuando status ∈ {emitida, parcialmente_pagada, pagada}, **el mes de
-  `issue_date` está abierto y la factura no tiene NC** (053). Modal con motivo obligatorio (3–1000).
+  la fecha de registro (`accounting_date`) está abierto y la factura no tiene NC** (053, 069). Modal con motivo obligatorio (3–1000).
   Con pagos aplicados el modal bloquea ("reverse los pagos primero").
-- La anulación es **NC total automática + reversión del asiento con fecha de hoy + `anulada`**, en
+- La anulación es **NC total automática + reversión del asiento con la fecha de registro elegida + `anulada`**, en
   UNA transacción (RPC `cancel_invoice_with_reversal`, 052; `cancelInvoice()` en
   `api/invoices.ts` con DELETE compensatorio de la NC si el RPC falla). Sin asiento propio para la NC.
 - **"Nota de crédito"** (por líneas con cantidad) convive con Anular cuando el mes está abierto y

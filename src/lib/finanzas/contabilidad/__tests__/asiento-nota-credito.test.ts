@@ -29,6 +29,7 @@ const NC: NotaDeCreditoParaAsiento = {
   id: "nc-1",
   credit_note_number: "NC-000001",
   issue_date: "2026-09-22",
+  accounting_date: "2026-09-22",
   grand_total: 414,
   invoice_number: "FAC-HON-000011",
   client_name: "Aurelio Barría Quintero",
@@ -103,7 +104,8 @@ test("🔒 cancelInvoice: sin el gate del 02/09, con el bloqueo por mes cerrado,
 
 test("el texto del mes cerrado es el de D4", () => {
   const src = leer("src/lib/finanzas/api/invoices.ts");
-  assert.match(src, /está cerrado: no se anula, `\s*\+\s*`se emite una nota de crédito con fecha de hoy\./);
+  // Desde E1 la NC ya no lleva "la fecha de hoy": lleva la fecha de registro elegida.
+  assert.match(src, /está cerrado: no se anula, `\s*\+\s*`se corrige con una nota de crédito\./);
 });
 
 test("la ruta de anulación pasa el cliente de SERVICIO y la ruta de NC declara admin y abogada", () => {

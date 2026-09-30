@@ -29,6 +29,7 @@ import {
 import { cargarCobroParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { getAsientoDeCobro } from "@/lib/finanzas/queries/payments";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { allocateReceiptNumber } from "@/lib/finanzas/numbering/receipt-numbering";
 
 type DB = SupabaseClient;
@@ -411,7 +412,9 @@ export async function reversePayment(
   tenantId: string,
   userId: string,
   paymentId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReversePaymentResult> {
   // 1. El cobro existe y es de este tenant. El RPC lo vuelve a chequear con
   //    candado; acá es para contestar 404 en vez de un error opaco.
@@ -442,12 +445,16 @@ export async function reversePayment(
     );
   }
 
-  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
-  //    Misma fórmula de "hoy" que el resto del módulo (UTC), y la misma que el
-  //    RPC compara contra su `current_date`.
-  const hoy = new Date().toISOString().slice(0, 10);
+  // 3. La fecha de registro (revisión del 28/09 y reunión del 30/09): la elige
+  //    el contador, en un período abierto y nunca antes del original. Se valida
+  //    acá para contestar en palabras; el RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(original, {
-    hoy,
+    fecha,
     motivo: reason,
     source_id: paymentId,
   });

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import Link from "next/link";
 import { BookOpenCheck, CalendarDays, FileSpreadsheet, History } from "lucide-react";
 
@@ -109,10 +110,11 @@ export default async function AsientosPage({
   // líneas del formulario.
   const terceros = await listTercerosDelLibro(ctx.db, ctx.tenantId);
 
-  // La fecha se calcula en el SERVIDOR: el reloj del navegador puede estar en otra
-  // zona horaria y un asiento cargado a las 22:00 en Panamá caería en el día
-  // siguiente — o sea, en otro período contable si es fin de mes.
-  const hoy = new Date().toISOString().slice(0, 10);
+  // La fecha se calcula en el SERVIDOR y en la zona de Panamá: el reloj del
+  // navegador puede estar en otra zona, y el día UTC (lo que se usaba hasta E1)
+  // ya es "mañana" desde las 19:00 de Panamá. Un asiento cargado a las 22:00
+  // caía en el día siguiente, o sea en otro período si es fin de mes.
+  const hoy = hoyEnPanama();
 
   return (
     <div className="space-y-5">

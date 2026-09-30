@@ -1,5 +1,7 @@
 "use client";
 
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Loader2, AlertCircle } from "lucide-react";
@@ -48,6 +50,8 @@ interface EditProps extends BaseProps {
     client_id: string;
     case_id: string | null;
     issue_date: string;
+    /** Fecha de REGISTRO del borrador (`068`). */
+    accounting_date: string;
     due_date: string;
     notes: string | null;
     lines: InvoiceLineInput[];
@@ -58,12 +62,9 @@ type Props = CreateProps | EditProps;
 
 const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO"];
 
+/** Hoy en Panamá: la misma fecha que usa el servidor (ver `hoy-en-panama.ts`). */
 function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return hoyEnPanama();
 }
 
 function addDays(iso: string, days: number): string {
@@ -97,6 +98,15 @@ export function InvoiceForm(props: Props) {
   );
   const [issueDate, setIssueDate] = useState<string>(
     props.mode === "edit" ? props.initial.issue_date : todayIso()
+  );
+  // Fecha de REGISTRO (la del asiento, define el período). Arranca igual a la
+  // del documento y la SIGUE mientras nadie la toque; una vez elegida a mano,
+  // queda como la dejaron. El período lo valida el servidor al emitir.
+  const [accountingDate, setAccountingDate] = useState<string>(
+    props.mode === "edit" ? props.initial.accounting_date : todayIso()
+  );
+  const [registroElegido, setRegistroElegido] = useState<boolean>(
+    props.mode === "edit" && props.initial.accounting_date !== props.initial.issue_date
   );
   const [dueDate, setDueDate] = useState<string>(
     props.mode === "edit" ? props.initial.due_date : addDays(todayIso(), 30)
@@ -147,6 +157,7 @@ export function InvoiceForm(props: Props) {
       client_id: clientId ?? "",
       case_id: caseId,
       issue_date: issueDate,
+      accounting_date: accountingDate,
       due_date: dueDate,
       notes: notes.trim() || null,
       lines: lines.map((ln) => ({
@@ -321,19 +332,36 @@ export function InvoiceForm(props: Props) {
               </div>
             )}
 
-            {/* Fechas */}
+            {/* Fechas: la del DOCUMENTO (va a la DGI) y la de REGISTRO (el libro) */}
             <div data-error={!!errors.issue_date}>
-              <Label className="mb-1 block">Fecha de emisión *</Label>
+              <Label className="mb-1 block">Fecha del documento (emisión) *</Label>
               <Input
                 type="date"
                 value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
+                  if (!registroElegido) setAccountingDate(e.target.value);
+                }}
                 disabled={isPending}
                 className={errors.issue_date ? "border-red-300" : ""}
               />
               {errors.issue_date && (
                 <p className="mt-1 text-xs text-red-600">{errors.issue_date}</p>
               )}
+            </div>
+
+            <div data-error={!!errors.accounting_date}>
+              <CampoFechaDeRegistro
+                id="invoice_accounting_date"
+                value={accountingDate}
+                onChange={(v) => {
+                  setAccountingDate(v);
+                  setRegistroElegido(true);
+                }}
+                error={errors.accounting_date}
+                disabled={isPending}
+                ayuda="Es la fecha contable de la factura: define el mes en que entra al libro y al resumen de ITBMS. Se valida al emitir: el mes tiene que estar abierto."
+              />
             </div>
 
             <div data-error={!!errors.due_date}>

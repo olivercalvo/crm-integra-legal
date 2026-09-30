@@ -36,6 +36,11 @@
 
 ### Punto 1. Fecha de documento y fecha de registro · **L** · riesgo **alto**
 
+> ✅ **E1 construida el 30/09/2026** en la rama (commits locales). Migraciones `068` y `069`
+> escritas y **sin aplicar**. Dos ajustes respecto de este plan: (1) `expenses.supplier_invoice_number`
+> NO va en la `068`: es del punto 3 y queda para E2; (2) las funciones de la `069` no se copian:
+> se parchan sobre su definición vigente con verificación (ver el encabezado de la migración).
+
 **Hoy**
 
 | Documento | Columnas de fecha | Fecha que va al asiento (`transaction_date`) | ¿Quién la elige? |
@@ -352,7 +357,7 @@ Numeración desde la `068`. La `056` sigue reservada y el punto 9 la retira. Tod
 
 | # | Migración | Qué hace | Inmutabilidad / hash |
 |---|---|---|---|
-| **068** | `fechas_de_registro` | `accounting_date` en `invoices`, `business_expenses`, `expenses` y `credit_notes`. Backfill = `transaction_date` del asiento de ese documento si existe, si no la fecha del documento (la migración **verifica** que coincidan con la fecha del documento y lista las que no). `NOT NULL`. Suma `accounting_date` a las listas congeladas de T4, T5 y `049`. `expenses.supplier_invoice_number` (punto 3). Quita el candado de hoy de `create_supplier_credit_note` | Backfill sobre documentos, **no sobre el libro**. Se hace antes de agregar la columna a la lista congelada |
+| **068** | `fechas_de_registro` | `accounting_date` en `invoices`, `business_expenses`, `expenses` y `credit_notes`. Backfill = `transaction_date` del asiento de ese documento si existe, si no la fecha del documento (la migración **informa** las que no coincidan). `NOT NULL`. Valor por defecto por trigger. Suma `accounting_date` a las listas congeladas de T4, T5 y `049`. (`expenses.supplier_invoice_number` pasó a E2; el candado de `create_supplier_credit_note` lo quita la `069`) | Backfill sobre documentos, **no sobre el libro**. Se hace antes de agregar la columna a la lista congelada |
 | **069** | `reversion_con_fecha_elegida` | `CREATE OR REPLACE` de los 8 RPC: `reverse_payment`, `reverse_supplier_payment`, `reverse_expense_tramite`, `cancel_invoice_with_reversal` (gate de mes → `accounting_date`), `reverse_journal_entry` (+ `apertura`), `reverse_credit_note`, `reverse_supplier_credit_note` y `reverse_journal_import` (recibe la fecha). Sale el `±1 día` | Sin datos. El espejo lo sigue verificando cada RPC |
 | **070** | `motor_v4_referencias_y_terceros` | `journal_entries.referencia_externa` (CHECK de largo). `post_journal_entry` v4: hash con `referencia_externa`; número `AD-` para `manual`/`apertura`/`cierre`; tercero obligatorio en cuentas control. CHECK de `source_type` + `'cierre'`. CHECK de `sequence_type` + `purchase`, `manual_entry`. Prefijo `NC-CO-` en `create_supplier_credit_note`. `post_journal_entries_batch` (`067`) no cambia de firma | **Cuarta versión de la fórmula**, con fecha en SOP-014. No toca filas viejas. `verify_accounting_chain` sigue verde porque no recalcula `content_hash` (si algún día se escribe un verificador que sí, tiene que conocer las cuatro versiones por `entry_number` de corte) |
 | **071** | `tasa_con_cuenta` | `tax_codes.account_code` + backfill a `200003` + `NOT NULL` | Catálogo, sin libro |

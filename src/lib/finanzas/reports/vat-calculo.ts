@@ -13,6 +13,10 @@
  *   · ITBMS crédito = ITBMS de compras − ITBMS de NC de compra (3.5).
  *   · Las facturas y NC anuladas no cuentan.
  *   · La NC cuenta en el mes DE LA NC, no en el de su factura.
+ *   · 🔴 El mes de cada documento es el de su FECHA DE REGISTRO
+ *     (`accounting_date`, la del asiento), no el de la fecha del documento.
+ *     Respuesta de Josuarth, P-1a (30/09/2026). Sin fecha de registro (datos
+ *     anteriores a la `068`) cuenta la del documento, que era la misma.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * QUÉ QUIERE DECIR "AUTORIZADA" ACÁ (decisión documentada)
@@ -42,8 +46,10 @@ export type EstadoFactura =
 
 export interface FacturaParaItbms {
   status: EstadoFactura;
-  /** `YYYY-MM-DD`. Sólo hace falta si se filtra por mes. */
+  /** `YYYY-MM-DD` del documento. Sólo hace falta si se filtra por mes. */
   issue_date?: string;
+  /** `YYYY-MM-DD` de REGISTRO. Si viene, es la que decide el mes (P-1a). */
+  accounting_date?: string | null;
   subtotal_total: number;
   tax_total: number;
 }
@@ -52,6 +58,8 @@ export interface NotaDeVentaParaItbms {
   status: string;
   /** `YYYY-MM-DD` de la NC (NO de su factura). */
   issue_date?: string;
+  /** `YYYY-MM-DD` de REGISTRO de la NC. Si viene, es la que decide el mes (P-1a). */
+  accounting_date?: string | null;
   fe_estado: string | null;
   /** El status de la factura que acredita. */
   factura_status: EstadoFactura;
@@ -97,25 +105,27 @@ function round2(n: number): number {
 /** Líneas 1, 2 y 3: ventas, ventas gravadas e ITBMS débito, netos de NC. */
 /**
  * @param mes `YYYY-MM` opcional. Si viene, cada documento cuenta en el mes de SU
- *            fecha: la factura en el de la factura, la NC en el de la NC.
+ *            fecha de registro: la factura en el de la factura, la NC en el de la NC.
  */
 export function ventasDelPeriodo(
   facturas: FacturaParaItbms[],
   notas: NotaDeVentaParaItbms[],
   mes?: string
 ): { ventas: number; gravadas: number; itbms: number } {
-  const delMes = (d?: string) => !mes || (d ?? "").slice(0, 7) === mes;
+  // El mes de un documento es el de su fecha de REGISTRO (P-1a).
+  const delMes = (d: { accounting_date?: string | null; issue_date?: string }) =>
+    !mes || (d.accounting_date ?? d.issue_date ?? "").slice(0, 7) === mes;
   let ventas = 0;
   let gravadas = 0;
   let itbms = 0;
   for (const f of facturas) {
-    if (!delMes(f.issue_date) || !cuentaLaFactura(f)) continue;
+    if (!delMes(f) || !cuentaLaFactura(f)) continue;
     ventas += f.subtotal_total;
     itbms += f.tax_total;
     if (f.tax_total > 0) gravadas += f.subtotal_total;
   }
   for (const n of notas) {
-    if (!delMes(n.issue_date) || !cuentaLaNotaDeVenta(n)) continue;
+    if (!delMes(n) || !cuentaLaNotaDeVenta(n)) continue;
     ventas -= n.subtotal_total;
     itbms -= n.tax_total;
     if (n.tax_total > 0) gravadas -= n.subtotal_total;

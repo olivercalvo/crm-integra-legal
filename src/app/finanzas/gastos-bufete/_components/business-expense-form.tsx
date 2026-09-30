@@ -1,5 +1,7 @@
 "use client";
 
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -66,12 +68,9 @@ const PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
   "otro",
 ];
 
+/** Hoy en Panamá: la misma fecha que usa el servidor (ver `hoy-en-panama.ts`). */
 function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return hoyEnPanama();
 }
 
 /**
@@ -99,6 +98,14 @@ export function BusinessExpenseForm(props: Props) {
 
   // ---- State --------------------------------------------------------------
   const [expenseDate, setExpenseDate] = useState<string>(init?.expense_date ?? todayIso());
+  // Fecha de REGISTRO (la del asiento, define el período). Sigue a la del
+  // documento hasta que alguien la elige a mano.
+  const [accountingDate, setAccountingDate] = useState<string>(
+    init?.accounting_date ?? init?.expense_date ?? todayIso()
+  );
+  const [registroElegido, setRegistroElegido] = useState<boolean>(
+    !!init?.accounting_date && init.accounting_date !== init.expense_date
+  );
   const [supplierName, setSupplierName] = useState<string>(init?.supplier_name ?? "");
   const [supplierRuc, setSupplierRuc] = useState<string>(init?.supplier_ruc ?? "");
   const [supplierId, setSupplierId] = useState<string>(init?.supplier_id ?? "");
@@ -235,6 +242,7 @@ export function BusinessExpenseForm(props: Props) {
 
     const payload: Partial<CreateBusinessExpenseInput> = {
       expense_date: expenseDate,
+      accounting_date: accountingDate,
       supplier_id: supplierId || null,
       due_date: dueDate || null,
       supplier_invoice_number: supplierInvoiceNumber.trim() || null,
@@ -423,12 +431,13 @@ export function BusinessExpenseForm(props: Props) {
 
           {/* Fecha */}
           <div data-error={!!errors.expense_date}>
-            <Label className="mb-1 block">Fecha del gasto *</Label>
+            <Label className="mb-1 block">Fecha del documento (factura del proveedor) *</Label>
             <Input
               type="date"
               value={expenseDate}
               onChange={(e) => {
                 setExpenseDate(e.target.value);
+                if (!registroElegido) setAccountingDate(e.target.value);
                 proponerVencimiento(e.target.value, proveedorElegido?.payment_terms_days ?? 0);
               }}
               disabled={isPending}
@@ -437,6 +446,21 @@ export function BusinessExpenseForm(props: Props) {
             {errors.expense_date && (
               <p className="mt-1 text-xs text-red-600">{errors.expense_date}</p>
             )}
+          </div>
+
+          {/* Fecha de REGISTRO: la del asiento. Informativa la de arriba. */}
+          <div data-error={!!errors.accounting_date}>
+            <CampoFechaDeRegistro
+              id="expense_accounting_date"
+              value={accountingDate}
+              onChange={(v) => {
+                setAccountingDate(v);
+                setRegistroElegido(true);
+              }}
+              error={errors.accounting_date}
+              disabled={isPending}
+              ayuda="Es la fecha contable de la compra: define el mes del asiento y del resumen de ITBMS. El vencimiento se cuenta desde la fecha del documento."
+            />
           </div>
 
           {/* ───────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import {
   construirAsientoDeGastoTramite,
@@ -75,7 +76,7 @@ export async function postearGastoTramite(
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
     .select(
-      `id, date, concept, posted_entry_id,
+      `id, date, accounting_date, concept, posted_entry_id,
        cases(case_code),
        suppliers(legal_name)`
     )
@@ -133,6 +134,7 @@ export async function postearGastoTramite(
     {
       id: String(gasto.id),
       date: String(gasto.date),
+      accounting_date: String((gasto as { accounting_date?: string | null }).accounting_date ?? gasto.date),
       concept: String(gasto.concept ?? ""),
       case_code: caso?.case_code ?? null,
       supplier_legal_name: prov?.legal_name ?? null,
@@ -218,7 +220,9 @@ export async function reverseExpenseTramite(
   tenantId: string,
   userId: string,
   expenseId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseExpenseTramiteResult> {
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
@@ -252,8 +256,14 @@ export async function reverseExpenseTramite(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: expenseId });
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
+  const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: expenseId });
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);
   }

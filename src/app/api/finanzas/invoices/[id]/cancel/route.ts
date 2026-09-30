@@ -39,7 +39,8 @@ interface RouteParams {
  *
  * Permisos: admin + abogada (Sprint 2C, D4 + D5). El contador NO anula.
  *
- * Body: `{ reason: string, observations?: string | null }`.
+ * Body: `{ reason: string, observations?: string | null, fecha_registro?: string }`.
+ * Sin `fecha_registro`, la anulación se registra con la fecha de hoy en Panamá.
  * El motivo exige **15 caracteres** desde el Bloque 9B (D5): es el mínimo que
  * pide la DGI para `cancellationReason`. Lo valida el orquestador con el mismo
  * módulo que usa el diálogo, y el CHECK de la `058` lo sostiene en la base.
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       params.id,
       b.reason,
       observaciones,
-      new Date()
+      new Date(),
+      b.fecha_registro
     );
 
     switch (r.estado) {
@@ -114,6 +116,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const cuerpo: Record<string, unknown> = { error: err.message };
       // El 400 del motivo se devuelve con la forma que el diálogo ya lee.
       if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      // El 422 de la fecha de registro, a su campo.
+      if (err.fieldErrors) cuerpo.fieldErrors = err.fieldErrors;
       return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[finanzas] cancelInvoice unexpected error:", err);

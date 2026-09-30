@@ -6,6 +6,8 @@ import { FileMinus, AlertCircle, AlertTriangle } from "lucide-react";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Label } from "@/components/ui/label";
 import { fmtImporte } from "@/lib/utils/importe";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import {
   NC_MOTIVO_MAX,
   NC_MOTIVO_MIN,
@@ -33,6 +35,8 @@ interface Props {
   /** D4: cuando el mes de la factura está cerrado, este botón reemplaza a "Anular". */
   mesCerrado: boolean;
   disabled?: boolean;
+  /** La fecha de registro de la factura: la NC no puede registrarse antes. */
+  fechaMinima?: string | null;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -52,7 +56,15 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * 🔴 La NC nace como documento INTERNO, sin autorización de la DGI, y el
  * detalle y el PDF lo dicen. Se envía a la DGI desde el detalle de la NC.
  */
-export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas, mesCerrado, disabled }: Props) {
+export function CreditNoteDialog({
+  invoiceId,
+  invoiceNumber,
+  balanceDue,
+  lineas,
+  mesCerrado,
+  disabled,
+  fechaMinima,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -60,6 +72,9 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Fecha de REGISTRO de la NC: la elige el contador, hoy en Panamá por defecto.
+  // La del documento es la de hoy (el día en que se emite).
+  const [fecha, setFecha] = useState(() => hoyEnPanama());
 
   const acreditables = lineas.filter((l) => l.disponible > 0.0001);
 
@@ -106,6 +121,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
     setCantidades({});
     setFieldErrors({});
     setSubmitError(null);
+    setFecha(hoyEnPanama());
   }
 
   function toggle(l: LineaAcreditable, marcada: boolean) {
@@ -135,6 +151,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
           body: JSON.stringify({
             invoice_id: invoiceId,
             reason: r,
+            fecha_registro: fecha,
             lineas: seleccion.map((x) => ({ invoice_line_id: x.linea.invoice_line_id, quantity: x.qty })),
           }),
         });
@@ -199,8 +216,9 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
             <div role="alert" className="flex items-start gap-2 rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
               <p>
-                El mes de esta factura está cerrado: no se anula, se emite una nota de crédito con la
-                fecha de hoy. Para acreditarla completa, marque todas las líneas.
+                El mes de esta factura está cerrado: no se anula, se emite una nota de crédito con
+                una fecha de registro en un mes abierto. Para acreditarla completa, marque todas las
+                líneas.
               </p>
             </div>
           )}
@@ -281,6 +299,19 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
             <span className={`font-mono text-lg font-bold ${excede ? "text-red-700" : "text-integra-navy"}`}>B/. {fmtImporte(total)}</span>
           </div>
 
+          <CampoFechaDeRegistro
+            id="nc_fecha_registro"
+            value={fecha}
+            onChange={(v) => {
+              setFecha(v);
+              if (fieldErrors.fecha_registro) setFieldErrors({ ...fieldErrors, fecha_registro: "" });
+            }}
+            min={fechaMinima ?? undefined}
+            error={fieldErrors.fecha_registro || null}
+            disabled={isPending}
+            ayuda="La nota de crédito entra al libro con esta fecha. Tiene que caer en un período abierto y no puede ser anterior a la factura."
+          />
+
           <div>
             <Label htmlFor="nc_reason" className="text-sm">
               Motivo <span className="text-red-600">*</span>
@@ -310,7 +341,7 @@ export function CreditNoteDialog({ invoiceId, invoiceNumber, balanceDue, lineas,
           </div>
 
           <p className="text-xs text-gray-500">
-            La nota de crédito lleva la fecha de hoy, se numera <span className="font-mono">NC-</span> y queda como
+            La nota de crédito lleva como fecha de documento la de hoy, se numera <span className="font-mono">NC-</span> y queda como
             documento interno: <span className="font-semibold">todavía no se envía a la DGI</span>.
           </p>
 

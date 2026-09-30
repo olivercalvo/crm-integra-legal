@@ -103,7 +103,10 @@ export interface FacturaParaAsiento {
   id: string;
   /** El correlativo YA generado. Ver `emitInvoice`. */
   invoice_number: string;
+  /** Fecha del DOCUMENTO (la que va a la DGI). Informativa en el libro. */
   issue_date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   grand_total: number;
   client_name: string;
   lineas: LineaFacturaParaAsiento[];
@@ -271,7 +274,7 @@ export function construirAsientoDeFactura(
   return {
     ok: true,
     asiento: {
-      transaction_date: f.issue_date,
+      transaction_date: f.accounting_date,
       description: descripcionDelAsientoDeFactura(f),
       source_type: "factura",
       lines,

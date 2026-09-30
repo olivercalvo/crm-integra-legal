@@ -123,7 +123,13 @@ export interface CreateInvoiceInput {
   invoice_kind: InvoiceKind;
   client_id: string;
   case_id: string | null;
-  issue_date: string; // YYYY-MM-DD
+  issue_date: string; // YYYY-MM-DD — fecha del DOCUMENTO (la que va a la DGI)
+  /**
+   * Fecha de REGISTRO (YYYY-MM-DD): la del asiento, define el período. Si no
+   * viene, es igual a `issue_date` (lo resuelve el validador y, por si acaso,
+   * el trigger de la `068`).
+   */
+  accounting_date?: string;
   due_date: string;   // YYYY-MM-DD
   notes: string | null;
   lines: Array<Omit<InvoiceLineInput, "_key" | "id">>;
@@ -135,6 +141,8 @@ export interface UpdateInvoiceInput {
   client_id: string;
   case_id: string | null;
   issue_date: string;
+  /** Fecha de REGISTRO. Ver `CreateInvoiceInput.accounting_date`. */
+  accounting_date?: string;
   due_date: string;
   notes: string | null;
   lines: InvoiceLineInput[]; // con id si ya existían
@@ -151,6 +159,8 @@ export interface InvoiceRow {
   case_id: string | null;
   quote_id: string | null;
   issue_date: string;
+  /** Fecha de REGISTRO (`068`). Puede faltar en una base anterior a la migración. */
+  accounting_date?: string | null;
   due_date: string;
   status: InvoiceStatus;
   currency: string;

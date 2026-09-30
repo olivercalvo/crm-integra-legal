@@ -17,6 +17,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import {
   validarLineasDeNotaDeCredito,
   type CreateCreditNoteInput,
@@ -94,7 +96,7 @@ export async function createCreditNote(
   // 1. La factura y sus líneas
   const { data: invoice, error: errInv } = await db
     .from("invoices")
-    .select("id, client_id, invoice_number, status, balance_due")
+    .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date")
     .eq("tenant_id", tenantId)
     .eq("id", input.invoice_id)
     .maybeSingle();
@@ -150,6 +152,18 @@ export async function createCreditNote(
     throw new MutationError(validacion.mensaje, validacion.status, undefined, validacion.fieldErrors);
   }
 
+  // 3.b La fecha de REGISTRO: la elige el contador, en un período abierto y
+  //     nunca antes del registro de la factura que corrige. Antes del número:
+  //     un 422 por mes cerrado no quema correlativo.
+  const registroDeLaFactura = String(
+    (invoice as { accounting_date?: string | null }).accounting_date ?? invoice.issue_date
+  );
+  const fechaDeRegistro = await resolverFechaDeRegistro(db, tenantId, input.fecha_registro, {
+    noAntesDe: { fecha: registroDeLaFactura, etiqueta: `la factura ${invoice.invoice_number}` },
+    que: "la nota de crédito",
+    campo: "fecha_registro",
+  });
+
   // 4. El número, después de todas las validaciones (un 400 no quema correlativo)
   const { data: nextNumber, error: errSeq } = await db.rpc("get_next_sequence_number", {
     p_tenant_id: tenantId,
@@ -160,8 +174,10 @@ export async function createCreditNote(
   }
   const formattedNumber = `NC-${String(nextNumber).padStart(6, "0")}`;
 
-  // 5. Cabecera con la fecha de HOY (totales = 0; T8c los recalcula con las líneas)
-  const issueDateIso = new Date().toISOString().slice(0, 10);
+  // 5. Cabecera (totales = 0; T8c los recalcula con las líneas). Dos fechas:
+  //    la del DOCUMENTO es el día en que se emite (hoy en Panamá: es la que va
+  //    a la DGI) y la de REGISTRO es la elegida.
+  const issueDateIso = hoyEnPanama();
   const { data: cnHeader, error: errCn } = await db
     .from("credit_notes")
     .insert({
@@ -170,6 +186,7 @@ export async function createCreditNote(
       invoice_id: input.invoice_id,
       client_id: invoice.client_id,
       issue_date: issueDateIso,
+      accounting_date: fechaDeRegistro,
       reason: input.reason,
       observations: input.observations,
       status: "emitida",
@@ -298,7 +315,9 @@ export async function createCreditNoteFromInvoice(
   userId: string,
   invoiceId: string,
   reason: string,
-  observations: string | null = null
+  observations: string | null = null,
+  /** Fecha de registro de la anulación que la genera. Sin ella, hoy en Panamá. */
+  fechaDeRegistro: string | null = null
 ): Promise<{ id: string; credit_note_number: string }> {
   const { data: inv, error: errInv } = await db
     .from("invoices")
@@ -338,6 +357,7 @@ export async function createCreditNoteFromInvoice(
     invoice_id: invoiceId,
     reason,
     observations,
+    fecha_registro: fechaDeRegistro,
     lineas: ((lines ?? []) as { id: string; quantity: number | string }[]).map((l) => ({
       invoice_line_id: l.id,
       quantity: Number(l.quantity),
@@ -526,7 +546,9 @@ export async function reverseCreditNote(
   tenantId: string,
   userId: string,
   creditNoteId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseCreditNoteResult> {
   // 1. La NC existe y es de este tenant. El RPC lo vuelve a chequear con
   //    candado; acá es para contestar 404 en vez de un error opaco.
@@ -559,10 +581,15 @@ export async function reverseCreditNote(
     );
   }
 
-  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
-  const hoy = new Date().toISOString().slice(0, 10);
+  // 3. La fecha de registro elegida (revisión del 28/09 y reunión del 30/09):
+  //    período abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(original, {
-    hoy,
+    fecha,
     motivo: reason,
     source_id: creditNoteId,
   });

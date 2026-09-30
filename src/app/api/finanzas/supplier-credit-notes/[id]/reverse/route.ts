@@ -34,12 +34,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
   const reason = String((body as { reason?: unknown } | null)?.reason ?? "");
   try {
-    const r = await reverseSupplierCreditNote(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason);
+    const r = await reverseSupplierCreditNote(
+      ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
+    );
     return NextResponse.json(r, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       const cuerpo: Record<string, unknown> = { error: err.message };
       if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      if (err.fieldErrors) cuerpo.fieldErrors = err.fieldErrors;
       return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[finanzas] reverseSupplierCreditNote unexpected error:", err);

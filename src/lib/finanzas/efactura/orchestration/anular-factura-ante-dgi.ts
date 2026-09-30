@@ -82,7 +82,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
-import { cancelInvoice, periodoDeLaFacturaCerrado } from "@/lib/finanzas/api/invoices";
+import {
+  cancelInvoice,
+  periodoDeLaFacturaCerrado,
+  resolverFechaDeAnulacion,
+} from "@/lib/finanzas/api/invoices";
 import { loadEmisorConfig } from "@/lib/finanzas/efactura/config/emisor-config";
 import {
   decidirAccionFiscal,
@@ -126,7 +130,9 @@ export async function anularFacturaAnteDgi(
   invoiceId: string,
   motivoCrudo: unknown,
   observations: string | null,
-  ahora: Date
+  ahora: Date,
+  /** Fecha de registro de la anulación. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ResultadoDeAnulacionFiscal> {
   // ---------------------------------------------------------------------------
   // T0 — Qué se puede hacer con esta factura. Se vuelve a preguntar acá: lo que
@@ -156,6 +162,15 @@ export async function anularFacturaAnteDgi(
     throw new MutationError(validado.mensaje, 400);
   }
   const motivo = validado.motivo;
+
+  // ---------------------------------------------------------------------------
+  // T0.c — La fecha de registro (la elige el contador desde el 30/09). Se valida
+  //        ACÁ, antes de registrar el intento y de hablar con el PAC: validarla
+  //        recién en el libro dejaría la factura anulada ante la DGI y viva en
+  //        el libro (D4) por un error que se veía de entrada (mes cerrado,
+  //        fecha anterior al asiento de la factura).
+  // ---------------------------------------------------------------------------
+  const fecha = await resolverFechaDeAnulacion(db, ledgerDb, tenantId, invoiceId, fechaDeRegistro);
 
   // ---------------------------------------------------------------------------
   // EL REINTENTO — la factura quedó marcada como anulada ante la DGI y falta el
@@ -192,7 +207,7 @@ export async function anularFacturaAnteDgi(
       // Marcada como anulada ante la DGI pero sin CUFE guardado: no hay a quién
       // preguntarle. Se completa en el libro, que es lo único que queda por
       // hacer, y la advertencia de la matriz ya lo explica en pantalla.
-      return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+      return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
     }
 
     const confirmacion = await confirmarAnulacionEnPac(
@@ -215,7 +230,7 @@ export async function anularFacturaAnteDgi(
       };
     }
 
-    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
   }
 
   // ---------------------------------------------------------------------------
@@ -228,7 +243,7 @@ export async function anularFacturaAnteDgi(
   //   política del bufete, no de este archivo.
   // ---------------------------------------------------------------------------
   if (accion.accion === "anular_solo_en_el_libro") {
-    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
   }
 
   // ---------------------------------------------------------------------------
@@ -359,7 +374,7 @@ export async function anularFacturaAnteDgi(
   // ---------------------------------------------------------------------------
   // T4 — El libro. Si falla, queda el estado intermedio de D4 (camino 3).
   // ---------------------------------------------------------------------------
-  return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+  return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
 }
 
 // ---------------------------------------------------------------------------
@@ -381,10 +396,11 @@ async function cerrarEnElLibro(
   userId: string,
   invoiceId: string,
   motivo: string,
-  observations: string | null
+  observations: string | null,
+  fecha: string
 ): Promise<ResultadoDeAnulacionFiscal> {
   try {
-    const r = await cancelInvoice(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations);
+    const r = await cancelInvoice(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
     return {
       estado: "anulada",
       mensaje: "Factura anulada ante la DGI y en el libro contable.",
@@ -413,7 +429,7 @@ async function cargarEstadoDeFactura(
   const { data, error } = await db
     .from("invoices")
     .select(
-      "id, status, fe_estado, dgi_cufe, issue_date, dgi_fecha_autorizacion, credited_total, amount_paid"
+      "id, status, fe_estado, dgi_cufe, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid"
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -423,6 +439,9 @@ async function cargarEstadoDeFactura(
   if (!data) throw new MutationError("Factura no encontrada", 404);
 
   const issueDate = data.issue_date ? String(data.issue_date) : null;
+  // El "mes de la factura" es el de su fecha de REGISTRO (el período de su
+  // asiento) desde la `068`. La ventana de 182 h sigue contando desde `issue_date`.
+  const registro = (data as { accounting_date?: string | null }).accounting_date ?? issueDate;
 
   return {
     status: String(data.status),
@@ -432,7 +451,7 @@ async function cargarEstadoDeFactura(
     dgiFechaAutorizacion: (data.dgi_fecha_autorizacion as string | null) ?? null,
     creditedTotal: Number(data.credited_total ?? 0),
     amountPaid: Number(data.amount_paid ?? 0),
-    mesCerrado: issueDate ? await periodoDeLaFacturaCerrado(db, tenantId, issueDate) : false,
+    mesCerrado: registro ? await periodoDeLaFacturaCerrado(db, tenantId, String(registro)) : false,
   };
 }
 

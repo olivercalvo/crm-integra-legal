@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(r, { status: 201 });
   } catch (err) {
     if (err instanceof MutationError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] createSupplierCreditNote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

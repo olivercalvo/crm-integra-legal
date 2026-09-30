@@ -14,7 +14,12 @@
  *  10. TOTAL AMOUNT DUE = (7) + (8) - (9)
  *
  * Convenciones:
- *   - Devengado por issue_date (no por fecha de pago).
+ *   - Devengado por FECHA DE REGISTRO (`accounting_date`), no por la del
+ *     documento ni por la de pago. Respuesta de Josuarth (P-1a, 30/09/2026): el
+ *     resumen va por la fecha contable, la misma que define el período del
+ *     asiento. Hasta la `068` la fecha era una sola, así que en los meses ya
+ *     cerrados no cambia nada. En las NC de compra, `issue_date` YA es la de
+ *     registro (la del proveedor es `supplier_document_date`).
  *   - 🔴 Desde el 25/09/2026 (regla de Oliver, ver `vat-calculo.ts`): las
  *     facturas ANULADAS no cuentan, y las NOTAS DE CRÉDITO de venta autorizadas
  *     y vigentes RESTAN, en el mes de la NC. Antes una anulada contaba positivo
@@ -216,31 +221,28 @@ export async function mesesConActividad(
   const [facturas, gastos, pagos, notas, notasCompra] = await Promise.all([
     db
       .from("invoices")
-      .select("issue_date")
+      .select("accounting_date")
       .eq("tenant_id", tenantId)
       .in("status", ["emitida", "parcialmente_pagada", "pagada", "anulada"]),
-    db.from("business_expenses").select("expense_date").eq("tenant_id", tenantId),
+    db.from("business_expenses").select("accounting_date").eq("tenant_id", tenantId),
     db.from("tax_payments").select("payment_date").eq("tenant_id", tenantId),
     // Un mes que sólo tiene una NC (de una factura de otro mes) también cuenta.
-    db.from("credit_notes").select("issue_date").eq("tenant_id", tenantId),
-    db.from("supplier_credit_notes").select("issue_date").eq("tenant_id", tenantId),
+    db.from("credit_notes").select("accounting_date").eq("tenant_id", tenantId),
+    // En la NC de compra la fecha de registro se llama `issue_date` (066).
+    db.from("supplier_credit_notes").select("accounting_date:issue_date").eq("tenant_id", tenantId),
   ]);
 
   const meses = new Set<string>();
-  for (const r of (facturas.data ?? []) as { issue_date: string }[]) {
-    const m = mes(r.issue_date);
-    if (m) meses.add(m);
-  }
-  for (const r of (gastos.data ?? []) as { expense_date: string }[]) {
-    const m = mes(r.expense_date);
+  for (const r of [...(facturas.data ?? []), ...(gastos.data ?? [])] as { accounting_date: string }[]) {
+    const m = mes(r.accounting_date);
     if (m) meses.add(m);
   }
   for (const r of (pagos.data ?? []) as { payment_date: string }[]) {
     const m = mes(r.payment_date);
     if (m) meses.add(m);
   }
-  for (const r of [...(notas.data ?? []), ...(notasCompra.data ?? [])] as { issue_date: string }[]) {
-    const m = mes(r.issue_date);
+  for (const r of [...(notas.data ?? []), ...(notasCompra.data ?? [])] as { accounting_date: string }[]) {
+    const m = mes(r.accounting_date);
     if (m) meses.add(m);
   }
 
@@ -277,10 +279,11 @@ export async function getVatSummary(
        client:clients!invoices_client_id_fkey(name, client_number)`
     )
     .eq("tenant_id", tenantId)
-    .gte("issue_date", from)
-    .lte("issue_date", to)
+    // Por fecha de REGISTRO (P-1a). La fecha que se muestra sigue siendo la del documento.
+    .gte("accounting_date", from)
+    .lte("accounting_date", to)
     .in("status", ["emitida", "parcialmente_pagada", "pagada"])
-    .order("issue_date", { ascending: true })
+    .order("accounting_date", { ascending: true })
     .order("invoice_number", { ascending: true });
 
   // 2) NOTAS DE CRÉDITO de venta con fecha en el mes (restan). Se traen todas
@@ -295,9 +298,9 @@ export async function getVatSummary(
        client:clients!credit_notes_client_id_fkey(name, client_number)`
     )
     .eq("tenant_id", tenantId)
-    .gte("issue_date", from)
-    .lte("issue_date", to)
-    .order("issue_date", { ascending: true })
+    .gte("accounting_date", from)
+    .lte("accounting_date", to)
+    .order("accounting_date", { ascending: true })
     .order("credit_note_number", { ascending: true });
 
   // 3) Compras del bufete (line 4/5/6).
@@ -308,9 +311,9 @@ export async function getVatSummary(
        subtotal, tax_rate, tax_amount, total, status`
     )
     .eq("tenant_id", tenantId)
-    .gte("expense_date", from)
-    .lte("expense_date", to)
-    .order("expense_date", { ascending: true });
+    .gte("accounting_date", from)
+    .lte("accounting_date", to)
+    .order("accounting_date", { ascending: true });
 
   // 4) Pagos al DGI del período (line 9).
   const paymentsPromise = db

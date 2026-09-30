@@ -1,7 +1,7 @@
 /**
  * POST /api/finanzas/asientos/[id]/reverse — reversa un asiento MANUAL.
  *
- * Bloque 7 (22/09/2026). Body: `{ reason }`. Delega en `reverseJournalEntry`
+ * Bloque 7 (22/09/2026). Body: `{ reason, fecha_registro? }`. Delega en `reverseJournalEntry`
  * → RPC `reverse_journal_entry` (055): espejo verificado, fecha de hoy,
  * `reverses_entry_id`. Esta ruta no arma líneas.
  *
@@ -65,13 +65,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas/asientos] reverse failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas/asientos] reverse unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

@@ -139,6 +139,8 @@ async function cargar(invoiceNumber: string): Promise<FacturaParaAsiento> {
     id: inv.id,
     invoice_number: invoiceNumber,
     issue_date: new Date(inv.issue_date).toISOString().slice(0, 10),
+    // Script de verificación: arma el asiento como antes de la `068` (registro = documento).
+    accounting_date: new Date(inv.issue_date).toISOString().slice(0, 10),
     grand_total: Number(inv.grand_total),
     client_name: inv.client_name,
     lineas,

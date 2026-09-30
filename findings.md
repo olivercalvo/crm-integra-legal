@@ -1,5 +1,14 @@
 # FINDINGS.MD — CRM INTEGRA LEGAL
 
+## FND-012: "Hoy" se calculaba en UTC: desde las 19:00 de Panamá el módulo contable fechaba "mañana"
+**Fecha:** 2026-09-30
+**Contexto:** Planificación del Bloque 1 (`docs/finanzas/plan-bloque1.md`), al relevar de dónde sale la fecha de cada reversión y cada nota de crédito.
+**Hallazgo:** Once lugares del módulo contable calculaban "hoy" con `new Date().toISOString().slice(0, 10)`, que es el día en **UTC**. Panamá está en UTC-5 todo el año: desde las 19:00 hasta la medianoche, ese valor ya es el día siguiente. Una NC emitida el 30/09 a las 20:00 quedaba con `issue_date` 01/10, en otro período; lo mismo las reversiones, la anulación, deshacer una importación y la fecha que proponía el Asiento de Diario (cuyo comentario decía, justamente, que se calculaba en el servidor para evitar ese problema). Los RPC toleraban ±1 día contra `current_date`, así que no fallaba: fechaba mal en silencio.
+**Impacto:** Asientos de fin de mes en el mes equivocado y un resumen de ITBMS corrido, sin ningún error visible. En los formularios el valor venía del navegador (hora local), así que la pantalla y el servidor podían proponer días distintos.
+**Decisión:** `hoyEnPanama()` (`lib/utils/hoy-en-panama.ts`, con `Intl` y `America/Panama`) en un solo lugar, usado en los once y en los formularios de finanzas y del gasto de trámite. Test con la hora exacta del cambio (19:00 de Panamá = 00:00 UTC) y un test que falla si el cálculo en UTC vuelve a aparecer en el módulo contable. Queda sin tocar el módulo Legal (tareas, comentarios, casos, prospectos): ~25 usos que no fechan asientos; se anotan en `task_plan.md`. Entregado con E1 del Bloque 1.
+
+---
+
 ## FND-007: El modal heredaba la alineación de la celda que lo abría
 **Fecha:** 2026-09-21
 **Contexto:** Punto 5 de la verificación del Bloque 2 — reversar un cobro con clic real desde el listado de cobros (deploy `6d0f621`). Era la verificación que había quedado pendiente del bloque de reversión del 17/09 (el modal nunca se había visto abierto).

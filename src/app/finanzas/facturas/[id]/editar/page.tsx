@@ -103,6 +103,7 @@ export default async function EditarFacturaPage({ params }: PageProps) {
           client_id: invoice.client_id,
           case_id: invoice.case_id,
           issue_date: invoice.issue_date,
+          accounting_date: invoice.accounting_date ?? invoice.issue_date,
           due_date: invoice.due_date,
           notes: invoice.notes,
           lines: formLines,

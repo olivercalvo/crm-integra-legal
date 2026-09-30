@@ -7,7 +7,7 @@ import { MutationError } from "@/lib/finanzas/api/errors";
 export const runtime = "nodejs";
 
 /**
- * POST /api/finanzas/asientos/importaciones/[id]/reverse  { reason }
+ * POST /api/finanzas/asientos/importaciones/[id]/reverse  { reason, fecha_registro? }
  * Deshace el lote COMPLETO: reversa cada asiento con fecha de hoy (067). Nada
  * se borra. Roles: admin y contador.
  */
@@ -25,10 +25,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   const reason = String((body as { reason?: unknown } | null)?.reason ?? "");
   try {
-    const r = await deshacerImportacion(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason);
+    const r = await deshacerImportacion(
+      ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
+    );
     return NextResponse.json(r);
   } catch (err) {
-    if (err instanceof MutationError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof MutationError) return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     console.error("[finanzas] deshacer importacion unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }

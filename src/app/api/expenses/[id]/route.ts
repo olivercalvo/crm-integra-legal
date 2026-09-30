@@ -39,7 +39,7 @@ export async function PATCH(
     // Fetch existing expense
     const { data: existing } = await admin
       .from("expenses")
-      .select("id, amount, concept, date, expense_type, tenant_id, receipt_url, receipt_filename")
+      .select("id, amount, concept, date, accounting_date, expense_type, tenant_id, receipt_url, receipt_filename")
       .eq("id", expenseId)
       .eq("tenant_id", profile.tenant_id)
       .single();
@@ -49,7 +49,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { amount, concept, date, receipt_url, receipt_filename } = body;
+    const { amount, concept, date, accounting_date, receipt_url, receipt_filename } = body;
 
     const updates: Record<string, unknown> = {};
     const auditEntries: { field: string; old_value: string | null; new_value: string | null }[] = [];
@@ -73,6 +73,13 @@ export async function PATCH(
     if (date !== undefined && date !== existing.date) {
       updates.date = date;
       auditEntries.push({ field: "date", old_value: existing.date, new_value: date });
+    }
+
+    // La fecha de REGISTRO sólo se mueve en un gasto que todavía no está en el
+    // libro: una vez posteado, el trigger de la `049` (con la `068`) la congela.
+    if (accounting_date !== undefined && accounting_date !== existing.accounting_date) {
+      updates.accounting_date = accounting_date;
+      auditEntries.push({ field: "accounting_date", old_value: existing.accounting_date, new_value: accounting_date });
     }
 
     if (receipt_url !== undefined && receipt_url !== existing.receipt_url) {

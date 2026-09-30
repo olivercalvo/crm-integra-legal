@@ -2274,13 +2274,13 @@ lo prueba con un trigger que revienta entre el paso 4 y el 5.
 
 ### La fecha
 
-La de la reversión (`current_date` ±1 día de tolerancia entre el reloj del servidor y el de la
-base). Nunca la del original: acta del 09/09. El servidor y el diálogo calculan "hoy" con la misma
-fórmula del resto del módulo (`new Date().toISOString().slice(0, 10)`, UTC).
+🔄 **Cambió el 30/09/2026 (E1, migración `069`).** Hasta ese día era la de hoy (`current_date`
+±1 día, acta del 09/09) y se calculaba en UTC. Ahora la ELIGE el contador: período abierto,
+nunca antes del original, hoy en Panamá por defecto. Ver SOP-045.
 
 ### El espejo se arma UNA vez
 
-`construirAsientoDeReversion(original, { hoy, motivo, source_id })` en
+`construirAsientoDeReversion(original, { fecha, motivo, source_id })` en
 `contabilidad/reversion.ts`. Lo llama el diálogo para la vista previa y el helper para postear.
 Si la pantalla necesita mostrar algo distinto de lo que devuelve esa función, **la función está
 mal, no la pantalla**: se corrige ahí y cambia en los dos lados.
@@ -2364,7 +2364,7 @@ después, así que una colisión aparece antes de tocar el libro y el DELETE com
 No hay que "emparejarlos" con esto.
 
 ⚠️ **Un asiento mal posteado NO se borra: se reversa.** `scripts/reversar-asiento-huerfano.ts`
-postea el espejo con `construirAsientoDeReversion` (fecha de hoy, `reverses_entry_id`), que es la
+postea el espejo con `construirAsientoDeReversion` (hoy en Panamá, `reverses_entry_id`), que es la
 misma función del diálogo de cobros y de la anulación. Solo staging.
 
 ### 3. Dos puertas, un formulario, dos rutas a la misma función
@@ -3452,13 +3452,72 @@ misma factura del sandbox.
 **NC de compra (066).** Se registra desde el detalle de la compra. Una transacción en la base
 (`create_supplier_credit_note`). El asiento es el de la compra al revés y la base lo verifica.
 El saldo de la compra es `balance_due` (derivado): nadie calcula `total − amount_paid` a mano.
-Se anula con Reversar (fecha de hoy). Defaults de Josuarth en el encabezado de la `066`.
+Se anula con Reversar (fecha de registro elegida, SOP-045). Defaults de Josuarth en el encabezado de la `066`.
 
 **Resumen de ITBMS.** La regla está en `reports/vat-calculo.ts`: facturas emitidas no anuladas
 menos NC de venta autorizadas y vigentes (mes de la NC); compras menos NC de compra vigentes.
-Las anuladas no cuentan.
+Las anuladas no cuentan. Desde E1 el mes de cada documento es el de su **fecha de registro**
+(P-1a, 30/09/2026), no el del documento.
 
 **Importar asientos (067).** Vista previa obligatoria, todo o nada, deshacer completo con
-reversiones fechadas hoy. Si un lote falla a mitad, no queda nada: no hay que limpiar.
+reversiones con la fecha de registro elegida (no antes del último asiento del lote, SOP-045). Si un lote falla a mitad, no queda nada: no hay que limpiar.
 
 **Emisión.** Las cuentas del asiento se validan antes de pedir el número de factura.
+
+---
+
+## SOP-045: Fecha de documento y fecha de registro (Bloque 1, E1, 30/09/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09 y reunión del 30/09) pidió dos fechas en todo
+documento tipo factura y que la fecha de registro de reversiones, anulaciones y notas la elija el
+contador. Reemplaza la segunda frase del acta del 09/09 ("la reversión lleva SIEMPRE la fecha en
+que se hace"). La primera frase sigue: una factura se anula dentro del mismo mes; cerrado el mes,
+se corrige con nota de crédito.
+
+### Las dos fechas
+
+| Documento | Fecha del DOCUMENTO (informativa) | Fecha de REGISTRO (la del asiento) |
+|---|---|---|
+| Factura (HON y REI) | `issue_date` (va a la DGI; 182 h; vencimiento) | `accounting_date` (068) |
+| Compra | `expense_date` (factura del proveedor; vencimiento) | `accounting_date` (068) |
+| Gasto de trámite | `date` (vencimiento) | `accounting_date` (068) |
+| NC de venta | `issue_date` = hoy en Panamá (va a la DGI) | `accounting_date` (068), elegida |
+| NC de compra | `supplier_document_date` | `issue_date` (ya lo era desde la 066) |
+| Reversión / anulación | — | `p_transaction_date` del RPC, elegida |
+
+⚠️ La "fecha de registro" es `journal_entries.transaction_date`. **No** es `record_date`, que es
+el sello de grabación (`current_date`) y no lo elige nadie.
+
+### Las reglas, y dónde vive cada una
+
+1. **Período abierto.** Lo exige `post_journal_entry` (sin cambios). La app lo valida ANTES en
+   `api/fecha-de-registro.ts` (`resolverFechaDeRegistro`) para: (a) contestar 422 sin quemar
+   correlativo (`FAC-`, `NC-`, `NCP-`); (b) cortar ANTES de hablar con el PAC en
+   `anular-factura-ante-dgi.ts` y `anular-nota-de-credito-ante-dgi.ts`. Validarla recién en el
+   libro dejaría el documento anulado ante la DGI y vivo en el libro (el estado D4).
+2. **Una reversión nunca antes de su original.** La exigen los RPC (sin cambios) y
+   `construirAsientoDeReversion`. Deshacer una importación: no antes del último asiento del lote.
+   Una NC: no antes de la fecha de registro de su factura.
+3. **Futuro en un mes abierto:** `PERMITIR_FECHA_DE_REGISTRO_FUTURA`
+   (`contabilidad/fecha-de-registro.ts`), hoy `true`. Es la ÚNICA llave; un test lo fija.
+4. **"El mes de la factura"** para anular es el de su `accounting_date` (069).
+5. **Resumen de ITBMS:** por fecha de registro (P-1a).
+6. **Congelada al emitir o postear:** T4 (facturas), T5 (NC) y el trigger de la 049 (gastos de
+   trámite) la tienen en su lista desde la 068. La compra la cuida `gateContable`.
+
+### Hoy es hoy en Panamá
+
+`hoyEnPanama()` (`lib/utils/hoy-en-panama.ts`), con `Intl` y `America/Panama`. Nunca
+`new Date().toISOString().slice(0, 10)`: desde las 19:00 de Panamá ese es el día de mañana
+(FND-012). Un test recorre el módulo contable y falla si vuelve a aparecer.
+
+### La 069 es un parche verificado, no una copia
+
+Toma la definición vigente de cada RPC, reemplaza sólo el candado y aborta si el texto no aparece
+exactamente una vez. Las migraciones 046…067 quedan como historia; la definición vigente es la de
+la base. Antes de aplicarla, correr los conteos del encabezado en modo solo lectura.
+
+### Verificación
+
+`sql/tests/verificacion-068-069-fecha-de-registro.sql` (todo en ROLLBACK). Las verificaciones de
+la 046, 050, 055 y 060 se reescribieron: lo que se rechaza ahora es la fecha anterior al original.

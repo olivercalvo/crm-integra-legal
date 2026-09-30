@@ -15,6 +15,13 @@ la base de producción, más el merge de `develop` a `main`:
 > **hueco a propósito**, no un olvido: si Josuarth contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
 >
+> 🆕 **La `068` y la `069` (Bloque 1, E1: fecha de registro), 30/09/2026.** Todavía en la
+> rama `feat/bloque1-contable`, sin aplicar en ningún lado. Van **después de la `067`** y
+> **antes del merge**: el código de E1 lee `accounting_date` y sin la `068` falla. Son
+> compatibles con el código de `main` (el trigger completa `accounting_date`; `main` manda la
+> fecha de hoy, que la `069` sigue aceptando), así que no abren una ventana propia. Antes de
+> la `069`, correr sus conteos en solo lectura: cada patrón tiene que aparecer una vez.
+>
 > 🆕 **La `066` (NC de compra) y la `067` (importar asientos), 25/09/2026, noche.**
 > La `066` toca `business_expenses` (saldo derivado, guard, recálculo de la `048`):
 > va en el Bloque B después de la `050`. La `067` es aditiva y va al final del A.

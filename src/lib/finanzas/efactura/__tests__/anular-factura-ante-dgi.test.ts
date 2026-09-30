@@ -73,6 +73,8 @@ interface Escenario {
   respuestaDelPac: () => unknown;
   /** `null` = `cancelInvoice` anda; un Error = falla el libro. */
   fallaDelLibro: Error | null;
+  /** `null` = la fecha de registro se acepta; un Error = se rechaza (mes cerrado). */
+  fechaRechazada: Error | null;
   invoice: Row;
   anulaciones: Array<Row & { id: string }>;
   diario: string[];
@@ -84,6 +86,7 @@ function nuevoEscenario(over?: Partial<Escenario>): Escenario {
   return {
     respuestaDelPac: () => [{ codigo: "0260", mensaje: "Documento anulado" }],
     fallaDelLibro: null,
+    fechaRechazada: null,
     invoice: {
       id: INVOICE,
       status: "emitida",
@@ -219,6 +222,15 @@ before(async () => {
       periodoDeLaFacturaCerrado: async () => {
         escenario.diario.push("SELECT accounting_periods (¿mes cerrado?)");
         return false;
+      },
+      // La fecha de registro se valida ANTES del intento y del PAC. Sólo deja
+      // rastro en el diario cuando la rechaza: es el caso que importa.
+      resolverFechaDeAnulacion: async () => {
+        if (escenario.fechaRechazada) {
+          escenario.diario.push("✗ fecha de registro rechazada");
+          throw escenario.fechaRechazada;
+        }
+        return "2026-09-23";
       },
     },
   });
@@ -660,3 +672,21 @@ test(
     assert.equal(escenario.diario.filter((l) => l.startsWith("POST ")).length, 0);
   }
 );
+
+// ---------------------------------------------------------------------------
+// LA FECHA DE REGISTRO (revisión del 28/09 y reunión del 30/09)
+// ---------------------------------------------------------------------------
+
+test("🔴 fecha de registro rechazada: se corta ANTES del intento y del PAC", { skip: skipNoMocks }, async () => {
+  escenario = nuevoEscenario({ fechaRechazada: new Error("El período 2026-08 está cerrado") });
+  await assert.rejects(
+    anularFacturaAnteDgi(db as never, db as never, TENANT, USER, INVOICE, MOTIVO, null, HOY, "2026-08-31"),
+    /2026-08 está cerrado/
+  );
+  const d = escenario.diario;
+  assert.ok(d.includes("✗ fecha de registro rechazada"), d.join(" / "));
+  assert.ok(!d.some((l) => l.startsWith("INSERT fe_anulaciones")), "sin intento registrado");
+  assert.ok(!d.some((l) => l.startsWith("POST")), "sin llamada al PAC");
+  assert.ok(!d.some((l) => l.startsWith("UPDATE invoices")), "sin la marca canceled");
+  assert.ok(!d.some((l) => l.startsWith("→ cancelInvoice")), "sin tocar el libro");
+});

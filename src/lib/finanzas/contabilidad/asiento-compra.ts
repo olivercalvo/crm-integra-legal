@@ -106,7 +106,10 @@ export interface LineaCompraParaAsiento {
 
 export interface CompraParaAsiento {
   id: string;
+  /** Fecha del DOCUMENTO (la factura del proveedor). Informativa. */
   expense_date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   description: string;
   /** `business_expenses.total` — la base más el impuesto. */
   total: number;
@@ -247,7 +250,7 @@ export function construirAsientoDeCompra(
   return {
     ok: true,
     asiento: {
-      transaction_date: c.expense_date,
+      transaction_date: c.accounting_date,
       description: descripcionDelAsientoDeCompra(c),
       source_type: SOURCE_TYPE_COMPRA,
       lines,

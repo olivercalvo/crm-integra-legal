@@ -62,7 +62,7 @@ export async function listInvoices(
     .select(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
-        issue_date, due_date, status, currency,
+        issue_date, accounting_date, due_date, status, currency,
         subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
@@ -117,7 +117,7 @@ export async function getInvoiceById(
     .select(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
-        issue_date, due_date, status, currency,
+        issue_date, accounting_date, due_date, status, currency,
         subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
         dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,

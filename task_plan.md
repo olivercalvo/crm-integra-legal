@@ -8,9 +8,26 @@
 - ✅ Recorrido parcial (admin): pantallas con las dos fechas; FAC-HON-000026 con dos líneas de
   400001 y su descripción, cliente en 100004 (asiento 95); REC-000010 con cliente en 100004
   (asiento 96); el Mayor de 400001 nombra el asiento viejo 80 desde su documento.
-- ⏳ Prueba con contador: Mayor del banco y reversión de REC-000010 (espejo con cliente).
-- ⏳ Después de la `070`: gasto de trámite con número de factura del proveedor y proveedor en
-  200001.
+- ✅ `070` aplicada en staging (01/10/2026). Verificación: columna opcional, CHECK 1..50, índice;
+  libro intacto (último asiento 96 al aplicar, cadena sin problemas).
+- ✅ Con el **contador** (01/10): Mayor de 100001 nombra a los 8 cobros (los 7 viejos sin
+  tercero en el libro, desde su documento); reversó REC-000010 → espejo 97 con Aurelio Barría
+  en 100004, grabado con rol contador; Mayor de 200001 y detalle del gasto y del asiento 98 sin
+  errores de acceso.
+- ✅ Con **abogada2**: gasto de trámite en CORP-001 con factura F-E2-0001 y dos líneas →
+  asiento 98, CABLE ONDA S.A en 200001, cada línea con su descripción.
+- 📋 **Por decidir (Josuarth / el bufete): el caso CORP-001 está CERRADO y la abogada pudo
+  cargarle un gasto de trámite.** No hay ningún control hoy. Opciones: se permite (un trámite
+  puede facturarse después del cierre), se bloquea, o se avisa en pantalla. No se cambió código.
+- 📋 Para E3: en el Mayor, el último escalón del nombre (el texto de la línea de control) pone
+  «Cuentas por pagar», «Reversión» o «Reversión: Cuentas por pagar» en gastos viejos SIN
+  proveedor y en algunas reversiones (asientos 33, 34, 36–39 y 51 de staging). Es texto
+  genérico, no un nombre: conviene que ese escalón ignore esos textos y deje la celda vacía.
+- 🐞 Corregido en el recorrido: el aviso del detalle del gasto de trámite decía «se postea su
+  espejo con la fecha de hoy» (quedó de antes de E1).
+- 🛠️ El servidor de desarrollo cortado por memoria el 30/09 dejó la caché `.next` rota (todas
+  las páginas fallaban con «Jest worker encountered 2 child process exceptions»). Se resolvió
+  borrando `.next`. No era código.
 
 ## >>> 30/09/2026 — BLOQUE 1, E1 (FECHAS) EN LA RAMA `feat/bloque1-contable` <<<
 

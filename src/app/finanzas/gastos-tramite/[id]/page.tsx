@@ -330,7 +330,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           <p className="text-sm text-amber-900">
             Este gasto está en el libro (asiento {gasto.entry_number}) y no se puede editar ni
             borrar. Si está mal, se <strong>reversa</strong>: el asiento queda y se postea su
-            espejo con la fecha de hoy.
+            espejo con la fecha de registro que elijas, en un mes abierto.
           </p>
           <ReversePaymentDialog
             variante="gasto"

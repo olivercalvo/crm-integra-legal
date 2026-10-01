@@ -83,7 +83,7 @@ export function RegisterPaymentDialog({
           if (data.fieldErrors) {
             setFieldErrors(data.fieldErrors);
           }
-          setSubmitError(data.error ?? "No se pudo registrar el pago.");
+          setSubmitError(data.error ?? "No se pudo registrar el cobro.");
           return;
         }
         setOpen(false);
@@ -112,7 +112,7 @@ export function RegisterPaymentDialog({
         className="bg-integra-navy text-white hover:bg-integra-navy/90 min-h-[48px]"
       >
         <CircleDollarSign size={16} className="mr-2" />
-        Registrar pago
+        Registrar cobro
       </Button>
 
       <ConfirmationModal
@@ -125,8 +125,9 @@ export function RegisterPaymentDialog({
         }}
         onConfirm={submit}
         loading={isPending}
-        title={`Registrar pago · ${invoiceNumber}`}
-        confirmButtonText={isPending ? "Registrando…" : "Registrar pago"}
+        // Un PAGO es dinero que sale; esto es un COBRO (Oliver, 01/10/2026).
+        title={`Registrar cobro · ${invoiceNumber}`}
+        confirmButtonText={isPending ? "Registrando…" : "Registrar cobro"}
         cancelButtonText="Cancelar"
       >
         <div className="space-y-4">
@@ -134,7 +135,7 @@ export function RegisterPaymentDialog({
           <div className="rounded-md border bg-gray-50 p-3 text-sm flex justify-between">
             <span className="text-gray-600">Saldo pendiente</span>
             <span className="font-mono font-semibold text-amber-700">
-              ${fmtImporte(balanceDue)}
+              B/. {fmtImporte(balanceDue)}
             </span>
           </div>
 

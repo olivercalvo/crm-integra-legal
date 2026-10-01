@@ -78,3 +78,12 @@ test("🔒 aplicar el saldo a favor va por el RPC y no postea", () => {
   assert.match(leer("src/app/api/finanzas/payments/[id]/apply-credit/route.ts"), /\["admin", "abogada", "contador"\]/);
   assert.match(leer("src/app/finanzas/facturas/[id]/page.tsx"), /const canApplyCredit = puedeAccionar \|\| userRole === "contador"/);
 });
+
+test("🔒 vocabulario (01/10/2026): un cobro se «registra», no se «paga», y los montos van en B/.", () => {
+  const dialogo = leer("src/app/finanzas/facturas/_components/register-payment-dialog.tsx");
+  assert.match(dialogo, /"Registrar cobro"/);
+  assert.doesNotMatch(dialogo, /"Registrar pago"/, "pago es dinero que sale");
+  const seccion = leer("src/app/finanzas/facturas/_components/payments-section.tsx");
+  assert.doesNotMatch(seccion, /^\s*\$\{fmtImporte/m, "un monto en pantalla no se escribe con «$»");
+  assert.match(seccion, /de B\/\. \{fmtImporte\(Number\(p\.amount\)\)\} del recibo/);
+});

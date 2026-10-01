@@ -106,6 +106,8 @@ export async function createTaxCode(
         name: input.name,
         rate: input.rate,
         active: input.active,
+        // 073: la cuenta es parte de la tasa, y la que más se pregunta después.
+        account_code: input.account_code,
       }),
     });
   } catch (err) {

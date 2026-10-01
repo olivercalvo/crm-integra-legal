@@ -57,7 +57,7 @@ test("lineasDeImpuesto agrupa por cuenta, ordena por cuenta y no deja líneas en
     l.map((x) => [x.account_code, x.credit, x.description]),
     [
       ["200003", 10.5, "ITBMS facturado · ITBMS_7"],
-      ["200005", 10, "ITBMS facturado · ITBMS_10"],
+      ["200005", 10, "Impuesto facturado · ITBMS_10"],
     ]
   );
 });
@@ -143,3 +143,9 @@ test("🔒 una sola implementación: los constructores usan lineasDeImpuesto y n
   }
   assert.match(leer("src/lib/finanzas/api/supplier-credit-notes.ts"), /cuentasDeTasas\(/, "la NC de compra no resuelve la cuenta de la tasa");
 });
+
+test("recorrido 01/10: una tasa con cuenta propia no se rotula «ITBMS»", () => {
+  const l = lineasDeImpuesto([{ tax_amount: 10, tax_account: "200005", tax_code: "ISC_5_PRUEBA" }], "credit", "ITBMS facturado");
+  assert.equal(l[0].description, "Impuesto facturado · ISC_5_PRUEBA");
+});
+

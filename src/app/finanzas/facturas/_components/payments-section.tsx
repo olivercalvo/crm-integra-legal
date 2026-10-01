@@ -43,7 +43,7 @@ interface Props {
  * Sección "Pagos registrados" del detalle de factura.
  * Visible cuando status ∈ emitida/parc/pagada. Muestra:
  *   - Resumen Total / Pagado / Saldo
- *   - Botón "Registrar pago" (visible solo si balance_due > 0 y canMutate)
+ *   - Botón "Registrar cobro" (visible solo si balance_due > 0 y canMutate). Un pago es dinero que sale; esto es un cobro.
  *   - Tabla con fila por pago (fecha, monto, método, referencia, registrado por)
  *   - Acción por fila, según el cobro:
  *       · sin asiento en el libro → Eliminar (canMutate)
@@ -134,7 +134,7 @@ export function PaymentsSection({
             Total
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-integra-navy">
-            ${fmtImporte(grandTotal)}
+            B/. {fmtImporte(grandTotal)}
           </div>
         </div>
         <div className="rounded-md border bg-emerald-50 p-3">
@@ -142,7 +142,7 @@ export function PaymentsSection({
             Pagado
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-emerald-700">
-            ${fmtImporte(amountPaid)}
+            B/. {fmtImporte(amountPaid)}
           </div>
         </div>
         <div
@@ -164,7 +164,7 @@ export function PaymentsSection({
               balanceDue > 0.001 ? "text-amber-700" : "text-gray-700"
             }`}
           >
-            ${fmtImporte(balanceDue)}
+            B/. {fmtImporte(balanceDue)}
           </div>
         </div>
       </div>
@@ -214,7 +214,7 @@ export function PaymentsSection({
                         reversado ? "line-through" : "text-emerald-700"
                       }`}
                     >
-                      ${fmtImporte(amount)}
+                      B/. {fmtImporte(amount)}
                       {/* Un recibo aplicado a varias facturas (Parte B): acá se ve
                           lo aplicado a ESTA, y abajo el total del recibo. */}
                       {Number(p.amount) > amount + 0.001 && (
@@ -222,7 +222,7 @@ export function PaymentsSection({
                           className="block text-xs font-normal text-gray-400 whitespace-nowrap"
                           title="El recibo se aplicó a varias facturas"
                         >
-                          de {fmtImporte(Number(p.amount))} del recibo
+                          de B/. {fmtImporte(Number(p.amount))} del recibo
                         </span>
                       )}
                     </td>
@@ -302,7 +302,7 @@ export function PaymentsSection({
       ) : (
         <div className="rounded-md border border-dashed bg-gray-50/40 p-6 text-center text-sm text-gray-500">
           {showRegisterButton
-            ? "Use el botón \"Registrar pago\" para asentar el primer cobro."
+            ? "Use el botón \"Registrar cobro\" para asentar el primer cobro."
             : "Esta factura aún no tiene pagos."}
         </div>
       )}

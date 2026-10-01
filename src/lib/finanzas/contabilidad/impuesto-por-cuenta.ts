@@ -35,8 +35,11 @@ function round2(n: number): number {
 
 /**
  * Agrupa el impuesto de las líneas por cuenta. Una cuenta sin monto no genera
- * línea. Con UNA sola cuenta la descripción es `base` (como siempre); con
- * varias, cada una dice qué tasas junta: «ITBMS facturado · ITBMS_7».
+ * línea. La línea de 200003 con una sola cuenta dice `base` (como siempre); una
+ * cuenta propia de otra tasa (ISC, una tasa de prueba) dice «Impuesto» en vez de
+ * «ITBMS» y nombra sus tasas: «Impuesto facturado · ISC_5». Con varias cuentas,
+ * cada una nombra las tasas que junta. (Recorrido del 01/10/2026: la línea del
+ * ISC salía rotulada «ITBMS facturado».)
  */
 export function lineasDeImpuesto(
   lineas: readonly ImpuestoDeLinea[],
@@ -61,6 +64,14 @@ export function lineasDeImpuesto(
       account_code: cuenta,
       debit: lado === "debit" ? g.monto : 0,
       credit: lado === "credit" ? g.monto : 0,
-      description: varias && g.tasas.size > 0 ? `${base} · ${Array.from(g.tasas).sort().join(", ")}` : base,
+      description: descripcionDeImpuesto(base, cuenta, g.tasas, varias),
     }));
 }
+
+function descripcionDeImpuesto(base: string, cuenta: string, tasas: Set<string>, varias: boolean): string {
+  const propia = cuenta !== CUENTA_IMPUESTO_SIN_TASA;
+  const texto = propia ? base.replace(/^ITBMS(?= )/, "Impuesto") : base;
+  if ((propia || varias) && tasas.size > 0) return `${texto} · ${Array.from(tasas).sort().join(", ")}`;
+  return texto;
+}
+

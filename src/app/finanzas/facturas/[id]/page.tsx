@@ -98,6 +98,10 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // en esta pantalla. Se mueve junto con el guard de
   // `/api/finanzas/payments/[id]/reverse` y la tabla de CLAUDE.md.
   const canReverse = puedeAccionar || userRole === "contador";
+  // 074 (Oliver, 01/10/2026): aplicar el saldo a favor de un cliente también lo
+  // hace el contador: no registra dinero nuevo, sólo dice qué factura cancela un
+  // cobro que ya está en el libro. Es una bandera aparte de `canMutate`.
+  const canApplyCredit = puedeAccionar || userRole === "contador";
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -128,7 +132,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       ? periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)
       : Promise.resolve(false),
     // 074: los cobros del cliente con saldo a favor, para aplicarlos acá.
-    showPaymentsSection && canMutate && invoice.client_id && Number(invoice.balance_due) > 0.005
+    showPaymentsSection && canApplyCredit && invoice.client_id && Number(invoice.balance_due) > 0.005
       ? listarSaldosAFavor(db, tenantId, String(invoice.client_id))
       : Promise.resolve([]),
   ]);
@@ -552,6 +556,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               canMutate={canMutate && !anulacionAMedias}
               canReverse={canReverse}
               saldosAFavor={saldosAFavor}
+              canApplyCredit={canApplyCredit && !anulacionAMedias}
             />
           )}
 

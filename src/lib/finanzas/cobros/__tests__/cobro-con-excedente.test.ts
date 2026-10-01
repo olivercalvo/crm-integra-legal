@@ -74,5 +74,7 @@ test("🔒 aplicar el saldo a favor va por el RPC y no postea", () => {
   const api = leer("src/lib/finanzas/api/saldo-a-favor.ts");
   assert.match(api, /rpc\("apply_payment_credit"/);
   assert.doesNotMatch(api, /postJournalEntry\(/);
-  assert.match(leer("src/app/api/finanzas/payments/[id]/apply-credit/route.ts"), /\["admin", "abogada"\]/);
+  // Oliver, 01/10/2026: también el contador. La ruta y la pantalla se mueven juntas.
+  assert.match(leer("src/app/api/finanzas/payments/[id]/apply-credit/route.ts"), /\["admin", "abogada", "contador"\]/);
+  assert.match(leer("src/app/finanzas/facturas/[id]/page.tsx"), /const canApplyCredit = puedeAccionar \|\| userRole === "contador"/);
 });

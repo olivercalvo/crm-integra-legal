@@ -16,15 +16,18 @@ interface RouteParams {
  * Aplica el SALDO A FAVOR de un cobro (lo que quedó sin aplicar) a facturas del
  * mismo cliente. Sin asiento: el dinero ya está en 100004 (migración `074`).
  *
- * Permisos: admin + abogada, los mismos que REGISTRAN cobros. El contador no:
- * aplicar un saldo es decidir qué factura se cancela, que es cobrar.
+ * Permisos: admin + abogada + CONTADOR (Oliver, 01/10/2026). El contador no
+ * registra cobros, pero aplicar un saldo a favor no mete dinero nuevo: dice qué
+ * factura cancela un cobro que ya está en el libro. Si se cambia esta lista se
+ * mueven juntos la tabla de CLAUDE.md, este guard y `canApplyCredit` en
+ * `facturas/[id]/page.tsx`.
  *
  * Body: { applications: [{ invoice_id, amount }] }. El tenant sale del perfil,
  * nunca del body (SOP-014).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
-  if (!["admin", "abogada"].includes(ctx.userRole)) {
+  if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 

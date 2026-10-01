@@ -32,6 +32,11 @@ interface Props {
   canReverse: boolean;
   /** 074: cobros del mismo cliente con saldo sin aplicar (más viejos primero). */
   saldosAFavor?: SaldoAFavor[];
+  /**
+   * 074: admin, abogada y CONTADOR (Oliver, 01/10/2026). Bandera aparte de
+   * `canMutate`: el contador aplica un saldo a favor pero no registra cobros.
+   */
+  canApplyCredit?: boolean;
 }
 
 /**
@@ -56,6 +61,7 @@ export function PaymentsSection({
   canMutate,
   canReverse,
   saldosAFavor = [],
+  canApplyCredit = false,
 }: Props) {
   const vigentes = payments.filter((p) => !p.reversion);
   const reversados = payments.length - vigentes.length;
@@ -97,7 +103,7 @@ export function PaymentsSection({
       </div>
 
       {/* 074: el saldo a favor del cliente, aplicable a esta factura. */}
-      {canMutate && balanceDue > 0.005 && saldosAFavor.length > 0 && (
+      {canApplyCredit && balanceDue > 0.005 && saldosAFavor.length > 0 && (
         <div className="mb-4 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
           <p className="text-sm font-medium text-emerald-900">
             El cliente tiene saldo a favor: B/.{" "}

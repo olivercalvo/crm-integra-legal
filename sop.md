@@ -3641,7 +3641,7 @@ correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir
    cliente, en el tramo corriente. Sin eso el auxiliar no cuadraría con 100004.
 3. **Aplicar el saldo a favor** = `apply_payment_credit` (una transacción, bloquea cobro y
    facturas, mismo cliente, no más que el saldo de cada factura ni que lo disponible). **No
-   postea**: el dinero ya está en 100004. Admin y abogada.
+   postea**: el dinero ya está en 100004. Admin, abogada y contador (Oliver, 01/10/2026).
 4. **Reversar** un cobro con saldo aplicado después lo reversa ENTERO: la `046` borra todas sus
    aplicaciones, también las agregadas con «Aplicar saldo a favor».
 5. **Referencia obligatoria** al crear (validador, pantalla, trigger). Un cobro viejo sin

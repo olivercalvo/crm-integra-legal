@@ -19,9 +19,16 @@ la base de producción, más el merge de `develop` a `main`:
 > `main`: va EN LA VENTANA, en el mismo despliegue que el código de E3, sin nadie operando.**
 > Rehace `post_journal_entry` (13 → 14 parámetros) y le agrega dos candados que el código
 > anterior no cumple:
-> - **Tercero obligatorio en 100004 y 200001** (salvo reversiones, y el proveedor en compras,
->   gastos de trámite y pagos sin ficha). Un asiento manual o importado contra esas cuentas
->   sin cliente/proveedor se rechaza. Los constructores ya lo mandan desde E2.
+> - **Tercero obligatorio en 100004 y 200001** (salvo reversiones). Sin excepción para
+>   compras, gastos de trámite ni pagos (01/10/2026): una compra o un gasto sin ficha de
+>   proveedor **no se registra**. Los constructores ya lo mandan desde E2.
+> - ⚠️ **Los gastos de trámite viejos sin proveedor** (en producción, los que se registran con
+>   el botón de reintento) piden el proveedor antes de entrar al libro. Asignarlo antes de
+>   operar, o avisarle al bufete.
+> - 🔴 **Mientras la rama no se mezcle, `develop` es incompatible con STAGING** (donde la `071`
+>   ya está aplicada desde el 01/10): sus Preview fallan al emitir facturas y NC, cobrar,
+>   registrar compras, gastos de trámite y pagos, y cargar asientos manuales. Ver
+>   `task_plan.md`.
 > - **`p_reference` vacío en `manual`/`apertura`/`cierre`**: el `AD-` lo pone el motor. El
 >   formulario de `main` manda la referencia libre en `reference` y **fallaría al registrar**.
 >

@@ -353,7 +353,8 @@ export function BusinessExpenseForm(props: Props) {
               tipeado distinto. Ahora se elige la ficha.
               ─────────────────────────────────────────────────────────────── */}
           <div data-error={!!errors.supplier_id}>
-            <Label className="mb-1 block">Proveedor</Label>
+            {/* E3: obligatorio. La compra va a 200001 y ahí no hay líneas sin proveedor. */}
+            <Label className="mb-1 block">Proveedor *</Label>
             <select
               value={supplierId}
               onChange={(e) => {
@@ -387,7 +388,7 @@ export function BusinessExpenseForm(props: Props) {
                 (errors.supplier_id ? "border-red-300" : "border-gray-300")
               }
             >
-              <option value="">Sin ficha de proveedor</option>
+              <option value="">Elegir proveedor</option>
               {props.suppliers.map((sp) => (
                 <option key={sp.id} value={sp.id}>
                   {sp.supplier_number} · {sp.trade_name?.trim() || sp.legal_name}

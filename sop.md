@@ -3599,3 +3599,12 @@ correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir
 - El **filtro** por módulo del Mayor y del Diario (las columnas ya están).
 - La referencia externa de la NC de compra (hoy la arma el SQL de la 066 sin ella).
 
+### Agregado del 01/10/2026: 200001 nunca sin proveedor
+
+7. **El proveedor es obligatorio en compras y gastos de trámite**, porque los dos acreditan 200001.
+   Se corta en cuatro lugares: formulario, ruta (400 antes de insertar), constructor
+   (`sin_proveedor`, antes de tomar `FAC-CO-`) y motor (071, sin excepción salvo reversiones).
+   Reemplaza la regla de SOP-033 §«sin proveedor no se bloquea». El pago de un documento viejo
+   sin proveedor tampoco se registra hasta asignárselo.
+8. **La `071` hace incompatible a `develop` con staging** hasta mezclar la rama (task_plan.md).
+

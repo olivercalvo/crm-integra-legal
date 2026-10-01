@@ -92,7 +92,7 @@ export type ResultadoAsiento =
   | { ok: true; asiento: AsientoInput }
   | {
       ok: false;
-      motivo: "sin_lineas" | "sin_clasificar" | "monto_cero" | "descuadre";
+      motivo: "sin_lineas" | "sin_clasificar" | "monto_cero" | "descuadre" | "sin_proveedor";
       mensaje: string;
       /** `line_order` de las líneas sin cuenta. Solo en `sin_clasificar`. */
       lineasSinCuenta?: number[];
@@ -126,6 +126,19 @@ export function construirAsientoDeGastoTramite(
   lineas: readonly ExpenseLineRow[],
   cuentaPorPagar: string = CUENTA_POR_PAGAR
 ): ResultadoAsiento {
+  // 🔴 E3 (01/10/2026, Oliver): ninguna línea en 200001 sin proveedor. El gasto
+  // de trámite acredita 200001, así que sin ficha no entra al libro. Reemplaza
+  // el "sin proveedor no se bloquea" de SOP-033. El motor (071) lo vuelve a
+  // exigir. Va ANTES de tomar el número FAC-CO-: no consume correlativo.
+  if (!gasto.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        "Este gasto se registra en Cuentas por pagar (200001), y cada movimiento ahí tiene que " +
+        "decir de qué proveedor es. Asigna el proveedor al gasto; si todavía no tiene ficha, créala en Proveedores.",
+    };
+  }
   if (lineas.length === 0) {
     return {
       ok: false,

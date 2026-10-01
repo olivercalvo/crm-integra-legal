@@ -299,9 +299,9 @@ test("E2: el gasto de trámite lleva al proveedor en la línea de 200001", () =>
   assert.equal(r.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id, "d2222222-2222-2222-2222-222222222222");
 });
 
-test("E2: sin proveedor, 200001 queda sin tercero (SOP-033: no se bloquea)", () => {
+test("🔴 E3: sin proveedor el gasto NO entra al libro (reemplaza el 'no se bloquea' de SOP-033)", () => {
   const r = construirAsientoDeGastoTramite({ ...GASTO, supplier_id: null, supplier_legal_name: null }, [linea()]);
-  assert.equal(r.ok, true);
-  if (!r.ok) return;
-  assert.equal(r.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id ?? null, null);
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.equal(r.motivo, "sin_proveedor");
 });

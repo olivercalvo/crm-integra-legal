@@ -161,11 +161,12 @@ test("E2: el proveedor va en la línea de 200001, y sólo ahí", () => {
   assert.ok(r.asiento.lines.filter((l) => l.account_code !== "200001").every((l) => !l.supplier_id && !l.client_id));
 });
 
-test("E2: una compra sin ficha de proveedor no inventa tercero", () => {
+test("🔴 E3: una compra sin ficha de proveedor NO se registra (200001 nunca sin tercero)", () => {
   const r = construirAsientoDeCompra(compra({ supplier_id: null }));
-  assert.equal(r.ok, true);
-  if (!r.ok) return;
-  assert.equal(r.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id ?? null, null);
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.equal(r.motivo, "sin_proveedor");
+  assert.match(r.mensaje, /Cuentas por pagar \(200001\)/);
 });
 
 // ---------------------------------------------------------------------------

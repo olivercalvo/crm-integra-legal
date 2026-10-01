@@ -117,6 +117,8 @@ export function validateCreateBusinessExpense(
   // supplier_id (opcional): el proveedor como entidad. Se valida que parezca un
   // uuid; que exista y sea del bufete lo verifica el helper server-side, igual
   // que con chart_account_code.
+  // 🔴 E3 (01/10/2026): OBLIGATORIO. La compra acredita 200001 y ahí no hay
+  // líneas sin proveedor (el motor lo exige desde la 071).
   let supplierId: string | null = null;
   if (raw.supplier_id != null && String(raw.supplier_id).trim() !== "") {
     const v = String(raw.supplier_id).trim();
@@ -125,6 +127,9 @@ export function validateCreateBusinessExpense(
     } else {
       supplierId = v;
     }
+  } else {
+    errors.supplier_id =
+      "Elige el proveedor: la compra va a Cuentas por pagar y ahí cada movimiento dice de quién es.";
   }
 
   // due_date (opcional): si no llega, el helper server-side lo calcula desde el

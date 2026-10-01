@@ -221,8 +221,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   (`supplier-payments-dos-destinos.test.ts`).
 - 🔴 **`expenses.payment_account_code` NO se escribe.** Resto de la 036, congelado por la 038 a
   propósito; el banco va en el pago. Se dropea después.
-- **Sin proveedor no se bloquea**: 200001 sin auxiliar, "(sin proveedor)" en la antigüedad;
-  `supplier_id` se asigna después (la 049 lo sacó de la lista congelada).
+- ~~**Sin proveedor no se bloquea**~~ **Desde E3 (01/10/2026) sin proveedor el gasto NO entra al
+  libro** (200001 nunca sin tercero). Lo viejo sin proveedor sigue en la antigüedad como
+  "(sin proveedor)"; `supplier_id` se puede asignar después (la 049 lo sacó de la lista congelada).
 - La antigüedad por pagar lee los gastos de trámite **en el libro** (FND-010 cerrado); los sin
   asiento no entran hasta registrarse.
 
@@ -356,9 +357,14 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   transacción: un lote de importación que falla no deja huecos. Para esos tipos el RPC
   **rechaza** un texto en `p_reference`; la referencia libre va en `p_referencia_externa`.
 - 🔴 **Tercero obligatorio en las cuentas con `cuenta_control`** (100004 cliente, 200001
-  proveedor), en el RPC para TODO `source_type`. Excepciones: `reversion` (el original viejo
-  puede no tenerlo) y el proveedor en `gasto`/`gasto_tramite`/`pago_proveedor` (SOP-033). El
-  formulario y la importación lo dicen antes con el número de línea de la pantalla.
+  proveedor), en el RPC para TODO `source_type`. Única excepción: `reversion` (el original
+  viejo puede no tenerlo). El formulario y la importación lo dicen antes con el número de
+  línea de la pantalla.
+- 🔴 **Ninguna línea en 200001 sin proveedor** (Oliver, 01/10/2026). Como toda compra y todo
+  gasto de trámite acreditan 200001, **el proveedor es OBLIGATORIO** en los dos: formulario,
+  ruta, constructor (`motivo: "sin_proveedor"`, antes de tomar el número) y motor. Reemplaza el
+  «sin proveedor no se bloquea» de SOP-033. La compra de contado sin ficha (banco directo) NO
+  existe todavía: propuesta P-2f en el plan.
 - 🔬 **Hash v4:** `referencia_externa` entra al `content_hash` (SOP-014, cuarta fila). La
   reversión la hereda sola dentro del RPC.
 - **El N.º de factura del proveedor de un gasto de trámite asentado se congela** (ahora es

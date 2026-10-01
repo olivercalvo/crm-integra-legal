@@ -24,7 +24,8 @@
 --        · una reversión hereda la `referencia_externa` del asiento que revierte
 --          (como ya heredaba `reference`, que la pasa cada RPC).
 --        · 🔴 TERCERO OBLIGATORIO en las cuentas con `cuenta_control`
---          (100004 = clientes, 200001 = proveedores). Ver el bloque 4c.
+--          (100004 = clientes, 200001 = proveedores), para TODO tipo de
+--          asiento salvo la reversión. Ver el bloque 4c.
 --        · 🔬 HASH v4: `referencia_externa` entra al `content_hash`.
 --   6. `post_journal_entries_batch` (067): la referencia del Excel pasa a
 --      `referencia_externa` (parche verificado, como la 069).
@@ -314,16 +315,17 @@ BEGIN
   -- un CLIENTE, y contra `'proveedores'` (200001) un PROVEEDOR. Es lo que deja
   -- que la antigüedad cuadre contra el Mayor por construcción (punto 10).
   --
-  -- Excepciones, todas deliberadas:
+  -- Una sola excepción, deliberada:
   --   · `reversion`: el espejo copia el tercero del original (E2), y el
   --     original de un asiento anterior a E2 no lo tiene. Exigirlo dejaría sin
   --     corrección posible a todo lo viejo.
-  --   · El PROVEEDOR no se exige en `gasto`, `gasto_tramite` y `pago_proveedor`:
-  --     un gasto sin ficha de proveedor se registra igual (SOP-033) y el pago
-  --     hereda esa falta. Lo que sí se rechaza ahí es un tercero del tipo
-  --     equivocado.
-  --   · Los mensajes dicen el número de línea y la cuenta, para que se lean
-  --     igual desde el formulario que desde la importación.
+  -- 🔴 NO hay excepción para compras, gastos de trámite ni pagos (Oliver,
+  --    01/10/2026): "no quiero líneas en la 200001 sin proveedor". Reemplaza el
+  --    "sin proveedor no se bloquea" de SOP-033. Una compra sin ficha sólo
+  --    tendría sentido de contado (banco directo, sin tocar 200001), y ese
+  --    camino todavía no existe: hoy toda compra acredita 200001.
+  -- Los mensajes dicen el número de línea y la cuenta, para que se lean igual
+  -- desde el formulario que desde la importación.
   IF p_source_type <> 'reversion' THEN
     SELECT string_agg(format('línea %s (%s)', l.ord, l.code), ', ' ORDER BY l.ord) INTO v_terceros
       FROM pg_temp._pje_lineas l
@@ -338,10 +340,7 @@ BEGIN
     SELECT string_agg(format('línea %s (%s)', l.ord, l.code), ', ' ORDER BY l.ord) INTO v_terceros
       FROM pg_temp._pje_lineas l
       JOIN public.chart_of_accounts c ON c.tenant_id = p_tenant_id AND c.code = l.code
-     WHERE c.cuenta_control = 'proveedores'
-       AND (l.client_id IS NOT NULL
-            OR (l.supplier_id IS NULL
-                AND p_source_type NOT IN ('gasto', 'gasto_tramite', 'pago_proveedor')));
+     WHERE c.cuenta_control = 'proveedores' AND (l.supplier_id IS NULL OR l.client_id IS NOT NULL);
     IF v_terceros IS NOT NULL THEN
       RAISE EXCEPTION
         'La cuenta de proveedores necesita el proveedor en cada línea: falta en %. Elige el proveedor para que el movimiento entre en su antigüedad.',
@@ -505,7 +504,7 @@ BEGIN
 END $$;
 
 COMMENT ON FUNCTION public.post_journal_entry(uuid, date, text, text, jsonb, uuid, text, uuid, text, uuid, date, text, text, text) IS
-  'ÚNICA vía para escribir en el ledger. SECURITY DEFINER y EXECUTE solo para service_role: NO valida el tenant, confía en p_tenant_id. Quien la llame DEBE sacar el tenant del usuario autenticado y nunca del cuerpo del request. Valida partida doble, resuelve el período, toma el correlativo sin huecos y encadena el hash, todo en UNA transacción. 039: reference (en el hash) e idempotency_key (no). 054: tercero por línea (en el hash). 071 (v4): referencia_externa (en el hash), número AD- propio para manual/apertura/cierre y tercero obligatorio en las cuentas con cuenta_control (salvo reversiones, y el proveedor en gasto/gasto_tramite/pago_proveedor).';
+  'ÚNICA vía para escribir en el ledger. SECURITY DEFINER y EXECUTE solo para service_role: NO valida el tenant, confía en p_tenant_id. Quien la llame DEBE sacar el tenant del usuario autenticado y nunca del cuerpo del request. Valida partida doble, resuelve el período, toma el correlativo sin huecos y encadena el hash, todo en UNA transacción. 039: reference (en el hash) e idempotency_key (no). 054: tercero por línea (en el hash). 071 (v4): referencia_externa (en el hash), número AD- propio para manual/apertura/cierre y tercero obligatorio en las cuentas con cuenta_control (salvo reversiones).';
 
 -- Los permisos de la 030, otra vez: un DROP se los lleva y un CREATE nuevo le
 -- da EXECUTE a PUBLIC.

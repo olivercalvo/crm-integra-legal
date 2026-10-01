@@ -450,7 +450,7 @@ export function AsientoManualForm({
                       {control && elegido && (
                         <p className="mt-1 flex items-start gap-1 text-xs text-amber-800">
                           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-                          Esta línea afecta la antigüedad de {elegido}.
+                          Esta línea afecta la antigüedad de {elegido.replace(/\.$/, "")}.
                         </p>
                       )}
                     </>

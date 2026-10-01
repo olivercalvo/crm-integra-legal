@@ -13,7 +13,7 @@
 --   [6]  HASH v4: se recalcula desde la fila y coincide; sin la referencia
 --        externa NO coincide (o sea: está adentro)
 --   [7]  la reversión hereda la referencia externa (llamada de 13 argumentos)
---   [8]  `gasto` contra 200001 sin proveedor → se acepta (SOP-033)
+--   [8]  `gasto` contra 200001 sin proveedor → RECHAZADO (01/10: sin excepción)
 --   [9]  un CLIENTE en 200001 → rechazado
 --   [10] `factura` contra 100004 sin cliente → rechazado (vale para todo tipo)
 --   [11] lote de importación: AD- consecutivos y la referencia del Excel en
@@ -176,17 +176,21 @@ BEGIN
     RAISE NOTICE '[7] la reversión hereda la referencia externa .. ❌ % / %', v_ref2, v_ext; v_fail := v_fail + 1;
   END IF;
 
-  -- [8] `gasto` contra 200001 sin proveedor: se acepta.
+  -- [8] `gasto` contra 200001 sin proveedor: rechazado (sin excepción).
   BEGIN
     PERFORM post_journal_entry(v_tenant, current_date, 'Compra sin proveedor 071', 'gasto',
       jsonb_build_array(
         jsonb_build_object('account_code','130003','debit',4,'credit',0),
         jsonb_build_object('account_code','200001','debit',0,'credit',4)
       ), NULL, NULL, NULL, NULL, v_user, NULL, 'FAC-CO-999998', NULL, 'F-123');
-    RAISE NOTICE '[8] gasto sin proveedor se acepta .............. ✅'; v_ok := v_ok + 1;
+    RAISE NOTICE '[8] gasto sin proveedor ........................ ❌ PASÓ (debía fallar)'; v_fail := v_fail + 1;
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    RAISE NOTICE '[8] gasto sin proveedor se acepta .............. ❌ %', v_err; v_fail := v_fail + 1;
+    IF v_err LIKE '%cuenta de proveedores necesita el proveedor%' THEN
+      RAISE NOTICE '[8] gasto sin proveedor ........................ ✅ RECHAZADO'; v_ok := v_ok + 1;
+    ELSE
+      RAISE NOTICE '[8] gasto sin proveedor ........................ ❌ otro error: %', v_err; v_fail := v_fail + 1;
+    END IF;
   END;
 
   -- [9] Un CLIENTE en 200001.

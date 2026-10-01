@@ -64,6 +64,19 @@ export async function POST(request: NextRequest) {
     if (!case_id || !concept || !date) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, concept, date" }, { status: 400 });
     }
+    // 🔴 E3 (01/10/2026): el gasto se postea al crearse contra 200001, y ahí no
+    // hay líneas sin proveedor. Se corta ANTES de insertar.
+    if (typeof supplier_id !== "string" || supplier_id.trim() === "") {
+      return NextResponse.json(
+        {
+          error:
+            "Elige el proveedor: el gasto va a Cuentas por pagar y ahí cada movimiento dice de quién es. " +
+            "Si todavía no tiene ficha, créala en Proveedores.",
+          fieldErrors: { supplier_id: "Elige el proveedor." },
+        },
+        { status: 400 }
+      );
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 🔴 LAS LÍNEAS SON OBLIGATORIAS, Y EL MONTO SALE DE ELLAS

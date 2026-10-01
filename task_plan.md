@@ -1,5 +1,33 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 01/10/2026 — 071 APLICADA EN STAGING; DEVELOP QUEDA INCOMPATIBLE CON STAGING <<<
+
+- ✅ **`071` aplicada en staging** (ref `xtyenhakplrkyifbcaow`). Antes de aplicarla se le quitó la
+  excepción de proveedor (pedido de Oliver: ninguna línea en 200001 sin proveedor).
+  `verificacion-071-motor-v4.sql`: **15 ok, 0 fallas**. `verify_accounting_chain`: 0 roturas.
+- ✅ Recorrido con contador: asiento manual sin cliente en 100004 → botón apagado con el motivo
+  y 400 por API; con cliente → **AD-000001** (asiento 99, `MEMO-E3-01` como referencia externa,
+  FERRETERÍA VALLARINO en 100004). Compra sin proveedor → rechazada en el formulario; con
+  CABLE ONDA → **FAC-CO-000001** (asiento 100) y su pago **PA-000008** (asiento 101), proveedor en
+  las dos líneas de 200001. Mayor con Módulo, N.º documento, N.º transacción y Ref. externa.
+- ⏳ Falta la parte con **abogada**: gasto de trámite en CORP-001 (pregunta del caso cerrado,
+  proveedor obligatorio, `FAC-CO-000002`, factura del proveedor como referencia externa) y un
+  cobro (`CO-000011`).
+- 🔴 **`develop` queda INCOMPATIBLE con staging hasta que se mezcle `feat/bloque1-contable`.**
+  Su código no manda el tercero (E2) ni deja vacío `p_reference` en el asiento manual, así que
+  contra staging **falla al emitir facturas y NC de venta, registrar cobros, compras, gastos de
+  trámite y pagos a proveedor, cargar asientos manuales e importar asientos contra 100004/200001**.
+  Siguen funcionando las reversiones (el motor las exime) y la NC de compra (la arma el SQL de la
+  066 con el proveedor). Afecta a los **deploys de Preview de `develop`**, que apuntan a staging.
+  No se arregla tocando staging: se arregla mezclando la rama.
+- 📋 **R-1 (requisito antes de producción):** verificador que recalcule el `content_hash` por
+  versión. Propuesta en el plan §8; diagnóstico en `sql/verificacion/recalculo-content-hash.sql`
+  (98 de 98 asientos reproducidos). Sin construir.
+- 📋 **P-2f:** compra de contado sin ficha de proveedor (propuesta en el plan §7). Hoy no existe:
+  sin proveedor no se registra ninguna compra ni gasto de trámite.
+- ⚠️ **Producción:** los ~128 gastos de trámite sin asiento que se registran con el botón de
+  reintento van a pedir el proveedor antes de entrar al libro (el mensaje lo dice).
+
 ## >>> 01/10/2026 — BLOQUE 1, E3 (REFERENCIAS Y TERCERO) EN LA RAMA <<<
 
 - ✅ Código y tests de E3 (plan §1 puntos 2 y 10, respuestas en §7). Commit local, sin push.

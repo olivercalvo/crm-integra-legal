@@ -107,6 +107,7 @@ function makeAdmin() {
             date: ins.date,
             concept: ins.concept,
             posted_entry_id: null,
+            supplier_id: ins.supplier_id,
             cases: { case_code: "CIV-014" },
             suppliers: null,
           },
@@ -219,7 +220,8 @@ function linea(over: Record<string, string> = {}) {
   };
 }
 
-const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-03-15" };
+// E3 (01/10/2026): el proveedor es obligatorio (200001 nunca sin tercero).
+const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-03-15", supplier_id: "prov-1" };
 
 // ===========================================================================
 // 1. LAS LÍNEAS SON OBLIGATORIAS
@@ -335,11 +337,18 @@ test("el proveedor y el vencimiento se guardan en el ENCABEZADO", { skip: skipNo
   assert.equal(state.capturado.expenseInsert?.due_date, "2026-04-14");
 });
 
-test("sin proveedor ni vencimiento se guardan como NULL, no vacíos", { skip: skipNoMocks }, async () => {
+test("sin vencimiento se guarda como NULL, no vacío", { skip: skipNoMocks }, async () => {
   reset();
-  await POST(req({ ...BASE, supplier_id: "", due_date: "", lines: [linea()] }));
-  assert.equal(state.capturado.expenseInsert?.supplier_id, null);
+  await POST(req({ ...BASE, due_date: "", lines: [linea()] }));
   assert.equal(state.capturado.expenseInsert?.due_date, null);
+});
+
+test("🔴 E3: sin proveedor → 400 ANTES de insertar (200001 nunca sin tercero)", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, supplier_id: "", lines: [linea()] }));
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /Elige el proveedor/);
+  assert.equal(state.capturado.expenseInsert, null, "no se insertó nada");
 });
 
 test("el tenant sale del perfil aunque el body mande otro", { skip: skipNoMocks }, async () => {

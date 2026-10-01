@@ -245,7 +245,16 @@ export async function createBusinessExpense(
     }
   }
 
-  if (input.supplier_id !== null && !(await proveedorValido(db, tenantId, input.supplier_id))) {
+  // 🔴 E3 (01/10/2026): sin proveedor no hay compra. Acredita 200001 y ahí no
+  // hay líneas sin proveedor. Se corta acá, ANTES de consumir el número FAC-CO-.
+  if (!input.supplier_id) {
+    throw new MutationError(
+      "Elige el proveedor: la compra va a Cuentas por pagar y ahí cada movimiento dice de quién es. " +
+        "Si todavía no tiene ficha, créala en Proveedores.",
+      400
+    );
+  }
+  if (!(await proveedorValido(db, tenantId, input.supplier_id))) {
     throw new MutationError("El proveedor seleccionado no existe.", 400);
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);

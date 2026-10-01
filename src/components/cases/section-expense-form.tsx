@@ -198,6 +198,10 @@ export function SectionExpenseForm({
       setError("Complete el concepto y la fecha del gasto");
       return;
     }
+    if (!expSupplier) {
+      setError("Elige el proveedor: el gasto va a Cuentas por pagar y ahí cada movimiento dice de quién es.");
+      return;
+    }
     if (yaPagado && !pagoBanco) {
       setError("Eligió \"Ya se pagó\": indique de qué cuenta bancaria salió el pago.");
       return;
@@ -448,13 +452,14 @@ export function SectionExpenseForm({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Proveedor (opcional)</Label>
+              {/* E3: obligatorio. El gasto va a 200001 y ahí no hay líneas sin proveedor. */}
+              <Label>Proveedor *</Label>
               <select
                 value={expSupplier}
                 onChange={(e) => elegirProveedor(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[48px] text-sm focus:border-integra-navy focus:outline-none"
               >
-                <option value="">Sin proveedor</option>
+                <option value="">Elegir proveedor</option>
                 {proveedores.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.legal_name}

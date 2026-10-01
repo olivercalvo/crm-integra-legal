@@ -117,7 +117,7 @@ function fake(g: Guion) {
             status: g.pagoExistente?.status ?? "registrado",
             created_at: "2026-09-21T00:00:00Z",
             created_by: USER,
-            compra: { id: COMPRA, description: "Insumos", supplier_name: "PROVEEDOR, S.A.", supplier_invoice_number: "F-1001" },
+            compra: { id: COMPRA, description: "Insumos", supplier_name: "PROVEEDOR, S.A.", supplier_invoice_number: "F-1001", supplier_id: "d2222222-2222-2222-2222-222222222222" },
           },
           error: null,
         };

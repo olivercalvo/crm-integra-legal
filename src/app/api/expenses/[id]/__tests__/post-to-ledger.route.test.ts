@@ -95,6 +95,8 @@ function reset(over: Partial<typeof state> = {}) {
     posted_entry_id: null,
     cases: { case_code: "CIV-014" },
     suppliers: { legal_name: "MICROSISTEMAS S.A." },
+    // E3: sin proveedor el gasto no entra al libro (200001 nunca sin tercero).
+    supplier_id: "prov-1",
   };
   state.asientoPrevio = null;
   state.fallaLookupAsiento = false;

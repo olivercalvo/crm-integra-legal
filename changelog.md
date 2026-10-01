@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, E3: 071 aplicada en staging y proveedor obligatorio] - 2026-10-01
+
+- `071` aplicada en staging, con un cambio previo: el motor ya no exime compras, gastos de
+  trámite ni pagos del proveedor en 200001. Verificación 15/15.
+- Proveedor obligatorio en compras y gastos de trámite (formulario, ruta, constructor y motor).
+- Diagnóstico de solo lectura `sql/verificacion/recalculo-content-hash.sql`: los 98 asientos de
+  staging se reproducen con su versión de fórmula (v1 a v3). Propuesta del verificador en el plan §8.
+- Recorrido con contador: AD-000001, FAC-CO-000001, PA-000008.
+- Aviso de antigüedad sin doble punto cuando el nombre termina en «.».
+
 ## [Bloque 1, E3: número de documento, referencia externa y tercero obligatorio] - 2026-10-01
 
 Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1 punto 2 y

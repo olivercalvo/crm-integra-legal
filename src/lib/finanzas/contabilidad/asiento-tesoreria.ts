@@ -275,6 +275,17 @@ export interface PagoProveedorParaAsiento {
 export function construirAsientoDePagoProveedor(
   p: PagoProveedorParaAsiento
 ): ResultadoAsientoTesoreria {
+  // 🔴 E3: el pago debita 200001, y ahí no hay líneas sin proveedor. Un documento
+  // viejo sin ficha se paga después de asignarle el proveedor.
+  if (!p.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        "El pago se registra contra Cuentas por pagar (200001) y el documento no tiene proveedor. " +
+        "Asígnale el proveedor y vuelve a registrar el pago.",
+    };
+  }
   if (!p.payment_account_code) {
     return {
       ok: false,

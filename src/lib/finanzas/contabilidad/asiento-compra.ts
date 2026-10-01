@@ -160,6 +160,19 @@ export function claveIdempotenteDeCompra(compraId: string): string {
 export function construirAsientoDeCompra(
   c: CompraParaAsiento
 ): ResultadoAsientoCompra {
+  // 🔴 E3 (01/10/2026, Oliver): ninguna línea en 200001 sin proveedor. La compra
+  // SIEMPRE acredita 200001 (el pago es la segunda transacción), así que sin
+  // ficha no se registra. El motor (071) lo vuelve a exigir.
+  if (!c.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        `La compra se registra en Cuentas por pagar (200001), y cada movimiento ahí tiene ` +
+        `que decir de qué proveedor es. Elige el proveedor; si todavía no tiene ficha, créala ` +
+        `en Proveedores.`,
+    };
+  }
   if (c.lineas.length === 0) {
     return {
       ok: false,

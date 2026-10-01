@@ -520,6 +520,7 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 | **P-2c** ✅ (01/10) | **Los 8 cobros de producción se quedan como `REC-`.** No se renumeran documentos entregados. Desde E3 los nuevos salen `CO-`. | La `047` sigue numerando `REC-` en la ventana; la secuencia `payment` no se reinicia y el siguiente es `CO-000009`. |
 | **P-2d** ✅ (01/10) | **Sí: el asiento de diario lleva una referencia libre opcional**, además de su `AD-`. | `journal_entries.referencia_externa` (`071`). El `AD-` lo pone el motor; el texto libre va a la referencia externa (formulario e importación). |
 | **Nombre** ✅ (01/10) | **Sin tercero en la línea de control, la celda Nombre queda vacía.** | Se retira el cuarto escalón de `nombreDelTercero` (el texto de la línea). Hecho en E3. |
+| **200001 sin proveedor** ✅ (01/10, Oliver) | **No se aceptan líneas en la 200001 sin proveedor.** Una compra sin ficha sólo se permitiría de contado (banco directo, sin tocar 200001); si toca 200001, el proveedor es obligatorio. | Hoy TODA compra y todo gasto de trámite acreditan 200001 (el pago es la segunda transacción), así que en E3 el proveedor pasa a ser **obligatorio** en compras y gastos de trámite, en los formularios, las rutas, los constructores y el motor (la `071` ya no exime `gasto`, `gasto_tramite` ni `pago_proveedor`). Reemplaza el «sin proveedor no se bloquea» de SOP-033. **El camino de contado sin proveedor no existe todavía**: queda propuesto abajo (P-2f). |
 | **Caso cerrado** ✅ (01/10) | **Se permite cargar el gasto de trámite en un caso cerrado, con un aviso visible antes de guardar:** «Este caso está cerrado. ¿Deseas registrar el gasto igual?». | Entró en E3: pregunta en pantalla en `section-expense-form.tsx` (las dos secciones del caso). No bloquea en el servidor. |
 
 **Tres decisiones más (30/09):**
@@ -544,6 +545,14 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 - **P-2c.** Los 8 cobros de producción: ¿`REC-000001…8` o `CO-000001…8`?
 - **P-2d.** Además de `AD-`, ¿el asiento de diario lleva una referencia libre? ¿Las reversiones se filtran con el módulo del original o con uno propio?
 - **P-2e.** ¿Le sirven los códigos `NC-ING` / `NC-CO` y el prefijo `NC-CO-` para las NC de compra?
+
+- **P-2f.** (propuesta, 01/10) **Compra de contado sin ficha de proveedor.** Diseño sugerido: el
+  asiento de la compra acredita el BANCO en vez de 200001 (un solo asiento, `FAC-CO-`), y el
+  documento queda pagado con un pago de `kind = 'contado'` en `supplier_payments` (número `PA-`,
+  banco, sin asiento propio), para que `amount_paid`, `status` y `balance_due` sigan saliendo del
+  mismo trigger de la `048`. Implica: CHECK de `kind`, que un pago `contado` no se pueda eliminar
+  ni reversar por separado (se reversa la compra entera), y decidir si la NC de compra aplica.
+  Tamaño M. ¿Hace falta, o alcanza con crear la ficha del proveedor?
 
 **Mayor**
 - **P-3a.** ¿En qué pantalla vio el nombre del usuario en lugar del tercero? (El Mayor no lo muestra.)
@@ -576,6 +585,68 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 - **P-11a.** Confirmar 300002 (hoy se llama "Perdida Retenidas": ¿se renombra a Resultados acumulados?), la fecha 31/12 y si la distribución a socias es un asiento aparte.
 
 ---
+
+## 8. Requisitos antes de producción (agregados el 01/10/2026)
+
+### R-1. 🔴 Un verificador que RECALCULE el `content_hash` de cada asiento
+
+**Pedido de Oliver (01/10/2026):** que el verificador detecte si alguien modificó el contenido
+de una fila, no solo si se rompió el encadenamiento. **Requisito antes de producción. No está
+construido: esto es la propuesta.**
+
+**Cómo está hoy.** `verify_accounting_chain(tenant)` (`030`) recorre los asientos por
+`entry_number` y comprueba dos cosas: que `prev_hash` sea el `hash` del anterior y que
+`hash = sha256(prev_hash || content_hash)`. **Nunca recalcula `content_hash` desde las
+columnas.** Consecuencia: si alguien con acceso directo a la base (con los triggers de la `023`
+desactivados, o como dueño de la tabla) cambia un monto, una cuenta, una fecha o un tercero y
+deja `content_hash` como estaba, la cadena sigue verde. Hoy lo único que protege el contenido
+son los triggers de inmutabilidad.
+
+**Lo que ya se midió (solo lectura, staging, 01/10):** `sql/verificacion/recalculo-content-hash.sql`
+recalcula los 98 asientos con las cuatro fórmulas de SOP-014. **Todos se reproducen**, y la
+versión que coincide es monótona en el correlativo: v1 = 1 a 11, v2 = 12 a 49, v3 = 50 a 98,
+ninguno sin versión. O sea que el recálculo es viable sin falsos positivos sobre lo que existe.
+(Los asientos 99 a 101 del recorrido de E3 ya son v4.)
+
+**Propuesta**
+
+1. **Columna `journal_entries.hash_version smallint`** (migración nueva). El motor la escribe en
+   cada asiento nuevo (4 desde la `071`; 5 si algún día cambia la fórmula). Para los viejos NO se
+   hace UPDATE (los triggers de la `023` lo impiden y está bien): se crea una tabla de cortes
+   **`accounting_hash_versions(tenant_id, version, desde_entry_number, hasta_entry_number)`**,
+   sembrada UNA vez con el diagnóstico de arriba, que la migración verifica antes de grabar (si un
+   asiento no coincide con la versión de su tramo, aborta).
+2. **`verify_accounting_chain` v2** (misma firma, más filas de salida): además de lo de hoy,
+   recalcula el `content_hash` con la fórmula de la versión del asiento (columna, o tramo si es
+   viejo) y devuelve `contenido_alterado` cuando no coincide. Una función por versión
+   (`contenido_v1(...)` … `contenido_v4(...)`), puras, y el motor pasa a usar **la misma**
+   `contenido_v4` para calcular al postear: una sola implementación, como `reversion.ts`.
+3. **Costo:** O(asientos + líneas), una pasada. Con miles de asientos es una consulta de
+   segundos; se corre bajo demanda (botón del contador o antes de cerrar un período), no en cada
+   posteo.
+
+**Lo que implica y hay que decidir**
+
+- ⚠️ **Lo que NO detecta igual:** la fórmula concatena con `|` y `:` **sin escapar**. Un cambio
+  que mueva texto entre dos campos libres contiguos (por ejemplo, pasar un `|` de la descripción
+  a la referencia) puede producir la misma cadena y pasar. Es una debilidad de la fórmula desde
+  la `028`, no del verificador. Se corrige sólo para adelante con una **v5** que codifique los
+  campos sin ambigüedad (JSON canónico o prefijo de largo). Recomiendo hacer la v5 en la misma
+  migración, porque producción todavía tiene el libro vacío: todo lo real nacería con v5.
+- ⚠️ **Lo que el hash nunca cubre:** `idempotency_key` y `created_by` no entran (decisión de la
+  `039`); una alteración ahí no se detecta. El nombre de la cuenta tampoco: se hashea el CÓDIGO
+  (inmutable por regla de la app).
+- 🔴 **Detectar no es impedir.** Un recálculo que encuentra una fila alterada no dice cuál era el
+  valor original. Para eso hace falta un respaldo externo (el de la tarea «Respaldo Base
+  Integra») con el que comparar. El verificador es la alarma, no la reparación.
+- **Tamaño:** S en SQL (cuatro funciones de contenido + la v2 del verificador + la tabla de
+  cortes), M si se suma la v5. Sin cambios de pantalla, salvo el botón si se quiere.
+
+### R-2. Develop queda incompatible con staging desde la `071`
+
+Ver `task_plan.md` y el runbook: desde el 01/10 los deploys de Preview de `develop` (que apuntan
+a staging) no pueden emitir facturas, cobros, compras, gastos de trámite, NC de venta, pagos a
+proveedor ni asientos manuales. Se resuelve cuando la rama se mezcle.
 
 ## Cierre
 

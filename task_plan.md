@@ -1,5 +1,38 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 01/10/2026 (cierre) — 073 Y 074 APLICADAS Y RECORRIDAS; ESTADO DEL BLOQUE 1 <<<
+
+- ✅ `073` y `074` aplicadas en staging. `verificacion-073-074.sql`: **11 ok, 0 fallas**.
+- ✅ Recorrido (contador + abogada2):
+  1. Cuenta **200005 ISC por pagar (prueba)** y tasa **ISC_5_PRUEBA** con esa cuenta; FAC-HON-000027
+     (asiento 105) postea el impuesto 10.00 en **200005**, nada en 200003.
+  2. **ITBMS_7** (usada) no deja cambiar su cuenta: mensaje en pantalla, sigue en 200003.
+  3. Cobro **CO-000012** de 250 sobre 210: aviso antes de guardar; asiento 106 por 250 con el
+     cliente en 100004 (`TRF-074-001` como referencia externa); −40.00 en la antigüedad.
+  4. Con el **contador**: «Aplicar B/. 40.00 de CO-000012» en FAC-HON-000007 → saldo 107.00 →
+     67.00, CO-000012 sin saldo a favor, **sin asiento nuevo** (el último sigue siendo el 106, el
+     movimiento de 100004 no cambia). Antigüedad: total 5,445.20 igual, el −40 desaparece y la
+     factura baja 40; la diferencia contra 100004 (193,765.55, apertura + documentos viejos) no se
+     movió. Cadena: 0 problemas.
+  5. Cobro sin referencia: no guarda en pantalla y la API responde 400.
+- 📋 Texto pendiente (no pedido, visto en el recorrido): el panel «Resumen» y las líneas del
+  detalle de la factura siguen mostrando «$» en vez de «B/.».
+
+### Qué queda del Bloque 1 (plan §4)
+| Entrega | Estado |
+|---|---|
+| E1 fechas, E2 tercero, E3 referencias y tercero obligatorio | ✅ en staging |
+| R-1 hash v5 y verificador (072) | ✅ en staging |
+| E4 tasa con cuenta (073), E5 excedente (074) | ✅ en staging |
+| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | 🛑 espera **P-8a** de Josuarth |
+| E8 NC como módulo propio | 🛑 espera **P-4a** de Josuarth |
+| E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
+| E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | se puede empezar; la parte de NC espera E8 |
+| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | depende de E6 |
+| E11 cierre anual | noviembre |
+| R-1b ancla externa de la cadena | propuesta, sin construir (requisito antes de producción) |
+| Ventana de producción 025 → 074 + merge | cuando Oliver lo decida; runbook al día |
+
 ## >>> 01/10/2026 (noche) — 072 APLICADA; 073 Y 074 ESCRITAS <<<
 
 - ✅ **`072` aplicada en staging**: 4 tramos (v1 1–11, v2 12–49, v3 50–98, v4 99–104).

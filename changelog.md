@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: recorrido de la 073 y la 074] - 2026-10-01
+
+- 073 y 074 aplicadas en staging (verificación 11/11) y recorridas con contador y abogada2:
+  impuesto de ISC_5_PRUEBA en 200005, tasa usada sin cambio de cuenta, cobro con excedente,
+  saldo a favor aplicado por el contador sin asiento, cobro sin referencia rechazado.
+- «Registrar cobro» en el diálogo de la factura y montos en B/. en la sección de cobros.
+
 ## [Bloque 1: tasa con su cuenta y cobro con excedente] - 2026-10-01
 
 - `072` aplicada en staging (verificación 8/8).

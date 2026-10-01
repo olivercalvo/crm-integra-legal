@@ -30,6 +30,8 @@ import {
 } from "@/lib/finanzas/types/invoice";
 
 interface BaseProps {
+  /** 077: las facturas que una nota de débito puede ajustar (de todos los clientes). */
+  facturasAjustables?: { id: string; invoice_number: string; client_id: string }[];
   clients: ClientOption[];
   /** Todas los casos del tenant (filtramos por client_id en el form). */
   casesByClient: Record<string, CaseOption[]>;
@@ -54,13 +56,15 @@ interface EditProps extends BaseProps {
     accounting_date: string;
     due_date: string;
     notes: string | null;
+    /** Sólo en una nota de débito (077). */
+    referenced_invoice_id?: string | null;
     lines: InvoiceLineInput[];
   };
 }
 
 type Props = CreateProps | EditProps;
 
-const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO"];
+const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO", "NOTA_DEBITO"];
 
 /** Hoy en Panamá: la misma fecha que usa el servidor (ver `hoy-en-panama.ts`). */
 function todayIso(): string {
@@ -114,6 +118,10 @@ export function InvoiceForm(props: Props) {
   const [notes, setNotes] = useState<string>(
     props.mode === "edit" ? props.initial.notes ?? "" : ""
   );
+  // 077: la factura que ajusta una nota de débito (opcional).
+  const [referencia, setReferencia] = useState<string | null>(
+    props.mode === "edit" ? props.initial.referenced_invoice_id ?? null : null
+  );
 
   // ---- Líneas -------------------------------------------------------------
   const [lines, setLines] = useState<InvoiceLineInput[]>(() =>
@@ -134,6 +142,14 @@ export function InvoiceForm(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, issueDate]);
 
+  // Si cambia el cliente, la factura que ajusta (de otro cliente) se limpia.
+  useEffect(() => {
+    if (referencia && !(props.facturasAjustables ?? []).some((f) => f.id === referencia && f.client_id === clientId)) {
+      setReferencia(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
   // Si cambia el cliente, limpiar el caso seleccionado (puede no aplicar).
   useEffect(() => {
     if (caseId && clientId) {
@@ -148,6 +164,9 @@ export function InvoiceForm(props: Props) {
   }, [clientId]);
 
   const availableCases = clientId ? props.casesByClient[clientId] ?? [] : [];
+  const ajustables = clientId
+    ? (props.facturasAjustables ?? []).filter((f) => f.client_id === clientId)
+    : [];
 
   // ---- Submit -------------------------------------------------------------
   async function handleSubmit() {
@@ -160,6 +179,7 @@ export function InvoiceForm(props: Props) {
       accounting_date: accountingDate,
       due_date: dueDate,
       notes: notes.trim() || null,
+      ...(kind === "NOTA_DEBITO" ? { referenced_invoice_id: referencia } : {}),
       lines: lines.map((ln) => ({
         service_id: ln.service_id,
         description: ln.description.trim(),
@@ -317,6 +337,42 @@ export function InvoiceForm(props: Props) {
                 disabled={isPending}
               />
             </div>
+
+            {/* 077: la nota de débito puede decir qué factura ajusta (opcional). */}
+            {kind === "NOTA_DEBITO" && (
+              <div className="sm:col-span-2" data-error={!!errors.referenced_invoice_id}>
+                <Label htmlFor="referenced_invoice_id" className="mb-1 block">
+                  Factura que ajusta (opcional)
+                </Label>
+                <select
+                  id="referenced_invoice_id"
+                  value={referencia ?? ""}
+                  onChange={(e) => setReferencia(e.target.value || null)}
+                  disabled={isPending || !clientId}
+                  className={
+                    "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white " +
+                    "hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                    (errors.referenced_invoice_id ? "border-red-300" : "border-gray-300")
+                  }
+                >
+                  <option value="">
+                    {!clientId ? "Elige primero el cliente" : "Sin factura asociada"}
+                  </option>
+                  {ajustables.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.invoice_number}
+                    </option>
+                  ))}
+                </select>
+                {errors.referenced_invoice_id && (
+                  <p className="mt-1 text-xs text-red-600">{errors.referenced_invoice_id}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  La nota de débito cobra algo más al cliente: se registra igual que una factura y se
+                  numera <span className="font-mono">ND-</span>.
+                </p>
+              </div>
+            )}
 
             {/* Caso (opcional) — oculto si el cliente no tiene casos */}
             {clientId && availableCases.length > 0 && (

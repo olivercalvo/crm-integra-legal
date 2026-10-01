@@ -39,6 +39,8 @@ import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
+import { MENSAJE_ND_SIN_DGI, PERMITIR_ND_A_LA_DGI } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
+import { referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
 import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { listarSaldosAFavor } from "@/lib/finanzas/api/saldo-a-favor";
@@ -206,7 +208,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     isEmitida || (isAnulada && invoice.fe_estado !== "no_emitida");
   // Permiso para disparar envío al PAC (D7 del sprint 2E.2 / consistente
   // con route handler que devuelve 403 a roles no permitidos).
-  const canEmitToPac = puedeAccionar;
+  // 077: la nota de débito todavía no va a la DGI (PERMITIR_ND_A_LA_DGI).
+  const ndSinDgi = invoice.invoice_kind === "NOTA_DEBITO" && !PERMITIR_ND_A_LA_DGI;
+  const canEmitToPac = puedeAccionar && !ndSinDgi;
+  const ajustaA =
+    invoice.invoice_kind === "NOTA_DEBITO" ? await referenciaDeNotaDeDebito(db, tenantId, invoice.id) : null;
   // Card DGI manual — legacy MVP pre-integración PAC. Queda visible SOLO
   // si la abogada efectivamente cargó datos manuales (hay al menos un
   // campo DGI manual presente) y la factura nunca entró al flujo
@@ -408,6 +414,20 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   {INVOICE_KIND_LABEL[invoice.invoice_kind]}
                 </dd>
               </div>
+              {invoice.invoice_kind === "NOTA_DEBITO" && (
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-gray-500">Ajusta la factura</dt>
+                  <dd className="mt-1 font-medium text-gray-900">
+                    {ajustaA ? (
+                      <Link href={`/finanzas/facturas/${ajustaA.id}`} className="font-mono hover:underline">
+                        {ajustaA.invoice_number}
+                      </Link>
+                    ) : (
+                      "Sin factura asociada"
+                    )}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500">Moneda</dt>
                 <dd className="mt-1 font-medium text-gray-900">{invoice.currency}</dd>
@@ -566,6 +586,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               Muestra el estado fiscal real (no_emitida / pending / authorized /
               error / canceled) y el CTA "Enviar a la DGI" o "Reintentar" según
               corresponda. */}
+          {ndSinDgi && isEmitida && (
+            <p role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+              {MENSAJE_ND_SIN_DGI}
+            </p>
+          )}
           {showEfacturaCard && (
             <EfacturaCard
               invoiceId={invoice.id}

@@ -33,6 +33,14 @@
 | R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
 | Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
 
+## >>> 01/10/2026 (noche) — NOTA DE DÉBITO (d14) <<<
+
+- ⏳ **`077` escrita, SIN APLICAR**. Hasta aplicarla, elegir «Nota de débito» falla al guardar
+  (CHECK de `invoice_kind`).
+- Valores por defecto: servicios de honorarios; factura que ajusta opcional; sin envío a la DGI
+  hasta autorizar una ND (tipo 05) en el sandbox. Pregunta para Josuarth: ¿la ND siempre ajusta
+  una factura, o puede ir sola?
+
 ## >>> 01/10/2026 (noche) — E8: NC COMO MÓDULO PROPIO <<<
 
 - ⏳ **`076` escrita, SIN APLICAR** (espera «aplica»). Hasta aplicarla, la NC de venta con factura

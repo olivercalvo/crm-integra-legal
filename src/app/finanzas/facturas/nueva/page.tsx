@@ -7,6 +7,7 @@ import {
   listTaxCodesActive,
 } from "@/lib/finanzas/queries/catalogs";
 import { InvoiceForm } from "../_components/invoice-form";
+import { facturasAjustables } from "@/lib/finanzas/queries/invoices";
 import type { CaseOption } from "@/lib/finanzas/types/invoice";
 
 
@@ -35,7 +36,7 @@ export default async function NuevaFacturaPage({ searchParams }: PageProps) {
   }
   const { db, tenantId } = ctx;
 
-  const [clients, services, taxCodes, casesRes] = await Promise.all([
+  const [clients, services, taxCodes, casesRes, ajustables] = await Promise.all([
     listClientsActive(db, tenantId),
     listServicesActive(db, tenantId),
     listTaxCodesActive(db, tenantId),
@@ -44,6 +45,7 @@ export default async function NuevaFacturaPage({ searchParams }: PageProps) {
       .select("id, case_code, description, client_id")
       .eq("tenant_id", tenantId)
       .order("case_code"),
+    facturasAjustables(db, tenantId),
   ]);
 
   const allCases = (casesRes.data ?? []) as CaseOption[];
@@ -71,6 +73,7 @@ export default async function NuevaFacturaPage({ searchParams }: PageProps) {
         casesByClient={casesByClient}
         services={services}
         taxCodes={taxCodes}
+        facturasAjustables={ajustables}
       />
 
       {/* Pre-fill suave desde searchParams.

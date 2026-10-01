@@ -59,11 +59,13 @@ export function ServiceCombobox({
   }, [open]);
 
   // Filtrar por tipo si aplica
+  // 077: una nota de débito lleva servicios de honorarios (un recargo, un
+  // ajuste), igual que `validarConsistenciaDeKind`.
   const kindFiltered = filterKind
     ? services.filter((s) =>
-        filterKind === "HONORARIOS"
-          ? s.service_type === "honorarios"
-          : s.service_type === "reembolso"
+        filterKind === "REEMBOLSO"
+          ? s.service_type === "reembolso"
+          : s.service_type === "honorarios"
       )
     : services;
 

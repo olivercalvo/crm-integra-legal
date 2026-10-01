@@ -82,7 +82,7 @@ export interface InvoiceDocumentProps {
   invoice_number: string;
   /** Display number — en borrador puede ser distinto del invoice_number interno. */
   display_number: string;
-  invoice_kind: "HONORARIOS" | "REEMBOLSO";
+  invoice_kind: "HONORARIOS" | "REEMBOLSO" | "NOTA_DEBITO";
   kind_label: string;                   // "Honorarios" | "Reembolso"
   status: string;
   /** Etiqueta legible mostrada como badge en el header (mapeado a tuteo neutro). */
@@ -496,12 +496,15 @@ export function InvoiceDocument(props: InvoiceDocumentProps) {
     !!dgi.cafe_url;
 
   const isCancelled = status === "anulada";
+  // 077: una nota de débito es una factura con otro tipo de documento.
+  const esNotaDeDebito = props.invoice_kind === "NOTA_DEBITO";
+  const tituloDoc = esNotaDeDebito ? "Nota de débito" : "Factura";
 
   return (
     <Document
-      title={`Factura ${display_number}`}
+      title={`${tituloDoc} ${display_number}`}
       author="Integra Legal"
-      subject={`Factura ${display_number}`}
+      subject={`${tituloDoc} ${display_number}`}
       creator="CRM Integra Legal"
       producer="CRM Integra Legal"
     >
@@ -512,7 +515,7 @@ export function InvoiceDocument(props: InvoiceDocumentProps) {
             <Image src={LOGO_SRC} style={styles.brandLogo} />
           </View>
           <View style={styles.docHeader}>
-            <Text style={styles.docHeaderTitle}>FACTURA</Text>
+            <Text style={styles.docHeaderTitle}>{tituloDoc.toUpperCase()}</Text>
             <Text style={styles.docHeaderNumber}>{display_number}</Text>
             <Text style={styles.docHeaderKind}>{kind_label.toUpperCase()}</Text>
             <Text

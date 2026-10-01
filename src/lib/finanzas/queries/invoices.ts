@@ -157,3 +157,57 @@ export async function getInvoiceById(
     lines: (lines ?? []) as InvoiceWithRelations["lines"],
   };
 }
+
+// ---------------------------------------------------------------------------
+// NOTA DE DÉBITO (077)
+// ---------------------------------------------------------------------------
+
+/** Una factura que una nota de débito puede ajustar. */
+export interface FacturaAjustable {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+}
+
+/**
+ * Las facturas que una nota de débito puede ajustar: emitidas (con o sin
+ * cobros), que no sean otra nota de débito. Del mismo cliente lo filtra la
+ * pantalla; la base lo vuelve a exigir (trigger de la 077).
+ */
+export async function facturasAjustables(db: DB, tenantId: string): Promise<FacturaAjustable[]> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("id, invoice_number, client_id, invoice_kind")
+    .eq("tenant_id", tenantId)
+    .in("status", ["emitida", "parcialmente_pagada", "pagada"])
+    .order("issue_date", { ascending: false });
+  if (error) {
+    console.error("[finanzas/queries] facturasAjustables failed", error);
+    return [];
+  }
+  return ((data ?? []) as { id: string; invoice_number: string; client_id: string; invoice_kind: string }[])
+    .filter((f) => f.invoice_kind !== "NOTA_DEBITO")
+    .map((f) => ({ id: f.id, invoice_number: f.invoice_number, client_id: f.client_id }));
+}
+
+/**
+ * La factura que ajusta una nota de débito, o null. Se lee con `*` y sólo se
+ * llama para una NOTA_DEBITO: así ninguna pantalla nombra la columna antes de
+ * que exista la 077.
+ */
+export async function referenciaDeNotaDeDebito(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<{ id: string; invoice_number: string } | null> {
+  const { data } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", invoiceId).maybeSingle();
+  const refId = (data as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id ?? null;
+  if (!refId) return null;
+  const { data: ref } = await db
+    .from("invoices")
+    .select("id, invoice_number")
+    .eq("tenant_id", tenantId)
+    .eq("id", refId)
+    .maybeSingle();
+  return ref ? { id: String(ref.id), invoice_number: String(ref.invoice_number) } : null;
+}

@@ -12,8 +12,14 @@
 
 // ---------- Status / kind --------------------------------------------------
 
-/** Valores válidos de invoices.invoice_kind (UPPERCASE en BD). */
-export type InvoiceKind = "HONORARIOS" | "REEMBOLSO";
+/**
+ * Valores válidos de invoices.invoice_kind (UPPERCASE en BD).
+ *
+ * `NOTA_DEBITO` (077, decisión 14): mismo efecto que una factura de venta, con
+ * su propia serie `ND-` y, opcional, la factura que ajusta
+ * (`referenced_invoice_id`). Su asiento es el de la factura.
+ */
+export type InvoiceKind = "HONORARIOS" | "REEMBOLSO" | "NOTA_DEBITO";
 
 /** Valores válidos de invoices.status. */
 export type InvoiceStatus =
@@ -43,15 +49,17 @@ export type FeEstado =
   | "error";
 
 /** Mapping invoice_kind → sequence_type para get_next_sequence_number(). */
-export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim"> = {
+export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim" | "debit_note"> = {
   HONORARIOS: "invoice_hon",
   REEMBOLSO: "invoice_reim",
+  NOTA_DEBITO: "debit_note",
 };
 
 /** Prefijo del invoice_number formateado. */
-export const PREFIX_BY_KIND: Record<InvoiceKind, "FAC-HON" | "FAC-REI"> = {
+export const PREFIX_BY_KIND: Record<InvoiceKind, "FAC-HON" | "FAC-REI" | "ND"> = {
   HONORARIOS: "FAC-HON",
   REEMBOLSO: "FAC-REI",
+  NOTA_DEBITO: "ND",
 };
 
 // ---------- Catalog rows --------------------------------------------------
@@ -132,6 +140,8 @@ export interface CreateInvoiceInput {
   accounting_date?: string;
   due_date: string;   // YYYY-MM-DD
   notes: string | null;
+  /** Sólo en una NOTA_DEBITO (077): la factura que ajusta. Opcional. */
+  referenced_invoice_id?: string | null;
   lines: Array<Omit<InvoiceLineInput, "_key" | "id">>;
 }
 
@@ -145,6 +155,8 @@ export interface UpdateInvoiceInput {
   accounting_date?: string;
   due_date: string;
   notes: string | null;
+  /** Sólo en una NOTA_DEBITO (077). */
+  referenced_invoice_id?: string | null;
   lines: InvoiceLineInput[]; // con id si ya existían
 }
 
@@ -254,6 +266,7 @@ export interface InvoiceListItem extends InvoiceRow {
 export const INVOICE_KIND_LABEL: Record<InvoiceKind, string> = {
   HONORARIOS: "Honorarios",
   REEMBOLSO: "Reembolso",
+  NOTA_DEBITO: "Nota de débito",
 };
 
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {

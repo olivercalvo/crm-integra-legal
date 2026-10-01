@@ -206,6 +206,8 @@ export async function createInvoice(
       status: "borrador",
       currency: "USD",
       notes: input.notes,
+      // 077: la columna sólo se manda en una nota de débito.
+      ...(input.invoice_kind === "NOTA_DEBITO" ? { referenced_invoice_id: input.referenced_invoice_id ?? null } : {}),
       created_by: userId,
       // totales se quedan en 0 — T8b los recalcula al insertar líneas
     })
@@ -272,6 +274,20 @@ export async function updateInvoice(
   //    "Tipo de documento" con líneas ya cargadas, sin que nada las revise.
   await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
 
+  // 0.b 077: la referencia a la factura que se ajusta es sólo de una nota de
+  //     débito. Si el borrador deja de serlo, se limpia (el CHECK la rechaza en
+  //     otro tipo). Se lee con `*` para no nombrar una columna que antes de la
+  //     077 no existe.
+  let referencia: { referenced_invoice_id?: string | null } = {};
+  if (input.invoice_kind === "NOTA_DEBITO") {
+    referencia = { referenced_invoice_id: input.referenced_invoice_id ?? null };
+  } else {
+    const { data: actual } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", invoiceId).maybeSingle();
+    if ((actual as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id) {
+      referencia = { referenced_invoice_id: null };
+    }
+  }
+
   // 1. UPDATE header. Si la factura no está en borrador, T4 rechaza con
   //    mensaje claro.
   const { error: errHeader } = await db
@@ -284,6 +300,7 @@ export async function updateInvoice(
       accounting_date: input.accounting_date ?? input.issue_date,
       due_date: input.due_date,
       notes: input.notes,
+      ...referencia,
     })
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId);

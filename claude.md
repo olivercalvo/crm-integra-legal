@@ -319,6 +319,16 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   200001/200003. Lleva el documento del proveedor en `referencia_externa`.
 - Una aplicación no se edita ni se borra: si fue un error, se reversa la NC.
 
+### Nota de débito (desde 2026-10-01, decisión 14 — `077` SIN APLICAR)
+- **Es una factura de venta con otro tipo de documento**: `invoice_kind = 'NOTA_DEBITO'`, serie
+  `ND-` (secuencia `debit_note`), mismo formulario, misma emisión y el MISMO asiento
+  (`source_type = 'factura'`). Suma en la antigüedad, el ITBMS y el resultado como una factura.
+- Lleva servicios de **honorarios** (un recargo, un ajuste); uno de reembolso se rechaza.
+- **La factura que ajusta es opcional** (`referenced_invoice_id`): del mismo cliente, emitida y que
+  no sea otra ND (trigger de la 077); T4 la congela al emitir. La columna sólo se nombra en una ND.
+- 🔴 **Todavía NO va a la DGI** (`PERMITIR_ND_A_LA_DGI = false`): el tipo 05 no se probó en el
+  sandbox. Se corta antes del correlativo y la pantalla no ofrece el botón.
+
 ### Asientos de diario — tercero, clon y reversión (desde 2026-09-22, Bloque 7 — SOLO staging)
 - 🔴 **El tercero de una línea son DOS FK reales** (`journal_entry_lines.client_id` /
   `.supplier_id`, `CHECK num_nonnulls(...) <= 1`), **no** un discriminador tipo `documents`: una

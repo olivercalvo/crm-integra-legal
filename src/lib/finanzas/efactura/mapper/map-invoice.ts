@@ -60,8 +60,10 @@ export interface MapInvoiceOptions {
 /**
  * El tipo de documento DGI que corresponde a cada tipo de factura del CRM.
  *
- *   HONORARIOS → "01" Factura de operación interna
- *   REEMBOLSO  → "09" Factura de reembolso
+ *   HONORARIOS  → "01" Factura de operación interna
+ *   REEMBOLSO   → "09" Factura de reembolso
+ *   NOTA_DEBITO → "05" Nota de débito (077). Su envío al PAC está APAGADO
+ *                 (`PERMITIR_ND_A_LA_DGI`) hasta probarla en el sandbox.
  *
  * Hasta el 17/09/2026 TODO salía como "01", incluidas las FAC-REI-*: 34
  * facturas de reembolso llegaron a la DGI como operación interna. Josuarth
@@ -77,6 +79,8 @@ export function tipoDocumentoDeKind(kind: InvoiceKind): TipoDocumento {
       return TIPO_DOCUMENTO.FACTURA_OPERACION_INTERNA;
     case "REEMBOLSO":
       return TIPO_DOCUMENTO.FACTURA_REEMBOLSO;
+    case "NOTA_DEBITO":
+      return TIPO_DOCUMENTO.NOTA_DEBITO;
     default: {
       const nunca: never = kind;
       throw new Error(`[efactura/mapper] invoice_kind desconocido: ${String(nunca)}`);

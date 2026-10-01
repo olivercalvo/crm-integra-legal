@@ -1,5 +1,14 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: nota de débito] - 2026-10-01
+
+- ⚠️ Migración `077` **escrita y SIN APLICAR**: tipo `NOTA_DEBITO`, serie `ND-`, referencia
+  opcional a la factura que ajusta (mismo cliente, emitida) y T4 que la congela. Verificación:
+  `sql/tests/verificacion-077-nota-de-debito.sql`.
+- «Nota de débito» en el Tipo de documento de la factura, con el selector de la factura que
+  ajusta. Mismo asiento que una factura. El envío a la DGI queda apagado hasta probarlo en el
+  sandbox.
+
 ## [Bloque 1, E8: notas de crédito como módulo propio] - 2026-10-01
 
 - ⚠️ Migración `076` **escrita y SIN APLICAR**: factura y compra opcionales, aplicaciones de NC,

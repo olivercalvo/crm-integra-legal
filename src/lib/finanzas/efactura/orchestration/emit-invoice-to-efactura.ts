@@ -117,11 +117,25 @@ interface InvoiceMeta {
   punto_facturacion: string | null;
   numero_documento: number | null;
   dgi_cufe: string | null;
+  /** 077: la nota de débito todavía no va a la DGI. */
+  invoice_kind: string;
 }
 
 // ---------------------------------------------------------------------------
 // Entrypoint
 // ---------------------------------------------------------------------------
+
+/**
+ * 🔴 LA NOTA DE DÉBITO (077) TODAVÍA NO VA A LA DGI. Su tipo 05 lleva el
+ * documento referenciado, igual que la NC, y nadie la probó contra el sandbox
+ * del PAC: lección del `0600` y de la referencia anidada de la NC, un payload
+ * sin probar se descubre como un rechazo sobre un documento real. Se enciende
+ * cambiando esta línea después de autorizar una en el sandbox.
+ */
+export const PERMITIR_ND_A_LA_DGI = false;
+
+export const MENSAJE_ND_SIN_DGI =
+  "La nota de débito todavía no se envía a la DGI desde el sistema: falta probarla en el ambiente de pruebas del proveedor de facturación electrónica. Queda registrada en el libro.";
 
 export async function emitInvoiceToEfactura(
   db: DB,
@@ -139,6 +153,9 @@ export async function emitInvoiceToEfactura(
       `No se puede emitir al PAC: la factura está en estado "${inv.status}". Primero hay que emitirla internamente.`,
       400
     );
+  }
+  if (inv.invoice_kind === "NOTA_DEBITO" && !PERMITIR_ND_A_LA_DGI) {
+    throw new MutationError(MENSAJE_ND_SIN_DGI, 409);
   }
   if (inv.fe_estado !== "no_emitida" && inv.fe_estado !== "error") {
     throw new MutationError(
@@ -416,7 +433,7 @@ async function loadInvoiceMeta(
 ): Promise<InvoiceMeta> {
   const { data, error } = await db
     .from("invoices")
-    .select("id, status, fe_estado, punto_facturacion, numero_documento, dgi_cufe")
+    .select("id, status, fe_estado, punto_facturacion, numero_documento, dgi_cufe, invoice_kind")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -434,6 +451,7 @@ async function loadInvoiceMeta(
     fe_estado: (data.fe_estado as FeEstado) ?? "no_emitida",
     punto_facturacion: (data.punto_facturacion as string | null) ?? null,
     dgi_cufe: (data.dgi_cufe as string | null) ?? null,
+    invoice_kind: String(data.invoice_kind ?? ""),
     numero_documento:
       data.numero_documento !== null && data.numero_documento !== undefined
         ? Number(data.numero_documento)

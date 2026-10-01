@@ -40,7 +40,7 @@ const ALLOWED_STATUS = new Set<InvoiceStatus>([
   "anulada",
   "cancelada_pre_emision",
 ]);
-const ALLOWED_KINDS = new Set<InvoiceKind>(["HONORARIOS", "REEMBOLSO"]);
+const ALLOWED_KINDS = new Set<InvoiceKind>(["HONORARIOS", "REEMBOLSO", "NOTA_DEBITO"]);
 
 export default async function FacturasListPage({ searchParams }: PageProps) {
   const { db, tenantId } = await getAuthenticatedContext();

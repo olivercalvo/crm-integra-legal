@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
     nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
   },
+  "077_nota_de_debito.sql": {
+    que: "Nota de debito: invoice_kind NOTA_DEBITO, serie debit_note (ND-), referenced_invoice_id opcional (mismo cliente, emitida) y T4 que la congela",
+    tipo: "cuerpo_funcion", nombre: "finanzas_referencia_de_nota_de_debito", contiene: "nota de débito",
+    nota: "Bloque 1, decision 14, 01/10. Mismo efecto que una factura de venta (asiento source_type factura). El envio al PAC (tipo 05) queda apagado en la app hasta probarlo en el sandbox (PERMITIR_ND_A_LA_DGI).",
+  },
   "076_nc_modulo_propio.sql": {
     que: "Notas de credito como modulo propio: factura y compra opcionales, aplicaciones de NC (venta y compra), credited_total desde aplicaciones, create_supplier_credit_note con lineas libres, apply_credit_note y apply_supplier_credit_note",
     tipo: "tabla", tabla: "credit_note_applications",

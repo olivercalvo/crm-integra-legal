@@ -50,6 +50,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { listarPeriodos } from "@/lib/finanzas/queries/periodos";
+import { anclaDelUltimoCierre } from "@/lib/finanzas/queries/anclas";
 import {
   codigoPeriodo,
   esAccionPeriodo,
@@ -253,11 +254,16 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // 075 (R-1b): al cerrar, la base grabó el ancla en la MISMA transacción del
+    // UPDATE (trigger). Se devuelve para que la pantalla la muestre enseguida.
+    const ancla = accion === "cerrar" ? await anclaDelUltimoCierre(admin, tenantId, fila.id) : null;
+
     return NextResponse.json({
       year,
       month,
       periodo: codigoPeriodo(year, month),
       estado: accion === "cerrar" ? "cerrado" : "abierto",
+      ancla: ancla ? { id: ancla.id, entry_number: ancla.entry_number, hash: ancla.hash } : null,
       // Se devuelve para que la pantalla pueda decir "reabierto" sin recargar.
       fueCerradoAlgunaVez: accion === "cerrar" ? true : Boolean(fila.closed_at),
     });

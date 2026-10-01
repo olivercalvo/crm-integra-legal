@@ -14,6 +14,7 @@ import {
   MOTIVO_REAPERTURA_MIN,
   type PeriodoRow,
 } from "@/lib/finanzas/contabilidad/periodos";
+import { huellaCorta } from "@/lib/finanzas/contabilidad/anclas";
 
 /**
  * CIERRE Y REAPERTURA DE PERÍODOS CONTABLES.
@@ -98,6 +99,13 @@ export function PeriodosManager({ periodos }: Props) {
       // doble clic, o dos personas a la vez—. No es un error, pero tampoco hay
       // que decir que se hizo algo.
       if (data?.sinCambios) setAviso(data.mensaje);
+      // 075 (R-1b): el ancla que grabó el cierre. Se dice en pantalla y la
+      // constancia se baja desde la sección de anclas.
+      else if (data?.ancla)
+        setAviso(
+          `Período ${data.periodo} cerrado. Último asiento del libro: N.º ${data.ancla.entry_number}. ` +
+            `Huella: ${huellaCorta(data.ancla.hash)}. Baje la constancia en «Anclas de la cadena» y guárdela fuera del sistema.`
+        );
       setPendiente(null);
       setMotivo("");
       startTransition(() => router.refresh());

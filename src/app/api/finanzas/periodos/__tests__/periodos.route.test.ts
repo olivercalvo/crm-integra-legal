@@ -71,6 +71,9 @@ function makeAdmin() {
         return { data: null, error: null };
       }
       if (table === "journal_entries") return { data: [], error: null };
+      if (table === "accounting_chain_anchors") {
+        return { data: { id: "ancla-1", period_id: "p1", year: 2026, month: 3, entry_number: 99, hash: "a".repeat(64), origen: "cierre", anchored_at: "2026-10-01T12:00:00Z" }, error: null };
+      }
       return { data: null, error: null };
     };
 
@@ -82,6 +85,8 @@ function makeAdmin() {
       },
       in: () => b,
       order: () => b,
+      // 075: la ruta lee el ancla del cierre (`.order().limit(1).maybeSingle()`).
+      limit: () => b,
       update: (p: unknown) => {
         op = "update";
         payload = p;

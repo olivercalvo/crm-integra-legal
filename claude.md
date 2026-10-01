@@ -389,7 +389,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **La `071` va en la ventana JUNTO con el código de E3.** El código anterior falla al
   postear un asiento manual. Runbook `despliegue-025-055.md`, nota de la `071`.
 
-### Ancla de la cadena y antigüedad nueva (desde 2026-10-01, Bloque 1 — `075` SIN APLICAR)
+### Ancla de la cadena y antigüedad nueva (desde 2026-10-01, Bloque 1 — `075` aplicada SOLO en staging)
 - 🔴 **El ancla la graba la BASE al cerrar un período** (trigger de la `075`), nunca la app.
   `accounting_chain_anchors` es inmutable y ni `service_role` la escribe. Sale de la base por el
   respaldo (`tablas/accounting_chain_anchors.json`) y por la constancia PDF del cierre.

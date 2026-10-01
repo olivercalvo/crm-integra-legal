@@ -1,5 +1,10 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: 075 aplicada en staging] - 2026-10-01
+
+- `075` aplicada en staging (verificación 8/8), con la corrección del nombre de una variable en
+  su bloque de verificación final.
+
 ## [Bloque 1: ancla de la cadena, antigüedad nueva y filtro por módulo] - 2026-10-01
 
 - Detalle de la factura (Resumen, líneas), lista y diálogos: montos en B/., no con «$».

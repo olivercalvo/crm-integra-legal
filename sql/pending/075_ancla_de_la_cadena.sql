@@ -193,17 +193,18 @@ GRANT  EXECUTE ON FUNCTION public.verify_chain_anchors(uuid, jsonb) TO service_r
 DO $$
 DECLARE
   v_n int;
-  t   record;
+  -- No se llama `t`: chocaría con el alias de la consulta de abajo.
+  r_bufete record;
 BEGIN
-  SELECT count(*) INTO v_n FROM public.tenants t
-   WHERE NOT EXISTS (SELECT 1 FROM public.accounting_chain_anchors a WHERE a.tenant_id = t.id);
+  SELECT count(*) INTO v_n FROM public.tenants tn
+   WHERE NOT EXISTS (SELECT 1 FROM public.accounting_chain_anchors a WHERE a.tenant_id = tn.id);
   IF v_n > 0 THEN
     RAISE EXCEPTION '075: % bufete(s) sin ancla inicial', v_n;
   END IF;
-  FOR t IN SELECT id FROM public.tenants LOOP
-    SELECT count(*) INTO v_n FROM public.verify_chain_anchors(t.id, NULL);
+  FOR r_bufete IN SELECT id FROM public.tenants LOOP
+    SELECT count(*) INTO v_n FROM public.verify_chain_anchors(r_bufete.id, NULL);
     IF v_n > 0 THEN
-      RAISE EXCEPTION '075: las anclas del bufete % no coinciden recién creadas', t.id;
+      RAISE EXCEPTION '075: las anclas del bufete % no coinciden recién creadas', r_bufete.id;
     END IF;
   END LOOP;
   IF has_table_privilege('service_role', 'public.accounting_chain_anchors', 'INSERT') THEN

@@ -30,8 +30,19 @@
 | E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
 | E10 Estado de Resultado y Balance (línea de ISR al 0 %) | depende de E6 |
 | E11 cierre anual | noviembre |
-| R-1b ancla externa de la cadena | ✅ construida; ⏳ `075` escrita, **espera «aplica»** en staging |
+| R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
 | Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
+
+## >>> 01/10/2026 (tarde) — 075 APLICADA EN STAGING <<<
+
+- ✅ `075` aplicada en staging con el ref confirmado. El primer intento falló en el bloque de
+  verificación final (la variable `t` chocaba con el alias `t`) y la transacción se deshizo
+  completa; corregido el nombre y reaplicada. `verificacion-075`: **8 ok, 0 fallas**. Triggers
+  del libro encendidos, 1 ancla inicial (asiento 106), cadena sin problemas.
+- 🔎 Los B/. 1,793 sin explicar de la antigüedad de staging: 2 NC emitidas SIN asiento
+  (NC-000012 2,140 y NC-000010 10), cobro REC-000002 sin asiento (150), FAC-HON-000007 sin
+  asiento (−67) y dos cobros CON asiento aplicados a facturas SIN asiento (REC-000008 −400,
+  CO-000012 −40). El reporte no mide ni la primera ni la última causa.
 
 ## >>> 01/10/2026 (tarde) — R-1b, E9 Y MONTOS EN B/. <<<
 

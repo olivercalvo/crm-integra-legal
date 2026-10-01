@@ -53,6 +53,8 @@ export default async function EstadoResultadoPage({
   const accounts = await loadReportAccounts(ctx.db, ctx.tenantId, {
     rango: { desde, hasta },
     aperturaDeResultado: hayPeriodo ? "excluir" : "incluir",
+    // E11 (080): sin esto, un año cerrado daría 0.
+    excluirCierre: true,
   });
 
   // Cuánto se dejó afuera. Se suma de las cuentas, no se recalcula aparte: es el

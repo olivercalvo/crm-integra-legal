@@ -6,6 +6,9 @@ import { listarPeriodos } from "@/lib/finanzas/queries/periodos";
 import { PeriodosManager } from "./_components/periodos-manager";
 import { AnclasDeLaCadena } from "./_components/anclas-de-la-cadena";
 import { listarAnclas } from "@/lib/finanzas/queries/anclas";
+import { CierreDelEjercicio } from "./_components/cierre-del-ejercicio";
+import { cierreVigente } from "@/lib/finanzas/api/cierre-anual";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 
 /**
  * PERÍODOS CONTABLES — cierre y reapertura.
@@ -54,6 +57,16 @@ export default async function PeriodosPage() {
     listarAnclas(ctx.db, ctx.tenantId),
   ]);
 
+  // E11 (080): los ejercicios que se pueden cerrar, hasta el año en curso (en
+  // Panamá), con su cierre vigente si ya lo tienen.
+  const anioActual = Number(hoyEnPanama().slice(0, 4));
+  const anios = Array.from(new Set(periodos.map((p) => p.year)))
+    .filter((a) => a <= anioActual)
+    .sort((a, b) => a - b);
+  const ejercicios = await Promise.all(
+    anios.map(async (anio) => ({ anio, vigente: await cierreVigente(ctx.db, ctx.tenantId, anio) }))
+  );
+
   return (
     <div className="space-y-5">
       <div>
@@ -75,6 +88,8 @@ export default async function PeriodosPage() {
       ) : (
         <PeriodosManager periodos={periodos} />
       )}
+
+      {ejercicios.length > 0 && <CierreDelEjercicio ejercicios={ejercicios} />}
 
       {anclas.length > 0 && <AnclasDeLaCadena anclas={anclas} />}
     </div>

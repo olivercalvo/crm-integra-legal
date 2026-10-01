@@ -24,6 +24,7 @@ import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
+import { SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO } from "@/lib/finanzas/contabilidad/cierre-anual";
 
 type DB = SupabaseClient;
 
@@ -48,7 +49,8 @@ export async function reverseJournalEntry(
   if (!original) {
     throw new MutationError("Asiento no encontrado", 404);
   }
-  if (original.source_type !== "manual") {
+  // 080: el cierre anual también se reversa desde acá (no tiene documento).
+  if (!SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO.includes(original.source_type)) {
     throw new MutationError(
       `El asiento ${original.entry_number} salió de un documento, no de una carga manual: ` +
         "desde acá no se reversa. Se corrige por su documento (anulando la factura, reversando " +

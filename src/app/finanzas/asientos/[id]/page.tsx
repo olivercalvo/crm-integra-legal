@@ -18,6 +18,7 @@ import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
 import { tipoTransaccionLabel } from "@/lib/finanzas/reports/libro-mayor";
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO } from "@/lib/finanzas/contabilidad/cierre-anual";
 
 /**
  * DETALLE DE UN ASIENTO DEL LIBRO — solo lectura (Bloque 7, commit 4).
@@ -59,6 +60,8 @@ export default async function AsientoDetallePage({ params }: PageProps) {
   if (!asiento) notFound();
 
   const esManual = asiento.source_type === "manual";
+  // 080: el cierre anual se reversa igual que un manual (pero no se clona).
+  const esReversable = SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO.includes(asiento.source_type);
   const yaReversado = asiento.reversadoPor !== null;
   // El documento que originó el asiento, cuando lo tiene. Es el mismo
   // resolvedor que usan el Mayor y el Diario: una sola tabla de destinos.
@@ -107,12 +110,12 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               Clonar
             </Link>
           )}
-          {/* REVERSAR (7.6). Solo un asiento manual que todavía no fue
-              reversado. El diálogo es el MISMO de cobros, pagos y gastos, con
+          {/* REVERSAR (7.6). Solo un asiento manual (o, desde la 080, un cierre
+              anual) que todavía no fue reversado. El diálogo es el MISMO de cobros, pagos y gastos, con
               su cuarta variante: la vista previa del espejo sale de
               `construirAsientoDeReversion`, la misma función que postea el
               servidor (`reversion-una-sola-implementacion.test.ts`). */}
-          {esManual && !yaReversado && (
+          {esReversable && !yaReversado && (
             <ReversePaymentDialog
               variante="asiento"
               paymentId={asiento.id}

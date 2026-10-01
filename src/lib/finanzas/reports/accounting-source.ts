@@ -78,6 +78,17 @@ export type AperturaDeResultado = "incluir" | "excluir";
 export interface OpcionesReporte {
   rango?: RangoReporte;
   aperturaDeResultado?: AperturaDeResultado;
+  /**
+   * E11 (080): deja afuera los asientos de CIERRE ANUAL y sus reversiones de
+   * los movimientos del período. Lo pide el Estado de Resultado: con el cierre
+   * adentro, un año cerrado da 0. El Balance NO lo pide: ahí el cierre es lo
+   * que pasa el resultado a 300002.
+   *
+   * Sólo toca los movimientos DEL RANGO. Lo anterior al `desde` se sigue
+   * sumando con los cierres, que es lo correcto: el cierre de 2026 deja en 0 lo
+   * de 2026 cuando se mira 2027.
+   */
+  excluirCierre?: boolean;
 }
 
 /** Los tipos de cuenta que forman el Estado de Resultado. */
@@ -124,12 +135,37 @@ export interface MovimientoDeCuenta {
  * algún día pesa, esto se convierte en una vista o un RPC — pero no antes de que
  * pese, y el cambio queda contenido en esta función.
  */
+/**
+ * E11: los asientos de cierre anual y las reversiones de un cierre. Vacío (lo
+ * normal hasta el primer 31/12) = el loader corre exactamente igual que antes.
+ */
+async function asientosDeCierre(db: DB, tenantId: string): Promise<Set<string>> {
+  const { data, error } = await db
+    .from("journal_entries")
+    .select("id, source_type, reverses_entry_id")
+    .eq("tenant_id", tenantId)
+    .in("source_type", ["cierre", "reversion"]);
+  if (error) {
+    console.error("[finanzas/reports] asientosDeCierre failed", error);
+    throw new Error("No se pudieron leer los asientos de cierre");
+  }
+  const filas = (data ?? []) as { id: string; source_type: string; reverses_entry_id: string | null }[];
+  const cierres = new Set(filas.filter((f) => f.source_type === "cierre").map((f) => f.id));
+  const fuera = new Set(cierres);
+  for (const f of filas) {
+    if (f.source_type === "reversion" && f.reverses_entry_id && cierres.has(f.reverses_entry_id)) fuera.add(f.id);
+  }
+  return fuera;
+}
+
 async function movimientosPorCuenta(
   db: DB,
   tenantId: string,
-  rango: RangoReporte = {}
+  rango: RangoReporte = {},
+  excluir: Set<string> = new Set()
 ): Promise<Map<string, MovimientoDeCuenta>> {
   const acotado = Boolean(rango.desde || rango.hasta);
+  const conExclusion = excluir.size > 0;
 
   // SIN RANGO se usa la consulta de siempre, sin el join. No es una
   // optimización: es que el caso "sin filtro" tiene que seguir siendo
@@ -137,9 +173,16 @@ async function movimientosPorCuenta(
   let q = acotado
     ? db
         .from("journal_entry_lines")
-        .select("account_id, debit, credit, journal_entries!inner(transaction_date)")
+        .select(
+          conExclusion
+            ? "entry_id, account_id, debit, credit, journal_entries!inner(transaction_date)"
+            : "account_id, debit, credit, journal_entries!inner(transaction_date)"
+        )
         .eq("tenant_id", tenantId)
-    : db.from("journal_entry_lines").select("account_id, debit, credit").eq("tenant_id", tenantId);
+    : db
+        .from("journal_entry_lines")
+        .select(conExclusion ? "entry_id, account_id, debit, credit" : "account_id, debit, credit")
+        .eq("tenant_id", tenantId);
 
   if (rango.desde) q = q.gte("journal_entries.transaction_date", rango.desde);
   if (rango.hasta) q = q.lte("journal_entries.transaction_date", rango.hasta);
@@ -154,11 +197,13 @@ async function movimientosPorCuenta(
   }
 
   const mapa = new Map<string, MovimientoDeCuenta>();
-  for (const fila of (data ?? []) as {
+  for (const fila of (data ?? []) as unknown as {
+    entry_id?: string;
     account_id: string;
     debit: number | string;
     credit: number | string;
   }[]) {
+    if (conExclusion && fila.entry_id && excluir.has(fila.entry_id)) continue;
     const previo = mapa.get(fila.account_id) ?? { debitos: 0, creditos: 0, neto: 0 };
     previo.debitos += Number(fila.debit);
     previo.creditos += Number(fila.credit);
@@ -248,9 +293,10 @@ export async function loadReportAccounts(
   const rango = opciones.rango ?? {};
   const excluirApertura = opciones.aperturaDeResultado === "excluir";
 
+  const excluir = opciones.excluirCierre ? await asientosDeCierre(db, tenantId) : new Set<string>();
   const [{ data, error }, movimientos, anteriores] = await Promise.all([
     db.from("chart_of_accounts").select(SELECT_COLS).eq("tenant_id", tenantId).order("code"),
-    movimientosPorCuenta(db, tenantId, rango),
+    movimientosPorCuenta(db, tenantId, rango, excluir),
     rango.desde
       ? movimientosAnteriores(db, tenantId, rango.desde)
       : Promise.resolve(new Map<string, number>()),

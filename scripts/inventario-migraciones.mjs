@@ -303,6 +303,11 @@ const MARCADORES = {
     tipo: "constraint", nombre: "coa_subcategoria_por_tipo",
     nota: "Bloque 1, E6, 01/10. El mapa cuenta por cuenta de Josuarth (P-8a) no llego: la migracion asigna un valor por defecto (el de subcategoriaPorDefecto) y lo informa con un NOTICE por cuenta; se corrige en el Plan de Cuentas. Reemplaza el CHECK de la 025 y el script sql/datos-staging de HON-FAM.",
   },
+  "080_cierre_anual.sql": {
+    que: "Cierre anual: close_fiscal_year (asiento cierre al 31/12 contra 300002, verificado), finanzas_saldos_de_resultado y reverse_journal_entry acepta cierre",
+    tipo: "funcion", nombre: "close_fiscal_year",
+    nota: "Bloque 1, E11, 01/10. Uno vigente por ano y en orden; EXECUTE solo service_role. El Estado de Resultado excluye los cierres en la app. Parche verificado sobre la definicion vigente de reverse_journal_entry.",
+  },
   "068_fechas_de_registro.sql": {
     que: "Fecha de registro (accounting_date) en facturas, compras, gastos de tramite y NC de venta; backfill desde el libro; congelada al emitir",
     tipo: "columna", tabla: "invoices", columna: "accounting_date",

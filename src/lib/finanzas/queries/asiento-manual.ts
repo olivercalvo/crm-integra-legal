@@ -50,6 +50,8 @@ export interface AsientoDelLibro {
   source_type: string;
   source_id: string | null;
   reference: string | null;
+  /** 071: cheque, factura del proveedor o la referencia libre. NULL en lo viejo. */
+  referencia_externa: string | null;
   reversal_reason: string | null;
   created_at: string;
   lineas: LineaDeAsiento[];
@@ -81,7 +83,7 @@ export async function getAsientoDelLibro(
     .from("journal_entries")
     .select(
       "id, entry_number, transaction_date, record_date, description, source_type, " +
-        "source_id, reference, reversal_reason, reverses_entry_id, created_at"
+        "source_id, reference, referencia_externa, reversal_reason, reverses_entry_id, created_at"
     )
     .eq("tenant_id", tenantId)
     .eq("id", id)
@@ -163,6 +165,7 @@ export async function getAsientoDelLibro(
     source_type: String(cabecera.source_type),
     source_id: (cabecera.source_id as string | null) ?? null,
     reference: (cabecera.reference as string | null) ?? null,
+    referencia_externa: (cabecera.referencia_externa as string | null) ?? null,
     reversal_reason: (cabecera.reversal_reason as string | null) ?? null,
     created_at: String(cabecera.created_at),
     lineas: lineasOrdenadas,

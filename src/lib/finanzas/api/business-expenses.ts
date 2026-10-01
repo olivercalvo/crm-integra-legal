@@ -21,6 +21,7 @@ import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
 import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 import type { AsientoInput } from "@/lib/finanzas/contabilidad/posting";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
 import {
   construirAsientoDeCompra,
   SOURCE_TYPE_COMPRA,
@@ -294,10 +295,21 @@ export async function createBusinessExpense(
   // es la suma y el asiento no cuadraría contra su propio documento.
   const { subtotal, taxAmount, taxRate } = importesDelEncabezado(lineas);
 
+  // El número FAC-CO- (071, E3), DESPUÉS de todas las validaciones y ANTES del
+  // INSERT, con el criterio del recibo (SOP-031): si el alta falla más abajo,
+  // el DELETE compensatorio deja un HUECO. Va a `reference` del asiento.
+  let purchaseNumber: string;
+  try {
+    purchaseNumber = await allocatePurchaseNumber(db, tenantId);
+  } catch (err) {
+    throw new MutationError("No se pudo asignar el número FAC-CO- de la compra. No se registró nada.", 500, err);
+  }
+
   const { data, error } = await db
     .from("business_expenses")
     .insert({
       tenant_id: tenantId,
+      purchase_number: purchaseNumber,
       expense_date: input.expense_date,
       accounting_date: fechaDeRegistro,
       due_date: dueDate,

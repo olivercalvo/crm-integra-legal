@@ -116,6 +116,10 @@ function makeAdmin() {
       if (table === "users") return { data: state.profile, error: null };
 
       if (table === "expenses") {
+        if (s.op === "update" && s.payload && "purchase_number" in s.payload) {
+          // 071 (E3): el UPDATE del número, ANTES del posteo. No es el cache.
+          return { data: null, error: null };
+        }
         if (s.op === "update") {
           state.capturado.cacheEscrito = s.payload;
           return state.fallaCache
@@ -167,6 +171,8 @@ function makeAdmin() {
   return {
     from: (t: string) => builder(t),
     rpc: async (_fn: string, args: Record<string, unknown>) => {
+      // 071 (E3): el número FAC-CO- se toma antes de postear. No es el posteo.
+      if (_fn === "get_next_sequence_number") return { data: 5, error: null };
       state.capturado.rpcLlamado = true;
       state.capturado.rpcArgs = args;
       if (state.rpcError) return { data: null, error: state.rpcError };

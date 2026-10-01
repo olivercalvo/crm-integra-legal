@@ -26,8 +26,9 @@ const ctx = (over: Partial<ContextoDeImportacion> = {}): ContextoDeImportacion =
   ...over,
 });
 const H = [...ENCABEZADOS];
-const fila = (a: string, f: unknown, d: string, cta: string, deb: unknown, cre: unknown, ref = "") =>
-  [a, f, d, ref, cta, "", deb, cre];
+// E3: la columna Tercero va entre Cuenta y Descripción de la línea.
+const fila = (a: string, f: unknown, d: string, cta: string, deb: unknown, cre: unknown, ref = "", ter = "") =>
+  [a, f, d, ref, cta, ter, "", deb, cre];
 
 test("un archivo válido: dos asientos, cuadrados, sin errores", () => {
   const r = validarImportacion(
@@ -82,12 +83,84 @@ test("montos: positivos con dos decimales; texto basura es ERROR, nunca 0", () =
   assert.deepEqual(parsearMonto(""), { ok: true, valor: 0 });
 });
 
-test("fechas: DD/MM/AAAA, ISO y serial de Excel; nunca MM/DD", () => {
-  assert.equal(parsearFecha("25/09/2026"), "2026-09-25");
-  assert.equal(parsearFecha("2026-09-25"), "2026-09-25");
-  assert.equal(parsearFecha(46290), "2026-09-25", "serial de Excel");
-  assert.equal(parsearFecha("09/25/2026"), null, "mes 25 no existe: no se adivina MM/DD");
-  assert.equal(parsearFecha("31/02/2026"), null);
+test("fechas en DD/MM: DD/MM/AAAA, ISO y serial de Excel; no se adivina MM/DD", () => {
+  assert.equal(parsearFecha("25/09/2026", "DD/MM"), "2026-09-25");
+  assert.equal(parsearFecha("2026-09-25", "DD/MM"), "2026-09-25");
+  assert.equal(parsearFecha(46290, "DD/MM"), "2026-09-25", "serial de Excel");
+  assert.equal(parsearFecha("09/25/2026", "DD/MM"), null, "mes 25 no existe: no se adivina MM/DD");
+  assert.equal(parsearFecha("31/02/2026", "DD/MM"), null);
+});
+
+test("E3, decisión (c): en MM/DD la misma cadena es OTRA fecha, y la imposible es error", () => {
+  assert.equal(parsearFecha("09/25/2026", "MM/DD"), "2026-09-25");
+  assert.equal(parsearFecha("03/04/2026", "MM/DD"), "2026-03-04", "4 de marzo");
+  assert.equal(parsearFecha("03/04/2026", "DD/MM"), "2026-04-03", "3 de abril");
+  assert.equal(parsearFecha("13/25/2026", "MM/DD"), null, "mes 13: error de fila, no se adivina");
+  // La ISO y el serial no dependen del formato.
+  assert.equal(parsearFecha("2026-09-25", "MM/DD"), "2026-09-25");
+  assert.equal(parsearFecha(46290, "MM/DD"), "2026-09-25");
+});
+
+test("E3: el formato del contexto manda en la validación y el error lo nombra", () => {
+  const filas = [H, fila("1", "09/25/2026", "Depreciación", "600001", 10, ""), fila("1", "09/25/2026", "", "100001", "", 10)];
+  assert.deepEqual(validarImportacion(filas, ctx({ formatoDeFecha: "MM/DD" })).errores, []);
+  const r = validarImportacion(filas, ctx({ formatoDeFecha: "DD/MM" }));
+  assert.ok(r.errores.some((e) => e.columna === "Fecha" && /DD\/MM\/AAAA/.test(e.mensaje)));
+});
+
+// ---------------------------------------------------------------------------
+// E3 (071): EL TERCERO EN LAS CUENTAS CONTROL
+// ---------------------------------------------------------------------------
+
+const ctxTerceros = (over: Partial<ContextoDeImportacion> = {}) =>
+  ctx({
+    cuentasExistentes: new Set(["600001", "100001", "100004", "200001"]),
+    cuentasActivas: new Set(["600001", "100001", "100004", "200001"]),
+    cuentasControl: new Map([["100004", "clientes"], ["200001", "proveedores"]]),
+    clientesPorCodigo: new Map([["CLI-0001", "cli-uuid"]]),
+    proveedoresPorCodigo: new Map([["PRV-0001", "prv-uuid"]]),
+    ...over,
+  });
+
+test("E3: con el código del tercero, la línea lleva el id resuelto", () => {
+  const r = validarImportacion(
+    [
+      H,
+      fila("1", "25/09/2026", "Ajuste CxC", "100004", 10, "", "", "cli-0001"),
+      fila("1", "25/09/2026", "", "200001", "", 10, "", "PRV-0001"),
+    ],
+    ctxTerceros()
+  );
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.asientos[0].lines[0].client_id, "cli-uuid", "el código se compara sin mayúsculas");
+  assert.equal(r.asientos[0].lines[0].supplier_id, null);
+  assert.equal(r.asientos[0].lines[1].supplier_id, "prv-uuid");
+});
+
+test("🔴 E3: 100004 sin cliente, 200001 con un CLIENTE y un código inexistente: tres errores en la columna Tercero", () => {
+  const r = validarImportacion(
+    [
+      H,
+      fila("1", "25/09/2026", "Ajuste", "100004", 10, ""),
+      fila("1", "25/09/2026", "", "200001", "", 10, "", "CLI-0001"),
+      fila("2", "25/09/2026", "Otro", "600001", 5, "", "", "CLI-9999"),
+      fila("2", "25/09/2026", "", "100001", "", 5),
+    ],
+    ctxTerceros()
+  );
+  const msg = r.errores.map((e) => `${e.fila}|${e.columna}|${e.mensaje}`).join("\n");
+  assert.match(msg, /^2\|Tercero\|La cuenta 100004 es de clientes/m);
+  assert.match(msg, /^3\|Tercero\|La cuenta 200001 es de proveedores/m);
+  assert.match(msg, /^4\|Tercero\|No hay ningún cliente ni proveedor con el código CLI-9999/m);
+});
+
+test("E3: en una cuenta que no es de control el tercero es opcional", () => {
+  const r = validarImportacion(
+    [H, fila("1", "25/09/2026", "Depreciación", "600001", 10, ""), fila("1", "25/09/2026", "", "100001", "", 10)],
+    ctxTerceros()
+  );
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.asientos[0].lines[0].client_id, null);
 });
 
 test("las filas de un asiento tienen que estar juntas", () => {
@@ -128,7 +201,8 @@ test("encabezados que faltan: un solo error que dice cuáles", () => {
 test("la plantilla se vuelve a leer: el ejemplo trae la cuenta vacía y lo dice", () => {
   const buf = Buffer.from(generarPlantillaDeAsientos([{ code: "600001", name: "Gasto", account_type: "expense" }]));
   const matriz = leerHojaDeAsientos(buf);
-  const r = validarImportacion(matriz, ctx());
+  // El ejemplo de la plantilla viene en MM/DD, el formato por defecto (E3).
+  const r = validarImportacion(matriz, ctx({ formatoDeFecha: "MM/DD" }));
   assert.equal(r.asientos.length, 2, "dos asientos de ejemplo");
   assert.ok(r.errores.every((e) => e.columna === "Cuenta" && /Falta la cuenta/.test(e.mensaje)));
 });

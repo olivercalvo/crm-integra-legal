@@ -259,6 +259,16 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
             </dd>
           </div>
 
+          {gasto.purchase_number && (
+            <div>
+              {/* E3 (071): el número propio, en la serie de las compras (P-2b). */}
+              <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <Hash size={13} /> N.º de compra
+              </dt>
+              <dd className="mt-1 font-mono text-sm text-gray-900">{gasto.purchase_number}</dd>
+            </div>
+          )}
+
           <div>
             {/* 070 (E2): el número de la factura del proveedor, como en las compras. */}
             <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">

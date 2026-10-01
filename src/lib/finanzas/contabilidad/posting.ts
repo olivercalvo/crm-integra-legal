@@ -83,7 +83,9 @@ export type SourceType =
   | "nota_credito_proveedor"
   | "manual"
   | "reversion"
-  | "apertura";
+  | "apertura"
+  /** Cierre anual (071; el RPC que lo postea llega en E11). Numera AD- como el manual. */
+  | "cierre";
 
 export const SOURCE_TYPES: SourceType[] = [
   "factura",
@@ -96,6 +98,7 @@ export const SOURCE_TYPES: SourceType[] = [
   "manual",
   "reversion",
   "apertura",
+  "cierre",
 ];
 
 /**
@@ -154,6 +157,18 @@ export interface AsientoInput {
    */
   reference?: string | null;
   /**
+   * El documento de AFUERA que respalda el asiento (071, E3): N.º de la factura
+   * del proveedor, cheque o transferencia de un cobro o un pago, o la referencia
+   * libre del asiento de diario (P-2d). `reference` es el número PROPIO.
+   *
+   * 🔴 En `manual`, `apertura` y `cierre` el número propio (AD-) lo pone el
+   * motor: ahí `reference` tiene que ir vacío y el texto libre va acá. El RPC
+   * rechaza lo contrario.
+   *
+   * Entra en el hash desde la v4 (SOP-014). Una reversión la hereda sola.
+   */
+  referencia_externa?: string | null;
+  /**
    * Token contra el doble envío, generado por la pantalla al abrir el formulario.
    *
    * 🔑 Hace falta SOLO donde no hay `source_id`, o sea en los asientos manuales.
@@ -201,6 +216,7 @@ export async function postJournalEntry(
     p_record_date: input.record_date ?? null,
     p_reference: input.reference ?? null,
     p_idempotency_key: input.idempotency_key ?? null,
+    p_referencia_externa: input.referencia_externa ?? null,
   });
 
   if (error) {

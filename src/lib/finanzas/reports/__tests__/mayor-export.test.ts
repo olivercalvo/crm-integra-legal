@@ -25,6 +25,9 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     tipoTransaccion: "Gasto / compra",
     numero: "2",
     nombre: "ESTACIÓN DELTA VÍA ESPAÑA",
+    modulo: "FAC-CO",
+    numeroDocumento: "FAC-CO-000002",
+    referenciaExterna: "F-123",
     terceroClave: null,
     descripcion: "Combustible de la flota — febrero 2026",
     contrapartida: "Cuentas por pagar",
@@ -67,16 +70,19 @@ function mayor(filas: FilaMayor[]): MayorDeCuenta {
 /** Índices de las columnas del mayor, para leer las filas sin contar a mano. */
 const COL = {
   fecha: 0,
-  tipo: 1,
-  numero: 2,
-  nombre: 3,
-  ruc: 4,
-  dv: 5,
-  descripcion: 6,
-  contrapartida: 7,
-  debito: 8,
-  credito: 9,
-  saldo: 10,
+  modulo: 1,
+  tipo: 2,
+  documento: 3,
+  numero: 4,
+  refExterna: 5,
+  nombre: 6,
+  ruc: 7,
+  dv: 8,
+  descripcion: 9,
+  contrapartida: 10,
+  debito: 11,
+  credito: 12,
+  saldo: 13,
 };
 
 const DELTA: TerceroFiscal = {
@@ -119,8 +125,13 @@ test("las columnas son las que pidió Josuarth, en orden", () => {
     hoja.columnas.map((c) => c.titulo),
     [
       "Fecha",
+      // E3 (01/10/2026): módulo, N.º de documento propio, correlativo y
+      // referencia externa. 🐞 Antes "Número de documento" traía el correlativo.
+      "Módulo",
       "Tipo de transacción",
-      "Número de documento",
+      "N.º documento",
+      "N.º transacción",
+      "Ref. externa",
       "Nombre",
       "RUC",
       "DV",
@@ -344,4 +355,17 @@ test("el nombre de la hoja distingue cobrar de pagar", () => {
   const rep = buildAntiguedad([doc()], CONTROL);
   assert.equal(hojaDeAntiguedad(rep, "pagar", new Map(), CTX).nombre, "Antiguedad CxP");
   assert.equal(hojaDeAntiguedad(rep, "cobrar", new Map(), CTX).nombre, "Antiguedad CxC");
+});
+
+// ---------------------------------------------------------------------------
+// E3: N.º DE DOCUMENTO Y N.º DE TRANSACCIÓN SON DOS COLUMNAS
+// ---------------------------------------------------------------------------
+
+test("E3: el número de documento es el propio y el de transacción el correlativo, numérico", () => {
+  const hoja = hojaDelMayor(mayor([fila()]), new Map(), CTX);
+  const f = hoja.filas[0];
+  assert.deepEqual(f[COL.modulo], { tipo: "texto", valor: "FAC-CO" });
+  assert.deepEqual(f[COL.documento], { tipo: "texto", valor: "FAC-CO-000002" });
+  assert.deepEqual(f[COL.numero], { tipo: "entero", valor: 2 }, "el correlativo va como número, ordenable");
+  assert.deepEqual(f[COL.refExterna], { tipo: "texto", valor: "F-123" });
 });

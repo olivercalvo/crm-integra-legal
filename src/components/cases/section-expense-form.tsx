@@ -4,7 +4,7 @@ import { useMemo, useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
-import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
+import { AlertTriangle, Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,12 @@ interface SectionExpenseFormProps {
    * se dispara en el mismo acto, después del alta, con su propio asiento.
    */
   bancos?: { code: string; name: string }[];
+  /**
+   * E3 (01/10/2026, decisión del bufete): un caso CERRADO admite gastos, pero
+   * antes de guardar se pregunta. No es un bloqueo: un trámite puede llegar
+   * facturado después del cierre.
+   */
+  casoCerrado?: boolean;
 }
 
 /**
@@ -77,6 +83,7 @@ export function SectionExpenseForm({
   proveedores = [],
   taxCodes = [],
   bancos = [],
+  casoCerrado = false,
 }: SectionExpenseFormProps) {
   // El default de impuesto resuelto contra el catálogo (id + tasa). Si el
   // código no existe la línea arranca sin impuesto, que el servidor tolera en
@@ -116,6 +123,8 @@ export function SectionExpenseForm({
   const [pagoReferencia, setPagoReferencia] = useState("");
   // Aviso que sobrevive al reset del formulario: el gasto quedó, el pago no.
   const [avisoPago, setAvisoPago] = useState<string | null>(null);
+  // E3: la pregunta del caso cerrado, en pantalla (nunca un diálogo del navegador).
+  const [preguntarCerrado, setPreguntarCerrado] = useState(false);
 
   // El monto del encabezado ES la suma de las líneas. No hay campo de monto: si
   // lo hubiera, habría dos verdades y el asiento se arma con una sola.
@@ -162,6 +171,7 @@ export function SectionExpenseForm({
     setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial)]);
     setFieldErrors({});
     resetPago();
+    setPreguntarCerrado(false);
     setShowExpenseForm(false);
     setError(null);
   };
@@ -182,7 +192,7 @@ export function SectionExpenseForm({
     setError(null);
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = (confirmadoCasoCerrado = false) => {
     setFieldErrors({});
     if (!expConcept.trim() || !expDate) {
       setError("Complete el concepto y la fecha del gasto");
@@ -207,6 +217,14 @@ export function SectionExpenseForm({
         return;
       }
     }
+    // E3: con el caso cerrado se pregunta ANTES de guardar. Va después de las
+    // validaciones para no preguntar por un formulario que igual no se guarda.
+    if (casoCerrado && !confirmadoCasoCerrado) {
+      setError(null);
+      setPreguntarCerrado(true);
+      return;
+    }
+    setPreguntarCerrado(false);
     startTransition(async () => {
       try {
         const response = await fetch("/api/expenses", {
@@ -575,11 +593,42 @@ export function SectionExpenseForm({
             </div>
             <p className="text-xs text-gray-400">JPG, PNG o PDF. Máximo 10MB.</p>
           </div>
+          {preguntarCerrado && (
+            <div
+              role="alertdialog"
+              aria-labelledby="pregunta-caso-cerrado"
+              className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3"
+            >
+              <p id="pregunta-caso-cerrado" className="flex items-start gap-2 text-sm font-medium text-amber-900">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                Este caso está cerrado. ¿Deseas registrar el gasto igual?
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setPreguntarCerrado(false)}
+                  disabled={isPending}
+                  className="min-h-[44px]"
+                >
+                  <X size={16} className="mr-1" /> No, volver
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleAddExpense(true)}
+                  disabled={isPending}
+                  className="min-h-[44px] bg-amber-600 hover:bg-amber-700"
+                >
+                  <Save size={16} className="mr-1" /> Sí, registrar el gasto
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <Button onClick={resetExpense} variant="ghost" disabled={isPending} className="min-h-[44px]">
               <X size={16} className="mr-1" /> Cancelar
             </Button>
-            <Button onClick={handleAddExpense} disabled={isPending} className="min-h-[44px] bg-red-600 hover:bg-red-700">
+            <Button onClick={() => handleAddExpense()} disabled={isPending} className="min-h-[44px] bg-red-600 hover:bg-red-700">
               {isPending ? <Loader2 size={16} className="mr-1 animate-spin" /> : <Save size={16} className="mr-1" />}
               Guardar Gasto{totalLineas > 0 ? ` · B/. ${totalLineas.toFixed(2)}` : ""}
             </Button>

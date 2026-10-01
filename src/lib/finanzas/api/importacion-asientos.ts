@@ -14,6 +14,8 @@ import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import {
   validarImportacion,
   type ContextoDeImportacion,
+  type CuentaControlImportada,
+  type FormatoDeFecha,
   type ResultadoDeImportacion,
 } from "@/lib/finanzas/import/asientos-import";
 import { leerHojaDeAsientos } from "@/lib/finanzas/import/asientos-workbook";
@@ -26,17 +28,37 @@ export function hashDelArchivo(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-export async function cargarContextoDeImportacion(db: DB, tenantId: string, hoy = new Date()): Promise<ContextoDeImportacion> {
-  const [cuentas, periodos] = await Promise.all([
-    db.from("chart_of_accounts").select("code, active").eq("tenant_id", tenantId),
+export async function cargarContextoDeImportacion(
+  db: DB,
+  tenantId: string,
+  hoy = new Date(),
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
+): Promise<ContextoDeImportacion> {
+  const [cuentas, periodos, clientes, proveedores] = await Promise.all([
+    db.from("chart_of_accounts").select("code, active, cuenta_control").eq("tenant_id", tenantId),
     db.from("accounting_periods").select("year, month, status").eq("tenant_id", tenantId),
+    // 071: los códigos que puede traer la columna Tercero.
+    db.from("clients").select("id, client_number").eq("tenant_id", tenantId),
+    db.from("suppliers").select("id, supplier_number").eq("tenant_id", tenantId),
   ]);
   if (cuentas.error) throw new MutationError(pgErrorToMessage(cuentas.error), 500, cuentas.error);
+  if (clientes.error) throw new MutationError(pgErrorToMessage(clientes.error), 500, clientes.error);
+  if (proveedores.error) throw new MutationError(pgErrorToMessage(proveedores.error), 500, proveedores.error);
   const existentes = new Set<string>();
   const activas = new Set<string>();
-  for (const c of (cuentas.data ?? []) as { code: string; active: boolean }[]) {
+  const cuentasControl = new Map<string, CuentaControlImportada>();
+  for (const c of (cuentas.data ?? []) as { code: string; active: boolean; cuenta_control: CuentaControlImportada | null }[]) {
     existentes.add(c.code);
     if (c.active) activas.add(c.code);
+    if (c.cuenta_control) cuentasControl.set(c.code, c.cuenta_control);
+  }
+  const clientesPorCodigo = new Map<string, string>();
+  for (const c of (clientes.data ?? []) as { id: string; client_number: string | null }[]) {
+    if (c.client_number) clientesPorCodigo.set(c.client_number.trim().toUpperCase(), c.id);
+  }
+  const proveedoresPorCodigo = new Map<string, string>();
+  for (const p of (proveedores.data ?? []) as { id: string; supplier_number: string | null }[]) {
+    if (p.supplier_number) proveedoresPorCodigo.set(p.supplier_number.trim().toUpperCase(), p.id);
   }
   const cerrados = new Set<string>();
   const conPeriodo = new Set<string>();
@@ -53,16 +75,21 @@ export async function cargarContextoDeImportacion(db: DB, tenantId: string, hoy 
     mesesCerrados: cerrados,
     mesesConPeriodo: conPeriodo,
     aniosConPeriodoAutomatico: new Set([anio, anio + 1]),
+    cuentasControl,
+    clientesPorCodigo,
+    proveedoresPorCodigo,
+    formatoDeFecha,
   };
 }
 
 export async function previsualizarImportacion(
   db: DB,
   tenantId: string,
-  buffer: Buffer
+  buffer: Buffer,
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<{ hash: string; resultado: ResultadoDeImportacion; yaImportado: string | null }> {
   const matriz = leerHojaDeAsientos(buffer);
-  const ctx = await cargarContextoDeImportacion(db, tenantId);
+  const ctx = await cargarContextoDeImportacion(db, tenantId, new Date(), formatoDeFecha);
   const resultado = validarImportacion(matriz, ctx);
   const hash = hashDelArchivo(buffer);
   const { data: previo } = await db
@@ -82,14 +109,16 @@ export async function contabilizarImportacion(
   userId: string,
   buffer: Buffer,
   fileName: string,
-  hashDeLaVistaPrevia: string
+  hashDeLaVistaPrevia: string,
+  /** El MISMO formato de la vista previa: otro leería otras fechas del mismo archivo. */
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<{ import_id: string; entries: number; total_debits: number; entry_numbers: number[] }> {
   const hash = hashDelArchivo(buffer);
   if (hash !== hashDeLaVistaPrevia) {
     throw new MutationError("El archivo no es el mismo que se revisó en la vista previa. Vuelve a subirlo y revísalo.", 409);
   }
   const matriz = leerHojaDeAsientos(buffer);
-  const ctx = await cargarContextoDeImportacion(db, tenantId);
+  const ctx = await cargarContextoDeImportacion(db, tenantId, new Date(), formatoDeFecha);
   const r = validarImportacion(matriz, ctx);
   if (r.errores.length > 0) {
     throw new MutationError(
@@ -107,6 +136,7 @@ export async function contabilizarImportacion(
       first_row: a.first_row,
       transaction_date: a.transaction_date,
       description: a.description,
+      // 071: el lote la manda a `referencia_externa`; el AD- lo pone el motor.
       reference: a.reference,
       lines: a.lines,
     })),
@@ -136,7 +166,7 @@ export async function cargarAsientosDeImportacion(db: DB, tenantId: string, impo
     db.from("journal_entries").select("id, entry_number, transaction_date, description, reference").eq("tenant_id", tenantId).in("id", ids),
     db
       .from("journal_entry_lines")
-      .select("entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)")
+      .select("entry_id, line_order, debit, credit, line_description, client_id, supplier_id, chart_of_accounts!inner(code, name)")
       .eq("tenant_id", tenantId)
       .in("entry_id", ids)
       .order("line_order"),
@@ -144,9 +174,10 @@ export async function cargarAsientosDeImportacion(db: DB, tenantId: string, impo
   ]);
   const cabeceras = new Map(((cab.data ?? []) as { id: string; entry_number: number; transaction_date: string; description: string; reference: string | null }[]).map((c) => [c.id, c]));
   const lineas = new Map<string, AsientoAReversar["lines"]>();
-  for (const l of (lin.data ?? []) as unknown as { entry_id: string; debit: number | string; credit: number | string; line_description: string | null; chart_of_accounts: { code: string; name: string } }[]) {
+  for (const l of (lin.data ?? []) as unknown as { entry_id: string; debit: number | string; credit: number | string; line_description: string | null; client_id: string | null; supplier_id: string | null; chart_of_accounts: { code: string; name: string } }[]) {
     const lista = lineas.get(l.entry_id) ?? [];
-    lista.push({ account_code: l.chart_of_accounts.code, account_name: l.chart_of_accounts.name, debit: Number(l.debit), credit: Number(l.credit), description: l.line_description });
+    // E2/E3: el tercero viaja al espejo (la reversión lo conserva, SOP-046).
+    lista.push({ account_code: l.chart_of_accounts.code, account_name: l.chart_of_accounts.name, debit: Number(l.debit), credit: Number(l.credit), description: l.line_description, client_id: l.client_id ?? null, supplier_id: l.supplier_id ?? null });
     lineas.set(l.entry_id, lista);
   }
   const reversadoPor = new Map(((rev.data ?? []) as { entry_number: number; reverses_entry_id: string }[]).map((r) => [r.reverses_entry_id, Number(r.entry_number)]));
@@ -217,7 +248,14 @@ export async function deshacerImportacion(
     espejos.push({
       entry_id: a.asiento.id,
       description: armado.asiento.description,
-      lines: armado.asiento.lines.map((l) => ({ account_code: l.account_code, debit: l.debit, credit: l.credit, description: l.description ?? null })),
+      lines: armado.asiento.lines.map((l) => ({
+        account_code: l.account_code,
+        debit: l.debit,
+        credit: l.credit,
+        description: l.description ?? null,
+        client_id: l.client_id ?? null,
+        supplier_id: l.supplier_id ?? null,
+      })),
     });
   }
 

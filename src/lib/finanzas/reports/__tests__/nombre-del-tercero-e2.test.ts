@@ -63,10 +63,14 @@ test("🐞 3º escalón: sólo la línea de CUENTA CONTROL, o el único tercero 
   assert.equal(nombreDelTercero(uno, CONTROL, propia), "ÚNICO", "un solo tercero en el asiento: es ése");
 });
 
-test("4º escalón: el heurístico viejo sigue para lo que nada resuelve", () => {
+test("🔴 E3: ya NO hay cuarto escalón: sin tercero la celda queda VACÍA, nunca el texto de la línea", () => {
+  // Josuarth, 01/10/2026: el heurístico ponía "Cuentas por pagar" o
+  // "Reversión" como si fueran un nombre (asientos 33, 34, 36 a 39 y 51).
   const propia = hermana();
-  const hermanas = [propia, hermana({ code: "100004", line_order: 2, descripcion: "ESTACIÓN DELTA" })];
-  assert.equal(nombreDelTercero(hermanas, CONTROL, propia, null), "ESTACIÓN DELTA");
+  for (const texto of ["ESTACIÓN DELTA", "Cuentas por pagar", "Reversión: Cuentas por pagar"]) {
+    const hermanas = [propia, hermana({ code: "100004", line_order: 2, descripcion: texto })];
+    assert.equal(nombreDelTercero(hermanas, CONTROL, propia, null), "", texto);
+  }
 });
 
 // ---------------------------------------------------------------------------

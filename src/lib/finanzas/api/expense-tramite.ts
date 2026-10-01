@@ -26,6 +26,7 @@ import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
 import {
   construirAsientoDeGastoTramite,
   SOURCE_TYPE_GASTO_TRAMITE,
@@ -77,6 +78,7 @@ export async function postearGastoTramite(
     .from("expenses")
     .select(
       `id, date, accounting_date, concept, posted_entry_id, supplier_id,
+       purchase_number, supplier_invoice_number,
        cases(case_code),
        suppliers(legal_name)`
     )
@@ -139,6 +141,9 @@ export async function postearGastoTramite(
       case_code: caso?.case_code ?? null,
       supplier_legal_name: prov?.legal_name ?? null,
       supplier_id: (gasto as { supplier_id?: string | null }).supplier_id ?? null,
+      purchase_number: (gasto as { purchase_number?: string | null }).purchase_number ?? null,
+      supplier_invoice_number:
+        (gasto as { supplier_invoice_number?: string | null }).supplier_invoice_number ?? null,
     },
     lineas
   );
@@ -149,10 +154,34 @@ export async function postearGastoTramite(
     throw new MutationError(armado.mensaje, 422, { motivo: armado.motivo, lineas: armado.lineasSinCuenta });
   }
 
+  // ── EL NÚMERO FAC-CO- (071, E3) ───────────────────────────────────────────
+  // Se toma DESPUÉS de armar (un gasto sin clasificar no consume número) y se
+  // escribe en el gasto ANTES de postear: el trigger de la 038 lo deja pasar
+  // porque todavía no hay asiento, y un reintento después de un posteo fallido
+  // REUSA el número que ya tiene en vez de quemar otro.
+  let numero = (gasto as { purchase_number?: string | null }).purchase_number ?? null;
+  if (!numero) {
+    try {
+      numero = await allocatePurchaseNumber(db, tenantId);
+    } catch (err) {
+      throw new MutationError("No se pudo asignar el número FAC-CO- del gasto. No se registró nada.", 500, err);
+    }
+    const { error: errNumero } = await db
+      .from("expenses")
+      .update({ purchase_number: numero })
+      .eq("id", expenseId)
+      .eq("tenant_id", tenantId);
+    if (errNumero) {
+      console.error("[expenses/postear] no se pudo guardar el número", errNumero);
+      throw new MutationError("No se pudo guardar el número del gasto. No se registró nada.", 500, errNumero);
+    }
+  }
+  const asiento = { ...armado.asiento, reference: numero };
+
   // ── EL POSTEO ─────────────────────────────────────────────────────────────
   let entryId: string;
   try {
-    entryId = await postJournalEntry(db, tenantId, armado.asiento, userId);
+    entryId = await postJournalEntry(db, tenantId, asiento, userId);
   } catch (err) {
     // ── CAPA 3: el UNIQUE de la 034 ─────────────────────────────────────────
     // ⚠️ El código de Postgres viaja en `MutationError.detail`, NO en `cause`

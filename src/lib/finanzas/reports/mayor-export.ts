@@ -47,8 +47,15 @@ export interface ContextoExport {
 
 const COLUMNAS_MAYOR = [
   { titulo: "Fecha", ancho: 12 },
+  // E3: el módulo (FAC-ING, FAC-CO, CO, PA, AD…), por el que Josuarth filtra.
+  { titulo: "Módulo", ancho: 16 },
   { titulo: "Tipo de transacción", ancho: 20 },
-  { titulo: "Número de documento", ancho: 22 },
+  // 🐞 E3: esta columna se rotulaba "Número de documento" y traía el
+  // `entry_number`. Ahora son dos: el número PROPIO del documento y el
+  // correlativo del libro, cada uno con su nombre.
+  { titulo: "N.º documento", ancho: 18 },
+  { titulo: "N.º transacción", ancho: 14 },
+  { titulo: "Ref. externa", ancho: 18 },
   { titulo: "Nombre", ancho: 34 },
   // Las dos columnas por las que existe todo esto.
   { titulo: "RUC", ancho: 20 },
@@ -106,8 +113,12 @@ export function hojaDelMayor(
 
     return [
       fecha(f.fecha),
+      texto(f.modulo),
       texto(f.kind === "saldo-inicial" ? "Saldo inicial" : f.tipoTransaccion),
-      texto(f.numero),
+      texto(f.numeroDocumento),
+      // El correlativo es un número: ordenable en Excel. Vacío en el saldo inicial.
+      f.numero ? entero(Number(f.numero)) : texto(""),
+      texto(f.referenciaExterna),
       // El nombre de la ficha manda sobre el texto del ledger: es el que está
       // al lado del RUC en el formulario de la DGI. Si no hay ficha, queda el
       // que muestra la pantalla.

@@ -149,6 +149,8 @@ function fake(g: Guion) {
   const db = {
     from: (n: string) => tabla(n),
     rpc: async (fn: string) => {
+      // 071 (E3): el número FAC-CO- de la compra.
+      if (fn === "get_next_sequence_number") return { data: 5, error: null };
       if (fn === "post_journal_entry") {
         reg.posteos++;
         if (!g.postea || g.postea === "ok") return { data: "je-1", error: null };

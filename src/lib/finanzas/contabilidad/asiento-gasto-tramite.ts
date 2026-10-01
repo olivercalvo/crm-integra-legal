@@ -82,6 +82,10 @@ export interface GastoParaAsiento {
   supplier_legal_name: string | null;
   /** El proveedor (E2): va en la línea de 200001. Sin proveedor, `null`. */
   supplier_id: string | null;
+  /** `FAC-CO-000001` (071, misma serie que las compras, P-2b): la `reference`. */
+  purchase_number?: string | null;
+  /** N.º de la factura del proveedor (070): la `referencia_externa` (071). */
+  supplier_invoice_number?: string | null;
 }
 
 export type ResultadoAsiento =
@@ -203,6 +207,9 @@ export function construirAsientoDeGastoTramite(
       source_type: SOURCE_TYPE_GASTO_TRAMITE,
       source_id: gasto.id,
       lines: lineasAsiento,
+      // E3 (071): el número propio y el del proveedor, cada uno en su columna.
+      reference: gasto.purchase_number ?? null,
+      referencia_externa: gasto.supplier_invoice_number?.trim() || null,
     },
   };
 }

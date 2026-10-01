@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
     nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
   },
+  "071_motor_v4_referencias_y_terceros.sql": {
+    que: "Motor v4: referencia_externa (en el hash), numero AD- en el motor, tercero obligatorio en 100004/200001, FAC-CO- (purchase_number), NC-CO-",
+    tipo: "columna", tabla: "journal_entries", columna: "referencia_externa",
+    nota: "Bloque 1, E3, 01/10. DROP + CREATE de post_journal_entry (13 -> 14 parametros, permisos de la 030 otra vez). Parches verificados al lote (067), a la NC de compra y al trigger de gastos de tramite. 🔴 Va JUNTO con el codigo de E3: con el candado de tercero y de p_reference, el codigo anterior falla al postear.",
+  },
 
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {

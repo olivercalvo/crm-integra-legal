@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BookOpenCheck, Copy, Loader2, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, BookOpenCheck, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,9 @@ import { MoneyInput } from "@/components/ui/money-input";
 import {
   estadoDelRegistro,
   lineaManualVacia,
+  parseTercero,
   totalesManuales,
+  type CuentaControl,
   type LineaManualDraft,
   valorDeTercero,
 } from "@/lib/finanzas/contabilidad/asiento-manual";
@@ -56,6 +58,8 @@ import type { TercerosDelLibro } from "@/lib/finanzas/queries/terceros-del-libro
 export interface CuentaAsientoOption {
   code: string;
   name: string;
+  /** 071: 100004 = clientes, 200001 = proveedores. Ahí el tercero es obligatorio. */
+  cuenta_control?: CuentaControl | null;
 }
 
 interface Props {
@@ -83,6 +87,8 @@ interface Props {
 
 interface Resultado {
   entry_number: number | null;
+  /** El AD- que le puso el motor (071). */
+  reference: string | null;
   transaction_date: string;
   record_date: string | null;
   lineas: number;
@@ -131,7 +137,24 @@ export function AsientoManualForm({
   // 🔴 La decisión NO se arma acá. Vive en `estadoDelRegistro()`, que devuelve
   //    el MOTIVO además del booleano, y ese motivo se muestra al lado del botón.
   //    Un botón apagado sin explicación es lo que bloqueó la demo del 09/09.
-  const registro = estadoDelRegistro(lineas, descripcion, enviando);
+  const controles = useMemo(
+    () =>
+      new Map<string, CuentaControl>(
+        cuentas
+          .filter((c) => c.cuenta_control)
+          .map((c) => [c.code, c.cuenta_control as CuentaControl])
+      ),
+    [cuentas]
+  );
+  const registro = estadoDelRegistro(lineas, descripcion, enviando, controles);
+
+  /** El nombre del tercero elegido, para el aviso de la antigüedad. */
+  function nombreDelTercero(valor: string): string | null {
+    const { client_id, supplier_id } = parseTercero(valor);
+    if (client_id) return terceros.clientes.find((c) => c.id === client_id)?.nombre ?? null;
+    if (supplier_id) return terceros.proveedores.find((p) => p.id === supplier_id)?.nombre ?? null;
+    return null;
+  }
 
   function actualizar(i: number, cambios: Partial<LineaManualDraft>) {
     const copia = [...lineas];
@@ -181,7 +204,8 @@ export function AsientoManualForm({
         body: JSON.stringify({
           transaction_date: fecha,
           description: descripcion,
-          reference: referencia,
+          // 071: el AD- lo pone el sistema; esto es la referencia EXTERNA.
+          referencia_externa: referencia,
           idempotency_key: token,
           lines: lineas,
         }),
@@ -207,7 +231,7 @@ export function AsientoManualForm({
         <div className="flex items-center gap-2 text-emerald-800">
           <BookOpenCheck size={20} />
           <h2 className="font-semibold">
-            Asiento {ok.entry_number} registrado en el libro
+            Asiento {ok.reference ?? ok.entry_number} registrado en el libro
           </h2>
         </div>
 
@@ -293,7 +317,7 @@ export function AsientoManualForm({
         </div>
 
         <div>
-          <Label htmlFor="referencia" className="mb-1 block">Referencia</Label>
+          <Label htmlFor="referencia" className="mb-1 block">Referencia externa</Label>
           <Input
             id="referencia"
             value={referencia}
@@ -303,7 +327,8 @@ export function AsientoManualForm({
             className="min-h-[48px]"
           />
           <p className="mt-1 text-xs text-gray-400">
-            El documento de respaldo: recibo, memo, planilla. Opcional.
+            El documento de respaldo: cheque, memo, planilla. Opcional. El número AD- lo pone el
+            sistema.
           </p>
         </div>
 
@@ -367,37 +392,70 @@ export function AsientoManualForm({
               </div>
 
               <div className="sm:col-span-4">
-                <Label className="mb-1 block text-xs">
-                  Tercero <span className="text-gray-400">(opcional)</span>
-                </Label>
-                <select
-                  value={l.tercero}
-                  onChange={(e) => actualizar(i, { tercero: e.target.value })}
-                  aria-label={`Tercero de la línea ${i + 1}`}
-                  className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
-                >
-                  <option value="">Sin tercero</option>
-                  {terceros.clientes.length > 0 && (
-                    <optgroup label="Clientes">
-                      {terceros.clientes.map((c) => (
-                        <option key={c.id} value={valorDeTercero("cliente", c.id)}>
-                          {c.nombre}
-                          {c.numero ? ` · ${c.numero}` : ""}
+                {/* 071 (E3): en 100004 y 200001 el tercero es OBLIGATORIO y del
+                    tipo de la cuenta. El selector ofrece solo ese grupo; la regla
+                    la hace cumplir el motor, esto la dice antes de apretar. */}
+                {(() => {
+                  const control = controles.get(l.account_code.trim()) ?? null;
+                  const elegido = l.tercero ? nombreDelTercero(l.tercero) : null;
+                  const verClientes = control !== "proveedores";
+                  const verProveedores = control !== "clientes";
+                  return (
+                    <>
+                      <Label className="mb-1 block text-xs">
+                        {control === "clientes"
+                          ? "Cliente *"
+                          : control === "proveedores"
+                            ? "Proveedor *"
+                            : (
+                              <>
+                                Tercero <span className="text-gray-400">(opcional)</span>
+                              </>
+                            )}
+                      </Label>
+                      <select
+                        value={l.tercero}
+                        onChange={(e) => actualizar(i, { tercero: e.target.value })}
+                        aria-label={`Tercero de la línea ${i + 1}`}
+                        className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[44px] text-sm focus:border-integra-navy focus:outline-none"
+                      >
+                        <option value="">
+                          {control === "clientes"
+                            ? "Elegir cliente"
+                            : control === "proveedores"
+                              ? "Elegir proveedor"
+                              : "Sin tercero"}
                         </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {terceros.proveedores.length > 0 && (
-                    <optgroup label="Proveedores">
-                      {terceros.proveedores.map((p) => (
-                        <option key={p.id} value={valorDeTercero("proveedor", p.id)}>
-                          {p.nombre}
-                          {p.numero ? ` · ${p.numero}` : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
+                        {verClientes && terceros.clientes.length > 0 && (
+                          <optgroup label="Clientes">
+                            {terceros.clientes.map((c) => (
+                              <option key={c.id} value={valorDeTercero("cliente", c.id)}>
+                                {c.nombre}
+                                {c.numero ? ` · ${c.numero}` : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {verProveedores && terceros.proveedores.length > 0 && (
+                          <optgroup label="Proveedores">
+                            {terceros.proveedores.map((p) => (
+                              <option key={p.id} value={valorDeTercero("proveedor", p.id)}>
+                                {p.nombre}
+                                {p.numero ? ` · ${p.numero}` : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                      {control && elegido && (
+                        <p className="mt-1 flex items-start gap-1 text-xs text-amber-800">
+                          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+                          Esta línea afecta la antigüedad de {elegido}.
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div className="sm:col-span-4">

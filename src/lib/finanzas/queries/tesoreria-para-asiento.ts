@@ -62,7 +62,7 @@ export async function cargarCobroParaAsiento(
   const { data: pay, error } = await db
     .from("payments")
     .select(
-      "id, payment_number, payment_date, amount, payment_account_code, client_id, client:clients!payments_client_id_fkey(name)"
+      "id, payment_number, payment_date, amount, payment_account_code, reference, client_id, client:clients!payments_client_id_fkey(name)"
     )
     .eq("tenant_id", tenantId)
     .eq("id", paymentId)
@@ -77,6 +77,7 @@ export async function cargarCobroParaAsiento(
     payment_date: string;
     amount: number | string;
     payment_account_code: string | null;
+    reference: string | null;
     client_id: string | null;
     client?: { name?: string } | { name?: string }[] | null;
   };
@@ -102,6 +103,7 @@ export async function cargarCobroParaAsiento(
   return {
     id: row.id,
     payment_number: row.payment_number ?? null,
+    referencia_pago: row.reference ?? null,
     payment_date: row.payment_date,
     amount: num(row.amount),
     client_name: cli?.name ?? null,
@@ -130,7 +132,7 @@ export async function cargarPagoProveedorParaAsiento(
   const { data: pago, error } = await db
     .from("supplier_payments")
     .select(
-      "id, payment_number, payment_date, amount, payment_account_code, business_expense_id, expense_id, " +
+      "id, payment_number, payment_date, amount, payment_account_code, reference, business_expense_id, expense_id, " +
         "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number, supplier_id), " +
         "tramite:expenses!supplier_payments_expense_id_fkey(id, concept, supplier_id, supplier_invoice_number, suppliers(legal_name), cases(case_code))"
     )
@@ -162,6 +164,7 @@ export async function cargarPagoProveedorParaAsiento(
     payment_date: string;
     amount: number | string;
     payment_account_code: string | null;
+    reference: string | null;
     business_expense_id: string | null;
     expense_id: string | null;
     compra?: Compra | Compra[] | null;
@@ -194,6 +197,7 @@ export async function cargarPagoProveedorParaAsiento(
   return {
     pago_id: row.id,
     payment_number: row.payment_number ?? null,
+    referencia_pago: row.reference ?? null,
     ...documento,
     payment_date: row.payment_date,
     amount: num(row.amount),

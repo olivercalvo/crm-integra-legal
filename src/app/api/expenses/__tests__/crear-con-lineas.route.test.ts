@@ -90,6 +90,10 @@ function makeAdmin() {
           state.capturado.borroElGasto = true;
           return { data: null, error: null };
         }
+        if (s.op === "update" && s.payload && "purchase_number" in (s.payload as object)) {
+          // 071 (E3): el número FAC-CO-, ANTES del posteo. No es el cache.
+          return { data: null, error: null };
+        }
         if (s.op === "update") {
           state.capturado.cacheEscrito = s.payload as Record<string, unknown>;
           return { data: null, error: null };
@@ -170,6 +174,8 @@ function makeAdmin() {
   return {
     from: (t: string) => builder(t),
     rpc: async (_fn: string, args: Record<string, unknown>) => {
+      // 071 (E3): el número FAC-CO- del gasto, antes del asiento.
+      if (_fn === "get_next_sequence_number") return { data: 5, error: null };
       state.capturado.rpcArgs = args;
       if (state.rpcError) return { data: null, error: state.rpcError };
       return { data: "entry-uuid-1", error: null };

@@ -1,5 +1,21 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 01/10/2026 — BLOQUE 1, E3 (REFERENCIAS Y TERCERO) EN LA RAMA <<<
+
+- ✅ Código y tests de E3 (plan §1 puntos 2 y 10, respuestas en §7). Commit local, sin push.
+- ⏳ **Migración `071` sin aplicar.** Hasta que se aplique, el Mayor, el Diario y el detalle del
+  asiento fallan en la rama (leen `referencia_externa`), y el alta de compras y gastos de
+  trámite también (secuencia `purchase` y columna `purchase_number`).
+- ⏳ Después de la `071`: `sql/tests/verificacion-071-motor-v4.sql` y recorrido (asiento manual
+  contra 100004 sin cliente → aviso y rechazo; con cliente → `AD-000001`; importación con
+  tercero; cobro `CO-000011`; pago `PA-000008`; compra y gasto de trámite `FAC-CO-`; Mayor con
+  las columnas nuevas; gasto en CORP-001 con la pregunta del caso cerrado).
+- 📋 Para E9: filtro por módulo en el Mayor y el Diario.
+- 📋 Abierta (no bloquea): la NC de compra no lleva todavía `referencia_externa` (el N.º del
+  documento del proveedor); la arma el SQL de la 066.
+- ✅ Resuelto el pendiente del 30/09 sobre CORP-001: el caso cerrado admite gastos con aviso.
+- ✅ Resuelto: los nombres genéricos del Mayor (asientos 33, 34, 36–39 y 51) quedan vacíos.
+
 ## >>> 30/09/2026 — BLOQUE 1, E2 (TERCERO Y DESCRIPCIÓN) EN LA RAMA <<<
 
 - ✅ Código y tests de E2 (plan §3). Commits locales, sin push.

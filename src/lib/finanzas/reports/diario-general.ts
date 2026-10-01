@@ -13,6 +13,7 @@
  */
 
 import { tipoTransaccionLabel } from "@/lib/finanzas/reports/libro-mayor";
+import { etiquetaDeModulo, moduloDelAsiento } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 
 const EPSILON = 0.005;
 
@@ -43,6 +44,12 @@ export interface AsientoCrudo {
   /** El tercero o el documento, si se pudo resolver. */
   documento: string | null;
   lineas: LineaCruda[];
+  /** E3: el `source_type` del asiento que revierte, para el módulo de una reversión. */
+  reverses_source_type?: string | null;
+  /** E3: el número propio del documento (`reference`). */
+  reference?: string | null;
+  /** E3 (071): referencia externa. */
+  referencia_externa?: string | null;
 }
 
 export interface LineaDiario {
@@ -66,6 +73,12 @@ export interface AsientoDiario {
   fecha: string;
   /** "Factura", "Cobro", "Pago a proveedor", "Asiento de diario"… el mismo texto que el mayor. */
   tipoTransaccion: string;
+  /** E3: el módulo (FAC-ING, CO, AD…), el mismo que el Mayor. */
+  modulo: string;
+  /** E3: N.º de documento (FAC-HON-000026, CO-000011, AD-000001). */
+  numeroDocumento: string;
+  /** E3 (071): referencia externa (cheque, factura del proveedor). */
+  referenciaExterna: string;
   /** El documento de respaldo (número de factura, proveedor, referencia). */
   documento: string;
   descripcion: string;
@@ -119,6 +132,9 @@ export function buildDiarioGeneral(crudos: AsientoCrudo[]): DiarioGeneral {
       numero: a.entry_number,
       fecha: a.transaction_date,
       tipoTransaccion: tipoTransaccionLabel(a.source_type),
+      modulo: etiquetaDeModulo(moduloDelAsiento(a.source_type, a.reverses_source_type)),
+      numeroDocumento: a.reference?.trim() || "",
+      referenciaExterna: a.referencia_externa?.trim() || "",
       documento: a.documento ?? "",
       descripcion: a.description,
       lineas,

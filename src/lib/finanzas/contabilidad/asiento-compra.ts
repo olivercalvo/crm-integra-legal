@@ -116,6 +116,10 @@ export interface CompraParaAsiento {
   supplier_name: string | null;
   /** El proveedor (E2): va en la línea de 200001. `null` en una compra sin ficha. */
   supplier_id: string | null;
+  /** `FAC-CO-000001` (071): la `reference` del asiento. `null` en las viejas. */
+  purchase_number?: string | null;
+  /** N.º de la factura del proveedor: la `referencia_externa` del asiento (071). */
+  supplier_invoice_number?: string | null;
   lineas: LineaCompraParaAsiento[];
 }
 
@@ -258,6 +262,9 @@ export function construirAsientoDeCompra(
       source_type: SOURCE_TYPE_COMPRA,
       lines,
       source_id: c.id,
+      // E3 (071): el número propio y el del proveedor, cada uno en su columna.
+      reference: c.purchase_number ?? null,
+      referencia_externa: c.supplier_invoice_number?.trim() || null,
       idempotency_key: claveIdempotenteDeCompra(c.id),
     },
   };

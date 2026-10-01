@@ -65,6 +65,8 @@ export interface GastoTramiteContable {
   accounting_date: string;
   /** Número de la factura del proveedor (070). Opcional. */
   supplier_invoice_number: string | null;
+  /** E3 (071): número interno FAC-CO-, el de las compras (P-2b). */
+  purchase_number: string | null;
   /** El concepto del encabezado (histórico; las líneas traen su descripción). */
   concept: string;
   expense_type: "tramite" | "administrativo";
@@ -114,7 +116,7 @@ export async function getGastoTramiteContable(
   const { data, error } = await db
     .from("expenses")
     .select(
-      `id, date, accounting_date, supplier_invoice_number, concept, expense_type, amount, due_date,
+      `id, date, accounting_date, supplier_invoice_number, purchase_number, concept, expense_type, amount, due_date,
        receipt_url, receipt_filename,
        supplier_id, status, amount_paid,
        cases!inner(case_code),
@@ -147,6 +149,7 @@ export async function getGastoTramiteContable(
     date: String(fila.date),
     accounting_date: String(fila.accounting_date ?? fila.date),
     supplier_invoice_number: (fila.supplier_invoice_number as string | null) ?? null,
+    purchase_number: (fila.purchase_number as string | null) ?? null,
     concept: String(fila.concept ?? ""),
     expense_type: fila.expense_type === "administrativo" ? "administrativo" : "tramite",
     amount: Number(fila.amount ?? 0),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { contabilizarImportacion, previsualizarImportacion } from "@/lib/finanzas/api/importacion-asientos";
+import { esFormatoDeFecha } from "@/lib/finanzas/import/asientos-import";
 import { WorkbookDeAsientosError } from "@/lib/finanzas/import/asientos-workbook";
 import { MutationError } from "@/lib/finanzas/api/errors";
 
@@ -32,6 +33,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Se esperaba un archivo" }, { status: 400 });
   }
   const mode = String(form.get("mode") ?? "preview");
+  // Decisión (c): DD/MM o MM/DD para `nn/nn/AAAA`. Un valor que no es ninguno
+  // de los dos se rechaza: adivinar sería fechar en otro mes sin error.
+  const formatoRaw = form.get("date_format");
+  const formato = formatoRaw === null ? "DD/MM" : String(formatoRaw);
+  if (!esFormatoDeFecha(formato)) {
+    return NextResponse.json({ error: "Elige el formato de fecha del archivo: DD/MM o MM/DD." }, { status: 400 });
+  }
   const file = form.get("file");
   if (!file || typeof file === "string") return NextResponse.json({ error: "Falta el archivo" }, { status: 400 });
   if (file.size === 0) return NextResponse.json({ error: "El archivo está vacío" }, { status: 400 });
@@ -40,12 +48,12 @@ export async function POST(request: NextRequest) {
 
   try {
     if (mode === "preview") {
-      const r = await previsualizarImportacion(ctx.db, ctx.tenantId, buffer);
+      const r = await previsualizarImportacion(ctx.db, ctx.tenantId, buffer, formato);
       return NextResponse.json(r);
     }
     if (mode === "commit") {
       const hash = String(form.get("hash") ?? "");
-      const r = await contabilizarImportacion(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, buffer, file.name, hash);
+      const r = await contabilizarImportacion(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, buffer, file.name, hash, formato);
       return NextResponse.json(r, { status: 201 });
     }
     return NextResponse.json({ error: "Modo inválido (preview | commit)" }, { status: 400 });

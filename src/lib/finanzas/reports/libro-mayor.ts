@@ -45,6 +45,7 @@ import {
   esNaturalezaAcreedora,
   type AccountType,
 } from "@/lib/finanzas/types/chart-of-account";
+import { etiquetaDeModulo, moduloDelAsiento } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -100,6 +101,10 @@ export interface MovimientoCrudo {
    * es `reversion`: sin esto no se sabe en qué tabla buscar al tercero.
    */
   reverses_source_type?: string | null;
+  /** E3: el número PROPIO del documento (`journal_entries.reference`). */
+  reference?: string | null;
+  /** E3 (071): cheque, factura del proveedor, referencia libre. NULL en lo viejo. */
+  referencia_externa?: string | null;
 }
 
 export interface CuentaDelMayor {
@@ -276,6 +281,15 @@ export interface FilaMayor {
   /** Columna "Nombre": el tercero. Ver `nombreDelTercero()`. */
   nombre: string;
   /**
+   * E3: el MÓDULO (FAC-ING, FAC-CO, CO, PA, AD…), derivado del `source_type`
+   * con `moduloDelAsiento()`. Una reversión: "CO · Reversión".
+   */
+  modulo: string;
+  /** E3: N.º de documento (FAC-HON-000026, CO-000011, AD-000001). Vacío en lo viejo sin número. */
+  numeroDocumento: string;
+  /** E3 (071): referencia externa (cheque, factura del proveedor). */
+  referenciaExterna: string;
+  /**
    * 054: el tercero de la línea como clave (`"cliente:<uuid>"`), cuando lo
    * tiene. La exportación la usa para poner RUC y DV de la ficha; la pantalla
    * ya tiene el nombre en `nombre`.
@@ -356,6 +370,7 @@ const TIPO_TRANSACCION_ES: Record<string, string> = {
   manual: "Asiento de diario",
   reversion: "Reversión",
   apertura: "Asiento de apertura",
+  cierre: "Cierre anual",
 };
 
 export function tipoTransaccionLabel(sourceType: string): string {
@@ -363,7 +378,12 @@ export function tipoTransaccionLabel(sourceType: string): string {
 }
 
 /**
- * Columna "Nombre" — el tercero de la operación, en tres escalones.
+ * Columna "Nombre" — el tercero de la operación, en tres escalones (E3).
+ *
+ * Desde E3 (01/10/2026) ya NO hay un cuarto escalón: el heurístico que copiaba
+ * la descripción de la línea de cuenta control ponía "Cuentas por pagar" o
+ * "Reversión" como si fueran un nombre (asientos 33, 34, 36 a 39 y 51 de
+ * staging). Josuarth estuvo de acuerdo: sin tercero, la celda queda VACÍA.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * 1º EL TERCERO DE LA PROPIA LÍNEA (migración `054`, 22/09/2026)
@@ -384,11 +404,9 @@ export function tipoTransaccionLabel(sourceType: string): string {
  *    acepta un tercero si es el ÚNICO del asiento (un asiento manual con dos
  *    clientes no es de ninguno de los dos).
  *
- * 4º LA DESCRIPCIÓN de la línea de cuenta control — el heurístico viejo, de
- *    cuando el ledger no tenía tercero. Queda para lo que nada de lo anterior
- *    resuelve (un asiento manual viejo contra 100004 sin tercero).
- *
- * Si no hay nada de eso, queda vacío en vez de inventar algo.
+ * Si no hay nada de eso, queda vacío en vez de inventar algo. Desde la 071 un
+ * asiento nuevo contra 100004 / 200001 no puede quedar sin tercero (salvo una
+ * compra sin ficha de proveedor, SOP-033), así que el vacío es cosa de lo viejo.
  */
 export function nombreDelTercero(
   hermanas: LineaHermana[],
@@ -412,8 +430,7 @@ export function nombreDelTercero(
   );
   if (distintos.length === 1) return distintos[0];
 
-  const control = hermanas.find((l) => controlPorCodigo[l.code]);
-  return control?.descripcion?.trim() || "";
+  return "";
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +485,9 @@ export function buildMayorDeCuenta(
     tipoTransaccion: "",
     numero: "",
     nombre: "",
+    modulo: "",
+    numeroDocumento: "",
+    referenciaExterna: "",
     // La fila de saldo inicial no es un movimiento: no tiene tercero.
     terceroClave: null,
     descripcion: "Saldo inicial",
@@ -518,6 +538,9 @@ export function buildMayorDeCuenta(
       tipoTransaccion: tipoTransaccionLabel(m.source_type),
       numero: String(m.entry_number),
       nombre,
+      modulo: etiquetaDeModulo(moduloDelAsiento(m.source_type, m.reverses_source_type)),
+      numeroDocumento: m.reference?.trim() || "",
+      referenciaExterna: m.referencia_externa?.trim() || "",
       // 054: la clave del tercero de la línea, para que el Excel le ponga RUC
       // y DV de la ficha. Si la línea no lo tiene, se mira el del asiento —la
       // resolución por documento de origen— como hasta ahora.

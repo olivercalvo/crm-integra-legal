@@ -88,7 +88,12 @@ export default async function AsientosPage({
       plantilla = borradoresDesdeAsiento(origen.lineas);
       clonadoDe = origen.entry_number;
       descripcionClonada = origen.description;
-      referenciaClonada = origen.reference ?? "";
+      // 071: la referencia libre vive en `referencia_externa`. En un asiento
+      // anterior a la 071 vivía en `reference`; un AD- nunca se clona (es el
+      // número del original, el clon recibe el suyo).
+      referenciaClonada =
+        origen.referencia_externa ??
+        (origen.reference && !/^AD-\d+$/.test(origen.reference) ? origen.reference : "");
     }
   }
 
@@ -103,7 +108,7 @@ export default async function AsientosPage({
   // El único filtro es `active`, el mismo que hace cumplir el RPC.
   const cuentas = (await listChartAccounts(ctx.db, ctx.tenantId))
     .filter((c) => c.active)
-    .map((c) => ({ code: c.code, name: c.name }));
+    .map((c) => ({ code: c.code, name: c.name, cuenta_control: c.cuenta_control ?? null }));
 
   // Los terceros que una línea puede nombrar (054). Clientes y proveedores en
   // una sola consulta cada uno: la lista se arma una vez y la comparten las N

@@ -180,7 +180,7 @@ export async function loadMovimientosDeCuenta(
     .select(
       "id, entry_id, line_order, debit, credit, line_description, client_id, supplier_id, " +
         "clients(name), suppliers(legal_name), " +
-        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id, reverses_entry_id)"
+        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id, reverses_entry_id, reference, referencia_externa)"
     )
     .eq("tenant_id", tenantId)
     .eq("account_id", accountId);
@@ -212,6 +212,8 @@ export async function loadMovimientosDeCuenta(
       source_type: string;
       source_id: string | null;
       reverses_entry_id: string | null;
+      reference: string | null;
+      referencia_externa: string | null;
     };
   };
   const filas = propias as unknown as FilaPropia[];
@@ -304,6 +306,8 @@ export async function loadMovimientosDeCuenta(
     reverses_source_type: f.journal_entries.reverses_entry_id
       ? tipoDelRevertido.get(f.journal_entries.reverses_entry_id) ?? null
       : null,
+    reference: f.journal_entries.reference ?? null,
+    referencia_externa: f.journal_entries.referencia_externa ?? null,
   }));
 }
 

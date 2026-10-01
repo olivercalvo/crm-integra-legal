@@ -187,6 +187,13 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                 label="DV"
                 value={proveedor.dv ? <span className="font-mono">{proveedor.dv}</span> : "—"}
               />
+              {/* E3 (071): el número PROPIO de la compra, el del libro. */}
+              {expense.purchase_number && (
+                <Item
+                  label="N.º de compra"
+                  value={<span className="font-mono">{expense.purchase_number}</span>}
+                />
+              )}
               {/* El comprobante que respalda la compra (migración `044`): es lo
                   que se busca al conciliar contra el proveedor. */}
               <Item

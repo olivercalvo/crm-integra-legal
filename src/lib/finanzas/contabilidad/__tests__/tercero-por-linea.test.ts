@@ -55,7 +55,10 @@ test("el tercero viaja DENTRO de cada línea, no como parámetro del RPC", async
   // La firma no creció: nada de p_client_id / p_supplier_id.
   const claves = Object.keys(cap.args ?? {});
   assert.ok(!claves.some((k) => /client|supplier/.test(k)), `la firma del RPC creció: ${claves.join(", ")}`);
-  assert.equal(claves.length, 13, "el RPC sigue teniendo trece parámetros");
+  // 071 (E3): el único parámetro nuevo es `p_referencia_externa`. El tercero
+  // sigue viajando dentro de las líneas.
+  assert.equal(claves.length, 14, "trece parámetros más la referencia externa (071)");
+  assert.ok(claves.includes("p_referencia_externa"));
 });
 
 test("una línea sin tercero manda null explícito en los dos campos", async () => {
@@ -98,12 +101,13 @@ test("🔬 la 054: el tercero entra al hash, el CHECK es 'cero o uno' y las FK s
   assert.match(sql, /Proveedor\(es\) inexistentes o de otro bufete/);
 });
 
-test("SOP-014 lista las tres versiones de la fórmula del content_hash, con fecha", () => {
+test("SOP-014 lista las cuatro versiones de la fórmula del content_hash, con fecha", () => {
   const sop = readFileSync(join(process.cwd(), "sop.md"), "utf8");
-  const i = sop.indexOf("Las tres versiones de la fórmula");
+  const i = sop.indexOf("Las cuatro versiones de la fórmula");
   assert.ok(i > 0, "falta la sección en SOP-014: un verificador futuro la necesita");
-  const bloque = sop.slice(i, i + 1800);
+  const bloque = sop.slice(i, i + 2200);
   assert.match(bloque, /2026-08-27/, "la fórmula original");
   assert.match(bloque, /2026-09-03/, "la que sumó reference (039)");
   assert.match(bloque, /2026-09-22/, "la que sumó el tercero (054)");
+  assert.match(bloque, /2026-10-01.*071.*referencia_externa/, "la que sumó la referencia externa (071)");
 });

@@ -47,6 +47,7 @@ import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import {
   armarAsientoManual,
+  type CuentaControl,
   type LineaManualDraft,
 } from "@/lib/finanzas/contabilidad/asiento-manual";
 
@@ -124,7 +125,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const fecha: unknown = body?.transaction_date;
     const descripcion: unknown = body?.description;
-    const referencia: unknown = body?.reference;
+    // 071 (E3, P-2d): el número propio (AD-) lo pone el motor; lo que escribe la
+    // persona es la referencia EXTERNA. Se acepta `reference` como nombre viejo
+    // del mismo campo para un formulario abierto antes del despliegue.
+    const referencia: unknown = body?.referencia_externa ?? body?.reference;
     const token: unknown = body?.idempotency_key;
     const lineasRaw: unknown = body?.lines;
 
@@ -155,7 +159,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const armado = armarAsientoManual(lineasRaw as LineaManualDraft[]);
+    if (typeof referencia === "string" && referencia.trim().length > 100) {
+      return NextResponse.json(
+        { error: "La referencia externa no puede pasar de 100 caracteres." },
+        { status: 400 }
+      );
+    }
+
+    // 071: las cuentas control, para decir "elige el cliente de la línea 2" con
+    // el número de la PANTALLA. El RPC lo vuelve a exigir igual.
+    const { data: filasControl, error: errControl } = await admin
+      .from("chart_of_accounts")
+      .select("code, cuenta_control")
+      .eq("tenant_id", tenantId)
+      .not("cuenta_control", "is", null);
+    if (errControl) {
+      console.error("[finanzas/asientos] cuentas control lookup failed", errControl);
+      return NextResponse.json({ error: "No se pudo leer el plan de cuentas. No se registró nada." }, { status: 500 });
+    }
+    const controles = new Map<string, CuentaControl>(
+      ((filasControl ?? []) as { code: string; cuenta_control: CuentaControl }[]).map((c) => [c.code, c.cuenta_control])
+    );
+
+    const armado = armarAsientoManual(lineasRaw as LineaManualDraft[], controles);
     if (!armado.ok) {
       return NextResponse.json({ error: armado.mensaje }, { status: 400 });
     }
@@ -197,7 +223,9 @@ export async function POST(request: NextRequest) {
           // también lo que lo deja fuera del UNIQUE de la `034`.
           source_id: null,
           lines: armado.lineas,
-          reference:
+          // El AD- lo asigna el motor (071): `reference` va vacío a propósito.
+          reference: null,
+          referencia_externa:
             typeof referencia === "string" && referencia.trim() !== ""
               ? referencia.trim()
               : null,
@@ -243,18 +271,20 @@ export async function POST(request: NextRequest) {
 
     const { data: creado } = await admin
       .from("journal_entries")
-      .select("entry_number, record_date, transaction_date")
+      .select("entry_number, record_date, transaction_date, reference")
       .eq("id", entryId)
       .maybeSingle();
 
     const fila = creado as
-      | { entry_number: number; record_date: string; transaction_date: string }
+      | { entry_number: number; record_date: string; transaction_date: string; reference: string | null }
       | null;
 
     return NextResponse.json(
       {
         entry_id: entryId,
         entry_number: fila?.entry_number ?? null,
+        // El AD- que le puso el motor (071).
+        reference: fila?.reference ?? null,
         // Las DOS fechas del Art. 13a. La de registro la pone el ledger, y
         // mostrarla es lo que le demuestra al contador que el sistema las guarda
         // separadas.

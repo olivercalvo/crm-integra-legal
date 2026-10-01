@@ -76,6 +76,13 @@ Congelados después de postear: `invoices.issue_date/due_date` (T4, `032`), `cre
 
 ### Punto 2. Referencia por módulo, número de documento y número de transacción · **M** · riesgo **medio**
 
+> ✅ **E3 construida el 01/10/2026** en la rama, con la migración **`071`** escrita y **sin
+> aplicar** (espera el «aplica»). Ajustes respecto de este punto: `moduloDelAsiento()` y las
+> columnas Módulo, N.º documento, N.º transacción y Ref. externa ya están en el Mayor (pantalla
+> y Excel) y en el Diario; el **filtro** por módulo queda para E9, como dice la tabla de §4.
+> La NC de compra numera `NC-CO-` (P-2e se toma por el valor por defecto). El formato de fecha
+> de la importación (decisión (c)) también entró en E3, con MM/DD por defecto.
+
 **Hoy**
 - `journal_entries.reference` (`039`, entra en el hash) guarda el número del documento en `factura` (`FAC-HON-…`), `pago` (`REC-`), `pago_proveedor` (`CE-`), `nota_credito` (`NC-`) y `nota_credito_proveedor` (`NCP-`). **Queda vacía en `gasto`, `gasto_tramite` y a veces en `manual`**, donde es texto libre del usuario. Las reversiones copian la referencia del original.
 - Los prefijos se arman en TS: `types/invoice.ts:46-55`, `credit-notes.ts:154`, `numbering/receipt-numbering.ts`, `numbering/supplier-payment-numbering.ts`. `NCP-` se arma solo en SQL (`066:446`).
@@ -509,6 +516,11 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 | **P-1d** ✅ | **Confirmado.** Reversiones, anulaciones y notas dejan de llevar siempre la fecha de hoy: el contador elige la fecha de registro, siempre en un período abierto. Por defecto, la pantalla propone **hoy en Panamá**. | Regla ya anotada en `CLAUDE.md` («Regla de la fecha de registro») como decisión **pendiente de implementar** (E1). Se sigue exigiendo que la reversión no sea anterior al original. `hoyEnPanama()` es el valor por defecto de todos los campos de fecha de registro. |
 | **P-2a** ✅ | **Se quedan las series `FAC-HON` y `FAC-REI`.** `FAC-ING` es solo el tipo de transacción calculado para filtrar. | Confirma la opción recomendada del punto 2. Ninguna secuencia de venta cambia. |
 | **P-6a** ✅ | **Una cuenta por tasa, la misma para ventas y compras.** | Una sola columna `tax_codes.account_code` (`071`), no dos. |
+| **P-2b** ✅ (01/10) | **El gasto de trámite usa `FAC-CO`, igual que las compras.** Lo distingue la cuenta 130003 y el caso. | Una sola secuencia `purchase` para `business_expenses` y `expenses`; módulo `FAC-CO` para `gasto` y `gasto_tramite`. Hecho en E3 (`071`). |
+| **P-2c** ✅ (01/10) | **Los 8 cobros de producción se quedan como `REC-`.** No se renumeran documentos entregados. Desde E3 los nuevos salen `CO-`. | La `047` sigue numerando `REC-` en la ventana; la secuencia `payment` no se reinicia y el siguiente es `CO-000009`. |
+| **P-2d** ✅ (01/10) | **Sí: el asiento de diario lleva una referencia libre opcional**, además de su `AD-`. | `journal_entries.referencia_externa` (`071`). El `AD-` lo pone el motor; el texto libre va a la referencia externa (formulario e importación). |
+| **Nombre** ✅ (01/10) | **Sin tercero en la línea de control, la celda Nombre queda vacía.** | Se retira el cuarto escalón de `nombreDelTercero` (el texto de la línea). Hecho en E3. |
+| **Caso cerrado** ✅ (01/10) | **Se permite cargar el gasto de trámite en un caso cerrado, con un aviso visible antes de guardar:** «Este caso está cerrado. ¿Deseas registrar el gasto igual?». | Entró en E3: pregunta en pantalla en `section-expense-form.tsx` (las dos secciones del caso). No bloquea en el servidor. |
 
 **Tres decisiones más (30/09):**
 - **(a) Número de documento en el encabezado de toda factura, automático o manual.** Venta: automático (`FAC-HON`/`FAC-REI`, como hoy). Compra y gasto de trámite: **el N.º de la factura del proveedor, manual, en el encabezado** (`business_expenses.supplier_invoice_number` ya existe; `expenses.supplier_invoice_number` es nuevo en la `068`), además del interno `FAC-CO-` automático. Queda por definir si el manual es obligatorio y único por proveedor (P-3b, no bloquea).

@@ -809,18 +809,19 @@ Dentro del RPC, el `SELECT ... FOR UPDATE` sobre la fila de `accounting_sequence
 las dos cosas con un solo candado: el correlativo sin huecos y la cadena. `sha256()` es nativo
 desde PostgreSQL 11 (la base corre 17.6), así que no hace falta pgcrypto.
 
-### 🔬 Las tres versiones de la fórmula del `content_hash`
+### 🔬 Las cuatro versiones de la fórmula del `content_hash`
 
 `content_hash` se computa dentro de `post_journal_entry` sobre un `concat_ws('|', …)` de la
-cabecera más un `string_agg` de las líneas. **Esa fórmula cambió dos veces**, y quien alguna vez
+cabecera más un `string_agg` de las líneas. **Esa fórmula cambió tres veces**, y quien alguna vez
 escriba un verificador que RECALCULE el contenido desde las columnas —el actual no lo hace—
-tiene que conocer las tres versiones o va a reportar como adulterados todos los asientos viejos:
+tiene que conocer las cuatro versiones o va a reportar como adulterados todos los asientos viejos:
 
 | Desde | Migración | Qué se agregó | Línea hasheada |
 |---|---|---|---|
 | **2026-08-27** | `028` | la fórmula original | `code:debit:credit:descr` |
 | **2026-09-03** | `039` | `reference` en la cabecera (`idempotency_key` **no**: es transporte, no contabilidad) | `code:debit:credit:descr` |
 | **2026-09-22** | `054` | `client_id` y `supplier_id` de cada línea | `code:debit:credit:descr:client_id:supplier_id` |
+| **2026-10-01** (al aplicar la `071`) | `071` | `referencia_externa` en la cabecera, justo después de `reference`, siempre (vacía si no hay). El `reference` que entra es el que quedó grabado: en `manual`/`apertura`/`cierre`, el `AD-` que pone el motor | sin cambio |
 
 Los dos campos del tercero se concatenan **siempre**, también vacíos: una fórmula de forma
 variable no se puede auditar.
@@ -3557,4 +3558,44 @@ que revierten). Pantalla y Excel usan el mismo resultado.
 3. **"Fecha de registro" en pantalla es la contable.** El sello de grabación es "Grabado el".
 4. **Sin ficha de proveedor no hay tercero.** No se inventa a partir del nombre escrito; el Mayor
    muestra ese nombre como respaldo, sin RUC.
+
+---
+
+## SOP-047: Número de documento, referencia externa y tercero obligatorio (Bloque 1, E3, 01/10/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09, puntos 2 y 10) filtra el Mayor por tipo de
+transacción como en QuickBooks (Transaction Type · Num · Trans #) y necesita que la antigüedad
+cuadre contra 100004/200001. Hasta E3 el número del documento, la referencia libre y el
+correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir de quién.
+
+### Las tres columnas
+
+| Concepto | Dónde | Ejemplos |
+|---|---|---|
+| Módulo | **derivado** (`moduloDelAsiento`) | FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA |
+| N.º de documento | `journal_entries.reference` | FAC-HON-000026, CO-000011, PA-000008, FAC-CO-000001, AD-000001 |
+| N.º de transacción | `entry_number` | 99 |
+| Referencia externa | `journal_entries.referencia_externa` (071) | F-123, CHQ-551, MEMO-2026-014 |
+
+### Reglas
+
+1. **Las secuencias no se reinician al cambiar de prefijo.** `REC-` → `CO-` y `CE-` → `PA-`
+   siguen el mismo contador: nunca conviven dos documentos con el mismo número.
+2. **El `AD-` lo pone el motor**, adentro de la transacción. Quien llame a `post_journal_entry`
+   con `manual`/`apertura`/`cierre` manda `p_reference` vacío y la referencia libre en
+   `p_referencia_externa`; si no, el RPC rechaza.
+3. **Tercero en 100004/200001, siempre** (salvo reversiones y compras sin ficha, SOP-033). Lo
+   exige el RPC; el formulario (`tercerosFaltantes`) y la importación (columna Tercero, código
+   CLI-/PRV-) lo dicen antes con el número de línea de la pantalla.
+4. **`FAC-CO-` se toma antes de postear.** Compra: antes del INSERT (un alta que falla deja
+   hueco, SOP-031). Gasto de trámite: se escribe en el gasto antes del asiento y el reintento
+   reusa el número.
+5. **La importación lee `nn/nn/AAAA` en el formato que elige la persona** (MM/DD por defecto,
+   decisión (c)). La vista previa y el registro usan el MISMO formato: viaja en los dos pedidos.
+6. **Sin tercero, Nombre vacío.** El Mayor ya no copia el texto de la línea de control.
+
+### Pendiente (E9)
+
+- El **filtro** por módulo del Mayor y del Diario (las columnas ya están).
+- La referencia externa de la NC de compra (hoy la arma el SQL de la 066 sin ella).
 

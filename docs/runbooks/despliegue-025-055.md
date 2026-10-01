@@ -15,6 +15,24 @@ la base de producción, más el merge de `develop` a `main`:
 > **hueco a propósito**, no un olvido: si Josuarth contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
 >
+> 🔴 **La `071` (Bloque 1, E3: motor v4), 01/10/2026. NO es compatible con el código de
+> `main`: va EN LA VENTANA, en el mismo despliegue que el código de E3, sin nadie operando.**
+> Rehace `post_journal_entry` (13 → 14 parámetros) y le agrega dos candados que el código
+> anterior no cumple:
+> - **Tercero obligatorio en 100004 y 200001** (salvo reversiones, y el proveedor en compras,
+>   gastos de trámite y pagos sin ficha). Un asiento manual o importado contra esas cuentas
+>   sin cliente/proveedor se rechaza. Los constructores ya lo mandan desde E2.
+> - **`p_reference` vacío en `manual`/`apertura`/`cierre`**: el `AD-` lo pone el motor. El
+>   formulario de `main` manda la referencia libre en `reference` y **fallaría al registrar**.
+>
+> Orden: `068` → `069` → `070` → **`071`** → merge del código → recién entonces se vuelve a
+> operar. Antes de aplicarla, en solo lectura: los tres patrones del parche (lote `067`,
+> `'NCP-' || lpad` y el `RETURN NEW; END $function$` del trigger de gastos de trámite) tienen
+> que aparecer **una vez** cada uno. Después: `sql/tests/verificacion-071-motor-v4.sql` y
+> `verify_accounting_chain` en 0 filas (la cadena vieja sigue verde: el verificador no
+> recalcula `content_hash`). En producción el libro está vacío, así que el primer asiento ya
+> nace con la v4.
+>
 > 🆕 **La `068` y la `069` (Bloque 1, E1: fecha de registro), 30/09/2026.** Todavía en la
 > rama `feat/bloque1-contable`, sin aplicar en ningún lado. Van **después de la `067`** y
 > **antes del merge**: el código de E1 lee `accounting_date` y sin la `068` falla. Son

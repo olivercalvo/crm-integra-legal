@@ -242,13 +242,16 @@ test("la trazabilidad nivel 2 viaja en la fila", () => {
 // Nombre del tercero
 // ===========================================================================
 
-test("el nombre sale de la línea que toca la CUENTA CONTROL", () => {
+test("E3: la DESCRIPCIÓN de la línea de control ya no es un nombre", () => {
+  // Hasta E3 esto devolvía "FERRETERÍA VALLARINO, S.A.": el texto de la línea
+  // de 100004. El nombre sale del tercero de la línea o del documento.
   const control = { "100004": "clientes", "200001": "proveedores" };
   const hermanas = [
     herm("100001", "Banco", 4815, 0, 1, "Transferencia"),
     herm("100004", "CxC", 0, 4815, 2, "FERRETERÍA VALLARINO, S.A."),
   ];
-  assert.equal(nombreDelTercero(hermanas, control), "FERRETERÍA VALLARINO, S.A.");
+  assert.equal(nombreDelTercero(hermanas, control), "");
+  assert.equal(nombreDelTercero(hermanas, control, null, "FERRETERÍA VALLARINO, S.A."), "FERRETERÍA VALLARINO, S.A.");
 });
 
 test("sin cuenta control en el asiento, el nombre queda vacío (no se inventa)", () => {

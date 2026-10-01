@@ -25,10 +25,33 @@ export const ENCABEZADOS = [
   "Descripción del asiento",
   "Referencia",
   "Cuenta",
+  // 071 (E3): el cliente o proveedor de la línea, por su código (CLI-/PRV-).
+  // Obligatorio en las cuentas control (100004, 200001). Una planilla vieja sin
+  // esta columna se sigue leyendo: es opcional como columna, no como dato.
+  "Tercero",
   "Descripción de la línea",
   "Débito",
   "Crédito",
 ] as const;
+
+/**
+ * Cómo se leen las fechas escritas como texto con barras (decisión (c) del
+ * 30/09/2026). `03/04/2026` es 3 de abril en DD/MM y 4 de marzo en MM/DD:
+ * adivinar mal fecharía un asiento en otro mes sin error, así que lo elige la
+ * persona en la pantalla. Las celdas con formato de fecha y el `AAAA-MM-DD`
+ * no dependen de esto.
+ */
+export type FormatoDeFecha = "DD/MM" | "MM/DD";
+export const FORMATOS_DE_FECHA: readonly FormatoDeFecha[] = ["MM/DD", "DD/MM"];
+/** El de la pantalla: Josuarth trabaja con MM/DD/AAAA (decisión (c)). */
+export const FORMATO_DE_FECHA_POR_DEFECTO: FormatoDeFecha = "MM/DD";
+
+export function esFormatoDeFecha(v: unknown): v is FormatoDeFecha {
+  return v === "DD/MM" || v === "MM/DD";
+}
+
+/** `chart_of_accounts.cuenta_control`. */
+export type CuentaControlImportada = "clientes" | "proveedores";
 
 const OBLIGATORIOS = ["asiento", "fecha", "descripcion del asiento", "cuenta", "debito", "credito"];
 
@@ -48,6 +71,9 @@ export interface LineaImportada {
   debit: number;
   credit: number;
   description: string | null;
+  /** 071: el tercero, resuelto desde el código de la columna Tercero. */
+  client_id: string | null;
+  supplier_id: string | null;
 }
 
 export interface AsientoImportado {
@@ -72,6 +98,14 @@ export interface ContextoDeImportacion {
   aniosConPeriodoAutomatico: Set<number>;
   /** `YYYY-MM` de los meses que ya tienen período (abierto o cerrado). */
   mesesConPeriodo: Set<string>;
+  /** 071: código de cuenta → `cuenta_control`. Sin el mapa no se exige tercero. */
+  cuentasControl?: Map<string, CuentaControlImportada>;
+  /** 071: `client_number` (CLI-0001) → id. */
+  clientesPorCodigo?: Map<string, string>;
+  /** 071: `supplier_number` (PRV-0001) → id. */
+  proveedoresPorCodigo?: Map<string, string>;
+  /** Cómo leer `nn/nn/AAAA`. Sin dato, DD/MM (lo que el importador aceptaba antes). */
+  formatoDeFecha?: FormatoDeFecha;
 }
 
 export interface ResultadoDeImportacion {
@@ -114,8 +148,12 @@ export function parsearMonto(v: unknown): { ok: true; valor: number } | { ok: fa
   return { ok: true, valor: round2(n) };
 }
 
-/** Fecha: celda de fecha de Excel, `AAAA-MM-DD` o `DD/MM/AAAA` (nunca MM/DD). */
-export function parsearFecha(v: unknown): string | null {
+/**
+ * Fecha: celda de fecha de Excel, `AAAA-MM-DD`, o texto con barras en el
+ * formato elegido (`DD/MM/AAAA` o `MM/DD/AAAA`). Una fecha imposible en ese
+ * formato (`13/25/2026` en MM/DD) es `null`, o sea error de fila.
+ */
+export function parsearFecha(v: unknown, formato: FormatoDeFecha = "DD/MM"): string | null {
   if (v === null || v === undefined || v === "") return null;
   const valida = (a: number, m: number, d: number) => {
     const f = new Date(Date.UTC(a, m - 1, d));
@@ -135,7 +173,11 @@ export function parsearFecha(v: unknown): string | null {
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (m) return valida(Number(m[1]), Number(m[2]), Number(m[3]));
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) return valida(Number(m[3]), Number(m[2]), Number(m[1]));
+  if (m) {
+    return formato === "MM/DD"
+      ? valida(Number(m[3]), Number(m[1]), Number(m[2]))
+      : valida(Number(m[3]), Number(m[2]), Number(m[1]));
+  }
   return null;
 }
 
@@ -172,6 +214,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
     descripcion: col("descripcion del asiento"),
     referencia: col("referencia"),
     cuenta: col("cuenta"),
+    tercero: col("tercero"),
     descLinea: col("descripcion de la linea"),
     debito: col("debito"),
     credito: col("credito"),
@@ -190,7 +233,11 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
     descLinea: string;
     debito: number;
     credito: number;
+    client_id: string | null;
+    supplier_id: string | null;
   }
+  const formato = ctx.formatoDeFecha ?? "DD/MM";
+  const ejemploDeFecha = formato === "MM/DD" ? "MM/DD/AAAA" : "DD/MM/AAAA";
   const filas: Fila[] = [];
   for (let i = 1; i < matriz.length; i++) {
     const r = matriz[i] ?? [];
@@ -198,7 +245,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
     const n = i + 1;
     const grupo = texto(celda(r, C.asiento));
     const cuenta = texto(celda(r, C.cuenta));
-    const fecha = parsearFecha(celda(r, C.fecha));
+    const fecha = parsearFecha(celda(r, C.fecha), formato);
     const d = parsearMonto(celda(r, C.debito));
     const c = parsearMonto(celda(r, C.credito));
 
@@ -207,7 +254,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
       errores.push({
         fila: n,
         columna: "Fecha",
-        mensaje: `Fecha inválida: "${texto(celda(r, C.fecha))}". Usa DD/MM/AAAA o AAAA-MM-DD.`,
+        mensaje: `Fecha inválida: "${texto(celda(r, C.fecha))}". Con el formato elegido se escribe ${ejemploDeFecha}; también vale AAAA-MM-DD.`,
       });
     }
     if (!cuenta) {
@@ -216,6 +263,36 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
       errores.push({ fila: n, columna: "Cuenta", mensaje: `La cuenta ${cuenta} no existe en el plan de cuentas.` });
     } else if (!ctx.cuentasActivas.has(cuenta)) {
       errores.push({ fila: n, columna: "Cuenta", mensaje: `La cuenta ${cuenta} está desactivada en el plan de cuentas.` });
+    }
+    // ── 071: el tercero. El código se busca entre clientes y proveedores; en
+    //    una cuenta control tiene que estar y ser del tipo de la cuenta.
+    const codigoTercero = texto(celda(r, C.tercero));
+    let client_id: string | null = null;
+    let supplier_id: string | null = null;
+    if (codigoTercero) {
+      client_id = ctx.clientesPorCodigo?.get(codigoTercero.toUpperCase()) ?? null;
+      supplier_id = client_id ? null : ctx.proveedoresPorCodigo?.get(codigoTercero.toUpperCase()) ?? null;
+      if (!client_id && !supplier_id) {
+        errores.push({
+          fila: n,
+          columna: "Tercero",
+          mensaje: `No hay ningún cliente ni proveedor con el código ${codigoTercero}.`,
+        });
+      }
+    }
+    const control = cuenta ? ctx.cuentasControl?.get(cuenta) : undefined;
+    if (control === "clientes" && !client_id && (!codigoTercero || supplier_id)) {
+      errores.push({
+        fila: n,
+        columna: "Tercero",
+        mensaje: `La cuenta ${cuenta} es de clientes: pon en Tercero el código del cliente (CLI-…).`,
+      });
+    } else if (control === "proveedores" && !supplier_id && (!codigoTercero || client_id)) {
+      errores.push({
+        fila: n,
+        columna: "Tercero",
+        mensaje: `La cuenta ${cuenta} es de proveedores: pon en Tercero el código del proveedor (PRV-…).`,
+      });
     }
     if (!d.ok) errores.push({ fila: n, columna: "Débito", mensaje: d.mensaje });
     if (!c.ok) errores.push({ fila: n, columna: "Crédito", mensaje: c.mensaje });
@@ -238,6 +315,8 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
       descLinea: texto(celda(r, C.descLinea)),
       debito: deb,
       credito: cre,
+      client_id,
+      supplier_id,
     });
   }
 
@@ -331,6 +410,8 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
         debit: f.debito,
         credit: f.credito,
         description: f.descLinea || null,
+        client_id: f.client_id,
+        supplier_id: f.supplier_id,
       })),
       total: deb,
     });

@@ -1,11 +1,12 @@
 /**
- * Numeración del COMPROBANTE DE EGRESO: `supplier_payments.payment_number` =
- * CE-000001 (Bloque 3, 21/09/2026). Calco de `receipt-numbering.ts`: la misma
- * RPC `get_next_sequence_number`, secuencia `'supplier_payment'` (048).
+ * Numeración del PAGO A PROVEEDOR: `supplier_payments.payment_number` =
+ * PA-000001. Calco de `receipt-numbering.ts`: la misma RPC
+ * `get_next_sequence_number`, secuencia `'supplier_payment'` (048).
  *
- * ⚠️ El prefijo `CE-` es PROPUESTA. Oliver le pregunta a Josuarth cómo llama
- * el bufete a este documento; si dice otro nombre, se cambia acá y en el
- * backfill de la 048 (`'CE-' || lpad(...)`), y nada más. El test lo fija.
+ * 🔁 Desde E3 (Bloque 1, 01/10/2026) el prefijo es `PA-` (módulo Pagos, plan
+ * punto 2). Hasta ahí era `CE-` (comprobante de egreso, Bloque 3). La secuencia
+ * no se reinicia: los `CE-` de staging se quedan y el siguiente sale `PA-` con
+ * el número que sigue. En producción nunca se emitió un `CE-`. El test lo fija.
  *
  * 🔴 El número se toma ANTES del INSERT y un alta que falla después deja un
  * HUECO — el mismo criterio del recibo de caja (SOP-031) y de `emitInvoice`.
@@ -20,7 +21,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type DB = SupabaseClient;
 
 export const SUPPLIER_PAYMENT_SEQUENCE_TYPE = "supplier_payment" as const;
-export const SUPPLIER_PAYMENT_NUMBER_PREFIX = "CE" as const;
+export const SUPPLIER_PAYMENT_NUMBER_PREFIX = "PA" as const;
 export const SUPPLIER_PAYMENT_NUMBER_PAD = 6;
 
 export function formatSupplierPaymentNumber(n: number): string {

@@ -5,6 +5,9 @@
 --   node scripts/run-sql.mjs sql/tests/verificacion-054-tercero-por-linea.sql
 --
 -- Nueve comprobaciones, incluida la falla forzada DESPUÉS de postear.
+-- ⚠️ Reescrita con la 071 (E3, 01/10/2026): el asiento de diario ya no lleva
+-- texto en `p_reference` (el AD- lo pone el motor) y las cuentas control exigen
+-- el tercero, así que [2] y [7] usan cuentas que no son de control.
 -- ============================================================================
 BEGIN;
 
@@ -41,7 +44,7 @@ BEGIN
     jsonb_build_object('account_code','200001','debit',0,'credit',10,'description','Ajuste CxP','supplier_id',v_prov)
   );
   v_entry := post_journal_entry(v_tenant, current_date, 'Verificación 054', 'manual', v_lineas,
-                                NULL, NULL, NULL, NULL, v_user, NULL, 'VER-054', NULL);
+                                NULL, NULL, NULL, NULL, v_user, NULL, NULL, NULL);
   SELECT count(*) INTO v_n FROM journal_entry_lines
    WHERE entry_id = v_entry AND (client_id = v_cli OR supplier_id = v_prov);
   IF v_n = 2 THEN
@@ -52,13 +55,14 @@ BEGIN
     v_fail := v_fail + 1;
   END IF;
 
-  -- [2] Una línea SIN tercero sigue siendo válida (D3: es opcional).
+  -- [2] Una línea SIN tercero sigue siendo válida en una cuenta que NO es de
+  --     control (D3). En 100004/200001 la exige la 071.
   SELECT entry_number, hash INTO v_nro, v_hash FROM journal_entries WHERE id = v_entry;
   BEGIN
     PERFORM post_journal_entry(v_tenant, current_date, 'Verificación 054 sin tercero', 'manual',
       jsonb_build_array(
-        jsonb_build_object('account_code','100004','debit',5,'credit',0),
-        jsonb_build_object('account_code','200001','debit',0,'credit',5)
+        jsonb_build_object('account_code','130003','debit',5,'credit',0),
+        jsonb_build_object('account_code','400001','debit',0,'credit',5)
       ), NULL, NULL, NULL, NULL, v_user, NULL, NULL, NULL);
     RAISE NOTICE '[2] sin tercero se postea igual ................ ✅';
     v_ok := v_ok + 1;
@@ -97,7 +101,7 @@ BEGIN
     PERFORM post_journal_entry(v_tenant, current_date, 'Verificación 054 tercero ajeno', 'manual',
       jsonb_build_array(
         jsonb_build_object('account_code','100004','debit',5,'credit',0,'client_id',v_cli_otro),
-        jsonb_build_object('account_code','200001','debit',0,'credit',5)
+        jsonb_build_object('account_code','200001','debit',0,'credit',5,'supplier_id',v_prov)
       ), NULL, NULL, NULL, NULL, v_user, NULL, NULL, NULL);
     RAISE NOTICE '[4] cliente de otro bufete ..................... ❌ PASÓ (debía fallar)';
     v_fail := v_fail + 1;
@@ -139,9 +143,9 @@ BEGIN
   SELECT content_hash INTO v_hash FROM journal_entries WHERE id = v_entry;
   v_entry := post_journal_entry(v_tenant, current_date, 'Verificación 054', 'manual',
     jsonb_build_array(
-      jsonb_build_object('account_code','100004','debit',10,'credit',0,'description','Ajuste CxC'),
-      jsonb_build_object('account_code','200001','debit',0,'credit',10,'description','Ajuste CxP')
-    ), NULL, NULL, NULL, NULL, v_user, NULL, 'VER-054', NULL);
+      jsonb_build_object('account_code','130003','debit',10,'credit',0,'description','Ajuste CxC'),
+      jsonb_build_object('account_code','400001','debit',0,'credit',10,'description','Ajuste CxP')
+    ), NULL, NULL, NULL, NULL, v_user, NULL, NULL, NULL);
   SELECT content_hash INTO v_hash2 FROM journal_entries WHERE id = v_entry;
   IF v_hash IS DISTINCT FROM v_hash2 THEN
     RAISE NOTICE '[7] el tercero cambia el content_hash .......... ✅';
@@ -169,7 +173,7 @@ BEGIN
     PERFORM post_journal_entry(v_tenant, current_date, 'Verificación 054 falla forzada', 'manual',
       jsonb_build_array(
         jsonb_build_object('account_code','100004','debit',7,'credit',0,'client_id',v_cli),
-        jsonb_build_object('account_code','200001','debit',0,'credit',7)
+        jsonb_build_object('account_code','200001','debit',0,'credit',7,'supplier_id',v_prov)
       ), NULL, NULL, NULL, NULL, v_user, NULL, NULL, NULL);
     RAISE EXCEPTION 'falla forzada después de postear' USING ERRCODE = 'P0054';
   EXCEPTION WHEN SQLSTATE 'P0054' THEN

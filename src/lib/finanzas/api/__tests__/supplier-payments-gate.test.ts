@@ -164,12 +164,12 @@ const INPUT = {
   notes: null,
 };
 
-test("caso feliz: pago parcial de 400 sobre 1000 → CE-000004, un insert, un asiento", async () => {
+test("caso feliz: pago parcial de 400 sobre 1000 → PA-000004, un insert, un asiento", async () => {
   const { db, reg } = fake({ postea: "ok" });
   const r = await createSupplierPayment(db as never, TENANT, USER, INPUT, db as never);
-  assert.equal(r.payment_number, "CE-000004");
+  assert.equal(r.payment_number, "PA-000004");
   assert.deepEqual(reg.correlativos, ["supplier_payment"]);
-  assert.equal(reg.payloadPago?.payment_number, "CE-000004");
+  assert.equal(reg.payloadPago?.payment_number, "PA-000004");
   assert.equal(reg.payloadPago?.kind, "payment");
   assert.equal(reg.payloadPago?.payment_account_code, "100001", "el banco vive en el PAGO");
   assert.equal(reg.posteos, 1);
@@ -283,7 +283,7 @@ const INPUT_TRAMITE = { ...INPUT, business_expense_id: null, expense_id: TRAMITE
 test("pago de un gasto de trámite: INSERT con expense_id (y business_expense_id null), un asiento", async () => {
   const { db, reg } = fake({ postea: "ok" });
   const r = await createSupplierPayment(db as never, TENANT, USER, INPUT_TRAMITE, db as never);
-  assert.equal(r.payment_number, "CE-000004", "la MISMA serie CE- que las compras");
+  assert.equal(r.payment_number, "PA-000004", "la MISMA serie PA- que las compras");
   assert.equal(reg.payloadPago?.expense_id, TRAMITE);
   assert.equal(reg.payloadPago?.business_expense_id, null, "arco exclusivo: el otro destino va null");
   assert.equal(reg.posteos, 1);

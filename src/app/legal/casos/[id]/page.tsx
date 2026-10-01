@@ -43,7 +43,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-import { getStatusStyle, formatCurrency } from "@/lib/utils/status-styles";
+import { esEstadoCerrado, getStatusStyle, formatCurrency } from "@/lib/utils/status-styles";
 
 interface PageProps {
   params: { id: string };
@@ -663,6 +663,7 @@ export default async function ExpedienteDetailPage({
                   proveedores={proveedoresParaGastos}
                   taxCodes={taxCodes}
                   bancos={bancos}
+                  casoCerrado={esEstadoCerrado(status?.name)}
                 />
               )}
 
@@ -762,6 +763,7 @@ export default async function ExpedienteDetailPage({
                   proveedores={proveedoresParaGastos}
                   taxCodes={taxCodes}
                   bancos={bancos}
+                  casoCerrado={esEstadoCerrado(status?.name)}
                 />
               )}
 

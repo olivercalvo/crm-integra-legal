@@ -126,7 +126,7 @@ export async function listBusinessExpenses(
     .select(
       `
         id, tenant_id, expense_date, accounting_date, due_date, supplier_id,
-        supplier_name, supplier_ruc, supplier_invoice_number,
+        supplier_name, supplier_ruc, supplier_invoice_number, purchase_number,
         chart_account_code, description,
         subtotal, tax_rate, tax_amount, total, amount_paid, credited_total, balance_due,
         status, payment_date, payment_method,
@@ -249,7 +249,7 @@ export async function getBusinessExpenseById(
     .select(
       `
         id, tenant_id, expense_date, accounting_date, due_date, supplier_id,
-        supplier_name, supplier_ruc, supplier_invoice_number,
+        supplier_name, supplier_ruc, supplier_invoice_number, purchase_number,
         chart_account_code, description,
         subtotal, tax_rate, tax_amount, total, amount_paid, credited_total, balance_due,
         status, payment_date, payment_method,

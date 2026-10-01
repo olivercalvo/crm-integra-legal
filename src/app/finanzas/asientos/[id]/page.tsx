@@ -201,10 +201,20 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               </div>
               {asiento.reference && (
                 <div>
+                  {/* E3: el número PROPIO del documento (FAC-HON-, CO-, AD-…). */}
                   <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                    <Hash size={12} /> Referencia
+                    <Hash size={12} /> N.º de documento
                   </dt>
                   <dd className="mt-1 font-mono text-gray-900">{asiento.reference}</dd>
+                </div>
+              )}
+              {asiento.referencia_externa && (
+                <div>
+                  {/* 071: cheque, factura del proveedor o la referencia libre. */}
+                  <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
+                    <Hash size={12} /> Referencia externa
+                  </dt>
+                  <dd className="mt-1 font-mono text-gray-900">{asiento.referencia_externa}</dd>
                 </div>
               )}
               {rutaDocumento && (

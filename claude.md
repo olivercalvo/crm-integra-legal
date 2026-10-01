@@ -305,10 +305,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   con fecha en `sop.md` SOP-014) y **viaja dentro de `p_lines`**: la firma de
   `post_journal_entry` sigue teniendo 13 parámetros y ningún llamador se tocó.
 - **Se puede poner en cualquier línea**, no solo en cuentas de control.
-- **El Mayor resuelve el nombre en cuatro escalones** (E2, 30/09/2026): tercero de la línea →
-  **tercero del documento de origen** (`resolverTercerosFiscales`, la MISMA función del Excel) →
-  tercero de la línea de cuenta control, o el único del asiento → el heurístico de texto viejo.
-  El segundo escalón es el que nombra los asientos anteriores a E2 sin tocarlos.
+- **El Mayor resuelve el nombre en tres escalones** (E2, 30/09/2026; E3 retiró el cuarto):
+  tercero de la línea → **tercero del documento de origen** (`resolverTercerosFiscales`, la
+  MISMA función del Excel) → tercero de la línea de cuenta control, o el único del asiento.
+  Si nada resuelve, **vacío**: el texto de la línea de control ya no se usa como nombre.
 - **Los asientos manuales NO alimentan la antigüedad** (no tienen vencimiento) pero **sí la
   explican**: la línea de "de dónde sale esa diferencia" los nombra con monto y tercero. Antes
   caían en el residuo anónimo de "hay una tercera causa".
@@ -342,6 +342,35 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Vocabulario en pantalla**: "Fecha de registro" = la contable; el sello `record_date` es
   "Grabado el". Factura, NC, gasto de trámite y asiento muestran las dos fechas. 🔒
   `vocabulario-de-fechas.test.ts`.
+
+### Número de documento, referencia externa y tercero obligatorio (desde 2026-10-01, Bloque 1 E3 — `071` SOLO escrita)
+- 🔴 **Tres conceptos, tres lugares.** `reference` = el número PROPIO del documento
+  (`FAC-HON-`, `CO-`, `PA-`, `FAC-CO-`, `NC-`, `NC-CO-`, `AD-`). `referencia_externa` = el papel
+  de AFUERA (factura del proveedor, cheque, transferencia, la referencia libre del diario).
+  El **módulo** (FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA) NO se guarda: lo deriva
+  `moduloDelAsiento()` del `source_type`; una reversión lleva el de su original.
+- **Prefijos nuevos, secuencias que NO se reinician:** cobros `CO-` (los `REC-` emitidos se
+  quedan, P-2c), pagos a proveedor `PA-` (los `CE-` de staging se quedan), NC de compra `NC-CO-`,
+  y `FAC-CO-` para compras **y** gastos de trámite (una sola secuencia `purchase`, P-2b).
+- 🔴 **El `AD-` lo asigna `post_journal_entry`** para `manual`/`apertura`/`cierre`, adentro de la
+  transacción: un lote de importación que falla no deja huecos. Para esos tipos el RPC
+  **rechaza** un texto en `p_reference`; la referencia libre va en `p_referencia_externa`.
+- 🔴 **Tercero obligatorio en las cuentas con `cuenta_control`** (100004 cliente, 200001
+  proveedor), en el RPC para TODO `source_type`. Excepciones: `reversion` (el original viejo
+  puede no tenerlo) y el proveedor en `gasto`/`gasto_tramite`/`pago_proveedor` (SOP-033). El
+  formulario y la importación lo dicen antes con el número de línea de la pantalla.
+- 🔬 **Hash v4:** `referencia_externa` entra al `content_hash` (SOP-014, cuarta fila). La
+  reversión la hereda sola dentro del RPC.
+- **El N.º de factura del proveedor de un gasto de trámite asentado se congela** (ahora es
+  `referencia_externa`); completarlo si estaba vacío sigue permitido. `purchase_number` no
+  cambia una vez asignado (trigger). El gasto de trámite toma su número ANTES de postear y un
+  reintento REUSA el que ya tiene.
+- **Mayor:** sin tercero la celda Nombre queda VACÍA. Se retiró el cuarto escalón (el texto
+  de la línea de control), que ponía «Cuentas por pagar» o «Reversión» como nombre.
+- **Caso cerrado:** el gasto se puede cargar, pero la pantalla pregunta antes de guardar
+  («Este caso está cerrado. ¿Deseas registrar el gasto igual?»). No hay bloqueo en el servidor.
+- 🔴 **La `071` va en la ventana JUNTO con el código de E3.** El código anterior falla al
+  postear un asiento manual. Runbook `despliegue-025-055.md`, nota de la `071`.
 
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`

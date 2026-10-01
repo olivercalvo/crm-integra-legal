@@ -75,6 +75,8 @@ export interface BusinessExpenseRow {
    * poder cargarse. Se valida el LARGO, nunca el formato.
    */
   supplier_invoice_number: string | null;
+  /** E3 (071): número interno FAC-CO-000001. NULL en las compras anteriores. */
+  purchase_number?: string | null;
   chart_account_code: string | null;
   description: string;
   subtotal: string | number;       // NUMERIC(12,2) → string vía REST

@@ -60,9 +60,25 @@ function Asiento({
               </span>
             )}
             <span className="font-mono text-xs text-gray-600">{asiento.fecha}</span>
+            {/* E3: el módulo, como en el Mayor. */}
+            {asiento.modulo && (
+              <span className="rounded-full bg-integra-navy px-2 py-0.5 font-mono text-[11px] font-medium text-white">
+                {asiento.modulo}
+              </span>
+            )}
             <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-integra-navy ring-1 ring-integra-navy/15">
               {asiento.tipoTransaccion}
             </span>
+            {asiento.numeroDocumento && (
+              <span className="font-mono text-xs text-gray-700" title="N.º de documento">
+                {asiento.numeroDocumento}
+              </span>
+            )}
+            {asiento.referenciaExterna && (
+              <span className="text-xs text-gray-500" title="Referencia externa">
+                Ref. {asiento.referenciaExterna}
+              </span>
+            )}
             {asiento.documento && (
               <span className="text-xs text-gray-600">
                 {destino ? (

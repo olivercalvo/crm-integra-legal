@@ -100,8 +100,10 @@ export function esCuentaDeBancoValida(c: CuentaDeBanco | null | undefined): bool
 
 export interface CobroParaAsiento {
   id: string;
-  /** `REC-000012`. Es la referencia del asiento (Parte B, 21/09/2026). */
+  /** `CO-000012` (`REC-` los anteriores a E3). Es la referencia del asiento. */
   payment_number: string | null;
+  /** Cheque o transferencia (`payments.reference`): la `referencia_externa` (071). */
+  referencia_pago?: string | null;
   payment_date: string;
   amount: number;
   client_name: string | null;
@@ -210,6 +212,7 @@ export function construirAsientoDeCobro(
       // número de factura (task_plan.md, Parte B, precisión 2). Los cobros de
       // antes de la 047 (sin número) caen a la factura, como siempre.
       reference: c.payment_number ?? c.facturas[0] ?? null,
+      referencia_externa: c.referencia_pago?.trim() || null,
       idempotency_key: claveIdempotenteDeCobro(c.id),
     },
   };
@@ -222,8 +225,10 @@ export function construirAsientoDeCobro(
 export interface PagoProveedorParaAsiento {
   /** El id del PAGO (`supplier_payments`, 048). Es el `source_id` del asiento. */
   pago_id: string;
-  /** `CE-000012`. Es la referencia del asiento. */
+  /** `PA-000012` (`CE-` los anteriores a E3). Es la referencia del asiento. */
   payment_number: string | null;
+  /** Cheque o transferencia (`supplier_payments.reference`): la `referencia_externa` (071). */
+  referencia_pago?: string | null;
   /**
    * El documento que se paga, para la descripción (049): una COMPRA
    * (`business_expenses`) o un GASTO DE TRÁMITE (`expenses`). El asiento es el
@@ -328,6 +333,7 @@ export function construirAsientoDePagoProveedor(
       lines,
       source_id: p.pago_id,
       reference: p.payment_number ?? null,
+      referencia_externa: p.referencia_pago?.trim() || null,
       idempotency_key: claveIdempotenteDePagoProveedor(p.pago_id),
     },
   };

@@ -54,7 +54,10 @@ export async function loadAsientosDelDiario(
 ): Promise<AsientoCrudo[]> {
   let q = db
     .from("journal_entries")
-    .select("id, entry_number, transaction_date, description, source_type, source_id")
+    .select(
+      "id, entry_number, transaction_date, description, source_type, source_id, " +
+        "reverses_entry_id, reference, referencia_externa"
+    )
     .eq("tenant_id", tenantId);
 
   if (rango.desde) q = q.gte("transaction_date", rango.desde);
@@ -76,9 +79,34 @@ export async function loadAsientosDelDiario(
     description: string;
     source_type: string;
     source_id: string | null;
+    reverses_entry_id: string | null;
+    reference: string | null;
+    referencia_externa: string | null;
   };
   const asientos = (cabeceras ?? []) as unknown as Cabecera[];
   if (asientos.length === 0) return [];
+
+  // -- E3: el tipo del asiento que revierte cada reversión (para su módulo) ---
+  // Casi siempre está en el mismo rango; si no, se pide aparte. Sin embed: el
+  // self-join de journal_entries da PGRST200 (21/09).
+  const tipoPorId = new Map(asientos.map((a) => [a.id, a.source_type]));
+  const faltan = Array.from(
+    new Set(
+      asientos
+        .map((a) => a.reverses_entry_id)
+        .filter((v): v is string => !!v && !tipoPorId.has(v))
+    )
+  );
+  if (faltan.length > 0) {
+    const { data: originales } = await db
+      .from("journal_entries")
+      .select("id, source_type")
+      .eq("tenant_id", tenantId)
+      .in("id", faltan);
+    for (const o of (originales ?? []) as { id: string; source_type: string }[]) {
+      tipoPorId.set(o.id, o.source_type);
+    }
+  }
 
   const entryIds = asientos.map((a) => a.id);
 
@@ -164,5 +192,8 @@ export async function loadAsientosDelDiario(
     source_id: a.source_id,
     documento: a.source_id ? (documentos.get(a.source_id) ?? null) : null,
     lineas: porAsiento.get(a.id) ?? [],
+    reverses_source_type: a.reverses_entry_id ? tipoPorId.get(a.reverses_entry_id) ?? null : null,
+    reference: a.reference ?? null,
+    referencia_externa: a.referencia_externa ?? null,
   }));
 }

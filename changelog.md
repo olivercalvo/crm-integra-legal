@@ -1,5 +1,38 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, E3: número de documento, referencia externa y tercero obligatorio] - 2026-10-01
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1 punto 2 y
+punto 10. ⚠️ Migración `071` **escrita y SIN APLICAR** (espera el «aplica»).
+
+### Numeración
+- Cobros `CO-` (los `REC-` emitidos se quedan), pagos a proveedor `PA-`, NC de compra `NC-CO-`.
+- Número interno `FAC-CO-` para compras y gastos de trámite (una secuencia, P-2b), visible en
+  sus detalles.
+- Asiento de diario `AD-`, asignado por el motor dentro de la transacción (también en la
+  importación: sin huecos).
+
+### El libro
+- `journal_entries.referencia_externa` (hash v4): factura del proveedor en compras y gastos de
+  trámite, cheque o transferencia en cobros y pagos, referencia libre del asiento de diario.
+- El motor exige el tercero en 100004 y 200001.
+- La reversión de una importación conserva el tercero (faltaba desde E2).
+
+### Pantallas
+- Mayor (pantalla y Excel) y Diario: Módulo, N.º documento, N.º transacción y Ref. externa.
+  🐞 El Excel rotulaba «Número de documento» una columna que traía el correlativo.
+- Mayor: sin tercero, la celda Nombre queda vacía (se retiró el heurístico del texto).
+- Asiento de diario: «Referencia externa»; en 100004/200001 el selector pide Cliente o Proveedor
+  y avisa «Esta línea afecta la antigüedad de…».
+- Importación: columna Tercero (CLI-/PRV-) y selector «Formato de fecha del archivo»
+  (MM/DD por defecto).
+- Caso cerrado: el gasto pregunta antes de guardar.
+
+### Pruebas
+- `npm test` en verde. Nuevas: `referencias-y-modulo-e3.test.ts`, `purchase-numbering.test.ts`,
+  formato de fecha y tercero en la importación, rutas del asiento manual con la 071.
+- `sql/tests/verificacion-071-motor-v4.sql` (15 comprobaciones) para correr después del «aplica».
+
 ## [Bloque 1, E2: tercero y descripción en el asiento] - 2026-09-30
 
 Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §3.

@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Download, Upload } from "lucide-react";
 import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
-import type { AsientoImportado, ErrorDeFila } from "@/lib/finanzas/import/asientos-import";
+import {
+  FORMATO_DE_FECHA_POR_DEFECTO,
+  type AsientoImportado,
+  type ErrorDeFila,
+  type FormatoDeFecha,
+} from "@/lib/finanzas/import/asientos-import";
 
 interface VistaPrevia {
   hash: string;
@@ -23,8 +28,12 @@ export function ImportarAsientos() {
   const [vista, setVista] = useState<VistaPrevia | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Decisión (c) del 30/09: el formato de `nn/nn/AAAA` lo elige la persona.
+  // Cambiarlo con un archivo ya subido vuelve a leerlo: la vista previa y el
+  // registro tienen que leer las MISMAS fechas.
+  const [formato, setFormato] = useState<FormatoDeFecha>(FORMATO_DE_FECHA_POR_DEFECTO);
 
-  function previsualizar(f: File) {
+  function previsualizar(f: File, conFormato: FormatoDeFecha = formato) {
     setArchivo(f);
     setVista(null);
     setError(null);
@@ -32,6 +41,7 @@ export function ImportarAsientos() {
       const fd = new FormData();
       fd.append("file", f);
       fd.append("mode", "preview");
+      fd.append("date_format", conFormato);
       const res = await fetch("/api/finanzas/asientos/importar", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -50,6 +60,7 @@ export function ImportarAsientos() {
       fd.append("file", archivo);
       fd.append("mode", "commit");
       fd.append("hash", vista.hash);
+      fd.append("date_format", formato);
       const res = await fetch("/api/finanzas/asientos/importar", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -94,6 +105,21 @@ export function ImportarAsientos() {
               e.target.value = "";
             }}
           />
+        </label>
+        <label className="inline-flex min-h-[48px] items-center gap-2 text-sm text-gray-700">
+          Formato de fecha del archivo
+          <select
+            value={formato}
+            onChange={(e) => {
+              const f = e.target.value as FormatoDeFecha;
+              setFormato(f);
+              if (archivo) previsualizar(archivo, f);
+            }}
+            className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
+          >
+            <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
+            <option value="DD/MM">DD/MM/AAAA (día primero)</option>
+          </select>
         </label>
         {archivo && <span className="text-sm text-gray-600">{archivo.name}</span>}
         {isPending && <span className="text-sm text-gray-500">Procesando…</span>}

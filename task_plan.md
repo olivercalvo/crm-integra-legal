@@ -13,7 +13,8 @@
   · Reversión anterior al original (asiento 88, 29/09) → rechazo en pantalla y 422 en la ruta.
   · Reversión en agosto cerrado (asiento 4, 15/08) → «El período 2026-08 está cerrado», sin
     asiento ni correlativo. NC-000017 autorizada con fecha 31/08 → 422 sin intento ante la DGI.
-  · ⏳ La de las 19:00 (fecha propuesta = hoy en Panamá) se corre a esa hora.
+  · ✅ 19:01 de Panamá (día UTC ya 01/10): el Asiento de Diario (servidor) y el diálogo de
+    reversión (navegador) proponen 30/09.
 - 📋 Para E2 (pantalla): detalle del asiento con las fechas al revés, detalle de factura sin la
   fecha de registro, detalle de NC sin rotular la de registro.
 - ⏳ Pregunta 5 de Josuarth (fechas futuras): hoy permitidas, `PERMITIR_FECHA_DE_REGISTRO_FUTURA`.

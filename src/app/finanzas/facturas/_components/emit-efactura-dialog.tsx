@@ -212,7 +212,7 @@ export function EmitEfacturaDialog({
             <div className="flex justify-between gap-3 border-t pt-2">
               <span className="text-gray-500">Total</span>
               <span className="font-mono font-semibold text-gray-900">
-                ${fmtImporte(grandTotal)}
+                B/. {fmtImporte(grandTotal)}
               </span>
             </div>
           </div>

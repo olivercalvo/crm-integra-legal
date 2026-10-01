@@ -520,13 +520,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                           {Number(ln.quantity).toFixed(2)}
                         </td>
                         <td className="py-2 pr-3 text-right font-mono">
-                          ${fmtImporte(Number(ln.unit_price))}
+                          B/. {fmtImporte(Number(ln.unit_price))}
                         </td>
                         <td className="py-2 pr-3 text-gray-600">
                           {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                         </td>
                         <td className="py-2 text-right font-mono font-medium">
-                          ${fmtImporte(Number(ln.line_total))}
+                          B/. {fmtImporte(Number(ln.line_total))}
                         </td>
                       </tr>
                     ))}
@@ -664,19 +664,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <div className="flex justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${fmtImporte(Number(invoice.subtotal_total))}
+                  B/. {fmtImporte(Number(invoice.subtotal_total))}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-600">Impuestos</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${fmtImporte(Number(invoice.tax_total))}
+                  B/. {fmtImporte(Number(invoice.tax_total))}
                 </dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${fmtImporte(Number(invoice.grand_total))}
+                  B/. {fmtImporte(Number(invoice.grand_total))}
                 </dd>
               </div>
               {(Number(invoice.amount_paid) > 0 || (creditedTotal > 0 && !isAnulada)) && (
@@ -684,19 +684,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   {Number(invoice.amount_paid) > 0 && (
                     <div className="flex justify-between text-xs text-gray-600 pt-2">
                       <dt>Pagado</dt>
-                      <dd className="font-mono">${fmtImporte(Number(invoice.amount_paid))}</dd>
+                      <dd className="font-mono">B/. {fmtImporte(Number(invoice.amount_paid))}</dd>
                     </div>
                   )}
                   {creditedTotal > 0 && !isAnulada && (
                     <div className="flex justify-between text-xs text-gray-600 pt-2">
                       <dt>Acreditado (NC)</dt>
-                      <dd className="font-mono">-${fmtImporte(creditedTotal)}</dd>
+                      <dd className="font-mono">−B/. {fmtImporte(creditedTotal)}</dd>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold">
                     <dt className={acreditadaTotal ? "text-gray-600" : "text-amber-700"}>Saldo</dt>
                     <dd className={`font-mono ${acreditadaTotal ? "text-gray-600" : "text-amber-700"}`}>
-                      ${fmtImporte(Number(invoice.balance_due))}
+                      B/. {fmtImporte(Number(invoice.balance_due))}
                     </dd>
                   </div>
                 </>

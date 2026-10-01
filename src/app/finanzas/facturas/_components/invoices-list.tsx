@@ -81,7 +81,7 @@ export function InvoicesList({ invoices }: Props) {
                   {formatDate(inv.due_date)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                  ${fmtImporte(Number(inv.grand_total))}
+                  B/. {fmtImporte(Number(inv.grand_total))}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <span
@@ -91,7 +91,7 @@ export function InvoicesList({ invoices }: Props) {
                         : "text-gray-400"
                     }
                   >
-                    ${fmtImporte(Number(inv.balance_due))}
+                    B/. {fmtImporte(Number(inv.balance_due))}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -148,11 +148,11 @@ export function InvoicesList({ invoices }: Props) {
               <span className="text-gray-500">Vence {formatDate(inv.due_date)}</span>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  ${fmtImporte(Number(inv.grand_total))}
+                  B/. {fmtImporte(Number(inv.grand_total))}
                 </p>
                 {Number(inv.balance_due) > 0 && (
                   <p className="text-xs text-amber-700">
-                    Saldo ${fmtImporte(Number(inv.balance_due))}
+                    Saldo B/. {fmtImporte(Number(inv.balance_due))}
                   </p>
                 )}
               </div>

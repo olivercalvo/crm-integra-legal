@@ -306,7 +306,7 @@ export function InvoiceLineItems({
                       Total línea
                     </label>
                     <div className="rounded-md bg-gray-50 px-3 py-2 min-h-[44px] flex items-center font-mono text-sm font-medium text-gray-900">
-                      ${fmtImporte(lineTotal)}
+                      B/. {fmtImporte(lineTotal)}
                     </div>
                   </div>
                 </div>

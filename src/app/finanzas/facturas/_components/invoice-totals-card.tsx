@@ -28,19 +28,19 @@ export function InvoiceTotalsCard({ lines }: Props) {
         <div className="flex justify-between">
           <dt className="text-gray-600">Subtotal</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${fmtImporte(subtotal)}
+            B/. {fmtImporte(subtotal)}
           </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-gray-600">Impuestos</dt>
           <dd className="font-mono font-medium text-gray-900">
-            ${fmtImporte(taxTotal)}
+            B/. {fmtImporte(taxTotal)}
           </dd>
         </div>
         <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
           <dt className="font-semibold text-integra-navy">Total</dt>
           <dd className="font-mono text-lg font-bold text-integra-navy">
-            ${fmtImporte(grandTotal)}
+            B/. {fmtImporte(grandTotal)}
           </dd>
         </div>
       </dl>

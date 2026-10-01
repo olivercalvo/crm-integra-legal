@@ -303,7 +303,7 @@ export function CancelInvoiceDialog({
                 <div className="flex justify-between">
                   <span className="text-gray-500">Total facturado</span>
                   <span className="font-mono text-gray-900">
-                    ${fmtImporte(grandTotal)}
+                    B/. {fmtImporte(grandTotal)}
                   </span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
@@ -311,7 +311,7 @@ export function CancelInvoiceDialog({
                     Total pagado
                   </span>
                   <span className="font-mono font-semibold text-amber-700">
-                    ${fmtImporte(amountPaid)}
+                    B/. {fmtImporte(amountPaid)}
                   </span>
                 </div>
               </div>
@@ -408,7 +408,7 @@ export function CancelInvoiceDialog({
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-gray-500">Total</span>
                   <span className="font-mono font-semibold text-gray-900">
-                    ${fmtImporte(grandTotal)}
+                    B/. {fmtImporte(grandTotal)}
                   </span>
                 </div>
               </div>

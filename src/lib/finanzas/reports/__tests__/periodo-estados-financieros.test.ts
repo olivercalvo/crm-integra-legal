@@ -322,6 +322,29 @@ test('aperturaDeResultado "excluir": las cuentas de resultado arrancan en cero',
   }
 });
 
+test('🔴 Estado de Resultado de mitad de año: SOLO los movimientos del período (01/10/2026)', async () => {
+  // Corte del 01/05 al 30/06: el asiento de abril queda AFUERA. Antes del
+  // arreglo, las cuentas de resultado arrancaban con lo de abril y el período
+  // salía acumulado desde enero (400001 daba −2500 sin moverse en el período).
+  const cuentas = await loadReportAccounts(db() as never, TENANT, {
+    rango: { desde: "2026-05-01", hasta: "2026-06-30" },
+    aperturaDeResultado: "excluir",
+  });
+  const porCodigo = new Map(cuentas.map((c) => [c.code, c]));
+  for (const c of cuentas) {
+    if (!CUENTAS_DE_RESULTADO.includes(c.account_type)) continue;
+    assertMoney(c.saldoInicial ?? 0, 0, `${c.code} arranca en 0`);
+    assertMoney(c.movimientoAnterior ?? 0, 0, `${c.code} sin lo anterior al corte`);
+    assertMoney(c.saldo, ASIENTO_JUNIO[c.code] ?? 0, `${c.code} = sólo lo de junio`);
+  }
+  assertMoney(porCodigo.get("400001")?.saldo ?? 0, 0, "400001 sólo se movió en abril: en el período da 0");
+  assertMoney(porCodigo.get("400006")?.saldo ?? 0, -2000, "400006 es la venta de junio");
+  // Y el Balance, que no excluye, sigue arrastrando lo anterior de las de balance.
+  const balance = await loadReportAccounts(db() as never, TENANT, { rango: { desde: "2026-05-01", hasta: "2026-06-30" } });
+  const cxc = balance.find((c) => c.code === "100004");
+  assertMoney(cxc?.movimientoAnterior ?? 0, ASIENTO_ABRIL["100004"], "las de balance arrastran lo anterior");
+});
+
 test('aperturaDeResultado "excluir" NO se aplica sin pedirlo', async () => {
   const cuentas = await loadReportAccounts(db() as never, TENANT, {
     rango: { desde: "2026-01-01", hasta: "2026-12-31" },

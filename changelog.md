@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Estado de Resultado por período: sólo el período] - 2026-10-01
+
+- Corregido: con fecha «desde», las cuentas de resultado arrastraban los movimientos anteriores
+  al corte (un período de mitad de año salía acumulado desde enero). Ahora arrancan en cero y
+  muestran sólo lo del período. El Balance no cambia. Test en
+  `periodo-estados-financieros.test.ts`.
+
 ## [Bloque 1: E10, E6 y E11] - 2026-10-01
 
 - ⚠️ `078` **sin aplicar**: tasa de ISR del bufete (`finanzas_parametros`). Estado de Resultado

@@ -329,7 +329,12 @@ export async function loadReportAccounts(
       const saldoApertura = round2(Number(r.saldo_inicial ?? 0));
       const excluida = excluirApertura && esDeResultado;
       const apertura = excluida ? 0 : saldoApertura;
-      const anterior = anteriores.get(r.id) ?? 0;
+      // 🔴 Corregido el 01/10/2026: en el Estado de Resultado por período la
+      // cuenta de resultado arranca en CERO, sin la apertura Y sin lo movido
+      // antes del `desde`. Hasta hoy se sacaba sólo la apertura y lo anterior
+      // al corte seguía sumando: un período de mitad de año salía acumulado
+      // desde enero. El Balance (que no usa "excluir") sigue sumando todo.
+      const anterior = excluida ? 0 : anteriores.get(r.id) ?? 0;
       // Lo que la Comprobación muestra como "saldo inicial": no es la apertura
       // de la cuenta cuando hay corte, es el saldo al arrancar el período.
       const inicial = round2(apertura + anterior);

@@ -100,7 +100,7 @@ export async function findChartAccountsByCodes(
     const slice = codes.slice(i, i + CHUNK);
     const { data, error } = await db
       .from("chart_of_accounts")
-      .select("id, code, description, active, is_system, cuenta_control, saldo_inicial_fecha")
+      .select("id, code, description, active, is_system, cuenta_control, saldo_inicial_fecha, subcategoria")
       .eq("tenant_id", tenantId)
       .in("code", slice);
 
@@ -118,6 +118,7 @@ export async function findChartAccountsByCodes(
         cuenta_control: CuentaControl | null;
         saldo_inicial_fecha: string | null;
         is_system: boolean;
+        subcategoria: string | null;
       };
       result.set(r.code, {
         id: r.id,
@@ -126,6 +127,7 @@ export async function findChartAccountsByCodes(
         cuenta_control: r.cuenta_control ?? null,
         saldo_inicial_fecha: r.saldo_inicial_fecha ?? null,
         is_system: r.is_system === true,
+        subcategoria: r.subcategoria ?? null,
       });
     }
   }

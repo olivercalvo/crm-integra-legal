@@ -298,6 +298,11 @@ const MARCADORES = {
     tipo: "tabla", tabla: "finanzas_parametros",
     nota: "Bloque 1, E10, 01/10. Decision (b) de Josuarth del 30/09: linea de ISR siempre visible con tasa configurable, 0 % para Integra. No toca el libro: es un calculo del reporte.",
   },
+  "079_subcategorias_y_cuentas_nuevas.sql": {
+    que: "Subcategoria obligatoria en los seis tipos (CHECK coa_subcategoria_por_tipo), patrimonio en tres, sin depreciacion_acumulada; 400009 Familia, 440001 Otros ingresos, HON-FAM y OTR-ING",
+    tipo: "constraint", nombre: "coa_subcategoria_por_tipo",
+    nota: "Bloque 1, E6, 01/10. El mapa cuenta por cuenta de Josuarth (P-8a) no llego: la migracion asigna un valor por defecto (el de subcategoriaPorDefecto) y lo informa con un NOTICE por cuenta; se corrige en el Plan de Cuentas. Reemplaza el CHECK de la 025 y el script sql/datos-staging de HON-FAM.",
+  },
   "068_fechas_de_registro.sql": {
     que: "Fecha de registro (accounting_date) en facturas, compras, gastos de tramite y NC de venta; backfill desde el libro; congelada al emitir",
     tipo: "columna", tabla: "invoices", columna: "accounting_date",

@@ -218,29 +218,44 @@ test("validateCreateChartAccount: sin saldo_inicial → default 0", () => {
   }
 });
 
-test("validateCreateChartAccount: sin subcategoria → null en cuentas de BALANCE", () => {
-  // Desde NIIF 18 esto solo vale para balance. En cuentas de resultado la
-  // subcategoría es obligatoria — ver el test de más abajo.
+test("E6: cuenta de BALANCE ACTIVA sin subcategoría → error (079)", () => {
+  // Hasta E6 era opcional en balance. Desde la 079 es obligatoria en los seis
+  // tipos (Josuarth): sin ella el Balance General no sabe en qué grupo va.
+  for (const tipo of ["asset", "liability", "equity"] as const) {
+    for (const subcategoria of [undefined, ""]) {
+      const r = validateCreateChartAccount({
+        code: "190002",
+        name: "Cuenta de balance",
+        account_type: tipo,
+        subcategoria,
+        active: true,
+      });
+      assert.equal(r.ok, false, `${tipo} sin subcategoría debería fallar`);
+      if (!r.ok) assert.ok(r.errors.subcategoria);
+    }
+  }
+});
+
+test("E6: cuenta de BALANCE INACTIVA sin subcategoría → ok (las viejas de QuickBooks)", () => {
   const r = validateCreateChartAccount({
-    code: "190002",
-    name: "Otros activos",
+    code: "190003",
+    name: "Cuenta vieja",
     account_type: "asset",
-    active: true,
+    active: false,
   });
   assert.equal(r.ok, true);
   if (r.ok) assert.equal(r.data.subcategoria, null);
 });
 
-test("validateCreateChartAccount: subcategoria vacía ('') → null en cuentas de BALANCE", () => {
-  const r = validateCreateChartAccount({
-    code: "190003",
-    name: "Sin clasificar",
-    account_type: "asset",
-    subcategoria: "",
-    active: true,
-  });
-  assert.equal(r.ok, true);
-  if (r.ok) assert.equal(r.data.subcategoria, null);
+test("E6: patrimonio en tres; depreciacion_acumulada y patrimonio ya no se aceptan", () => {
+  for (const sub of ["capital_social", "resultados_acumulados", "otras_reservas"]) {
+    const r = validateCreateChartAccount({ code: "300009", name: "Patrimonio", account_type: "equity", subcategoria: sub, active: true });
+    assert.equal(r.ok, true, sub);
+  }
+  for (const [tipo, sub] of [["equity", "patrimonio"], ["asset", "depreciacion_acumulada"]] as const) {
+    const r = validateCreateChartAccount({ code: "300010", name: "Patrimonio", account_type: tipo, subcategoria: sub, active: true });
+    assert.equal(r.ok, false, `${sub} ya no es válida`);
+  }
 });
 
 // ---- NIIF 18: subcategoría obligatoria y acotada por tipo (Fase 1) ----
@@ -323,6 +338,7 @@ test("cuenta_control: solo clientes/proveedores, y NULL si viene vacía", () => 
     code: "100005",
     name: "Otra",
     account_type: "asset",
+    subcategoria: "activo_corriente",
     cuenta_control: "",
     active: true,
   });
@@ -371,6 +387,7 @@ test("validateCreateChartAccount: saldo_inicial redondea a 2 decimales", () => {
     code: "100001",
     name: "Caja",
     account_type: "asset",
+    subcategoria: "activo_corriente",
     saldo_inicial: "1234.567",
     saldo_inicial_fecha: "2026-01-01",
     active: true,
@@ -562,7 +579,7 @@ test("POST crear con código DUPLICADO → 400, no inserta", { skip: skipNoMocks
   reset();
   state.dupByCode = { id: "acc-existing", code: "1201", account_type: "asset", is_system: false };
   const res = await POST(
-    req({ code: "1201", name: "Cuenta repetida", account_type: "asset", active: true })
+    req({ code: "1201", name: "Cuenta repetida", account_type: "asset", subcategoria: "activo_corriente", active: true })
   );
   const json = (await res.json()) as { error: string };
   assert.equal(res.status, 400);

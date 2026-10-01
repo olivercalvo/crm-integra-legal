@@ -425,19 +425,9 @@ const ACTIVO_GROUPS: GroupSpec[] = [
     label: "Propiedad, planta y equipo",
     subtotalLabel: "Total Propiedad, planta y equipo",
   },
-  // Contracuenta de PPE, e inmediatamente debajo de ella porque es donde se lee:
-  // el activo fijo NETO es la resta de las dos. Agregada el 01/09/2026 (Rose la
-  // señaló como faltante el 25/08).
-  //
-  // ⚠️ Es la ÚNICA línea que este bloque toca del Balance General, y no mueve
-  // ningún número: hoy no hay ninguna cuenta con esta subcategoría. Sin ella, la
-  // subcategoría se podría asignar en el Plan de Cuentas pero la cuenta caería en
-  // el grupo "sin clasificar" del Balance — o sea, el campo nuevo nacería roto.
-  {
-    subcategoria: "depreciacion_acumulada",
-    label: "Depreciación acumulada",
-    subtotalLabel: "Total Depreciación acumulada",
-  },
+  // E6 (01/10/2026): la depreciación acumulada ya no es un grupo propio. Es una
+  // cuenta de PPE con saldo acreedor y resta DENTRO de PPE: el subtotal de PPE
+  // ya es el activo fijo neto.
   {
     subcategoria: "activo_no_corriente",
     label: "Activo no corriente",
@@ -458,9 +448,15 @@ const PASIVO_GROUPS: GroupSpec[] = [
   },
 ];
 
-/** El patrimonio va plano: el modelo de Josuar no lo subdivide. */
+/** E6: el patrimonio se abre en los tres grupos que pidió Josuarth. */
 const PATRIMONIO_GROUPS: GroupSpec[] = [
-  { subcategoria: "patrimonio", label: null, subtotalLabel: null },
+  { subcategoria: "capital_social", label: "Capital social", subtotalLabel: "Total Capital social" },
+  {
+    subcategoria: "resultados_acumulados",
+    label: "Resultados acumulados",
+    subtotalLabel: "Total Resultados acumulados",
+  },
+  { subcategoria: "otras_reservas", label: "Otras reservas", subtotalLabel: "Total Otras reservas" },
 ];
 
 export interface BalanceGeneralOptions {
@@ -526,8 +522,8 @@ export function buildBalanceGeneral(
 
   const utilidadDelEjercicio = round2(options.utilidadDelEjercicio);
 
-  // Las cuentas de patrimonio van planas (el modelo de Josuar no las subdivide),
-  // más el renglón calculado del resultado del ejercicio.
+  // Las cuentas de patrimonio por sus tres grupos (E6), más el renglón
+  // calculado del resultado del ejercicio.
   const equityGroups = groupsBySubcategoria(equityAccounts, PATRIMONIO_GROUPS);
   const patrimonio: ReportSection = {
     label: "PATRIMONIO",

@@ -38,6 +38,7 @@ import {
   cuentaControlLabel,
   isSubcategoriaValidaParaTipo,
   requiereSubcategoria,
+  esTipoResultado,
   subcategoriaLabel,
   subcategoriasParaTipo,
   type AccountType,
@@ -536,9 +537,9 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 ))}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                {requiereSubcategoria(form.account_type)
+                {esTipoResultado(form.account_type)
                   ? "NIIF 18: clasifica la cuenta por actividad (operación, inversión o financiamiento)."
-                  : "Agrupa el Balance General (corriente, no corriente, propiedad planta y equipo)."}
+                  : "Agrupa el Balance General. La depreciación acumulada va en Propiedad, planta y equipo."}
               </p>
               {fieldErrors.subcategoria && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.subcategoria}</p>

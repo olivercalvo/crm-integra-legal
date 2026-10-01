@@ -39,7 +39,7 @@ export const TEMPLATE_HEADERS = [
  */
 const TEMPLATE_EXAMPLES: Array<[string, string, string, string, number]> = [
   ["100001", "Caja general", "Activo", SUBCATEGORIA_LABEL_ES.activo_corriente, 2500],
-  ["300001", "Capital pagado", "Patrimonio", SUBCATEGORIA_LABEL_ES.patrimonio, -15000],
+  ["300001", "Capital pagado", "Patrimonio", SUBCATEGORIA_LABEL_ES.capital_social, -15000],
   ["400001", "Derecho Corporativo", "Ingreso", SUBCATEGORIA_LABEL_ES.ingresos_operativos, 0],
   [
     "500001",

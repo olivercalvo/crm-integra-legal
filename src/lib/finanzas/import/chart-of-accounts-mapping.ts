@@ -21,6 +21,8 @@
 
 import {
   isSubcategoria,
+  isSubcategoriaValidaParaTipo,
+  subcategoriaPorDefecto,
   SUBCATEGORIA_LABEL_ES,
   SUBCATEGORIAS,
   type AccountType,
@@ -80,6 +82,9 @@ export function parseSubcategoria(raw: unknown): Subcategoria | null {
   // 1) ¿Es el value tal cual? ("gasto_operativo", "GASTO_OPERATIVO")
   const asValue = normalized.replace(/ /g, "_");
   if (isSubcategoria(asValue)) return asValue;
+
+  // 1b) E6: la depreciación acumulada dejó de ser subcategoría; va en PPE.
+  if (asValue === "depreciacion_acumulada") return "propiedad_planta_equipo";
 
   // 2) ¿Es el label en español? ("Gasto operativo", "Propiedad, planta y equipo")
   return SUBCATEGORIA_BY_LABEL[normalized] ?? null;
@@ -372,6 +377,12 @@ export interface ParsedImportRow {
   name: string;
   account_type: AccountType | null;
   subcategoria: Subcategoria | null;
+  /**
+   * E6: true si la subcategoría vino escrita en el archivo. Si es false, la de
+   * la fila es el VALOR POR DEFECTO (`subcategoriaPorDefecto`) y, en una cuenta
+   * que ya existe, no pisa la que la cuenta ya tiene.
+   */
+  subcategoriaExplicita?: boolean;
   saldo_inicial: number;
   /** Motivos por los que la fila no se puede importar. Vacío = OK. */
   errors: string[];
@@ -443,16 +454,28 @@ export function parseSheetRows(rows: unknown[][]): ParseSheetResult | null {
       errors.push(`Tipo de cuenta no reconocido: ${shown}. Use: ${ACCEPTED_TYPE_LABELS}`);
     }
 
-    // Subcategoría: la EXPLÍCITA del archivo gana sobre el default del tipo.
-    let subcategoria: Subcategoria | null = mapping?.subcategoriaDefault ?? null;
+    // Subcategoría: la EXPLÍCITA del archivo gana sobre el default. E6: desde
+    // la 079 es obligatoria también en balance, así que el default ya no es
+    // null en activo, pasivo y patrimonio (`subcategoriaPorDefecto`).
+    let subcategoria: Subcategoria | null = mapping
+      ? subcategoriaPorDefecto(mapping.account_type, code, name)
+      : null;
+    let subcategoriaExplicita = false;
     const subRaw = cellAt(row, header.columns.subcategoria);
     const subText = subRaw == null ? "" : String(subRaw).trim();
     if (subText !== "") {
       // Acepta el value snake_case ("gasto_operativo") o el label en español
       // ("Gasto operativo"), porque el usuario copia y pega de la plantilla.
-      const explicit = parseSubcategoria(subText);
-      if (explicit) {
+      // E6: «Patrimonio» era la única subcategoría del patrimonio hasta la 079.
+      // Una plantilla vieja la trae escrita: se toma como «sin elegir» y cae en
+      // el valor por defecto (capital, resultados u otras reservas).
+      const vieja = normalizeValueKey(subText) === "patrimonio";
+      const explicit = vieja ? null : parseSubcategoria(subText);
+      if (vieja) {
+        // queda el valor por defecto, sin marcarla explícita
+      } else if (explicit) {
         subcategoria = explicit;
+        subcategoriaExplicita = true;
       } else {
         errors.push(`Subcategoría no reconocida: "${subText}"`);
       }
@@ -468,6 +491,7 @@ export function parseSheetRows(rows: unknown[][]): ParseSheetResult | null {
       name,
       account_type: mapping?.account_type ?? null,
       subcategoria,
+      subcategoriaExplicita,
       saldo_inicial: saldoResult.ok ? saldoResult.value : 0,
       errors,
     });
@@ -503,6 +527,8 @@ export interface ExistingAccountInfo {
    */
   saldo_inicial_fecha: string | null;
   is_system: boolean;
+  /** E6: la subcategoría que ya tiene. Se conserva si el archivo no trae una. */
+  subcategoria?: string | null;
 }
 
 export interface ClassifiedRow extends ParsedImportRow {
@@ -551,8 +577,16 @@ export function classifyRows(
     const match = existing.get(row.code);
     if (match) {
       counts.update++;
+      // E6: sin subcategoría escrita en el archivo, la cuenta conserva la que ya
+      // tiene (si sirve para su tipo). El valor por defecto es para cuentas nuevas
+      // o sin clasificar: no pisa la clasificación que el contador corrigió a mano.
+      const conservar =
+        !row.subcategoriaExplicita &&
+        row.account_type !== null &&
+        isSubcategoriaValidaParaTipo(row.account_type, match.subcategoria);
       return {
         ...row,
+        subcategoria: conservar ? (match.subcategoria as Subcategoria) : row.subcategoria,
         errors,
         action: "update",
         existingId: match.id,

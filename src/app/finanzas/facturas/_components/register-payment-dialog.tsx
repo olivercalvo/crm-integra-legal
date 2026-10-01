@@ -6,11 +6,13 @@ import { CircleDollarSign, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { fmtImporte } from "@/lib/utils/importe";
+import { mensajeDeExcedente } from "@/lib/finanzas/cobros/repartir-por-antiguedad";
 import {
   PaymentFormFields,
   emptyPaymentFormValues,
   validatePaymentForm,
   toPaymentPayload,
+  excedenteDelCobro,
   type PaymentFormValues,
   type PaymentFormErrors,
 } from "@/components/finanzas/cobros/payment-form-fields";
@@ -145,6 +147,18 @@ export function RegisterPaymentDialog({
             bancos={bancos}
             disabled={isPending}
             amountInputRef={amountInputRef}
+            afterAmount={
+              // 074: la advertencia del excedente, en la misma pantalla y antes
+              // de guardar. No bloquea.
+              excedenteDelCobro(Number(values.amount), balanceDue) > 0 ? (
+                <p
+                  role="status"
+                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+                >
+                  {mensajeDeExcedente(excedenteDelCobro(Number(values.amount), balanceDue))}
+                </p>
+              ) : null
+            }
           />
 
           {submitError && (

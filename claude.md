@@ -192,10 +192,14 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   `POST /api/finanzas/invoices/[id]/payments`, una factura) y `/finanzas/cobros/nuevo`
   (`POST /api/finanzas/payments` con `applications[]`, una o varias) usan `payment-form-fields.tsx`.
   🔒 `payment-form-una-sola-implementacion.test.ts` falla si una puerta declara sus propios campos.
-- **Un recibo puede aplicarse a VARIAS facturas del mismo cliente** (Parte B, 21/09/2026). El total
-  tiene que ser IGUAL a la suma de lo aplicado: 🔴 **el excedente se RECHAZA** (no se guarda en
-  `amount_unapplied`) hasta que Josuarth defina si va a 100004 o a anticipos — la pregunta está en
-  `task_plan.md`. El asiento sigue siendo UNO de dos líneas por el total, con `reference` =
+- **Un recibo puede aplicarse a VARIAS facturas del mismo cliente** (Parte B, 21/09/2026). 🟢 **Desde
+  la `074` (Oliver, 01/10/2026) el EXCEDENTE se permite**: la pantalla lo avisa antes de guardar
+  (`mensajeDeExcedente`, el mismo texto en las dos puertas), queda en `amount_unapplied` como
+  **saldo a favor del cliente en 100004**, sale en NEGATIVO en la antigüedad (tramo corriente) y
+  se aplica a la próxima factura con «Aplicar saldo a favor» (RPC `apply_payment_credit`, SIN
+  asiento, admin y abogada). Lo aplicado nunca pasa el saldo de una factura. 🔴 **La referencia
+  del cobro es OBLIGATORIA** (validador, pantalla y trigger al crear; no un CHECK NOT VALID, que
+  rompería la reversión de un cobro viejo sin referencia). El asiento sigue siendo UNO de dos líneas por el total, con `reference` =
   `payment_number`; la reversión (046) devuelve todas las facturas. El reparto por antigüedad es de
   la pantalla (`lib/finanzas/cobros/repartir-por-antiguedad.ts`); el servidor valida, no reparte.
 - **`/finanzas/cobros` lo ven admin, abogada y contador; registran solo admin y abogada.** El
@@ -437,8 +441,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **La pantalla pide el PORCENTAJE y guarda la FRACCIÓN**, mostrando las dos a la vez. El
   CHECK es `rate BETWEEN 0 AND 1`: "7" donde va `0.07` daría 700%.
 - 🔴 **Una tasa NO se borra: se desactiva.** Cinco FK apuntan a `tax_codes`.
-- **Una tasa nueva aparece sola** en los tres selectores y su ITBMS va a `200003`: es una
-  constante del asiento (`CUENTA_ITBMS`), no un campo por tasa. Nada que configurar.
+- 🔴 **Cada tasa tiene SU cuenta** (`tax_codes.account_code`, migración `073`, Josuarth P-6a: la
+  misma para ventas y compras). Los asientos generan **una línea de impuesto por cuenta**
+  (`lineasDeImpuesto`, UNA implementación para factura, compra y sus NC). La cuenta: activa, de
+  pasivo o activo, no de control; **una vez usada la tasa no cambia** (trigger): se desactiva y
+  se crea otra. `200003` queda sólo para una línea con impuesto y sin tasa (lo de antes de la 045).
 - ⚠️ `services_catalog.default_tax_code` la referencia con un FK compuesto `ON UPDATE CASCADE`:
   editar un código lo renombra también allá. Detalle en `sop.md` SOP-037.
 

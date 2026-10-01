@@ -29,6 +29,14 @@ la base de producción, más el merge de `develop` a `main`:
 >   caso). La abogada o el contador asignan el proveedor a cada uno (crean la ficha si falta;
 >   siempre se exige) antes de registrarlos con «Registrar en el libro contable».
 >
+> 🔴 **La `073` (tasa con su cuenta) y la `074` (cobro con excedente), 01/10/2026.** Van después
+> de la `072`, en la ventana y con el código. La `073` hace `account_code` NOT NULL: el alta de
+> una tasa desde el código de `main` (sin cuenta) fallaría. La `074` exige la referencia al
+> crear un cobro: el formulario de `main` la deja vacía y fallaría. Antes de la `073`, en solo
+> lectura: el texto `x->>'account_code' = '200003'` aparece UNA vez en
+> `create_supplier_credit_note`. En producción `ISC_5` y cualquier otra tasa quedan en 200003
+> (backfill); si Josuarth quiere otra cuenta para alguna, se crea una tasa nueva.
+>
 > 🔴 **La `072` (hash v5 y verificador que recalcula), 01/10/2026.** Va inmediatamente
 > después de la `071` y en la misma ventana. No toca el libro: detecta la versión de cada
 > asiento viejo (en producción no hay ninguno) y parcha el motor. Aborta si el verificador

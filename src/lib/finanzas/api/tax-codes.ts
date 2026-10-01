@@ -15,7 +15,7 @@ import type {
 } from "@/lib/finanzas/types/tax-code";
 
 const ENTITY = "tax_codes";
-const SELECT_COLS = "id, code, name, rate, active";
+const SELECT_COLS = "id, code, name, rate, active, account_code";
 
 /** Catálogo completo del tenant, activos e inactivos, ordenado por código. */
 export async function listTaxCodes(
@@ -66,6 +66,7 @@ export async function createTaxCode(
       name: input.name,
       rate: input.rate,
       active: input.active,
+      account_code: input.account_code,
     })
     .select(SELECT_COLS)
     .single();
@@ -79,6 +80,11 @@ export async function createTaxCode(
         409,
         error
       );
+    }
+    // 073: la cuenta inexistente, inactiva o de control la rechaza el trigger
+    // con un mensaje ya redactado.
+    if (e?.code === "23514" && (error as { message?: string }).message) {
+      throw new MutationError((error as { message: string }).message, 409, error);
     }
     console.error("[finanzas] createTaxCode failed", error);
     throw new MutationError("No se pudo crear el impuesto", 400, error);
@@ -151,6 +157,9 @@ export async function updateTaxCode(
   if (input.active !== undefined && input.active !== previo.active) {
     changed.active = { old: previo.active, nuevo: input.active };
   }
+  if (input.account_code !== undefined && input.account_code !== previo.account_code) {
+    changed.account_code = { old: previo.account_code, nuevo: input.account_code };
+  }
 
   if (Object.keys(changed).length === 0) {
     return { ...previo, rate: Number(previo.rate) };
@@ -169,6 +178,11 @@ export async function updateTaxCode(
 
   if (error) {
     console.error("[finanzas] updateTaxCode failed", error);
+    // 073: los rechazos del trigger de la cuenta ya vienen redactados.
+    const e = error as { code?: string; message?: string };
+    if ((e.code === "23514" || e.code === "23001") && e.message) {
+      throw new MutationError(e.message, 409, error);
+    }
     throw new MutationError("No se pudo actualizar el impuesto", 400, error);
   }
 

@@ -28,6 +28,8 @@ export interface FilaLinea {
   subtotal: number | string | null;
   tax_amount: number | string | null;
   service_id: string | null;
+  /** 073: la tasa de la línea, para saber a qué cuenta va su impuesto. */
+  tax_code_id?: string | null;
 }
 
 function num(v: number | string | null): number {
@@ -63,7 +65,7 @@ export async function cargarFacturaParaAsiento(
 
   const { data: filas, error: errLin } = await db
     .from("invoice_lines")
-    .select("line_order, description, subtotal, tax_amount, service_id")
+    .select("line_order, description, subtotal, tax_amount, service_id, tax_code_id")
     .eq("tenant_id", tenantId)
     .eq("invoice_id", invoiceId)
     .order("line_order", { ascending: true });
@@ -143,14 +145,24 @@ export async function resolverLineasParaAsiento(
     for (const c of (cta ?? []) as { code: string }[]) activas.add(c.code);
   }
 
+  // ---- 073: la cuenta del impuesto de cada tasa ---------------------------
+  const tasas = await cuentasDeTasas(
+    db,
+    tenantId,
+    lineasCrudas.map((l) => l.tax_code_id ?? null)
+  );
+
   return lineasCrudas.map((l) => {
     const svc = l.service_id ? servicios.get(l.service_id) : undefined;
     const cuenta = svc?.revenue_account ?? null;
+    const tasa = l.tax_code_id ? tasas.get(l.tax_code_id) : undefined;
     return {
       line_order: l.line_order,
       description: l.description,
       subtotal: num(l.subtotal),
       tax_amount: num(l.tax_amount),
+      tax_account: tasa?.account_code ?? null,
+      tax_code: tasa?.code ?? null,
       service_code: svc?.code ?? null,
       service_name: svc?.name ?? null,
       revenue_account: cuenta,
@@ -158,4 +170,29 @@ export async function resolverLineasParaAsiento(
     };
   });
 
+}
+
+/**
+ * 073: `tax_code_id → { code, account_code }` de las tasas usadas. Compartido por
+ * los loaders de factura, NC de venta, compra y NC de compra: UN lugar que dice a
+ * qué cuenta va el impuesto de cada tasa.
+ */
+export async function cuentasDeTasas(
+  db: DB,
+  tenantId: string,
+  ids: readonly (string | null)[]
+): Promise<Map<string, { code: string; account_code: string }>> {
+  const unicos = Array.from(new Set(ids.filter((x): x is string => !!x)));
+  const mapa = new Map<string, { code: string; account_code: string }>();
+  if (unicos.length === 0) return mapa;
+  const { data, error } = await db
+    .from("tax_codes")
+    .select("id, code, account_code")
+    .eq("tenant_id", tenantId)
+    .in("id", unicos);
+  if (error) throw error;
+  for (const t of (data ?? []) as { id: string; code: string; account_code: string | null }[]) {
+    if (t.account_code) mapa.set(t.id, { code: t.code, account_code: t.account_code });
+  }
+  return mapa;
 }

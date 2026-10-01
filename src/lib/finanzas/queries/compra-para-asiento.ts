@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 import { esTipoValidoParaGasto } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import { cuentasDeTasas } from "@/lib/finanzas/queries/factura-para-asiento";
 import type {
   CompraParaAsiento,
   LineaCompraParaAsiento,
@@ -26,6 +27,7 @@ interface FilaLinea {
   amount: number | string | null;
   tax_amount: number | string | null;
   chart_account_code: string | null;
+  tax_code_id: string | null;
 }
 
 function num(v: number | string | null): number {
@@ -60,7 +62,7 @@ export async function cargarCompraParaAsiento(
 
   const { data: filas, error: errLin } = await db
     .from("expense_lines")
-    .select("line_order, description, amount, tax_amount, chart_account_code")
+    .select("line_order, description, amount, tax_amount, chart_account_code, tax_code_id")
     .eq("tenant_id", tenantId)
     .eq("business_expense_id", compraId)
     .order("line_order", { ascending: true });
@@ -90,11 +92,16 @@ export async function cargarCompraParaAsiento(
     }
   }
 
+  // 073: la cuenta del impuesto de la tasa de cada línea.
+  const tasas = await cuentasDeTasas(db, tenantId, crudas.map((l) => l.tax_code_id));
+
   const lineas: LineaCompraParaAsiento[] = crudas.map((l) => ({
     line_order: l.line_order,
     description: l.description,
     amount: num(l.amount),
     tax_amount: num(l.tax_amount),
+    tax_account: l.tax_code_id ? tasas.get(l.tax_code_id)?.account_code ?? null : null,
+    tax_code: l.tax_code_id ? tasas.get(l.tax_code_id)?.code ?? null : null,
     chart_account_code: l.chart_account_code,
     cuenta_valida: l.chart_account_code !== null && validas.has(l.chart_account_code),
   }));

@@ -3618,3 +3618,32 @@ correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir
    sin proveedor tampoco se registra hasta asignárselo.
 8. **La `071` hace incompatible a `develop` con staging** hasta mezclar la rama (task_plan.md).
 
+---
+
+## SOP-048: La cuenta de cada tasa y el saldo a favor del cliente (Bloque 1, 01/10/2026)
+
+### La tasa con su cuenta (`073`)
+
+1. **La cuenta del impuesto la dice la tasa** (`tax_codes.account_code`), no el constructor. Una
+   factura con dos tasas de cuentas distintas lleva dos líneas de impuesto.
+2. **Una implementación:** `contabilidad/impuesto-por-cuenta.ts` (`lineasDeImpuesto`). Los
+   loaders resuelven la cuenta con `cuentasDeTasas` (factura, NC de venta, compra, NC de compra).
+   🔒 `impuesto-por-cuenta.test.ts` falla si un constructor vuelve a escribir la cuenta en duro.
+3. **Una vez usada, la cuenta de una tasa no cambia** (trigger): una NC invierte la factura con
+   la cuenta de la tasa al día de la NC.
+4. La NC de compra verifica en la base contra las cuentas de las tasas de esa compra.
+
+### El cobro con excedente (`074`)
+
+1. **El excedente queda en `payments.amount_unapplied`** (T7b/T7c lo derivan desde siempre). El
+   asiento del cobro es por el TOTAL, así que ya está en 100004 con el cliente.
+2. **Antigüedad por cobrar:** cada saldo a favor de un cobro contabilizado resta en la fila del
+   cliente, en el tramo corriente. Sin eso el auxiliar no cuadraría con 100004.
+3. **Aplicar el saldo a favor** = `apply_payment_credit` (una transacción, bloquea cobro y
+   facturas, mismo cliente, no más que el saldo de cada factura ni que lo disponible). **No
+   postea**: el dinero ya está en 100004. Admin y abogada.
+4. **Reversar** un cobro con saldo aplicado después lo reversa ENTERO: la `046` borra todas sus
+   aplicaciones, también las agregadas con «Aplicar saldo a favor».
+5. **Referencia obligatoria** al crear (validador, pantalla, trigger). Un cobro viejo sin
+   referencia se sigue pudiendo reversar.
+

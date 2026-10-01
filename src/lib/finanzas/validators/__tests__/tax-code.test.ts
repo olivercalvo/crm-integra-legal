@@ -18,7 +18,8 @@ import {
 } from "@/lib/finanzas/validators/tax-code";
 import { parseTaxRatePercent, TAX_CODE_RE } from "@/lib/finanzas/types/tax-code";
 
-const VALIDO = { code: "ITBMS_10", name: "ITBMS 10%", rate: 0.1, active: true };
+// 073: la cuenta del impuesto es obligatoria en el alta.
+const VALIDO = { code: "ITBMS_10", name: "ITBMS 10%", rate: 0.1, active: true, account_code: "200003" };
 
 test("un alta válida pasa y normaliza el código a mayúsculas", () => {
   const r = validateCreateTaxCode({ ...VALIDO, code: "itbms_10" });
@@ -132,3 +133,13 @@ test("la edición sigue sin admitir el código: se elige una vez", () => {
     "cambiar el código dejaría documentos apuntando a uno que ya no existe"
   );
 });
+
+test("073: sin cuenta del impuesto el alta no pasa, y la cuenta llega al dato", () => {
+  const sin = validateCreateTaxCode({ code: "ITBMS_10", name: "ITBMS 10%", rate: 0.1, active: true });
+  assert.ok(!sin.ok);
+  if (!sin.ok) assert.match(sin.errors.account_code, /Elige la cuenta/);
+  const con = validateCreateTaxCode({ ...VALIDO, account_code: " 200005 " });
+  assert.ok(con.ok);
+  if (con.ok) assert.equal(con.data.account_code, "200005");
+});
+

@@ -40,11 +40,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  // La factura del path + el monto del body = la única aplicación.
+  // La factura del path = la única aplicación. 074: lo APLICADO es el menor
+  // entre el monto y el saldo de la factura; el resto queda como saldo a favor
+  // del cliente (amount_unapplied). El saldo se lee acá, con la sesión (RLS).
   const b = (body ?? {}) as Record<string, unknown>;
+  const { data: fac } = await ctx.db
+    .from("invoices")
+    .select("balance_due")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", params.id)
+    .maybeSingle();
+  const monto = Number(b.amount);
+  const saldo = fac ? Number((fac as { balance_due: number | string }).balance_due) : NaN;
+  const aplicado =
+    isFinite(monto) && isFinite(saldo) && saldo > 0 ? Math.min(monto, Math.round(saldo * 100) / 100) : monto;
   const payload = {
     ...b,
-    applications: [{ invoice_id: params.id, amount: Number(b.amount) }],
+    applications: [{ invoice_id: params.id, amount: aplicado }],
   };
 
   const validation = validateCreatePayment(payload);

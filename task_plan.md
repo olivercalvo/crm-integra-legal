@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 01/10/2026 (noche) — 072 APLICADA; 073 Y 074 ESCRITAS <<<
+
+- ✅ **`072` aplicada en staging**: 4 tramos (v1 1–11, v2 12–49, v3 50–98, v4 99–104).
+  `verificacion-072`: **8 ok, 0 fallas**. Triggers de la 023 intactos después del test.
+- 📋 **R-1b (ancla externa)** anotado en el plan §8 como requisito antes de producción. Sin construir.
+- ⏳ **`073` escrita, sin aplicar**: cada tasa con su cuenta (punto 6).
+- ⏳ **`074` escrita, sin aplicar**: cobro con excedente, saldo a favor y referencia obligatoria (punto 5).
+- ⏳ Hasta aplicar la 073, la pantalla de Impuestos y los asientos de la rama fallan contra staging
+  (leen `tax_codes.account_code`); hasta la 074, «Aplicar saldo a favor» responde con error.
+- 🛑 Esperan a Josuarth: plan de cuentas (P-8a) y NC como módulo (P-4a). No empezados.
+- ⚠️ El servidor de desarrollo se detuvo por límite de tiempo; se levanta de nuevo para el
+  recorrido de la 073/074.
+
 ## >>> 01/10/2026 (tarde) — RECORRIDO E3 CERRADO; 072 ESCRITA <<<
 
 - ✅ Con **abogada2**: gasto de trámite en CORP-001 (cerrado). Sin proveedor → «Elige el

@@ -82,7 +82,11 @@ export interface DocumentoPendiente {
   fechaReferencia: string;
   /** Días transcurridos. Negativo o 0 = todavía no vence. */
   diasVencido: number;
-  /** Lo que falta cobrar o pagar. Siempre positivo. */
+  /**
+   * Lo que falta cobrar o pagar. Positivo en un documento; NEGATIVO en un saldo
+   * a favor del cliente (074: lo que un cobro dejó sin aplicar), que resta en
+   * la fila de ese cliente.
+   */
   saldo: number;
   /** `source_type` del ledger, para armar el enlace al documento. */
   sourceType: string;

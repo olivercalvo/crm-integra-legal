@@ -12,8 +12,16 @@ import {
   type TaxCodeRow,
 } from "@/lib/finanzas/types/tax-code";
 
+/** 073: una cuenta que puede recibir el impuesto de una tasa. */
+export interface CuentaDeImpuestoOption {
+  code: string;
+  name: string;
+}
+
 interface Props {
   taxCodes: TaxCodeRow[];
+  /** 073: activas, de pasivo o activo y no de control. La base lo vuelve a exigir. */
+  cuentasDeImpuesto: CuentaDeImpuestoOption[];
   /**
    * Quién puede editar Y crear: admin y contador. La abogada entra a mirar.
    *
@@ -32,7 +40,11 @@ interface Props {
  * `parseTaxRatePercent`, y el validador del servidor rechaza cualquier cosa
  * mayor a 1 por si alguien manda el número crudo por API.
  */
-export function TaxCodesManager({ taxCodes, canEdit }: Props) {
+export function TaxCodesManager({ taxCodes, cuentasDeImpuesto, canEdit }: Props) {
+  const [nuevaCuenta, setNuevaCuenta] = useState("200003");
+  const [cuentaEdit, setCuentaEdit] = useState("");
+  const nombreDeCuenta = (code: string) =>
+    cuentasDeImpuesto.find((c) => c.code === code)?.name ?? "";
   const router = useRouter();
   const [editando, setEditando] = useState<string | null>(null);
   const [valorPct, setValorPct] = useState("");
@@ -58,6 +70,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
   const decimalNuevo = parseTaxRatePercent(nuevoPct);
 
   function empezar(t: TaxCodeRow) {
+    setCuentaEdit(t.account_code);
     setEditando(t.id);
     setValorPct(String(Number((Number(t.rate) * 100).toFixed(4))));
     setNombre(t.name);
@@ -74,6 +87,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
     setNuevoCodigo("");
     setNuevoNombre("");
     setNuevoPct("");
+    setNuevaCuenta(cuentasDeImpuesto.some((c) => c.code === "200003") ? "200003" : "");
     setErrorAlta(null);
   }
 
@@ -94,13 +108,14 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
           name: nuevoNombre.trim(),
           rate: decimalNuevo,
           active: true,
+          account_code: nuevaCuenta,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         const campos = data?.errors as Record<string, string> | undefined;
         setErrorAlta(
-          campos?.code ?? campos?.name ?? campos?.rate ?? data?.error ?? "No se pudo crear la tasa."
+          campos?.code ?? campos?.name ?? campos?.rate ?? campos?.account_code ?? data?.error ?? "No se pudo crear la tasa."
         );
         return;
       }
@@ -174,12 +189,17 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
       const res = await fetch(`/api/finanzas/configuracion/tax-codes/${t.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rate, name: nombre.trim() }),
+        body: JSON.stringify({
+          rate,
+          name: nombre.trim(),
+          // 073: sólo si cambió. La base la rechaza si la tasa ya se usó.
+          ...(cuentaEdit && cuentaEdit !== t.account_code ? { account_code: cuentaEdit } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(
-          data?.fieldErrors?.rate ?? data?.error ?? "No se pudo guardar el cambio."
+          data?.fieldErrors?.rate ?? data?.fieldErrors?.account_code ?? data?.error ?? "No se pudo guardar el cambio."
         );
         return;
       }
@@ -273,6 +293,29 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
                 )}
               </p>
             </div>
+
+            <div>
+              <label htmlFor="nueva-cuenta" className="mb-1 block text-xs font-medium text-gray-700">
+                Cuenta del impuesto
+              </label>
+              <select
+                id="nueva-cuenta"
+                value={nuevaCuenta}
+                onChange={(e) => setNuevaCuenta(e.target.value)}
+                disabled={guardando}
+                className="block w-full rounded-md border border-gray-300 bg-white px-2 py-2 text-sm"
+              >
+                <option value="">Elegir cuenta</option>
+                {cuentasDeImpuesto.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} · {c.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-500">
+                La misma en ventas y en compras. Después de usarla no se cambia.
+              </p>
+            </div>
           </div>
 
           {errorAlta && (
@@ -296,8 +339,8 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
 
           <p className="text-[11px] text-gray-500">
             La tasa nueva aparece sola en los selectores de facturas, compras y gastos de
-            trámite, y su ITBMS va a <span className="font-mono">200003</span> como las demás.
-            Una tasa no se borra: se desactiva.
+            trámite. Su impuesto va a la cuenta que elijas, en ventas y en compras. Una vez
+            usada, la cuenta no se cambia y la tasa no se borra: se desactiva y se crea otra.
           </p>
         </form>
       )}
@@ -309,6 +352,7 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
             <th className="px-4 py-2 text-left font-semibold text-gray-600">Código</th>
             <th className="px-4 py-2 text-left font-semibold text-gray-600">Nombre</th>
             <th className="px-4 py-2 text-right font-semibold text-gray-600">Tasa</th>
+            <th className="px-4 py-2 text-left font-semibold text-gray-600">Cuenta</th>
             <th className="px-4 py-2 text-center font-semibold text-gray-600">Estado</th>
             {canEdit && <th className="px-4 py-2 text-right font-semibold text-gray-600" />}
           </tr>
@@ -347,6 +391,27 @@ export function TaxCodesManager({ taxCodes, canEdit }: Props) {
                     </div>
                   ) : (
                     <span className="font-mono">{formatTaxRate(t.rate)}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {enEdicion ? (
+                    <select
+                      value={cuentaEdit}
+                      onChange={(e) => setCuentaEdit(e.target.value)}
+                      disabled={guardando}
+                      aria-label={`Cuenta del impuesto de ${t.code}`}
+                      className="max-w-[220px] rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                    >
+                      {cuentasDeImpuesto.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.code} · {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="font-mono text-gray-700" title={nombreDeCuenta(t.account_code)}>
+                      {t.account_code}
+                    </span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-center">

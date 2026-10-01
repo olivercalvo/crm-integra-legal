@@ -40,6 +40,7 @@ import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
 import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
+import { listarSaldosAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 import { CreditNotesSection } from "../_components/credit-notes-section";
 import { CreditNoteDialog, type LineaAcreditable } from "../_components/credit-note-dialog";
 import { AcreditadaTotalBadge } from "@/components/finanzas/acreditada-total-badge";
@@ -115,7 +116,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // Cargar pagos, NC, lo ya acreditado por línea y el período, en paralelo.
   // El período solo importa si esta persona puede anular (D4: cerrado el mes
   // de la factura, el botón "Anular" se reemplaza por "Nota de crédito").
-  const [payments, creditNotes, acreditadoPorLinea, mesCerrado] = await Promise.all([
+  const [payments, creditNotes, acreditadoPorLinea, mesCerrado, saldosAFavor] = await Promise.all([
     showPaymentsSection
       ? getPaymentsForInvoice(db, tenantId, invoice.id)
       : Promise.resolve([]),
@@ -126,6 +127,10 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     cancellable && canMutate
       ? periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)
       : Promise.resolve(false),
+    // 074: los cobros del cliente con saldo a favor, para aplicarlos acá.
+    showPaymentsSection && canMutate && invoice.client_id && Number(invoice.balance_due) > 0.005
+      ? listarSaldosAFavor(db, tenantId, String(invoice.client_id))
+      : Promise.resolve([]),
   ]);
 
   // 🔴 QUÉ SE PUEDE HACER CON ESTA FACTURA — lo decide la matriz, no el JSX.
@@ -546,6 +551,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               balanceDue={Number(invoice.balance_due)}
               canMutate={canMutate && !anulacionAMedias}
               canReverse={canReverse}
+              saldosAFavor={saldosAFavor}
             />
           )}
 

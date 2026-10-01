@@ -3,6 +3,7 @@ import { Percent, Info } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listTaxCodes } from "@/lib/finanzas/api/tax-codes";
+import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { TaxCodesManager } from "./_components/tax-codes-manager";
 
 // Ver: los tres roles de finanzas. Editar: admin y contador — mismo criterio
@@ -21,6 +22,17 @@ export default async function ImpuestosPage() {
   }
 
   const taxCodes = await listTaxCodes(ctx.db, ctx.tenantId);
+  // 073: las cuentas que pueden recibir el impuesto de una tasa. El MISMO
+  // criterio que el trigger de la 073 (activa, pasivo o activo, no de control);
+  // la base lo vuelve a exigir.
+  const cuentasDeImpuesto = (await listChartAccounts(ctx.db, ctx.tenantId))
+    .filter(
+      (c) =>
+        c.active &&
+        (c.account_type === "liability" || c.account_type === "asset") &&
+        !c.cuenta_control
+    )
+    .map((c) => ({ code: c.code, name: c.name }));
   const canEdit = ROLES_EDICION.includes(ctx.userRole);
 
   return (
@@ -51,7 +63,7 @@ export default async function ImpuestosPage() {
         </p>
       </div>
 
-      <TaxCodesManager taxCodes={taxCodes} canEdit={canEdit} />
+      <TaxCodesManager taxCodes={taxCodes} cuentasDeImpuesto={cuentasDeImpuesto} canEdit={canEdit} />
 
       {!canEdit && (
         <p className="text-xs text-gray-500">

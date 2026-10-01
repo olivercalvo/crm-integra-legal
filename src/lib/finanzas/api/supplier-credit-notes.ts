@@ -26,6 +26,7 @@ import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { esTipoValidoParaGasto } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
+import { cuentasDeTasas } from "@/lib/finanzas/queries/factura-para-asiento";
 
 type DB = SupabaseClient;
 
@@ -57,7 +58,7 @@ export async function cargarCompraParaNc(
 
   const { data: lns, error: errL } = await db
     .from("expense_lines")
-    .select("id, line_order, description, chart_account_code, amount, tax_rate, tax_amount")
+    .select("id, line_order, description, chart_account_code, amount, tax_rate, tax_amount, tax_code_id")
     .eq("tenant_id", tenantId)
     .eq("business_expense_id", compraId)
     .order("line_order", { ascending: true });
@@ -65,7 +66,10 @@ export async function cargarCompraParaNc(
   const lineas = (lns ?? []) as {
     id: string; line_order: number; description: string; chart_account_code: string | null;
     amount: number | string; tax_rate: number | string; tax_amount: number | string;
+    tax_code_id: string | null;
   }[];
+  // 073: la cuenta del impuesto de cada tasa (la NC acredita la MISMA que la compra debitó).
+  const tasas = await cuentasDeTasas(db, tenantId, lineas.map((l) => l.tax_code_id));
 
   // Lo acreditado por NC VIGENTES, por línea.
   const acreditado = new Map<string, { base: number; itbms: number }>();
@@ -119,6 +123,8 @@ export async function cargarCompraParaNc(
       amount: num(l.amount),
       tax_rate: num(l.tax_rate),
       tax_amount: num(l.tax_amount),
+      tax_account: l.tax_code_id ? tasas.get(l.tax_code_id)?.account_code ?? null : null,
+      tax_code: l.tax_code_id ? tasas.get(l.tax_code_id)?.code ?? null : null,
       acreditado_base: acreditado.get(l.id)?.base ?? 0,
       acreditado_itbms: acreditado.get(l.id)?.itbms ?? 0,
       cuenta_valida: l.chart_account_code !== null && validas.has(l.chart_account_code),

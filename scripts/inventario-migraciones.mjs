@@ -308,6 +308,16 @@ const MARCADORES = {
     tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
     nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
   },
+  "074_cobro_con_excedente.sql": {
+    que: "Cobro con excedente: referencia obligatoria al crear (trigger) y apply_payment_credit para aplicar el saldo a favor sin asiento",
+    tipo: "cuerpo_funcion", nombre: "apply_payment_credit", contiene: "saldo a favor",
+    nota: "Bloque 1, punto 5, 01/10. El excedente queda en amount_unapplied (T7b/T7c ya lo derivaban) y en 100004 con el cliente. La referencia es trigger BEFORE INSERT y no CHECK NOT VALID: el CHECK se evalua en cada UPDATE y reversar un cobro viejo sin referencia fallaria.",
+  },
+  "073_tasa_con_cuenta.sql": {
+    que: "Cada tasa de impuesto con su cuenta (tax_codes.account_code, backfill 200003), reglas de la cuenta y NC de compra verificada por cuenta de tasa",
+    tipo: "columna", tabla: "tax_codes", columna: "account_code",
+    nota: "Bloque 1, punto 6, 01/10. Josuarth P-6a: una cuenta por tasa, la misma para ventas y compras. Una vez usada la tasa su cuenta no cambia (trigger). Va con el codigo: el alta de una tasa sin cuenta falla.",
+  },
   "072_hash_v5_y_verificador.sql": {
     que: "Hash v5 (JSON canonico, sin separadores ambiguos), hash_version por asiento, tramos de versiones viejas y verify_accounting_chain que recalcula el contenido",
     tipo: "columna", tabla: "journal_entries", columna: "hash_version",

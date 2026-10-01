@@ -94,10 +94,10 @@ export function validateCreatePayment(
     errors.payment_date = "Fecha del pago inválida (esperado YYYY-MM-DD)";
   }
 
-  // amount > 0, y == la suma de lo aplicado. El excedente se RECHAZA (no hay
-  // dónde ponerlo hasta que el bufete defina anticipos) y el faltante también
-  // (un recibo que no coincide con la transferencia rompe la conciliación).
-  // El mensaje dice los dos montos y la salida (SOP-027).
+  // amount > 0 y ≥ la suma de lo aplicado. 074 (Oliver, 01/10/2026): el
+  // EXCEDENTE se permite y queda como saldo a favor del cliente en 100004
+  // (`amount_unapplied`, que ya derivan T7b/T7c). Lo que se sigue rechazando es
+  // aplicar MÁS de lo que entró: eso no lo concilia ningún banco.
   const amount = Number(raw?.amount);
   if (!isFinite(amount) || amount <= 0) {
     errors.amount = "El monto debe ser mayor a 0";
@@ -106,14 +106,10 @@ export function validateCreatePayment(
   } else if (!errors.applications && applications.length > 0) {
     const aplicado = round2(applications.reduce((acc, a) => acc + a.amount, 0));
     const diferencia = round2(amount - aplicado);
-    if (Math.abs(diferencia) > 0.005) {
+    if (diferencia < -0.005) {
       errors.amount =
-        diferencia > 0
-          ? `La transferencia es de ${fmt(amount)} y las facturas seleccionadas suman ${fmt(aplicado)}. ` +
-            `Un recibo tiene que coincidir con la transferencia para que el banco concilie. ` +
-            `Seleccione otra factura pendiente del mismo cliente por el resto (${fmt(diferencia)}) o ajuste el monto.`
-          : `El monto del recibo es ${fmt(amount)} pero lo aplicado a las facturas suma ${fmt(aplicado)}: ` +
-            `sobran ${fmt(-diferencia)} aplicados. Baje lo aplicado o suba el monto del recibo.`;
+        `El monto del recibo es ${fmt(amount)} pero lo aplicado a las facturas suma ${fmt(aplicado)}: ` +
+        `sobran ${fmt(-diferencia)} aplicados. Baje lo aplicado o suba el monto del recibo.`;
     }
   }
 
@@ -123,15 +119,17 @@ export function validateCreatePayment(
     errors.method = "Método de pago inválido";
   }
 
-  // reference (opcional, longitud)
+  // reference — OBLIGATORIA desde la 074 (Oliver, 01/10/2026): el número de
+  // transferencia, cheque o recibo es lo que concilia contra el banco. La base
+  // lo vuelve a exigir al crear el cobro.
   let reference: string | null = null;
-  if (raw?.reference != null && String(raw.reference).trim() !== "") {
-    const r = String(raw.reference).trim();
-    if (r.length > 200) {
-      errors.reference = "Referencia muy larga (máximo 200 caracteres)";
-    } else {
-      reference = r;
-    }
+  const r = raw?.reference == null ? "" : String(raw.reference).trim();
+  if (r === "") {
+    errors.reference = "La referencia es obligatoria: número de transferencia, cheque o recibo.";
+  } else if (r.length > 200) {
+    errors.reference = "Referencia muy larga (máximo 200 caracteres)";
+  } else {
+    reference = r;
   }
 
   // 🔴 payment_account_code — OBLIGATORIO. El banco lo elige quien registra,

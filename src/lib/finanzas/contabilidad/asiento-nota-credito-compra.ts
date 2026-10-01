@@ -36,6 +36,9 @@ export interface LineaDeCompraParaNc {
   amount: number;
   tax_rate: number;
   tax_amount: number;
+  /** 073: la cuenta del impuesto de la tasa de la línea de compra. */
+  tax_account?: string | null;
+  tax_code?: string | null;
   /** Base ya acreditada por NC vigentes (`status = 'emitida'`). */
   acreditado_base: number;
   /** ITBMS ya acreditado por NC vigentes. */
@@ -156,6 +159,8 @@ export function construirAsientoDeNotaDeCompra(
       description: x.linea.description,
       amount: x.amount,
       tax_amount: x.tax_amount,
+      tax_account: x.linea.tax_account ?? null,
+      tax_code: x.linea.tax_code ?? null,
       chart_account_code: x.linea.chart_account_code,
       cuenta_valida: x.linea.cuenta_valida,
     })),
@@ -174,8 +179,8 @@ export function construirAsientoDeNotaDeCompra(
     description:
       l.account_code === CUENTA_POR_PAGAR
         ? compra.supplier_name
-        : l.description === "ITBMS de compras (crédito fiscal)"
-          ? "ITBMS de compras acreditado por el proveedor"
+        : l.description?.startsWith("ITBMS de compras (crédito fiscal)")
+          ? l.description.replace("ITBMS de compras (crédito fiscal)", "ITBMS de compras acreditado por el proveedor")
           : l.description,
     // El tercero en la cuenta control, para que el Mayor de 200001 diga de
     // qué proveedor es sin adivinar por el texto.

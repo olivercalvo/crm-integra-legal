@@ -35,7 +35,7 @@ export async function cargarNotaDeCreditoParaAsiento(
 
   const { data: filas, error: errLin } = await db
     .from("credit_note_lines")
-    .select("line_order, description, subtotal, tax_amount, service_id")
+    .select("line_order, description, subtotal, tax_amount, service_id, tax_code_id")
     .eq("tenant_id", tenantId)
     .eq("credit_note_id", ncId)
     .order("line_order", { ascending: true });

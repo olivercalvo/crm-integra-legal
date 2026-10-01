@@ -206,6 +206,14 @@ Mapeo `source_type` → módulo: `factura`→FAC-ING, `gasto`→FAC-CO, `gasto_t
 
 ### Punto 5. Cobro con excedente y referencia obligatoria · **M** · riesgo **medio**
 
+> ✅ **Construido el 01/10/2026** (decisión de Oliver: con advertencia en la misma pantalla, saldo a
+> favor en 100004, negativo en la antigüedad y aplicable a la próxima factura). Migración **`074`**
+> escrita y **sin aplicar**. Dos ajustes respecto de este punto: la referencia obligatoria es un
+> **trigger al crear**, no un `CHECK NOT VALID` (ese CHECK se evalúa en cada UPDATE y reversar un
+> cobro viejo sin referencia fallaría), y aplicar el saldo va por un RPC (`apply_payment_credit`)
+> que bloquea el cobro y las facturas. P-5a (columna aparte en la antigüedad) queda con el valor
+> por defecto: tramo corriente.
+
 **Hoy**
 - `validators/payment.ts:97-122` exige `amount = Σ aplicaciones` y rechaza el excedente. La misma regla está en `repartir-por-antiguedad.ts:86-121`.
 - `payments.amount_unapplied` **ya existe**, con CHECK `0..amount`, y los triggers T7b/T7c lo mantienen (`b3e:571-650`). Hoy siempre queda en 0, salvo 3 cobros viejos de staging que ya lo tienen distinto de 0.
@@ -226,6 +234,11 @@ Mapeo `source_type` → módulo: `factura`→FAC-ING, `gasto`→FAC-CO, `gasto_t
 ---
 
 ### Punto 6. Cada tasa de impuesto con su cuenta · **M** · riesgo **medio**
+
+> ✅ **Construido el 01/10/2026** con P-6a (una cuenta por tasa, la misma en ventas y compras).
+> Migración **`073`** escrita y **sin aplicar**. La verificación de la NC de compra se generalizó
+> en la misma `073` (no espera al punto 4). Las cuentas candidatas excluyen las de control
+> (100004 / 200001), porque ahí toda línea lleva tercero.
 
 **Hoy**
 - `tax_codes` no tiene cuenta. `CUENTA_ITBMS = "200003"` está **definida dos veces**: en `asiento-factura.ts:76` (haber) y en `asiento-compra.ts:74` (debe, crédito fiscal).
@@ -652,6 +665,49 @@ ninguno sin versión. O sea que el recálculo es viable sin falsos positivos sob
   Integra») con el que comparar. El verificador es la alarma, no la reparación.
 - **Tamaño:** S en SQL (cuatro funciones de contenido + la v2 del verificador + la tabla de
   cortes), M si se suma la v5. Sin cambios de pantalla, salvo el botón si se quiere.
+
+### R-1b. 🔴 El ancla externa de la cadena (requisito antes de producción, 01/10/2026)
+
+**Pedido de Oliver (01/10/2026):** al cerrar cada mes, guardar el número y el hash del último
+asiento FUERA de la base, en el respaldo y en un registro que pueda ver el contador, para
+detectar una reescritura completa de la cadena. **Sólo anotado y propuesto: no está construido.**
+
+**Por qué hace falta.** La `072` detecta una fila alterada (el contenido no reproduce su
+hash) y un eslabón roto. Lo que NO puede detectar es a alguien con acceso total a la base que
+reescriba desde un asiento en adelante el contenido, el `content_hash`, el `hash` y todos los
+`prev_hash` siguientes: la cadena queda coherente consigo misma. El único remedio es comparar
+contra algo que esa persona no controle: un hash anotado antes, fuera de la base.
+
+**Propuesta**
+
+1. **Qué se ancla:** al cerrar un período (`/finanzas/periodos`, la acción que ya existe), el
+   **último asiento GRABADO en ese momento** (el `entry_number` más alto del bufete), no el
+   último con fecha de ese mes: la cadena se ordena por número, no por fecha de registro. Se
+   guarda `(bufete, período cerrado, entry_number, hash, fecha y hora, usuario)`.
+2. **Dónde, dentro de la base:** tabla `accounting_chain_anchors`, inmutable (los triggers de
+   la `023` por calco: sin UPDATE ni DELETE). Sola no sirve de ancla —vive en la misma base—
+   pero es la lista que se compara contra las copias de afuera.
+3. **Dónde, fuera de la base (lo que de verdad ancla), dos copias:**
+   - **El respaldo:** `scripts/backup-supabase.mjs` ya baja las tablas a JSON. Se le agrega
+     un archivo aparte `anclas-AAAA-MM-DD.json` con todas las anclas, que queda en OneDrive
+     con cada respaldo diario. Un respaldo viejo guarda las anclas como estaban ese día.
+   - **Un registro que ve el contador:** al cerrar el mes, la pantalla muestra el ancla
+     («Período 2026-10 cerrado. Último asiento: 214. Huella: 3f9a…c21e») y la agrega a un
+     **PDF de cierre de período** que se descarga y se le manda al contador (o se archiva en el
+     legajo). Recomendado: que el correo de cierre lo mande el sistema al contador con la
+     huella en el cuerpo, porque un correo enviado queda fuera del alcance de quien controla
+     la base.
+4. **Cómo se verifica:** `verify_accounting_chain` (o una función hermana
+   `verify_chain_anchors(tenant, anclas jsonb)`) recibe la lista de anclas de AFUERA (el JSON
+   del respaldo o lo que dicte el contador) y comprueba que el asiento N siga teniendo ese
+   hash. Si una reescritura cambió algo desde antes del ancla, el hash de N ya no coincide.
+5. **Lo que sigue sin cubrir:** lo grabado después del último ancla (como mucho, el mes en
+   curso), y un respaldo que también haya sido reemplazado. Por eso son dos copias en lugares
+   distintos.
+
+**Tamaño:** M. Una migración (tabla + función de verificación), el cierre de período que
+graba y muestra el ancla, el PDF o correo de cierre, y el agregado al respaldo (el script lo
+corre la tarea programada de Windows, fuera de Claude Code: el cambio lo prueba una persona).
 
 ### R-2. Develop queda incompatible con staging desde la `071`
 

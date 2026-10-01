@@ -70,6 +70,13 @@ export interface ResultadoReparto {
   diferencia: number;
   /** Mensaje para la pantalla, en lenguaje de contador (SOP-027). Null si cierra. */
   mensaje: string | null;
+  /**
+   * 074: el EXCEDENTE no bloquea. Es una advertencia que se muestra en la misma
+   * pantalla antes de guardar: el sobrante queda como saldo a favor del cliente.
+   */
+  advertencia: string | null;
+  /** 074: lo que queda a favor del cliente (0 si no hay excedente). */
+  excedente: number;
   /** Errores por factura (monto > saldo). */
   porFactura: Record<string, string>;
 }
@@ -107,18 +114,34 @@ export function validarReparto(
     mensaje = "Hay montos que superan el saldo de su factura.";
   } else if (aplicado <= 0) {
     mensaje = "Aplique el cobro a por lo menos una factura.";
-  } else if (diferencia > 0.005) {
-    mensaje =
-      `La transferencia es de ${fmt(total)} y las facturas seleccionadas suman ${fmt(aplicado)}. ` +
-      `Un recibo tiene que coincidir con la transferencia para que el banco concilie. ` +
-      `Seleccione otra factura pendiente del mismo cliente por el resto (${fmt(diferencia)}) o ajuste el monto.`;
   } else if (diferencia < -0.005) {
     mensaje =
       `El monto del recibo es ${fmt(total)} pero lo aplicado a las facturas suma ${fmt(aplicado)}: ` +
       `sobran ${fmt(-diferencia)} aplicados. Baje lo aplicado o suba el monto del recibo.`;
   }
 
-  return { ok: mensaje === null, aplicado, diferencia, mensaje, porFactura };
+  const excedente = mensaje === null && diferencia > 0.005 ? diferencia : 0;
+  return {
+    ok: mensaje === null,
+    aplicado,
+    diferencia,
+    mensaje,
+    advertencia: excedente > 0 ? mensajeDeExcedente(excedente) : null,
+    excedente,
+    porFactura,
+  };
+}
+
+/**
+ * 074: el texto de la advertencia, el MISMO en las dos puertas (el alta de
+ * cobros y el diálogo de la factura). `cliente` es opcional: el alta lo conoce.
+ */
+export function mensajeDeExcedente(excedente: number, cliente?: string | null): string {
+  const quien = cliente?.trim() ? ` de ${cliente.trim()}` : " del cliente";
+  return (
+    `El cobro supera lo aplicado en ${fmt(excedente)}. Queda como saldo a favor${quien} en ` +
+    `Cuentas por Cobrar (100004) y se puede aplicar a la próxima factura.`
+  );
 }
 
 /** Lo que va al servidor: sin las filas en 0. */

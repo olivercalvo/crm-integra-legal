@@ -60,6 +60,7 @@
  */
 
 import type { AsientoInput, LineaAsiento } from "@/lib/finanzas/contabilidad/posting";
+import { lineasDeImpuesto } from "@/lib/finanzas/contabilidad/impuesto-por-cuenta";
 
 /**
  * ITBMS, una sola cuenta para ventas y compras. Ver el encabezado.
@@ -71,7 +72,7 @@ import type { AsientoInput, LineaAsiento } from "@/lib/finanzas/contabilidad/pos
  * que la decisión se aplicó en los dos lados, no de que hay una constante que
  * alguien puede cambiar y mover los dos sin darse cuenta.
  */
-export const CUENTA_ITBMS = "200003";
+export const CUENTA_ITBMS = "200003"; // 073: sólo para líneas con impuesto y sin tasa.
 
 /** Cuenta control de proveedores. El crédito de toda compra va acá. */
 export const CUENTA_POR_PAGAR = "200001";
@@ -96,6 +97,10 @@ export interface LineaCompraParaAsiento {
   amount: number;
   /** ITBMS de la línea. Cero en las exentas. */
   tax_amount: number;
+  /** 073: la cuenta del impuesto de la tasa de la línea (`tax_codes.account_code`). */
+  tax_account?: string | null;
+  /** 073: el código de la tasa, para nombrar la línea si hay varias cuentas. */
+  tax_code?: string | null;
   chart_account_code: string | null;
   /**
    * ¿La cuenta existe, está activa, y es de un tipo que puede recibir un
@@ -222,7 +227,6 @@ export function construirAsientoDeCompra(
   // ---- 3) UNA LÍNEA DEL LIBRO POR CADA LÍNEA DE LA COMPRA (E2) -------------
   // Antes se agrupaba por cuenta. Josuarth (28/09, punto 3) pidió ver en el
   // Mayor la descripción de CADA línea del documento; agrupando se perdía.
-  const itbms = round2(c.lineas.reduce((s, l) => s + l.tax_amount, 0));
   const haber = round2(c.total);
 
   const lines: LineaAsiento[] = [];
@@ -236,14 +240,8 @@ export function construirAsientoDeCompra(
       description: l.description?.trim() || null,
     });
   }
-  if (itbms > 0) {
-    lines.push({
-      account_code: CUENTA_ITBMS,
-      debit: itbms,
-      credit: 0,
-      description: "ITBMS de compras (crédito fiscal)",
-    });
-  }
+  // 073: una línea de impuesto POR CUENTA (la de la tasa de cada línea).
+  lines.push(...lineasDeImpuesto(c.lineas, "debit", "ITBMS de compras (crédito fiscal)"));
   lines.push({
     account_code: CUENTA_POR_PAGAR,
     debit: 0,

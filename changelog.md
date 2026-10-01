@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: tasa con su cuenta y cobro con excedente] - 2026-10-01
+
+- `072` aplicada en staging (verificación 8/8).
+- ⚠️ `073` **escrita, sin aplicar**: `tax_codes.account_code` (backfill 200003), una línea de
+  impuesto por cuenta en factura, compra y sus NC, selector de cuenta en Impuestos.
+- ⚠️ `074` **escrita, sin aplicar**: cobro con excedente (advertencia en pantalla, saldo a favor en
+  100004, negativo en la antigüedad), «Aplicar saldo a favor» sin asiento y referencia
+  obligatoria.
+- Plan §8: R-1b, el ancla externa de la cadena (sólo propuesta).
+
 ## [Bloque 1, R-1: hash v5 y verificador que recalcula] - 2026-10-01
 
 - ⚠️ Migración `072` **escrita y SIN APLICAR**: contenido del hash en JSON canónico (v5),

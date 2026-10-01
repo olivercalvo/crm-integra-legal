@@ -222,6 +222,56 @@ async function facturasPendientes(db: DB, tenantId: string): Promise<DocumentoPe
 }
 
 /**
+ * 074: SALDOS A FAVOR de clientes (lo que un cobro dejó sin aplicar), en
+ * NEGATIVO. El asiento del cobro acreditó 100004 por el TOTAL, así que el
+ * excedente ya está en el mayor; si el auxiliar no lo restara, la antigüedad no
+ * cuadraría contra 100004. Sólo cobros CONTABILIZADOS: uno sin asiento no movió
+ * el mayor. Va en el tramo corriente (un saldo a favor no vence; P-5a de
+ * Josuarth puede pedir una columna aparte).
+ */
+async function saldosAFavor(db: DB, tenantId: string): Promise<DocumentoPendiente[]> {
+  const { data, error } = await db
+    .from("payments")
+    .select("id, payment_number, payment_date, amount_unapplied, client_id, clients!inner(id, name)")
+    .eq("tenant_id", tenantId)
+    .neq("status", "anulado")
+    .gt("amount_unapplied", 0.005);
+  if (error) {
+    console.error("[finanzas/antiguedad] saldosAFavor failed", error);
+    throw new Error("No se pudieron leer los saldos a favor");
+  }
+  type Fila = {
+    id: string;
+    payment_number: string | null;
+    payment_date: string;
+    amount_unapplied: number | string;
+    client_id: string;
+    clients: { id: string; name: string };
+  };
+  const filas = (data ?? []) as unknown as Fila[];
+  if (filas.length === 0) return [];
+  const { data: asientos } = await db
+    .from("journal_entries")
+    .select("source_id")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", "pago")
+    .in("source_id", filas.map((f) => f.id));
+  const enElLibro = new Set(((asientos ?? []) as { source_id: string }[]).map((a) => a.source_id));
+  return filas
+    .filter((f) => enElLibro.has(f.id))
+    .map((f) => ({
+      id: f.id,
+      numero: `${f.payment_number ?? "Cobro"} (saldo a favor)`,
+      tercero: f.clients.name,
+      terceroId: f.client_id,
+      fechaReferencia: String(f.payment_date).slice(0, 10),
+      diasVencido: 0,
+      saldo: -round2(Number(f.amount_unapplied)),
+      sourceType: "pago",
+    }));
+}
+
+/**
  * Gastos del bufete pendientes de pago.
  *
  * Agrupa por `supplier_id` —la ficha del proveedor— y cuenta la antigüedad desde
@@ -535,7 +585,8 @@ export async function loadAntiguedad(
 }> {
   const [documentos, controlCrudo, sinAsiento] = await Promise.all([
     tipo === "cobrar"
-      ? facturasPendientes(db, tenantId)
+      ? // 074: las facturas pendientes MÁS los saldos a favor, en negativo.
+        Promise.all([facturasPendientes(db, tenantId), saldosAFavor(db, tenantId)]).then(([a, b]) => [...a, ...b])
       : // Compras del bufete + gastos de trámite EN EL LIBRO (FND-010).
         Promise.all([gastosPendientes(db, tenantId), gastosTramitePendientes(db, tenantId)]).then(
           ([a, b]) => [...a, ...b]

@@ -28,6 +28,11 @@ export interface TaxCodeRow {
   /** DECIMAL [0, 1] con 4 decimales. 0.07 = 7%. */
   rate: number | string;
   active: boolean;
+  /**
+   * 073: la cuenta del impuesto de esta tasa, la misma para ventas y compras
+   * (Josuarth, P-6a). Una vez usada la tasa no cambia (lo impide la base).
+   */
+  account_code: string;
 }
 
 /** Lo que la pantalla de configuración puede cambiar. */
@@ -35,6 +40,8 @@ export interface UpdateTaxCodeInput {
   name?: string;
   rate?: number;
   active?: boolean;
+  /** 073: sólo mientras la tasa no se haya usado en un documento. */
+  account_code?: string;
 }
 
 /**
@@ -49,7 +56,12 @@ export interface CreateTaxCodeInput {
   name: string;
   rate: number;
   active: boolean;
+  /** 073: obligatoria. La base verifica que exista, esté activa y no sea cuenta control. */
+  account_code: string;
 }
+
+/** Forma de un código de cuenta del plan (los códigos son dígitos). */
+export const ACCOUNT_CODE_RE = /^[0-9A-Za-z._-]{1,20}$/;
 
 /**
  * Forma admitida de un código: mayúsculas, dígitos y guión bajo.

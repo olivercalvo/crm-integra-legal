@@ -9,6 +9,8 @@ import { RegisterPaymentDialog } from "./register-payment-dialog";
 import { DeletePaymentButton } from "./delete-payment-button";
 import { ReversePaymentDialog } from "./reverse-payment-dialog";
 import { fmtImporte } from "@/lib/utils/importe";
+import { ApplyCreditButton } from "./apply-credit-button";
+import type { SaldoAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 
 interface Props {
   invoiceId: string;
@@ -28,6 +30,8 @@ interface Props {
    * amplía la otra.
    */
   canReverse: boolean;
+  /** 074: cobros del mismo cliente con saldo sin aplicar (más viejos primero). */
+  saldosAFavor?: SaldoAFavor[];
 }
 
 /**
@@ -51,6 +55,7 @@ export function PaymentsSection({
   balanceDue,
   canMutate,
   canReverse,
+  saldosAFavor = [],
 }: Props) {
   const vigentes = payments.filter((p) => !p.reversion);
   const reversados = payments.length - vigentes.length;
@@ -90,6 +95,31 @@ export function PaymentsSection({
           />
         )}
       </div>
+
+      {/* 074: el saldo a favor del cliente, aplicable a esta factura. */}
+      {canMutate && balanceDue > 0.005 && saldosAFavor.length > 0 && (
+        <div className="mb-4 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-sm font-medium text-emerald-900">
+            El cliente tiene saldo a favor: B/.{" "}
+            {fmtImporte(saldosAFavor.reduce((s, x) => s + x.disponible, 0))}. Se aplica sin asiento:
+            el dinero ya está en Cuentas por Cobrar.
+          </p>
+          {saldosAFavor.map((s) => (
+            <div key={s.payment_id} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-emerald-800">
+                <span className="font-mono">{s.payment_number ?? "Cobro"}</span> del {formatDate(s.payment_date)}:
+                B/. {fmtImporte(s.disponible)} disponibles
+              </span>
+              <ApplyCreditButton
+                paymentId={s.payment_id}
+                paymentNumber={s.payment_number}
+                invoiceId={invoiceId}
+                monto={Math.min(s.disponible, Math.round(balanceDue * 100) / 100)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Resumen Total / Pagado / Saldo */}
       <div className="grid grid-cols-3 gap-3 mb-4">

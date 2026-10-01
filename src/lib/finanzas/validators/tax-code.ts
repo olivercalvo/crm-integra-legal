@@ -7,6 +7,7 @@
  * recién se vería en el total.
  */
 import {
+  ACCOUNT_CODE_RE,
   TAX_CODE_RE,
   TAX_RATE_DECIMALS,
   TAX_RATE_MAX,
@@ -60,11 +61,20 @@ export function validateCreateTaxCode(input: unknown): ValidationResult<CreateTa
     errors.active = "El estado activo debe ser verdadero o falso.";
   }
 
+  // 073: la cuenta del impuesto es obligatoria. Que exista, esté activa y no
+  // sea de clientes o proveedores lo verifica la base (trigger de la 073).
+  const accountCode = String(body.account_code ?? "").trim();
+  if (!accountCode) {
+    errors.account_code = "Elige la cuenta a la que va el impuesto de esta tasa.";
+  } else if (!ACCOUNT_CODE_RE.test(accountCode)) {
+    errors.account_code = "Código de cuenta inválido.";
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   return {
     ok: true,
-    data: { code, name, rate, active: body.active !== false },
+    data: { code, name, rate, active: body.active !== false, account_code: accountCode },
   };
 }
 
@@ -103,6 +113,15 @@ export function validateUpdateTaxCode(input: unknown): ValidationResult<UpdateTa
       errors.active = "El estado activo debe ser verdadero o falso.";
     } else {
       data.active = body.active;
+    }
+  }
+
+  if (body.account_code !== undefined) {
+    const c = String(body.account_code ?? "").trim();
+    if (!c || !ACCOUNT_CODE_RE.test(c)) {
+      errors.account_code = "Elige la cuenta a la que va el impuesto de esta tasa.";
+    } else {
+      data.account_code = c;
     }
   }
 

@@ -3527,3 +3527,34 @@ la base. Antes de aplicarla, correr los conteos del encabezado en modo solo lect
 
 `sql/tests/verificacion-068-069-fecha-de-registro.sql` (todo en ROLLBACK). Las verificaciones de
 la 046, 050, 055 y 060 se reescribieron: lo que se rechaza ahora es la fecha anterior al original.
+
+---
+
+## SOP-046: El tercero y la descripción en el asiento (Bloque 1, E2, 30/09/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09, punto 3) pidió que la columna Nombre del Mayor
+diga el cliente o proveedor de la transacción y la Descripción, la de cada línea del documento.
+Hasta E2 el nombre salía de un heurístico (el texto de la línea de control) y las líneas de
+ingreso y gasto se agrupaban por cuenta, sin descripción propia.
+
+### Lo nuevo se guarda; lo viejo se resuelve
+
+| | Asientos desde E2 | Asientos anteriores |
+|---|---|---|
+| Tercero | En la línea de 100004 / 200001 (`client_id` / `supplier_id`, 054) | Del documento de origen, al leer (`resolverTercerosFiscales`) |
+| Descripción | La de cada línea del documento | La que quedó grabada (inmutable) |
+
+El libro no se actualiza nunca. `resolverTercerosFiscales` cubre: factura, cobro (directo por
+`payments.client_id`, así un cobro reversado sigue teniendo cliente), NC de venta, compra, gasto
+de trámite, pago a proveedor (por lo que paga), NC de compra y reversiones (por el tipo del asiento
+que revierten). Pantalla y Excel usan el mismo resultado.
+
+### Reglas
+
+1. **Una línea del libro por cada línea del documento** en factura y compra. No se agrupa.
+2. **El espejo de una reversión conserva el tercero.** Si se agrega un reversor nuevo, su
+   payload al RPC tiene que llevar `client_id` / `supplier_id`.
+3. **"Fecha de registro" en pantalla es la contable.** El sello de grabación es "Grabado el".
+4. **Sin ficha de proveedor no hay tercero.** No se inventa a partir del nombre escrito; el Mayor
+   muestra ese nombre como respaldo, sin RUC.
+

@@ -47,6 +47,7 @@ function compra(p: Partial<CompraParaAsiento> = {}): CompraParaAsiento {
     description: "Insumos de septiembre",
     total: 107,
     supplier_name: "DISTRIBUIDORA OFIPLUS, S.A.",
+    supplier_id: "d2222222-2222-2222-2222-222222222222",
     lineas: [linea()],
     ...p,
   };
@@ -130,21 +131,41 @@ test("tres líneas contra UNA sola cuenta por pagar — el caso de la compra #3"
   assert.equal(creditos[0].credit, 1497.85);
 });
 
-test("dos líneas con la misma cuenta se agrupan", () => {
+test("E2: dos líneas con la misma cuenta van en DOS líneas del libro, cada una con su descripción", () => {
+  // Hasta E2 se agrupaban por cuenta. Josuarth (28/09, punto 3) pidió ver en el
+  // Mayor la descripción de cada línea del documento.
   const r = construirAsientoDeCompra(
     compra({
       total: 214,
       lineas: [
-        linea({ line_order: 1, amount: 100, tax_amount: 7 }),
-        linea({ line_order: 2, amount: 100, tax_amount: 7 }),
+        linea({ line_order: 1, amount: 100, tax_amount: 7, description: "Resmas de papel" }),
+        linea({ line_order: 2, amount: 100, tax_amount: 7, description: "Tóner" }),
       ],
     })
   );
   assert.equal(r.ok, true);
   if (!r.ok) return;
   const gasto = r.asiento.lines.filter((l) => l.account_code === "610008");
-  assert.equal(gasto.length, 1);
-  assert.equal(gasto[0].debit, 200);
+  assert.deepEqual(gasto.map((l) => [l.debit, l.description]), [[100, "Resmas de papel"], [100, "Tóner"]]);
+  // El total por cuenta no cambia.
+  assert.equal(gasto.reduce((s, l) => s + l.debit, 0), 200);
+});
+
+test("E2: el proveedor va en la línea de 200001, y sólo ahí", () => {
+  const r = construirAsientoDeCompra(compra());
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const control = r.asiento.lines.filter((l) => l.account_code === "200001");
+  assert.equal(control.length, 1);
+  assert.equal(control[0].supplier_id, "d2222222-2222-2222-2222-222222222222");
+  assert.ok(r.asiento.lines.filter((l) => l.account_code !== "200001").every((l) => !l.supplier_id && !l.client_id));
+});
+
+test("E2: una compra sin ficha de proveedor no inventa tercero", () => {
+  const r = construirAsientoDeCompra(compra({ supplier_id: null }));
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id ?? null, null);
 });
 
 // ---------------------------------------------------------------------------

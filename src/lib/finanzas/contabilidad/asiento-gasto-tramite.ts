@@ -80,6 +80,8 @@ export interface GastoParaAsiento {
   case_code: string | null;
   /** Razón social del proveedor, si tiene. */
   supplier_legal_name: string | null;
+  /** El proveedor (E2): va en la línea de 200001. Sin proveedor, `null`. */
+  supplier_id: string | null;
 }
 
 export type ResultadoAsiento =
@@ -171,6 +173,9 @@ export function construirAsientoDeGastoTramite(
     debit: 0,
     credit: total,
     description: gasto.supplier_legal_name ?? "Cuentas por pagar",
+    // E2: el proveedor en la cuenta control. Un gasto sin proveedor (SOP-033)
+    // queda sin tercero, como hasta hoy.
+    supplier_id: gasto.supplier_id,
   };
 
   const lineasAsiento = [...debitos, credito];

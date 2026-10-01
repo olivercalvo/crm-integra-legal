@@ -33,6 +33,7 @@ const NC: NotaDeCreditoParaAsiento = {
   grand_total: 414,
   invoice_number: "FAC-HON-000011",
   client_name: "Aurelio Barría Quintero",
+  client_id: "c1111111-1111-1111-1111-111111111111",
   lineas: [
     // 2 × 100 al 7% = 214 (ingreso 400004)
     { line_order: 1, description: "Honorarios", subtotal: 200, tax_amount: 14, service_code: "HON-CORP", revenue_account: "400004", cuenta_valida: true },
@@ -126,4 +127,13 @@ test("emitCreditNote postea con construirAsientoDeNotaDeCredito y compensa si el
   assert.match(fn, /compensarNotaDeCredito\(/);
   const comp = src.slice(src.indexOf("export async function compensarNotaDeCredito"), src.indexOf("export async function emitCreditNote"));
   assert.match(comp, /"finanzas_compensar_nota_de_credito"/, "la válvula y el DELETE van juntos, en la base");
+});
+
+test("E2: la NC lleva al cliente en la línea de 100004", () => {
+  const r = construirAsientoDeNotaDeCredito(NC);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const control = r.asiento.lines.find((l) => l.account_code === "100004");
+  assert.equal(control?.client_id, "c1111111-1111-1111-1111-111111111111");
+  assert.ok((control?.credit ?? 0) > 0, "la NC acredita 100004");
 });

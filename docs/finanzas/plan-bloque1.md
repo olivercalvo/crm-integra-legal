@@ -123,6 +123,12 @@ Mapeo `source_type` → módulo: `factura`→FAC-ING, `gasto`→FAC-CO, `gasto_t
 
 ### Punto 3. Libro Mayor: Nombre, Descripción y N.º de factura del proveedor · **M** · riesgo **bajo**
 
+> ✅ **E2 construida el 30/09/2026** en la rama. La migración del número de factura del proveedor
+> en el gasto de trámite tomó el número **070**; las del plan se corren uno: el motor v4 pasa a
+> **071**, tasa con cuenta a 072, excedente a 073, NC módulo a 074, plan de cuentas a 075,
+> apertura a 076 y cierre anual a 077. La tabla de §2 conserva los números originales como
+> referencia del diseño.
+
 **Hoy**
 - **Nombre** (`libro-mayor.ts:379-392`) sale en tres escalones: el tercero de la línea, después el de **cualquier** línea hermana (el comentario dice "de la cuenta control", pero el código no filtra por cuenta: bug menor), y por último la descripción de la línea de control, que es un heurístico de texto.
   - El Mayor no muestra al usuario que registró (`created_by` no se lee). Si Josuarth vio un usuario, lo vio en otra pantalla, o el heurístico cayó en la descripción del encabezado. Hay que confirmar la captura (P-3a).

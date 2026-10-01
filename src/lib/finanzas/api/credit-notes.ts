@@ -379,7 +379,7 @@ export async function getCreditNoteById(
     .from("credit_notes")
     .select(
       `
-        id, credit_note_number, invoice_id, client_id, issue_date, reason,
+        id, credit_note_number, invoice_id, client_id, issue_date, accounting_date, reason,
         observations, status, currency, subtotal_total, tax_total, grand_total,
         fe_estado, dgi_cufe, dgi_fecha_autorizacion,
         created_at, created_by,
@@ -609,6 +609,9 @@ export async function reverseCreditNote(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

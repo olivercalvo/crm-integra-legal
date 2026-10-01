@@ -212,9 +212,17 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
         <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-              <Calendar size={13} /> Fecha del gasto
+              <Calendar size={13} /> Fecha del documento
             </dt>
             <dd className="mt-1 text-sm text-gray-900">{formatDate(gasto.date)}</dd>
+          </div>
+
+          <div>
+            {/* La de REGISTRO (068): la del asiento, define el mes. */}
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              <Calendar size={13} /> Fecha de registro
+            </dt>
+            <dd className="mt-1 text-sm text-gray-900">{formatDate(gasto.accounting_date)}</dd>
           </div>
 
           <div>
@@ -247,6 +255,18 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
             <dd className="mt-1 text-sm text-gray-900">
               {gasto.supplier_legal_name ?? (
                 <span className="text-gray-400">Sin proveedor</span>
+              )}
+            </dd>
+          </div>
+
+          <div>
+            {/* 070 (E2): el número de la factura del proveedor, como en las compras. */}
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              <Hash size={13} /> Factura del proveedor
+            </dt>
+            <dd className="mt-1 font-mono text-sm text-gray-900">
+              {gasto.supplier_invoice_number ?? (
+                <span className="font-sans text-gray-400">Sin número</span>
               )}
             </dd>
           </div>

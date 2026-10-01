@@ -105,6 +105,8 @@ export interface CobroParaAsiento {
   payment_date: string;
   amount: number;
   client_name: string | null;
+  /** El cliente del cobro (E2): va en la línea de 100004. */
+  client_id: string | null;
   /** Los números de las facturas a las que se aplicó. Para la descripción. */
   facturas: string[];
   /** `payments.payment_account_code`. `null` en los cobros anteriores a la `041`. */
@@ -184,7 +186,14 @@ export function construirAsientoDeCobro(
       credit: 0,
       description: `Cobro ${facturas}`,
     },
-    { account_code: CUENTA_POR_COBRAR, debit: 0, credit: monto, description: c.client_name },
+    // E2: el cliente en la cuenta control, como dato y no como texto.
+    {
+      account_code: CUENTA_POR_COBRAR,
+      debit: 0,
+      credit: monto,
+      description: c.client_name,
+      client_id: c.client_id,
+    },
   ];
 
   return {
@@ -225,6 +234,8 @@ export interface PagoProveedorParaAsiento {
   documento_id: string;
   documento_description: string;
   supplier_name: string | null;
+  /** El proveedor del documento que se paga (E2): va en la línea de 200001. */
+  supplier_id: string | null;
   supplier_invoice_number: string | null;
   payment_date: string;
   /** Lo pagado EN ESTE pago, no el total de la compra (pago parcial, Josuarth 21/09). */
@@ -296,6 +307,7 @@ export function construirAsientoDePagoProveedor(
       debit: monto,
       credit: 0,
       description: p.supplier_name,
+      supplier_id: p.supplier_id,
     },
     {
       account_code: p.payment_account_code,

@@ -114,6 +114,8 @@ export interface CompraParaAsiento {
   /** `business_expenses.total` — la base más el impuesto. */
   total: number;
   supplier_name: string | null;
+  /** El proveedor (E2): va en la línea de 200001. `null` en una compra sin ficha. */
+  supplier_id: string | null;
   lineas: LineaCompraParaAsiento[];
 }
 
@@ -200,23 +202,22 @@ export function construirAsientoDeCompra(
     };
   }
 
-  // ---- 3) Agrupar los débitos POR CUENTA -----------------------------------
-  // Dos líneas pueden apuntar a la misma cuenta. Una línea de asiento por
-  // cuenta: el mayor de esa cuenta se lee mejor y el asiento no crece con el
-  // detalle de la compra.
-  const porCuenta = new Map<string, number>();
-  for (const l of c.lineas) {
-    const cuenta = l.chart_account_code as string;
-    porCuenta.set(cuenta, round2((porCuenta.get(cuenta) ?? 0) + l.amount));
-  }
-
+  // ---- 3) UNA LÍNEA DEL LIBRO POR CADA LÍNEA DE LA COMPRA (E2) -------------
+  // Antes se agrupaba por cuenta. Josuarth (28/09, punto 3) pidió ver en el
+  // Mayor la descripción de CADA línea del documento; agrupando se perdía.
   const itbms = round2(c.lineas.reduce((s, l) => s + l.tax_amount, 0));
   const haber = round2(c.total);
 
   const lines: LineaAsiento[] = [];
-  for (const [cuenta, monto] of Array.from(porCuenta.entries()).sort()) {
+  for (const l of [...c.lineas].sort((a, b) => a.line_order - b.line_order)) {
+    const monto = round2(l.amount);
     if (monto === 0) continue;
-    lines.push({ account_code: cuenta, debit: monto, credit: 0, description: null });
+    lines.push({
+      account_code: l.chart_account_code as string,
+      debit: monto,
+      credit: 0,
+      description: l.description?.trim() || null,
+    });
   }
   if (itbms > 0) {
     lines.push({
@@ -231,6 +232,8 @@ export function construirAsientoDeCompra(
     debit: 0,
     credit: haber,
     description: c.supplier_name,
+    // E2: el proveedor en la cuenta control, como dato y no como texto.
+    supplier_id: c.supplier_id,
   });
 
   // ---- 4) Red contra un error de redondeo DE ESTE ARCHIVO ------------------

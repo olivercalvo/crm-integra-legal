@@ -446,10 +446,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                  <Calendar size={12} /> Emisión
+                  <Calendar size={12} /> Fecha del documento
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">
                   {formatDate(invoice.issue_date)}
+                </dd>
+              </div>
+              <div>
+                {/* La de REGISTRO (068): define el mes del asiento y del resumen de ITBMS. */}
+                <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                  <Calendar size={12} /> Fecha de registro
+                </dt>
+                <dd className="mt-1 font-medium text-gray-900">
+                  {formatDate(registroDeLaFactura)}
                 </dd>
               </div>
               <div>

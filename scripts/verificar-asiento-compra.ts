@@ -112,6 +112,7 @@ async function cargar(compraId: string): Promise<CompraParaAsiento> {
   return {
     id: be.id,
     expense_date: new Date(be.expense_date).toISOString().slice(0, 10),
+    supplier_id: be.supplier_id ?? null,
     // Script de verificación: arma el asiento como antes de la `068` (registro = documento).
     accounting_date: new Date(be.expense_date).toISOString().slice(0, 10),
     description: be.description,

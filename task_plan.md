@@ -1,5 +1,17 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 30/09/2026 — BLOQUE 1, E2 (TERCERO Y DESCRIPCIÓN) EN LA RAMA <<<
+
+- ✅ Código y tests de E2 (plan §3). Commits locales, sin push.
+- ⏳ **Migración `070` sin aplicar** (`expenses.supplier_invoice_number`). Hasta que se aplique,
+  el alta de gasto de trámite y el detalle del gasto fallan en la rama (leen la columna).
+- ✅ Recorrido parcial (admin): pantallas con las dos fechas; FAC-HON-000026 con dos líneas de
+  400001 y su descripción, cliente en 100004 (asiento 95); REC-000010 con cliente en 100004
+  (asiento 96); el Mayor de 400001 nombra el asiento viejo 80 desde su documento.
+- ⏳ Prueba con contador: Mayor del banco y reversión de REC-000010 (espejo con cliente).
+- ⏳ Después de la `070`: gasto de trámite con número de factura del proveedor y proveedor en
+  200001.
+
 ## >>> 30/09/2026 — BLOQUE 1, E1 (FECHAS) EN LA RAMA `feat/bloque1-contable` <<<
 
 - ✅ Código y tests de E1 (plan §1). Commits locales, sin push.

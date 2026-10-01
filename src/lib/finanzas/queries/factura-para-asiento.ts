@@ -52,7 +52,7 @@ export async function cargarFacturaParaAsiento(
   const { data: inv, error: errInv } = await db
     .from("invoices")
     .select(
-      "id, issue_date, accounting_date, grand_total, client:clients!invoices_client_id_fkey(name)"
+      "id, issue_date, accounting_date, grand_total, client_id, client:clients!invoices_client_id_fkey(name)"
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -82,6 +82,7 @@ export async function cargarFacturaParaAsiento(
       (inv as { accounting_date?: string | null }).accounting_date ??
       (inv as { issue_date: string }).issue_date,
     grand_total: num((inv as { grand_total: number | string }).grand_total),
+    client_id: (inv as { client_id?: string | null }).client_id ?? null,
     client_name: nombre ?? "—",
     lineas,
   };

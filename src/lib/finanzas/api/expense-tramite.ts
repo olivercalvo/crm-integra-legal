@@ -76,7 +76,7 @@ export async function postearGastoTramite(
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
     .select(
-      `id, date, accounting_date, concept, posted_entry_id,
+      `id, date, accounting_date, concept, posted_entry_id, supplier_id,
        cases(case_code),
        suppliers(legal_name)`
     )
@@ -138,6 +138,7 @@ export async function postearGastoTramite(
       concept: String(gasto.concept ?? ""),
       case_code: caso?.case_code ?? null,
       supplier_legal_name: prov?.legal_name ?? null,
+      supplier_id: (gasto as { supplier_id?: string | null }).supplier_id ?? null,
     },
     lineas
   );
@@ -279,6 +280,9 @@ export async function reverseExpenseTramite(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

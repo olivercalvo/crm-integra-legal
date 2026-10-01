@@ -1,5 +1,31 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, E2: tercero y descripción en el asiento] - 2026-09-30
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §3.
+⚠️ Migración `070` **escrita y SIN APLICAR**.
+
+### Pantallas (vocabulario de Josuarth)
+- Detalle del asiento: "Fecha de registro" = la contable; "Grabado el" = el sello de grabación.
+  El formulario del asiento manual, igual.
+- Detalle de factura, de NC y de gasto de trámite: "Fecha del documento" y "Fecha de registro".
+
+### El libro
+- Factura, NC de venta, cobro, compra, gasto de trámite y pago a proveedor guardan el cliente o
+  proveedor en la línea de 100004 / 200001. La reversión conserva el tercero en el espejo.
+- Factura y compra: una línea del libro por línea del documento, con su descripción (ya no se
+  agrupa por cuenta).
+- Mayor (pantalla y Excel): el nombre de los asientos viejos sale de su documento de origen;
+  `resolverTercerosFiscales` cubre ahora gasto de trámite, pago a proveedor, NC de compra y
+  reversiones. Corregido: el tercer escalón tomaba el tercero de cualquier línea.
+- Gasto de trámite: número de factura del proveedor (`070`), en el formulario del caso, las rutas
+  y el detalle.
+
+### Pruebas
+- `npm test`: 1489/1489. Nuevas: tercero en la cuenta control por constructor, una línea por
+  línea del documento, espejo con tercero, orden de escalones del Mayor, resolución por documento
+  con base simulada, vocabulario de fechas en pantalla.
+
 ## [Bloque 1, E1: fecha de documento y fecha de registro] - 2026-09-30
 
 Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1. Respuestas de

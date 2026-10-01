@@ -39,7 +39,7 @@ export async function PATCH(
     // Fetch existing expense
     const { data: existing } = await admin
       .from("expenses")
-      .select("id, amount, concept, date, accounting_date, expense_type, tenant_id, receipt_url, receipt_filename")
+      .select("id, amount, concept, date, accounting_date, supplier_invoice_number, expense_type, tenant_id, receipt_url, receipt_filename")
       .eq("id", expenseId)
       .eq("tenant_id", profile.tenant_id)
       .single();
@@ -49,7 +49,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { amount, concept, date, accounting_date, receipt_url, receipt_filename } = body;
+    const { amount, concept, date, accounting_date, receipt_url, receipt_filename, supplier_invoice_number } = body;
 
     const updates: Record<string, unknown> = {};
     const auditEntries: { field: string; old_value: string | null; new_value: string | null }[] = [];
@@ -80,6 +80,24 @@ export async function PATCH(
     if (accounting_date !== undefined && accounting_date !== existing.accounting_date) {
       updates.accounting_date = accounting_date;
       auditEntries.push({ field: "accounting_date", old_value: existing.accounting_date, new_value: accounting_date });
+    }
+
+    // 070 (E2): el número de la factura del proveedor se puede cargar o corregir
+    // también en un gasto ya registrado: no entra al asiento (ver la 070).
+    if (supplier_invoice_number !== undefined) {
+      const n = typeof supplier_invoice_number === "string" && supplier_invoice_number.trim() !== ""
+        ? supplier_invoice_number.trim()
+        : null;
+      if (n && n.length > 50) {
+        return NextResponse.json(
+          { error: "El número de factura del proveedor no puede pasar de 50 caracteres." },
+          { status: 400 }
+        );
+      }
+      if (n !== (existing.supplier_invoice_number ?? null)) {
+        updates.supplier_invoice_number = n;
+        auditEntries.push({ field: "supplier_invoice_number", old_value: existing.supplier_invoice_number, new_value: n });
+      }
     }
 
     if (receipt_url !== undefined && receipt_url !== existing.receipt_url) {

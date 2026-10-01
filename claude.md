@@ -305,8 +305,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   con fecha en `sop.md` SOP-014) y **viaja dentro de `p_lines`**: la firma de
   `post_journal_entry` sigue teniendo 13 parámetros y ningún llamador se tocó.
 - **Se puede poner en cualquier línea**, no solo en cuentas de control.
-- **El Mayor resuelve el nombre en tres escalones**: tercero de la línea → tercero de la línea de
-  cuenta control → el heurístico de texto viejo, que sostiene TODO lo anterior a la `054`.
+- **El Mayor resuelve el nombre en cuatro escalones** (E2, 30/09/2026): tercero de la línea →
+  **tercero del documento de origen** (`resolverTercerosFiscales`, la MISMA función del Excel) →
+  tercero de la línea de cuenta control, o el único del asiento → el heurístico de texto viejo.
+  El segundo escalón es el que nombra los asientos anteriores a E2 sin tocarlos.
 - **Los asientos manuales NO alimentan la antigüedad** (no tienen vencimiento) pero **sí la
   explican**: la línea de "de dónde sale esa diferencia" los nombra con monto y tercero. Antes
   caían en el residuo anónimo de "hay una tercera causa".
@@ -321,6 +323,25 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   📋 Pre-flight obligatorio antes de producción (está al pie de la `055`).
 - **`MAX_LINEAS_MANUALES = 100` es tope del FORMULARIO, no del libro.** El RPC no tiene tope y el
   importador de Excel no pasa por ahí. No unificarlos.
+
+### Tercero y descripción en cada asiento nuevo (desde 2026-09-30, Bloque 1 E2 — SOLO staging)
+- 🔴 **Todo asiento de documento guarda el tercero en la línea de 100004 / 200001**: factura y
+  NC de venta (cliente), cobro (cliente), compra, gasto de trámite y pago a proveedor
+  (proveedor). La NC de compra ya lo hacía. Un gasto o compra sin ficha de proveedor queda sin
+  tercero: no se inventa (SOP-033).
+- 🔴 **La reversión CONSERVA el tercero** de cada línea: el espejo de un cobro devuelve el saldo
+  a ese cliente. Hasta E2 el espejo quedaba anónimo. Los cargadores del original leen
+  `client_id` / `supplier_id` y cada reversor los manda al RPC.
+- **Factura y compra: una línea del libro por cada línea del documento**, con su descripción
+  (Josuarth, punto 3). Ya NO se agrupa por cuenta; el total por cuenta no cambia. El gasto de
+  trámite ya era así.
+- **Los asientos viejos NO se tocan**: el Mayor les pone nombre desde su documento.
+- **`expenses.supplier_invoice_number`** (`070`): mismas reglas que la `044` de compras. NO se
+  congela al postear porque no entra al asiento; cuando E3 lo lleve a `referencia_externa`,
+  E3 lo congela.
+- **Vocabulario en pantalla**: "Fecha de registro" = la contable; el sello `record_date` es
+  "Grabado el". Factura, NC, gasto de trámite y asiento muestran las dos fechas. 🔒
+  `vocabulario-de-fechas.test.ts`.
 
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`

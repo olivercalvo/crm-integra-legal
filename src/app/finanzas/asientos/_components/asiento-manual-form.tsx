@@ -213,14 +213,15 @@ export function AsientoManualForm({
 
         <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-xs text-emerald-700">Fecha de la operación</dt>
+            <dt className="text-xs text-emerald-700">Fecha de registro</dt>
             <dd className="font-medium text-emerald-900">{ok.transaction_date}</dd>
           </div>
           <div>
             {/* Las DOS fechas del Art. 13a. Se muestran juntas a propósito: es lo
-                que le demuestra al contador que el sistema las guarda separadas y
-                que la de registro no se puede retocar. */}
-            <dt className="text-xs text-emerald-700">Fecha de registro</dt>
+                que le demuestra al contador que el sistema las guarda separadas.
+                Desde E2 se rotulan con el vocabulario de Josuarth: la de registro
+                es la contable (arriba); ésta es el día en que se grabó. */}
+            <dt className="text-xs text-emerald-700">Grabado el</dt>
             <dd className="font-medium text-emerald-900">{ok.record_date ?? "—"}</dd>
           </div>
           <div>
@@ -278,7 +279,7 @@ export function AsientoManualForm({
       {/* ── Encabezado ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <Label htmlFor="fecha" className="mb-1 block">Fecha de la operación *</Label>
+          <Label htmlFor="fecha" className="mb-1 block">Fecha de registro *</Label>
           <Input
             id="fecha"
             type="date"

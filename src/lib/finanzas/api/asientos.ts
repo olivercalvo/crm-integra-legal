@@ -84,6 +84,9 @@ export async function reverseJournalEntry(
         debit: l.debit,
         credit: l.credit,
         description: l.descripcion,
+        // E2: el espejo conserva el tercero de cada línea.
+        client_id: l.client_id,
+        supplier_id: l.supplier_id,
       })),
     },
     // `source_id` null: el vínculo con el original es `reverses_entry_id`, y
@@ -105,6 +108,9 @@ export async function reverseJournalEntry(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

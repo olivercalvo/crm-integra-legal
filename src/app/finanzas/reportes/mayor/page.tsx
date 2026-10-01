@@ -10,6 +10,11 @@ import {
   loadDestinosDeOrigen,
 } from "@/lib/finanzas/reports/libro-mayor-source";
 import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
+import {
+  nombresPorAsiento,
+  origenesDeMovimientos,
+  resolverTercerosFiscales,
+} from "@/lib/finanzas/reports/tercero-fiscal";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { StatementHeader } from "../_components/financial-statement";
 import { BotonExportar } from "../_components/boton-exportar";
@@ -56,8 +61,18 @@ export default async function LibroMayorPage({
       loadMovimientosDeCuenta(ctx.db, ctx.tenantId, code, { desde, hasta }),
       loadCuentasControl(ctx.db, ctx.tenantId),
     ]);
-    mayor = buildMayorDeCuenta(cuenta, movimientos, { controlPorCodigo: control });
-    destinos = await loadDestinosDeOrigen(ctx.db, ctx.tenantId, movimientos);
+    // E2: el nombre del tercero sale del DOCUMENTO DE ORIGEN, con la misma
+    // resolución que el Excel. Así los asientos anteriores a E2 tienen nombre
+    // sin tocarlos, y todas las líneas del asiento dicen de quién es.
+    const [terceros, destinosDeOrigen] = await Promise.all([
+      resolverTercerosFiscales(ctx.db, ctx.tenantId, origenesDeMovimientos(movimientos)),
+      loadDestinosDeOrigen(ctx.db, ctx.tenantId, movimientos),
+    ]);
+    mayor = buildMayorDeCuenta(cuenta, movimientos, {
+      controlPorCodigo: control,
+      nombrePorAsiento: nombresPorAsiento(terceros),
+    });
+    destinos = destinosDeOrigen;
   }
 
   return (

@@ -143,6 +143,7 @@ async function cargar(invoiceNumber: string): Promise<FacturaParaAsiento> {
     accounting_date: new Date(inv.issue_date).toISOString().slice(0, 10),
     grand_total: Number(inv.grand_total),
     client_name: inv.client_name,
+    client_id: inv.client_id ?? null,
     lineas,
   };
 }

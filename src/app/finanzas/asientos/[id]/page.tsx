@@ -88,7 +88,7 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               )}
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Registrado el {formatDateTime(asiento.created_at)}
+              Grabado el {formatDateTime(asiento.created_at)}
             </p>
           </div>
         </div>
@@ -185,14 +185,17 @@ export default async function AsientoDetallePage({ params }: PageProps) {
                 <dd className="mt-1 font-medium text-gray-900">{asiento.description}</dd>
               </div>
               <div>
+                {/* Vocabulario de Josuarth (E1/E2): la «fecha de registro» es la
+                    CONTABLE (`transaction_date`, define el período). El día en que
+                    se grabó el asiento (`record_date`) es otra cosa: «Grabado el». */}
                 <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                  <CalendarDays size={12} /> Fecha de la operación
+                  <CalendarDays size={12} /> Fecha de registro
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(asiento.transaction_date)}</dd>
               </div>
               <div>
                 <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                  <CalendarDays size={12} /> Fecha de registro
+                  <CalendarDays size={12} /> Grabado el
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(asiento.record_date)}</dd>
               </div>

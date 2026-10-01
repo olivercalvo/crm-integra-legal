@@ -47,6 +47,7 @@ function factura(p: Partial<FacturaParaAsiento> = {}): FacturaParaAsiento {
     accounting_date: "2026-09-04",
     grand_total: 1070,
     client_name: "Cliente S.A.",
+    client_id: "c1111111-1111-1111-1111-111111111111",
     lineas: [linea()],
     ...p,
   };
@@ -117,21 +118,52 @@ test("factura exenta (reembolso): sin línea de ITBMS, HABER 130003", () => {
   );
 });
 
-test("dos servicios con la MISMA cuenta se agrupan en una línea", () => {
+test("E2: dos servicios con la MISMA cuenta van en DOS líneas, cada una con la descripción de su línea", () => {
+  // Hasta E2 se agrupaban por cuenta. Josuarth (28/09, punto 3): en el Mayor,
+  // la descripción de cada línea del documento, no la del encabezado.
   const r = construirAsientoDeFactura(
     factura({
       grand_total: 3210,
       lineas: [
-        linea({ line_order: 1, subtotal: 1000, tax_amount: 70, service_code: "HON-COR" }),
-        linea({ line_order: 2, subtotal: 2000, tax_amount: 140, service_code: "HON-CIV" }),
+        linea({ line_order: 1, subtotal: 1000, tax_amount: 70, service_code: "HON-COR", description: "Constitución de sociedad" }),
+        linea({ line_order: 2, subtotal: 2000, tax_amount: 140, service_code: "HON-CIV", description: "Due diligence" }),
       ],
     })
   );
   assert.equal(r.ok, true);
   if (!r.ok) return;
   const ingreso = r.asiento.lines.filter((l) => l.account_code === "400001");
-  assert.equal(ingreso.length, 1);
-  assert.equal(ingreso[0].credit, 3000);
+  assert.deepEqual(
+    ingreso.map((l) => [l.credit, l.description]),
+    [[1000, "Constitución de sociedad"], [2000, "Due diligence"]]
+  );
+  assert.equal(ingreso.reduce((s, l) => s + l.credit, 0), 3000, "el total por cuenta no cambia");
+});
+
+test("E2: el cliente va en la línea de 100004, y sólo ahí", () => {
+  const r = construirAsientoDeFactura(factura());
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const control = r.asiento.lines.filter((l) => l.account_code === "100004");
+  assert.equal(control.length, 1);
+  assert.equal(control[0].client_id, "c1111111-1111-1111-1111-111111111111");
+  assert.ok(r.asiento.lines.filter((l) => l.account_code !== "100004").every((l) => !l.client_id && !l.supplier_id));
+});
+
+test("E2: las líneas del libro siguen el orden de la factura, no el de las cuentas", () => {
+  const r = construirAsientoDeFactura(
+    factura({
+      grand_total: 3210,
+      lineas: [
+        linea({ line_order: 2, subtotal: 2000, tax_amount: 140, revenue_account: "400001", description: "Segunda" }),
+        linea({ line_order: 1, subtotal: 1000, tax_amount: 70, revenue_account: "400004", description: "Primera" }),
+      ],
+    })
+  );
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const ingresos = r.asiento.lines.filter((l) => l.account_code.startsWith("4"));
+  assert.deepEqual(ingresos.map((l) => l.description), ["Primera", "Segunda"]);
 });
 
 test("servicios con cuentas distintas producen una línea cada uno", () => {

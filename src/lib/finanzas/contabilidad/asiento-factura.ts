@@ -109,6 +109,11 @@ export interface FacturaParaAsiento {
   accounting_date: string;
   grand_total: number;
   client_name: string;
+  /**
+   * El cliente de la factura (E2). Va en la línea de 100004 para que el Mayor
+   * y la antigüedad sepan de quién es sin adivinar por el texto.
+   */
+  client_id: string | null;
   lineas: LineaFacturaParaAsiento[];
 }
 
@@ -220,16 +225,12 @@ export function construirAsientoDeFactura(
     return { ok: false, motivo: "cuenta_invalida", mensaje };
   }
 
-  // ---- 3) Agrupar los créditos de ingreso POR CUENTA -----------------------
-  // Dos servicios distintos pueden apuntar a la misma cuenta. Una línea por
-  // cuenta y no una por línea de factura: el mayor de esa cuenta se lee mejor y
-  // el asiento no crece con el detalle comercial de la factura.
-  const porCuenta = new Map<string, number>();
-  for (const l of f.lineas) {
-    const cuenta = l.revenue_account as string;
-    porCuenta.set(cuenta, round2((porCuenta.get(cuenta) ?? 0) + l.subtotal));
-  }
-
+  // ---- 3) UNA LÍNEA DEL LIBRO POR CADA LÍNEA DE LA FACTURA (E2) ------------
+  // Hasta el Bloque 1 se agrupaba por cuenta de ingreso ("el asiento no crece
+  // con el detalle comercial"). Josuarth pidió lo contrario (revisión del
+  // 28/09, punto 3): en la columna Descripción del Mayor, la descripción de
+  // CADA línea del documento, no la del encabezado. Agrupando, esa descripción
+  // se perdía. El total por cuenta no cambia: el Mayor suma igual.
   const itbms = round2(f.lineas.reduce((s, l) => s + l.tax_amount, 0));
   const debe = round2(f.grand_total);
 
@@ -239,11 +240,19 @@ export function construirAsientoDeFactura(
       debit: debe,
       credit: 0,
       description: `Factura ${f.invoice_number}`,
+      // E2: el cliente en la cuenta control, como dato y no como texto.
+      client_id: f.client_id,
     },
   ];
-  for (const [cuenta, monto] of Array.from(porCuenta.entries()).sort()) {
+  for (const l of [...f.lineas].sort((a, b) => a.line_order - b.line_order)) {
+    const monto = round2(l.subtotal);
     if (monto === 0) continue;
-    lines.push({ account_code: cuenta, debit: 0, credit: monto, description: null });
+    lines.push({
+      account_code: l.revenue_account as string,
+      debit: 0,
+      credit: monto,
+      description: l.description?.trim() || null,
+    });
   }
   if (itbms > 0) {
     lines.push({

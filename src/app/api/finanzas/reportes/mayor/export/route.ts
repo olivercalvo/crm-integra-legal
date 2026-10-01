@@ -10,6 +10,8 @@ import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
 import {
   resolverTercerosFiscales,
   resolverTercerosDeLineas,
+  nombresPorAsiento,
+  origenesDeMovimientos,
 } from "@/lib/finanzas/reports/tercero-fiscal";
 import { hojaDelMayor } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
@@ -75,17 +77,17 @@ export async function GET(request: NextRequest) {
       loadCuentasControl(ctx.db, ctx.tenantId),
     ]);
 
-    const mayor = buildMayorDeCuenta(cuenta, movimientos, { controlPorCodigo: control });
-
     const terceros = await resolverTercerosFiscales(
       ctx.db,
       ctx.tenantId,
-      movimientos.map((m) => ({
-        entry_id: m.entry_id,
-        source_type: m.source_type,
-        source_id: m.source_id,
-      }))
+      origenesDeMovimientos(movimientos)
     );
+
+    // E2: el mismo segundo escalón que la pantalla, para que digan lo mismo.
+    const mayor = buildMayorDeCuenta(cuenta, movimientos, {
+      controlPorCodigo: control,
+      nombrePorAsiento: nombresPorAsiento(terceros),
+    });
 
     // 054: el tercero puesto EN LA LÍNEA. Se resuelve aparte porque no sale del
     // documento de origen —un asiento manual no tiene— y es el que manda cuando

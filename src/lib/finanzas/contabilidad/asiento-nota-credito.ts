@@ -47,6 +47,8 @@ export interface NotaDeCreditoParaAsiento {
   grand_total: number;
   invoice_number: string;
   client_name: string;
+  /** El cliente de la NC (E2): va en la línea de 100004. */
+  client_id: string | null;
   /** Las líneas de la NC con la cuenta de ingreso de su servicio, como en la factura. */
   lineas: FacturaParaAsiento["lineas"];
 }
@@ -65,6 +67,7 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     accounting_date: nc.accounting_date,
     grand_total: nc.grand_total,
     client_name: nc.client_name,
+    client_id: nc.client_id,
     lineas: nc.lineas,
   });
   if (!comoFactura.ok) {
@@ -90,6 +93,9 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
         : l.description === "ITBMS facturado"
           ? "ITBMS acreditado"
           : l.description,
+    // E2: el cliente de la línea de 100004 pasa tal cual al revés.
+    client_id: l.client_id ?? null,
+    supplier_id: l.supplier_id ?? null,
   }));
 
   const asiento: AsientoInput = {

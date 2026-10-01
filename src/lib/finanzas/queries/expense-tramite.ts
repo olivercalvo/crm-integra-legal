@@ -59,8 +59,12 @@ export const CAMPOS_DE_CASO_PERMITIDOS = ["case_code"] as const;
 /** Un gasto de trámite, con lo que la vista contable puede ver y nada más. */
 export interface GastoTramiteContable {
   id: string;
-  /** Fecha en que se incurrió el gasto. */
+  /** Fecha del DOCUMENTO (la factura del proveedor). */
   date: string;
+  /** Fecha de REGISTRO (068): la del asiento, define el período. */
+  accounting_date: string;
+  /** Número de la factura del proveedor (070). Opcional. */
+  supplier_invoice_number: string | null;
   /** El concepto del encabezado (histórico; las líneas traen su descripción). */
   concept: string;
   expense_type: "tramite" | "administrativo";
@@ -110,7 +114,7 @@ export async function getGastoTramiteContable(
   const { data, error } = await db
     .from("expenses")
     .select(
-      `id, date, concept, expense_type, amount, due_date,
+      `id, date, accounting_date, supplier_invoice_number, concept, expense_type, amount, due_date,
        receipt_url, receipt_filename,
        supplier_id, status, amount_paid,
        cases!inner(case_code),
@@ -141,6 +145,8 @@ export async function getGastoTramiteContable(
   return {
     id: String(fila.id),
     date: String(fila.date),
+    accounting_date: String(fila.accounting_date ?? fila.date),
+    supplier_invoice_number: (fila.supplier_invoice_number as string | null) ?? null,
     concept: String(fila.concept ?? ""),
     expense_type: fila.expense_type === "administrativo" ? "administrativo" : "tramite",
     amount: Number(fila.amount ?? 0),

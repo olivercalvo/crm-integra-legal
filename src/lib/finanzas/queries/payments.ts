@@ -125,7 +125,9 @@ export async function cargarAsientosPorOrigen(
 
   const { data: lineas, error: errLineas } = await db
     .from("journal_entry_lines")
-    .select("entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)")
+    .select(
+      "entry_id, line_order, debit, credit, line_description, client_id, supplier_id, chart_of_accounts!inner(code, name)"
+    )
     .eq("tenant_id", tenantId)
     .in(
       "entry_id",
@@ -144,6 +146,8 @@ export async function cargarAsientosPorOrigen(
     debit: number | string;
     credit: number | string;
     line_description: string | null;
+    client_id: string | null;
+    supplier_id: string | null;
     chart_of_accounts: { code: string; name: string };
   };
   const porAsiento = new Map<string, AsientoDeCobro["lines"]>();
@@ -155,6 +159,9 @@ export async function cargarAsientosPorOrigen(
       debit: num(l.debit),
       credit: num(l.credit),
       description: l.line_description,
+      // E2: el espejo de la reversión conserva el tercero de cada línea.
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     });
     porAsiento.set(l.entry_id, lista);
   }

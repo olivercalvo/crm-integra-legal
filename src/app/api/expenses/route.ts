@@ -44,6 +44,21 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { case_id, concept, date, expense_type, supplier_id, due_date, accounting_date } = body;
+    // 070 (E2): el número de la factura del proveedor. Opcional; sólo el largo,
+    // nunca el formato (mismo criterio que las compras, 044).
+    const supplierInvoiceNumber =
+      typeof body.supplier_invoice_number === "string" && body.supplier_invoice_number.trim() !== ""
+        ? body.supplier_invoice_number.trim()
+        : null;
+    if (supplierInvoiceNumber && supplierInvoiceNumber.length > 50) {
+      return NextResponse.json(
+        {
+          error: "El número de factura del proveedor no puede pasar de 50 caracteres.",
+          fieldErrors: { supplier_invoice_number: "Máximo 50 caracteres." },
+        },
+        { status: 400 }
+      );
+    }
     const lineasRaw = body?.lines;
 
     if (!case_id || !concept || !date) {
@@ -208,6 +223,7 @@ export async function POST(request: NextRequest) {
         registered_by: user.id,
         supplier_id: typeof supplier_id === "string" && supplier_id ? supplier_id : null,
         due_date: typeof due_date === "string" && due_date ? due_date : null,
+        supplier_invoice_number: supplierInvoiceNumber,
       })
       .select()
       .single();

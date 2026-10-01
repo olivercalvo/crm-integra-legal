@@ -180,7 +180,7 @@ export async function loadMovimientosDeCuenta(
     .select(
       "id, entry_id, line_order, debit, credit, line_description, client_id, supplier_id, " +
         "clients(name), suppliers(legal_name), " +
-        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id)"
+        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id, reverses_entry_id)"
     )
     .eq("tenant_id", tenantId)
     .eq("account_id", accountId);
@@ -211,10 +211,32 @@ export async function loadMovimientosDeCuenta(
       description: string;
       source_type: string;
       source_id: string | null;
+      reverses_entry_id: string | null;
     };
   };
   const filas = propias as unknown as FilaPropia[];
   const entryIds = Array.from(new Set(filas.map((f) => f.entry_id)));
+
+  // -- 1.b) E2: el tipo del asiento que revierte cada REVERSIÓN ---------------
+  // Sin embed: el self-join de journal_entries por FK da PGRST200 (21/09).
+  const idsRevertidos = Array.from(
+    new Set(
+      filas
+        .map((f) => f.journal_entries.reverses_entry_id)
+        .filter((v): v is string => !!v)
+    )
+  );
+  const tipoDelRevertido = new Map<string, string>();
+  if (idsRevertidos.length > 0) {
+    const { data: originales } = await db
+      .from("journal_entries")
+      .select("id, source_type")
+      .eq("tenant_id", tenantId)
+      .in("id", idsRevertidos);
+    for (const o of (originales ?? []) as { id: string; source_type: string }[]) {
+      tipoDelRevertido.set(o.id, o.source_type);
+    }
+  }
 
   // -- 2) TODAS las líneas de esos asientos (para la contrapartida) -----------
   const { data: todas, error: errTodas } = await db
@@ -279,6 +301,9 @@ export async function loadMovimientosDeCuenta(
     hermanas: porAsiento.get(f.entry_id) ?? [],
     terceroClave: claveDeTercero(f.client_id, f.supplier_id),
     terceroNombre: f.clients?.name ?? f.suppliers?.legal_name ?? null,
+    reverses_source_type: f.journal_entries.reverses_entry_id
+      ? tipoDelRevertido.get(f.journal_entries.reverses_entry_id) ?? null
+      : null,
   }));
 }
 

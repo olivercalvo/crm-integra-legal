@@ -30,6 +30,9 @@ export interface LineaDeAsiento {
   tercero: string | null;
   /** `"cliente:<uuid>"` / `"proveedor:<uuid>"`, para precargar el clon. */
   terceroClave: string | null;
+  /** Los ids crudos del tercero, para que el espejo de la reversión lo conserve (E2). */
+  client_id: string | null;
+  supplier_id: string | null;
 }
 
 export interface AsientoVecino {
@@ -147,6 +150,8 @@ export async function getAsientoDelLibro(
       : l.supplier_id
         ? `proveedor:${l.supplier_id}`
         : null,
+    client_id: l.client_id ?? null,
+    supplier_id: l.supplier_id ?? null,
   }));
 
   return {

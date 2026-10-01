@@ -62,7 +62,7 @@ export async function cargarCobroParaAsiento(
   const { data: pay, error } = await db
     .from("payments")
     .select(
-      "id, payment_number, payment_date, amount, payment_account_code, client:clients!payments_client_id_fkey(name)"
+      "id, payment_number, payment_date, amount, payment_account_code, client_id, client:clients!payments_client_id_fkey(name)"
     )
     .eq("tenant_id", tenantId)
     .eq("id", paymentId)
@@ -77,6 +77,7 @@ export async function cargarCobroParaAsiento(
     payment_date: string;
     amount: number | string;
     payment_account_code: string | null;
+    client_id: string | null;
     client?: { name?: string } | { name?: string }[] | null;
   };
 
@@ -104,6 +105,7 @@ export async function cargarCobroParaAsiento(
     payment_date: row.payment_date,
     amount: num(row.amount),
     client_name: cli?.name ?? null,
+    client_id: row.client_id ?? null,
     facturas,
     payment_account_code: row.payment_account_code,
     banco_valido: await bancoValido(db, tenantId, row.payment_account_code),
@@ -129,8 +131,8 @@ export async function cargarPagoProveedorParaAsiento(
     .from("supplier_payments")
     .select(
       "id, payment_number, payment_date, amount, payment_account_code, business_expense_id, expense_id, " +
-        "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number), " +
-        "tramite:expenses!supplier_payments_expense_id_fkey(id, concept, suppliers(legal_name), cases(case_code))"
+        "compra:business_expenses!supplier_payments_business_expense_id_fkey(id, description, supplier_name, supplier_invoice_number, supplier_id), " +
+        "tramite:expenses!supplier_payments_expense_id_fkey(id, concept, supplier_id, supplier_invoice_number, suppliers(legal_name), cases(case_code))"
     )
     .eq("tenant_id", tenantId)
     .eq("id", pagoId)
@@ -139,10 +141,18 @@ export async function cargarPagoProveedorParaAsiento(
   if (error) throw error;
   if (!pago) return null;
 
-  type Compra = { id: string; description: string; supplier_name: string | null; supplier_invoice_number: string | null };
+  type Compra = {
+    id: string;
+    description: string;
+    supplier_name: string | null;
+    supplier_invoice_number: string | null;
+    supplier_id: string | null;
+  };
   type Tramite = {
     id: string;
     concept: string;
+    supplier_id: string | null;
+    supplier_invoice_number: string | null;
     suppliers: { legal_name: string } | { legal_name: string }[] | null;
     cases: { case_code: string } | { case_code: string }[] | null;
   };
@@ -168,13 +178,16 @@ export async function cargarPagoProveedorParaAsiento(
           documento_id: row.expense_id,
           documento_description: `${tramite.concept}${uno(tramite.cases)?.case_code ? ` — ${uno(tramite.cases)?.case_code}` : ""}`,
           supplier_name: uno(tramite.suppliers)?.legal_name ?? null,
-          supplier_invoice_number: null,
+          supplier_id: tramite.supplier_id ?? null,
+          // 070 (E2): el gasto de trámite también guarda la factura del proveedor.
+          supplier_invoice_number: tramite.supplier_invoice_number ?? null,
         }
       : {
           documento_kind: "compra" as const,
           documento_id: row.business_expense_id ?? "",
           documento_description: compra?.description ?? "",
           supplier_name: compra?.supplier_name ?? null,
+          supplier_id: compra?.supplier_id ?? null,
           supplier_invoice_number: compra?.supplier_invoice_number ?? null,
         };
 

@@ -114,6 +114,9 @@ export interface AsientoDeCobro {
     debit: number;
     credit: number;
     description: string | null;
+    /** El tercero de la línea (054). El espejo de la reversión lo conserva (E2). */
+    client_id?: string | null;
+    supplier_id?: string | null;
   }[];
 }
 

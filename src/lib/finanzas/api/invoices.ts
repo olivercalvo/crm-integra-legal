@@ -1072,6 +1072,9 @@ export async function cancelInvoice(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     }));
     description = armado.asiento.description;
   }

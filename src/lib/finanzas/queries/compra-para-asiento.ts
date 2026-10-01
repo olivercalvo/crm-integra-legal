@@ -50,7 +50,7 @@ export async function cargarCompraParaAsiento(
 ): Promise<CompraParaAsiento | null> {
   const { data: be, error: errBe } = await db
     .from("business_expenses")
-    .select("id, expense_date, accounting_date, description, total, supplier_name")
+    .select("id, expense_date, accounting_date, description, total, supplier_name, supplier_id")
     .eq("tenant_id", tenantId)
     .eq("id", compraId)
     .maybeSingle();
@@ -104,6 +104,7 @@ export async function cargarCompraParaAsiento(
     expense_date: string;
     accounting_date: string | null;
     description: string;
+    supplier_id: string | null;
     total: number | string;
     supplier_name: string | null;
   };
@@ -113,6 +114,7 @@ export async function cargarCompraParaAsiento(
     expense_date: row.expense_date,
     accounting_date: row.accounting_date ?? row.expense_date,
     description: row.description,
+    supplier_id: row.supplier_id ?? null,
     total: num(row.total),
     supplier_name: row.supplier_name,
     lineas,

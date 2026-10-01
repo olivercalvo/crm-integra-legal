@@ -94,6 +94,12 @@ export interface MovimientoCrudo {
   /** 054: el tercero de ESTA línea. */
   terceroClave?: string | null;
   terceroNombre?: string | null;
+  /**
+   * E2: si el asiento es una REVERSIÓN, el `source_type` del asiento que
+   * revierte. La reversión conserva el `source_id` del documento, pero su tipo
+   * es `reversion`: sin esto no se sabe en qué tabla buscar al tercero.
+   */
+  reverses_source_type?: string | null;
 }
 
 export interface CuentaDelMayor {
@@ -365,27 +371,46 @@ export function tipoTransaccionLabel(sourceType: string): string {
  * Desde el Bloque 7 una línea puede nombrar al cliente o al proveedor con una
  * FK. Es un dato, no una deducción: manda sobre todo lo demás.
  *
- * 2º EL TERCERO DE LA LÍNEA DE CUENTA CONTROL del mismo asiento. Si la línea
- *    que se está mirando es la de gasto y la de 100004 dice de quién es, el
- *    renglón lo muestra igual: es el mismo asiento.
+ * 2º EL TERCERO DEL DOCUMENTO DE ORIGEN (E2, 30/09/2026). La factura, el
+ *    cobro, la compra, el gasto de trámite, el pago o la nota de crédito dicen
+ *    de quién son. Es la MISMA resolución que ya usaba el Excel
+ *    (`resolverTercerosFiscales`): la pantalla y el archivo dicen lo mismo. Es
+ *    lo que le pone nombre a los asientos anteriores a E2 SIN TOCARLOS, y a
+ *    todas las líneas del asiento, también a la del banco (Josuarth, punto 3).
  *
- * 3º LA DESCRIPCIÓN de la línea de cuenta control — el heurístico viejo, de
- *    cuando el ledger no tenía tercero. Sigue vivo porque **los asientos
- *    anteriores a la 054 no tienen FK** y son la mayoría del libro; sacarlo
- *    dejaría esa columna vacía en todo lo ya registrado.
+ * 3º EL TERCERO DE LA LÍNEA DE CUENTA CONTROL del mismo asiento. Hasta E2 este
+ *    escalón tomaba el de CUALQUIER línea hermana aunque el comentario dijera
+ *    "de cuenta control"; ahora mira primero la de control y, si no hay, sólo
+ *    acepta un tercero si es el ÚNICO del asiento (un asiento manual con dos
+ *    clientes no es de ninguno de los dos).
+ *
+ * 4º LA DESCRIPCIÓN de la línea de cuenta control — el heurístico viejo, de
+ *    cuando el ledger no tenía tercero. Queda para lo que nada de lo anterior
+ *    resuelve (un asiento manual viejo contra 100004 sin tercero).
  *
  * Si no hay nada de eso, queda vacío en vez de inventar algo.
  */
 export function nombreDelTercero(
   hermanas: LineaHermana[],
   controlPorCodigo: Record<string, string | null>,
-  propia?: LineaHermana | null
+  propia?: LineaHermana | null,
+  delDocumento?: string | null
 ): string {
   const deLaPropia = propia?.terceroNombre?.trim();
   if (deLaPropia) return deLaPropia;
 
-  const conTercero = hermanas.find((l) => l.terceroNombre?.trim());
-  if (conTercero?.terceroNombre) return conTercero.terceroNombre.trim();
+  const doc = delDocumento?.trim();
+  if (doc) return doc;
+
+  const controlConTercero = hermanas.find(
+    (l) => controlPorCodigo[l.code] && l.terceroNombre?.trim()
+  );
+  if (controlConTercero?.terceroNombre) return controlConTercero.terceroNombre.trim();
+
+  const distintos = Array.from(
+    new Set(hermanas.map((l) => l.terceroNombre?.trim()).filter((n): n is string => !!n))
+  );
+  if (distintos.length === 1) return distintos[0];
 
   const control = hermanas.find((l) => controlPorCodigo[l.code]);
   return control?.descripcion?.trim() || "";
@@ -398,6 +423,11 @@ export function nombreDelTercero(
 export interface LibroMayorOptions {
   /** code → cuenta_control ('clientes' | 'proveedores' | null). */
   controlPorCodigo?: Record<string, string | null>;
+  /**
+   * E2: entry_id → nombre del tercero de su DOCUMENTO DE ORIGEN
+   * (`resolverTercerosFiscales`). Segundo escalón de `nombreDelTercero`.
+   */
+  nombrePorAsiento?: Map<string, string>;
 }
 
 /**
@@ -464,7 +494,12 @@ export function buildMayorDeCuenta(
     const propia =
       m.hermanas.find((h) => h.line_order === m.line_order) ?? m.hermanas[0];
 
-    const nombre = nombreDelTercero(m.hermanas, control, propia);
+    const nombre = nombreDelTercero(
+      m.hermanas,
+      control,
+      propia,
+      options.nombrePorAsiento?.get(m.entry_id) ?? null
+    );
     const propiaDescripcion = m.line_description?.trim() || "";
 
     // Si la línea que se está mostrando ES la de la cuenta control, su

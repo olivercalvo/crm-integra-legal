@@ -101,6 +101,8 @@ export function SectionExpenseForm({
   const [expFile, setExpFile] = useState<File | null>(null);
   const expFileRef = useRef<HTMLInputElement>(null);
   const [expSupplier, setExpSupplier] = useState("");
+  // 070 (E2): número de la factura del proveedor. Opcional, como en las compras.
+  const [expFacturaProv, setExpFacturaProv] = useState("");
   const [expDueDate, setExpDueDate] = useState("");
   const [expLineas, setExpLineas] = useState<ExpenseLineDraft[]>(() => [
     lineaVacia("l0", CUENTA_TRAMITE_DEFAULT, impuestoInicial),
@@ -155,6 +157,7 @@ export function SectionExpenseForm({
     setExpFile(null);
     if (expFileRef.current) expFileRef.current.value = "";
     setExpSupplier("");
+    setExpFacturaProv("");
     setExpDueDate("");
     setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial)]);
     setFieldErrors({});
@@ -214,6 +217,7 @@ export function SectionExpenseForm({
             concept: expConcept.trim(),
             date: expDate,
             accounting_date: expRegistro,
+            supplier_invoice_number: expFacturaProv.trim() || null,
             expense_type: sectionType,
             supplier_id: expSupplier || null,
             due_date: expDueDate || null,
@@ -458,6 +462,21 @@ export function SectionExpenseForm({
                 Se precarga con el plazo del proveedor y se puede cambiar. De acá salen
                 los tramos de la antigüedad.
               </p>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              {/* 070 (E2): el número de la factura del proveedor, como en las compras. */}
+              <Label htmlFor="gasto_factura_proveedor">N.º de factura del proveedor (opcional)</Label>
+              <Input
+                id="gasto_factura_proveedor"
+                value={expFacturaProv}
+                onChange={(e) => setExpFacturaProv(e.target.value)}
+                maxLength={50}
+                placeholder="Ej: F-001-0004521"
+                className="min-h-[48px]"
+              />
+              {fieldErrors.supplier_invoice_number && (
+                <p className="text-xs text-red-600">{fieldErrors.supplier_invoice_number}</p>
+              )}
             </div>
           </div>
 

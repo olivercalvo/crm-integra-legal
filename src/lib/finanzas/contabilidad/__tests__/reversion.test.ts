@@ -129,3 +129,15 @@ test("E1: la fecha elegida puede ser cualquiera desde la del original (otro mes 
   const b = ok(construirAsientoDeReversion(COBRO, { fecha: COBRO.transaction_date, motivo: "Cheque devuelto", source_id: PAGO }));
   assert.equal(b.transaction_date, COBRO.transaction_date);
 });
+
+test("E2: el espejo CONSERVA el tercero de cada línea (devuelve el saldo a ese cliente)", () => {
+  const conTercero: AsientoAReversar = {
+    ...COBRO,
+    lines: COBRO.lines.map((l, i) =>
+      i === 1 ? { ...l, client_id: "c1111111-1111-1111-1111-111111111111" } : l
+    ),
+  };
+  const a = ok(construirAsientoDeReversion(conTercero, { fecha: HOY, motivo: "Cheque devuelto", source_id: PAGO }));
+  assert.equal(a.lines[1].client_id, "c1111111-1111-1111-1111-111111111111");
+  assert.equal(a.lines[0].client_id ?? null, null);
+});

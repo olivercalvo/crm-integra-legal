@@ -49,6 +49,9 @@ export interface LineaOriginal {
   debit: number;
   credit: number;
   description: string | null;
+  /** El tercero de la línea (054). El espejo lo conserva (E2). */
+  client_id?: string | null;
+  supplier_id?: string | null;
 }
 
 /** El asiento que se va a reversar. */
@@ -136,6 +139,10 @@ export function construirAsientoDeReversion(
     debit: round2(l.credit),
     credit: round2(l.debit),
     description: l.description ? `Reversión: ${l.description}` : "Reversión",
+    // E2: el espejo de una línea de 100004 con cliente devuelve el saldo A ESE
+    // cliente. Sin esto el original tenía tercero y el espejo quedaba anónimo.
+    client_id: l.client_id ?? null,
+    supplier_id: l.supplier_id ?? null,
   }));
 
   return {

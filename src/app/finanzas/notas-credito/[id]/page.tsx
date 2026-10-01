@@ -72,6 +72,8 @@ interface NcDetalle {
   credit_note_number: string;
   invoice_id: string;
   issue_date: string;
+  /** Fecha de REGISTRO (`068`): la del asiento. */
+  accounting_date?: string | null;
   reason: string;
   observations: string | null;
   status: string;
@@ -376,9 +378,18 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                  <Calendar size={12} /> Fecha de la nota
+                  <Calendar size={12} /> Fecha del documento
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(nc.issue_date)}</dd>
+              </div>
+              <div>
+                {/* La de REGISTRO define el mes del asiento y del resumen de ITBMS. */}
+                <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                  <Calendar size={12} /> Fecha de registro
+                </dt>
+                <dd className="mt-1 font-medium text-gray-900">
+                  {formatDate(nc.accounting_date ?? nc.issue_date)}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500">Moneda</dt>

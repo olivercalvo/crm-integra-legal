@@ -150,6 +150,7 @@ export function construirAsientoDeNotaDeCompra(
     description: compra.description,
     total: calculo.total,
     supplier_name: compra.supplier_name,
+    supplier_id: compra.supplier_id,
     lineas: calculo.lineas.map((x) => ({
       line_order: x.linea.line_order,
       description: x.linea.description,

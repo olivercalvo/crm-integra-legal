@@ -303,6 +303,11 @@ const MARCADORES = {
     tipo: "cuerpo_funcion", nombre: "reverse_payment", contiene: "La reversión necesita una fecha de registro",
     nota: "Bloque 1, E1, 30/09. Parche verificado sobre la definicion vigente de nueve funciones (no copias). Depende de la 068 (cancel_invoice_with_reversal mide el mes por accounting_date). Se mira el cuerpo: el nombre de la funcion no cambia.",
   },
+  "070_gasto_tramite_factura_proveedor.sql": {
+    que: "expenses.supplier_invoice_number: numero de factura del proveedor en el gasto de tramite",
+    tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
+    nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
+  },
 
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {

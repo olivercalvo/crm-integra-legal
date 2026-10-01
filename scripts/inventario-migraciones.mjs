@@ -303,6 +303,11 @@ const MARCADORES = {
     tipo: "constraint", nombre: "coa_subcategoria_por_tipo",
     nota: "Bloque 1, E6, 01/10. El mapa cuenta por cuenta de Josuarth (P-8a) no llego: la migracion asigna un valor por defecto (el de subcategoriaPorDefecto) y lo informa con un NOTICE por cuenta; se corrige en el Plan de Cuentas. Reemplaza el CHECK de la 025 y el script sql/datos-staging de HON-FAM.",
   },
+  "081_correcciones_076_y_079.sql": {
+    que: "Correcciones: create_supplier_credit_note sin record de la compra (NC sin compra fallaba) y CHECK de subcategoria sin el hueco del NULL",
+    tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
+    nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
+  },
   "080_cierre_anual.sql": {
     que: "Cierre anual: close_fiscal_year (asiento cierre al 31/12 contra 300002, verificado), finanzas_saldos_de_resultado y reverse_journal_entry acepta cierre",
     tipo: "funcion", nombre: "close_fiscal_year",

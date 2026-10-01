@@ -24,14 +24,27 @@
 | E1 fechas, E2 tercero, E3 referencias y tercero obligatorio | ✅ en staging |
 | R-1 hash v5 y verificador (072) | ✅ en staging |
 | E4 tasa con cuenta (073), E5 excedente (074) | ✅ en staging |
-| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | 🛑 espera **P-8a** de Josuarth |
+| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | ✅ parte técnica (079 sin aplicar); el mapa espera **P-8a** |
 | E8 NC como módulo propio | ✅ construido (076 sin aplicar); venta sin factura apagada hasta **P-4a** |
 | E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
 | E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
-| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | depende de E6 |
-| E11 cierre anual | noviembre |
+| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | ✅ construido (078 sin aplicar) |
+| E11 cierre anual | ✅ construido (080 sin aplicar); no cerrar 2026 en staging sin decidirlo |
 | R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
 | Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
+
+## >>> 01/10/2026 (noche) — E10, E6 Y E11 <<<
+
+- ⏳ `078`, `079` y `080` escritas, SIN APLICAR. Orden en la ventana: la 080 necesita la 071
+  (CHECK con `cierre`) y la 055.
+- Abiertas: P-8a (mapa de subcategorías), P-8b (400009), P-8c (440001 y HON-OTROS), P-11a
+  (300002 y su nombre «Perdida Retenidas»), P-7a.
+- ⚠️ Cerrar 2026 en staging hoy movería unos 244,476.91 de saldos de apertura de resultado
+  (QuickBooks). No cerrar sin decidirlo.
+- 🔎 Posible error que ya existía: el Estado de Resultado con `desde` suma al saldo inicial de las
+  cuentas de resultado los movimientos anteriores al corte (un período de mitad de año sale
+  acumulado desde enero). Sin tocar.
+- Dato de staging: agosto 2026 está cerrado en `accounting_periods`.
 
 ## >>> 01/10/2026 (noche) — NOTA DE DÉBITO (d14) <<<
 

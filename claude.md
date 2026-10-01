@@ -329,6 +329,36 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **Todavía NO va a la DGI** (`PERMITIR_ND_A_LA_DGI = false`): el tipo 05 no se probó en el
   sandbox. Se corta antes del correlativo y la pantalla no ofrece el botón.
 
+### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` SIN APLICAR)
+- Sin «Distribución a Socias». Siempre: Utilidad bruta → Utilidad antes de impuesto sobre la
+  renta → Impuesto sobre la renta (también en 0.00) → Utilidad neta. El Balance lleva la utilidad
+  neta (acumulada mientras no haya cierre, y lo dice).
+- **La tasa de ISR es del bufete** (`finanzas_parametros.isr_rate`, FRACCIÓN 0..1, 0 por
+  defecto). La pantalla pide el porcentaje y muestra la fracción. Escriben admin y contador
+  (`PUT /api/finanzas/configuracion/parametros`); sin fila, el reporte usa 0.
+
+### Plan de cuentas: subcategorías (desde 2026-10-01, E6 — `079` SIN APLICAR)
+- **Subcategoría obligatoria en los seis tipos** (CHECK `coa_subcategoria_por_tipo`, cuentas
+  activas). Sale `depreciacion_acumulada` (la depreciación resta dentro de PPE) y `patrimonio`
+  (ahora capital_social, resultados_acumulados, otras_reservas).
+- 🟡 **El mapa de Josuarth (P-8a) no llegó**: la 079 asigna un valor por defecto con un NOTICE por
+  cuenta (`subcategoriaPorDefecto()`, la MISMA regla en SQL y en la importación) y se corrige en
+  el Plan de Cuentas.
+- **400009 Derecho de Familia** (HON-FAM) y **440001 Otros ingresos** con el servicio `OTR-ING`,
+  que es `service_type = 'honorarios'` (SOP-029 no deja 'otro' en una FAC-HON). Códigos
+  propuestos: P-8b, P-8c. Reemplaza el paso «Reasignar» de P-15 y el script de
+  `sql/datos-staging/` de HON-FAM.
+
+### Cierre anual (desde 2026-10-01, E11 — `080` SIN APLICAR)
+- Asiento `cierre` al 31/12 (número `AD-` del motor): cada cuenta de resultado en contra y la
+  diferencia a **300002**. Lo arma `construirAsientoDeCierre()` (la misma función que la vista
+  previa) y **la base lo VERIFICA** contra `finanzas_saldos_de_resultado` (`close_fiscal_year`,
+  sólo `service_role`).
+- Uno vigente por año, **en orden**, con diciembre abierto. Se reversa con
+  `reverse_journal_entry` (acepta `manual` y `cierre`) y el año se puede volver a cerrar.
+- El **Estado de Resultado excluye los cierres** y sus reversiones; el Balance los incluye.
+- Admin y contador, desde Períodos Contables. P-11a abierta (300002 y su nombre).
+
 ### Asientos de diario — tercero, clon y reversión (desde 2026-09-22, Bloque 7 — SOLO staging)
 - 🔴 **El tercero de una línea son DOS FK reales** (`journal_entry_lines.client_id` /
   `.supplier_id`, `CHECK num_nonnulls(...) <= 1`), **no** un discriminador tipo `documents`: una

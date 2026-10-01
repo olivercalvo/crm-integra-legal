@@ -379,6 +379,12 @@ Mapeo `source_type` → módulo: `factura`→FAC-ING, `gasto`→FAC-CO, `gasto_t
 
 ## 2. Cambios en la base: migraciones en orden
 
+> **Numeración real (01/10/2026).** La tabla de abajo es la del plan original. Lo construido quedó:
+> 071 motor v4 · 072 hash v5 · 073 tasa con cuenta · 074 cobro con excedente · 075 ancla de la
+> cadena · **076 NC como módulo** · **077 nota de débito** · **078 tasa de ISR del bufete** ·
+> **079 plan de cuentas** · **080 cierre anual**. La apertura (E7) toma el siguiente número
+> libre. Orden en la ventana: 068 → … → 080; la 080 necesita la 071 y la 055.
+
 Numeración desde la `068`. La `056` sigue reservada y el punto 9 la retira. Todas van a `sql/pending/`, se prueban en staging con `run-sql.mjs` **solo cuando cierre la ventana de revisión de SOP-019**, y en producción entran en la ventana del despliegue, después de la `067`.
 
 | # | Migración | Qué hace | Inmutabilidad / hash |

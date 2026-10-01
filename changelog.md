@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: E10, E6 y E11] - 2026-10-01
+
+- ⚠️ `078` **sin aplicar**: tasa de ISR del bufete (`finanzas_parametros`). Estado de Resultado
+  sin Distribución a Socias, con utilidad bruta, antes de ISR, ISR y neta; Balance con utilidad
+  neta. Tarjeta de la tasa en Configuración, Impuestos.
+- ⚠️ `079` **sin aplicar**: subcategoría obligatoria en los seis tipos, patrimonio en tres, sin
+  depreciación acumulada como subcategoría, 400009 Derecho de Familia, 440001 Otros ingresos y
+  el servicio OTR-ING. Valores por defecto corregibles mientras llega el mapa de Josuarth.
+- ⚠️ `080` **sin aplicar**: cierre anual contra 300002 verificado por la base, con vista previa
+  en Períodos Contables, reversable; el Estado de Resultado excluye los cierres.
+
 ## [Bloque 1: nota de débito] - 2026-10-01
 
 - ⚠️ Migración `077` **escrita y SIN APLICAR**: tipo `NOTA_DEBITO`, serie `ND-`, referencia

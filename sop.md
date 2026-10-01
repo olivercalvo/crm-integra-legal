@@ -809,7 +809,7 @@ Dentro del RPC, el `SELECT ... FOR UPDATE` sobre la fila de `accounting_sequence
 las dos cosas con un solo candado: el correlativo sin huecos y la cadena. `sha256()` es nativo
 desde PostgreSQL 11 (la base corre 17.6), así que no hace falta pgcrypto.
 
-### 🔬 Las cuatro versiones de la fórmula del `content_hash`
+### 🔬 Las cinco versiones de la fórmula del `content_hash`
 
 `content_hash` se computa dentro de `post_journal_entry` sobre un `concat_ws('|', …)` de la
 cabecera más un `string_agg` de las líneas. **Esa fórmula cambió tres veces**, y quien alguna vez
@@ -822,6 +822,16 @@ tiene que conocer las cuatro versiones o va a reportar como adulterados todos lo
 | **2026-09-03** | `039` | `reference` en la cabecera (`idempotency_key` **no**: es transporte, no contabilidad) | `code:debit:credit:descr` |
 | **2026-09-22** | `054` | `client_id` y `supplier_id` de cada línea | `code:debit:credit:descr:client_id:supplier_id` |
 | **2026-10-01** (al aplicar la `071`) | `071` | `referencia_externa` en la cabecera, justo después de `reference`, siempre (vacía si no hay). El `reference` que entra es el que quedó grabado: en `manual`/`apertura`/`cierre`, el `AD-` que pone el motor | sin cambio |
+| **al aplicar la `072`** | `072` | **v5: JSON canónico** (`finanzas_contenido_v5`): cada campo con su clave, NULL como null, textos escapados por jsonb. Ya no hay separador que mover entre campos. La descripción entra tal como se graba (`btrim`). Se guarda `hash_version = 5` | objeto `{cuenta, debito, credito, descripcion, cliente, proveedor}` (`finanzas_linea_v5`) |
+
+🔒 **Desde la `072` el verificador SÍ recalcula** (`verify_accounting_chain` v2): para cada
+asiento usa la versión de su columna `hash_version` o, si es anterior, la del tramo de
+`accounting_hash_versions`, reconstruye el contenido con `finanzas_contenido_de_asiento` y
+compara. En staging, antes de la `072`, los 98 asientos se reprodujeron (v1 1–11, v2 12–49,
+v3 50–98; diagnóstico en `sql/verificacion/recalculo-content-hash.sql`). Lo que sigue sin
+detectarse: una reescritura completa de la cadena desde un punto (hace falta un ancla externa:
+el respaldo o el último hash publicado) y los campos que no entran (`idempotency_key`,
+`created_by`, `created_at`).
 
 Los dos campos del tercero se concatenan **siempre**, también vacíos: una fórmula de forma
 variable no se puede auditar.

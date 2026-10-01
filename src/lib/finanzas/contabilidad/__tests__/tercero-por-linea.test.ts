@@ -101,13 +101,14 @@ test("🔬 la 054: el tercero entra al hash, el CHECK es 'cero o uno' y las FK s
   assert.match(sql, /Proveedor\(es\) inexistentes o de otro bufete/);
 });
 
-test("SOP-014 lista las cuatro versiones de la fórmula del content_hash, con fecha", () => {
+test("SOP-014 lista las cinco versiones de la fórmula del content_hash, con fecha", () => {
   const sop = readFileSync(join(process.cwd(), "sop.md"), "utf8");
-  const i = sop.indexOf("Las cuatro versiones de la fórmula");
+  const i = sop.indexOf("Las cinco versiones de la fórmula");
   assert.ok(i > 0, "falta la sección en SOP-014: un verificador futuro la necesita");
-  const bloque = sop.slice(i, i + 2200);
+  const bloque = sop.slice(i, i + 3200);
   assert.match(bloque, /2026-08-27/, "la fórmula original");
   assert.match(bloque, /2026-09-03/, "la que sumó reference (039)");
   assert.match(bloque, /2026-09-22/, "la que sumó el tercero (054)");
   assert.match(bloque, /2026-10-01.*071.*referencia_externa/, "la que sumó la referencia externa (071)");
+  assert.match(bloque, /`072`.*v5: JSON canónico/, "la v5 sin separadores ambiguos (072)");
 });

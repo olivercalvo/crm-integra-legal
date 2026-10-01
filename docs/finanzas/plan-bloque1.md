@@ -546,13 +546,15 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 - **P-2d.** Además de `AD-`, ¿el asiento de diario lleva una referencia libre? ¿Las reversiones se filtran con el módulo del original o con uno propio?
 - **P-2e.** ¿Le sirven los códigos `NC-ING` / `NC-CO` y el prefijo `NC-CO-` para las NC de compra?
 
-- **P-2f.** (propuesta, 01/10) **Compra de contado sin ficha de proveedor.** Diseño sugerido: el
+- **P-2f.** ❌ **No se hace** (Oliver, 01/10/2026): **siempre se exige la ficha del
+  proveedor**, también en una compra de contado. Queda abajo el diseño que se descartó, sólo
+  como registro. ~~**Compra de contado sin ficha de proveedor.** Diseño sugerido: el
   asiento de la compra acredita el BANCO en vez de 200001 (un solo asiento, `FAC-CO-`), y el
   documento queda pagado con un pago de `kind = 'contado'` en `supplier_payments` (número `PA-`,
   banco, sin asiento propio), para que `amount_paid`, `status` y `balance_due` sigan saliendo del
   mismo trigger de la `048`. Implica: CHECK de `kind`, que un pago `contado` no se pueda eliminar
   ni reversar por separado (se reversa la compra entera), y decidir si la NC de compra aplica.
-  Tamaño M. ¿Hace falta, o alcanza con crear la ficha del proveedor?
+  Tamaño M.~~
 
 **Mayor**
 - **P-3a.** ¿En qué pantalla vio el nombre del usuario en lugar del tercero? (El Mayor no lo muestra.)
@@ -589,6 +591,15 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 ## 8. Requisitos antes de producción (agregados el 01/10/2026)
 
 ### R-1. 🔴 Un verificador que RECALCULE el `content_hash` de cada asiento
+
+> ✅ **Aprobado por Oliver el 01/10/2026 y construido** en la migración **`072`**
+> (`sql/pending/072_hash_v5_y_verificador.sql`), escrita y **sin aplicar**: espera el
+> «aplica». Lo que quedó: la v5 en JSON canónico con la recomendación de abajo, la columna
+> `hash_version`, la tabla de tramos y el verificador v2 con la MISMA firma. La migración
+> aborta si un asiento no se reproduce o si el verificador nuevo encuentra un solo problema.
+> La `072` toma el número que el plan tenía para «tasa con cuenta»: las siguientes se corren
+> otra vez uno (tasa con cuenta 073, excedente 074, NC módulo 075, plan de cuentas 076,
+> apertura 077, cierre 078).
 
 **Pedido de Oliver (01/10/2026):** que el verificador detecte si alguien modificó el contenido
 de una fila, no solo si se rompió el encadenamiento. **Requisito antes de producción. No está

@@ -22,9 +22,17 @@ la base de producción, más el merge de `develop` a `main`:
 > - **Tercero obligatorio en 100004 y 200001** (salvo reversiones). Sin excepción para
 >   compras, gastos de trámite ni pagos (01/10/2026): una compra o un gasto sin ficha de
 >   proveedor **no se registra**. Los constructores ya lo mandan desde E2.
-> - ⚠️ **Los gastos de trámite viejos sin proveedor** (en producción, los que se registran con
->   el botón de reintento) piden el proveedor antes de entrar al libro. Asignarlo antes de
->   operar, o avisarle al bufete.
+> - ⚠️ **Los gastos de trámite sin proveedor no entran al libro.** En producción son los 137
+>   (la `036` crea `supplier_id` vacío). 📋 **PASO PREVIO A ABRIR EL LIBRO:** con la cola ya
+>   aplicada y ANTES del merge, una persona corre en el SQL Editor de producción
+>   `sql/verificacion/gastos-tramite-sin-proveedor.sql` (SOLO LECTURA: resumen + lista por
+>   caso). La abogada o el contador asignan el proveedor a cada uno (crean la ficha si falta;
+>   siempre se exige) antes de registrarlos con «Registrar en el libro contable».
+>
+> 🔴 **La `072` (hash v5 y verificador que recalcula), 01/10/2026.** Va inmediatamente
+> después de la `071` y en la misma ventana. No toca el libro: detecta la versión de cada
+> asiento viejo (en producción no hay ninguno) y parcha el motor. Aborta si el verificador
+> nuevo encuentra un solo problema. Después: `sql/tests/verificacion-072-hash-v5-verificador.sql`.
 > - 🔴 **Mientras la rama no se mezcle, `develop` es incompatible con STAGING** (donde la `071`
 >   ya está aplicada desde el 01/10): sus Preview fallan al emitir facturas y NC, cobrar,
 >   registrar compras, gastos de trámite y pagos, y cargar asientos manuales. Ver

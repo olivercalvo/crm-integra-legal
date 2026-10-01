@@ -367,6 +367,13 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   existe todavía: propuesta P-2f en el plan.
 - 🔬 **Hash v4:** `referencia_externa` entra al `content_hash` (SOP-014, cuarta fila). La
   reversión la hereda sola dentro del RPC.
+- 🔬 **Hash v5 y verificador que recalcula (`072`, escrita SIN APLICAR):** contenido en JSON
+  canónico (`finanzas_contenido_v5`, la MISMA función en el motor y en el verificador),
+  `journal_entries.hash_version` en todo asiento nuevo y tramos de las versiones viejas en
+  `accounting_hash_versions`. `verify_accounting_chain` mantiene la firma y suma «contenido
+  alterado (fórmula vN)». No detecta una reescritura completa de la cadena (hace falta un
+  ancla externa).
+- **Siempre se exige la ficha del proveedor**, también de contado (P-2f descartada, 01/10).
 - **El N.º de factura del proveedor de un gasto de trámite asentado se congela** (ahora es
   `referencia_externa`); completarlo si estaba vacío sigue permitido. `purchase_number` no
   cambia una vez asignado (trigger). El gasto de trámite toma su número ANTES de postear y un

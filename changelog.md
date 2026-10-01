@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, R-1: hash v5 y verificador que recalcula] - 2026-10-01
+
+- ⚠️ Migración `072` **escrita y SIN APLICAR**: contenido del hash en JSON canónico (v5),
+  `hash_version` por asiento, tramos de versiones viejas y `verify_accounting_chain` que
+  recalcula el contenido con la fórmula de cada asiento (v1 a v5).
+- `sql/tests/verificacion-072-hash-v5-verificador.sql` (8 comprobaciones, con adulteraciones
+  simuladas dentro de un ROLLBACK).
+- Consulta de solo lectura para producción: `sql/verificacion/gastos-tramite-sin-proveedor.sql`.
+- Recorrido E3 cerrado con abogada: FAC-CO-000002 (gasto de trámite) y CO-000011 (cobro).
+- P-2f (compra de contado sin proveedor) descartada.
+
 ## [Bloque 1, E3: 071 aplicada en staging y proveedor obligatorio] - 2026-10-01
 
 - `071` aplicada en staging, con un cambio previo: el motor ya no exime compras, gastos de

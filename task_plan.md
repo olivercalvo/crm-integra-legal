@@ -1,5 +1,23 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 01/10/2026 (tarde) — RECORRIDO E3 CERRADO; 072 ESCRITA <<<
+
+- ✅ Con **abogada2**: gasto de trámite en CORP-001 (cerrado). Sin proveedor → «Elige el
+  proveedor…»; con CABLE ONDA → pregunta «Este caso está cerrado. ¿Deseas registrar el gasto
+  igual?» → **FAC-CO-000002** (asiento 102), `F-E3-T01` como referencia externa, CABLE ONDA en
+  200001.
+- ✅ Cobro de FAC-HON-000026 → **CO-000011** (asiento 103), `TRF-E3-001` como referencia
+  externa, Aurelio Barría en 100004; la factura queda pagada.
+- ✅ **Factura del proveedor en la compra: NO era un error del formulario.** Repetida con un
+  valor verificado en el campo antes de guardar: **FAC-CO-000003** con `F-E3-002` guardado y
+  visible. En la primera prueba el texto no llegó al campo por cómo escribe la herramienta del
+  navegador (pasó lo mismo con el monto del cobro). No se cambió código.
+- ⏳ **Migración `072` escrita, sin aplicar** (hash v5 + verificador que recalcula, R-1).
+- ❌ **P-2f descartada:** siempre se exige la ficha del proveedor.
+- 📋 Paso previo a abrir el libro en producción: `sql/verificacion/gastos-tramite-sin-proveedor.sql`
+  (runbook, nota de la 071). En staging lista 20 gastos (B/. 7,600.00).
+- ⚠️ El servidor de desarrollo se reinició limpio (caché de webpack dañada).
+
 ## >>> 01/10/2026 — 071 APLICADA EN STAGING; DEVELOP QUEDA INCOMPATIBLE CON STAGING <<<
 
 - ✅ **`071` aplicada en staging** (ref `xtyenhakplrkyifbcaow`). Antes de aplicarla se le quitó la

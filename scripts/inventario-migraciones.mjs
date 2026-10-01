@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
     nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
   },
+  "072_hash_v5_y_verificador.sql": {
+    que: "Hash v5 (JSON canonico, sin separadores ambiguos), hash_version por asiento, tramos de versiones viejas y verify_accounting_chain que recalcula el contenido",
+    tipo: "columna", tabla: "journal_entries", columna: "hash_version",
+    nota: "Bloque 1, R-1, 01/10. No toca el libro: detecta la version de cada asiento viejo y la guarda por tramos en accounting_hash_versions. Aborta si un asiento no se reproduce con ninguna formula o si el verificador nuevo encuentra un solo problema. Parche verificado del motor de la 071.",
+  },
   "071_motor_v4_referencias_y_terceros.sql": {
     que: "Motor v4: referencia_externa (en el hash), numero AD- en el motor, tercero obligatorio en 100004/200001, FAC-CO- (purchase_number), NC-CO-",
     tipo: "columna", tabla: "journal_entries", columna: "referencia_externa",

@@ -81,6 +81,9 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     };
   }
 
+  // E8: una NC sin factura (saldo a favor del cliente) lo dice en su glosa.
+  const deLaFactura = nc.invoice_number ? `factura ${nc.invoice_number}` : "sin factura asociada";
+
   // Al revés: lo que la factura acreditó (ingreso, ITBMS) la NC lo debita;
   // lo que debitó (100004) la NC lo acredita.
   const lines: LineaAsiento[] = comoFactura.asiento.lines.map((l) => ({
@@ -89,7 +92,7 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
     credit: l.debit,
     description:
       l.description === `Factura ${nc.credit_note_number}`
-        ? `Nota de crédito ${nc.credit_note_number} — factura ${nc.invoice_number}`
+        ? `Nota de crédito ${nc.credit_note_number}, ${deLaFactura}`
         : l.description === "ITBMS facturado"
           ? "ITBMS acreditado"
           : l.description,
@@ -100,7 +103,9 @@ export function construirAsientoDeNotaDeCredito(nc: NotaDeCreditoParaAsiento): R
 
   const asiento: AsientoInput = {
     ...comoFactura.asiento,
-    description: `Nota de crédito ${nc.credit_note_number} — Factura ${nc.invoice_number} — ${nc.client_name}`,
+    description: nc.invoice_number
+      ? `Nota de crédito ${nc.credit_note_number} — Factura ${nc.invoice_number} — ${nc.client_name}`
+      : `Nota de crédito ${nc.credit_note_number}, sin factura asociada, ${nc.client_name}`,
     source_type: SOURCE_TYPE_NOTA_CREDITO,
     source_id: nc.id,
     reference: nc.credit_note_number,

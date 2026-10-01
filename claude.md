@@ -253,8 +253,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - FND-010 (los gastos de trámite en la antigüedad por pagar) se cerró el mismo día con el Bloque 4.
 
 ### Nota de crédito contable (desde 2026-09-22, Bloque 5 — SOLO staging)
-- 🔴 **Una NC se emite POR LÍNEAS con cantidad, nunca por monto libre.** El precio y la tasa son
-  los de la factura (`credit_note_lines` copia `unit_price`, `tax_rate`, `tax_code_id`); el asiento
+- 🔴 **Una NC se emite POR LÍNEAS con cantidad, nunca por monto libre.** Desde E8 (01/10/2026) las
+  líneas de la factura son el valor INICIAL y se editan (precio hasta el de la factura, P-4b;
+  tasa del catálogo, nunca del body; se pueden agregar líneas con servicio); el asiento
   se arma por línea (cuenta de ingreso de cada servicio, 130003 en los REIM-*, ITBMS por tasa) y
   así una NC parcial da el ITBMS proporcional exacto. Validador puro: `validators/credit-note.ts`.
   Tope (D7): **no se acredita más que `balance_due`**; lo cobrado se reversa primero.
@@ -297,6 +298,26 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **NC de COMPRA no va (D6).** Preguntas abiertas en `task_plan.md`: (i) ideati — ¿la DGI acepta
   una NC enviada semanas después de su fecha contable?; (ii) Josuarth — acreditar una factura ya
   cobrada (saldo acreedor) y el excedente del recibo.
+
+### Notas de crédito como módulo propio (desde 2026-10-01, Bloque 1 E8 — `076` SIN APLICAR)
+- **Pantallas:** `/finanzas/notas-credito` (+ `/nueva`, admin y abogada) y
+  `/finanzas/notas-credito-proveedor` (+ `/nueva`, también el contador, por prefijo). El botón de la
+  factura y el de la compra abren la MISMA pantalla con el documento precargado (`?factura=`,
+  `?compra=`): un solo formulario, con el editor de líneas de la factura / de la compra.
+- **El documento es OPCIONAL.** Sin documento, la NC es **saldo a favor** del tercero (negativo en
+  la antigüedad) y se aplica desde su detalle con «Aplicar saldo a favor» (`apply_credit_note`,
+  `apply_supplier_credit_note`, SIN asiento, admin, abogada y contador). La pantalla pregunta antes
+  de guardar sin documento.
+- 🔴 **La NC de VENTA sin factura está APAGADA** detrás de `PERMITIR_NC_VENTA_SIN_FACTURA`
+  (`validators/credit-note.ts`) hasta P-4a. Una NC sin factura tampoco se manda a la DGI (409
+  antes del correlativo). La de compra sin compra SÍ se permite.
+- 🔴 **`credited_total` = Σ NC `emitida` nacidas sobre el documento + Σ aplicaciones.** La NC con
+  documento lo sigue acreditando entero por `invoice_id` / `business_expense_id` (sin backfill);
+  la 076 aborta si cambia un solo `credited_total`. CHECK nuevo `credited_total <= grand_total`.
+- **`create_supplier_credit_note` cambió de firma** (compra opcional, proveedor, líneas con cuenta,
+  monto, impuesto e ITBMS ±0,02) y verifica el asiento **cuenta por cuenta**, ya no sólo
+  200001/200003. Lleva el documento del proveedor en `referencia_externa`.
+- Una aplicación no se edita ni se borra: si fue un error, se reversa la NC.
 
 ### Asientos de diario — tercero, clon y reversión (desde 2026-09-22, Bloque 7 — SOLO staging)
 - 🔴 **El tercero de una línea son DOS FK reales** (`journal_entry_lines.client_id` /

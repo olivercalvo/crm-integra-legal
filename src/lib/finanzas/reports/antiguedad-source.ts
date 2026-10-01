@@ -289,6 +289,81 @@ async function saldosAFavor(db: DB, tenantId: string): Promise<DocumentoPendient
 }
 
 /**
+ * E8 (`076`): las NOTAS DE CRÉDITO SIN DOCUMENTO son saldo a favor del tercero,
+ * en NEGATIVO, igual que el excedente de un cobro. Su asiento ya acreditó
+ * 100004 (venta) o debitó 200001 (compra) con el cliente o el proveedor, así
+ * que sin restarlas acá la antigüedad no cuadraría contra el mayor. Lo que ya
+ * se aplicó a una factura o compra ya bajó el saldo de ese documento y no se
+ * vuelve a restar. Sólo las que están en el libro.
+ */
+async function saldosAFavorDeNotas(db: DB, tenantId: string, tipo: TipoAntiguedad): Promise<DocumentoPendiente[]> {
+  const venta = tipo === "cobrar";
+  const { data, error } = venta
+    ? await db
+        .from("credit_notes")
+        .select("id, credit_note_number, accounting_date, grand_total, client_id, clients!inner(name)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "emitida")
+        .is("invoice_id", null)
+    : await db
+        .from("supplier_credit_notes")
+        .select("id, credit_note_number, issue_date, grand_total, supplier_id, suppliers!inner(legal_name, trade_name)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "emitida")
+        .is("business_expense_id", null);
+  if (error) {
+    console.error("[finanzas/antiguedad] saldosAFavorDeNotas failed", error);
+    throw new Error("No se pudieron leer las notas de crédito con saldo a favor");
+  }
+  const filas = (data ?? []) as unknown as Record<string, unknown>[];
+  if (filas.length === 0) return [];
+  const ids = filas.map((f) => String(f.id));
+
+  const [{ data: apps }, { data: asientos }] = await Promise.all([
+    db
+      .from(venta ? "credit_note_applications" : "supplier_credit_note_applications")
+      .select("credit_note_id, amount_applied")
+      .eq("tenant_id", tenantId)
+      .in("credit_note_id", ids),
+    db
+      .from("journal_entries")
+      .select("source_id")
+      .eq("tenant_id", tenantId)
+      .eq("source_type", venta ? "nota_credito" : "nota_credito_proveedor")
+      .in("source_id", ids),
+  ]);
+  const aplicado = new Map<string, number>();
+  for (const a of (apps ?? []) as { credit_note_id: string; amount_applied: number | string }[]) {
+    aplicado.set(a.credit_note_id, (aplicado.get(a.credit_note_id) ?? 0) + Number(a.amount_applied));
+  }
+  const enElLibro = new Set(((asientos ?? []) as { source_id: string }[]).map((x) => x.source_id));
+
+  const partidas: DocumentoPendiente[] = [];
+  for (const f of filas) {
+    const id = String(f.id);
+    if (!enElLibro.has(id)) continue;
+    const saldo = round2(Number(f.grand_total) - (aplicado.get(id) ?? 0));
+    if (saldo <= 0.005) continue;
+    const crudo = (venta ? f.clients : f.suppliers) as unknown;
+    const t = (Array.isArray(crudo) ? crudo[0] : crudo) as
+      | { name?: string; legal_name?: string; trade_name?: string | null }
+      | null
+      | undefined;
+    partidas.push({
+      id,
+      numero: `${f.credit_note_number} (saldo a favor)`,
+      tercero: venta ? t?.name ?? "" : t?.trade_name?.trim() || t?.legal_name || "",
+      terceroId: String(venta ? f.client_id : f.supplier_id),
+      fechaReferencia: String(venta ? f.accounting_date : f.issue_date).slice(0, 10),
+      diasVencido: 0,
+      saldo: -saldo,
+      sourceType: venta ? "nota_credito" : "nota_credito_proveedor",
+    });
+  }
+  return partidas;
+}
+
+/**
  * Gastos del bufete pendientes de pago.
  *
  * Agrupa por `supplier_id` —la ficha del proveedor— y cuenta la antigüedad desde
@@ -587,10 +662,14 @@ export async function loadAntiguedad(
   const [documentosDeModulo, controlCrudo, base, diario] = await Promise.all([
     tipo === "cobrar"
       ? // 074: las facturas pendientes MÁS los saldos a favor, en negativo.
-        Promise.all([facturasPendientes(db, tenantId), saldosAFavor(db, tenantId)]).then(([a, b]) => [...a, ...b])
-      : // Compras del bufete + gastos de trámite EN EL LIBRO (FND-010).
-        Promise.all([gastosPendientes(db, tenantId), gastosTramitePendientes(db, tenantId)]).then(
-          ([a, b]) => [...a, ...b]
+        //     E8: y las NC sin factura, también en negativo.
+        Promise.all([facturasPendientes(db, tenantId), saldosAFavor(db, tenantId), saldosAFavorDeNotas(db, tenantId, "cobrar")]).then(
+          ([a, b, c]) => [...a, ...b, ...c]
+        )
+      : // Compras del bufete + gastos de trámite EN EL LIBRO (FND-010), y las
+        // NC de proveedor sin compra en negativo (E8).
+        Promise.all([gastosPendientes(db, tenantId), gastosTramitePendientes(db, tenantId), saldosAFavorDeNotas(db, tenantId, "pagar")]).then(
+          ([a, b, c]) => [...a, ...b, ...c]
         ),
     saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
     tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),

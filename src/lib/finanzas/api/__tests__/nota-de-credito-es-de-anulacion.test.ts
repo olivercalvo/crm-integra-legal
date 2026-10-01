@@ -27,6 +27,6 @@ test("🔒 esAnulacion exige que la NC NO tenga asiento propio", () => {
   );
 });
 
-test("la etiqueta dice Total cuando la NC acredita la factura entera", () => {
-  assert.match(PAGINA, /\{acreditaElTotal \? "Total" : "Parcial"\}/);
+test("la etiqueta dice Total cuando la NC acredita la factura entera (y Sin factura cuando no tiene, E8)", () => {
+  assert.match(PAGINA, /\{sinFactura \? "Sin factura" : acreditaElTotal \? "Total" : "Parcial"\}/);
 });

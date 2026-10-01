@@ -99,12 +99,14 @@ interface MetaNc {
   fe_estado: string;
   punto_facturacion: string | null;
   numero_documento: number | null;
+  /** E8: una NC sin factura no se manda a la DGI (P-4a). */
+  invoice_id: string | null;
 }
 
 async function loadMetaNc(db: DB, tenantId: string, id: string): Promise<MetaNc> {
   const { data, error } = await db
     .from("credit_notes")
-    .select("id, credit_note_number, status, fe_estado, punto_facturacion, numero_documento")
+    .select("id, credit_note_number, status, fe_estado, punto_facturacion, numero_documento, invoice_id")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -118,6 +120,7 @@ async function loadMetaNc(db: DB, tenantId: string, id: string): Promise<MetaNc>
     fe_estado: String(r.fe_estado ?? "no_emitida"),
     punto_facturacion: r.punto_facturacion === null ? null : String(r.punto_facturacion),
     numero_documento: r.numero_documento === null ? null : Number(r.numero_documento),
+    invoice_id: (r.invoice_id as string | null) ?? null,
   };
 }
 
@@ -148,6 +151,16 @@ export async function emitCreditNoteToEfactura(
   if (nc.status === "anulada") {
     throw new MutationError(
       "Esta nota de crédito está anulada: no se envía a la DGI.",
+      409
+    );
+  }
+  // 🔴 E8 / P-4a: una NC tipo 04 tiene que decir qué factura corrige. Sin
+  //    factura no hay documento referenciado y el PAC la rechaza: se corta acá,
+  //    antes de tocar el correlativo.
+  if (!nc.invoice_id) {
+    throw new MutationError(
+      "Esta nota de crédito no está asociada a una factura, así que no se puede enviar a la DGI: " +
+        "el documento electrónico tiene que decir qué factura corrige. Queda como documento interno.",
       409
     );
   }

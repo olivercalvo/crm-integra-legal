@@ -8,6 +8,7 @@ import {
   Calendar,
   FileText,
   XCircle,
+  FileMinus,
 } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,6 @@ import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { listarSaldosAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 import { CreditNotesSection } from "../_components/credit-notes-section";
-import { CreditNoteDialog, type LineaAcreditable } from "../_components/credit-note-dialog";
 import { AcreditadaTotalBadge } from "@/components/finanzas/acreditada-total-badge";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 import { fmtImporte } from "@/lib/utils/importe";
@@ -179,17 +179,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     ? traducirRechazo(envioFallido.codigos, invoice.client?.name ?? null)
     : null;
 
-  // Lo que el diálogo de NC puede ofrecer: facturado menos ya acreditado, por
-  // línea. Sale de la MISMA consulta que usa el servidor para validar.
-  const lineasAcreditables: LineaAcreditable[] = invoice.lines.map((ln) => ({
-    invoice_line_id: ln.id,
-    line_order: ln.line_order,
-    description: ln.description,
-    quantity: Number(ln.quantity),
-    unit_price: Number(ln.unit_price),
-    tax_rate: Number(ln.tax_rate ?? 0),
-    disponible: Math.round((Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0)) * 100) / 100,
-  }));
+  // Lo que queda por acreditar de cada línea: facturado menos ya acreditado.
+  // Sale de la MISMA consulta que usa el servidor para validar. Si no queda
+  // nada, el botón de NC no se ofrece.
+  const quedaPorAcreditar = invoice.lines.some(
+    (ln) => Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0) > 0.0001
+  );
   // "Anular" aparece cuando la matriz dice que se puede anular — con la DGI o
   // sólo en el libro, según la factura tenga CUFE o no. Los motivos por los que
   // no se puede (mes cerrado, NC previa, plazo vencido) los junta la matriz y
@@ -203,7 +198,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     canMutate &&
     !anulacionAMedias &&
     !acreditadaTotal &&
-    lineasAcreditables.some((l) => l.disponible > 0);
+    quedaPorAcreditar;
   // Card "Facturación Electrónica" (PAC) — visible en facturas emitidas y
   // en anuladas que hayan llegado a interactuar con DGI (para conservar
   // historial post-anulación).
@@ -302,15 +297,22 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               grandTotal={Number(invoice.grand_total)}
             />
           )}
+          {/* E8: la NC es un módulo propio. El botón se queda y abre la MISMA
+              pantalla que el listado, con la factura precargada: un solo
+              formulario. Mismo criterio de visibilidad que el diálogo de antes. */}
           {showCreditNote && (
-            <CreditNoteDialog
-              invoiceId={invoice.id}
-              invoiceNumber={invoice.invoice_number}
-              balanceDue={Number(invoice.balance_due)}
-              lineas={lineasAcreditables}
-              mesCerrado={mesCerrado}
-              fechaMinima={registroDeLaFactura}
-            />
+            <Link
+              href={`/finanzas/notas-credito/nueva?factura=${invoice.id}`}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-integra-navy/30 bg-white px-4 text-sm font-semibold text-integra-navy hover:bg-integra-navy hover:text-white"
+              title={
+                mesCerrado
+                  ? "El mes de esta factura está cerrado: no se anula, se emite una nota de crédito"
+                  : "Emitir una nota de crédito sobre esta factura"
+              }
+            >
+              <FileMinus size={16} />
+              Nota de crédito
+            </Link>
           )}
           {showCancel && (
             <CancelInvoiceDialog

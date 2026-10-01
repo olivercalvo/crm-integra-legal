@@ -304,9 +304,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
           {compraParaNc && (
             <SupplierCreditNotesSection
               compraId={expense.id}
-              compraLabel={expense.description}
               notas={notasProveedor}
-              lineas={compraParaNc.lineas}
               saldo={compraParaNc.balance_due}
               canMutate={canMutate}
             />

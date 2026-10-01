@@ -29,7 +29,7 @@ import { totalDeLineaDeNc } from "@/lib/finanzas/validators/credit-note";
 const ROOT = process.cwd();
 const leer = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
-const DIALOGO = "src/app/finanzas/facturas/_components/credit-note-dialog.tsx";
+const FORMULARIO = "src/app/finanzas/notas-credito/_components/nota-de-credito-form.tsx";
 const FACTURA = "src/app/finanzas/facturas/[id]/page.tsx";
 const NC_PAGE = "src/app/finanzas/notas-credito/[id]/page.tsx";
 const PDF_ROUTE = "src/app/api/finanzas/credit-notes/[id]/pdf/route.ts";
@@ -42,14 +42,21 @@ test("totalDeLineaDeNc redondea el subtotal y el impuesto por separado, como T8c
   assert.equal(totalDeLineaDeNc(0.5, 200, 0.07), 107);
 });
 
-test("🔒 el diálogo calcula el total con totalDeLineaDeNc y no por su cuenta", () => {
-  const src = leer(DIALOGO);
-  assert.match(src, /import \{[^}]*totalDeLineaDeNc[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
-  assert.match(src, /totalDeLineaDeNc\(x\.qty, x\.linea\.unit_price, x\.linea\.tax_rate\)/);
+test("🔒 la pantalla de NC (E8) valida y calcula con las MISMAS funciones del servidor", () => {
+  const src = leer(FORMULARIO);
+  assert.match(src, /import \{[\s\S]*?validarLineasDeNotaDeCredito[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
+  assert.match(src, /import \{[\s\S]*?totalDeLineaDeNc[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
+  assert.match(src, /validarLineasDeNotaDeCredito\(\{/, "el tope en vivo es el del servidor");
   assert.doesNotMatch(src, /\*\s*\(1\s*\+\s*[\w.]*tax_rate/, "no aplica la tasa por su cuenta");
   assert.doesNotMatch(src, /unit_price\s*\*\s*\(1/, "no aplica la tasa por su cuenta");
   assert.match(src, /fetch\("\/api\/finanzas\/credit-notes"/);
   assert.match(src, /router\.push\(`\/finanzas\/notas-credito\/\$\{data\.id\}/, "al emitir va al detalle de la NC");
+  // Mismo editor de líneas que la factura: "mismo formulario que la factura".
+  assert.match(src, /<InvoiceLineItems/);
+  // El botón de la factura abre ESTA pantalla con la factura precargada.
+  const factura = leer(FACTURA);
+  assert.match(factura, /href=\{`\/finanzas\/notas-credito\/nueva\?factura=\$\{invoice\.id\}`\}/);
+  assert.doesNotMatch(factura, /CreditNoteDialog/, "el diálogo viejo se retiró: un solo formulario");
 });
 
 test("el detalle de la factura: Anular solo sin NC parcial y con el mes abierto; el disponible sale de la misma consulta que valida", () => {

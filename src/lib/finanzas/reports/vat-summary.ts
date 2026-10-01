@@ -335,7 +335,8 @@ export async function getVatSummary(
     .select(
       `id, credit_note_number, supplier_document_number, issue_date, status,
        subtotal_total, tax_total, grand_total,
-       compra:business_expenses!supplier_credit_notes_business_expense_id_fkey(supplier_name, description)`
+       compra:business_expenses!supplier_credit_notes_business_expense_id_fkey(supplier_name, description),
+       proveedor:suppliers!supplier_credit_notes_supplier_id_fkey(legal_name)`
     )
     .eq("tenant_id", tenantId)
     .gte("issue_date", from)
@@ -362,6 +363,8 @@ export async function getVatSummary(
     tax_total: string | number;
     grand_total: string | number;
     compra: { supplier_name: string | null; description: string } | null;
+    /** E8: una NC sin compra nombra al proveedor por su ficha. */
+    proveedor?: { legal_name: string } | null;
   }>;
   // Base gravada de cada NC de compra: sus líneas con ITBMS > 0.
   const baseGravadaPorNc = new Map<string, number>();
@@ -633,8 +636,10 @@ export async function getVatSummary(
     expenseDetail.push({
       id: n.id,
       expense_date: n.issue_date,
-      supplier_name: n.compra?.supplier_name ?? null,
-      description: `Nota de crédito ${n.credit_note_number} (documento del proveedor ${n.supplier_document_number}) sobre: ${n.compra?.description ?? ""}`,
+      supplier_name: n.compra?.supplier_name ?? n.proveedor?.legal_name ?? null,
+      description: n.compra
+        ? `Nota de crédito ${n.credit_note_number} (documento del proveedor ${n.supplier_document_number}) sobre: ${n.compra.description}`
+        : `Nota de crédito ${n.credit_note_number} (documento del proveedor ${n.supplier_document_number}), sin compra asociada`,
       account_code: null,
       account_name: null,
       subtotal: -Number(n.subtotal_total),

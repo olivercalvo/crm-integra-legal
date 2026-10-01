@@ -26,6 +26,10 @@ interface Props {
   errors: ValidationErrors;
   onChange: (lines: InvoiceLineInput[]) => void;
   disabled?: boolean;
+  /** Título de la sección. La nota de crédito (E8) usa este mismo editor. */
+  titulo?: string;
+  /** Errores en vivo por línea (la NC muestra el tope de cada línea mientras se escribe). */
+  avisosPorLinea?: Record<number, string>;
 }
 
 let _keyCounter = 0;
@@ -64,6 +68,8 @@ export function InvoiceLineItems({
   errors,
   onChange,
   disabled,
+  titulo = "Líneas de la factura",
+  avisosPorLinea = {},
 }: Props) {
   function patchLine(idx: number, patch: Partial<InvoiceLineInput>) {
     const next = [...lines];
@@ -114,7 +120,7 @@ export function InvoiceLineItems({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-integra-navy">Líneas de la factura</h2>
+        <h2 className="text-base font-semibold text-integra-navy">{titulo}</h2>
         <Button
           type="button"
           size="sm"
@@ -160,7 +166,7 @@ export function InvoiceLineItems({
             // calculaba (`lineErrors.service`) pero nunca se pintaba ni marcaba la
             // fila — un slot muerto. El `data-error` es lo que el scrollIntoView
             // de `invoice-form.tsx` busca para llegar hasta acá.
-            const hayErrorEnLinea = Object.values(lineErrors).some(Boolean);
+            const hayErrorEnLinea = Object.values(lineErrors).some(Boolean) || !!avisosPorLinea[idx];
 
             return (
               <div
@@ -276,13 +282,13 @@ export function InvoiceLineItems({
                         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500"
                         aria-hidden="true"
                       >
-                        $
+                        B/.
                       </span>
                       <MoneyInput
                         value={ln.unit_price}
                         onChange={(e) => patchLine(idx, { unit_price: Number(e.target.value) })}
                         disabled={disabled}
-                        className={`pl-7 ${lineErrors.unit_price ? "border-red-300" : ""}`}
+                        className={`pl-10 ${lineErrors.unit_price ? "border-red-300" : ""}`}
                       />
                     </div>
                     {lineErrors.unit_price && (
@@ -310,6 +316,9 @@ export function InvoiceLineItems({
                     </div>
                   </div>
                 </div>
+                {avisosPorLinea[idx] && (
+                  <p role="alert" className="text-xs text-red-600">{avisosPorLinea[idx]}</p>
+                )}
               </div>
             );
           })}

@@ -1,5 +1,17 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1, E8: notas de crédito como módulo propio] - 2026-10-01
+
+- ⚠️ Migración `076` **escrita y SIN APLICAR**: factura y compra opcionales, aplicaciones de NC,
+  `credited_total` con aplicaciones, `create_supplier_credit_note` con líneas libres y
+  verificación del asiento por cuenta, `apply_credit_note` / `apply_supplier_credit_note`.
+  Verificación: `sql/tests/verificacion-076-nc-modulo.sql`.
+- Pantallas nuevas: listados y alta de NC de venta y de proveedor. El botón de la factura y el
+  de la compra llevan a la misma pantalla, con el documento precargado y las líneas editables.
+- NC de venta sin factura apagada (P-4a); NC de compra sin compra permitida, como saldo a favor.
+- Antigüedad: las NC sin documento restan como saldo a favor del tercero.
+- El precio del editor de líneas de la factura se muestra en B/.
+
 ## [Bloque 1: 075 aplicada en staging] - 2026-10-01
 
 - `075` aplicada en staging (verificación 8/8), con la corrección del nombre de una variable en

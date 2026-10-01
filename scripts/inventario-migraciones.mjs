@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
     nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
   },
+  "076_nc_modulo_propio.sql": {
+    que: "Notas de credito como modulo propio: factura y compra opcionales, aplicaciones de NC (venta y compra), credited_total desde aplicaciones, create_supplier_credit_note con lineas libres, apply_credit_note y apply_supplier_credit_note",
+    tipo: "tabla", tabla: "credit_note_applications",
+    nota: "Bloque 1, E8, 01/10. La NC con factura sigue acreditandola entera por invoice_id (sin backfill); la verificacion final aborta si cambia un solo credited_total. La NC de venta sin factura queda apagada en la app (PERMITIR_NC_VENTA_SIN_FACTURA, P-4a).",
+  },
   "075_ancla_de_la_cadena.sql": {
     que: "Ancla externa de la cadena: accounting_chain_anchors inmutable, ancla al cerrar cada periodo (trigger), ancla inicial y verify_chain_anchors",
     tipo: "tabla", tabla: "accounting_chain_anchors",

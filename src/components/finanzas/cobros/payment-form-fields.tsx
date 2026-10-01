@@ -75,6 +75,9 @@ export function emptyPaymentFormValues(): PaymentFormValues {
  */
 export function validatePaymentForm(
   v: PaymentFormValues,
+  // 074: el saldo ya no limita el monto (el excedente queda a favor del
+  // cliente). Se sigue recibiendo para no tocar a los cinco llamadores.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   balanceDue: number
 ): { ok: boolean; errors: PaymentFormErrors; amountNum: number } {
   const errors: PaymentFormErrors = {};

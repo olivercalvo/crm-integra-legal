@@ -23,6 +23,8 @@ import { CreditNotePdfButton } from "@/components/finanzas/credit-note-pdf-butto
 import { EnviarNcALaDgiButton } from "./_components/enviar-nc-a-la-dgi-button";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
 import { MOTIVO_ANULACION_MIN } from "@/lib/finanzas/validators/cancel-invoice";
+import { AplicarSaldoDeNc } from "@/components/finanzas/aplicar-saldo-de-nc";
+import { facturasConSaldoDelCliente, saldoDeNotaDeCredito } from "@/lib/finanzas/queries/notas-credito";
 import {
   decidirAccionSobreNotaDeCredito,
   type FeEstado,
@@ -70,7 +72,7 @@ interface PageProps {
 interface NcDetalle {
   id: string;
   credit_note_number: string;
-  invoice_id: string;
+  invoice_id: string | null;
   issue_date: string;
   /** Fecha de REGISTRO (`068`): la del asiento. */
   accounting_date?: string | null;
@@ -152,6 +154,17 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
   const recienEmitida = searchParams?.emitida === "1";
 
+  // E8: una NC sin factura es saldo a favor del cliente (hoy apagada, P-4a).
+  const sinFactura = !nc.invoice_id;
+  const { aplicaciones, aplicado } = sinFactura
+    ? await saldoDeNotaDeCredito(db, tenantId, nc.id, "venta")
+    : { aplicaciones: [], aplicado: 0 };
+  const saldoAFavor = sinFactura ? Math.round((Number(nc.grand_total) - aplicado) * 100) / 100 : 0;
+  const facturasParaAplicar =
+    sinFactura && nc.status === "emitida" && saldoAFavor > 0.005 && nc.client && asiento
+      ? await facturasConSaldoDelCliente(db, tenantId, nc.client.id)
+      : [];
+
   // ── Qué se puede hacer con esta nota de crédito ──────────────────────────
   //
   // 🔴 La decisión NO se deriva acá en el JSX: la toma la misma función pura
@@ -222,7 +235,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                 </span>
               ) : (
                 <span className="inline-flex items-center rounded-full border border-integra-gold/60 bg-integra-gold/10 px-2.5 py-0.5 text-xs font-semibold text-integra-navy">
-                  {acreditaElTotal ? "Total" : "Parcial"}
+                  {sinFactura ? "Sin factura" : acreditaElTotal ? "Total" : "Parcial"}
                 </span>
               )}
             </div>
@@ -338,7 +351,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                       </span>
                     </Link>
                   ) : (
-                    "—"
+                    "Sin factura asociada"
                   )}
                 </dd>
               </div>
@@ -409,6 +422,36 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               )}
             </dl>
           </section>
+
+          {sinFactura && (
+            <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+              <h2 className="text-base font-semibold text-integra-navy">Saldo a favor del cliente</h2>
+              <p className="text-sm text-gray-700">
+                Esta nota de crédito no está asociada a una factura: queda como saldo a favor de{" "}
+                <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
+                {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
+              </p>
+              {aplicaciones.length > 0 && (
+                <ul className="divide-y rounded-md border text-sm">
+                  {aplicaciones.map((a, i) => (
+                    <li key={i} className="flex justify-between px-3 py-2">
+                      <span className="font-mono">{a.documento_numero}</span>
+                      <span className="font-mono">B/. {fmtImporte(a.amount_applied)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {nc.status === "emitida" && saldoAFavor > 0.005 && asiento && (
+                <AplicarSaldoDeNc
+                  endpoint={`/api/finanzas/credit-notes/${nc.id}/apply`}
+                  campo="invoice_id"
+                  documentos={facturasParaAplicar}
+                  saldo={saldoAFavor}
+                  queDocumento="factura"
+                />
+              )}
+            </section>
+          )}
 
           {/* Líneas */}
           <section className="rounded-xl border bg-white p-5 shadow-sm">

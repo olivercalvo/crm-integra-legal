@@ -25,13 +25,22 @@
 | R-1 hash v5 y verificador (072) | ✅ en staging |
 | E4 tasa con cuenta (073), E5 excedente (074) | ✅ en staging |
 | E6 plan de cuentas (subcategorías, Familia, otros ingresos) | 🛑 espera **P-8a** de Josuarth |
-| E8 NC como módulo propio | 🛑 espera **P-4a** de Josuarth |
+| E8 NC como módulo propio | ✅ construido (076 sin aplicar); venta sin factura apagada hasta **P-4a** |
 | E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
 | E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
 | E10 Estado de Resultado y Balance (línea de ISR al 0 %) | depende de E6 |
 | E11 cierre anual | noviembre |
 | R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
 | Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
+
+## >>> 01/10/2026 (noche) — E8: NC COMO MÓDULO PROPIO <<<
+
+- ⏳ **`076` escrita, SIN APLICAR** (espera «aplica»). Hasta aplicarla, la NC de venta con factura
+  funciona (no necesita esquema nuevo) y la de proveedor NO (el RPC cambió de firma).
+- Valores por defecto: P-4b → el precio no sube sobre el de la factura; tope con documento = su
+  saldo (D7 / J-3); P-4a → venta sin factura apagada.
+- Recorrido pendiente después del «aplica»: NC de venta desde la factura y desde el listado; NC de
+  proveedor con compra y sin compra; aplicar su saldo a una compra; reversarla.
 
 ## >>> 01/10/2026 (tarde) — 075 APLICADA EN STAGING <<<
 

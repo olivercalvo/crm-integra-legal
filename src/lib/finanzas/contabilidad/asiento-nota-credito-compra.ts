@@ -39,6 +39,8 @@ export interface LineaDeCompraParaNc {
   /** 073: la cuenta del impuesto de la tasa de la línea de compra. */
   tax_account?: string | null;
   tax_code?: string | null;
+  /** E8: la tasa de la línea (para saber si la NC la cambia). */
+  tax_code_id?: string | null;
   /** Base ya acreditada por NC vigentes (`status = 'emitida'`). */
   acreditado_base: number;
   /** ITBMS ya acreditado por NC vigentes. */
@@ -46,13 +48,50 @@ export interface LineaDeCompraParaNc {
   cuenta_valida: boolean;
 }
 
+/**
+ * Una línea pedida. Con `expense_line_id`, todo lo demás cae en lo de la
+ * compra; sin ella (E8: NC sin compra, o línea agregada), cuenta, descripción
+ * y monto son obligatorios. El impuesto lo escribe la persona y se acepta con
+ * la tolerancia de la compra (±0,02): el comprobante del proveedor manda.
+ */
 export interface LineaPedida {
-  expense_line_id: string;
+  expense_line_id: string | null;
   amount: number;
+  chart_account_code?: string;
+  description?: string;
+  /** `undefined` = el de la línea de la compra; `null` = sin impuesto. */
+  tax_code_id?: string | null;
+  /** `null`/`undefined` = el sugerido por la tasa. */
+  tax_amount?: number | null;
+}
+
+/** Una tasa del catálogo con su cuenta (073). */
+export interface TasaParaNcDeCompra {
+  code: string;
+  rate: number;
+  account_code: string | null;
+  active: boolean;
+}
+
+/** Lo que hace falta del plan y del catálogo para las líneas que no vienen de la compra. */
+export interface CatalogosParaNcDeCompra {
+  tasas: Map<string, TasaParaNcDeCompra>;
+  /** Códigos de cuenta activos y válidos para un gasto (`esTipoValidoParaGasto`, sin control). */
+  cuentasValidas: Set<string>;
 }
 
 export interface LineaCalculada {
-  linea: LineaDeCompraParaNc;
+  /** La línea de la compra, si viene de una. */
+  linea: LineaDeCompraParaNc | null;
+  expense_line_id: string | null;
+  line_order: number;
+  description: string;
+  chart_account_code: string;
+  cuenta_valida: boolean;
+  tax_code_id: string | null;
+  tax_rate: number;
+  tax_account: string | null;
+  tax_code: string | null;
   amount: number;
   tax_amount: number;
 }
@@ -60,6 +99,9 @@ export interface LineaCalculada {
 export type ResultadoCalculo =
   | { ok: true; lineas: LineaCalculada[]; subtotal: number; itbms: number; total: number }
   | { ok: false; mensaje: string };
+
+/** La misma tolerancia que la compra (`validators/expense-line.ts`). */
+export const TOLERANCIA_ITBMS_NC = 0.02;
 
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -74,7 +116,7 @@ export function disponibleEnLinea(l: LineaDeCompraParaNc): number {
  * El ITBMS de lo acreditado en una línea. Si se acredita TODO lo que queda, el
  * ITBMS es el remanente exacto: el de la compra se cargó con ±0,02 de
  * tolerancia y recalcularlo podría dejar un centavo de saldo que nadie debe.
- * Misma regla que el RPC de la `066`.
+ * Misma regla que el RPC de la `066`/`076`.
  */
 export function itbmsDeLineaDeNc(l: LineaDeCompraParaNc, monto: number): number {
   if (round2(monto) === disponibleEnLinea(l)) {
@@ -84,31 +126,102 @@ export function itbmsDeLineaDeNc(l: LineaDeCompraParaNc, monto: number): number 
 }
 
 /**
- * Valida el pedido contra la compra y calcula los montos.
- * @param saldoDeLaCompra `balance_due`: el tope del documento (J-3).
+ * Valida el pedido y calcula los montos. Es la MISMA función en la pantalla y
+ * en el servidor, y la base (`create_supplier_credit_note`, 076) vuelve a
+ * calcular todo y rechaza un asiento que no coincida.
+ * @param saldoDeLaCompra `balance_due`: el tope del documento (J-3). `null` =
+ *   NC sin compra: sin tope, la NC entera es saldo a favor con el proveedor.
  */
 export function calcularNcDeCompra(
   lineasDeCompra: LineaDeCompraParaNc[],
   pedido: LineaPedida[],
-  saldoDeLaCompra: number
+  saldoDeLaCompra: number | null,
+  catalogos: CatalogosParaNcDeCompra = { tasas: new Map(), cuentasValidas: new Set() }
 ): ResultadoCalculo {
   const porId = new Map(lineasDeCompra.map((l) => [l.id, l]));
   const lineas: LineaCalculada[] = [];
+  let orden = 0;
   for (const p of pedido) {
     const monto = round2(Number(p.amount) || 0);
     if (monto <= 0) continue;
-    const l = porId.get(p.expense_line_id);
-    if (!l) return { ok: false, mensaje: "Una línea de la nota de crédito no pertenece a esta compra." };
-    const disponible = disponibleEnLinea(l);
-    if (monto > disponible) {
-      return {
-        ok: false,
-        mensaje:
-          `Línea ${l.line_order} ("${l.description}"): puedes acreditar hasta B/. ${disponible.toFixed(2)} ` +
-          `de base; ya se acreditaron B/. ${round2(l.acreditado_base).toFixed(2)} con otras notas de crédito.`,
-      };
+    orden += 1;
+    const l = p.expense_line_id ? porId.get(p.expense_line_id) : undefined;
+    if (p.expense_line_id && !l) {
+      return { ok: false, mensaje: "Una línea de la nota de crédito no pertenece a esta compra." };
     }
-    lineas.push({ linea: l, amount: monto, tax_amount: itbmsDeLineaDeNc(l, monto) });
+    if (l) {
+      const disponible = disponibleEnLinea(l);
+      if (monto > disponible) {
+        return {
+          ok: false,
+          mensaje:
+            `Línea ${l.line_order} ("${l.description}"): puedes acreditar hasta B/. ${disponible.toFixed(2)} ` +
+            `de base; ya se acreditaron B/. ${round2(l.acreditado_base).toFixed(2)} con otras notas de crédito.`,
+        };
+      }
+    }
+
+    const descripcion = (p.description ?? l?.description ?? "").trim();
+    if (descripcion.length < 3 || descripcion.length > 300) {
+      return { ok: false, mensaje: `Línea ${orden}: la descripción debe tener entre 3 y 300 caracteres.` };
+    }
+    const cuenta = (p.chart_account_code ?? l?.chart_account_code ?? "").trim();
+    if (!cuenta) {
+      return { ok: false, mensaje: `Línea ${orden} ("${descripcion}"): elige la cuenta contable.` };
+    }
+    const cuentaValida = l && cuenta === l.chart_account_code ? l.cuenta_valida : catalogos.cuentasValidas.has(cuenta);
+
+    // El impuesto: el de la línea de la compra si no se cambió; si no, el del
+    // catálogo (nunca el del body).
+    const taxId = p.tax_code_id !== undefined ? p.tax_code_id : l?.tax_code_id ?? null;
+    let tasa = 0;
+    let taxAccount: string | null = null;
+    let taxCode: string | null = null;
+    const mismaTasa = !!l && (taxId ?? null) === (l.tax_code_id ?? null);
+    if (mismaTasa && l) {
+      tasa = l.tax_rate;
+      taxAccount = l.tax_account ?? null;
+      taxCode = l.tax_code ?? null;
+    } else if (taxId) {
+      const t = catalogos.tasas.get(taxId);
+      if (!t || !t.active) {
+        return { ok: false, mensaje: `Línea ${orden} ("${descripcion}"): elige un impuesto activo del catálogo.` };
+      }
+      tasa = t.rate;
+      taxAccount = t.account_code;
+      taxCode = t.code;
+    }
+
+    let impuesto: number;
+    if (l && mismaTasa && monto === disponibleEnLinea(l)) {
+      impuesto = itbmsDeLineaDeNc(l, monto);
+    } else {
+      const sugerido = round2(monto * tasa);
+      impuesto = p.tax_amount === null || p.tax_amount === undefined ? sugerido : round2(Number(p.tax_amount));
+      if (!(impuesto >= 0) || Math.abs(impuesto - sugerido) > TOLERANCIA_ITBMS_NC + 1e-9) {
+        return {
+          ok: false,
+          mensaje:
+            `Línea ${orden} ("${descripcion}"): el impuesto (B/. ${impuesto.toFixed(2)}) no corresponde a su tasa ` +
+            `(B/. ${sugerido.toFixed(2)}).`,
+        };
+      }
+    }
+
+    lineas.push({
+      linea: l ?? null,
+      expense_line_id: l?.id ?? null,
+      line_order: orden,
+      description: descripcion,
+      chart_account_code: cuenta,
+      cuenta_valida: cuentaValida,
+      tax_code_id: taxId ?? null,
+      tax_rate: tasa,
+      tax_account: taxAccount,
+      tax_code: taxCode,
+      amount: monto,
+      tax_amount: impuesto,
+    });
   }
   if (lineas.length === 0) {
     return { ok: false, mensaje: "Indica cuánto se acredita en al menos una línea." };
@@ -116,20 +229,22 @@ export function calcularNcDeCompra(
   const subtotal = round2(lineas.reduce((s, x) => s + x.amount, 0));
   const itbms = round2(lineas.reduce((s, x) => s + x.tax_amount, 0));
   const total = round2(subtotal + itbms);
-  if (total > round2(saldoDeLaCompra)) {
+  if (saldoDeLaCompra !== null && total > round2(saldoDeLaCompra)) {
     return {
       ok: false,
       mensaje:
         `La nota de crédito (B/. ${total.toFixed(2)}) supera lo que falta pagar de esta compra ` +
-        `(B/. ${round2(saldoDeLaCompra).toFixed(2)}). Si el proveedor te devolvió dinero o te dejó ` +
-        `saldo a favor, consulta con el contador antes de registrarla.`,
+        `(B/. ${round2(saldoDeLaCompra).toFixed(2)}). Regístrala sin asociarla a la compra: queda como ` +
+        `saldo a favor con el proveedor.`,
     };
   }
   return { ok: true, lineas, subtotal, itbms, total };
 }
 
 export interface CompraParaNc {
-  id: string;
+  /** `null` en una NC sin compra (E8). */
+  id: string | null;
+  /** La compra, o "sin compra asociada". */
   description: string;
   supplier_name: string | null;
   supplier_id: string | null;
@@ -147,7 +262,7 @@ export function construirAsientoDeNotaDeCompra(
   calculo: Extract<ResultadoCalculo, { ok: true }>
 ): ResultadoAsientoCompra {
   const comoCompra = construirAsientoDeCompra({
-    id: compra.id,
+    id: compra.id ?? "nueva",
     expense_date: fechaDeRegistro,
     accounting_date: fechaDeRegistro,
     description: compra.description,
@@ -155,14 +270,14 @@ export function construirAsientoDeNotaDeCompra(
     supplier_name: compra.supplier_name,
     supplier_id: compra.supplier_id,
     lineas: calculo.lineas.map((x) => ({
-      line_order: x.linea.line_order,
-      description: x.linea.description,
+      line_order: x.line_order,
+      description: x.description,
       amount: x.amount,
       tax_amount: x.tax_amount,
-      tax_account: x.linea.tax_account ?? null,
-      tax_code: x.linea.tax_code ?? null,
-      chart_account_code: x.linea.chart_account_code,
-      cuenta_valida: x.linea.cuenta_valida,
+      tax_account: x.tax_account,
+      tax_code: x.tax_code,
+      chart_account_code: x.chart_account_code,
+      cuenta_valida: x.cuenta_valida,
     })),
   });
   if (!comoCompra.ok) {

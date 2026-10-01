@@ -9,12 +9,15 @@ import { getSupplierCreditNoteById } from "@/lib/finanzas/api/supplier-credit-no
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { SOURCE_TYPE_NOTA_CREDITO_PROVEEDOR } from "@/lib/finanzas/contabilidad/asiento-nota-credito-compra";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { AplicarSaldoDeNc } from "@/components/finanzas/aplicar-saldo-de-nc";
+import { comprasConSaldoDelProveedor, saldoDeNotaDeCredito } from "@/lib/finanzas/queries/notas-credito";
 
 /**
  * Detalle de una NOTA DE CRÉDITO DE PROVEEDOR (3.5, migración `066`).
  *
  * La ven admin, abogada y contador (los que tienen las compras); el contador
- * entra por el patrón exacto de `route-access.ts`. Reversar: los mismos tres,
+ * entra por el prefijo de `route-access.ts` (E8). Una NC sin compra es saldo a
+ * favor con el proveedor y se aplica desde acá a una compra suya. Reversar: los mismos tres,
  * igual que registrarla. La NC es inmutable: sólo se anula con su reversión.
  */
 const ROLES = ["admin", "abogada", "contador"];
@@ -68,6 +71,17 @@ export default async function NotaDeCreditoProveedorPage({ params, searchParams 
   const anulada = nc.status === "anulada";
   const puedeReversar = ROLES.includes(userRole) && !anulada && asiento !== null;
 
+  // E8: sin compra, la NC es saldo a favor con el proveedor.
+  const sinCompra = !compra;
+  const { aplicaciones, aplicado } = sinCompra
+    ? await saldoDeNotaDeCredito(db, tenantId, nc.id, "compra")
+    : { aplicaciones: [], aplicado: 0 };
+  const saldoAFavor = sinCompra ? Math.round((Number(nc.grand_total) - aplicado) * 100) / 100 : 0;
+  const comprasParaAplicar =
+    sinCompra && !anulada && saldoAFavor > 0.005 && proveedor && asiento
+      ? await comprasConSaldoDelProveedor(db, tenantId, proveedor.id)
+      : [];
+
   return (
     <div className="space-y-5">
       {searchParams?.registrada === "1" && (
@@ -83,8 +97,8 @@ export default async function NotaDeCreditoProveedorPage({ params, searchParams 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <BackButton
-            fallbackHref={compra ? `/finanzas/gastos-bufete/${compra.id}` : "/finanzas/gastos-bufete"}
-            label={compra ? "Volver a la compra" : "Volver a compras"}
+            fallbackHref={compra ? `/finanzas/gastos-bufete/${compra.id}` : "/finanzas/notas-credito-proveedor"}
+            label={compra ? "Volver a la compra" : "Volver a notas de crédito"}
             showLabel
           />
           <div className="min-w-0">
@@ -141,7 +155,9 @@ export default async function NotaDeCreditoProveedorPage({ params, searchParams 
                 <Link href={`/finanzas/gastos-bufete/${compra.id}`} className="inline-flex items-center gap-1 text-integra-navy hover:underline">
                   <ShoppingBag size={14} /> {compra.description}
                 </Link>
-              ) : null}
+              ) : (
+                "Sin compra asociada"
+              )}
             </dd>
           </div>
           <div>
@@ -240,6 +256,36 @@ export default async function NotaDeCreditoProveedorPage({ params, searchParams 
               ))}
             </tbody>
           </table>
+        </section>
+      )}
+
+      {sinCompra && (
+        <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-integra-navy">Saldo a favor con el proveedor</h2>
+          <p className="text-sm text-gray-700">
+            Esta nota de crédito no está asociada a una compra: queda como saldo a favor de{" "}
+            <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
+            {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
+          </p>
+          {aplicaciones.length > 0 && (
+            <ul className="divide-y rounded-md border text-sm">
+              {aplicaciones.map((a, i) => (
+                <li key={i} className="flex justify-between px-3 py-2">
+                  <span>{a.documento_numero}</span>
+                  <span className="font-mono">B/. {fmtImporte(a.amount_applied)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!anulada && saldoAFavor > 0.005 && asiento && (
+            <AplicarSaldoDeNc
+              endpoint={`/api/finanzas/supplier-credit-notes/${nc.id}/apply`}
+              campo="business_expense_id"
+              documentos={comprasParaAplicar}
+              saldo={saldoAFavor}
+              queDocumento="compra"
+            />
+          )}
         </section>
       )}
 

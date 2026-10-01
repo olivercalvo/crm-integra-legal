@@ -20,9 +20,12 @@ import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import {
+  MENSAJE_NC_VENTA_SIN_FACTURA,
+  PERMITIR_NC_VENTA_SIN_FACTURA,
   validarLineasDeNotaDeCredito,
   type CreateCreditNoteInput,
   type LineaFacturada,
+  type TasaDelCatalogo,
 } from "@/lib/finanzas/validators/credit-note";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeNotaDeCredito } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
@@ -93,60 +96,99 @@ export async function createCreditNote(
   userId: string,
   input: CreateCreditNoteInput
 ): Promise<{ id: string; credit_note_number: string; total: number }> {
-  // 1. La factura y sus líneas
-  const { data: invoice, error: errInv } = await db
-    .from("invoices")
-    .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date")
-    .eq("tenant_id", tenantId)
-    .eq("id", input.invoice_id)
-    .maybeSingle();
-  if (errInv) {
-    throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
-  }
-  if (!invoice) {
-    throw new MutationError("Factura no encontrada", 404);
+  // 1. La factura (opcional) y sus líneas. Sin factura, el cliente del pedido.
+  type FacturaParaNc = {
+    id: string;
+    client_id: string;
+    invoice_number: string;
+    status: string;
+    balance_due: number;
+    issue_date: string;
+    accounting_date: string | null;
+  };
+  let invoice: FacturaParaNc | null = null;
+  let facturadas: LineaFacturada[] = [];
+  let acreditadoPorLinea = new Map<string, number>();
+  let clientId: string;
+
+  if (input.invoice_id) {
+    const { data: inv, error: errInv } = await db
+      .from("invoices")
+      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.invoice_id)
+      .maybeSingle();
+    if (errInv) {
+      throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
+    }
+    if (!inv) {
+      throw new MutationError("Factura no encontrada", 404);
+    }
+    invoice = { ...(inv as Record<string, unknown>), balance_due: Number(inv.balance_due ?? 0) } as FacturaParaNc;
+    if (input.client_id && input.client_id !== invoice.client_id) {
+      throw new MutationError("La factura es de otro cliente.", 400, undefined, { invoice_id: "La factura es de otro cliente." });
+    }
+    clientId = invoice.client_id;
+
+    const { data: invoiceLines, error: errLines } = await db
+      .from("invoice_lines")
+      .select(
+        `id, line_order, service_id, description, quantity, unit_price,
+         tax_code, tax_rate, tax_code_id`
+      )
+      .eq("tenant_id", tenantId)
+      .eq("invoice_id", input.invoice_id)
+      .order("line_order", { ascending: true });
+    if (errLines) {
+      throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
+    }
+    if (!invoiceLines || invoiceLines.length === 0) {
+      throw new MutationError("La factura no tiene líneas para generar la nota de crédito.", 400);
+    }
+    facturadas = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
+      id: String(ln.id),
+      line_order: Number(ln.line_order),
+      service_id: (ln.service_id as string | null) ?? null,
+      description: String(ln.description ?? ""),
+      quantity: Number(ln.quantity),
+      unit_price: Number(ln.unit_price),
+      tax_code: String(ln.tax_code ?? ""),
+      tax_rate: Number(ln.tax_rate ?? 0),
+      tax_code_id: (ln.tax_code_id as string | null) ?? null,
+    }));
+
+    // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
+    acreditadoPorLinea = await acreditadoPorLineaDeFactura(db, tenantId, input.invoice_id);
+  } else {
+    // 🔴 P-4a: la NC de venta sin factura está apagada. El validador de forma
+    //    ya la corta; esto es por si alguien llama a la función directo.
+    if (!PERMITIR_NC_VENTA_SIN_FACTURA) {
+      throw new MutationError(MENSAJE_NC_VENTA_SIN_FACTURA, 409);
+    }
+    if (!input.client_id) {
+      throw new MutationError("Elige el cliente de la nota de crédito.", 400, undefined, { client_id: "Elige el cliente." });
+    }
+    const { data: cli } = await db
+      .from("clients")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.client_id)
+      .maybeSingle();
+    if (!cli) throw new MutationError("Cliente no encontrado", 404);
+    clientId = input.client_id;
   }
 
-  const { data: invoiceLines, error: errLines } = await db
-    .from("invoice_lines")
-    .select(
-      `id, line_order, service_id, description, quantity, unit_price,
-       tax_code, tax_rate, tax_code_id`
-    )
-    .eq("tenant_id", tenantId)
-    .eq("invoice_id", input.invoice_id)
-    .order("line_order", { ascending: true });
-  if (errLines) {
-    throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
-  }
-  if (!invoiceLines || invoiceLines.length === 0) {
-    throw new MutationError("La factura no tiene líneas para generar la nota de crédito.", 400);
-  }
-
-  // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
-  const acreditadoPorLinea = await acreditadoPorLineaDeFactura(db, tenantId, input.invoice_id);
-
-  // 3. La regla contable (pura)
-  const facturadas: LineaFacturada[] = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
-    id: String(ln.id),
-    line_order: Number(ln.line_order),
-    service_id: (ln.service_id as string | null) ?? null,
-    description: String(ln.description ?? ""),
-    quantity: Number(ln.quantity),
-    unit_price: Number(ln.unit_price),
-    tax_code: String(ln.tax_code ?? ""),
-    tax_rate: Number(ln.tax_rate ?? 0),
-    tax_code_id: (ln.tax_code_id as string | null) ?? null,
-  }));
+  // 3. La regla contable (pura), con el catálogo de tasas: la tasa de una línea
+  //    editada sale de acá, nunca del body.
+  const tasas = await tasasDelCatalogo(db, tenantId);
   const validacion = validarLineasDeNotaDeCredito({
-    factura: {
-      invoice_number: String(invoice.invoice_number ?? ""),
-      status: String(invoice.status),
-      balance_due: Number(invoice.balance_due ?? 0),
-    },
+    factura: invoice
+      ? { invoice_number: String(invoice.invoice_number ?? ""), status: String(invoice.status), balance_due: invoice.balance_due }
+      : null,
     facturadas,
     acreditadoPorLinea,
     pedido: input.lineas,
+    tasas,
   });
   if (!validacion.ok) {
     throw new MutationError(validacion.mensaje, validacion.status, undefined, validacion.fieldErrors);
@@ -155,11 +197,11 @@ export async function createCreditNote(
   // 3.b La fecha de REGISTRO: la elige el contador, en un período abierto y
   //     nunca antes del registro de la factura que corrige. Antes del número:
   //     un 422 por mes cerrado no quema correlativo.
-  const registroDeLaFactura = String(
-    (invoice as { accounting_date?: string | null }).accounting_date ?? invoice.issue_date
-  );
+  const registroDeLaFactura = invoice ? String(invoice.accounting_date ?? invoice.issue_date) : null;
   const fechaDeRegistro = await resolverFechaDeRegistro(db, tenantId, input.fecha_registro, {
-    noAntesDe: { fecha: registroDeLaFactura, etiqueta: `la factura ${invoice.invoice_number}` },
+    ...(registroDeLaFactura
+      ? { noAntesDe: { fecha: registroDeLaFactura, etiqueta: `la factura ${invoice?.invoice_number}` } }
+      : {}),
     que: "la nota de crédito",
     campo: "fecha_registro",
   });
@@ -184,7 +226,7 @@ export async function createCreditNote(
       tenant_id: tenantId,
       credit_note_number: formattedNumber,
       invoice_id: input.invoice_id,
-      client_id: invoice.client_id,
+      client_id: clientId,
       issue_date: issueDateIso,
       accounting_date: fechaDeRegistro,
       reason: input.reason,
@@ -200,7 +242,7 @@ export async function createCreditNote(
   }
   const creditNoteId = cnHeader.id as string;
 
-  // 6. Las líneas. T8c recalcula totales; la 051 deriva credited_total.
+  // 6. Las líneas. T8c recalcula totales; la 051/076 deriva credited_total.
   const { error: errCnLines } = await db.from("credit_note_lines").insert(
     validacion.lineas.map((ln) => ({
       tenant_id: tenantId,
@@ -233,6 +275,46 @@ export async function createCreditNote(
   }
 
   return { id: creditNoteId, credit_note_number: formattedNumber, total: validacion.total };
+}
+
+/** El catálogo de tasas del bufete, por id (activas e inactivas: el validador decide). */
+async function tasasDelCatalogo(db: DB, tenantId: string): Promise<Map<string, TasaDelCatalogo>> {
+  const { data, error } = await db.from("tax_codes").select("id, code, rate, active").eq("tenant_id", tenantId);
+  if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
+  return new Map(
+    ((data ?? []) as { id: string; code: string; rate: number | string; active: boolean }[]).map((t) => [
+      t.id,
+      { code: t.code, rate: Number(t.rate), active: Boolean(t.active) },
+    ])
+  );
+}
+
+/**
+ * APLICAR el saldo a favor de una NC (E8, `076`): una NC sin factura se aplica
+ * a una factura del mismo cliente. NO genera asiento (el crédito ya está en
+ * 100004 a nombre del cliente); el RPC bloquea las dos filas y valida los dos
+ * saldos. Va con el cliente de SERVICIO (SOP-014).
+ */
+export async function applyCreditNote(
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  creditNoteId: string,
+  invoiceId: string,
+  amount: number
+): Promise<{ aplicado: number; saldo_a_favor: number; invoice_number: string }> {
+  const { data, error } = await ledgerDb.rpc("apply_credit_note", {
+    p_tenant_id: tenantId,
+    p_credit_note_id: creditNoteId,
+    p_invoice_id: invoiceId,
+    p_amount: amount,
+    p_created_by: userId,
+  });
+  if (error) {
+    throw new MutationError(error.message || "No se pudo aplicar el saldo de la nota de crédito.", 422, error);
+  }
+  const r = data as { aplicado: number | string; saldo_a_favor: number | string; invoice_number: string };
+  return { aplicado: Number(r.aplicado), saldo_a_favor: Number(r.saldo_a_favor), invoice_number: r.invoice_number };
 }
 
 /**

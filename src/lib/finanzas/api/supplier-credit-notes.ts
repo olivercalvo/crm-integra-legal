@@ -17,9 +17,11 @@ import {
   calcularNcDeCompra,
   construirAsientoDeNotaDeCompra,
   SOURCE_TYPE_NOTA_CREDITO_PROVEEDOR,
+  type CatalogosParaNcDeCompra,
   type CompraParaNc,
   type LineaDeCompraParaNc,
   type LineaPedida,
+  type TasaParaNcDeCompra,
 } from "@/lib/finanzas/contabilidad/asiento-nota-credito-compra";
 import { construirAsientoDeReversion, MOTIVO_MAX, MOTIVO_MIN, type AsientoAReversar } from "@/lib/finanzas/contabilidad/reversion";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
@@ -125,6 +127,7 @@ export async function cargarCompraParaNc(
       tax_amount: num(l.tax_amount),
       tax_account: l.tax_code_id ? tasas.get(l.tax_code_id)?.account_code ?? null : null,
       tax_code: l.tax_code_id ? tasas.get(l.tax_code_id)?.code ?? null : null,
+      tax_code_id: l.tax_code_id,
       acreditado_base: acreditado.get(l.id)?.base ?? 0,
       acreditado_itbms: acreditado.get(l.id)?.itbms ?? 0,
       cuenta_valida: l.chart_account_code !== null && validas.has(l.chart_account_code),
@@ -133,7 +136,10 @@ export async function cargarCompraParaNc(
 }
 
 export interface CrearNcDeCompraInput {
-  business_expense_id: string;
+  /** La compra que corrige. `null` = sin compra: saldo a favor con el proveedor (E8). */
+  business_expense_id: string | null;
+  /** El proveedor. Con compra, el de la compra; sin compra, obligatorio. */
+  supplier_id: string | null;
   supplier_document_number: string;
   supplier_document_date: string;
   supplier_cufe?: string | null;
@@ -150,29 +156,43 @@ export function validarPedidoDeNcDeCompra(raw: unknown):
   const b = (raw ?? {}) as Record<string, unknown>;
   const errors: Record<string, string> = {};
   const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const compra = s(b.business_expense_id);
+  const compra = s(b.business_expense_id) || null;
+  const proveedor = s(b.supplier_id) || null;
   const doc = s(b.supplier_document_number);
   const fecha = s(b.supplier_document_date);
   const motivo = s(b.reason);
-  if (!compra) errors.business_expense_id = "Falta la compra.";
+  if (!compra && !proveedor) errors.supplier_id = "Elige el proveedor.";
   if (!doc) errors.supplier_document_number = "Escribe el número de la nota de crédito que te dio el proveedor.";
   if (doc.length > 100) errors.supplier_document_number = "El número del documento no puede pasar de 100 caracteres.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || Number.isNaN(Date.parse(fecha))) {
     errors.supplier_document_date = "Indica la fecha del documento del proveedor.";
   }
   if (motivo.length < 3 || motivo.length > 1000) errors.reason = "El motivo debe tener entre 3 y 1000 caracteres.";
-  const lineas = Array.isArray(b.lineas)
-    ? (b.lineas as unknown[]).map((x) => {
-        const o = (x ?? {}) as Record<string, unknown>;
-        return { expense_line_id: s(o.expense_line_id), amount: Number(o.amount) };
-      }).filter((x) => x.expense_line_id && Number.isFinite(x.amount) && x.amount > 0)
+  const lineas: LineaPedida[] = Array.isArray(b.lineas)
+    ? (b.lineas as unknown[])
+        .map((x) => {
+          const o = (x ?? {}) as Record<string, unknown>;
+          const linea: LineaPedida = { expense_line_id: s(o.expense_line_id) || null, amount: Number(o.amount) };
+          if (typeof o.chart_account_code === "string") linea.chart_account_code = o.chart_account_code.trim();
+          if (typeof o.description === "string") linea.description = o.description;
+          if (o.tax_code_id !== undefined) linea.tax_code_id = s(o.tax_code_id) || null;
+          if (o.tax_amount !== undefined && o.tax_amount !== null && String(o.tax_amount).trim() !== "") {
+            linea.tax_amount = Number(o.tax_amount);
+          }
+          return linea;
+        })
+        .filter((x) => Number.isFinite(x.amount) && x.amount > 0)
     : [];
   if (lineas.length === 0) errors.lineas = "Indica cuánto se acredita en al menos una línea.";
+  if (lineas.some((l) => !l.expense_line_id && !compra && !l.chart_account_code)) {
+    errors.lineas = "Cada línea lleva su cuenta contable.";
+  }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return {
     ok: true,
     data: {
       business_expense_id: compra,
+      supplier_id: proveedor,
       supplier_document_number: doc,
       supplier_document_date: fecha,
       supplier_cufe: s(b.supplier_cufe) || null,
@@ -181,6 +201,30 @@ export function validarPedidoDeNcDeCompra(raw: unknown):
       fecha_registro: s(b.fecha_registro) || null,
     },
   };
+}
+
+/**
+ * El catálogo que necesita una línea libre: las tasas con su cuenta (073) y las
+ * cuentas que sirven para un gasto (el MISMO predicado que la compra), sin las
+ * cuentas control.
+ */
+export async function cargarCatalogosParaNcDeCompra(db: DB, tenantId: string): Promise<CatalogosParaNcDeCompra> {
+  const [{ data: tc, error: e1 }, { data: cta, error: e2 }] = await Promise.all([
+    db.from("tax_codes").select("id, code, rate, account_code, active").eq("tenant_id", tenantId),
+    db.from("chart_of_accounts").select("code, active, account_type, cuenta_control").eq("tenant_id", tenantId),
+  ]);
+  if (e1) throw new MutationError(pgErrorToMessage(e1), 500, e1);
+  if (e2) throw new MutationError(pgErrorToMessage(e2), 500, e2);
+  const tasas = new Map<string, TasaParaNcDeCompra>(
+    ((tc ?? []) as { id: string; code: string; rate: number | string; account_code: string | null; active: boolean }[]).map(
+      (t) => [t.id, { code: t.code, rate: Number(t.rate), account_code: t.account_code ?? null, active: Boolean(t.active) }]
+    )
+  );
+  const cuentasValidas = new Set<string>();
+  for (const c of (cta ?? []) as { code: string; active: boolean; account_type: AccountType; cuenta_control: string | null }[]) {
+    if (c.active && !c.cuenta_control && esTipoValidoParaGasto(c.account_type)) cuentasValidas.add(c.code);
+  }
+  return { tasas, cuentasValidas };
 }
 
 export interface NcDeCompraCreada {
@@ -197,33 +241,66 @@ export async function createSupplierCreditNote(
   userId: string,
   input: CrearNcDeCompraInput
 ): Promise<NcDeCompraCreada> {
-  const compra = await cargarCompraParaNc(db, tenantId, input.business_expense_id);
-  if (!compra) throw new MutationError("Compra no encontrada", 404);
+  // La compra (opcional). Sin compra, el proveedor con su ficha.
+  let compra: CompraConLineasParaNc | null = null;
+  let paraAsiento: CompraParaNc;
+  if (input.business_expense_id) {
+    compra = await cargarCompraParaNc(db, tenantId, input.business_expense_id);
+    if (!compra) throw new MutationError("Compra no encontrada", 404);
+    if (input.supplier_id && input.supplier_id !== compra.supplier_id) {
+      throw new MutationError("La compra es de otro proveedor.", 400, undefined, { business_expense_id: "La compra es de otro proveedor." });
+    }
+    paraAsiento = compra;
+  } else {
+    const { data: prov } = await db
+      .from("suppliers")
+      .select("id, legal_name, trade_name")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.supplier_id ?? "")
+      .maybeSingle();
+    if (!prov) throw new MutationError("Proveedor no encontrado", 404);
+    const p = prov as { id: string; legal_name: string; trade_name: string | null };
+    paraAsiento = {
+      id: null,
+      description: "sin compra asociada",
+      supplier_name: p.trade_name?.trim() || p.legal_name,
+      supplier_id: p.id,
+    };
+  }
 
   // La fecha de REGISTRO (revisión del 28/09 y reunión del 30/09): la elige el
   // contador, en un período abierto. La del documento del proveedor es aparte
   // (`supplier_document_date`) e informativa. Se valida antes del RPC, que toma
-  // el número `NCP-`: así un mes cerrado no llega a la base.
+  // el número: así un mes cerrado no llega a la base.
   const hoy = await resolverFechaDeRegistro(db, tenantId, input.fecha_registro, {
     que: "la nota de crédito",
     campo: "fecha_registro",
   });
 
-  const calculo = calcularNcDeCompra(compra.lineas, input.lineas, compra.balance_due);
+  const catalogos = await cargarCatalogosParaNcDeCompra(db, tenantId);
+  const calculo = calcularNcDeCompra(compra?.lineas ?? [], input.lineas, compra ? compra.balance_due : null, catalogos);
   if (!calculo.ok) throw new MutationError(calculo.mensaje, 422);
 
-  const armado = construirAsientoDeNotaDeCompra(compra, hoy, calculo);
+  const armado = construirAsientoDeNotaDeCompra(paraAsiento, hoy, calculo);
   if (!armado.ok) throw new MutationError(armado.mensaje, 422);
 
   const { data, error } = await ledgerDb.rpc("create_supplier_credit_note", {
     p_tenant_id: tenantId,
-    p_business_expense_id: compra.id,
+    p_business_expense_id: compra?.id ?? null,
+    p_supplier_id: paraAsiento.supplier_id,
     p_doc_numero: input.supplier_document_number,
     p_doc_fecha: input.supplier_document_date,
     p_doc_cufe: input.supplier_cufe ?? null,
     p_reason: input.reason,
     p_issue_date: hoy,
-    p_lineas: calculo.lineas.map((x) => ({ expense_line_id: x.linea.id, amount: x.amount })),
+    p_lineas: calculo.lineas.map((x) => ({
+      expense_line_id: x.expense_line_id,
+      chart_account_code: x.chart_account_code,
+      description: x.description,
+      amount: x.amount,
+      tax_code_id: x.tax_code_id,
+      tax_amount: x.tax_amount,
+    })),
     p_asiento: armado.asiento.lines,
     p_created_by: userId,
   });
@@ -241,6 +318,33 @@ export async function createSupplierCreditNote(
   }
   const r = data as { id: string; credit_note_number: string; total: number; entry_number: number };
   return { id: r.id, credit_note_number: r.credit_note_number, total: Number(r.total), entry_number: Number(r.entry_number) };
+}
+
+/**
+ * APLICAR el saldo a favor de una NC de compra sin compra (E8, `076`) a una
+ * compra del mismo proveedor. Sin asiento: el crédito ya está en 200001 a
+ * nombre del proveedor. Cliente de SERVICIO (SOP-014).
+ */
+export async function applySupplierCreditNote(
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  ncId: string,
+  compraId: string,
+  amount: number
+): Promise<{ aplicado: number; saldo_a_favor: number }> {
+  const { data, error } = await ledgerDb.rpc("apply_supplier_credit_note", {
+    p_tenant_id: tenantId,
+    p_credit_note_id: ncId,
+    p_business_expense_id: compraId,
+    p_amount: amount,
+    p_created_by: userId,
+  });
+  if (error) {
+    throw new MutationError(error.message || "No se pudo aplicar el saldo de la nota de crédito.", 422, error);
+  }
+  const r = data as { aplicado: number | string; saldo_a_favor: number | string };
+  return { aplicado: Number(r.aplicado), saldo_a_favor: Number(r.saldo_a_favor) };
 }
 
 export async function getAsientoDeNotaDeCompra(

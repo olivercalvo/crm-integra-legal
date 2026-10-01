@@ -34,12 +34,14 @@ test("línea ya acreditada por completo", () => {
   );
 });
 
-test("🔒 el diálogo usa la misma función y apaga el botón con el error", () => {
+test("🔒 la pantalla de NC usa la misma función y apaga el botón con el error", () => {
   const raiz = path.resolve(__dirname, "../../../../..");
-  const dialogo = readFileSync(path.join(raiz, "src/app/finanzas/facturas/_components/credit-note-dialog.tsx"), "utf8");
+  // E8: el diálogo se reemplazó por la pantalla del módulo, que corre el
+  // validador ENTERO del servidor (y con él, este mismo tope por línea).
+  const dialogo = readFileSync(path.join(raiz, "src/app/finanzas/notas-credito/_components/nota-de-credito-form.tsx"), "utf8");
   const validador = readFileSync(path.join(raiz, "src/lib/finanzas/validators/credit-note.ts"), "utf8");
-  assert.match(dialogo, /errorDeCantidadAcreditable\(/);
-  assert.match(dialogo, /confirmDisabled=\{hayErrorEnVivo\}/);
-  assert.doesNotMatch(dialogo, /qty > x\.linea\.disponible/, "no reimplementa el tope");
+  assert.match(dialogo, /validarLineasDeNotaDeCredito\(/);
+  assert.match(dialogo, /disabled=\{isPending \|\| sinFacturaBloqueado \|\| !validacion \|\| !validacion\.ok\}/);
+  assert.doesNotMatch(dialogo, /qty > x\.linea\.disponible|> l\.disponible/, "no reimplementa el tope");
   assert.match(validador, /const excedida = errorDeCantidadAcreditable\(/, "el servidor usa la misma");
 });

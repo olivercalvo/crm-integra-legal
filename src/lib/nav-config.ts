@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  FileMinus,
   LayoutDashboard,
   Users,
   FolderOpen,
@@ -81,6 +82,10 @@ export const TABS: TabDef[] = [
       { label: "Cotizaciones",      href: "/finanzas/cotizaciones",               icon: FileText,    roles: ["admin", "abogada"] },
       { label: "Plantilla T&C",     href: "/finanzas/cotizaciones/configuracion", icon: Settings,    roles: ["admin"] },
       { label: "Facturas",          href: "/finanzas/facturas",                   icon: Receipt,     roles: ["admin", "abogada"] },
+      // Notas de crédito como módulo propio (E8, 01/10/2026). Venta: emiten
+      // admin y abogada, como las facturas. El contador sigue entrando sólo al
+      // DETALLE (patrón en route-access.ts), no al listado ni al alta.
+      { label: "Notas de Crédito",  href: "/finanzas/notas-credito",              icon: FileMinus,   roles: ["admin", "abogada"] },
       // Cobros (recibos de caja, Bloque 2 — 21/09/2026). El contador entra
       // desde el mismo día por respuesta de Josuarth ("SÍ debe ver la pantalla
       // de Cobros"), en solo lectura: el patrón exacto está en
@@ -88,6 +93,9 @@ export const TABS: TabDef[] = [
       // /nuevo no). Los dos se mueven juntos o nav-guard.test.ts falla.
       { label: "Cobros",            href: "/finanzas/cobros",                     icon: HandCoins,   roles: ["admin", "abogada", "contador"] },
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
+      // NC de compra (E8): el contador tiene CRUD de compras, así que también
+      // registra la NC del proveedor (prefijo en route-access.ts).
+      { label: "NC de Proveedores", href: "/finanzas/notas-credito-proveedor",    icon: FileMinus,      roles: ["admin", "abogada", "contador"] },
       { label: "Proveedores",       href: "/finanzas/proveedores",                icon: Truck,          roles: ["admin", "abogada", "contador"] },
       { label: "Reportes",          href: "/finanzas/reportes",                   icon: BarChart3,      roles: ["admin", "abogada", "contador"] },
       // Asientos de diario: admin y contador, la abogada NO. Un asiento manual

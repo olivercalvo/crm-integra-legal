@@ -121,7 +121,8 @@ test("una cuenta inactiva en la línea: rechaza con el mensaje de la compra", ()
 
 test("🔒 una sola implementación: la pantalla y el servidor usan calcularNcDeCompra", () => {
   const raiz = path.resolve(__dirname, "../../../../..");
-  const pantalla = readFileSync(path.join(raiz, "src/app/finanzas/gastos-bufete/_components/supplier-credit-notes-section.tsx"), "utf8");
+  // E8: la pantalla es el formulario del módulo (el detalle de la compra enlaza a él).
+  const pantalla = readFileSync(path.join(raiz, "src/app/finanzas/notas-credito-proveedor/_components/nc-de-proveedor-form.tsx"), "utf8");
   const api = readFileSync(path.join(raiz, "src/lib/finanzas/api/supplier-credit-notes.ts"), "utf8");
   assert.match(pantalla, /calcularNcDeCompra\(/);
   assert.match(api, /calcularNcDeCompra\(/);

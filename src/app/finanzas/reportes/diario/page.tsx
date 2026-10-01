@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadAsientosDelDiario } from "@/lib/finanzas/reports/diario-general-source";
-import { buildDiarioGeneral } from "@/lib/finanzas/reports/diario-general";
+import { buildDiarioGeneral, filtrarAsientosPorModulos } from "@/lib/finanzas/reports/diario-general";
+import { modulosDesdeParametro } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 import { loadDestinosDeOrigen } from "@/lib/finanzas/reports/libro-mayor-source";
 import { StatementHeader, JournalScopeNotice } from "../_components/financial-statement";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
@@ -18,7 +19,7 @@ export const metadata = {
 export default async function DiarioGeneralPage({
   searchParams,
 }: {
-  searchParams: { desde?: string; hasta?: string };
+  searchParams: { desde?: string; hasta?: string; modulo?: string };
 }) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
@@ -28,7 +29,12 @@ export default async function DiarioGeneralPage({
   const desde = searchParams.desde?.trim() || "";
   const hasta = searchParams.hasta?.trim() || "";
 
-  const crudos = await loadAsientosDelDiario(ctx.db, ctx.tenantId, { desde, hasta });
+  const modulos = modulosDesdeParametro(searchParams.modulo);
+
+  const crudos = filtrarAsientosPorModulos(
+    await loadAsientosDelDiario(ctx.db, ctx.tenantId, { desde, hasta }),
+    modulos
+  );
   const diario = buildDiarioGeneral(crudos);
 
   // Los destinos salen del MISMO resolvedor que usa el Libro Mayor, así que los
@@ -52,7 +58,14 @@ export default async function DiarioGeneralPage({
 
       <JournalScopeNotice hayPeriodo={Boolean(desde || hasta)} />
 
-      <DiarioFiltros desde={desde} hasta={hasta} />
+      <DiarioFiltros desde={desde} hasta={hasta} modulos={modulos} />
+
+      {modulos.length > 0 && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+          Se muestran solo los asientos de <strong>{modulos.join(", ")}</strong>, con sus
+          reversiones. Los totales del pie suman lo que se ve.
+        </p>
+      )}
 
       <DiarioTable
         diario={diario}

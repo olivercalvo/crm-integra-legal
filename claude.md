@@ -389,6 +389,19 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **La `071` va en la ventana JUNTO con el código de E3.** El código anterior falla al
   postear un asiento manual. Runbook `despliegue-025-055.md`, nota de la `071`.
 
+### Ancla de la cadena y antigüedad nueva (desde 2026-10-01, Bloque 1 — `075` SIN APLICAR)
+- 🔴 **El ancla la graba la BASE al cerrar un período** (trigger de la `075`), nunca la app.
+  `accounting_chain_anchors` es inmutable y ni `service_role` la escribe. Sale de la base por el
+  respaldo (`tablas/accounting_chain_anchors.json`) y por la constancia PDF del cierre.
+  `verify_chain_anchors` compara contra la cadena; la ruta le pasa el `tenant_id` del perfil.
+- **Antigüedad (E9):** una línea de asiento manual o de apertura contra 100004/200001 CON el
+  tercero del auxiliar es una partida de ese tercero (por fecha de registro); SIN tercero sigue
+  explicando la diferencia. Nunca en los dos lados. Un asiento reversado no cuenta en ninguno.
+  Lógica pura en `reports/partidas-de-diario.ts`.
+- **Filtro por módulo:** en el Mayor se filtra DESPUÉS de armar (`filtrarMayorPorModulos`): el
+  saldo corrido sigue siendo el de la cuenta completa y el pie suma lo visible. La pantalla y el
+  Excel usan la misma función. Una reversión entra en el módulo de lo que revierte.
+
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`
   (`ruc`, `dv`) y dos campos en pantalla. Josuarth lo pidió textual el 25/08: los

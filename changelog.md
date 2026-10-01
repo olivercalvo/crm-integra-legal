@@ -1,5 +1,17 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: ancla de la cadena, antigüedad nueva y filtro por módulo] - 2026-10-01
+
+- Detalle de la factura (Resumen, líneas), lista y diálogos: montos en B/., no con «$».
+- ⚠️ Migración `075` **escrita y SIN APLICAR** (R-1b): cada cierre de período graba el número y
+  el hash del último asiento en `accounting_chain_anchors` (inmutable); ancla inicial;
+  `verify_chain_anchors`. Constancia de cierre en PDF y verificación contra el JSON del respaldo
+  en Períodos Contables.
+- Antigüedad (E9): las partidas de diario y de apertura con tercero en la cuenta control entran
+  a la tabla del tercero, con enlace al asiento. El Excel les pone RUC y DV de la ficha.
+- Mayor y Diario: filtro «Módulo» (FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA), con las
+  reversiones dentro del módulo de lo que revierten. El Excel del Mayor respeta el filtro.
+
 ## [Bloque 1: recorrido de la 073 y la 074] - 2026-10-01
 
 - 073 y 074 aplicadas en staging (verificación 11/11) y recorridas con contador y abogada2:

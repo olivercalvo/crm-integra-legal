@@ -9,7 +9,8 @@ import {
   loadMovimientosDeCuenta,
   loadDestinosDeOrigen,
 } from "@/lib/finanzas/reports/libro-mayor-source";
-import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
+import { buildMayorDeCuenta, filtrarMayorPorModulos } from "@/lib/finanzas/reports/libro-mayor";
+import { modulosDesdeParametro } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 import {
   nombresPorAsiento,
   origenesDeMovimientos,
@@ -31,7 +32,7 @@ export const metadata = {
 export default async function LibroMayorPage({
   searchParams,
 }: {
-  searchParams: { cuenta?: string; desde?: string; hasta?: string };
+  searchParams: { cuenta?: string; desde?: string; hasta?: string; modulo?: string };
 }) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
@@ -47,6 +48,7 @@ export default async function LibroMayorPage({
   const code = searchParams.cuenta?.trim() || "";
   const desde = searchParams.desde?.trim() || "";
   const hasta = searchParams.hasta?.trim() || "";
+  const modulos = modulosDesdeParametro(searchParams.modulo);
 
   // El rango va también acá, no solo a los movimientos: con `desde`, la fila
   // "Saldo inicial" tiene que traer el saldo al día anterior, no el de apertura.
@@ -68,10 +70,15 @@ export default async function LibroMayorPage({
       resolverTercerosFiscales(ctx.db, ctx.tenantId, origenesDeMovimientos(movimientos)),
       loadDestinosDeOrigen(ctx.db, ctx.tenantId, movimientos),
     ]);
-    mayor = buildMayorDeCuenta(cuenta, movimientos, {
-      controlPorCodigo: control,
-      nombrePorAsiento: nombresPorAsiento(terceros),
-    });
+    // E9: el filtro por módulo va DESPUÉS de armar el mayor, para que el saldo
+    // corrido siga siendo el de la cuenta completa.
+    mayor = filtrarMayorPorModulos(
+      buildMayorDeCuenta(cuenta, movimientos, {
+        controlPorCodigo: control,
+        nombrePorAsiento: nombresPorAsiento(terceros),
+      }),
+      modulos
+    );
     destinos = destinosDeOrigen;
   }
 
@@ -118,6 +125,7 @@ export default async function LibroMayorPage({
         cuentaSeleccionada={code}
         desde={desde}
         hasta={hasta}
+        modulos={modulos}
       />
 
       {!cuenta && (
@@ -148,10 +156,19 @@ export default async function LibroMayorPage({
             <BotonExportar
               href={`/api/finanzas/reportes/mayor/export?cuenta=${encodeURIComponent(cuenta.code)}${
                 desde ? `&desde=${desde}` : ""
-              }${hasta ? `&hasta=${hasta}` : ""}`}
+              }${hasta ? `&hasta=${hasta}` : ""}${modulos.length > 0 ? `&modulo=${modulos.join(",")}` : ""}`}
               nombreSugerido={`Mayor_${cuenta.code}.xlsx`}
             />
           </div>
+
+          {modulos.length > 0 && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900">
+              Se muestran solo los movimientos de <strong>{modulos.join(", ")}</strong>. El pie suma
+              lo que se ve; la columna <strong>Saldo</strong> sigue siendo el saldo de la cuenta
+              completa después de cada movimiento, por eso entre una fila y la siguiente puede
+              cambiar por movimientos que no se listan.
+            </p>
+          )}
 
           <LibroMayorTable mayor={mayor} destinos={destinos} />
         </>
@@ -160,7 +177,8 @@ export default async function LibroMayorPage({
       {cuenta && mayor && mayor.cantidadMovimientos === 0 && (
         <p className="text-xs text-gray-500">
           Esta cuenta no tiene movimientos
-          {desde || hasta ? " en el rango de fechas elegido" : ""}. Solo se muestra su saldo
+          {desde || hasta ? " en el rango de fechas elegido" : ""}
+          {modulos.length > 0 ? " de los módulos elegidos" : ""}. Solo se muestra su saldo
           inicial.
         </p>
       )}

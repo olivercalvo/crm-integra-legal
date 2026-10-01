@@ -27,11 +27,26 @@
 | E6 plan de cuentas (subcategorías, Familia, otros ingresos) | 🛑 espera **P-8a** de Josuarth |
 | E8 NC como módulo propio | 🛑 espera **P-4a** de Josuarth |
 | E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
-| E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | se puede empezar; la parte de NC espera E8 |
+| E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
 | E10 Estado de Resultado y Balance (línea de ISR al 0 %) | depende de E6 |
 | E11 cierre anual | noviembre |
-| R-1b ancla externa de la cadena | propuesta, sin construir (requisito antes de producción) |
-| Ventana de producción 025 → 074 + merge | cuando Oliver lo decida; runbook al día |
+| R-1b ancla externa de la cadena | ✅ construida; ⏳ `075` escrita, **espera «aplica»** en staging |
+| Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
+
+## >>> 01/10/2026 (tarde) — R-1b, E9 Y MONTOS EN B/. <<<
+
+- ✅ Detalle de la factura, lista y diálogos: todos los montos en B/. (test `montos-en-balboas`).
+- ⏳ **`075` escrita, SIN APLICAR** (ancla externa, R-1b): `accounting_chain_anchors`, ancla al
+  cerrar un período (trigger), ancla inicial, `verify_chain_anchors`. Constancia PDF y
+  verificación contra el archivo del respaldo en /finanzas/periodos. Verificación:
+  `sql/tests/verificacion-075-ancla.sql` (8 comprobaciones, ROLLBACK). ⚠️ En el plan la 075
+  figuraba como apertura: la apertura pasa a la siguiente libre.
+- ✅ **E9 sin migración**: la antigüedad lista las partidas de diario y apertura CON tercero en
+  100004/200001 (por fecha de registro, enlace al asiento para admin/contador); lo manual sin
+  tercero sigue en la explicación; los asientos reversados no cuentan en ninguno de los dos
+  lados. Filtro «Módulo» (multi-selección) en el Mayor (también el Excel) y el Diario; el saldo
+  corrido del Mayor sigue siendo el de la cuenta completa.
+- Pendiente E9: la parte de NC (E8) y `sql/verificacion/antiguedad_estado_cuenta.sql`.
 
 ## >>> 01/10/2026 (noche) — 072 APLICADA; 073 Y 074 ESCRITAS <<<
 

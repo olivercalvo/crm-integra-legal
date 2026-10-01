@@ -72,3 +72,30 @@ export function etiquetaDeModulo(m: ModuloDelAsiento): string {
   if (m.esReversion) return m.modulo ? `${m.modulo} · Reversión` : "Reversión";
   return m.modulo ?? "";
 }
+
+// ---------------------------------------------------------------------------
+// E9: el FILTRO por módulo del Mayor y del Diario.
+// ---------------------------------------------------------------------------
+
+const CODIGOS = new Set<string>(MODULOS.map((m) => m.codigo));
+
+/**
+ * Los módulos de `?modulo=CO,AD`, en el orden de `MODULOS`. Un código que no
+ * existe se descarta en silencio: es un enlace viejo o tipeado a mano, y
+ * rechazarlo dejaría la pantalla en blanco.
+ */
+export function modulosDesdeParametro(valor: string | null | undefined): Modulo[] {
+  if (!valor) return [];
+  const pedidos = new Set(valor.split(",").map((v) => v.trim().toUpperCase()));
+  return MODULOS.map((m) => m.codigo).filter((c) => pedidos.has(c) && CODIGOS.has(c));
+}
+
+/**
+ * ¿Entra el asiento en el filtro? Sin módulos elegidos entra todo. Una
+ * reversión entra con el módulo de lo que revierte: el espejo de un cobro es
+ * parte de los cobros, y filtrar CO sin él mostraría un saldo que no existe.
+ */
+export function entraEnElFiltro(m: ModuloDelAsiento, elegidos: readonly Modulo[]): boolean {
+  if (elegidos.length === 0) return true;
+  return m.modulo !== null && elegidos.includes(m.modulo);
+}

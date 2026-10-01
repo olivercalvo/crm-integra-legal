@@ -99,6 +99,10 @@ export function hojaDelMayor(
   if (ctx.desde || ctx.hasta) {
     encabezado.push(["Período", `${ctx.desde || "inicio"} a ${ctx.hasta || "hoy"}`]);
   }
+  // E9: un Excel filtrado lo dice arriba, para que nadie lo lea como la cuenta completa.
+  if (mayor.filtroModulos?.length) {
+    encabezado.push(["Módulos", `${mayor.filtroModulos.join(", ")} (el saldo es el de la cuenta completa)`]);
+  }
   encabezado.push(["Movimientos", String(mayor.cantidadMovimientos)]);
 
   const filas: Celda[][] = mayor.filas.map((f) => {

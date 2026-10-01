@@ -26,6 +26,7 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     numero: "2",
     nombre: "ESTACIÓN DELTA VÍA ESPAÑA",
     modulo: "FAC-CO",
+    moduloDerivado: { modulo: "FAC-CO", esReversion: false },
     numeroDocumento: "FAC-CO-000002",
     referenciaExterna: "F-123",
     terceroClave: null,

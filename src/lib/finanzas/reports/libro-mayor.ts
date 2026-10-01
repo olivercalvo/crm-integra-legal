@@ -45,7 +45,13 @@ import {
   esNaturalezaAcreedora,
   type AccountType,
 } from "@/lib/finanzas/types/chart-of-account";
-import { etiquetaDeModulo, moduloDelAsiento } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
+import {
+  entraEnElFiltro,
+  etiquetaDeModulo,
+  moduloDelAsiento,
+  type Modulo,
+  type ModuloDelAsiento,
+} from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -285,6 +291,8 @@ export interface FilaMayor {
    * con `moduloDelAsiento()`. Una reversión: "CO · Reversión".
    */
   modulo: string;
+  /** E9: el módulo sin formato, para el filtro. null en la fila de saldo inicial. */
+  moduloDerivado: ModuloDelAsiento | null;
   /** E3: N.º de documento (FAC-HON-000026, CO-000011, AD-000001). Vacío en lo viejo sin número. */
   numeroDocumento: string;
   /** E3 (071): referencia externa (cheque, factura del proveedor). */
@@ -356,6 +364,8 @@ export interface MayorDeCuenta {
   totales: TotalesPie;
   /** Cuántos movimientos entraron (sin contar la fila de saldo inicial). */
   cantidadMovimientos: number;
+  /** E9: los módulos por los que se filtró. Vacío = la cuenta completa. */
+  filtroModulos: Modulo[];
 }
 
 /** Etiqueta en español del `source_type` del asiento. */
@@ -486,6 +496,7 @@ export function buildMayorDeCuenta(
     numero: "",
     nombre: "",
     modulo: "",
+    moduloDerivado: null,
     numeroDocumento: "",
     referenciaExterna: "",
     // La fila de saldo inicial no es un movimiento: no tiene tercero.
@@ -539,6 +550,7 @@ export function buildMayorDeCuenta(
       numero: String(m.entry_number),
       nombre,
       modulo: etiquetaDeModulo(moduloDelAsiento(m.source_type, m.reverses_source_type)),
+      moduloDerivado: moduloDelAsiento(m.source_type, m.reverses_source_type),
       numeroDocumento: m.reference?.trim() || "",
       referenciaExterna: m.referencia_externa?.trim() || "",
       // 054: la clave del tercero de la línea, para que el Excel le ponga RUC
@@ -577,6 +589,38 @@ export function buildMayorDeCuenta(
       saldoFinal: saldoSegunNaturaleza(pie.saldoFinal, cuenta.account_type),
     },
     cantidadMovimientos: ordenados.length,
+    filtroModulos: [],
+  };
+}
+
+/**
+ * E9: el Mayor FILTRADO por módulo (FAC-ING, CO, AD…).
+ *
+ * Se filtra DESPUÉS de armar el mayor, a propósito: el saldo corrido de cada
+ * fila sigue siendo el saldo real de la cuenta después de ese movimiento. Si se
+ * filtrara antes, la columna Saldo inventaría una cuenta que sólo tiene cobros.
+ * Lo que sí se recalcula es el pie (débitos, créditos y neto de lo que se ve);
+ * el saldo final sigue siendo el de la cuenta completa.
+ */
+export function filtrarMayorPorModulos(mayor: MayorDeCuenta, elegidos: readonly Modulo[]): MayorDeCuenta {
+  if (elegidos.length === 0) return mayor;
+  const filas = mayor.filas.filter(
+    (f) => f.kind === "saldo-inicial" || (f.moduloDerivado !== null && entraEnElFiltro(f.moduloDerivado, elegidos))
+  );
+  const movimientos = filas.filter((f) => f.kind === "movimiento");
+  const totalDebitos = round2(movimientos.reduce((s, f) => s + f.debito, 0));
+  const totalCreditos = round2(movimientos.reduce((s, f) => s + f.credito, 0));
+  return {
+    ...mayor,
+    filas,
+    totales: {
+      ...mayor.totales,
+      totalDebitos,
+      totalCreditos,
+      netoDelPeriodo: saldoSegunNaturaleza(round2(totalDebitos - totalCreditos), mayor.cuenta.account_type),
+    },
+    cantidadMovimientos: movimientos.length,
+    filtroModulos: [...elegidos],
   };
 }
 

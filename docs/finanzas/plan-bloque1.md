@@ -668,6 +668,11 @@ ninguno sin versión. O sea que el recálculo es viable sin falsos positivos sob
 
 ### R-1b. 🔴 El ancla externa de la cadena (requisito antes de producción, 01/10/2026)
 
+> **Estado (01/10/2026, tarde):** construida. Migración `075_ancla_de_la_cadena.sql` escrita y
+> **sin aplicar** (espera «aplica»), con `sql/tests/verificacion-075-ancla.sql`. Pantalla en
+> /finanzas/periodos (constancia PDF y verificación contra el respaldo). La apertura, que esta
+> tabla numeraba 075, pasa al siguiente número libre.
+
 **Pedido de Oliver (01/10/2026):** al cerrar cada mes, guardar el número y el hash del último
 asiento FUERA de la base, en el respaldo y en un registro que pueda ver el contador, para
 detectar una reescritura completa de la cadena. **Sólo anotado y propuesto: no está construido.**

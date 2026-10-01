@@ -90,6 +90,11 @@ export interface DocumentoPendiente {
   saldo: number;
   /** `source_type` del ledger, para armar el enlace al documento. */
   sourceType: string;
+  /**
+   * E9: una PARTIDA DE DIARIO o de APERTURA no tiene documento; su enlace es el
+   * asiento. Sólo viene en esas partidas.
+   */
+  entryId?: string;
 }
 
 export interface FilaTercero {

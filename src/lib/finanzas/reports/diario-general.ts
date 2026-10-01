@@ -13,7 +13,12 @@
  */
 
 import { tipoTransaccionLabel } from "@/lib/finanzas/reports/libro-mayor";
-import { etiquetaDeModulo, moduloDelAsiento } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
+import {
+  entraEnElFiltro,
+  etiquetaDeModulo,
+  moduloDelAsiento,
+  type Modulo,
+} from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 
 const EPSILON = 0.005;
 
@@ -106,6 +111,19 @@ export interface DiarioGeneral {
   cantidadLineas: number;
   /** Asientos que no cuadran. Vacío es lo único normal. */
   descuadrados: number[];
+}
+
+/**
+ * E9: los asientos de los módulos elegidos (ninguno = todos). En el Diario no
+ * hay saldo corrido que cuidar, así que se filtra ANTES de armar: los totales
+ * del pie son los de lo que se ve, y cada asiento sigue cuadrando solo.
+ */
+export function filtrarAsientosPorModulos<T extends Pick<AsientoCrudo, "source_type" | "reverses_source_type">>(
+  crudos: T[],
+  elegidos: readonly Modulo[]
+): T[] {
+  if (elegidos.length === 0) return crudos;
+  return crudos.filter((a) => entraEnElFiltro(moduloDelAsiento(a.source_type, a.reverses_source_type), elegidos));
 }
 
 /** Arma el Diario a partir de los asientos crudos, ya ordenados. */

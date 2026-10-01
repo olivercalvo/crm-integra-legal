@@ -75,16 +75,15 @@ export default async function AntiguedadPage({
           )}
         </>
       )}
-      {/* D5 (Bloque 7): los asientos manuales contra la cuenta control. Mueven
-          el mayor y no el auxiliar, así que son una causa de la diferencia —y
-          hasta el 22/09/2026 caían en el residuo anónimo de "una tercera
-          causa". NO entran en los tramos: un asiento manual no tiene
-          vencimiento. */}
+      {/* D5 (Bloque 7): los asientos manuales SIN tercero contra la cuenta
+          control (lo anterior a la 071). Mueven el mayor y no el auxiliar, así
+          que son una causa de la diferencia. Desde E9 los que SÍ tienen tercero
+          ya no están acá: entran a la tabla como partida de ese tercero. */}
       {(sa.manuales?.cantidad ?? 0) > 0 && (
         <>
           , y{" "}
           <strong>
-            {sa.manuales!.cantidad} asiento(s) de diario por {money(sa.manuales!.monto)}
+            {sa.manuales!.cantidad} asiento(s) de diario sin tercero por {money(sa.manuales!.monto)}
           </strong>{" "}
           contra esta cuenta, que mueven el mayor sin pasar por un documento
           {sa.manuales!.terceros.length > 0 && <> ({sa.manuales!.terceros.join(", ")})</>}
@@ -98,9 +97,18 @@ export default async function AntiguedadPage({
   // destino: no hace falta resolver contra el ledger.
   const destinos = new Map<string, string>(
     documentos
-      .filter((d) => RUTA_DEL_DOCUMENTO[d.sourceType])
+      .filter((d) => !d.entryId && RUTA_DEL_DOCUMENTO[d.sourceType])
       .map((d) => [d.id, RUTA_DEL_DOCUMENTO[d.sourceType](d.id)])
   );
+  // E9: una partida de diario o de apertura no tiene documento; su enlace es el
+  // asiento, que sólo abren admin y contador (prefijo /finanzas/asientos).
+  // nav-guard-ok: el enlace se arma sólo si `puedeAbrirElAsiento`.
+  const puedeAbrirElAsiento = ctx.userRole === "admin" || ctx.userRole === "contador";
+  if (puedeAbrirElAsiento) {
+    for (const d of documentos) {
+      if (d.entryId) destinos.set(d.id, `/finanzas/asientos/${d.entryId}`);
+    }
+  }
 
   return (
     <div className="space-y-4">

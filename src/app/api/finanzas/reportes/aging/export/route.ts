@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadAntiguedad, type TipoAntiguedad } from "@/lib/finanzas/reports/antiguedad-source";
 import { buildAntiguedad } from "@/lib/finanzas/reports/antiguedad";
-import { resolverTercerosDeDocumentos } from "@/lib/finanzas/reports/tercero-fiscal";
+import { resolverTercerosDeDocumentos, resolverTercerosDeLineas } from "@/lib/finanzas/reports/tercero-fiscal";
 import { hojaDeAntiguedad } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
@@ -36,12 +36,28 @@ export async function GET(request: NextRequest) {
     const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo);
     const reporte = buildAntiguedad(documentos, control);
 
-    const terceros = await resolverTercerosDeDocumentos(
-      ctx.db,
-      ctx.tenantId,
-      tipo,
-      documentos.map((d) => d.id)
-    );
+    // E9: una partida de diario no es un documento (su id es "asiento:tercero",
+    // no un uuid) y se resuelve por el tercero de la línea, con la misma
+    // función del Mayor. Mezclarla con los documentos rompería esa consulta.
+    const partidas = documentos.filter((d) => d.entryId);
+    const prefijo = tipo === "cobrar" ? "cliente:" : "proveedor:";
+    const [terceros, deLineas] = await Promise.all([
+      resolverTercerosDeDocumentos(
+        ctx.db,
+        ctx.tenantId,
+        tipo,
+        documentos.filter((d) => !d.entryId).map((d) => d.id)
+      ),
+      resolverTercerosDeLineas(
+        ctx.db,
+        ctx.tenantId,
+        partidas.map((d) => (d.terceroId ? `${prefijo}${d.terceroId}` : null))
+      ),
+    ]);
+    for (const d of partidas) {
+      const t = d.terceroId ? deLineas.get(`${prefijo}${d.terceroId}`) : undefined;
+      if (t) terceros.set(d.id, t);
+    }
 
     const buffer = generarXlsx([
       hojaDeAntiguedad(reporte, tipo, terceros, {

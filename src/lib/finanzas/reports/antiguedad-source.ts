@@ -27,11 +27,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
-  ConteoConTerceros,
   ControlMedido,
   DocumentoPendiente,
   SinAsiento,
 } from "@/lib/finanzas/reports/antiguedad";
+import {
+  manualesSinTercero,
+  partidasDeDiario,
+  SOURCE_TYPES_DE_PARTIDA,
+  type LineaDeControl,
+} from "@/lib/finanzas/reports/partidas-de-diario";
 
 type DB = SupabaseClient;
 
@@ -104,73 +109,85 @@ async function saldoDeCuentaControl(
 }
 
 /**
- * ASIENTOS MANUALES contra la cuenta control (D5, Bloque 7).
+ * LÍNEAS DE ASIENTOS MANUALES Y DE APERTURA contra la cuenta control (E9).
  *
- * Mueven el mayor y no el auxiliar, así que son una de las causas de la
- * diferencia — y hasta hoy caían en el residuo anónimo. Se miden acá y se
- * nombran en pantalla; **no entran en los tramos**: un asiento manual no tiene
- * vencimiento.
- *
- * `source_type = 'manual'` a propósito y no "todo lo que no sea un documento":
- * una `reversion` o el asiento de `apertura` son otra cosa y tienen su propia
- * explicación.
- *
- * El signo: para COBRAR (activo) un débito sube el mayor y sube la diferencia;
- * para PAGAR el auxiliar se compara en valor absoluto contra un saldo acreedor,
- * así que el efecto se invierte. Se devuelve ya con el signo que corresponde.
+ * Una sola lectura para dos usos (`partidas-de-diario.ts`): las líneas CON el
+ * tercero del auxiliar son partidas de la tabla; las que no lo tienen (lo
+ * anterior a la 071) siguen en la explicación de la diferencia (D5). Una
+ * `reversion` no se lee: se usa para descartar los asientos que ya se
+ * reversaron, que con su espejo suman cero en el mayor.
  */
-async function manualesContraControl(
+async function lineasDeDiarioContraControl(
   db: DB,
   tenantId: string,
-  code: string,
-  tipo: TipoAntiguedad
-): Promise<ConteoConTerceros> {
+  code: string
+): Promise<{ lineas: LineaDeControl[]; reversados: Set<string> }> {
+  const vacio = { lineas: [] as LineaDeControl[], reversados: new Set<string>() };
   const { data: cuenta } = await db
     .from("chart_of_accounts")
     .select("id")
     .eq("tenant_id", tenantId)
     .eq("code", code)
     .maybeSingle();
-  if (!cuenta) return { cantidad: 0, monto: 0, terceros: [] };
+  if (!cuenta) return vacio;
 
   const { data, error } = await db
     .from("journal_entry_lines")
     .select(
-      "entry_id, debit, credit, clients(name), suppliers(legal_name), " +
-        "journal_entries!inner(source_type)"
+      "entry_id, debit, credit, client_id, supplier_id, clients(name), suppliers(legal_name, trade_name), " +
+        "journal_entries!inner(entry_number, source_type, transaction_date, reference)"
     )
     .eq("tenant_id", tenantId)
     .eq("account_id", (cuenta as { id: string }).id)
-    .eq("journal_entries.source_type", "manual");
+    .in("journal_entries.source_type", [...SOURCE_TYPES_DE_PARTIDA]);
 
   if (error) {
-    console.error("[finanzas/antiguedad] manualesContraControl failed", error);
-    return { cantidad: 0, monto: 0, terceros: [] };
+    console.error("[finanzas/antiguedad] lineasDeDiarioContraControl failed", error);
+    return vacio;
   }
 
   type Fila = {
     entry_id: string;
     debit: number | string;
     credit: number | string;
+    client_id: string | null;
+    supplier_id: string | null;
     clients: { name: string } | null;
-    suppliers: { legal_name: string } | null;
+    suppliers: { legal_name: string; trade_name: string | null } | null;
+    journal_entries: {
+      entry_number: number;
+      source_type: string;
+      transaction_date: string;
+      reference: string | null;
+    };
   };
-  const filas = (data ?? []) as unknown as Fila[];
-  const asientos = new Set<string>();
-  const terceros = new Set<string>();
-  let neto = 0;
-  for (const f of filas) {
-    asientos.add(f.entry_id);
-    neto += Number(f.debit ?? 0) - Number(f.credit ?? 0);
-    const nombre = f.clients?.name ?? f.suppliers?.legal_name;
-    if (nombre) terceros.add(nombre);
-  }
+  const lineas: LineaDeControl[] = ((data ?? []) as unknown as Fila[]).map((f) => ({
+    entryId: f.entry_id,
+    entryNumber: Number(f.journal_entries.entry_number),
+    sourceType: f.journal_entries.source_type,
+    fecha: String(f.journal_entries.transaction_date).slice(0, 10),
+    referencia: f.journal_entries.reference,
+    debit: Number(f.debit ?? 0),
+    credit: Number(f.credit ?? 0),
+    clientId: f.client_id,
+    supplierId: f.supplier_id,
+    terceroNombre:
+      f.clients?.name ?? (f.suppliers ? f.suppliers.trade_name?.trim() || f.suppliers.legal_name : null),
+  }));
+  if (lineas.length === 0) return vacio;
 
-  return {
-    cantidad: asientos.size,
-    monto: round2(tipo === "pagar" ? -neto : neto),
-    terceros: Array.from(terceros).sort((a, b) => a.localeCompare(b, "es")),
-  };
+  const ids = Array.from(new Set(lineas.map((l) => l.entryId)));
+  const { data: espejos } = await db
+    .from("journal_entries")
+    .select("reverses_entry_id")
+    .eq("tenant_id", tenantId)
+    .in("reverses_entry_id", ids);
+  const reversados = new Set(
+    ((espejos ?? []) as { reverses_entry_id: string | null }[])
+      .map((e) => e.reverses_entry_id)
+      .filter((v): v is string => !!v)
+  );
+  return { lineas, reversados };
 }
 
 /**
@@ -559,22 +576,6 @@ async function sinAsientoPagar(db: DB, tenantId: string): Promise<SinAsiento> {
   };
 }
 
-/**
- * Las tres piezas de `porCablear` juntas: documentos sin asiento, cobros o
- * pagos sin asiento, y los asientos manuales contra la cuenta control (D5).
- */
-async function sinAsientoConManuales(
-  db: DB,
-  tenantId: string,
-  tipo: TipoAntiguedad
-): Promise<SinAsiento> {
-  const [base, manuales] = await Promise.all([
-    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
-    manualesContraControl(db, tenantId, CUENTA_CONTROL[tipo], tipo),
-  ]);
-  return { ...base, manuales };
-}
-
 export async function loadAntiguedad(
   db: DB,
   tenantId: string,
@@ -583,7 +584,7 @@ export async function loadAntiguedad(
   documentos: DocumentoPendiente[];
   control: ControlMedido;
 }> {
-  const [documentos, controlCrudo, sinAsiento] = await Promise.all([
+  const [documentosDeModulo, controlCrudo, base, diario] = await Promise.all([
     tipo === "cobrar"
       ? // 074: las facturas pendientes MÁS los saldos a favor, en negativo.
         Promise.all([facturasPendientes(db, tenantId), saldosAFavor(db, tenantId)]).then(([a, b]) => [...a, ...b])
@@ -592,8 +593,17 @@ export async function loadAntiguedad(
           ([a, b]) => [...a, ...b]
         ),
     saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
-    sinAsientoConManuales(db, tenantId, tipo),
+    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId) : sinAsientoPagar(db, tenantId),
+    lineasDeDiarioContraControl(db, tenantId, CUENTA_CONTROL[tipo]),
   ]);
+
+  // E9: las partidas de diario y de apertura CON tercero son saldo de ese
+  // tercero; las que no lo tienen siguen explicando la diferencia (D5).
+  const documentos = [...documentosDeModulo, ...partidasDeDiario(diario.lineas, tipo, diario.reversados)];
+  const sinAsiento: SinAsiento = {
+    ...base,
+    manuales: manualesSinTercero(diario.lineas, tipo, diario.reversados),
+  };
 
   // El auxiliar de pagar se compara en VALOR ABSOLUTO: la cuenta por pagar tiene
   // saldo acreedor (negativo en balanza) y los documentos son montos positivos.

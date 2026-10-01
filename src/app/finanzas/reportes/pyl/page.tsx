@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildEstadoResultadoNiif18 } from "@/lib/finanzas/reports/estado-resultado-niif18";
+import { getTasaIsr } from "@/lib/finanzas/queries/parametros";
 import {
   StatementHeader,
   OpeningBalancesNotice,
@@ -59,10 +60,10 @@ export default async function EstadoResultadoPage({
   const aperturaExcluida = accounts.reduce((a, c) => a + (c.aperturaExcluida ?? 0), 0);
   const hayAperturaExcluida = Math.abs(aperturaExcluida) >= 0.005;
 
-  // Integra es sociedad civil: sin ISR a nivel de empresa y con distribución a
-  // socias. Los dos son los defaults del builder; se escriben acá igual para que
-  // se vea de dónde sale, y para que cambiarlo a una S.A. sea una línea.
-  const er = buildEstadoResultadoNiif18(accounts);
+  // E10: la tasa de ISR es la del bufete (078, Configuración > Impuestos); 0 %
+  // para Integra. La línea del impuesto se muestra siempre.
+  const isrRate = await getTasaIsr(ctx.db, ctx.tenantId);
+  const er = buildEstadoResultadoNiif18(accounts, { isrRate });
 
   return (
     <div className="space-y-4">
@@ -129,17 +130,11 @@ export default async function EstadoResultadoPage({
           financiamiento). Los bloques sin cuentas no se muestran.
         </p>
         <p className="text-xs text-gray-500">
-          <strong>Impuesto sobre la Renta y distribución:</strong> Integra es una{" "}
-          <strong>sociedad civil</strong>, así que no paga impuesto sobre la renta a nivel de
-          empresa: el resultado se reparte a las socias y cada una paga su renta personal. Por
-          eso el impuesto va en 0 y el <strong>resultado del ejercicio cierra en cero</strong>. La
-          tasa quedó como parámetro del reporte para cuando se use en sociedades anónimas.
-        </p>
-        <p className="text-xs text-gray-500">
-          El renglón de <strong>Distribución a Socias</strong> es un{" "}
-          <strong>cálculo del reporte, no un asiento</strong>: la cuenta 300004 todavía no tiene
-          movimientos registrados. Cuando se postee el cierre del ejercicio, el número va a salir
-          de los asientos.
+          <strong>Impuesto sobre la renta:</strong> se calcula sobre la utilidad antes de impuesto
+          con la tasa del bufete ({(isrRate * 100).toLocaleString("es-PA", { maximumFractionDigits: 2 })} %),
+          que se configura en Configuración, Impuestos. Integra es una{" "}
+          <strong>sociedad civil</strong> y usa 0 %: cada socia paga su renta personal. Es un{" "}
+          <strong>cálculo del reporte, no un asiento</strong>.
         </p>
       </div>
     </div>

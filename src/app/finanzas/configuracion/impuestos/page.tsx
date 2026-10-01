@@ -5,6 +5,8 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listTaxCodes } from "@/lib/finanzas/api/tax-codes";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { TaxCodesManager } from "./_components/tax-codes-manager";
+import { TasaIsrCard } from "./_components/tasa-isr-card";
+import { getTasaIsr } from "@/lib/finanzas/queries/parametros";
 
 // Ver: los tres roles de finanzas. Editar: admin y contador — mismo criterio
 // que la clasificación contable de una cuenta. Ver el encabezado de la ruta PATCH.
@@ -34,6 +36,8 @@ export default async function ImpuestosPage() {
     )
     .map((c) => ({ code: c.code, name: c.name }));
   const canEdit = ROLES_EDICION.includes(ctx.userRole);
+  // E10 (078): la tasa de ISR del bufete, para el Estado de Resultado.
+  const tasaIsr = await getTasaIsr(ctx.db, ctx.tenantId);
 
   return (
     <div className="space-y-5">
@@ -70,6 +74,8 @@ export default async function ImpuestosPage() {
           Solo el administrador o el contador pueden modificar las tasas.
         </p>
       )}
+
+      <TasaIsrCard tasa={tasaIsr} canEdit={canEdit} />
     </div>
   );
 }

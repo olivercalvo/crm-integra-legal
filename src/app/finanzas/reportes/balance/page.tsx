@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadReportAccounts } from "@/lib/finanzas/reports/accounting-source";
 import { buildAccountingReports } from "@/lib/finanzas/reports/accounting-reports";
+import { getTasaIsr } from "@/lib/finanzas/queries/parametros";
 import {
   StatementHeader,
   OpeningBalancesNotice,
@@ -40,9 +41,10 @@ export default async function BalanceGeneralPage({
   const accounts = await loadReportAccounts(ctx.db, ctx.tenantId, {
     rango: { hasta },
   });
-  // Los dos reportes se arman juntos para que la "Utilidad del Ejercicio" del
-  // patrimonio sea exactamente la utilidad operativa del Estado de Resultado.
-  const { balanceGeneral: bg } = buildAccountingReports(accounts);
+  // Los dos reportes se arman juntos para que la "Utilidad neta" del patrimonio
+  // sea exactamente la del Estado de Resultado, con la MISMA tasa de ISR (E10).
+  const isrRate = await getTasaIsr(ctx.db, ctx.tenantId);
+  const { balanceGeneral: bg } = buildAccountingReports(accounts, { isrRate });
 
   // El riesgo de doble conteo lo detecta el BUILDER, que es quien tiene los
   // números: desde que el Balance suma el ledger, un asiento puede acreditar la
@@ -78,9 +80,9 @@ export default async function BalanceGeneralPage({
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
           <span>
             Hay cuentas de patrimonio con saldo ({formatAmount(saldoCuentasPatrimonio)}) y además se
-            suma el renglón calculado <strong>Utilidad del Ejercicio</strong>. Si alguna de esas
+            suma el renglón calculado <strong>Utilidad neta</strong>. Si alguna de esas
             cuentas ya representa el resultado del período,{" "}
-            <strong>se estaría contando dos veces</strong>. Confirmalo con el contador.
+            <strong>se estaría contando dos veces</strong>. Confírmalo con el contador.
           </span>
         </p>
       )}
@@ -126,10 +128,12 @@ export default async function BalanceGeneralPage({
       <div className="space-y-2">
         <SignConventionNote />
         <p className="text-xs text-gray-500">
-          <strong>Utilidad del Ejercicio:</strong> el patrimonio incluye la{" "}
-          <strong>utilidad operativa del período</strong>, que es un renglón calculado desde el
-          Estado de Resultado. Cuando exista el cierre de ejercicio, el resultado se posteará
-          como asiento y este renglón calculado desaparece.
+          <strong>Utilidad neta:</strong> el patrimonio incluye la{" "}
+          <strong>utilidad neta</strong> del Estado de Resultado (después del impuesto sobre la
+          renta calculado con la tasa del bufete), como renglón calculado.{" "}
+          <strong>Es acumulada desde el inicio</strong> mientras no haya un cierre anual: el
+          cierre lleva el resultado del año a 300002 con un asiento y el renglón calculado deja de
+          incluir ese año.
         </p>
       </div>
     </div>

@@ -293,6 +293,11 @@ const MARCADORES = {
     nota: "7.5, 25/09. Todo o nada: post_journal_entries_batch postea cada asiento por post_journal_entry en una transaccion. reverse_journal_import reversa cada asiento con reverse_journal_entry (055), fecha de hoy, sin borrar nada. Los asientos importados son source_type manual.",
   },
 
+  "078_parametros_del_bufete_isr.sql": {
+    que: "Parametros contables por bufete: la tasa de ISR del Estado de Resultado (fraccion, 0 por defecto)",
+    tipo: "tabla", tabla: "finanzas_parametros",
+    nota: "Bloque 1, E10, 01/10. Decision (b) de Josuarth del 30/09: linea de ISR siempre visible con tasa configurable, 0 % para Integra. No toca el libro: es un calculo del reporte.",
+  },
   "068_fechas_de_registro.sql": {
     que: "Fecha de registro (accounting_date) en facturas, compras, gastos de tramite y NC de venta; backfill desde el libro; congelada al emitir",
     tipo: "columna", tabla: "invoices", columna: "accounting_date",

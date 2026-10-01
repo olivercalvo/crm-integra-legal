@@ -6,22 +6,21 @@
  *   ACTIVIDAD DE OPERACIÓN
  *     Ingresos operativos ................. (subtotal)
  *     Costos operativos ................... (subtotal)
- *     ► Utilidad Bruta operativa
+ *     ► Utilidad bruta
  *     Gastos operativos ................... (subtotal)
  *     ► Utilidad Operativa
  *   ACTIVIDAD DE INVERSIÓN          (solo si hay cuentas)
  *   ACTIVIDAD DE FINANCIAMIENTO     (solo si hay cuentas)
- *   ► Utilidad antes de impuesto sobre la renta   ⎫
- *     Impuesto sobre la renta                     ⎬ solo si dicen algo (ver abajo)
- *   ► Utilidad Neta                               ⎭
- *   DISTRIBUCIÓN A SOCIAS           (sociedad civil, Tarea 4)
- *   ► Resultado del ejercicio = 0
+ *   ► Utilidad antes de impuesto sobre la renta
+ *     Impuesto sobre la renta (tasa del bufete)
+ *   ► Utilidad neta
  *
- * ⚠️ Las tres líneas del medio se OCULTAN cuando son redundantes — sociedad
- * civil, sin inversión ni financiamiento y con ISR en cero—, que es el caso de
- * Integra: ahí son la Utilidad Operativa repetida dos veces con un 0.00 en el
- * medio, entre el resultado y su distribución. Lo pidió Josuarth el 09/09/2026.
- * Vuelven solas en cuanto aportan un dato; el detalle, en `mostrarPuenteAlNeto`.
+ * E10 (Bloque 1, 01/10/2026): las cuatro líneas de resultado (bruta, antes de
+ * impuesto, impuesto y neta) se muestran SIEMPRE, también en 0.00 (decisión b
+ * de Josuarth del 30/09: ISR con tasa configurable, 0 % para Integra). El
+ * bloque «Distribución a Socias», un cálculo que dejaba el ejercicio en cero,
+ * se QUITÓ: el reparto del resultado es un asiento (cierre anual, E11), no un
+ * renglón del reporte.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * LAS DOS CONVENCIONES DE SIGNO — leer antes de tocar nada
@@ -119,9 +118,9 @@ export type FilaER =
   | { kind: "grupo"; label: string; subcategoria: Subcategoria }
   /**
    * Una cuenta. `estructural` marca los renglones que NO vienen del plan de
-   * cuentas sino de la estructura del reporte (hoy: la distribución a socias).
-   * El filtro "solo cuentas con saldo" NO los esconde aunque den 0: sin el
-   * renglón de distribución, la sección quedaría con encabezado y nada debajo.
+   * cuentas sino de la estructura del reporte. Desde E10 ninguno lo usa (era la
+   * distribución a socias); se conserva porque el filtro "solo cuentas con
+   * saldo" sabe no esconderlos.
    */
   | {
       kind: "cuenta";
@@ -161,8 +160,6 @@ export interface TotalesER {
   utilidadAntesImpuesto: number;
   impuesto: number;
   utilidadNeta: number;
-  distribucionSocias: number;
-  resultadoDelEjercicio: number;
 }
 
 export interface EstadoResultadoNiif18 {
@@ -170,8 +167,6 @@ export interface EstadoResultadoNiif18 {
   /** Todos en convención de BALANZA. */
   totales: TotalesER;
   isr: IsrLine;
-  /** true si se aplicó la sección de distribución a socias. */
-  distribucionAplicada: boolean;
   /**
    * Cuentas de resultado que no se pudieron ubicar en ninguna actividad
    * (subcategoría NULL o de balance). El CHECK de BD lo impide en cuentas
@@ -185,30 +180,12 @@ export interface EstadoResultadoNiif18 {
 // Configuración
 // ---------------------------------------------------------------------------
 
-/**
- * Código de la cuenta de distribución a socias.
- *
- * PROVISIONAL: Oliver se lo confirma a Josuar por correo. Puede que además
- * quiera un pasivo "Por pagar a socias" para cuando la distribución no se paga
- * de inmediato. Es un parámetro justamente para que cambiarlo no obligue a
- * perseguir el código por medio repositorio.
- */
-export const CUENTA_DISTRIBUCION_SOCIAS = "300004";
-export const NOMBRE_DISTRIBUCION_SOCIAS = "Distribución a Socias";
-
 export interface EstadoResultadoNiif18Options {
-  /** Tasa de ISR como fracción. Default `DEFAULT_ISR_RATE` (0 para Integra). */
-  isrRate?: number;
   /**
-   * Sociedad civil: el resultado se reparte a las socias y el ejercicio cierra
-   * en CERO. Default true (Integra). En una sociedad anónima va false: ahí el
-   * resultado queda en el patrimonio y sí paga impuesto a nivel de empresa.
+   * Tasa de ISR como fracción: la del bufete (`finanzas_parametros.isr_rate`,
+   * 078). Default `DEFAULT_ISR_RATE` (0).
    */
-  distribucionASocias?: boolean;
-  /** Código de la cuenta de distribución. Default CUENTA_DISTRIBUCION_SOCIAS. */
-  cuentaDistribucion?: string;
-  /** Nombre de la cuenta de distribución. */
-  nombreDistribucion?: string;
+  isrRate?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,9 +219,6 @@ export function buildEstadoResultadoNiif18(
   options: EstadoResultadoNiif18Options = {}
 ): EstadoResultadoNiif18 {
   const isrRate = options.isrRate ?? DEFAULT_ISR_RATE;
-  const conDistribucion = options.distribucionASocias ?? true;
-  const codigoDist = options.cuentaDistribucion ?? CUENTA_DISTRIBUCION_SOCIAS;
-  const nombreDist = options.nombreDistribucion ?? NOMBRE_DISTRIBUCION_SOCIAS;
 
   const filas: FilaER[] = [];
 
@@ -323,7 +297,7 @@ export function buildEstadoResultadoNiif18(
       utilidadBrutaOperativa = round2(tIngresos + tCostos);
       filas.push({
         kind: "resultado",
-        label: "► Utilidad Bruta operativa",
+        label: "► Utilidad bruta",
         valor: presentar(utilidadBrutaOperativa),
       });
     }
@@ -393,82 +367,26 @@ export function buildEstadoResultadoNiif18(
   const isr: IsrLine = { rate: isrRate, amount: impuesto, huboUtilidad: hayUtilidad };
   const utilidadNeta = round2(utilidadAntesImpuesto + impuesto);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // LAS TRES LÍNEAS DEL MEDIO SE OCULTAN CUANDO NO DICEN NADA
-  // ─────────────────────────────────────────────────────────────────────────
-  // Josuarth, 09/09/2026: «él tiene la utilidad operacional y después de la
-  // utilidad operacional debe ir distribución a socios».
-  //
-  // En Integra —sociedad civil, sin actividad de inversión ni de
-  // financiamiento— «Utilidad antes de impuesto», «Impuesto sobre la renta» y
-  // «Utilidad Neta» son el MISMO número de la Utilidad Operativa repetido dos
-  // veces, con un 0.00 en el medio. Tres renglones entre el resultado y su
-  // distribución que no agregan un dato.
-  //
-  // 🔴 No se borran: se ocultan SÓLO cuando son redundantes, y cada condición
-  //    dice exactamente qué información estaría perdiéndose:
-  //
-  //      · `difiereDeOperativa` → hay inversión, financiamiento o cuentas sin
-  //        categoría: entonces «antes de impuesto» NO es la operativa y hay que
-  //        mostrar el puente.
-  //      · `hayImpuesto` → el bufete tributa a nivel de empresa: la línea de
-  //        impuesto es un dato, no un cero.
-  //      · `conDistribucion` → si el ejercicio NO se reparte, la Utilidad Neta
-  //        es el cierre del reporte y no se toca nunca.
-  //
-  //    Con cualquiera de esas, la cadena completa vuelve sola.
-  const difiereDeOperativa = Math.abs(utilidadAntesImpuesto - utilidadOperativa) >= 0.005;
-  const hayImpuesto = isrRate > 0 || Math.abs(impuesto) >= 0.005;
-  const mostrarPuenteAlNeto = !conDistribucion || difiereDeOperativa || hayImpuesto;
-
-  if (mostrarPuenteAlNeto) {
-    filas.push({
-      kind: "resultado",
-      label: "► Utilidad antes de impuesto sobre la renta",
-      valor: presentar(utilidadAntesImpuesto),
-    });
-    filas.push({
-      kind: "impuesto",
-      label: "Impuesto sobre la renta",
-      nota: notaImpuesto(isrRate, hayUtilidad),
-      valor: presentar(impuesto),
-    });
-    filas.push({
-      kind: "resultado",
-      label: "► Utilidad Neta",
-      valor: presentar(utilidadNeta),
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tarea 4 — distribución a socias (sociedad civil)
-  // ---------------------------------------------------------------------------
-  // Integra es sociedad civil: no paga ISR a nivel de empresa, reparte todo a
-  // las socias y cada una paga su renta personal. El ejercicio cierra en CERO.
-  let distribucionSocias = 0;
-  let resultadoDelEjercicio = utilidadNeta;
-
-
-  if (conDistribucion) {
-    // La distribución es exactamente el opuesto de la utilidad neta: por eso el
-    // resultado del ejercicio da 0 por construcción, no por casualidad.
-    distribucionSocias = round2(-utilidadNeta);
-    resultadoDelEjercicio = round2(utilidadNeta + distribucionSocias);
-
-    filas.push({ kind: "bloque", label: "DISTRIBUCIÓN A SOCIAS", actividad: "operacion" });
-    filas.push({
-      kind: "cuenta",
-      code: codigoDist,
-      name: nombreDist,
-      valor: presentar(distribucionSocias),
-      estructural: true,
-    });
-    filas.push({
-      kind: "resultado",
-      label: "► Resultado del ejercicio",
-      valor: presentar(resultadoDelEjercicio),
-    });
-  }
+  // E10: las tres líneas van SIEMPRE, también en 0.00. Antes se ocultaban
+  // cuando repetían la Utilidad Operativa (09/09/2026) porque abajo venía la
+  // distribución a socias; sin ese bloque, la Utilidad neta es el cierre del
+  // reporte y el impuesto es un dato aunque la tasa sea 0.
+  filas.push({
+    kind: "resultado",
+    label: "► Utilidad antes de impuesto sobre la renta",
+    valor: presentar(utilidadAntesImpuesto),
+  });
+  filas.push({
+    kind: "impuesto",
+    label: "Impuesto sobre la renta",
+    nota: notaImpuesto(isrRate, hayUtilidad),
+    valor: presentar(impuesto),
+  });
+  filas.push({
+    kind: "resultado",
+    label: "► Utilidad neta",
+    valor: presentar(utilidadNeta),
+  });
 
   return {
     filas,
@@ -483,11 +401,8 @@ export function buildEstadoResultadoNiif18(
       utilidadAntesImpuesto,
       impuesto,
       utilidadNeta,
-      distribucionSocias,
-      resultadoDelEjercicio,
     },
     isr,
-    distribucionAplicada: conDistribucion,
     sinClasificar,
   };
 }
@@ -499,11 +414,10 @@ function ordenar(accounts: ReportAccount[]): ReportAccount[] {
   );
 }
 
-function notaImpuesto(rate: number, hayUtilidad: boolean): string {
-  if (rate === 0) {
-    return "sociedad civil: no paga a nivel de empresa. Cada socia paga su renta personal";
-  }
-  if (!hayUtilidad) return "no aplica: el período no cerró con utilidad";
+/** La nota de la línea de impuesto. Exportada para el test. */
+export function notaImpuesto(rate: number, hayUtilidad: boolean): string {
   const pct = (rate * 100).toLocaleString("es-PA", { maximumFractionDigits: 2 });
-  return `tasa ${pct}%, a confirmar con el contador`;
+  if (rate === 0) return "tasa 0 % del bufete (se configura en Impuestos)";
+  if (!hayUtilidad) return `tasa ${pct} %: no aplica, el período no cerró con utilidad`;
+  return `tasa ${pct} % del bufete`;
 }

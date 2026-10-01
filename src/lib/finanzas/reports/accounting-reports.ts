@@ -168,10 +168,18 @@ export interface BalanceGeneral {
   pasivos: ReportSection;
   patrimonio: ReportSection;
   /**
-   * Resultado del ejercicio que se lleva al patrimonio. Hoy = utilidad
-   * OPERATIVA (decisión provisional, ver buildBalanceGeneral).
+   * Resultado del ejercicio que se lleva al patrimonio: la UTILIDAD NETA del
+   * Estado de Resultado (E10, 01/10/2026; antes la operativa). Acumulada
+   * mientras no haya cierre anual.
    */
   utilidadDelEjercicio: number;
+  /**
+   * E10: el ISR CALCULADO por el reporte (tasa del bufete), como pasivo en
+   * convención de balanza (negativo). 0 con tasa 0. No es un asiento: si la
+   * neta lleva el impuesto restado, el pasivo tiene que llevarlo sumado o el
+   * Balance deja de cuadrar por exactamente ese monto.
+   */
+  isrPorPagarCalculado: number;
   /** Total de Pasivos + Total de Patrimonio. */
   totalPasivoPatrimonio: number;
   /** Total de Activo + Total Pasivo+Patrimonio. 0 = cuadra. */
@@ -204,8 +212,9 @@ export interface BalanceGeneral {
  *
  * Integra es una **sociedad civil** y NO paga impuesto sobre la renta a nivel de
  * empresa: reparte el resultado a las socias y cada una paga su renta personal
- * (15%). Ese reparto es lo que muestra la sección de distribución del Estado de
- * Resultado (`estado-resultado-niif18.ts`), y por eso el ejercicio cierra en 0.
+ * (15%). Desde E10 (01/10/2026) la tasa es un parámetro del bufete
+ * (`finanzas_parametros.isr_rate`, 078) y esta constante es sólo el valor
+ * cuando un bufete no tiene fila.
  *
  * **El parámetro se queda a propósito.** Rose lo pidió explícitamente pensando
  * en vender el sistema después a sociedades anónimas, que sí lo pagan: ahí se
@@ -456,11 +465,16 @@ const PATRIMONIO_GROUPS: GroupSpec[] = [
 
 export interface BalanceGeneralOptions {
   /**
-   * Resultado del ejercicio a llevar al patrimonio. Se pasa desde afuera (en
-   * vez de recalcularlo acá) para que el Balance y el Estado de Resultado no
-   * puedan divergir: es literalmente el mismo número.
+   * Resultado del ejercicio a llevar al patrimonio: la utilidad NETA. Se pasa
+   * desde afuera (en vez de recalcularlo acá) para que el Balance y el Estado de
+   * Resultado no puedan divergir: es literalmente el mismo número.
    */
   utilidadDelEjercicio: number;
+  /**
+   * El ISR calculado (positivo, como en `IsrLine.amount`). Va al pasivo como
+   * renglón calculado. Default 0.
+   */
+  isrCalculado?: number;
 }
 
 /**
@@ -478,8 +492,10 @@ export interface BalanceGeneralOptions {
  * lugar de esconderlo. Cuando llegue el Paso 3, el cierre del ejercicio debería
  * postear el resultado a `300003` y este renglón calculado desaparece.
  *
- * ⚠️ PROVISIONAL: se usa la utilidad OPERATIVA (antes de ISR), pendiente de que
- * Josuar confirme si el patrimonio debe llevar la operativa o la neta.
+ * E10 (01/10/2026): el patrimonio lleva la utilidad NETA. Con una tasa de ISR
+ * distinta de 0, el impuesto calculado entra al pasivo como renglón calculado
+ * («Impuesto sobre la renta por pagar (calculado)»): así el Balance cuadra
+ * aunque el impuesto no esté registrado en el libro.
  */
 export function buildBalanceGeneral(
   accounts: ReportAccount[],
@@ -496,11 +512,16 @@ export function buildBalanceGeneral(
     total: sumSaldos(assetAccounts),
   };
 
+  // En balanza un pasivo es negativo: el impuesto calculado (un gasto, positivo)
+  // entra con el signo opuesto.
+  const isrCalculado = options.isrCalculado ?? 0;
+  // Sin el `=== 0` saldría −0, que se imprime «-0.00».
+  const isrPorPagarCalculado = isrCalculado === 0 ? 0 : round2(-isrCalculado);
   const pasivos: ReportSection = {
     label: "PASIVOS",
     totalLabel: "Total de Pasivos",
     groups: groupsBySubcategoria(liabilityAccounts, PASIVO_GROUPS),
-    total: sumSaldos(liabilityAccounts),
+    total: round2(sumSaldos(liabilityAccounts) + isrPorPagarCalculado),
   };
 
   const utilidadDelEjercicio = round2(options.utilidadDelEjercicio);
@@ -531,6 +552,7 @@ export function buildBalanceGeneral(
     pasivos,
     patrimonio,
     utilidadDelEjercicio,
+    isrPorPagarCalculado,
     totalPasivoPatrimonio,
     descuadre,
     cuadra: Math.abs(descuadre) < EPSILON,
@@ -539,9 +561,9 @@ export function buildBalanceGeneral(
 }
 
 /**
- * Arma los DOS reportes de una pasada, garantizando que la "Utilidad del
- * Ejercicio" del Balance sea exactamente la utilidad operativa del Estado de
- * Resultado.
+ * Arma los DOS reportes de una pasada, garantizando que el resultado del
+ * Balance sea exactamente la utilidad NETA del Estado de Resultado (E10), y que
+ * el ISR calculado vaya al pasivo.
  */
 export function buildAccountingReports(
   accounts: ReportAccount[],
@@ -549,7 +571,8 @@ export function buildAccountingReports(
 ): { estadoResultado: EstadoResultado; balanceGeneral: BalanceGeneral } {
   const estadoResultado = buildEstadoResultado(accounts, options);
   const balanceGeneral = buildBalanceGeneral(accounts, {
-    utilidadDelEjercicio: estadoResultado.utilidadOperativa,
+    utilidadDelEjercicio: estadoResultado.utilidadNeta,
+    isrCalculado: estadoResultado.isr.amount,
   });
   return { estadoResultado, balanceGeneral };
 }

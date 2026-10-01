@@ -98,7 +98,7 @@ export function countZeroRows(sections: ReportSection[]): number {
  * QUÉ SE CONSERVA SIEMPRE, aunque dé cero:
  *   · `bloque`, `resultado` e `impuesto` — son la ESTRUCTURA del estado, no un
  *     detalle de cuenta. Los cuatro subtotales obligatorios salen de ahí.
- *   · Las cuentas marcadas `estructural` (la distribución a socias): sin ese
+ *   · Las cuentas marcadas `estructural` (hoy ninguna; era la distribución a socias): sin ese
  *     renglón la sección queda con encabezado y nada debajo.
  *
  * QUÉ SE OCULTA:

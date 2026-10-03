@@ -1,5 +1,14 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 4) — HOTFIX 084 EN PRODUCCIÓN <<<
+
+- ✅ **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** por Oliver: `audit_log` solo de agregar (730 filas
+  antes y después, política FOR SELECT con `get_tenant_id()`, `anon` sin permisos, triggers activos, prueba en
+  la app OK). **Producción = 024 + 084.**
+- ✅ `main` `9b00b12` (deploy de Producción OK), `develop` `36e80e2` + `b000141` (marcador del inventario),
+  merge a `feat/bloque1-contable` con el documento de `main`.
+- La ventana grande sigue siendo 025 → 083 (+ la 084, que entra y no cambia nada).
+
 ## >>> 03/10/2026 (cierre 3) — 084 APLICADA EN STAGING Y HOTFIX DE PRODUCCIÓN LISTO <<<
 
 - ✅ `084` aplicada en staging. `verificacion-084`: **11 ok, 0 fallas**. Corrida dos veces: la segunda no cambia

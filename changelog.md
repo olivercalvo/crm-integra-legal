@@ -1,5 +1,14 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Hotfix 084 en producción] - 2026-10-03
+
+- 🔒 **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** (Oliver, SQL Editor): `audit_log` solo de
+  agregar. Antes y después 730 filas; política FOR ALL → FOR SELECT con la misma expresión
+  (`get_tenant_id()`); `anon` sin permisos; `authenticated` con INSERT, REFERENCES, SELECT y TRIGGER; los dos
+  triggers activos; prueba en la app OK. Producción: **024 + 084**.
+- `hotfix/audit-log-solo-agregar` → `main` (`9b00b12`, deploy de Producción OK) → `develop` (`36e80e2`,
+  marcador del inventario en `b000141`) → `feat/bloque1-contable`.
+
 ## [084 aplicada en staging y hotfix de producción preparado] - 2026-10-03
 
 - `084` aplicada en staging (11/11). Idempotente: una segunda corrida no cambia nada.

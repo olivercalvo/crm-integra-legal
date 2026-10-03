@@ -311,7 +311,7 @@ const MARCADORES = {
   "084_audit_log_solo_agregar.sql": {
     que: "audit_log: politica FOR SELECT (misma expresion de bufete), sin UPDATE/DELETE/TRUNCATE para anon/authenticated y trigger de solo agregar",
     tipo: "funcion", nombre: "audit_log_solo_agregar",
-    nota: "Hotfix de seguridad del 03/10, independiente: no depende de nada posterior a la 024 y aplica limpio en main (24b227a). Todas las escrituras usan el cliente de servicio.",
+    nota: "Hotfix de seguridad. APLICADA EN PRODUCCION el 03/10/2026 por Oliver (sola: produccion = 024 + 084); en main desde 9b00b12. En la ventana 025 -> 083 entra igual y no cambia nada (idempotente, probado en staging). Todas las escrituras usan el cliente de servicio.",
   },
   "083_fe_estado_interna.sql": {
     que: "fe_estado 'interna' en invoices y credit_notes (NC/ND emitida sin enviarse a la DGI), terminal por trigger",

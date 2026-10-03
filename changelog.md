@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [084 audit_log solo de agregar (sin aplicar) y dos bitácoras] - 2026-10-03
+
+- ⚠️ `084` **escrita, SIN APLICAR**: `audit_log` pasa a lectura por bufete para el usuario, sin UPDATE,
+  DELETE ni TRUNCATE para nadie salvo el superusuario. Hotfix independiente para producción.
+  Verificación: `sql/tests/verificacion-084-audit-log-solo-agregar.sql` (11 pruebas).
+- Propuesta de auditoría: dos bitácoras, contable y legal, con su tabla, cadena, pantalla y permisos.
+
 ## [083 aplicada, NC/ND internas y tres propuestas] - 2026-10-03
 
 - `083` aplicada en staging (verificación 4/4). ND-000004 y NC-000023 emitidas como internas: con

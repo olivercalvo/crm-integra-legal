@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 2) — 084 Y DOS BITÁCORAS <<<
+
+- ⏳ **`084` escrita, SIN APLICAR** (espera «aplica»): `audit_log` solo de agregar. Confirmado en producción
+  el mismo agujero (consulta de Oliver). Las 32 escrituras y las 2 lecturas usan el cliente de servicio, así
+  que no hace falta política de INSERT. Verificación: antes 3/11 en staging (el agujero), simulada después
+  11/11 en una transacción deshecha. **Hotfix independiente**: aplica limpio en `main` (24b227a), sin
+  depender de nada posterior a la 024. ⚠️ En Supabase `postgres` no es superusuario: después de la 084 nadie
+  borra filas de `audit_log` sin quitar el trigger (y borrar un bufete entero queda bloqueado por la
+  cascada). `scripts/run_all_pending.sql` (viejo) hace `DELETE FROM audit_log`: ya no correría.
+- 📐 Propuesta de bitácora separada en contable (la ve el contador) y legal (la ve el admin), con el
+  ruteo de clientes, usuarios y gastos de trámite (opción 1: dueño + copia contable de lo fiscal) y el
+  reparto del legado.
+
 ## >>> 03/10/2026 (cierre) — 083, PROPUESTAS DE CORTE, ALERTAS Y AUDITORÍA <<<
 
 - ✅ `083` aplicada en staging (4/4) y NC/ND internas probadas (`docs/efactura/prueba-notas-internas.txt`).

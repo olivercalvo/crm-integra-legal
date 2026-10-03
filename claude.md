@@ -681,6 +681,13 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - `/finanzas/pendientes-dgi` (admin y abogada reintentan; el contador ve), desde
   `PENDIENTES_DGI_DESDE = 2026-06-01`. Aviso en el listado de facturas (cuenta `no_emitida` y
   `error`), en el hub de reportes y en el dashboard Legal (la abogada, sólo las suyas).
+- **Formatos de RUC aceptados** (contrastados con los 22 jurídicos autorizados en producción, 03/10):
+  jurídica en tres grupos numéricos o **NT** (propiedad horizontal, `8-NT-2-735096`); natural con
+  cédula, prefijos `PE`/`E`/`N`/`AV`/`PI`, PE con tres grupos y NT. La consulta SQL repite los patrones.
+- 🔴 **El tipo de receptor se deduce en UN lugar**: `tipoReceptorEfectivo()`
+  (`mapper/derive-tipo-receptor-fe.ts`), para el mapper, el gate fiscal y las validaciones. Sin tipo
+  cargado: jurídica o natural con DV → `01`; natural sin DV → `02`. Caso CLI-036 de producción: antes
+  el gate exigía el tipo explícito y la factura quedaba «no emitida» sin aviso.
 
 ### Errores de la DGI — prevenir y mostrar (desde 2026-09-23)
 - 🔴 **Descripción de línea: 2 a 500 caracteres** (`controles-dgi.ts`). El tope es de la DGI

@@ -1,6 +1,11 @@
 # Borrador para ideati (NO ENVIADO)
 
 > Redactado el 03/10/2026 para que Oliver lo revise y lo mande. Nada de esto se envió.
+>
+> ⚠️ **Cruce del 03/10** (`docs/finanzas/cruce-preguntas-pendientes.md`): las tres preguntas ya tienen respuesta
+> o están en espera. La 1 (papel) espera a que el bufete confirme si existe alguna factura en papel; la 2 la
+> contestó ideati y lo que queda es contable (Josuarth); la 3 está en el `task_plan.md` (459 a 461 del sandbox,
+> 463 real). Recomendación: no mandar este mensaje el lunes.
 
 **Asunto:** Integra Legal · tres consultas: notas de crédito, CPBS de reembolsos y facturas de prueba
 

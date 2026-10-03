@@ -258,11 +258,19 @@ loaders) y un test que recorra las fuentes de reportes y falle si alguna no lo u
 
 ### 9.5 Lo fiscal es otra pregunta
 
-La marca saca los documentos de **nuestros** libros, no de la DGI. Si las cuatro se autorizaron en el
-ambiente de **producción** de la DGI, para la DGI son ventas reales del bufete con su ITBMS, y la
-declaración de junio y julio no las incluye. La ventana de 182 h para anular ya pasó para las cuatro. La
-pregunta va a ideati (borrador del 03/10): en qué ambiente se autorizaron y, si fue en producción, cómo
-se anulan. Hasta tener la respuesta, la marca no cambia: lo que se haga ante la DGI se registra aparte.
+La marca saca los documentos de **nuestros** libros, no de la DGI. Corrección del cruce de preguntas
+(`docs/finanzas/cruce-preguntas-pendientes.md`, I-3), que lo encontró en el propio repositorio:
+- **FAC-HON-000459, 460 y 461 se autorizaron en el SANDBOX** (`i_amb=2`, punto `001`, correlativos 1 a 3;
+  `task_plan.md`, registro de pruebas de junio). Están en la base de producción porque hasta el 25/08
+  `localhost` escribía en ella. **Para la DGI no existen**: no hay nada que anular allá.
+- **FAC-HON-000463 es real ante la DGI**: fue la primera emisión en producción (go-live del 08/07, punto
+  `051`), B/. 1.07 de Integra a Integra. La ventana de 182 h venció en julio: ante la DGI sólo se corrige
+  con una **NC 04** con su CUFE, y esa NC también sería un documento fiscal real.
+- La consulta de confirmación por `fe_emisiones.i_amb` está en el cruce (I-3); la corre Oliver.
+
+Consecuencia para la propuesta: las tres de junio se marcan de prueba sin ningún paso fiscal. La 463 es una
+decisión de Josuarth: marcarla de prueba (fuera de ventas e ITBMS del CRM, aunque la DGI la tenga) o
+dejarla como venta real de 1.07 y acreditarla con NC. La pregunta 3 del borrador a ideati sobra.
 
 ### 9.6 Migración que haría falta (sin escribirla)
 

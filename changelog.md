@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bitácoras de auditoría y cruce de preguntas] - 2026-10-03
+
+- Cruce de preguntas pendientes para ideati, licenciadas y Josuarth (`docs/finanzas/cruce-preguntas-pendientes.md`).
+- Migraciones `086` y `087` escritas (sin aplicar): bitácora contable y bitácora legal, solo de agregar, con
+  cadena de hash, anclas y verificación, llenadas por triggers en la base. `088` (copia del registro
+  anterior) escrita y sin aplicar a propósito.
+- Cada ruta que escribe le dice a la base quién es el usuario (`createAdminClient(usuario)`).
+- Pantallas «Bitácora Contable» (contador y admin) y «Bitácora Legal» (admin), con filtros, Excel y
+  verificación de integridad. El registro anterior sigue visible en «Registro anterior».
+
 ## [RUC NT, tipo de receptor deducido y clientes de prueba] - 2026-10-03
 
 - Las validaciones previas aceptan el RUC de propiedad horizontal (`8-NT-2-735096`) y la cédula PE con

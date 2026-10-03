@@ -1,5 +1,26 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 7) — CRUCE DE PREGUNTAS Y BITÁCORAS DE AUDITORÍA <<<
+
+- ✅ Parte 1: `docs/finanzas/cruce-preguntas-pendientes.md`. De 15 preguntas, 4 ya respondidas, 3 se
+  resuelven (del todo o en parte) con consultas de solo lectura y 10 hay que preguntarlas. Se suman 2
+  (L-4 facturas en papel, J-10 CPBS). FAC-HON-000459/460/461 fueron del sandbox; sólo la 463 es real.
+  Recomendación: no mandar nada a ideati el lunes.
+- ⏳ Oliver corre en producción las consultas de solo lectura del cruce (I-3, L-1, L-2, L-3, J-6) antes
+  de los mensajes. Prueba del `1519` en sandbox antes de J-4.
+- ✅ Parte 2, código: `086` (núcleo), `087` (captura en 41 tablas), `088` (legado, SIN APLICAR a
+  propósito). Probadas en staging dentro de una transacción con ROLLBACK: captura con usuario por header,
+  copia fiscal a la contable, «sistema» sin usuario, cadena íntegra, UPDATE/DELETE/TRUNCATE rechazados,
+  lectura por rol (contador no lee la legal, abogada no lee la contable), 088 con conteos iguales.
+- ✅ `createAdminClient(usuario)` en las 96 llamadas; pantallas, Excel y «Verificar integridad».
+- ⏳ **Esperando «aplica»** de la 086 y la 087 en staging. Después: el recorrido del punto 7 (crear,
+  editar, anular y reversar documentos contables y legales, usuario, antes/después, cadena, intentos de
+  editar y borrar).
+- 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
+  tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
+- 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y
+  plantillas de observaciones. Dudas abiertas: lecturas sensibles y retención (J-9).
+
 ## >>> 03/10/2026 (cierre 6) — RUC NT, CLI-036, CLIENTES DE PRUEBA <<<
 
 - ✅ Resultado de producción: 22 RUC jurídicos autorizados. La regla rechazaba 3 (propiedad horizontal,

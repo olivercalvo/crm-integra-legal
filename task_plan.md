@@ -1,5 +1,23 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (noche) — FACTURACIÓN ELECTRÓNICA QUE FALTABA <<<
+
+- ✅ `082` aplicada en staging (verificación 3/3).
+- ✅ ND 05 (con CUFE) y 07 (sin factura), NC 06 (sin factura): construidas y autorizadas de punta a
+  punta en el sandbox (`docs/efactura/prueba-notas-de-punta-a-punta.txt`). La 07 dio un `fetch
+  failed` de red en el primer intento y autorizó al reintentar con el mismo correlativo (55).
+- ✅ Opción al emitir NC/ND: «Enviar a la DGI» o «Interna». ⏳ **`083` escrita, SIN APLICAR**
+  (`fe_estado = 'interna'`, terminal): hasta el «aplica», elegir «Interna» deja el documento emitido
+  y «Sin enviar» con un aviso de fallo. Falta probar la interna en staging después del «aplica».
+- 📝 Borrador para ideati (NO enviado): `docs/efactura/borrador-mensaje-ideati-2026-10-03.md`.
+- ⏳ Para Oliver: correr `sql/verificacion/produccion-facturas-dgi-por-mes.sql` (y la de documentos
+  por mes) en el SQL Editor de producción.
+- 📐 Propuesta sin construir: `docs/finanzas/propuesta-corte-quickbooks.md`. 🔴 Choca con P-9a
+  (corte 31/12/2025): hay que elegir la fecha antes de construir.
+- ⚠️ Prueba en sandbox: el cliente FERRETERÍA VALLARINO se apuntó al RUC del emisor y se restauró.
+  En staging quedaron ND-000002, ND-000003 y NC-000022 (autorizadas en sandbox) y los
+  correlativos FE 48 a 56 consumidos.
+
 ## >>> 03/10/2026 (tarde) — RESPUESTAS DE JOSUARTH DEL 02/10 <<<
 
 - Anotadas en `docs/finanzas/plan-bloque1.md` §7 (P-9a, P-8c, J-7, J-9, K-5/P-1c, P-4a, apertura y

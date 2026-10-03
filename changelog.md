@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [ND y NC genéricas a la DGI, envío al emitir, 082 aplicada] - 2026-10-03
+
+- `082` aplicada en staging. Verificación 3/3: 400010 con HON-OTROS; banco en una línea de NC de
+  compra rechazado; cuenta de gasto aceptada.
+- Nota de débito a la DGI: 05 con el CUFE de la factura que ajusta, 07 sin factura. NC sin factura:
+  06 genérica. Autorizadas en sandbox (ND-000002, ND-000003, NC-000022).
+- Al emitir una NC o una ND se elige «Enviar a la DGI» o «Interna (no se envía)». ⚠️ La interna
+  necesita la `083` (escrita, SIN APLICAR): `fe_estado = 'interna'`, terminal.
+- Borrador de mensaje para ideati (no enviado), consulta de producción de facturas con y sin DGI
+  por mes, y propuesta de «contabilizado fuera» para el corte con QuickBooks.
+
 ## [Respuestas de Josuarth del 02/10 y detalles del recorrido] - 2026-10-03
 
 - ⚠️ `082` **escrita, SIN APLICAR**: cuenta 400010 «Otros servicios» (operativa) con HON-OTROS;

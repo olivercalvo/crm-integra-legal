@@ -24,6 +24,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreateCreditNoteInput } from "@/lib/finanzas/validators/credit-note";
 import { emitCreditNote } from "@/lib/finanzas/api/credit-notes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { aplicarEnvioAlEmitir, leerModoDeEnvio, type ResultadoDelEnvio } from "@/lib/finanzas/efactura/orchestration/envio-al-emitir";
 
 export const runtime = "nodejs";
 
@@ -42,6 +43,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
+  let envio: ReturnType<typeof leerModoDeEnvio> = null;
+  try {
+    envio = leerModoDeEnvio((body as { envio?: unknown })?.envio);
+  } catch (err) {
+    if (err instanceof MutationError) return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors ?? undefined }, { status: err.status });
+    throw err;
+  }
+
   const validation = validateCreateCreditNoteInput(body);
   if (!validation.ok) {
     return NextResponse.json({ error: "Validación fallida", fieldErrors: validation.errors }, { status: 400 });
@@ -56,7 +65,15 @@ export async function POST(request: NextRequest) {
       ctx.userId,
       validation.data
     );
-    return NextResponse.json(result, { status: 201 });
+    // La NC ya existe con su asiento. «dgi» la manda (04 con factura, 06 sin
+    // ella); «interna» la marca y no llama al PAC. Un rechazo no la deshace.
+    let envioResultado: ResultadoDelEnvio | null = null;
+    if (envio) {
+      envioResultado = await aplicarEnvioAlEmitir(ctx.db, ctx.tenantId, ctx.userId, { tabla: "credit_notes", id: result.id }, envio).catch(
+        (e: unknown) => ({ envio: envio!, fe: { ok: false, feEstado: "no_emitida", mensaje: e instanceof Error ? e.message : String(e) } })
+      );
+    }
+    return NextResponse.json({ ...result, envio: envioResultado }, { status: 201 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] emitCreditNote failed:", err.message, err.detail);

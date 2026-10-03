@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { SelectorDeEnvio, type ModoDeEnvio } from "@/components/finanzas/selector-de-envio";
 import { useRouter } from "next/navigation";
 import { AlertCircle, AlertTriangle, FileMinus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ export function NotaDeCreditoForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmandoSinFactura, setConfirmandoSinFactura] = useState(false);
+  const [envio, setEnvio] = useState<ModoDeEnvio | null>(null);
 
   const factura = facturas.find((f) => f.id === facturaId) ?? null;
   const facturasDelCliente = useMemo(
@@ -145,6 +147,7 @@ export function NotaDeCreditoForm({
       e.reason = `El motivo debe tener entre ${NC_MOTIVO_MIN} y ${NC_MOTIVO_MAX} caracteres.`;
     }
     if (lines.length === 0) e.lines = "Agrega al menos una línea.";
+    if (!envio) e.envio = "Elige si se envía a la DGI o queda interna.";
     setErrors(e);
     if (Object.keys(e).length > 0 || !validacion || !validacion.ok || sinFacturaBloqueado) return;
 
@@ -160,6 +163,7 @@ export function NotaDeCreditoForm({
             observations: observations.trim() || null,
             fecha_registro: fecha,
             lineas: pedido,
+            envio,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -175,7 +179,10 @@ export function NotaDeCreditoForm({
           setSubmitError(data.error ?? "No se pudo emitir la nota de crédito.");
           return;
         }
-        router.push(`/finanzas/notas-credito/${data.id}?emitida=1`);
+        // Si eligió la DGI y el envío no terminó bien, la NC igual existe: el
+        // detalle lo dice y ofrece reintentar.
+        const fallo = data.envio?.envio === "dgi" && data.envio?.fe && !data.envio.fe.ok;
+        router.push(`/finanzas/notas-credito/${data.id}?emitida=1${fallo ? "&envio=fallo" : ""}`);
         router.refresh();
       } catch {
         setSubmitError("Error de red. Intenta de nuevo.");
@@ -285,6 +292,16 @@ export function NotaDeCreditoForm({
                 }`}
               />
               {errors.reason && <p className="mt-1 text-xs text-red-600">{errors.reason}</p>}
+            </div>
+
+            <div className="sm:col-span-2">
+              <SelectorDeEnvio
+                valor={envio}
+                onChange={setEnvio}
+                disabled={isPending}
+                error={errors.envio}
+                nombre="nota de crédito"
+              />
             </div>
 
             <div className="sm:col-span-2">

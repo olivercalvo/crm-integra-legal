@@ -125,11 +125,13 @@ test("🟢 P-4a: la NC de venta sin factura está encendida (Josuarth, 02/10), c
   }
 });
 
-test("🔴 una NC sin factura no se manda a la DGI: se corta antes del correlativo", () => {
+test("🟢 03/10: una NC sin factura va como 06 genérica; con factura, 04 y el gate del CUFE antes del correlativo", () => {
   const src = readFileSync(path.join(RAIZ, "src/lib/finanzas/efactura/orchestration/emit-credit-note-to-efactura.ts"), "utf8");
-  const corte = src.indexOf("if (!nc.invoice_id)");
-  const bundle = src.indexOf("fetchCreditNoteEfacturaBundle(db, tenantId, creditNoteId)");
-  assert.ok(corte > 0 && corte < bundle, "el corte va antes de armar el envío");
+  assert.doesNotMatch(src, /if \(!nc\.invoice_id\)/, "ya no se corta por no tener factura");
+  assert.match(src, /tipoDocumento: tipoDocumentoDeNota\("credito", factura !== null\)/);
+  const gate = src.indexOf("if (factura && !factura.dgi_cufe)");
+  const correlativo = src.indexOf("allocateFeNumero(db, { tenantId, puntoFacturacion })");
+  assert.ok(gate > 0 && gate < correlativo, "sin CUFE (con factura) se corta antes de quemar número");
 });
 
 // ── Compra ────────────────────────────────────────────────────────────────────

@@ -60,6 +60,7 @@ import { mapInvoiceToEfacturaRequest } from "@/lib/finanzas/efactura/mapper/map-
 import { allocateFeNumero } from "@/lib/finanzas/efactura/secuencias/allocate-fe-numero";
 import { post } from "@/lib/finanzas/efactura/transport/efactura-client";
 import { fetchCreditNoteEfacturaBundle } from "@/lib/finanzas/efactura/data/fetch-credit-note-efactura-bundle";
+import { tipoDocumentoDeNota } from "@/lib/finanzas/efactura/mapper/tipo-de-documento";
 import {
   parsePacResponse,
   MENSAJE_INCIERTO,
@@ -154,16 +155,8 @@ export async function emitCreditNoteToEfactura(
       409
     );
   }
-  // 🔴 E8 / P-4a: una NC tipo 04 tiene que decir qué factura corrige. Sin
-  //    factura no hay documento referenciado y el PAC la rechaza: se corta acá,
-  //    antes de tocar el correlativo.
-  if (!nc.invoice_id) {
-    throw new MutationError(
-      "Esta nota de crédito no está asociada a una factura, así que no se puede enviar a la DGI: " +
-        "el documento electrónico tiene que decir qué factura corrige. Queda como documento interno.",
-      409
-    );
-  }
+  // 🟢 03/10/2026: una NC SIN factura ya se manda, como 06 GENÉRICA y sin
+  //    referencia (`tipoDocumentoDeNota`). Con factura sigue siendo 04 + CUFE.
   if (nc.fe_estado !== "no_emitida" && nc.fe_estado !== "error") {
     throw new MutationError(
       nc.fe_estado === "authorized"
@@ -177,8 +170,8 @@ export async function emitCreditNoteToEfactura(
 
   const { bundle, factura } = await fetchCreditNoteEfacturaBundle(db, tenantId, creditNoteId);
 
-  // 🔴 EL GATE DEL CUFE. Antes de tocar el correlativo.
-  if (!factura.dgi_cufe) {
+  // 🔴 EL GATE DEL CUFE (sólo con factura). Antes de tocar el correlativo.
+  if (factura && !factura.dgi_cufe) {
     throw new MutationError(
       `La factura ${factura.invoice_number} no tiene CUFE, así que esta nota de crédito no se ` +
         "puede enviar a la DGI: el documento electrónico tiene que decir qué factura corrige. " +
@@ -250,8 +243,11 @@ export async function emitCreditNoteToEfactura(
       sequence: { puntoFacturacion, numeroDocumento },
       options: {
         iAmb: emisor.iAmb,
-        tipoDocumento: TIPO_DOCUMENTO_NOTA_CREDITO,
-        referencia: { cufe: factura.dgi_cufe, fechaEmision: factura.issue_date },
+        // 04 + CUFE con factura; 06 sin referencia sin ella (1705 / 1706).
+        tipoDocumento: tipoDocumentoDeNota("credito", factura !== null),
+        ...(factura && factura.dgi_cufe
+          ? { referencia: { cufe: factura.dgi_cufe, fechaEmision: factura.issue_date } }
+          : {}),
       },
     });
   } catch (err) {

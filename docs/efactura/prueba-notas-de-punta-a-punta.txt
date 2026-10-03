@@ -1,0 +1,18 @@
+Prueba de punta a punta · 2026-10-03T17:50:33.561Z · EFACTURA_I_AMB=2 · staging
+cliente FERRETERÍA VALLARINO apuntado al RUC/DV del emisor (el sandbox rechaza RUC ficticios)
+→ ND con factura (debe ir 05) · ND-000002 · tipoDocumento=05 · referencia=CUFE FE0120000025046169-3…
+   ✅ AUTORIZADA · feEstado=authorized
+   en la base: fe_estado=authorized · CUFE FE0520000025046169-3-2021-4000002026100300000000540010124879041887
+   cod_res: [{"dCodRes":"0260","dMsgRes":"Autorizado el uso de la FE"}]
+→ ND sin factura (debe ir 07) · ND-000003 · tipoDocumento=07 · referencia=ninguna
+   ❌ no autorizada · feEstado=error · Fallo de comunicación con el PAC. Reintente en unos minutos. Detalle: fetch failed
+   en la base: fe_estado=error · CUFE (ninguno)
+   cod_res: null
+→ NC sin factura (debe ir 06) · NC-000022 · tipoDocumento=06 · referencia=ninguna
+   ✅ AUTORIZADA · feEstado=authorized
+   en la base: fe_estado=authorized · CUFE FE0620000025046169-3-2021-4000002026100300000000560010120401646398
+   cod_res: [{"dCodRes":"0260","dMsgRes":"Autorizado el uso de la FE"}]
+cliente restaurado
+→ Reintento ND-000003 (07) · nº 55 (el mismo: 55) · intento 2
+   ✅ AUTORIZADA · CUFE FE0720000025046169-3-2021-4000002026100300000000550010124995707731 · [{"dCodRes":"0260","dMsgRes":"Autorizado el uso de la FE"}]
+cliente restaurado

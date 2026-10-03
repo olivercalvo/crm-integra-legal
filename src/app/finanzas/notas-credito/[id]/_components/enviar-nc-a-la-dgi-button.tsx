@@ -11,7 +11,8 @@ interface Props {
   creditNoteId: string;
   creditNoteNumber: string;
   /** El número de la factura que corrige, para nombrarla en el modal. */
-  invoiceNumber: string;
+  /** `null` ⇒ NC sin factura: va como 06 genérica, sin referencia. */
+  invoiceNumber: string | null;
   /** Reintento: la NC ya salió una vez y volvió con error. */
   esReintento: boolean;
 }
@@ -110,10 +111,17 @@ export function EnviarNcALaDgiButton({
         loading={isPending}
       >
         <div className="space-y-3 text-sm text-gray-700">
-          <p>
-            Se va a enviar la nota de crédito <strong>{creditNoteNumber}</strong>, que corrige la
-            factura <strong>{invoiceNumber}</strong>.
-          </p>
+          {invoiceNumber ? (
+            <p>
+              Se va a enviar la nota de crédito <strong>{creditNoteNumber}</strong>, que corrige la
+              factura <strong>{invoiceNumber}</strong>.
+            </p>
+          ) : (
+            <p>
+              Se va a enviar la nota de crédito <strong>{creditNoteNumber}</strong> como nota de crédito
+              genérica: no corrige ninguna factura electrónica en particular.
+            </p>
+          )}
           <p className="rounded-md bg-amber-50 p-3 text-amber-900">
             Una vez que la DGI la autorice, la nota de crédito existe ante el fisco y{" "}
             <strong>ya no se puede corregir</strong>: para deshacerla hay que anularla ante la DGI,

@@ -309,10 +309,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   `apply_supplier_credit_note`, SIN asiento, admin, abogada y contador). La pantalla pregunta antes
   de guardar sin documento.
 - 🟢 **La NC de VENTA sin factura está ENCENDIDA** (`PERMITIR_NC_VENTA_SIN_FACTURA = true`,
-  Josuarth 02/10, P-4a) como **documento interno**: no se manda a la DGI (409 antes del
-  correlativo) y por eso no resta ITBMS. Su envío (¿tipo 06?) se activa después del inventario
-  de facturación electrónica, no con esa constante. La de compra sin compra SÍ se permite.
-- 🔴 **Una línea de NC de compra no acredita un BANCO** (`082`, `finanzas_es_cuenta_de_banco`).
+  Josuarth 02/10, P-4a) y **desde el 03/10 se manda a la DGI como 06 genérica, sin referencia**
+  (autorizada en sandbox: NC-000022). Hasta que se autoriza no resta ITBMS. La de compra sin
+  compra SÍ se permite.
+- 🔴 **Una línea de NC de compra no acredita un BANCO** (`082`, aplicada SOLO en staging, `finanzas_es_cuenta_de_banco`).
   «Banco» = activo cuyo nombre dice banco, caja o efectivo: la MISMA regla que
   `esCuentaDeBancoPorNombre` (`asiento-tesoreria.ts`), fijada por
   `cuenta-de-banco-una-sola-regla.test.ts`. Las líneas de compra y de NC de proveedor no ofrecen
@@ -332,8 +332,24 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Lleva servicios de **honorarios** (un recargo, un ajuste); uno de reembolso se rechaza.
 - **La factura que ajusta es opcional** (`referenced_invoice_id`): del mismo cliente, emitida y que
   no sea otra ND (trigger de la 077); T4 la congela al emitir. La columna sólo se nombra en una ND.
-- 🔴 **Todavía NO va a la DGI** (`PERMITIR_ND_A_LA_DGI = false`): el tipo 05 no se probó en el
-  sandbox. Se corta antes del correlativo y la pantalla no ofrece el botón.
+- 🟢 **Va a la DGI desde el 03/10** (`PERMITIR_ND_A_LA_DGI = true`): **05 con el CUFE** de la
+  factura que ajusta, **07 genérica** sin factura (autorizadas en sandbox: ND-000002 y ND-000003).
+  Si la factura que ajusta no tiene CUFE: 409 antes del correlativo («emítala como interna»).
+
+### Tipo de documento de una nota y «Enviar a la DGI / Interna» (desde 2026-10-03 — `083` SIN APLICAR)
+- 🔴 **El tipo sale de si hay referencia, nunca de un parámetro aparte**: `tipoDocumentoDeNota()`
+  (`efactura/mapper/tipo-de-documento.ts`). NC 04 con CUFE / 06 sin; ND 05 con CUFE / 07 sin. La DGI
+  rechaza 04/05 sin CUFE (`1705`) y 06/07 con CUFE (`1706`); medido en sandbox el 03/10
+  (`docs/efactura/prueba-tipos-05-06-07.txt`, `docs/efactura/inventario-2026-10-03.md`).
+- **Al emitir una NC o una ND se elige** «Enviar a la DGI» o «Interna (no se envía)»
+  (`SelectorDeEnvio`, sin opción marcada; `envio` en el body de `POST /credit-notes` y de
+  `POST /invoices/[id]/emit`, sólo ND). Lo aplica `aplicarEnvioAlEmitir`
+  (`efactura/orchestration/envio-al-emitir.ts`) **después** de emitir: un rechazo del PAC no deshace el
+  asiento; el documento queda en `error` y se reintenta desde su tarjeta.
+- 🔴 **La interna es `fe_estado = 'interna'`** (083): postea igual en el libro, nunca llama al PAC, y la
+  base la hace TERMINAL (sólo desde `no_emitida`, y de ahí no se sale). Banda de documento interno en
+  pantalla y PDF. Una ND interna se anula sólo en el libro (`decidirAccionFiscal`, sin el aviso del
+  portal). ⚠️ Sin la 083 aplicada, elegir «Interna» falla en el CHECK.
 
 ### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` aplicada SOLO en staging)
 - Sin «Distribución a Socias». Siempre: Utilidad bruta → Utilidad antes de impuesto sobre la

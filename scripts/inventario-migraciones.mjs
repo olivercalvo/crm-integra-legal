@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
     nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
   },
+  "083_fe_estado_interna.sql": {
+    que: "fe_estado 'interna' en invoices y credit_notes (NC/ND emitida sin enviarse a la DGI), terminal por trigger",
+    tipo: "funcion", nombre: "finanzas_fe_estado_interna_guard",
+    nota: "03/10. La NC/ND interna postea igual en el libro y nunca llama al PAC. Solo desde no_emitida; de interna no se sale.",
+  },
   "082_otros_servicios_y_nc_sin_bancos.sql": {
     que: "400010 Otros servicios con HON-OTROS; create_supplier_credit_note rechaza bancos (finanzas_es_cuenta_de_banco)",
     tipo: "funcion", nombre: "finanzas_es_cuenta_de_banco",

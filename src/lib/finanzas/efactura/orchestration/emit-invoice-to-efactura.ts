@@ -49,6 +49,8 @@ import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { loadEmisorConfig } from "@/lib/finanzas/efactura/config/emisor-config";
 import { fetchInvoiceEfacturaBundle } from "@/lib/finanzas/efactura/data/fetch-invoice-efactura-bundle";
 import { mapInvoiceToEfacturaRequest } from "@/lib/finanzas/efactura/mapper/map-invoice";
+import { tipoDocumentoDeNota } from "@/lib/finanzas/efactura/mapper/tipo-de-documento";
+import type { TipoDocumento } from "@/lib/finanzas/efactura/types/catalogs";
 import { allocateFeNumero } from "@/lib/finanzas/efactura/secuencias/allocate-fe-numero";
 import { post } from "@/lib/finanzas/efactura/transport/efactura-client";
 import {
@@ -61,7 +63,7 @@ import {
 
 type DB = SupabaseClient;
 
-export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error";
+export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error" | "interna";
 
 /**
  * 🔴 `incierto` — "el PAC contestó algo que no sé leer", y NO es un rechazo.
@@ -126,13 +128,13 @@ interface InvoiceMeta {
 // ---------------------------------------------------------------------------
 
 /**
- * 🔴 LA NOTA DE DÉBITO (077) TODAVÍA NO VA A LA DGI. Su tipo 05 lleva el
- * documento referenciado, igual que la NC, y nadie la probó contra el sandbox
- * del PAC: lección del `0600` y de la referencia anidada de la NC, un payload
- * sin probar se descubre como un rechazo sobre un documento real. Se enciende
- * cambiando esta línea después de autorizar una en el sandbox.
+ * 🟢 LA NOTA DE DÉBITO (077) VA A LA DGI desde el 03/10/2026, con el tipo que le
+ * toca (`tipoDocumentoDeNota`): **05 con el CUFE** de la factura que ajusta, o
+ * **07 genérica** sin referencia. Las dos se autorizaron en el sandbox antes de
+ * encender esto (docs/efactura/prueba-tipos-05-06-07.txt). Una ND que ajusta
+ * una factura SIN CUFE no se manda: 409 antes del correlativo, como la NC.
  */
-export const PERMITIR_ND_A_LA_DGI = false;
+export const PERMITIR_ND_A_LA_DGI = true;
 
 export const MENSAJE_ND_SIN_DGI =
   "La nota de débito todavía no se envía a la DGI desde el sistema: falta probarla en el ambiente de pruebas del proveedor de facturación electrónica. Queda registrada en el libro.";
@@ -180,6 +182,28 @@ export async function emitInvoiceToEfactura(
         "No se vuelve a enviar, porque sería un segundo documento fiscal por la misma venta.",
       409
     );
+  }
+
+  // 🔴 La NOTA DE DÉBITO: el tipo sale de si ajusta una factura (05 + CUFE) o
+  //    no (07). Se resuelve ANTES del correlativo: una ND sobre una factura sin
+  //    CUFE no se puede mandar (la 05 exige el CUFE, `1705`) y no quema número.
+  let tipoDocumento: TipoDocumento | undefined;
+  let referencia: { cufe: string; fechaEmision: string } | undefined;
+  if (inv.invoice_kind === "NOTA_DEBITO") {
+    const ajustada = await cargarFacturaQueAjusta(db, tenantId, invoiceId);
+    if (ajustada) {
+      if (!ajustada.dgi_cufe) {
+        throw new MutationError(
+          `La factura ${ajustada.invoice_number} que ajusta esta nota de débito no tiene CUFE, así que ` +
+            "la nota de débito no se puede enviar a la DGI: el documento electrónico tiene que decir qué " +
+            "factura ajusta. Si la factura se emitió en el portal de ideati, cargue su CUFE primero; si no, " +
+            "emita la nota de débito como interna.",
+          409
+        );
+      }
+      referencia = { cufe: ajustada.dgi_cufe, fechaEmision: ajustada.issue_date };
+    }
+    tipoDocumento = tipoDocumentoDeNota("debito", Boolean(referencia));
   }
 
   // Bundle + gate fiscal del cliente (validateClientFiscalGate adentro).
@@ -272,7 +296,9 @@ export async function emitInvoiceToEfactura(
       bundle,
       emisor,
       sequence: { puntoFacturacion, numeroDocumento },
-      options: { iAmb: emisor.iAmb },
+      // Factura de honorarios o de reembolso: el tipo lo deriva el mapper de
+      // `invoice_kind` (01/09) y no hay referencia. ND: 05 con CUFE o 07.
+      options: { iAmb: emisor.iAmb, ...(tipoDocumento ? { tipoDocumento } : {}), ...(referencia ? { referencia } : {}) },
     });
   } catch (err) {
     await db
@@ -425,6 +451,31 @@ export async function emitInvoiceToEfactura(
 // ---------------------------------------------------------------------------
 // Helpers de BD
 // ---------------------------------------------------------------------------
+
+/**
+ * La factura que ajusta una nota de débito, con lo que pide la referencia
+ * fiscal. Se lee con `*` (la columna sólo existe desde la 077) y sólo para ND.
+ */
+async function cargarFacturaQueAjusta(
+  db: DB,
+  tenantId: string,
+  ndId: string
+): Promise<{ invoice_number: string; issue_date: string; dgi_cufe: string | null } | null> {
+  const { data: nd, error } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", ndId).maybeSingle();
+  if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
+  const refId = (nd as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id ?? null;
+  if (!refId) return null;
+  const { data: ref, error: e2 } = await db
+    .from("invoices")
+    .select("invoice_number, issue_date, dgi_cufe")
+    .eq("tenant_id", tenantId)
+    .eq("id", refId)
+    .maybeSingle();
+  if (e2) throw new MutationError(pgErrorToMessage(e2), 500, e2);
+  if (!ref) return null;
+  const cufe = typeof ref.dgi_cufe === "string" && ref.dgi_cufe.trim() ? ref.dgi_cufe.trim() : null;
+  return { invoice_number: String(ref.invoice_number), issue_date: String(ref.issue_date).slice(0, 10), dgi_cufe: cufe };
+}
 
 async function loadInvoiceMeta(
   db: DB,

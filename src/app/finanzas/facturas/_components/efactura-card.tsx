@@ -110,6 +110,14 @@ export function EfacturaCard({
         />
       )}
 
+      {feEstado === "interna" && (
+        // 083: se emitió a propósito como interna. No hay botón: no se manda.
+        <p className="text-sm text-gray-700">
+          Este documento se emitió como <strong>interno</strong>: está en el libro contable y no se envía a la
+          DGI. No tiene CUFE ni vale como comprobante fiscal electrónico.
+        </p>
+      )}
+
       {feEstado === "pending" && <PendingSection />}
 
       {feEstado === "authorized" && (

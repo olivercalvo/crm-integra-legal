@@ -68,14 +68,16 @@ test("lleva servicios de honorarios; uno de reembolso se rechaza", () => {
   assert.match(String(mal["lines.0.service"]), /Este servicio es de Reembolso; una factura de Nota de débito no puede llevarlo/);
 });
 
-test("🔴 todavía no va a la DGI: una sola constante, y se corta antes de todo", () => {
+test("🟢 03/10: la ND va a la DGI (05 con CUFE, 07 sin factura) y el tipo se decide antes del correlativo", () => {
   const src = readFileSync(path.join(RAIZ, "src/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura.ts"), "utf8");
-  assert.match(src, /export const PERMITIR_ND_A_LA_DGI = false;/);
-  const corte = src.indexOf('inv.invoice_kind === "NOTA_DEBITO" && !PERMITIR_ND_A_LA_DGI');
-  const bundle = src.indexOf("fetchInvoiceEfacturaBundle(db, tenantId, invoiceId)");
-  assert.ok(corte > 0 && corte < bundle, "el corte va antes de armar el envío");
+  assert.match(src, /export const PERMITIR_ND_A_LA_DGI = true;/);
+  assert.match(src, /tipoDocumento = tipoDocumentoDeNota\("debito", Boolean\(referencia\)\);/);
+  const ajustada = src.indexOf("cargarFacturaQueAjusta(db, tenantId, invoiceId)");
+  const correlativo = src.indexOf("allocateFeNumero(db, {");
+  assert.ok(ajustada > 0 && ajustada < correlativo, "la factura sin CUFE se rechaza sin quemar número");
+  // La llave sigue siendo UNA: la pantalla esconde el botón con la misma constante.
   const detalle = readFileSync(path.join(RAIZ, "src/app/finanzas/facturas/[id]/page.tsx"), "utf8");
-  assert.match(detalle, /const canEmitToPac = puedeAccionar && !ndSinDgi;/, "la pantalla no ofrece el botón");
+  assert.match(detalle, /const canEmitToPac = puedeAccionar && !ndSinDgi;/);
 });
 
 test("la columna nueva sólo se nombra en una nota de débito (antes de la 077 no existe)", () => {

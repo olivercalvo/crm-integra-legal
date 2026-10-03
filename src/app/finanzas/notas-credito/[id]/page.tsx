@@ -66,7 +66,7 @@ const READING_ROLES = ["admin", "abogada", "contador"];
 
 interface PageProps {
   params: { id: string };
-  searchParams?: { emitida?: string };
+  searchParams?: { emitida?: string; envio?: string };
 }
 
 interface NcDetalle {
@@ -127,6 +127,9 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
   const nc = raw as unknown as NcDetalle;
 
   const noEmitida = nc.fe_estado === "no_emitida";
+  // 083: emitida a propósito como interna. Misma banda, otro texto: no es que
+  // «todavía» no se mandó, es que no se va a mandar.
+  const interna = nc.fe_estado === "interna";
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
 
   // Su asiento propio (NC posterior o parcial, D5) o, si acompaña una
@@ -201,6 +204,16 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
   return (
     <div className="space-y-5">
+      {searchParams?.envio === "fallo" && (
+        <div role="alert" className="flex items-start gap-2 rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            La nota de crédito se emitió y está en el libro, pero el envío a la DGI no se completó. Revisa su
+            estado fiscal abajo y vuelve a enviarla cuando se pueda.
+          </span>
+        </div>
+      )}
+
       {recienEmitida && (
         <div
           role="status"
@@ -245,11 +258,12 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
         <div className="flex flex-wrap items-center gap-2">
           <CreditNotePdfButton creditNoteId={nc.id} />
-          {puedeEnviarALaDgi && nc.invoice && (
+          {/* Sin factura también: va como 06 genérica (03/10/2026). */}
+          {puedeEnviarALaDgi && (
             <EnviarNcALaDgiButton
               creditNoteId={nc.id}
               creditNoteNumber={nc.credit_note_number}
-              invoiceNumber={nc.invoice.invoice_number}
+              invoiceNumber={nc.invoice?.invoice_number ?? null}
               esReintento={nc.fe_estado === "error"}
             />
           )}
@@ -314,6 +328,22 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
       )}
 
       {/* D1: documento interno */}
+      {interna && (
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-md border-l-4 border-slate-500 bg-slate-50 p-4 text-sm text-slate-900"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-slate-600" />
+          <div>
+            <p className="font-semibold uppercase tracking-wide">Documento interno: no se envía a la DGI</p>
+            <p className="mt-1">
+              Esta nota de crédito se emitió como interna: consta en los libros del bufete y no se manda a la
+              DGI. No tiene CUFE ni vale como comprobante fiscal electrónico; el PDF lleva la misma marca.
+            </p>
+          </div>
+        </div>
+      )}
+
       {noEmitida && (
         <div
           role="note"

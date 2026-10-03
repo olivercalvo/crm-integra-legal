@@ -304,6 +304,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               nextNumberPreview={numberPreview}
               grandTotal={Number(invoice.grand_total)}
               sinDgi={ndSinDgi}
+              elegirEnvio={invoice.invoice_kind === "NOTA_DEBITO" && !ndSinDgi}
             />
           )}
           {/* E8: la NC es un módulo propio. El botón se queda y abre la MISMA

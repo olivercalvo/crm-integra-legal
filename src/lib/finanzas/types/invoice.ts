@@ -40,13 +40,16 @@ export type InvoiceStatus =
  *   - authorized → DGI autorizó. Hay CUFE + protocolo + fecha.
  *   - canceled   → anulada en DGI (post-autorización).
  *   - error      → último intento rechazado. Se puede reintentar.
+ *   - interna    → se emitió a propósito SIN enviarla a la DGI (083). Terminal:
+ *                  ni se envía ni se reintenta. Hoy sólo NC y ND.
  */
 export type FeEstado =
   | "no_emitida"
   | "pending"
   | "authorized"
   | "canceled"
-  | "error";
+  | "error"
+  | "interna";
 
 /** Mapping invoice_kind → sequence_type para get_next_sequence_number(). */
 export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim" | "debit_note"> = {
@@ -286,6 +289,7 @@ export const FE_ESTADO_LABEL: Record<FeEstado, string> = {
   authorized: "Autorizada DGI",
   canceled: "Anulada en DGI",
   error: "Error",
+  interna: "Interna (no se envía)",
 };
 
 /**

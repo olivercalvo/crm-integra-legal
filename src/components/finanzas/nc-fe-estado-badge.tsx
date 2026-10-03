@@ -29,7 +29,9 @@ export function NcFeEstadoBadge({ estado }: { estado: string }) {
         ? "bg-amber-50 text-amber-700 border-amber-200"
         : estado === "error"
           ? "bg-red-50 text-red-700 border-red-200"
-          : "bg-gray-50 text-gray-500 border-gray-200";
+          : estado === "interna"
+            ? "bg-slate-50 text-slate-700 border-slate-300"
+            : "bg-gray-50 text-gray-500 border-gray-200";
   return (
     <Badge variant="outline" className={`${cls} font-medium`}>
       {FE_ESTADO_LABEL[estado as FeEstado] ?? estado}

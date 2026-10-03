@@ -18,6 +18,8 @@ function estadoClasses(estado: FeEstado): string {
       return "bg-red-50 text-red-700 border-red-200";
     case "canceled":
       return "bg-gray-50 text-gray-500 border-gray-200 italic";
+    case "interna":
+      return "bg-slate-50 text-slate-700 border-slate-300";
     default:
       return "bg-gray-100 text-gray-700 border-gray-200";
   }

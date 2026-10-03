@@ -160,7 +160,7 @@ test("el detalle de la NC: admin, abogada y contador; el contador abre el detall
 
 test("🔒 D1: el PDF marca DOCUMENTO INTERNO cuando fe_estado es no_emitida, y la ruta se lo pasa", () => {
   const doc = leer(PDF_DOC);
-  assert.match(doc, /const noEmitida = fe_estado === "no_emitida";/);
+  assert.match(doc, /const noEmitida = fe_estado === "no_emitida" \|\| fe_estado === "interna";/, "083: la interna lleva la misma banda");
   assert.match(doc, /\{noEmitida && \(\s*<View style=\{styles\.internalBand\} fixed>/);
   assert.match(doc, /DOCUMENTO INTERNO: SIN AUTORIZACIÓN DE LA DGI/);
   assert.match(doc, /fe_estado: string;/);

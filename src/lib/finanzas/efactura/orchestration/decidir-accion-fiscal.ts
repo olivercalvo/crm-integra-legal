@@ -110,7 +110,7 @@ const HUSO_PANAMA = "-05:00";
 
 const MS_POR_HORA = 3_600_000;
 
-export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error";
+export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error" | "interna";
 
 /** Lo que la base sabe de la factura. Nada más que esto entra a la decisión. */
 export interface EstadoDeFactura {
@@ -279,6 +279,28 @@ export function decidirAccionFiscal(
   }
   if (estado.mesCerrado) {
     motivos.push("el mes de la factura está cerrado");
+  }
+
+  // 6b. 083: emitida a propósito como INTERNA. A diferencia del caso 7, acá SÍ
+  //     sabemos que nunca llegó a la DGI: no hay portal que mirar ni CUFE que
+  //     pedir. Sin bloqueos se anula en el libro; con bloqueos se corrige con
+  //     una nota de crédito (interna también), que la pantalla ya ofrece.
+  if (estado.feEstado === "interna") {
+    if (motivos.length === 0) {
+      return {
+        accion: "anular_solo_en_el_libro",
+        mensaje:
+          "Este documento se emitió como interno: se anula en el libro contable y se genera su " +
+          "nota de crédito total. No hay nada que anular ante la DGI.",
+        advertencia: "",
+      };
+    }
+    return {
+      accion: "no_aplica",
+      mensaje:
+        `Este documento se emitió como interno y no se puede anular: ${motivos.join("; ")}. ` +
+        "Se corrige con una nota de crédito.",
+    };
   }
 
   // 7. Sin CUFE: puede ser una factura que nunca llegó a la DGI, o una emitida

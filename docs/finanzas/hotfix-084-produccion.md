@@ -3,6 +3,26 @@
 > Para que **Oliver** lo aplique en el SQL Editor de producción (`uqmmkklbhzxqybljiecs`).
 > Ningún agente lo aplica. Rama: `hotfix/audit-log-solo-agregar` (desde `main` 24b227a).
 
+## ✅ Aplicado en producción el 03/10/2026 (Oliver)
+
+**Estado de producción desde ese día: migraciones hasta la `024`, más la `084`** (aplicada sola, como
+hotfix). La ventana grande (025 → 083) sigue pendiente. Cuando corra, la 084 entra en la cola y no cambia nada
+(ver «Cuando llegue la ventana grande»).
+
+| | Antes | Después |
+|---|---|---|
+| Filas de `audit_log` | 730 | **730** (ninguna tocada) |
+| Política | `audit_tenant_isolation` FOR ALL USING (`tenant_id = get_tenant_id()`) | `audit_log_select` **FOR SELECT** USING (`tenant_id = get_tenant_id()`): la misma expresión, copiada |
+| `anon` | todos los permisos | **sin permisos** |
+| `authenticated` | todos los permisos | INSERT, REFERENCES, SELECT, TRIGGER |
+| Triggers `trg_audit_log_solo_agregar`, `trg_audit_log_sin_truncate` | no existían | **los dos activos** |
+| RLS | activo | activo |
+| Prueba en la app (paso 4) | — | **OK** |
+
+Dato que confirma por qué la 084 copia la expresión en vez de escribirla: en producción la función se llama
+**`get_tenant_id()`**. En staging es `tenant_id()` y en las migraciones del repo, `auth.tenant_id()`: tres
+nombres para lo mismo.
+
 ## Qué corrige
 
 Hoy, en producción, `audit_log` tiene la política `audit_tenant_isolation` **FOR ALL**, y `anon` y

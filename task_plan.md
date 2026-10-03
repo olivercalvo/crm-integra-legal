@@ -13,9 +13,16 @@
   copia fiscal a la contable, «sistema» sin usuario, cadena íntegra, UPDATE/DELETE/TRUNCATE rechazados,
   lectura por rol (contador no lee la legal, abogada no lee la contable), 088 con conteos iguales.
 - ✅ `createAdminClient(usuario)` en las 97 llamadas (más un comentario); pantallas, Excel y «Verificar integridad».
-- ⏳ **Esperando «aplica»** de la 086 y la 087 en staging. Después: el recorrido del punto 7 (crear,
-  editar, anular y reversar documentos contables y legales, usuario, antes/después, cadena, intentos de
-  editar y borrar).
+- ✅ `086` y `087` **aplicadas en staging** (03/10, con el «aplica» de Oliver). Medición de la importación
+  grande en `docs/finanzas/prueba-bitacoras.txt`: 200 líneas pasan de 434 a 511 ms; 50 clientes, sin
+  diferencia medible.
+- 🔴 **Recorrido del punto 7 DETENIDO**: crear un comentario da 500 (`COALESCE types text and integer`).
+  `documento_de` hacía `coalesce(case_code, case_number)` con `case_number` entero. Por fallar cerrado,
+  en staging hoy NO se guardan tareas, comentarios ni cobros del caso. Corrección `089` escrita y
+  simulada, **esperando «aplica»**. Lo contable del recorrido quedó bien (27 filas, usuario y rol
+  correctos, cadena íntegra).
+- ⏳ Después de la 089: resto del punto 7 y pruebas 2 (concurrencia), 3 (qué ve el usuario si la
+  bitácora falla) y 4 (roles).
 - 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
   tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
 - 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y

@@ -1,0 +1,126 @@
+PRUEBA DE LAS BITÁCORAS DE AUDITORÍA EN STAGING
+03/10/2026 · rama feat/bloque1-contable · staging xtyenhakplrkyifbcaow
+Producción no se tocó. La 088 (legado) NO se aplicó.
+
+ESTADO: DETENIDA en el punto 7, por un fallo de la 087. Corrección escrita (089), SIN APLICAR.
+
+======================================================================
+1. APLICACIÓN
+======================================================================
+086_bitacoras_nucleo.sql   aplicada 03/10, 362 ms
+  NOTICE: 086 ✅ bitácoras contable y legal: solo agregar, cadena, anclas, lectura por rol
+087_bitacoras_captura.sql  aplicada 03/10, 305 ms
+  NOTICE: 087 ✅ 41 tablas con captura en su bitácora
+
+======================================================================
+2. IMPORTACIÓN GRANDE: CON Y SIN LA 087 (prueba 1)
+======================================================================
+Medido directo en la base de staging, 5 rondas, cada una en BEGIN … ROLLBACK
+(no quedó nada escrito). Script: post_journal_entries_batch con 50 asientos de
+4 líneas (200 líneas) y 50 altas de clientes una por una (como /api/import).
+
+                                   sin 087 (antes)   con 087 (después)
+Importación 200 líneas, mediana        434 ms            511 ms     (+77 ms, ~1,5 ms por asiento)
+  rondas                       900 434 455 426 425   637 512 511 478 471
+50 clientes uno por uno, mediana      5104 ms           4754 ms     (sin diferencia medible)
+  rondas                   5100 5082 5136 5882 5104  4756 4741 5014 4744 4754
+
+Filas de bitácora por ronda: contable 101 (50 asientos, el lote y los datos
+fiscales de 50 clientes), legal 50 (los clientes completos). Las líneas del
+libro no se auditan (ya están en el libro).
+
+Lectura: la importación no queda lenta. En los clientes manda la ida y vuelta
+por la red (~95 ms por alta desde esta máquina); el trigger no se distingue
+del ruido.
+
+Candado por bufete: PENDIENTE de medir con dos sesiones a la vez (prueba 2).
+
+======================================================================
+3. RECORRIDO DEL PUNTO 7 (rutas reales, localhost:3000 → staging)
+======================================================================
+Cada paso con la sesión de su rol (usuarios de los fixtures del seed).
+
+Contable
+  ✅ abogada crea una factura borrador          HTTP 201
+  ✅ abogada edita la factura (notas y precio)  HTTP 200
+  ✅ abogada emite la factura (FAC-HON-000029)  HTTP 200
+  ✅ admin registra un cobro (CO-000013)        HTTP 201
+  ✅ contador reversa el cobro                  HTTP 200
+  ✅ abogada anula la factura (NC-000024)       HTTP 200
+Legal
+  ✅ abogada crea un caso (EXP-001)             HTTP 201
+  ✅ abogada edita el caso                      HTTP 200
+  ❌ abogada comenta en el caso                 HTTP 500 {"error":"Error al agregar el comentario"}
+     Log del servidor: COALESCE types text and integer cannot be matched (42804)
+  ⏸  sin correr: cambio de DV del cliente (mixto), gasto de trámite y su
+     reversión (mixto), tareas.
+
+Qué registró cada bitácora hasta ahí (resumen; filas completas en la base)
+
+BITÁCORA CONTABLE (27 filas)
+  usuario                   rol       origen   acción         tabla                 documento
+  Ileana Barrios (STAGING)  abogada   usuario  crear          invoices              DRAFT-…  notes: [null, borrador]
+  Ileana Barrios (STAGING)  abogada   usuario  crear          invoice_lines         DRAFT-…  subtotal: [null, 100.00]
+  Ileana Barrios (STAGING)  abogada   sistema  editar         invoices              DRAFT-…  grand_total: [0.00, 107.00]
+  Ileana Barrios (STAGING)  abogada   usuario  editar         invoices              DRAFT-…  notes: [borrador, editada para la prueba]
+  Ileana Barrios (STAGING)  abogada   usuario  eliminar/crear invoice_lines         DRAFT-…  subtotal 100.00 → 120.00
+  Ileana Barrios (STAGING)  abogada   usuario  contabilizar   journal_entries       FAC-HON-000029
+  Ileana Barrios (STAGING)  abogada   usuario  emitir         invoices              FAC-HON-000029  status: [borrador, emitida]
+  Rodrigo Sanjur (STAGING)  admin     usuario  crear          payments              CO-000013  amount: [null, 128.40]
+  Rodrigo Sanjur (STAGING)  admin     usuario  aplicar        payment_applications  CO-000013
+  Rodrigo Sanjur (STAGING)  admin     sistema  editar         invoices              FAC-HON-000029  status: [emitida, pagada]
+  Rodrigo Sanjur (STAGING)  admin     usuario  contabilizar   journal_entries       CO-000013
+  Elías Pimentel (STAGING)  contador  usuario  reversar       journal_entries       CO-000013
+  Elías Pimentel (STAGING)  contador  usuario  reversar       payment_reversals     CO-000013  reason: [null, Prueba de bitácora: cobro duplicado]
+  Elías Pimentel (STAGING)  contador  sistema  editar         invoices              FAC-HON-000029  status: [pagada, emitida]
+  Elías Pimentel (STAGING)  contador  usuario  reversar       payments              CO-000013  status: [registrado, anulado]
+  Ileana Barrios (STAGING)  abogada   usuario  crear          credit_notes          NC-000024
+  Ileana Barrios (STAGING)  abogada   usuario  reversar       journal_entries       FAC-HON-000029
+  Ileana Barrios (STAGING)  abogada   usuario  anular         invoices              FAC-HON-000029  status: [emitida, anulada]
+  («sistema» = lo recalculó otro trigger: T7a, credited_total, totales.)
+
+BITÁCORA LEGAL (2 filas)
+  Ileana Barrios (STAGING)  abogada   usuario  crear          cases                 EXP-001
+  Ileana Barrios (STAGING)  abogada   usuario  editar         cases                 EXP-001  observations: [null, observación de prueba de bitácora]
+
+Cadena (bitacora_verificar, la misma función del botón «Verificar integridad»)
+  contable: filas 27, integra true, filas_alteradas [], anclas_que_no_coinciden []
+  legal:    filas 2,  integra true, filas_alteradas [], anclas_que_no_coinciden []
+  (Los id empiezan en 506 y 251: las rondas de medición con ROLLBACK consumen
+  la identidad. La cadena se enlaza por hash, no por id; los huecos no la rompen.)
+
+======================================================================
+4. EL FALLO Y SU CORRECCIÓN (089, SIN APLICAR)
+======================================================================
+Causa: auditoria.documento_de, rama de tasks / comments / client_payments:
+  coalesce(case_code, case_number)  con case_number entero.
+PL/pgSQL prepara cada consulta recién al ejecutarla; la simulación de la 087
+tocó clientes y casos, nunca esa rama.
+
+Efecto en staging HOY (087 aplicada, 089 no): como la captura falla cerrado,
+NO se pueden crear ni editar tareas, comentarios ni cobros del caso. Nada se
+guarda a medias: la operación se deshace entera.
+
+Sondeo de las 41 tablas (documento_de, accion_de y diferencias sobre una fila
+real de cada una, en BEGIN … ROLLBACK): sólo fallan tasks y comments;
+client_payments no tiene filas en staging pero usa la misma rama.
+tax_payments y credit_note_applications tampoco tienen filas; sus ramas son
+lecturas de jsonb o la misma búsqueda que ya pasó en otras tablas.
+
+089 simulada en BEGIN … ROLLBACK:
+  sin la 089: COALESCE types text and integer cannot be matched
+  NOTICE: 089 ✅ documento_de: tareas, comentarios y cobros del caso devuelven el número del caso (CORP-001)
+  con la 089: el comentario entra y la bitácora legal lo registra.
+
+======================================================================
+5. PENDIENTE (después del «aplica» de la 089)
+======================================================================
+- Terminar el punto 7: comentario, tarea, DV del cliente (debe ir a las dos
+  bitácoras con el mismo evento_id), gasto de trámite y su reversión.
+- «Verificar integridad» desde la pantalla.
+- Intentar editar y borrar una fila de cada bitácora (debe fallar).
+- Prueba 2: factura y gasto de trámite a la vez, con dos usuarios.
+- Prueba 3: falla de la bitácora, qué ve el usuario. Lo que vio la abogada en
+  este fallo real fue «Error al agregar el comentario»: no es técnico, pero
+  tampoco dice qué pasó ni qué hacer.
+- Prueba 4: roles (abogada sin contable, contador sin legal, admin las dos).

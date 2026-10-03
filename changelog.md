@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bitácoras: 086 y 087 en staging, fallo en tareas y comentarios] - 2026-10-03
+
+- `086` y `087` aplicadas en staging. La importación de 200 líneas tarda 77 ms más (434 a 511 ms).
+- Fallo encontrado en el recorrido: con la `087`, crear un comentario o una tarea daba error y no se
+  guardaba. Corrección `089` escrita, sin aplicar todavía.
+- Resultados en `docs/finanzas/prueba-bitacoras.txt`.
+
 ## [Bitácoras de auditoría y cruce de preguntas] - 2026-10-03
 
 - Cruce de preguntas pendientes para ideati, licenciadas y Josuarth (`docs/finanzas/cruce-preguntas-pendientes.md`).

@@ -327,6 +327,13 @@ const MARCADORES = {
     sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'escribir_legado')`,
     nota: "03/10. ESCRITA Y SIN APLICAR a proposito: va cuando las bitacoras nuevas esten escribiendo y verificadas. Requiere 086 y 087.",
   },
+  "089_bitacoras_documento_de_casos.sql": {
+    que: "Correccion de auditoria.documento_de: tareas, comentarios y cobros del caso fallaban (COALESCE de texto y entero) y, por fallar cerrado, no se podian guardar",
+    tipo: "dato",
+    // Solo catálogo, por la misma razón que la 088.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'documento_de' AND p.prosrc LIKE '%case_number::text%')`,
+    nota: "03/10. Encontrada en el recorrido del punto 7 con la 087 recien aplicada en staging. Va inmediatamente despues de la 087.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

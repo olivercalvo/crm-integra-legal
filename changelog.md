@@ -1,5 +1,14 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bloque 1: 076 a 081 aplicadas en staging] - 2026-10-03
+
+- `076`, `077`, `078`, `079` y `080` aplicadas en staging (01/10).
+- `081` aplicada en staging (03/10): la NC de proveedor sin compra ya no falla («record v_compra
+  is not assigned yet») y el CHECK de subcategoría ya no deja pasar una cuenta activa con
+  subcategoría vacía.
+- Verificaciones: 076 8/8, 077 5/5, 078 4/4, 079 7/7, 080 7/7.
+- Producción: sin cambios. La `081` va en la ventana inmediatamente después de la `080`.
+
 ## [Estado de Resultado por período: sólo el período] - 2026-10-01
 
 - Corregido: con fecha «desde», las cuentas de resultado arrastraban los movimientos anteriores

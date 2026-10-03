@@ -1,5 +1,24 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 — 076 A 081 APLICADAS EN STAGING <<<
+
+- ✅ `076` a `080` aplicadas en staging el 01/10 (ref `xtyenhakplrkyifbcaow`). Al aplicarlas, la
+  verificación de la 076 abortó en su paso 1 y la de la 079 dio 5/7: dos fallas reales, no del test.
+- ✅ `081` aplicada en staging el 03/10, con «aplica» de Oliver. Corrige:
+  1. `create_supplier_credit_note` (076): la NC de proveedor **sin compra** fallaba con «record
+     "v_compra" is not assigned yet». La compra pasa a escalares. Antes de aplicar se comparó con la
+     definición vigente: sólo cambia eso.
+  2. CHECK `coa_subcategoria_por_tipo` (079): dejaba pasar una cuenta activa con subcategoría NULL
+     (`NULL IN (…)` es NULL). Se agrega `subcategoria IS NOT NULL`. Ninguna cuenta real estaba así
+     (0 de 101 activas).
+- ✅ Verificaciones después de la 081: **076 8/8, 077 5/5, 078 4/4, 079 7/7, 080 7/7** (31/31,
+  todas con ROLLBACK).
+- ✅ Corregido el posible error anotado el 01/10: el Estado de Resultado con «desde» ya no arrastra
+  los movimientos anteriores al corte (`9c567f7`, test en `periodo-estados-financieros.test.ts`).
+- En producción la `081` va inmediatamente después de la `080`, en la misma ventana.
+- Siguiente: recorrido en el navegador de los cinco puntos (NC como módulo, nota de débito, Estado
+  de Resultado, plan de cuentas, cierre anual sólo en vista previa: **no cerrar 2026**) y Bloque 2.
+
 ## >>> 01/10/2026 (cierre) — 073 Y 074 APLICADAS Y RECORRIDAS; ESTADO DEL BLOQUE 1 <<<
 
 - ✅ `073` y `074` aplicadas en staging. `verificacion-073-074.sql`: **11 ok, 0 fallas**.
@@ -24,14 +43,14 @@
 | E1 fechas, E2 tercero, E3 referencias y tercero obligatorio | ✅ en staging |
 | R-1 hash v5 y verificador (072) | ✅ en staging |
 | E4 tasa con cuenta (073), E5 excedente (074) | ✅ en staging |
-| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | ✅ parte técnica (079 sin aplicar); el mapa espera **P-8a** |
-| E8 NC como módulo propio | ✅ construido (076 sin aplicar); venta sin factura apagada hasta **P-4a** |
+| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | ✅ parte técnica (079 + 081 en staging); el mapa espera **P-8a** |
+| E8 NC como módulo propio | ✅ en staging (076 + 081); venta sin factura apagada hasta **P-4a** |
 | E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
 | E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
-| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | ✅ construido (078 sin aplicar) |
-| E11 cierre anual | ✅ construido (080 sin aplicar); no cerrar 2026 en staging sin decidirlo |
+| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | ✅ en staging (078) |
+| E11 cierre anual | ✅ en staging (080); no cerrar 2026 en staging sin decidirlo |
 | R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
-| Ventana de producción 025 → 075 + merge | cuando Oliver lo decida; runbook al día |
+| Ventana de producción 025 → 081 + merge | cuando Oliver lo decida; runbook al día |
 
 ## >>> 01/10/2026 (noche) — E10, E6 Y E11 <<<
 

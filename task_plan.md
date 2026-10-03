@@ -1,5 +1,20 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 5) — VALIDACIONES PREVIAS A LA DGI Y PENDIENTES <<<
+
+- ✅ `085` aplicada en staging. Pruebas en staging y sandbox (`docs/efactura/prueba-validaciones-previas.txt`):
+  RUC mal formado → 422 sin consumir número; descripción vacía → 422 y línea marcada; rechazo del
+  PAC (FAC-HON-000028, `1601`/`1602`) → motivo guardado y en la lista; reintento del mes → autorizada
+  y fuera de la lista; un pendiente de septiembre → 409 «Consultar con el contador».
+- Reglas contra los 15 clientes de staging: 3 fallarían, sólo por no estar activos; ningún RUC ni DV.
+  Datos ficticios: poca evidencia.
+- ⏳ Oliver corre `sql/verificacion/produccion-ruc-clientes-autorizados.sql` y pasa el resultado: si
+  una regla marca un RUC ya autorizado por la DGI, la regla está mal.
+- 🟡 Decisiones abiertas: el algoritmo del DV (no está en la ficha); la fecha ante la DGI de un
+  reenvío tardío (Josuarth); `PENDIENTES_DGI_DESDE = 2026-06-01`.
+- Quedaron en staging dos borradores de prueba con motivo (pruebas 1 y 2) y FAC-HON-000028 autorizada
+  en el sandbox (correlativo FE 57).
+
 ## >>> 03/10/2026 (cierre 4) — HOTFIX 084 EN PRODUCCIÓN <<<
 
 - ✅ **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** por Oliver: `audit_log` solo de agregar (730 filas

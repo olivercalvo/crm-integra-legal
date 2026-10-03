@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Validaciones previas a la DGI y pendientes] - 2026-10-03
+
+- `085` aplicada en staging: `fe_motivo_pendiente` en facturas y NC.
+- Una factura (y la ND o NC que va a la DGI) se valida antes de tomar número: estructura del RUC,
+  DV, receptor, descripción y cifras de cada línea, cuadre de totales, topes y nota referenciada.
+  El motivo queda guardado y se ve al reabrir el documento.
+- Lista «Pendientes de enviar a la DGI», con reintento (no para documentos de un mes anterior) y
+  aviso en facturas, reportes y el dashboard Legal.
+- Probado en staging y sandbox: `docs/efactura/prueba-validaciones-previas.txt`. Consulta para
+  contrastar las reglas con clientes reales: `sql/verificacion/produccion-ruc-clientes-autorizados.sql`.
+
 ## [Hotfix 084 en producción] - 2026-10-03
 
 - 🔒 **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** (Oliver, SQL Editor): `audit_log` solo de

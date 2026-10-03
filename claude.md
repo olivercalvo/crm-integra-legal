@@ -668,6 +668,20 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   cobros y NC bloqueados mientras dure — pero **reversar cobros sigue disponible**, porque es
   lo que hay que hacer para poder completarla. Detalle en `sop.md` SOP-040.
 
+### Validaciones previas a la DGI y pendientes (desde 2026-10-03 — `085` aplicada SOLO en staging)
+- 🔴 **Lo que la DGI rechazaría se valida ANTES del número**: `validarParaLaDgi()`
+  (`efactura/validaciones-previas.ts`, puro, con el código de la ficha en cada regla). La factura
+  siempre; la ND y la NC sólo con «Enviar a la DGI»; la interna nunca. Y otra vez antes de cada envío.
+- Del RUC se valida la **estructura por tipo de contribuyente**, no el DV: la ficha no publica el
+  algoritmo. El sandbox rechazó con `1601` un RUC que pasa la estructura: la DGI sigue siendo la
+  última palabra. Antes de producción, contrastar con `sql/verificacion/produccion-ruc-clientes-autorizados.sql`.
+- 🔴 **Todo envío al PAC pasa por `enviar-a-la-dgi.ts`**: bloquea el reenvío de un documento de un
+  mes anterior («Consultar con el contador»), revalida y guarda el motivo (`fe_motivo_pendiente`,
+  085), que se limpia al autorizar. 🔒 Un test falla si una ruta llama directo a los orquestadores.
+- `/finanzas/pendientes-dgi` (admin y abogada reintentan; el contador ve), desde
+  `PENDIENTES_DGI_DESDE = 2026-06-01`. Aviso en el listado de facturas (cuenta `no_emitida` y
+  `error`), en el hub de reportes y en el dashboard Legal (la abogada, sólo las suyas).
+
 ### Errores de la DGI — prevenir y mostrar (desde 2026-09-23)
 - 🔴 **Descripción de línea: 2 a 500 caracteres** (`controles-dgi.ts`). El tope es de la DGI
   (`10105`) y ya rebotó una factura con **545**. Contador visible en el campo (`312/500`), rojo

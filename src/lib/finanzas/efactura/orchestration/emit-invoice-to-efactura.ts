@@ -159,6 +159,13 @@ export async function emitInvoiceToEfactura(
   if (inv.invoice_kind === "NOTA_DEBITO" && !PERMITIR_ND_A_LA_DGI) {
     throw new MutationError(MENSAJE_ND_SIN_DGI, 409);
   }
+  // 083: emitido a propósito como interno. Nunca se manda (la base lo impide igual).
+  if (inv.fe_estado === "interna") {
+    throw new MutationError(
+      "Este documento se emitió como interno: no se envía a la DGI. Si hace falta uno fiscal, se emite otro documento.",
+      409
+    );
+  }
   if (inv.fe_estado !== "no_emitida" && inv.fe_estado !== "error") {
     throw new MutationError(
       inv.fe_estado === "authorized"

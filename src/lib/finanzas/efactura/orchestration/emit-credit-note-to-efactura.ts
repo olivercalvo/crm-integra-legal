@@ -157,6 +157,13 @@ export async function emitCreditNoteToEfactura(
   }
   // 🟢 03/10/2026: una NC SIN factura ya se manda, como 06 GENÉRICA y sin
   //    referencia (`tipoDocumentoDeNota`). Con factura sigue siendo 04 + CUFE.
+  // 083: emitido a propósito como interno. Nunca se manda (la base lo impide igual).
+  if (nc.fe_estado === "interna") {
+    throw new MutationError(
+      "Este documento se emitió como interno: no se envía a la DGI. Si hace falta uno fiscal, se emite otro documento.",
+      409
+    );
+  }
   if (nc.fe_estado !== "no_emitida" && nc.fe_estado !== "error") {
     throw new MutationError(
       nc.fe_estado === "authorized"

@@ -1,0 +1,15 @@
+NC y ND «Interna» · 2026-10-03T19:03:40.803Z · staging (083 aplicada)
+ND emitida ND-000004 · envío elegido: interna
+→ ND-000004 · fe_estado=interna · CUFE (ninguno) · correlativo FE (ninguno)
+   en el libro: asiento 114 (factura, ND-000004)
+   intentos en fe_emisiones: 0
+   enviarla después: rechazado (409) · No se puede reenviar: estado fiscal "interna". (mensaje anterior al ajuste del mismo día; ver el commit)
+   UPDATE directo a 'pending': rechazado por la base · El documento se emitió como interno: no se envía a la DGI (estado fiscal «interna» → «pending»).
+NC emitida NC-000023 · envío elegido: interna
+→ NC-000023 · fe_estado=interna · CUFE (ninguno) · correlativo FE (ninguno)
+   en el libro: asiento 115 (nota_credito, NC-000023)
+   intentos en fe_emisiones: 0
+   enviarla después: rechazado (409) · No se puede reenviar: estado fiscal "interna". (mensaje anterior al ajuste del mismo día; ver el commit)
+   UPDATE directo a 'pending': rechazado por la base · El documento se emitió como interno: no se envía a la DGI (estado fiscal «interna» → «pending»).
+correlativos FE (fe_secuencias) sin cambios: ✅ sí
+llamadas fuera de Supabase (PAC) durante toda la prueba: 0 ✅

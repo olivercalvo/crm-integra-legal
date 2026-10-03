@@ -336,7 +336,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   factura que ajusta, **07 genérica** sin factura (autorizadas en sandbox: ND-000002 y ND-000003).
   Si la factura que ajusta no tiene CUFE: 409 antes del correlativo («emítala como interna»).
 
-### Tipo de documento de una nota y «Enviar a la DGI / Interna» (desde 2026-10-03 — `083` SIN APLICAR)
+### Tipo de documento de una nota y «Enviar a la DGI / Interna» (desde 2026-10-03 — `083` aplicada SOLO en staging)
 - 🔴 **El tipo sale de si hay referencia, nunca de un parámetro aparte**: `tipoDocumentoDeNota()`
   (`efactura/mapper/tipo-de-documento.ts`). NC 04 con CUFE / 06 sin; ND 05 con CUFE / 07 sin. La DGI
   rechaza 04/05 sin CUFE (`1705`) y 06/07 con CUFE (`1706`); medido en sandbox el 03/10
@@ -349,7 +349,8 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **La interna es `fe_estado = 'interna'`** (083): postea igual en el libro, nunca llama al PAC, y la
   base la hace TERMINAL (sólo desde `no_emitida`, y de ahí no se sale). Banda de documento interno en
   pantalla y PDF. Una ND interna se anula sólo en el libro (`decidirAccionFiscal`, sin el aviso del
-  portal). ⚠️ Sin la 083 aplicada, elegir «Interna» falla en el CHECK.
+  portal). Probada en staging el 03/10 (ND-000004, NC-000023): asiento, `interna`, 0 intentos ante el
+  PAC, enviarla después → 409 en la app y rechazo en la base (`docs/efactura/prueba-notas-internas.txt`).
 
 ### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` aplicada SOLO en staging)
 - Sin «Distribución a Socias». Siempre: Utilidad bruta → Utilidad antes de impuesto sobre la

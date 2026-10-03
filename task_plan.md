@@ -24,12 +24,16 @@
 - ✅ Punto 7 completo: comentario, tarea, cobro del caso, DV del cliente en las dos bitácoras con el
   mismo `evento_id`, gasto de trámite y su reversión. Editar, borrar y vaciar una bitácora: rechazado
   con `postgres` y con la clave de servicio. Cadenas íntegras.
-- 🔴 **Prueba 2 DETENIDA: deadlock.** Factura y gasto de trámite a la vez: 3/3 bien. Pero la importación
-  de asientos y la NC de compra escriben en la bitácora antes de postear, y un posteo suelto lo hace al
-  revés: intercalados, `deadlock detected` (40P01), reproducido con dos sesiones. Corrección `090`
-  (la bitácora toma primero el correlativo del libro) escrita y simulada, **esperando «aplica»**.
-- ⏳ Después de la 090: repetir la prueba 2 (b2) y la de las 41 tablas; prueba 3 (mensaje claro si la
-  bitácora falla); prueba 4 (roles y «Verificar integridad» desde la pantalla).
+- ✅ `090` aplicada en staging (03/10): la bitácora toma primero el correlativo del libro. Prueba permanente
+  `sql/tests/concurrencia-bitacora-libro.mjs`: 120 rondas (importación de asientos y NC de compra contra
+  emisión, cobro y gasto de trámite, peor orden forzado), **cero deadlocks**; `--control` (orden viejo) se
+  traba en 18 de 18. Obligatoria en el paso −1 del runbook junto con la de las 41 tablas (131/131 con la 090).
+- ✅ Prueba 4: admin ve las dos, contador sólo la contable, abogada y asistente ninguna (24 de 24 por las
+  rutas, más el navegador). «Verificar integridad» desde la pantalla: contable 66 y legal 26, íntegras.
+- ⏳ **Prueba 3, esperando «aplica» de la `091`**: AU001 con el mensaje claro y el error real en el log
+  (`fetchConAuditoria` en los dos clientes, `conManejoDeAuditoria` en los 120 archivos de rutas, 9 tests).
+  El código ya está; sin la 091 no cambia nada. Después: verlo en pantalla con una trampa temporal en staging
+  (se muestra antes).
 - 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
   tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
 - 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y

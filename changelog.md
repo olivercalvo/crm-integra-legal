@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bitácoras: 090 aplicada, prueba de concurrencia, mensaje claro si falla la auditoría] - 2026-10-03
+
+- `090` aplicada en staging: la importación de asientos y la nota de crédito de compra ya no se traban con
+  otro posteo (120 rondas, cero bloqueos).
+- Prueba permanente de concurrencia `sql/tests/concurrencia-bitacora-libro.mjs`, obligatoria antes de cada
+  ventana de producción.
+- Si falla el registro de auditoría, la pantalla dirá «No se pudo guardar porque falló el registro de
+  auditoría. Intenta de nuevo y, si se repite, avisa al administrador.» y el error real queda en el log del
+  servidor. Código listo; la migración `091` espera aprobación.
+- Probado por rol: el contador ve sólo la bitácora contable, el admin las dos y la abogada ninguna.
+
 ## [Bitácoras: 089 aplicada, prueba de las 41 tablas, deadlock con el libro] - 2026-10-03
 
 - `089` aplicada en staging: los comentarios, las tareas y los cobros del caso se vuelven a guardar.

@@ -2,9 +2,9 @@ PRUEBA DE LAS BITÁCORAS DE AUDITORÍA EN STAGING
 03/10/2026 · rama feat/bloque1-contable · staging xtyenhakplrkyifbcaow
 Producción no se tocó. La 088 (legado) NO se aplicó.
 
-ESTADO: DETENIDA en la prueba 2 por un deadlock entre la bitácora y el libro.
-        Corrección escrita (090), SIN APLICAR. Antes: 089 aplicada, prueba de las 41
-        tablas 131/131, punto 7 completo.
+ESTADO: 086, 087, 089 y 090 aplicadas en staging. Punto 7 y pruebas 1, 2 y 4
+        completas y bien. Prueba 3: migración 091 y manejo de errores escritos,
+        091 SIN APLICAR (esperando «aplica»). La 088 sigue sin aplicar a propósito.
 
 ======================================================================
 1. APLICACIÓN
@@ -361,7 +361,7 @@ Lectura
   importación y cada NC de compra que coincida con otro posteo.
 
 ======================================================================
-9. SEGUNDO FALLO: ORDEN DE CANDADOS (090, SIN APLICAR)
+9. SEGUNDO FALLO: ORDEN DE CANDADOS (090, APLICADA EL 03/10)
 ======================================================================
 sql/pending/090_bitacoras_orden_de_candados.sql
 auditoria.escribir (y el ancla al cerrar un período) toman primero la fila
@@ -375,12 +375,131 @@ Simulada en BEGIN … ROLLBACK junto con la prueba de las 41 tablas:
 El cruce entre dos sesiones (b2) sólo se puede probar con la 090 aplicada.
 
 ======================================================================
-10. PENDIENTE (después del «aplica» de la 090)
+10. 090 APLICADA Y PRUEBA DE CONCURRENCIA PERMANENTE
 ======================================================================
-- Repetir la prueba 2 (b2): la segunda sesión tiene que ESPERAR y terminar, sin deadlock.
-- Repetir la prueba de las 41 tablas.
-- Prueba 3: qué ve el usuario si la bitácora falla (mensaje claro y el error
-  real en el log). Con los dos fallos de hoy ya se vio que hoy NO es así: el
-  comentario mostró «Error al agregar el comentario», y un deadlock mostraría
-  lo que cada ruta haga con el error de la base.
-- Prueba 4: roles y «Verificar integridad» desde la pantalla.
+090_bitacoras_orden_de_candados.sql  aplicada 03/10, 204 ms
+  NOTICE: 090 ✅ bitácora y libro: un solo orden de candados (correlativo del libro, después bitácora)
+
+sql/tests/concurrencia-bitacora-libro.mjs (dos sesiones, todo en ROLLBACK).
+Obligatoria antes de cualquier ventana de producción (runbook paso −1, junto con
+la de las 41 tablas; CLAUDE.md). Cada ronda fuerza el PEOR orden: X (importación
+de asientos o NC de compra, con el RPC real) ya pasó su primera escritura
+auditada; Y (emisión, cobro o gasto de trámite: escrituras y posteo en una
+transacción) arranca; X corre el RPC. Y tiene que ESPERAR y terminar.
+
+Control (orden de antes de la 090: el candado de la bitácora sin el del libro):
+  ▶ Concurrencia bitácora ↔ libro contra staging · 3 rondas por combinación · MODO CONTROL (orden viejo)
+  
+    importación de asientos × emisión de factura     rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1138 ms
+    importación de asientos × cobro                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1101 ms
+    importación de asientos × gasto de trámite       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1097 ms
+    NC de compra × emisión de factura                rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1099 ms
+    NC de compra × cobro                             rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1094 ms
+    NC de compra × gasto de trámite                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1093 ms
+  
+  Total: 18 rondas · deadlocks 18 · otros errores 0
+  ✅ control: con el orden viejo el deadlock aparece en todas las rondas (la prueba lo detecta)
+
+Con la 090, 20 rondas por combinación:
+  ▶ Concurrencia bitácora ↔ libro contra staging · 20 rondas por combinación
+  
+    importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 790 ms
+    importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 590 ms
+    importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 705 ms
+    NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 688 ms
+    NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 588 ms
+    NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 678 ms
+  
+  Total: 120 rondas · deadlocks 0 · otros errores 0
+  ✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+La espera máxima de Y (~0,6 a 0,8 s) es la transacción de X más la pausa
+forzada de 150 ms: una espera, no un error.
+
+======================================================================
+11. PRUEBA DE LAS 41 TABLAS CON LA 090
+======================================================================
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+  verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+======================================================================
+12. PRUEBA 3: SI FALLA LA BITÁCORA (091 ESCRITA, SIN APLICAR)
+======================================================================
+Base: sql/pending/091_bitacoras_error_claro.sql
+  auditoria.registrar y el ancla al cerrar un período relanzan cualquier falla con
+  SQLSTATE AU001, MESSAGE «No se pudo guardar porque falló el registro de
+  auditoría. Intenta de nuevo y, si se repite, avisa al administrador.», el error
+  original en DETAIL y la tabla y la operación en HINT. Sigue fallando cerrado.
+App:
+  - src/lib/auditoria/error-de-auditoria.ts
+    · fetchConAuditoria: va en los dos clientes de Supabase del servidor
+      (createAdminClient y el de sesión). Ante AU001 escribe en el log del servidor
+      «[auditoria] falló el registro de auditoría; la operación se deshizo:» con el
+      error original, la tabla, la operación y la llamada (método y ruta, sin
+      parámetros).
+    · conManejoDeAuditoria: envuelve todos los handlers de los 120 archivos de
+      rutas de src/app/api. Si en esa petición la base contestó AU001, la
+      respuesta de error de la ruta (su texto propio o una excepción) se reemplaza
+      por {"error": <el mensaje>, "codigo": "AU001"}, 500. Una respuesta exitosa
+      no se toca.
+  - El navegador no escribe en tablas (sólo sesión y Storage): toda escritura pasa
+    por esas rutas.
+  - 🔒 error-de-auditoria.test.ts (9 tests): mensaje y log, otro error intacto,
+    éxito intacto, excepción, el cuerpo sigue legible para supabase-js, dos
+    peticiones a la vez sin contaminarse, todo handler envuelto, los dos clientes
+    conectados, el mismo texto en la 091 y en la app y sin «—».
+
+Simulada en BEGIN … ROLLBACK:
+  NOTICE: 091 ✅ falla de la bitácora → AU001, mensaje claro, original en el detalle: [P0001] falla forzada por la verificación 091
+  Prueba de las 41 tablas encima de la 091: 131 operaciones, 0 fallas, cadena íntegra.
+  Costo (una subtransacción por fila auditada), importación de 200 líneas, 10 rondas:
+    sin 091 mediana 528 ms · con 091 mediana 575 ms (+47 ms).
+
+Suite 1632/1632 · tsc limpio · lint 0 nuevos (20 de la lista base) · npm run build
+OK (los 3 «Dynamic server usage» de siempre; las tres rutas salen dinámicas).
+
+Pendiente con el «aplica»: aplicar la 091 y verlo en pantalla. Para que la
+bitácora falle a pedido hace falta una trampa temporal en staging (por ejemplo,
+documento_de que falle sólo para un comentario con un texto marcado), que se
+muestra antes, se aplica, se prueba y se quita.
+
+======================================================================
+13. PRUEBA 4: ROLES Y «VERIFICAR INTEGRIDAD» DESDE LA PANTALLA
+======================================================================
+Por las rutas reales, con la sesión de cada rol:
+  Prueba 4 · roles · 2026-10-03T23:47:01.501Z
+    ✅ admin     contable pantalla  GET /finanzas/auditoria → 200
+    ✅ admin     contable Excel     GET /api/finanzas/auditoria/export → 200 · archivo recibido
+    ✅ admin     contable verificar POST /api/finanzas/auditoria/verificar → 200 · integra true · filas 66
+    ✅ admin     legal    pantalla  GET /legal/admin/auditoria → 200
+    ✅ admin     legal    Excel     GET /api/admin/auditoria/export → 200 · archivo recibido
+    ✅ admin     legal    verificar POST /api/admin/auditoria/verificar → 200 · integra true · filas 26
+    ✅ abogada   contable pantalla  GET /finanzas/auditoria → 307 → /
+    ✅ abogada   contable Excel     GET /api/finanzas/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ abogada   contable verificar POST /api/finanzas/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ abogada   legal    pantalla  GET /legal/admin/auditoria → 307 → /legal
+    ✅ abogada   legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ abogada   legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ contador  contable pantalla  GET /finanzas/auditoria → 200
+    ✅ contador  contable Excel     GET /api/finanzas/auditoria/export → 200 · archivo recibido
+    ✅ contador  contable verificar POST /api/finanzas/auditoria/verificar → 200 · integra true · filas 66
+    ✅ contador  legal    pantalla  GET /legal/admin/auditoria → 307 → /finanzas/reportes
+    ✅ contador  legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ contador  legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ asistente contable pantalla  GET /finanzas/auditoria → 307 → /legal
+    ✅ asistente contable Excel     GET /api/finanzas/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ asistente contable verificar POST /api/finanzas/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ asistente legal    pantalla  GET /legal/admin/auditoria → 307 → /legal
+    ✅ asistente legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ asistente legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+  ✅ todos como se esperaba: admin las dos, contador sólo la contable, abogada y asistente ninguna
+
+En el navegador (localhost:3000):
+  - Abogada (abogada 2): /finanzas/auditoria y /legal/admin/auditoria la devuelven
+    al inicio; el menú no ofrece ninguna bitácora.
+  - Admin, «Bitácora contable» → «Verificar integridad»:
+      «Íntegra: 66 registros encadenados y 0 anclas que coinciden.»
+  - Admin, «Bitácora legal» → «Verificar integridad»:
+      «Íntegra: 26 registros encadenados y 0 anclas que coinciden.»
+  (0 anclas: todas las filas son de hoy; la primera ancla diaria se graba con el
+  primer cambio de mañana.)

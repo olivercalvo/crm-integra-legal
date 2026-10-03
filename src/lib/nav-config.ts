@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  FileWarning,
   FileMinus,
   LayoutDashboard,
   Users,
@@ -92,6 +93,10 @@ export const TABS: TabDef[] = [
       // CONTADOR_FINANZAS_ALLOWED_PATTERNS de route-access.ts (el listado sí,
       // /nuevo no). Los dos se mueven juntos o nav-guard.test.ts falla.
       { label: "Cobros",            href: "/finanzas/cobros",                     icon: HandCoins,   roles: ["admin", "abogada", "contador"] },
+      // Pendientes de enviar a la DGI (03/10/2026): emitidos sin autorización.
+      // Reintentan admin y abogada; el contador los ve (patrón exacto en
+      // route-access.ts). Los dos se mueven juntos o nav-guard.test.ts falla.
+      { label: "Pendientes DGI",    href: "/finanzas/pendientes-dgi",             icon: FileWarning, roles: ["admin", "abogada", "contador"] },
       { label: "Gastos del Bufete", href: "/finanzas/gastos-bufete",              icon: ShoppingBag,    roles: ["admin", "abogada", "contador"] },
       // NC de compra (E8): el contador tiene CRUD de compras, así que también
       // registra la NC del proveedor (prefijo en route-access.ts).

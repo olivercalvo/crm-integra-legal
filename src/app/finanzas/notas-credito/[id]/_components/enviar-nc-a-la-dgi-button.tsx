@@ -150,7 +150,7 @@ export function EnviarNcALaDgiButton({
                     </p>
                   </>
                 ) : (
-                  <p className="break-words">{error}</p>
+                  <p className="whitespace-pre-line break-words">{error}</p>
                 )}
               </div>
             </div>

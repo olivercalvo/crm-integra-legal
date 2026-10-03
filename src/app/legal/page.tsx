@@ -1,4 +1,6 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { contarPendientesDgi } from "@/lib/finanzas/queries/pendientes-dgi";
+import { AvisoPendientesDgi } from "@/components/finanzas/aviso-pendientes-dgi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
@@ -31,6 +33,12 @@ export default async function LegalDashboard() {
 
   const { db, tenantId, userId, userRole } = ctx;
   const isAdmin = userRole === "admin";
+  // 03/10/2026: documentos emitidos sin autorización de la DGI. La abogada ve
+  // sólo los que creó ella; el admin, todos.
+  const pendientesDgi =
+    userRole === "admin" || userRole === "abogada"
+      ? await contarPendientesDgi(db, tenantId, userRole === "abogada" ? userId : null)
+      : 0;
 
   // Fetch stats in parallel
   const [clientsRes, pendingTasksRes, casesRes, prospectsRes] = await Promise.all([
@@ -289,6 +297,8 @@ export default async function LegalDashboard() {
           </Button>
         </div>
       </div>
+
+      <AvisoPendientesDgi cantidad={pendientesDgi} soloMios={userRole === "abogada"} />
 
       {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">

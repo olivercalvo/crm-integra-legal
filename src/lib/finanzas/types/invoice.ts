@@ -207,6 +207,9 @@ export interface InvoiceRow {
   punto_facturacion: string | null;
   numero_documento: number | null;
   ef_invoice_uuid: string | null;
+  /** 085 (03/10/2026): por qué no se emitió o no llegó a la DGI. NULL = nada pendiente. */
+  fe_motivo_pendiente?: string | null;
+  fe_motivo_pendiente_en?: string | null;
   // ----- Anulación. Se llenan en el mismo UPDATE que cambia status a 'anulada'.
   // Schema: migration 20260507000001_finanzas_b4_anular_factura.sql
   cancellation_reason: string | null;

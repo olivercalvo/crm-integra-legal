@@ -39,6 +39,7 @@ import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
+import { MotivoPendienteDgi } from "@/components/finanzas/motivo-pendiente-dgi";
 import { MENSAJE_ND_SIN_DGI, PERMITIR_ND_A_LA_DGI } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
 import { notasDeDebitoDeLaFactura, referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
 import { PaymentsSection } from "../_components/payments-section";
@@ -378,6 +379,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
           )}
         </div>
       )}
+
+      {/* 03/10/2026: por qué no se emitió o no llegó a la DGI, guardado (085). */}
+      <MotivoPendienteDgi motivo={invoice.fe_motivo_pendiente} en={invoice.fe_motivo_pendiente_en} />
 
       {/* 🔴 SIN CUFE NO HAY NOTA DE CRÉDITO ELECTRÓNICA (Bloque 9C).
           La matriz devuelve `nc_04_requiere_cufe` cuando la factura no se puede

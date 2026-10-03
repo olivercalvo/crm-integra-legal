@@ -124,6 +124,7 @@ export async function getInvoiceById(
         fe_estado, dgi_protocolo_autorizacion, qr_content,
         punto_facturacion, numero_documento, ef_invoice_uuid,
         cancellation_reason, cancelled_at,
+        fe_motivo_pendiente, fe_motivo_pendiente_en,
         client:clients!invoices_client_id_fkey(id, name, client_number, ruc),
         case:cases!invoices_case_id_fkey(id, case_code, description)
       `

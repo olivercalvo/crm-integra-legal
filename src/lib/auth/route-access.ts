@@ -208,6 +208,12 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   //   ❌ /finanzas/notas-credito/nueva  (emitir es de admin y abogada)
   // El `(?!nueva$)` no es adorno: sin él, "nueva" entra como si fuera un id.
   /^\/finanzas\/notas-credito\/(?!nueva$)[^/]+$/,
+  // ───────────────────────────────────────────────────────────────────────────
+  // PENDIENTES DE ENVIAR A LA DGI (03/10/2026). El contador los ve: sin la
+  // autorización de la DGI la factura no vale ante el fisco y él la tiene en el
+  // ITBMS. Reintentar es de admin y abogada (la página no le muestra el botón y
+  // las rutas de envío le responden 403). Patrón EXACTO.
+  /^\/finanzas\/pendientes-dgi$/,
 ];
 
 /**

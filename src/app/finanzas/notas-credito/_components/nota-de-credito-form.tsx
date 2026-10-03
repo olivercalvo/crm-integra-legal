@@ -366,7 +366,7 @@ export function NotaDeCreditoForm({
         {submitError && (
           <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             <AlertCircle size={18} className="mt-0.5 shrink-0" />
-            <span>{submitError}</span>
+            <span className="whitespace-pre-line">{submitError}</span>
           </div>
         )}
 

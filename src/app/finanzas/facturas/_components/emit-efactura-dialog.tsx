@@ -221,7 +221,7 @@ export function EmitEfacturaDialog({
             <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               <div className="flex items-start gap-2">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <span className="font-medium">{error}</span>
+                <span className="whitespace-pre-line font-medium">{error}</span>
               </div>
               {/* Guía accionable (ej. RUC inválido). Va ARRIBA del detalle
                   técnico: es lo que la usuaria necesita para resolver. */}

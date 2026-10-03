@@ -18,6 +18,7 @@ import { fmtImporte } from "@/lib/utils/importe";
 import { getCreditNoteById } from "@/lib/finanzas/api/credit-notes";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { SOURCE_TYPE_NOTA_CREDITO } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
+import { MotivoPendienteDgi } from "@/components/finanzas/motivo-pendiente-dgi";
 import { NcFeEstadoBadge } from "@/components/finanzas/nc-fe-estado-badge";
 import { CreditNotePdfButton } from "@/components/finanzas/credit-note-pdf-button";
 import { EnviarNcALaDgiButton } from "./_components/enviar-nc-a-la-dgi-button";
@@ -87,6 +88,8 @@ interface NcDetalle {
   dgi_cufe: string | null;
   dgi_fecha_autorizacion: string | null;
   created_at: string;
+  fe_motivo_pendiente?: string | null;
+  fe_motivo_pendiente_en?: string | null;
   invoice: {
     id: string;
     invoice_number: string;
@@ -328,6 +331,8 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
       )}
 
       {/* D1: documento interno */}
+      <MotivoPendienteDgi motivo={nc.fe_motivo_pendiente} en={nc.fe_motivo_pendiente_en} />
+
       {interna && (
         <div
           role="note"

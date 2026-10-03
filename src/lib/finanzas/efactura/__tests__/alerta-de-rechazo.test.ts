@@ -168,33 +168,30 @@ test("el botón dice REENVIAR, no 'reintentar'", () => {
 // EL CONTADOR DEL LISTADO
 // ---------------------------------------------------------------------------
 
-test("🔴 el contador se cuenta SIEMPRE, no sobre las filas filtradas", () => {
+test("🔴 el contador se cuenta SIEMPRE, no sobre las filas filtradas, y cuenta también las no enviadas (03/10)", () => {
   // Es una alarma, no una columna del resultado: si dependiera de los filtros,
-  // desaparecería justo cuando alguien está mirando otra cosa.
-  const src = leer("src/lib/finanzas/queries/fe-emisiones.ts");
-  assert.match(src, /contarFacturasConErrorDgi/);
-  assert.match(src, /\.eq\("fe_estado", "error"\)/);
+  // desaparecería justo cuando alguien está mirando otra cosa. Desde el 03/10
+  // cuenta `no_emitida` además de `error`: así quedaron 4 facturas de producción.
+  const src = leer("src/lib/finanzas/queries/pendientes-dgi.ts");
+  assert.match(src, /const PENDIENTE = \["no_emitida", "error"\]/);
   assert.match(src, /head: true/, "cuenta sin traerse las filas");
 
   const pagina = leer("src/app/finanzas/facturas/page.tsx");
-  assert.match(pagina, /contarFacturasConErrorDgi\(db, tenantId\)/);
-  assert.doesNotMatch(
-    pagina,
-    /contarFacturasConErrorDgi\([^)]*status/,
-    "el contador no recibe los filtros de la pantalla"
-  );
+  assert.match(pagina, /contarPendientesDgi\(db, tenantId\)/);
+  assert.doesNotMatch(pagina, /contarPendientesDgi\([^)]*status/, "el contador no recibe los filtros de la pantalla");
 });
 
-test("el contador enlaza a un filtro que muestra esas facturas", () => {
+test("el aviso enlaza a la lista de pendientes; el filtro ?fe=error del listado sigue", () => {
+  const aviso = leer("src/components/finanzas/aviso-pendientes-dgi.tsx");
+  assert.match(aviso, /href="\/finanzas\/pendientes-dgi"/);
   const pagina = leer("src/app/finanzas/facturas/page.tsx");
-  assert.match(pagina, /\/finanzas\/facturas\?fe=error/);
   assert.match(pagina, /fe_estado: soloConErrorDgi \? "error" : null/);
 });
 
 test("singular y plural, que es lo que separa un sistema cuidado de uno que no", () => {
-  const pagina = leer("src/app/finanzas/facturas/page.tsx");
-  assert.match(pagina, /conErrorDgi === 1 \? "" : "s"/);
-  assert.match(pagina, /conErrorDgi === 1 \? "la aceptó" : "las aceptó"/);
+  const aviso = leer("src/components/finanzas/aviso-pendientes-dgi.tsx");
+  assert.match(aviso, /plural \? "s" : ""/);
+  assert.match(aviso, /plural \? "los aceptó" : "lo aceptó"/);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

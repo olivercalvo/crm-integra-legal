@@ -1,5 +1,13 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bitácoras: 089 aplicada, prueba de las 41 tablas, deadlock con el libro] - 2026-10-03
+
+- `089` aplicada en staging: los comentarios, las tareas y los cobros del caso se vuelven a guardar.
+- Prueba permanente `sql/tests/verificacion-087-captura-41-tablas.sql` (131 operaciones, todas bien),
+  obligatoria antes de cada ventana de producción.
+- Encontrado un bloqueo cruzado entre la bitácora y el libro (importación de asientos o NC de compra al
+  mismo tiempo que otro posteo). Corrección `090` escrita, sin aplicar todavía.
+
 ## [Bitácoras: 086 y 087 en staging, fallo en tareas y comentarios] - 2026-10-03
 
 - `086` y `087` aplicadas en staging. La importación de 200 líneas tarda 77 ms más (434 a 511 ms).

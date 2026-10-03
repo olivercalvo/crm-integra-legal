@@ -703,6 +703,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Nadie las edita ni las borra** (`trg_solo_agregar`, mecanismo de la `084`); se leen sólo por
   `bitacora_leer` / `bitacora_verificar` (service_role), que vuelven a exigir el rol: contable admin y
   contador, legal admin.
+- 🔒 **`sql/tests/verificacion-087-captura-41-tablas.sql` es obligatoria antes de cualquier ventana de producción**
+  (runbook, paso −1): INSERT, UPDATE y DELETE en las 41 tablas, en ROLLBACK, y cada operación en su
+  bitácora. Existe porque la `087` rompió comentarios y tareas en staging (error de tipos que sólo aparecía
+  al ejecutar esa rama; lo corrigió la `089`). Una tabla nueva con trigger se suma a la prueba.
 - Pantallas `/finanzas/auditoria` y `/legal/admin/auditoria` (la lectura vieja de `audit_log` queda en
   `/anterior` hasta aplicar la `088`).
 

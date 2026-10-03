@@ -183,6 +183,7 @@ los puntos donde **se para**.
 | −2 | Josuarth elige la cuenta de los servicios de P-15 | correo | si no decide: esos servicios quedan sin facturar |
 | −2 | Respuestas por escrito de Josuarth: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
+| −1 | 🔴 `node scripts/run-sql.mjs sql/tests/verificacion-087-captura-41-tablas.sql` en staging, con el mismo esquema que va a producción (obligatoria en **cualquier** ventana desde el 03/10/2026) | máquina → staging | alguna `FALLA`, una tabla sin captura o la cadena no íntegra: la bitácora falla cerrado y en producción eso bloquea guardar |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
 | D·1 | 🔴 **Respaldo** (§2), y abrirlo para comprobar que se lee | panel de Supabase | no se puede leer → **se termina el día acá** |

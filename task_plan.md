@@ -16,13 +16,20 @@
 - ✅ `086` y `087` **aplicadas en staging** (03/10, con el «aplica» de Oliver). Medición de la importación
   grande en `docs/finanzas/prueba-bitacoras.txt`: 200 líneas pasan de 434 a 511 ms; 50 clientes, sin
   diferencia medible.
-- 🔴 **Recorrido del punto 7 DETENIDO**: crear un comentario da 500 (`COALESCE types text and integer`).
-  `documento_de` hacía `coalesce(case_code, case_number)` con `case_number` entero. Por fallar cerrado,
-  en staging hoy NO se guardan tareas, comentarios ni cobros del caso. Corrección `089` escrita y
-  simulada, **esperando «aplica»**. Lo contable del recorrido quedó bien (27 filas, usuario y rol
-  correctos, cadena íntegra).
-- ⏳ Después de la 089: resto del punto 7 y pruebas 2 (concurrencia), 3 (qué ve el usuario si la
-  bitácora falla) y 4 (roles).
+- ✅ `089` aplicada en staging (03/10): `documento_de` rompía tareas, comentarios y cobros del caso
+  (`coalesce` de texto y entero; por fallar cerrado, no se guardaban).
+- ✅ `sql/tests/verificacion-087-captura-41-tablas.sql`: INSERT, UPDATE y DELETE en las 41 tablas, en
+  ROLLBACK, cada uno en su bitácora. **131/131.** Detecta el fallo de la 089 si se reintroduce.
+  **Obligatoria antes de cualquier ventana de producción** (runbook, paso −1; CLAUDE.md).
+- ✅ Punto 7 completo: comentario, tarea, cobro del caso, DV del cliente en las dos bitácoras con el
+  mismo `evento_id`, gasto de trámite y su reversión. Editar, borrar y vaciar una bitácora: rechazado
+  con `postgres` y con la clave de servicio. Cadenas íntegras.
+- 🔴 **Prueba 2 DETENIDA: deadlock.** Factura y gasto de trámite a la vez: 3/3 bien. Pero la importación
+  de asientos y la NC de compra escriben en la bitácora antes de postear, y un posteo suelto lo hace al
+  revés: intercalados, `deadlock detected` (40P01), reproducido con dos sesiones. Corrección `090`
+  (la bitácora toma primero el correlativo del libro) escrita y simulada, **esperando «aplica»**.
+- ⏳ Después de la 090: repetir la prueba 2 (b2) y la de las 41 tablas; prueba 3 (mensaje claro si la
+  bitácora falla); prueba 4 (roles y «Verificar integridad» desde la pantalla).
 - 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
   tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
 - 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y

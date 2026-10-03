@@ -184,6 +184,7 @@ los puntos donde **se para**.
 | −2 | Respuestas por escrito de Josuarth: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
 | −1 | 🔴 `node scripts/run-sql.mjs sql/tests/verificacion-087-captura-41-tablas.sql` en staging, con el mismo esquema que va a producción (obligatoria en **cualquier** ventana desde el 03/10/2026) | máquina → staging | alguna `FALLA`, una tabla sin captura o la cadena no íntegra: la bitácora falla cerrado y en producción eso bloquea guardar |
+| −1 | 🔴 `node sql/tests/concurrencia-bitacora-libro.mjs` en staging (20 rondas por combinación; importación de asientos y NC de compra contra emisión, cobro y gasto de trámite, con dos sesiones), con el mismo esquema que va a producción (obligatoria en **cualquier** ventana desde el 03/10/2026, junto con la de las 41 tablas) | máquina → staging | un solo `deadlock detected` u otro error: bitácora y libro no toman los candados en el mismo orden (090) |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
 | D·1 | 🔴 **Respaldo** (§2), y abrirlo para comprobar que se lee | panel de Supabase | no se puede leer → **se termina el día acá** |

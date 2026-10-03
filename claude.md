@@ -707,6 +707,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   (runbook, paso −1): INSERT, UPDATE y DELETE en las 41 tablas, en ROLLBACK, y cada operación en su
   bitácora. Existe porque la `087` rompió comentarios y tareas en staging (error de tipos que sólo aparecía
   al ejecutar esa rama; lo corrigió la `089`). Una tabla nueva con trigger se suma a la prueba.
+- 🔒 **Y `sql/tests/concurrencia-bitacora-libro.mjs`, también obligatoria**: dos sesiones, peor orden forzado, cero
+  `deadlock detected`. Regla de la `090`: **la bitácora toma primero el correlativo del libro y después su candado**
+  (`auditoria.tomar_candados`), el orden de `post_journal_entry`. Nada en `auditoria` toma el candado de la bitácora
+  por su cuenta; la verificación de la `090` lo exige. `--control` reproduce el orden viejo y debe trabarse.
 - Pantallas `/finanzas/auditoria` y `/legal/admin/auditoria` (la lectura vieja de `audit_log` queda en
   `/anterior` hasta aplicar la `088`).
 

@@ -266,7 +266,7 @@ export function GastosIndividualesTable({
           Estos gastos se cargaron antes de que el sistema pidiera la cuenta contable, así
           que <strong className="font-semibold text-gray-600">nadie los clasificó</strong>.
           No se les asignó una por defecto porque pudieron ser fondos del cliente o costo
-          propio del bufete. Se pueden ir resolviendo de a poco: elegí la cuenta en cada
+          propio del bufete. Se pueden ir resolviendo de a poco: elige la cuenta en cada
           fila, o marcá varias y asignales la misma de una vez. Los gastos nuevos ya no
           pueden quedar así.
         </p>

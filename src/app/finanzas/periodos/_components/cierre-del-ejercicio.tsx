@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookCheck, Eye, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { fmtImporte } from "@/lib/utils/importe";
 import type { LineaDeCierre } from "@/lib/finanzas/contabilidad/cierre-anual";
 
@@ -38,11 +39,15 @@ export function CierreDelEjercicio({ ejercicios }: { ejercicios: EjercicioParaCe
   const [vista, setVista] = useState<Vista | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hecho, setHecho] = useState<string | null>(null);
+  // Cerrar el año sólo se deshace con una reversión: se confirma ESCRIBIENDO el
+  // año, no con un clic al lado de «Cancelar» (recorrido del 03/10/2026).
+  const [anioEscrito, setAnioEscrito] = useState("");
 
   function verVistaPrevia(anio: number) {
     setError(null);
     setHecho(null);
     setVista(null);
+    setAnioEscrito("");
     startTransition(async () => {
       try {
         const res = await fetch(`/api/finanzas/periodos/cierre-anual?anio=${anio}`);
@@ -174,14 +179,40 @@ export function CierreDelEjercicio({ ejercicios }: { ejercicios: EjercicioParaCe
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={() => confirmar(vista.anio)} disabled={isPending} className="min-h-[44px] gap-1.5">
-                  {isPending ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
-                  Sí, cerrar el ejercicio {vista.anio}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setVista(null)} disabled={isPending} className="min-h-[44px]">
-                  Cancelar
-                </Button>
+              <div className="space-y-2 border-t pt-3">
+                <label htmlFor="confirmar-anio" className="block text-sm text-gray-700">
+                  Cerrar el ejercicio postea un asiento que sólo se deshace con una reversión. Para confirmar,
+                  escribe el año <span className="font-mono font-semibold">{vista.anio}</span>:
+                </label>
+                <Input
+                  id="confirmar-anio"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={anioEscrito}
+                  onChange={(e) => setAnioEscrito(e.target.value)}
+                  disabled={isPending}
+                  className="max-w-[10rem] font-mono"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setVista(null)}
+                    disabled={isPending}
+                    className="min-h-[44px]"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => confirmar(vista.anio)}
+                    disabled={isPending || anioEscrito.trim() !== String(vista.anio)}
+                    className="min-h-[44px] gap-1.5"
+                  >
+                    {isPending ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
+                    Sí, cerrar el ejercicio {vista.anio}
+                  </Button>
+                </div>
               </div>
             </>
           )}

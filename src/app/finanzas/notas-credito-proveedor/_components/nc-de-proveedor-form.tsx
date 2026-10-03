@@ -262,7 +262,7 @@ export function NcDeProveedorForm({
 
         {confirmandoSinCompra && (
           <div role="alertdialog" className="flex flex-wrap items-center justify-between gap-3 rounded-md border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-900">
-            <span>No estás asociando esta nota a una factura. ¿Deseas continuar?</span>
+            <span>No estás asociando esta nota a una compra. ¿Deseas continuar?</span>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setConfirmandoSinCompra(false)}>
                 No, elegir una compra

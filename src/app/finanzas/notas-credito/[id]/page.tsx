@@ -426,11 +426,19 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
           {sinFactura && (
             <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
               <h2 className="text-base font-semibold text-integra-navy">Saldo a favor del cliente</h2>
-              <p className="text-sm text-gray-700">
-                Esta nota de crédito no está asociada a una factura: queda como saldo a favor de{" "}
-                <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
-                {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
-              </p>
+              {nc.status === "anulada" ? (
+                // Anulada no deja saldo a favor: las aplicaciones quedan como historia.
+                <p className="text-sm text-gray-700">
+                  Esta nota de crédito está anulada: ya no deja saldo a favor del cliente.
+                  {aplicaciones.length > 0 && " Antes de anularla se había aplicado a:"}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-700">
+                  Esta nota de crédito no está asociada a una factura: queda como saldo a favor de{" "}
+                  <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
+                  {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
+                </p>
+              )}
               {aplicaciones.length > 0 && (
                 <ul className="divide-y rounded-md border text-sm">
                   {aplicaciones.map((a, i) => (

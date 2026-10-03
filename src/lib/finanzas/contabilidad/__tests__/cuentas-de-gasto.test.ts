@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 
 import {
   cuentasClasificables,
+  cuentasParaLineaDeNcDeCompra,
   cuentasSugeridasParaTramite,
   esCuentaValidaComoDefaultDeProveedor,
   esTipoValidoComoDefaultDeProveedor,
@@ -327,5 +328,21 @@ test("el rechazo EXPLICA, y distingue desactivada de tipo equivocado", () => {
     }),
     null,
     "una cuenta de gasto activa no tiene motivo de rechazo"
+  );
+});
+
+test("NC de proveedor: el selector no ofrece cuentas control ni bancos, y sí lo demás que la base acepta", () => {
+  const cuentas = [
+    { code: "100001" }, // banco: la base lo acepta, el selector no
+    { code: "100004" }, // control de clientes: la base lo rechaza
+    { code: "110001" }, // activo que no es banco
+    { code: "610005" },
+    { code: "400001" }, // ingreso: fuera de las válidas
+  ];
+  const validas = new Set(["100001", "110001", "610005"]);
+  const bancos = new Set(["100001", "100002", "100003"]);
+  assert.deepEqual(
+    cuentasParaLineaDeNcDeCompra(cuentas, validas, bancos).map((c) => c.code),
+    ["110001", "610005"]
   );
 });

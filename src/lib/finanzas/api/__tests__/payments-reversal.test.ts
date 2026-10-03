@@ -120,7 +120,7 @@ test("manda al RPC el espejo exacto, con la fecha de hoy, el motivo trimeado y e
   assert.equal(a.p_created_by, USER);
   assert.equal(a.p_reason, "Cheque devuelto por el banco");
   assert.equal(a.p_transaction_date, hoy);
-  assert.match(String(a.p_description), /^Reversión del asiento 10 — /);
+  assert.match(String(a.p_description), /^Reversión del asiento 10: /);
   assert.deepEqual(
     (a.p_lines as { account_code: string; debit: number; credit: number }[]).map((l) => [l.account_code, l.debit, l.credit]),
     [

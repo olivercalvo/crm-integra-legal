@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,6 +122,13 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  // El formulario vive ARRIBA de la tabla. Sin llevar la pantalla hasta él,
+  // «Editar» en una fila de abajo parecía no hacer nada (recorrido del 03/10).
+  const formRef = useRef<HTMLDivElement>(null);
+  const formTarget = form ? (form.mode === "edit" ? form.id : "nueva") : null;
+  useEffect(() => {
+    if (formTarget) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [formTarget]);
   const [importing, setImporting] = useState(false);
 
   /**
@@ -442,7 +449,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
 
       {/* Form crear/editar */}
       {form && (
-        <div className="rounded-lg border border-integra-gold/40 bg-integra-gold/5 p-4 space-y-4">
+        <div ref={formRef} className="scroll-mt-24 rounded-lg border border-integra-gold/40 bg-integra-gold/5 p-4 space-y-4">
           <p className="text-sm font-semibold text-integra-navy">
             {form.mode === "create" ? "Nueva cuenta" : `Editar cuenta ${form.code}`}
           </p>
@@ -461,7 +468,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               />
               {form.mode === "edit" && (
                 <p className="mt-1 text-xs text-gray-500">
-                  El código no se puede modificar. Si está mal, desactivá la cuenta y creá una nueva.
+                  El código no se puede modificar. Si está mal, desactiva la cuenta y crea una nueva.
                 </p>
               )}
               {fieldErrors.code && (
@@ -617,7 +624,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               <p className="mt-1 text-xs text-gray-500">
                 {saldoNoEsCero
                   ? "A qué día corresponde el monto. El período fiscal va del 1 de enero al 31 de diciembre."
-                  : "Se habilita cuando cargás un saldo distinto de 0."}
+                  : "Se habilita cuando cargas un saldo distinto de 0."}
               </p>
               {fieldErrors.saldo_inicial_fecha && (
                 <p className="mt-1 text-xs text-red-600">

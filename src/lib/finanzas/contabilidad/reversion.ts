@@ -149,7 +149,7 @@ export function construirAsientoDeReversion(
     ok: true,
     asiento: {
       transaction_date: datos.fecha,
-      description: `Reversión del asiento ${original.entry_number} — ${original.description}`,
+      description: `Reversión del asiento ${original.entry_number}: ${original.description}`,
       source_type: "reversion",
       lines,
       source_id: datos.source_id,

@@ -1,5 +1,19 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Correcciones del recorrido del 03/10] - 2026-10-03
+
+- NC de proveedor sin compra: el aviso dice «compra» (decía «factura»); el diálogo de reversión ya no
+  queda en «de la compra .» cuando no hay compra.
+- Una NC anulada (de venta o de proveedor) ya no muestra saldo a favor: dice que está anulada y deja
+  las aplicaciones como historia.
+- El selector de cuentas de la NC de proveedor ofrece sólo lo que la base acepta y sin bancos
+  (`cuentasParaLineaDeNcDeCompra`); antes ofrecía 100004 y los bancos.
+- Plan de Cuentas: «Editar» lleva la pantalla al formulario. Sin voseo en el Plan de Cuentas, la
+  importación de cuentas y la tabla de gastos.
+- La descripción de un asiento de reversión usa «:» en vez de «—» (vale para las reversiones nuevas;
+  las ya escritas no se tocan).
+- Cierre anual: se confirma escribiendo el año, y «Cancelar» y «Sí, cerrar» quedan en extremos opuestos.
+
 ## [Bloque 1: 076 a 081 aplicadas en staging] - 2026-10-03
 
 - `076`, `077`, `078`, `079` y `080` aplicadas en staging (01/10).

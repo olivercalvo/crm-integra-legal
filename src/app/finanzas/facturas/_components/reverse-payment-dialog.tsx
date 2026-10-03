@@ -286,8 +286,15 @@ export function ReversePaymentDialog({
             <div className="space-y-1">
               <p>
                 Vas a reversar {t.el} {t.cosa} de{" "}
-                <span className="font-semibold text-integra-navy">{paymentLabel}</span>{" "}
-                {t.aplicadoA} <span className="font-mono font-semibold">{invoiceNumber}</span>.
+                <span className="font-semibold text-integra-navy">{paymentLabel}</span>
+                {/* Una NC sin documento no tiene «de la compra X»: sin esto quedaba «de la compra .». */}
+                {invoiceNumber.trim() ? (
+                  <>
+                    {" "}
+                    {t.aplicadoA} <span className="font-mono font-semibold">{invoiceNumber}</span>
+                  </>
+                ) : null}
+                .
               </p>
               <p>
                 El asiento <span className="font-mono">{asiento.entry_number}</span> no se

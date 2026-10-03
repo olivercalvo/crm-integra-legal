@@ -262,11 +262,20 @@ export default async function NotaDeCreditoProveedorPage({ params, searchParams 
       {sinCompra && (
         <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-integra-navy">Saldo a favor con el proveedor</h2>
-          <p className="text-sm text-gray-700">
-            Esta nota de crédito no está asociada a una compra: queda como saldo a favor de{" "}
-            <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
-            {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
-          </p>
+          {anulada ? (
+            // Anulada no deja saldo a favor: su reversión ya devolvió lo
+            // aplicado a cada compra. Las aplicaciones quedan como historia.
+            <p className="text-sm text-gray-700">
+              Esta nota de crédito está anulada: ya no deja saldo a favor con el proveedor.
+              {aplicaciones.length > 0 && " Antes de anularla se había aplicado a:"}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-700">
+              Esta nota de crédito no está asociada a una compra: queda como saldo a favor de{" "}
+              <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
+              {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
+            </p>
+          )}
           {aplicaciones.length > 0 && (
             <ul className="divide-y rounded-md border text-sm">
               {aplicaciones.map((a, i) => (

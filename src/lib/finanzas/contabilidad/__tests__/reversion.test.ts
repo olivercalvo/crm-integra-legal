@@ -58,7 +58,7 @@ test("apunta al original, es de tipo reversion, lleva el motivo y hereda la refe
   assert.equal(a.reversal_reason, "Cheque devuelto", "el motivo va trimeado");
   assert.equal(a.source_id, PAGO);
   assert.equal(a.reference, "FAC-HON-000002");
-  assert.match(a.description, /^Reversión del asiento 10 — Cobro de FAC-HON-000002/);
+  assert.match(a.description, /^Reversión del asiento 10: Cobro de FAC-HON-000002/);
 });
 
 test("las descripciones de línea dicen que son una reversión, pero no entran en el cuadre", () => {

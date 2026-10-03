@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
+import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
+import { cuentasParaLineaDeNcDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { comprasAbiertasParaNc } from "@/lib/finanzas/queries/notas-credito";
@@ -29,13 +31,20 @@ export default async function NuevaNcDeProveedorPage({ searchParams }: PageProps
     redirect("/finanzas");
   }
 
-  const [cuentas, proveedores, taxCodes, compras, catalogos] = await Promise.all([
+  const [cuentas, proveedores, taxCodes, compras, catalogos, bancos] = await Promise.all([
     listExpenseAccountOptions(db, tenantId),
     listSupplierOptions(db, tenantId),
     listTaxCodesActive(db, tenantId),
     comprasAbiertasParaNc(db, tenantId),
     cargarCatalogosParaNcDeCompra(db, tenantId),
+    listarCuentasDeBanco(db, tenantId),
   ]);
+  // Sólo lo que la base acepta en una línea, y sin bancos.
+  const cuentasDeLinea = cuentasParaLineaDeNcDeCompra(
+    cuentas,
+    catalogos.cuentasValidas,
+    new Set(bancos.map((b) => b.code))
+  );
 
   const compraInicial = searchParams.compra && compras.some((c) => c.id === searchParams.compra) ? searchParams.compra : null;
 
@@ -59,7 +68,7 @@ export default async function NuevaNcDeProveedorPage({ searchParams }: PageProps
         proveedores={proveedores.map((p) => ({ id: p.id, nombre: p.trade_name?.trim() || p.legal_name }))}
         compras={compras}
         compraInicial={compraInicial}
-        cuentas={cuentas.map((c) => ({ code: c.code, name: c.name, account_type: c.account_type ?? "expense" }))}
+        cuentas={cuentasDeLinea.map((c) => ({ code: c.code, name: c.name, account_type: c.account_type ?? "expense" }))}
         taxCodes={taxCodes}
         tasas={Array.from(catalogos.tasas.entries())}
         cuentasValidas={Array.from(catalogos.cuentasValidas)}

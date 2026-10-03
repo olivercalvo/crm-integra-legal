@@ -253,3 +253,22 @@ export function cuentasClasificables<T extends CuentaClasificable>(
     .filter((c) => c.active !== false && esTipoValidoParaGasto(c.account_type))
     .sort((a, b) => a.code.localeCompare(b.code));
 }
+
+/**
+ * Las cuentas que el formulario de la NC de proveedor ofrece para una línea.
+ *
+ * Dos filtros, con los sesgos de siempre (SOP-024 regla 3):
+ *   · `cuentasValidas` es la regla de la BASE (`create_supplier_credit_note`):
+ *     activa, que sirva para un gasto y que NO sea cuenta control. Sin ella el
+ *     selector ofrecía 100004, que el RPC rechaza (recorrido del 03/10/2026).
+ *   · `codigosDeBanco` es opinado: la base acepta un banco en la línea (es un
+ *     activo), pero acreditar un banco con una NC de compra es un disparate. La
+ *     lista sale de `listarCuentasDeBanco`, la misma que ofrece el banco del pago.
+ */
+export function cuentasParaLineaDeNcDeCompra<T extends { code: string }>(
+  cuentas: readonly T[],
+  cuentasValidas: ReadonlySet<string>,
+  codigosDeBanco: ReadonlySet<string>
+): T[] {
+  return cuentas.filter((c) => cuentasValidas.has(c.code) && !codigosDeBanco.has(c.code));
+}

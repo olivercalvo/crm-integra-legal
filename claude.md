@@ -299,7 +299,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   una NC enviada semanas después de su fecha contable?; (ii) Josuarth — acreditar una factura ya
   cobrada (saldo acreedor) y el excedente del recibo.
 
-### Notas de crédito como módulo propio (desde 2026-10-01, Bloque 1 E8 — `076` SIN APLICAR)
+### Notas de crédito como módulo propio (desde 2026-10-01, Bloque 1 E8 — `076` + `081` aplicadas SOLO en staging)
 - **Pantallas:** `/finanzas/notas-credito` (+ `/nueva`, admin y abogada) y
   `/finanzas/notas-credito-proveedor` (+ `/nueva`, también el contador, por prefijo). El botón de la
   factura y el de la compra abren la MISMA pantalla con el documento precargado (`?factura=`,
@@ -319,7 +319,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   200001/200003. Lleva el documento del proveedor en `referencia_externa`.
 - Una aplicación no se edita ni se borra: si fue un error, se reversa la NC.
 
-### Nota de débito (desde 2026-10-01, decisión 14 — `077` SIN APLICAR)
+### Nota de débito (desde 2026-10-01, decisión 14 — `077` aplicada SOLO en staging)
 - **Es una factura de venta con otro tipo de documento**: `invoice_kind = 'NOTA_DEBITO'`, serie
   `ND-` (secuencia `debit_note`), mismo formulario, misma emisión y el MISMO asiento
   (`source_type = 'factura'`). Suma en la antigüedad, el ITBMS y el resultado como una factura.
@@ -329,7 +329,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **Todavía NO va a la DGI** (`PERMITIR_ND_A_LA_DGI = false`): el tipo 05 no se probó en el
   sandbox. Se corta antes del correlativo y la pantalla no ofrece el botón.
 
-### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` SIN APLICAR)
+### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` aplicada SOLO en staging)
 - Sin «Distribución a Socias». Siempre: Utilidad bruta → Utilidad antes de impuesto sobre la
   renta → Impuesto sobre la renta (también en 0.00) → Utilidad neta. El Balance lleva la utilidad
   neta (acumulada mientras no haya cierre, y lo dice).
@@ -337,7 +337,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   defecto). La pantalla pide el porcentaje y muestra la fracción. Escriben admin y contador
   (`PUT /api/finanzas/configuracion/parametros`); sin fila, el reporte usa 0.
 
-### Plan de cuentas: subcategorías (desde 2026-10-01, E6 — `079` SIN APLICAR)
+### Plan de cuentas: subcategorías (desde 2026-10-01, E6 — `079` + `081` aplicadas SOLO en staging)
 - **Subcategoría obligatoria en los seis tipos** (CHECK `coa_subcategoria_por_tipo`, cuentas
   activas). Sale `depreciacion_acumulada` (la depreciación resta dentro de PPE) y `patrimonio`
   (ahora capital_social, resultados_acumulados, otras_reservas).
@@ -349,7 +349,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   propuestos: P-8b, P-8c. Reemplaza el paso «Reasignar» de P-15 y el script de
   `sql/datos-staging/` de HON-FAM.
 
-### Cierre anual (desde 2026-10-01, E11 — `080` SIN APLICAR)
+### Cierre anual (desde 2026-10-01, E11 — `080` aplicada SOLO en staging)
 - Asiento `cierre` al 31/12 (número `AD-` del motor): cada cuenta de resultado en contra y la
   diferencia a **300002**. Lo arma `construirAsientoDeCierre()` (la misma función que la vista
   previa) y **la base lo VERIFICA** contra `finanzas_saldos_de_resultado` (`close_fiscal_year`,

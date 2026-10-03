@@ -16,8 +16,31 @@
 - ✅ Corregido el posible error anotado el 01/10: el Estado de Resultado con «desde» ya no arrastra
   los movimientos anteriores al corte (`9c567f7`, test en `periodo-estados-financieros.test.ts`).
 - En producción la `081` va inmediatamente después de la `080`, en la misma ventana.
-- Siguiente: recorrido en el navegador de los cinco puntos (NC como módulo, nota de débito, Estado
-  de Resultado, plan de cuentas, cierre anual sólo en vista previa: **no cerrar 2026**) y Bloque 2.
+- ✅ **Recorrido de los cinco puntos (03/10, contador + abogada2):**
+  1. NC de proveedor **sin compra** NC-CO-000004 (CABLE ONDA, 21.40), asiento 107 con el proveedor en
+     200001. Aplicados 10.70 a FAC-CO-000003 (saldo 0, sin asiento). Reversada (asiento 108, el espejo
+     conserva el proveedor) y la compra volvió a 10.70.
+  2. Estado de Resultado: estructura sin Distribución a Socias; septiembre y octubre cuadran cuenta por
+     cuenta con el libro. ISR 25 % → 56.25 sobre 225.00; vuelto a 0. Balance cuadra (264,529.08) con la
+     misma utilidad neta (247,908.56).
+  3. Plan de cuentas: 67 activas con subcategoría, patrimonio en tres, 400009 y 440001.
+  4. Cierre anual 2026: **sólo vista previa** (247,908.56 a 300002, 298,795.31 por lado). 0 asientos de
+     cierre en la base.
+  5. Nota de débito **ND-000001** (CLI-009, ajusta FAC-HON-000022, 107.00), asiento 109 igual al de una
+     factura; sin botón de DGI. NC de venta **NC-000021** parcial (214.00) sobre FAC-HON-000022 desde
+     su botón: el tope P-4b bloquea un precio mayor; asiento 110; saldo de la factura 1,070 → 856.
+- ✅ Corregidos (`27102d8`): los siete detalles anotados en el recorrido y la confirmación del cierre
+  anual escribiendo el año. ⏳ El cierre anual nuevo falta verlo en el navegador con el contador.
+- 📋 Vistos en el recorrido, sin corregir todavía:
+  - Detalle de NC de venta: líneas y resumen con «$» en vez de «B/.», y el # de línea sale 2 en una NC
+    de una sola línea.
+  - Nota de débito: el diálogo de emisión dice «envíala a la DGI con el botón Enviar a la DGI», que en
+    una ND no existe; la tarjeta de Facturación Electrónica habla de «enviarla»; el panel lateral de la
+    factura nueva dice «FAC-HON-… o FAC-REI-…» también para una ND.
+  - FAC-HON-000022 no muestra la ND que la ajusta.
+  - La NC de venta ofrece «Sin factura» en el selector aunque está apagada (no se probó a dónde lleva).
+  - La compra nueva usa la misma lista de cuentas que tenía la NC de proveedor (con 100004 y bancos).
+- Siguiente: Bloque 2.
 
 ## >>> 01/10/2026 (cierre) — 073 Y 074 APLICADAS Y RECORRIDAS; ESTADO DEL BLOQUE 1 <<<
 

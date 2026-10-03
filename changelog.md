@@ -1,5 +1,17 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [083 aplicada, NC/ND internas y tres propuestas] - 2026-10-03
+
+- `083` aplicada en staging (verificación 4/4). ND-000004 y NC-000023 emitidas como internas: con
+  asiento, `fe_estado = 'interna'`, sin llamar al PAC; enviarlas después se rechaza en la app y en
+  la base. El 409 de un documento interno dice qué pasa.
+- Propuesta del corte con QuickBooks reescrita en dos fechas (apertura 31/12/2025 y posteo automático
+  desde una fecha configurable), con el cuadre por residuo y los cobros posteriores.
+- Propuesta de alerta para facturas emitidas sin autorización de la DGI y consulta del detalle de
+  las 4 de producción (solo SELECT).
+- Diagnóstico y propuesta de bitácora de auditoría. Hallazgo: `audit_log` se puede editar y borrar
+  desde la sesión de cualquier usuario.
+
 ## [ND y NC genéricas a la DGI, envío al emitir, 082 aplicada] - 2026-10-03
 
 - `082` aplicada en staging. Verificación 3/3: 400010 con HON-OTROS; banco en una línea de NC de

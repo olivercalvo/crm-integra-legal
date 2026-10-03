@@ -1,5 +1,21 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre) — 083, PROPUESTAS DE CORTE, ALERTAS Y AUDITORÍA <<<
+
+- ✅ `083` aplicada en staging (4/4) y NC/ND internas probadas (`docs/efactura/prueba-notas-internas.txt`).
+- 📐 `docs/finanzas/propuesta-corte-quickbooks.md`: dos fechas (apertura 31/12/2025; posteo automático
+  desde B, propuesta 01/07/2026). Dudas abiertas: confirmar B, qué hacer con las facturas de prueba de
+  mayo en producción, si la importación trae ventas por factura.
+- 📐 `docs/efactura/propuesta-alerta-no-enviadas.md`: 4 facturas de producción (FAC-HON-000489, 000496,
+  000503, 000508) emitidas sin DGI. **No se tocan.** ⏳ Oliver corre
+  `sql/verificacion/produccion-facturas-no-enviadas-detalle.sql`. Antes de reintentarlas: probar en
+  sandbox la fecha de emisión vieja (`1519`) y decidir con Josuarth.
+- 📐 `docs/finanzas/propuesta-bitacora-auditoria.md`.
+- 🔴 **Hallazgo de seguridad (sin tocar):** `audit_log` tiene RLS FOR ALL y grants de UPDATE, DELETE y
+  TRUNCATE a `authenticated`: cualquier usuario logueado puede editar o borrar la bitácora de su bufete.
+  Propuesta de corrección inmediata en el punto 4 de la propuesta de auditoría. Probablemente igual en
+  producción (es del MVP): verificar.
+
 ## >>> 03/10/2026 (noche) — FACTURACIÓN ELECTRÓNICA QUE FALTABA <<<
 
 - ✅ `082` aplicada en staging (verificación 3/3).

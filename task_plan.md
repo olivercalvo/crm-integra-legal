@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (tarde) — RESPUESTAS DE JOSUARTH DEL 02/10 <<<
+
+- Anotadas en `docs/finanzas/plan-bloque1.md` §7 (P-9a, P-8c, J-7, J-9, K-5/P-1c, P-4a, apertura y
+  fase siguiente).
+- ✅ Hecho en código: K-5 (sin fechas futuras, también asiento manual e importación), P-4a (NC de
+  venta sin factura, interna), y los detalles pendientes del recorrido (B/. y # en la NC de venta,
+  textos de la ND, la factura muestra su ND, compra sin cuentas control ni bancos).
+- ⏳ **`082` escrita, SIN APLICAR** (espera «aplica»): 400010 Otros servicios + HON-OTROS, y la base
+  rechaza bancos en una línea de NC de compra.
+- 🟡 Para Josuarth: subcategoría NIIF 18 de la 440001 («no operativo»: ¿inversión o financiamiento?);
+  apertura recomendada = facturas internas de saldo inicial para CxC (y CxP), con su cuenta puente.
+- Siguiente: inventario de facturación electrónica (sandbox) y consultas de producción en lectura.
+
 ## >>> 03/10/2026 — 076 A 081 APLICADAS EN STAGING <<<
 
 - ✅ `076` a `080` aplicadas en staging el 01/10 (ref `xtyenhakplrkyifbcaow`). Al aplicarlas, la

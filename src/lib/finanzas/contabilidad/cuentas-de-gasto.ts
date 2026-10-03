@@ -74,6 +74,7 @@
 
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 import { CUENTA_TRAMITE_DEFAULT } from "@/lib/finanzas/types/expense-line";
+import { esCuentaDeBancoPorNombre } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
 
 // ---------------------------------------------------------------------------
 // EL GUARD — lo que el servidor rechaza
@@ -255,20 +256,21 @@ export function cuentasClasificables<T extends CuentaClasificable>(
 }
 
 /**
- * Las cuentas que el formulario de la NC de proveedor ofrece para una línea.
+ * Las cuentas que se ofrecen para una LÍNEA de compra o de NC de proveedor.
  *
- * Dos filtros, con los sesgos de siempre (SOP-024 regla 3):
- *   · `cuentasValidas` es la regla de la BASE (`create_supplier_credit_note`):
- *     activa, que sirva para un gasto y que NO sea cuenta control. Sin ella el
- *     selector ofrecía 100004, que el RPC rechaza (recorrido del 03/10/2026).
- *   · `codigosDeBanco` es opinado: la base acepta un banco en la línea (es un
- *     activo), pero acreditar un banco con una NC de compra es un disparate. La
- *     lista sale de `listarCuentasDeBanco`, la misma que ofrece el banco del pago.
+ * Sobre la lista de `listExpenseAccountOptions` (activas de activo, costo y
+ * gasto), saca dos cosas que esa lista dejaba pasar (recorrido del 03/10/2026):
+ *   · las cuentas CONTROL (100004, 200001): la NC de compra las rechaza en la
+ *     base, y una compra contra 100004 no tiene sentido;
+ *   · los BANCOS y cajas (`esCuentaDeBancoPorNombre`, la regla de la `082`).
+ * `incluirCodigos` son las cuentas que la compra que se edita ya tiene: se
+ * ofrecen igual, para no reclasificarla en silencio al guardar.
  */
-export function cuentasParaLineaDeNcDeCompra<T extends { code: string }>(
-  cuentas: readonly T[],
-  cuentasValidas: ReadonlySet<string>,
-  codigosDeBanco: ReadonlySet<string>
-): T[] {
-  return cuentas.filter((c) => cuentasValidas.has(c.code) && !codigosDeBanco.has(c.code));
+export function cuentasParaLineaDeCompra<
+  T extends { code: string; name: string; account_type?: string | null; cuenta_control?: string | null },
+>(cuentas: readonly T[], incluirCodigos: readonly (string | null | undefined)[] = []): T[] {
+  const incluir = new Set(incluirCodigos.filter((c): c is string => !!c));
+  return cuentas.filter(
+    (c) => incluir.has(c.code) || (!c.cuenta_control && !esCuentaDeBancoPorNombre(c))
+  );
 }

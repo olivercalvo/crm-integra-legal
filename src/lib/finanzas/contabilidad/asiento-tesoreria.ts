@@ -94,6 +94,20 @@ export function esCuentaDeBancoValida(c: CuentaDeBanco | null | undefined): bool
   return !!c && c.active && c.account_type === "asset";
 }
 
+/**
+ * Qué cuenta ES un banco o una caja: un activo cuyo nombre lo dice.
+ *
+ * 🔒 Es la MISMA regla que `finanzas_es_cuenta_de_banco` en la base (`082`), que
+ * la usa para rechazar un banco en una línea de NC de compra. Las dos se fijan
+ * una contra la otra en `cuenta-de-banco-una-sola-regla.test.ts`: si cambia el
+ * patrón de un lado, el test falla.
+ */
+export const PATRON_CUENTA_DE_BANCO = /banco|caja|efectivo/i;
+
+export function esCuentaDeBancoPorNombre(c: { account_type?: string | null; name: string }): boolean {
+  return c.account_type === "asset" && PATRON_CUENTA_DE_BANCO.test(c.name);
+}
+
 // ---------------------------------------------------------------------------
 // COBRO DE UNA FACTURA
 // ---------------------------------------------------------------------------

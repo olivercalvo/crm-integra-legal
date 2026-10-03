@@ -509,13 +509,21 @@ export function InvoiceForm(props: Props) {
         <InvoiceTotalsCard lines={lines} />
         <div className="rounded-lg border bg-white p-4 text-xs text-gray-500">
           <p className="font-semibold text-gray-700 mb-1">Sobre la numeración</p>
-          <p>
-            Las facturas se guardan inicialmente como{" "}
-            <span className="font-mono">borrador</span>. El número definitivo
-            (<span className="font-mono">FAC-HON-…</span> o{" "}
-            <span className="font-mono">FAC-REI-…</span>) se asigna recién al
-            emitir.
-          </p>
+          {kind === "NOTA_DEBITO" ? (
+            <p>
+              La nota de débito se guarda como{" "}
+              <span className="font-mono">borrador</span>. El número definitivo
+              (<span className="font-mono">ND-…</span>) se asigna recién al emitir.
+            </p>
+          ) : (
+            <p>
+              Las facturas se guardan inicialmente como{" "}
+              <span className="font-mono">borrador</span>. El número definitivo
+              (<span className="font-mono">FAC-HON-…</span> o{" "}
+              <span className="font-mono">FAC-REI-…</span>) se asigna recién al
+              emitir.
+            </p>
+          )}
         </div>
       </aside>
     </div>

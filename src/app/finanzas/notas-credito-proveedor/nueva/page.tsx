@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
-import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
-import { cuentasParaLineaDeNcDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import { cuentasParaLineaDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { comprasAbiertasParaNc } from "@/lib/finanzas/queries/notas-credito";
@@ -31,20 +30,15 @@ export default async function NuevaNcDeProveedorPage({ searchParams }: PageProps
     redirect("/finanzas");
   }
 
-  const [cuentas, proveedores, taxCodes, compras, catalogos, bancos] = await Promise.all([
+  const [cuentas, proveedores, taxCodes, compras, catalogos] = await Promise.all([
     listExpenseAccountOptions(db, tenantId),
     listSupplierOptions(db, tenantId),
     listTaxCodesActive(db, tenantId),
     comprasAbiertasParaNc(db, tenantId),
     cargarCatalogosParaNcDeCompra(db, tenantId),
-    listarCuentasDeBanco(db, tenantId),
   ]);
-  // Sólo lo que la base acepta en una línea, y sin bancos.
-  const cuentasDeLinea = cuentasParaLineaDeNcDeCompra(
-    cuentas,
-    catalogos.cuentasValidas,
-    new Set(bancos.map((b) => b.code))
-  );
+  // Sin cuentas control ni bancos: lo que la base acepta en una línea (082).
+  const cuentasDeLinea = cuentasParaLineaDeCompra(cuentas);
 
   const compraInicial = searchParams.compra && compras.some((c) => c.id === searchParams.compra) ? searchParams.compra : null;
 

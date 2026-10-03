@@ -549,12 +549,39 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 
 **Quedan abiertas y bloquean solo P-4a y P-8a** (van a Josuarth hoy, 30/09; el Excel de P-8a es `03_Documentos/Adjuntos para Josuarth/subcategorias-cuentas-balance.xlsx`). El resto de §7 no bloquea: se construye con el valor por defecto que dice cada punto y se ajusta con la respuesta.
 
+### Respuestas de Josuarth (reunión del 02/10/2026)
+
+| # | Respuesta | Qué se hizo |
+|---|---|---|
+| **P-9a** ✅ | **Corte al 31/12/2025.** Los saldos iniciales se cargan al 31/12/2025 (los manda él; salen de la declaración de renta) y él registra 2026 desde enero. **No se cargan ingresos ni gastos acumulados.** | La apertura es solo de cuentas de balance. Sale del punto 9 lo de "corte a mitad de año" (`aperturaDeResultado`). Hay que crear los períodos de 2025 antes de postear (el motor crea solo el año en curso y el siguiente). Cómo se cargan las cuentas por cobrar: ver «Apertura» abajo. |
+| **P-8c** ✅ | **"Honorarios, otros" va a una cuenta nueva de ingreso OPERATIVA, "Otros servicios", y HON-OTROS apunta a ella.** La 440001 Otros ingresos queda para lo no operativo. | `082`: **400010 Otros servicios** (ingresos_operativos) y HON-OTROS → 400010. ⚠️ La 440001 sigue con subcategoría `ingresos_operativos`: NIIF 18 no tiene «no operativo»; falta que Josuarth diga si va a inversión o a financiamiento (se cambia en el Plan de Cuentas, sin migración). Las facturas ya emitidas con HON-OTROS siguen en 440001: el libro no se reescribe. |
+| **J-7** ✅ | **Sin lógica especial.** La NC del proveedor deja saldo a favor en Cuentas por pagar; si el bufete le devuelve al cliente, se hace una NC de venta aparte. | Nada que construir: la NC de proveedor sin compra (E8) ya deja saldo a favor en 200001, y la NC de venta sin factura se activó (P-4a). |
+| **J-9** ✅ | **No aplica al sistema**: los anexos son de la declaración de renta. | Nada. |
+| **K-5 / P-1c** ✅ | **No se permiten fechas de registro posteriores a hoy.** | `PERMITIR_FECHA_DE_REGISTRO_FUTURA = false`. Además, el alta de un asiento manual y la importación de asientos no pasaban por esa llave: ahora la respetan (422 en la ruta, error por fila en la importación). |
+| **P-4a** ✅ | **La NC de venta sin factura SÍ se permite**, como documento interno. Regla general: toda factura, NC y ND puede enviarse a la DGI o quedar interna. | `PERMITIR_NC_VENTA_SIN_FACTURA = true`. Sigue sin ir a la DGI (409 antes del correlativo). El envío de la NC sin factura y de la ND se activa **después del inventario de facturación electrónica** (punto 2 de la lista del 03/10), no antes. |
+
+**Apertura de cuentas por cobrar: asiento por cliente o facturas internas (propuesta de Josuarth).**
+
+| | A. Asiento de apertura (el punto 9 tal como está) | B. Facturas internas de saldo inicial (Josuarth) |
+|---|---|---|
+| Qué se carga | Un asiento al 31/12/2025 con una línea de 100004 por cliente (o por documento), con tercero. | Una "factura" por cada factura pendiente al 31/12/2025: cliente, número original, fecha, vencimiento y saldo. Nunca va a la DGI. |
+| Antigüedad | Entra como partida de diario **por la fecha del asiento** (31/12/2025), sin vencimiento: todo cae en el mismo tramo, no en el de cada factura. El total por cliente cuadra con el Mayor; los tramos no. | Cada factura en su tramo **por su vencimiento real**. Cuadra contra el Mayor por construcción, documento por documento. |
+| Cobros de 2026 sobre lo viejo | **No tienen a qué aplicarse**: el recibo exige una factura. Quedan como saldo a favor del cliente y la antigüedad muestra +X (apertura) y −X (cobro) sin cruzarlos nunca. | Flujo normal: el recibo se aplica a esa factura, el saldo baja, la reversión la devuelve. El estado de cuenta muestra el número que el cliente conoce. |
+| Carga | Más simple: una planilla, reusa la importación de asientos. | Un Excel de una fila por factura pendiente (sale del auxiliar de QuickBooks). Más filas, mismo esfuerzo para Josuarth si el auxiliar existe. |
+| Construcción | Ya diseñado (E7). | **No puede ser una factura común**: su asiento acreditaría ingreso e ITBMS de 2025, ya declarados. Hace falta un tipo propio (`SALDO_INICIAL`): asiento 100004 (con cliente) contra una **cuenta puente de apertura**, fuera de ventas, ITBMS, Estado de Resultado y DGI, con el número original como referencia (sin correlativo `FAC-`). El asiento de apertura del resto (bancos, CxP, activos, patrimonio) usa la misma cuenta puente y la deja en cero. Tamaño M. |
+
+**Recomendación: B para las cuentas por cobrar** (y lo mismo para cuentas por pagar si hay proveedores con saldo), **y el asiento de apertura para todo lo demás.** Lo que se hace en enero es cobrar facturas viejas: con A cada cobro queda como saldo a favor sin cruzar y la antigüedad deja de servir justo los primeros meses. A es más simple de cargar, pero se paga todos los días en la conciliación. Pendiente para Josuarth: el código y nombre de la cuenta puente, y si hay saldos de proveedores al 31/12.
+
+**Siguiente fase (solo anotado, no se construye ahora):**
+1. Carga masiva de facturas de compra desde Excel: la cuenta por defecto del proveedor (`default_chart_account_code`), la descripción copiada de su factura anterior, y una pantalla de revisión editable con «Contabilizar».
+2. Después: bitácora de auditoría, niveles de acceso y aprobaciones.
+
 ### Preguntas
 
 **Fechas**
 - **P-1a.** ✅ Respondida (arriba).
 - **P-1b.** ¿La fecha de registro puede ser **anterior** a la del documento? (Una compra que llega en octubre con factura de septiembre y septiembre ya cerrado es el caso normal al revés.)
-- **P-1c.** ¿Se permiten fechas de registro futuras (dentro de un mes abierto)?
+- **P-1c.** ✅ No (02/10): ninguna fecha de registro posterior a hoy.
 - **P-1d.** ✅ Respondida (arriba). Sigue abierto, sin bloquear: la regla "anular solo dentro del mes", ¿se mide con la fecha de registro?
 - **P-1e.** ¿El vencimiento se cuenta desde la fecha del documento?
 
@@ -580,7 +607,7 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 - **P-3b.** ¿N.º de factura del proveedor obligatorio en compras y gastos de trámite? ¿Único por proveedor?
 
 **Notas de crédito**
-- **P-4a.** 🔴 **Abierta, bloquea E8.** Una NC de venta sin factura no se puede mandar a la DGI (tipo 04 exige la factura referenciada), así que no resta ITBMS. ¿Se permite igual, como documento interno, o del lado de ventas la factura es obligatoria?
+- **P-4a.** ✅ Respondida el 02/10: sí, como documento interno. ~~**Abierta, bloquea E8.**~~ Una NC de venta sin factura no se puede mandar a la DGI (tipo 04 exige la factura referenciada), así que no resta ITBMS. ¿Se permite igual, como documento interno, o del lado de ventas la factura es obligatoria?
 - **P-4b.** Con factura, ¿el precio de una línea puede subir sobre el de la factura? ¿Cambiar de gravada a exenta es para corregir un error de la factura?
 - **P-4c.** El saldo a favor, ¿se aplica siempre a mano ("Aplicar saldo a favor") o automático a la siguiente factura? ¿Hay devoluciones de dinero (salida de banco contra 100004)?
 
@@ -595,10 +622,10 @@ Todas las pruebas corren con clics en el deploy de la rama o en localhost (stagi
 - **P-7a.** La línea de ISR ya está decidida (tasa configurable, 0 %). Abierto, sin bloquear: si algún día se registra el ISR en el libro, ¿en qué cuenta? ¿La 300004 se desactiva?
 - **P-8a.** 🔴 **Abierta, bloquea E6.** Mapa de subcategorías para **todas** las cuentas activas de activo, pasivo y patrimonio: va en `subcategorias-cuentas-balance.xlsx` (30/09). ¿Dónde va la 300004?
 - **P-8b.** Código y nombre de la cuenta de Familia. ¿Las licenciadas ya confirmaron que va separada (L1)?
-- **P-8c.** Código, nombre y subcategoría de la cuenta de otros ingresos. ¿Lleva ITBMS? ¿HON-OTROS va ahí?
+- **P-8c.** ✅ 02/10: 400010 Otros servicios (operativa) para HON-OTROS; 440001 para lo no operativo. Pregunta original: código, nombre y subcategoría de la cuenta de otros ingresos. ¿Lleva ITBMS? ¿HON-OTROS va ahí?
 
 **Saldos iniciales y tercero**
-- **P-9a.** Fecha de corte (decisión 4). Si es a mitad de año, ¿la apertura trae ingresos y gastos acumulados?
+- **P-9a.** ✅ 02/10: 31/12/2025, sin ingresos ni gastos acumulados. Pregunta original: fecha de corte (decisión 4). Si es a mitad de año, ¿la apertura trae ingresos y gastos acumulados?
 - **P-9b.** Detalle de 100004/200001: ¿por documento (decisión 12) o un saldo por cliente o proveedor?
 - **P-10a.** En la importación, ¿el tercero se identifica por código (CLI-/PRV-) o por RUC (K-2)?
 

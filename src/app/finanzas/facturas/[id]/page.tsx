@@ -40,7 +40,7 @@ import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
 import { MENSAJE_ND_SIN_DGI, PERMITIR_ND_A_LA_DGI } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
-import { referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
+import { notasDeDebitoDeLaFactura, referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
 import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { listarSaldosAFavor } from "@/lib/finanzas/api/saldo-a-favor";
@@ -213,6 +213,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const canEmitToPac = puedeAccionar && !ndSinDgi;
   const ajustaA =
     invoice.invoice_kind === "NOTA_DEBITO" ? await referenciaDeNotaDeDebito(db, tenantId, invoice.id) : null;
+  const notasDeDebito =
+    invoice.invoice_kind !== "NOTA_DEBITO" ? await notasDeDebitoDeLaFactura(db, tenantId, invoice.id) : [];
   // Card DGI manual — legacy MVP pre-integración PAC. Queda visible SOLO
   // si la abogada efectivamente cargó datos manuales (hay al menos un
   // campo DGI manual presente) y la factura nunca entró al flujo
@@ -301,6 +303,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               invoiceKind={invoice.invoice_kind}
               nextNumberPreview={numberPreview}
               grandTotal={Number(invoice.grand_total)}
+              sinDgi={ndSinDgi}
             />
           )}
           {/* E8: la NC es un módulo propio. El botón se queda y abre la MISMA
@@ -425,6 +428,26 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                     ) : (
                       "Sin factura asociada"
                     )}
+                  </dd>
+                </div>
+              )}
+              {notasDeDebito.length > 0 && (
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-gray-500">
+                    {notasDeDebito.length === 1 ? "Nota de débito que la ajusta" : "Notas de débito que la ajustan"}
+                  </dt>
+                  <dd className="mt-1 space-y-0.5 font-medium text-gray-900">
+                    {notasDeDebito.map((nd) => (
+                      <div key={nd.id}>
+                        <Link href={`/finanzas/facturas/${nd.id}`} className="font-mono hover:underline">
+                          {nd.invoice_number ?? "ND sin número"}
+                        </Link>{" "}
+                        <span className="text-sm font-normal text-gray-500">
+                          B/. {fmtImporte(nd.grand_total)}
+                          {nd.status === "anulada" ? " (anulada)" : ""}
+                        </span>
+                      </div>
+                    ))}
                   </dd>
                 </div>
               )}
@@ -591,7 +614,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               {MENSAJE_ND_SIN_DGI}
             </p>
           )}
-          {showEfacturaCard && (
+          {/* La ND sin DGI no muestra la tarjeta: hablaría de «enviarla» con un botón que no existe. */}
+          {showEfacturaCard && !ndSinDgi && (
             <EfacturaCard
               invoiceId={invoice.id}
               invoiceNumber={invoice.invoice_number}
@@ -733,7 +757,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
 
           {!editable && !isAnulada && (
             <div className="rounded-lg border bg-white p-4 text-xs text-gray-500">
-              <p className="font-semibold text-gray-700 mb-1">Factura inmutable</p>
+              <p className="font-semibold text-gray-700 mb-1">
+                {invoice.invoice_kind === "NOTA_DEBITO" ? "Nota de débito inmutable" : "Factura inmutable"}
+              </p>
               <p>
                 En estado{" "}
                 <span className="font-mono">{invoice.status}</span> no se permite

@@ -477,16 +477,18 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {nc.lines.map((ln) => (
+                  {nc.lines.map((ln, i) => (
                     <tr key={ln.id}>
-                      <td className="py-2 pr-3 text-gray-500">{ln.line_order + 1}</td>
+                      {/* La posición en pantalla, no `line_order`: las NC viejas lo guardan
+                          desde 0 y las de E8 desde 1, y «+1» mostraba 2 en una NC de una línea. */}
+                      <td className="py-2 pr-3 text-gray-500">{i + 1}</td>
                       <td className="py-2 pr-3 text-gray-900">{ln.description}</td>
                       <td className="py-2 pr-3 text-right font-mono">{Number(ln.quantity).toFixed(2)}</td>
-                      <td className="py-2 pr-3 text-right font-mono">${fmtImporte(Number(ln.unit_price))}</td>
+                      <td className="py-2 pr-3 text-right font-mono">B/. {fmtImporte(Number(ln.unit_price))}</td>
                       <td className="py-2 pr-3 text-gray-600">
                         {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                       </td>
-                      <td className="py-2 text-right font-mono font-medium">${fmtImporte(Number(ln.line_total))}</td>
+                      <td className="py-2 text-right font-mono font-medium">B/. {fmtImporte(Number(ln.line_total))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -517,7 +519,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               </p>
             ) : (
               <p className="text-sm text-amber-800">
-                Sin asiento en el libro. Si la emisión falló después de crear la nota, avisale a Oliver: no
+                Sin asiento en el libro. Si la emisión falló después de crear la nota, avísale a Oliver: no
                 debería existir una nota de crédito parcial sin su asiento.
               </p>
             )}
@@ -531,16 +533,16 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
-                <dd className="font-mono font-medium text-gray-900">${fmtImporte(Number(nc.subtotal_total))}</dd>
+                <dd className="font-mono font-medium text-gray-900">B/. {fmtImporte(Number(nc.subtotal_total))}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-600">Impuestos</dt>
-                <dd className="font-mono font-medium text-gray-900">${fmtImporte(Number(nc.tax_total))}</dd>
+                <dd className="font-mono font-medium text-gray-900">B/. {fmtImporte(Number(nc.tax_total))}</dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total acreditado</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${fmtImporte(Number(nc.grand_total))}
+                  B/. {fmtImporte(Number(nc.grand_total))}
                 </dd>
               </div>
             </dl>

@@ -52,13 +52,12 @@ test("la reversión el mismo día del original, o después, se acepta", () => {
   assert.equal(errorDeFechaDeRegistro({ ...regla, fecha: "2026-09-25" }), null);
 });
 
-test("🟡 fechas futuras en un mes abierto: detrás de UNA constante (pregunta 5, P-1c)", () => {
+test("🔴 K-5: una fecha de registro posterior a hoy se rechaza (Josuarth, 02/10)", () => {
+  assert.equal(PERMITIR_FECHA_DE_REGISTRO_FUTURA, false);
   const e = errorDeFechaDeRegistro({ fecha: "2026-10-05", hoy: HOY, periodoCerrado: false });
-  if (PERMITIR_FECHA_DE_REGISTRO_FUTURA) {
-    assert.equal(e, null, "mientras Josuarth no conteste, se permiten");
-  } else {
-    assert.match(e!, /posterior a hoy/);
-  }
+  assert.match(e!, /posterior a hoy/);
+  // Hoy mismo sí.
+  assert.equal(errorDeFechaDeRegistro({ fecha: HOY, hoy: HOY, periodoCerrado: false }), null);
 });
 
 test("🔒 la llave de las fechas futuras está en UN solo lugar", async () => {

@@ -19,6 +19,8 @@
  *    silencioso.
  */
 
+import { PERMITIR_FECHA_DE_REGISTRO_FUTURA } from "@/lib/finanzas/contabilidad/fecha-de-registro";
+
 export const ENCABEZADOS = [
   "Asiento",
   "Fecha",
@@ -106,6 +108,8 @@ export interface ContextoDeImportacion {
   proveedoresPorCodigo?: Map<string, string>;
   /** Cómo leer `nn/nn/AAAA`. Sin dato, DD/MM (lo que el importador aceptaba antes). */
   formatoDeFecha?: FormatoDeFecha;
+  /** Hoy en Panamá (`YYYY-MM-DD`). Con él se rechaza una fecha futura (K-5). */
+  hoy?: string;
 }
 
 export interface ResultadoDeImportacion {
@@ -391,7 +395,14 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
     if (fecha) {
       const mes = fecha.slice(0, 7);
       const [a, m] = mes.split("-");
-      if (ctx.mesesCerrados.has(mes)) {
+      if (!PERMITIR_FECHA_DE_REGISTRO_FUTURA && ctx.hoy && fecha > ctx.hoy) {
+        const [ha, hm, hd] = ctx.hoy.split("-");
+        errores.push({
+          fila: primera.n,
+          columna: "Fecha",
+          mensaje: `La fecha ${fecha.slice(8, 10)}/${m}/${a} es posterior a hoy (${hd}/${hm}/${ha}).`,
+        });
+      } else if (ctx.mesesCerrados.has(mes)) {
         errores.push({ fila: primera.n, columna: "Fecha", mensaje: `El mes ${m}/${a} está cerrado.` });
       } else if (!ctx.mesesConPeriodo.has(mes) && !ctx.aniosConPeriodoAutomatico.has(Number(a))) {
         errores.push({ fila: primera.n, columna: "Fecha", mensaje: `No hay período contable abierto para ${m}/${a}.` });

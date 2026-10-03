@@ -16,6 +16,12 @@ interface Props {
   /** Total a emitir, en USD. Para mostrar al confirmar. */
   grandTotal: number;
   disabled?: boolean;
+  /**
+   * El documento no se puede mandar a la DGI desde el sistema (hoy, la nota de
+   * débito: `PERMITIR_ND_A_LA_DGI`). Lo decide la página, que es server: este
+   * componente no importa el orquestador.
+   */
+  sinDgi?: boolean;
 }
 
 /**
@@ -31,7 +37,10 @@ export function EmitInvoiceDialog({
   nextNumberPreview,
   grandTotal,
   disabled,
+  sinDgi = false,
 }: Props) {
+  // «factura» o «nota de débito»: los dos son femeninos, el resto del texto no cambia.
+  const nombre = invoiceKind === "NOTA_DEBITO" ? "nota de débito" : "factura";
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -46,7 +55,7 @@ export function EmitInvoiceDialog({
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setError(data.error ?? "No se pudo emitir la factura");
+          setError(data.error ?? `No se pudo emitir la ${nombre}`);
           return;
         }
         setOpen(false);
@@ -75,7 +84,7 @@ export function EmitInvoiceDialog({
         className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px]"
       >
         <Send size={16} className="mr-2" />
-        Emitir factura interna
+        Emitir {nombre} interna
       </Button>
 
       <ConfirmationModal
@@ -83,23 +92,31 @@ export function EmitInvoiceDialog({
         onClose={() => !isPending && setOpen(false)}
         onConfirm={emit}
         loading={isPending}
-        title="Emitir factura interna"
-        confirmButtonText="Sí, emitir factura interna"
+        title={`Emitir ${nombre} interna`}
+        confirmButtonText={`Sí, emitir ${nombre} interna`}
         cancelButtonText="Cancelar"
       >
         <div className="space-y-3">
           <p className="text-sm text-gray-700">
             Esta acción asigna el número definitivo y cambia el estado a{" "}
-            <span className="font-semibold text-integra-navy">emitida</span>. La
-            factura ya no podrá editarse ni eliminarse.
+            <span className="font-semibold text-integra-navy">emitida</span>. La{" "}
+            {nombre} ya no podrá editarse ni eliminarse.
           </p>
 
           <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
-            <p>
-              <span className="font-semibold">Todavía no vale ante la DGI.</span>{" "}
-              Después de emitirla, envíala a la DGI desde esta misma factura con el
-              botón «Enviar a la DGI».
-            </p>
+            {sinDgi ? (
+              <p>
+                <span className="font-semibold">Queda como documento interno.</span>{" "}
+                La {nombre} todavía no se envía a la DGI desde el sistema: se registra en
+                el libro y vale para la cuenta del cliente.
+              </p>
+            ) : (
+              <p>
+                <span className="font-semibold">Todavía no vale ante la DGI.</span>{" "}
+                Después de emitirla, envíala a la DGI desde esta misma {nombre} con el
+                botón «Enviar a la DGI».
+              </p>
+            )}
           </div>
 
           <div className="rounded-md border bg-gray-50 p-3 space-y-2 text-sm">
@@ -125,7 +142,7 @@ export function EmitInvoiceDialog({
 
           {nextNumberPreview && (
             <p className="text-xs text-gray-500">
-              El número es preview. Si otra factura del mismo tipo se emite antes,
+              El número es preview. Si otro documento del mismo tipo se emite antes,
               el número final será el siguiente disponible.
             </p>
           )}

@@ -60,12 +60,16 @@ export function totalDeLineaDeNc(quantity: number, unitPrice: number, taxRate: n
 // ---------------------------------------------------------------------------
 
 /**
- * 🔴 UNA SOLA CONSTANTE. Una NC tipo 04 sin documento referenciado no se puede
- * mandar al PAC, y una NC no autorizada no resta ITBMS (`vat-calculo.ts`).
- * Mientras Josuarth no diga si eso le sirve (P-4a), la de venta exige factura.
- * La base ya la admite (`076`): encenderla es cambiar esta línea.
+ * 🟢 UNA SOLA CONSTANTE, ENCENDIDA (Josuarth, reunión del 02/10/2026, P-4a):
+ * la NC de venta sin factura SÍ se permite, como DOCUMENTO INTERNO. Queda como
+ * saldo a favor del cliente y se aplica desde su detalle.
+ *
+ * Lo que NO cambia: no se manda a la DGI (`emit-credit-note-to-efactura.ts`
+ * corta con 409 antes del correlativo) y, como no está autorizada, no resta
+ * ITBMS (`vat-calculo.ts`). Ese envío (¿tipo 06?) se activa después del
+ * inventario de facturación electrónica, no con esta constante.
  */
-export const PERMITIR_NC_VENTA_SIN_FACTURA = false;
+export const PERMITIR_NC_VENTA_SIN_FACTURA = true;
 
 export const MENSAJE_NC_VENTA_SIN_FACTURA =
   "Por ahora la nota de crédito de venta necesita una factura: sin factura no se puede enviar a la DGI. Elige la factura que corrige.";

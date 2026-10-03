@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { cuentasParaLineaDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { BackButton } from "@/components/ui/back-button";
 import { listExpenseAccountOptions } from "@/lib/finanzas/queries/business-expenses";
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
@@ -47,7 +48,7 @@ export default async function NuevoGastoBufetePage() {
 
       <BusinessExpenseForm
         mode="create"
-        accounts={accounts}
+        accounts={cuentasParaLineaDeCompra(accounts)}
         suppliers={suppliers}
         taxCodes={taxCodes}
         bancos={bancos}

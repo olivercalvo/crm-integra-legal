@@ -29,6 +29,8 @@ export interface ExpenseAccountOption {
   inactiva?: boolean;
   /** Naturaleza de la cuenta, para poder agrupar el selector. */
   account_type?: AccountType;
+  /** `clientes` / `proveedores` si es cuenta control (100004, 200001). */
+  cuenta_control?: string | null;
 }
 
 interface ListBusinessExpensesParams {
@@ -389,7 +391,7 @@ export async function listExpenseAccountOptions(
   // que el contador arma el reporte y la cuenta no aparece en ningún lado.
   const { data, error } = await db
     .from("chart_of_accounts")
-    .select("code, name, active, account_type")
+    .select("code, name, active, account_type, cuenta_control")
     .eq("tenant_id", tenantId)
     // Los tres tipos del acta. Qué tipo NO puede clasificar un desembolso vive en
     // `cuentas-de-gasto.ts`, así que el selector y el guard no pueden divergir.
@@ -406,6 +408,7 @@ export async function listExpenseAccountOptions(
     name: string;
     active: boolean;
     account_type: AccountType;
+    cuenta_control?: string | null;
   }[];
   return filas
     .filter((r) => r.active || (incluirCodigo != null && r.code === incluirCodigo))
@@ -413,6 +416,7 @@ export async function listExpenseAccountOptions(
       code: r.code,
       name: r.name,
       account_type: r.account_type,
+      cuenta_control: r.cuenta_control ?? null,
       // La UI lo marca para que se entienda por qué aparece una cuenta que ya
       // no se ofrece a las demás.
       inactiva: !r.active,

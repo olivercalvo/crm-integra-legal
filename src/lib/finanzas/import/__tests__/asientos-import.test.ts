@@ -218,3 +218,17 @@ test("🔒 el commit re-lee el archivo, exige el hash de la vista previa y poste
   assert.doesNotMatch(api, /MAX_LINEAS_MANUALES/, "el tope del formulario no es del importador");
   assert.match(ruta, /\["admin", "contador"\]/, "los mismos roles que el asiento manual");
 });
+
+test("🔴 K-5: un asiento con fecha posterior a hoy es error de la fila (Josuarth, 02/10)", () => {
+  const filas = [
+    H,
+    fila("1", "28/09/2026", "Futuro", "600001", 10, ""),
+    fila("1", "28/09/2026", "", "100001", "", 10),
+  ];
+  const r = validarImportacion(filas, ctx({ hoy: "2026-09-25" }));
+  assert.equal(r.errores.length, 1);
+  assert.equal(r.errores[0].columna, "Fecha");
+  assert.match(r.errores[0].mensaje, /posterior a hoy \(25\/09\/2026\)/);
+  // El mismo día de hoy, sin error.
+  assert.deepEqual(validarImportacion(filas, ctx({ hoy: "2026-09-28" })).errores, []);
+});

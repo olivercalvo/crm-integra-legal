@@ -107,16 +107,15 @@ test("se puede agregar una línea nueva; sin servicio no, porque de él sale la 
   assert.ok(forma.errors?.["lineas.0.tax_code_id"]);
 });
 
-test("🔴 P-4a: la NC de venta sin factura está apagada, con UNA constante", () => {
-  assert.equal(PERMITIR_NC_VENTA_SIN_FACTURA, false);
+test("🟢 P-4a: la NC de venta sin factura está encendida (Josuarth, 02/10), con UNA constante", () => {
+  assert.equal(PERMITIR_NC_VENTA_SIN_FACTURA, true);
   const r = validateCreateCreditNoteInput({
     invoice_id: null,
     client_id: "22222222-2222-2222-2222-222222222222",
     reason: "Descuento",
     lineas: [{ quantity: 1, service_id: SVC, description: "Descuento", unit_price: 10, tax_code_id: T7 }],
   });
-  assert.equal(r.ok, false);
-  assert.equal(r.errors?.invoice_id, MENSAJE_NC_VENTA_SIN_FACTURA);
+  assert.notEqual(r.errors?.invoice_id, MENSAJE_NC_VENTA_SIN_FACTURA);
   // Una sola constante: nadie más decide si la venta sin factura va o no.
   const usos = ["src/lib/finanzas/api/credit-notes.ts", "src/app/finanzas/notas-credito/_components/nota-de-credito-form.tsx"]
     .map((f) => readFileSync(path.join(RAIZ, f), "utf8"));

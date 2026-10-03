@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
     nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
   },
+  "082_otros_servicios_y_nc_sin_bancos.sql": {
+    que: "400010 Otros servicios con HON-OTROS; create_supplier_credit_note rechaza bancos (finanzas_es_cuenta_de_banco)",
+    tipo: "funcion", nombre: "finanzas_es_cuenta_de_banco",
+    nota: "Respuestas de Josuarth del 02/10 y recorrido del 03/10. Parche verificado sobre la definicion vigente (081). Va despues de la 081.",
+  },
   "080_cierre_anual.sql": {
     que: "Cierre anual: close_fiscal_year (asiento cierre al 31/12 contra 300002, verificado), finanzas_saldos_de_resultado y reverse_journal_entry acepta cierre",
     tipo: "funcion", nombre: "close_fiscal_year",

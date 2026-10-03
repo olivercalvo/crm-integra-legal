@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
+import { cuentasParaLineaDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import {
   getBusinessExpenseById,
   listExpenseAccountOptions,
@@ -79,7 +80,10 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
       <BusinessExpenseForm
         mode="edit"
         bancos={[]}
-        accounts={accounts}
+        accounts={cuentasParaLineaDeCompra(
+          accounts,
+          (lineasDeLaCompra ?? []).map((l) => l.chart_account_code)
+        )}
         suppliers={suppliers}
         taxCodes={taxCodes}
         initial={{

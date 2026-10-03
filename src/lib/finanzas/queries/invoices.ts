@@ -211,3 +211,30 @@ export async function referenciaDeNotaDeDebito(
     .maybeSingle();
   return ref ? { id: String(ref.id), invoice_number: String(ref.invoice_number) } : null;
 }
+
+/**
+ * Las notas de débito que ajustan una factura (el lado inverso de
+ * `referenciaDeNotaDeDebito`), sin borradores. Recorrido del 03/10: la factura
+ * no mostraba la ND que la ajusta.
+ *
+ * Nombra la columna en el FILTRO: antes de la 077 esa consulta falla, y por eso
+ * un error devuelve la lista vacía en vez de romper el detalle de la factura.
+ */
+export async function notasDeDebitoDeLaFactura(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<{ id: string; invoice_number: string | null; status: string; grand_total: number }[]> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("id, invoice_number, status, grand_total, invoice_kind")
+    .eq("tenant_id", tenantId)
+    .eq("referenced_invoice_id", invoiceId)
+    .eq("invoice_kind", "NOTA_DEBITO")
+    .neq("status", "borrador")
+    .order("issue_date", { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as { id: string; invoice_number: string | null; status: string; grand_total: number | string }[]).map(
+    (n) => ({ id: n.id, invoice_number: n.invoice_number, status: n.status, grand_total: Number(n.grand_total) })
+  );
+}

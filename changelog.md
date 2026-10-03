@@ -1,5 +1,22 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Respuestas de Josuarth del 02/10 y detalles del recorrido] - 2026-10-03
+
+- ⚠️ `082` **escrita, SIN APLICAR**: cuenta 400010 «Otros servicios» (operativa) con HON-OTROS;
+  `create_supplier_credit_note` rechaza un banco o una caja en una línea
+  (`finanzas_es_cuenta_de_banco`, la misma regla que la pantalla). Verificación:
+  `sql/tests/verificacion-082-otros-servicios-y-bancos.sql`.
+- K-5: ninguna fecha de registro posterior a hoy (`PERMITIR_FECHA_DE_REGISTRO_FUTURA = false`),
+  también en el alta de un asiento manual y en la importación de asientos.
+- P-4a: la NC de venta sin factura se permite como documento interno (no va a la DGI).
+- Compra nueva y NC de proveedor: las líneas no ofrecen cuentas control ni bancos.
+- Detalle de NC de venta: montos en B/. y número de línea por posición.
+- Nota de débito: diálogo de emisión, panel de numeración y caja de «inmutable» hablan de nota de
+  débito, y sin la tarjeta de Facturación Electrónica mientras no va a la DGI. La factura muestra
+  la nota de débito que la ajusta.
+- Plan del Bloque 1 §7: respuestas del 02/10, comparación de la apertura de cuentas por cobrar y
+  la fase siguiente.
+
 ## [Correcciones del recorrido del 03/10] - 2026-10-03
 
 - NC de proveedor sin compra: el aviso dice «compra» (decía «factura»); el diálogo de reversión ya no

@@ -21,6 +21,7 @@ import {
 import { leerHojaDeAsientos } from "@/lib/finanzas/import/asientos-workbook";
 import { construirAsientoDeReversion, type AsientoAReversar } from "@/lib/finanzas/contabilidad/reversion";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 
 type DB = SupabaseClient;
 
@@ -79,6 +80,7 @@ export async function cargarContextoDeImportacion(
     clientesPorCodigo,
     proveedoresPorCodigo,
     formatoDeFecha,
+    hoy: hoyEnPanama(hoy),
   };
 }
 

@@ -15,6 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  esCuentaDeBancoPorNombre,
   esCuentaDeBancoValida,
   type CobroParaAsiento,
   type PagoProveedorParaAsiento,
@@ -229,7 +230,7 @@ export async function listarCuentasDeBanco(
     .order("code");
   if (error) throw error;
 
-  return ((data ?? []) as { code: string; name: string }[]).filter((c) =>
-    /banco|caja|efectivo/i.test(c.name)
-  );
+  return ((data ?? []) as { code: string; name: string; account_type: string }[])
+    .filter(esCuentaDeBancoPorNombre)
+    .map((c) => ({ code: c.code, name: c.name }));
 }

@@ -45,6 +45,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { errorDeFechaDeRegistro } from "@/lib/finanzas/contabilidad/fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import {
   armarAsientoManual,
   type CuentaControl,
@@ -134,9 +136,15 @@ export async function POST(request: NextRequest) {
 
     if (typeof fecha !== "string" || !FECHA_RE.test(fecha)) {
       return NextResponse.json(
-        { error: "Indicá la fecha del asiento (AAAA-MM-DD)." },
+        { error: "Indica la fecha del asiento (AAAA-MM-DD)." },
         { status: 400 }
       );
+    }
+    // K-5 (Josuarth, 02/10): nunca posterior a hoy en Panamá. El período lo
+    // vuelve a exigir el motor; acá sólo la llave de las fechas futuras.
+    const errorDeFecha = errorDeFechaDeRegistro({ fecha, hoy: hoyEnPanama(), periodoCerrado: false });
+    if (errorDeFecha) {
+      return NextResponse.json({ error: errorDeFecha, fieldErrors: { transaction_date: errorDeFecha } }, { status: 422 });
     }
     if (typeof descripcion !== "string" || descripcion.trim().length < 3) {
       return NextResponse.json(
@@ -154,7 +162,7 @@ export async function POST(request: NextRequest) {
       // Sin token no hay nada que impida el doble posteo, y un asiento duplicado
       // no se borra. Se exige en vez de dejarlo opcional.
       return NextResponse.json(
-        { error: "Falta el identificador del formulario. Recargá la pantalla." },
+        { error: "Falta el identificador del formulario. Recarga la pantalla." },
         { status: 400 }
       );
     }

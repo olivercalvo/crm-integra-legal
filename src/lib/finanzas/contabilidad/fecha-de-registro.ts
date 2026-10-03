@@ -38,13 +38,14 @@
  */
 
 /**
- * 🟡 ¿Se admite una fecha de registro posterior a hoy (en un mes abierto)?
+ * 🔴 ¿Se admite una fecha de registro posterior a hoy (en un mes abierto)? NO.
  *
- * Josuarth no contestó todavía (pregunta 5 de la lista del 30/09, P-1c del
- * plan). Mientras tanto se permite. Es la ÚNICA llave: la base no mira el
- * futuro, así que cambiar esto a `false` basta para prohibirlas.
+ * Josuarth, reunión del 02/10/2026 (K-5 / P-1c): ninguna fecha de registro
+ * posterior a hoy en Panamá. Es la ÚNICA llave: la base no mira el futuro. La
+ * usan `resolverFechaDeRegistro` (documentos, reversiones, anulaciones y NC),
+ * el alta de un asiento manual y la importación de asientos.
  */
-export const PERMITIR_FECHA_DE_REGISTRO_FUTURA = true;
+export const PERMITIR_FECHA_DE_REGISTRO_FUTURA = false;
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 

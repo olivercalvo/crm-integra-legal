@@ -19,7 +19,7 @@ import assert from "node:assert/strict";
 
 import {
   cuentasClasificables,
-  cuentasParaLineaDeNcDeCompra,
+  cuentasParaLineaDeCompra,
   cuentasSugeridasParaTramite,
   esCuentaValidaComoDefaultDeProveedor,
   esTipoValidoComoDefaultDeProveedor,
@@ -331,18 +331,21 @@ test("el rechazo EXPLICA, y distingue desactivada de tipo equivocado", () => {
   );
 });
 
-test("NC de proveedor: el selector no ofrece cuentas control ni bancos, y sí lo demás que la base acepta", () => {
+test("compra y NC de proveedor: sin cuentas control ni bancos; lo ya guardado se sigue ofreciendo", () => {
   const cuentas = [
-    { code: "100001" }, // banco: la base lo acepta, el selector no
-    { code: "100004" }, // control de clientes: la base lo rechaza
-    { code: "110001" }, // activo que no es banco
-    { code: "610005" },
-    { code: "400001" }, // ingreso: fuera de las válidas
+    { code: "100001", name: "Banco General Operativa", account_type: "asset", cuenta_control: null },
+    { code: "100004", name: "Cuentas por Cobrar Clientes", account_type: "asset", cuenta_control: "clientes" },
+    { code: "110001", name: "Mobiliario y equipo", account_type: "asset", cuenta_control: null },
+    { code: "610005", name: "Internet", account_type: "expense", cuenta_control: null },
+    { code: "700001", name: "Gastos Bancarios", account_type: "expense", cuenta_control: null },
   ];
-  const validas = new Set(["100001", "110001", "610005"]);
-  const bancos = new Set(["100001", "100002", "100003"]);
   assert.deepEqual(
-    cuentasParaLineaDeNcDeCompra(cuentas, validas, bancos).map((c) => c.code),
-    ["110001", "610005"]
+    cuentasParaLineaDeCompra(cuentas).map((c) => c.code),
+    ["110001", "610005", "700001"]
+  );
+  // Editar una compra vieja contra un banco no la reclasifica en silencio.
+  assert.deepEqual(
+    cuentasParaLineaDeCompra(cuentas, ["100001", null]).map((c) => c.code),
+    ["100001", "110001", "610005", "700001"]
   );
 });

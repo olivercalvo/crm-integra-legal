@@ -308,9 +308,15 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   la antigüedad) y se aplica desde su detalle con «Aplicar saldo a favor» (`apply_credit_note`,
   `apply_supplier_credit_note`, SIN asiento, admin, abogada y contador). La pantalla pregunta antes
   de guardar sin documento.
-- 🔴 **La NC de VENTA sin factura está APAGADA** detrás de `PERMITIR_NC_VENTA_SIN_FACTURA`
-  (`validators/credit-note.ts`) hasta P-4a. Una NC sin factura tampoco se manda a la DGI (409
-  antes del correlativo). La de compra sin compra SÍ se permite.
+- 🟢 **La NC de VENTA sin factura está ENCENDIDA** (`PERMITIR_NC_VENTA_SIN_FACTURA = true`,
+  Josuarth 02/10, P-4a) como **documento interno**: no se manda a la DGI (409 antes del
+  correlativo) y por eso no resta ITBMS. Su envío (¿tipo 06?) se activa después del inventario
+  de facturación electrónica, no con esa constante. La de compra sin compra SÍ se permite.
+- 🔴 **Una línea de NC de compra no acredita un BANCO** (`082`, `finanzas_es_cuenta_de_banco`).
+  «Banco» = activo cuyo nombre dice banco, caja o efectivo: la MISMA regla que
+  `esCuentaDeBancoPorNombre` (`asiento-tesoreria.ts`), fijada por
+  `cuenta-de-banco-una-sola-regla.test.ts`. Las líneas de compra y de NC de proveedor no ofrecen
+  cuentas control ni bancos (`cuentasParaLineaDeCompra`).
 - 🔴 **`credited_total` = Σ NC `emitida` nacidas sobre el documento + Σ aplicaciones.** La NC con
   documento lo sigue acreditando entero por `invoice_id` / `business_expense_id` (sin backfill);
   la 076 aborta si cambia un solo `credited_total`. CHECK nuevo `credited_total <= grand_total`.
@@ -344,6 +350,8 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🟡 **El mapa de Josuarth (P-8a) no llegó**: la 079 asigna un valor por defecto con un NOTICE por
   cuenta (`subcategoriaPorDefecto()`, la MISMA regla en SQL y en la importación) y se corrige en
   el Plan de Cuentas.
+- **400010 Otros servicios** (operativa, `082`, Josuarth 02/10): ahí va **HON-OTROS**. La 440001
+  queda para lo no operativo (su subcategoría NIIF 18 la confirma Josuarth).
 - **400009 Derecho de Familia** (HON-FAM) y **440001 Otros ingresos** con el servicio `OTR-ING`,
   que es `service_type = 'honorarios'` (SOP-029 no deja 'otro' en una FAC-HON). Códigos
   propuestos: P-8b, P-8c. Reemplaza el paso «Reasignar» de P-15 y el script de
@@ -920,9 +928,10 @@ Josuarth la confirmó por escrito en la revisión del 28/09 y en la reunión del
 - 🔴 **El período se valida ANTES de tomar un correlativo y ANTES de hablar con el PAC**
   (`api/fecha-de-registro.ts`). Validarla recién en el libro dejaría una factura o una NC
   anulada ante la DGI y viva en el libro. La base lo vuelve a exigir.
-- **Fechas futuras en un mes abierto: detrás de UNA constante**,
-  `PERMITIR_FECHA_DE_REGISTRO_FUTURA` (`contabilidad/fecha-de-registro.ts`), hoy `true`
-  mientras Josuarth contesta la pregunta 5. La base no mira el futuro.
+- 🔴 **Ninguna fecha de registro posterior a hoy** (Josuarth 02/10, K-5 / P-1c):
+  `PERMITIR_FECHA_DE_REGISTRO_FUTURA = false` (`contabilidad/fecha-de-registro.ts`), la única
+  llave. La respetan `resolverFechaDeRegistro`, el alta de un asiento manual y la importación de
+  asientos. La base no mira el futuro.
 - **«Hoy» se calcula con `hoyEnPanama()`** (`lib/utils/hoy-en-panama.ts`), nunca con
   `toISOString()`: desde las 19:00 de Panamá el día UTC ya es mañana. Hay un test que lo fija.
   Detalle en `sop.md` SOP-045.

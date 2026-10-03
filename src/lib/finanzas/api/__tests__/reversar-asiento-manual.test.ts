@@ -74,7 +74,7 @@ test("un asiento ya reversado se rechaza antes de llamar al RPC", () => {
 test("la ruta: admin y contador, el tenant del contexto y el cliente de servicio", () => {
   const src = leer(RUTA);
   assert.match(src, /const MUTATING_ROLES = \["admin", "contador"\] as const;/);
-  assert.match(src, /createAdminClient\(\)/);
+  assert.match(src, /createAdminClient\(ctx\.userId\)/);
   assert.match(src, /ctx\.tenantId/);
   assert.doesNotMatch(src, /body.*tenant_id|tenant_id.*body/, "el tenant nunca sale del body");
   // El motivo se valida con el mismo rango que las otras tres reversiones.

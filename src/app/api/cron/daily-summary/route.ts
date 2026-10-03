@@ -223,7 +223,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const isTest = url.searchParams.get("test") === "true";
 
-    const db = createAdminClient();
+    // actor-ok: el cron no tiene un usuario detrás; sólo lee y manda el resumen.
+    const db = createAdminClient(null);
     const resend = getResend();
 
     const results: Array<{ email: string; status: "sent" | "error"; error?: string }> = [];

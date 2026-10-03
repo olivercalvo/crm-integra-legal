@@ -26,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const reason = String((body as { reason?: unknown } | null)?.reason ?? "");
   try {
     const r = await deshacerImportacion(
-      ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason,
+      ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, params.id, reason,
       (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(r);

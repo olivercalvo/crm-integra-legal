@@ -452,6 +452,15 @@ const EXPORTS = [
     archivo: "src/app/api/finanzas/reportes/vat-summary/export/route.ts",
     pantalla: "/finanzas/reportes/vat-summary",
   },
+  // Bitácoras de auditoría (03/10/2026).
+  {
+    archivo: "src/app/api/finanzas/auditoria/export/route.ts",
+    pantalla: "/finanzas/auditoria",
+  },
+  {
+    archivo: "src/app/api/admin/auditoria/export/route.ts",
+    pantalla: "/legal/admin/auditoria",
+  },
 ];
 
 /** Extrae la lista de roles declarada en el archivo de la ruta. */

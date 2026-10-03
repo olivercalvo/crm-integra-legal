@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     ignoradas = r.ignoradas;
   }
 
-  const { data, error } = await createAdminClient().rpc("verify_chain_anchors", {
+  const { data, error } = await createAdminClient(ctx.userId).rpc("verify_chain_anchors", {
     p_tenant_id: ctx.tenantId,
     p_anclas: anclas,
   });

@@ -62,7 +62,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.db,
       // 🔑 SOP-014: el RPC va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,

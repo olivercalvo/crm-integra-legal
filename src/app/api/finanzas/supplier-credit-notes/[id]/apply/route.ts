@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const r = await applySupplierCreditNote(createAdminClient(), ctx.tenantId, ctx.userId, params.id, compraId, amount);
+    const r = await applySupplierCreditNote(createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, params.id, compraId, amount);
     return NextResponse.json(r, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {

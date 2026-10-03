@@ -69,7 +69,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const db = createAdminClient();
+  // actor-ok: lo hace el cliente desde el link público, sin sesión. La bitácora lo
+  // registra como «sistema» y el detalle de la aceptación (IP, nombre) queda en su tabla.
+  const db = createAdminClient(null);
 
   const ctx = {
     ip_address: extractIp(request),

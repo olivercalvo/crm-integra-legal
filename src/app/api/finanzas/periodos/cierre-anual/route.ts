@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
   const anio = anioDe(new URL(request.url).searchParams.get("anio"));
   try {
-    const prep = await prepararCierre(ctx.db, createAdminClient(), ctx.tenantId, anio);
+    const prep = await prepararCierre(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, anio);
     return NextResponse.json(prep, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) return NextResponse.json({ error: err.message }, { status: err.status });
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
   const anio = anioDe((body as { anio?: unknown } | null)?.anio);
   try {
-    const r = await cerrarEjercicio(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, anio);
+    const r = await cerrarEjercicio(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, anio);
     return NextResponse.json(r, { status: 201 });
   } catch (err) {
     if (err instanceof MutationError) return NextResponse.json({ error: err.message }, { status: err.status });

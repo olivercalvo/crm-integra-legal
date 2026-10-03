@@ -246,6 +246,10 @@ export const ADMIN_CONTADOR_ONLY_PREFIXES = [
   // admite movimientos es una atribución de cierre contable, y cerrar un mes
   // le cambia el resultado a TODO el sistema — no solo a quien lo cierra.
   "/finanzas/periodos",
+  // Bitácora contable (03/10/2026). La ven el contador y el admin, los dos en
+  // solo lectura (decisión de Oliver). La abogada no: es la auditoría del
+  // trabajo contable, y Josuarth la pidió para el contador.
+  "/finanzas/auditoria",
 ];
 
 /**

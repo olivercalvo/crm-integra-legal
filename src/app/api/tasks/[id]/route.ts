@@ -15,7 +15,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     // Get user's tenant_id + role
     const { data: profile, error: profileError } = await admin

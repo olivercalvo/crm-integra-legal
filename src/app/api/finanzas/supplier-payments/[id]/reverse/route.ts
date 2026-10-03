@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const result = await reverseSupplierPayment(
       ctx.db,
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,

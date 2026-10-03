@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const r = await createSupplierCreditNote(
       ctx.db,
       // 🔑 SOP-014: el RPC va con el cliente de SERVICIO; el tenant, del perfil.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       v.data

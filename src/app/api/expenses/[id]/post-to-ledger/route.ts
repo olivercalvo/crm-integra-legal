@@ -24,7 +24,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *   · **Server-side.** Es un route handler. `postJournalEntry` no se importa
  *     nunca desde un client component.
- *   · **Cliente de servicio.** `createAdminClient()`. Desde la migración `030` el
+ *   · **Cliente de servicio.** `createAdminClient(user.id)`. Desde la migración `030` el
  *     RPC tiene `EXECUTE` solo para `service_role`: no es llamable desde la
  *     sesión del usuario.
  *   · **`tenant_id` del PERFIL, nunca del body.** Se lee de `users` con el id del
@@ -91,7 +91,7 @@ export async function POST(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")

@@ -111,7 +111,7 @@ test("el texto del mes cerrado es el de D4", () => {
 
 test("la ruta de anulación pasa el cliente de SERVICIO y la ruta de NC declara admin y abogada", () => {
   const cancel = leer("src/app/api/finanzas/invoices/[id]/cancel/route.ts");
-  assert.match(cancel, /createAdminClient\(\)/);
+  assert.match(cancel, /createAdminClient\(ctx\.userId\)/);
   const nc = leer("src/app/api/finanzas/credit-notes/route.ts");
   assert.match(nc, /const MUTATING_ROLES = \["admin", "abogada"\] as const;/);
   assert.match(nc, /emitCreditNote\(/);

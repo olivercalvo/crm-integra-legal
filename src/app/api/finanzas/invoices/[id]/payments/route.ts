@@ -75,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       validation.data,
       // 🔑 SOP-014: el posteo va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
-      createAdminClient()
+      createAdminClient(ctx.userId)
     );
     // El número de recibo viaja en la respuesta para el toast ("Recibo REC-000012
     // registrado") y para el enlace al PDF.

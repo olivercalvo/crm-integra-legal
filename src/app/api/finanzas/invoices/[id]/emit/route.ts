@@ -58,7 +58,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.db,
       ctx.tenantId,
       params.id,
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.userId,
       // 🔴 03/10/2026: la factura SIEMPRE se valida para la DGI antes del número;
       //    la ND, sólo si va a la DGI. La interna no.

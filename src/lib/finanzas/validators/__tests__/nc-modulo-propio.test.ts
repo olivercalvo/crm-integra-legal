@@ -236,7 +236,7 @@ test("🔒 aplicar el saldo de una NC va por el RPC con el cliente de servicio y
     "src/app/api/finanzas/supplier-credit-notes/[id]/apply/route.ts",
   ]) {
     const src = readFileSync(path.join(RAIZ, f), "utf8");
-    assert.match(src, /createAdminClient\(\), ctx\.tenantId, ctx\.userId/);
+    assert.match(src, /createAdminClient\(ctx\.userId\), ctx\.tenantId, ctx\.userId/);
     assert.doesNotMatch(src, /body\??\.tenant_id/, "el tenant nunca sale del body");
   }
 });

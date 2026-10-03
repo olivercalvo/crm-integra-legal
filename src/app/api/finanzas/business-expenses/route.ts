@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       // 🔑 SOP-014: el posteo necesita el cliente de SERVICIO — desde la `030` el
       //    RPC tiene EXECUTE solo para `service_role`. El `tenant_id` sale del
       //    contexto autenticado, nunca del cuerpo del request.
-      createAdminClient()
+      createAdminClient(ctx.userId)
     );
     return NextResponse.json({ id: result.id, total: result.total }, { status: 201 });
   } catch (err) {

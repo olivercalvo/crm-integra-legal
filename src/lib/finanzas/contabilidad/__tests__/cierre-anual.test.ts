@@ -105,7 +105,7 @@ test("la ruta del cierre: tenant del perfil, cliente de servicio, admin y contad
   const ruta = leer("src/app/api/finanzas/periodos/cierre-anual/route.ts");
   assert.match(ruta, /ctx\.tenantId/);
   assert.ok(!/body[^;\n]*tenant/i.test(ruta), "el tenant nunca sale del body");
-  assert.match(ruta, /createAdminClient\(\)/);
+  assert.match(ruta, /createAdminClient\(ctx\.userId\)/);
   assert.match(ruta, /const ROLES = \["admin", "contador"\]/);
 });
 

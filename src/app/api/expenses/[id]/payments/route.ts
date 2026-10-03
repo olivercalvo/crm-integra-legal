@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.userId,
       validation.data,
       // 🔑 SOP-014: el posteo va con el cliente de SERVICIO.
-      createAdminClient()
+      createAdminClient(ctx.userId)
     );
     return NextResponse.json(
       { id: result.id, payment_number: result.payment_number },

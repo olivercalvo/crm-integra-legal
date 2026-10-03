@@ -79,7 +79,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const r = await anularFacturaAnteDgi(
       ctx.db,
       // 🔑 SOP-014: la reversión del libro va con el cliente de SERVICIO.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,

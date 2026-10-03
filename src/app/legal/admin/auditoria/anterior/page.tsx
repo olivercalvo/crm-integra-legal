@@ -184,12 +184,12 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
     if (dateTo)   params.set("date_to",   dateTo);
     if (p > 1)    params.set("page",      String(p));
     const qs = params.toString();
-    return `/legal/admin/auditoria${qs ? `?${qs}` : ""}`;
+    return `/legal/admin/auditoria/anterior${qs ? `?${qs}` : ""}`;
   }
 
   // Filename for export
   const today = new Date().toISOString().slice(0, 10);
-  const exportFilename = `auditoria-${today}`;
+  const exportFilename = `registro-anterior-${today}`;
 
   return (
     <div className="space-y-5">
@@ -199,7 +199,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-integra-navy">
-            Auditoría del Sistema
+            Registro anterior
           </h2>
           <p className="text-sm text-gray-500">
             {total.toLocaleString("es-PA")} registro

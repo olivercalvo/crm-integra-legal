@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       validation.data,
       // 🔑 SOP-014: el posteo va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
-      createAdminClient()
+      createAdminClient(ctx.userId)
     );
     return NextResponse.json(
       { id: result.id, payment_number: result.payment_number },

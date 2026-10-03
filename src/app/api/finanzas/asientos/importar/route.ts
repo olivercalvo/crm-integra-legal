@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
     if (mode === "commit") {
       const hash = String(form.get("hash") ?? "");
-      const r = await contabilizarImportacion(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, buffer, file.name, hash, formato);
+      const r = await contabilizarImportacion(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, buffer, file.name, hash, formato);
       return NextResponse.json(r, { status: 201 });
     }
     return NextResponse.json({ error: "Modo inválido (preview | commit)" }, { status: 400 });

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const result = await emitCreditNote(
       ctx.db,
       // 🔑 SOP-014: el posteo (y la compensación) van con el cliente de SERVICIO.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       validation.data,

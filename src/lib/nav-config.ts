@@ -112,6 +112,9 @@ export const TABS: TabDef[] = [
       // Períodos: cerrar un mes impide asientos nuevos con esa fecha. El gate
       // real es ADMIN_CONTADOR_ONLY_PREFIXES; esta línea solo esconde el botón.
       { label: "Períodos Contables", href: "/finanzas/periodos",                 icon: CalendarClock,  roles: ["admin", "contador"] },
+      // Bitácora contable: admin y contador, solo lectura. Gate real en
+      // ADMIN_CONTADOR_ONLY_PREFIXES.
+      { label: "Bitácora Contable", href: "/finanzas/auditoria",                 icon: FileText,       roles: ["admin", "contador"] },
       { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
       { label: "Impuestos",         href: "/finanzas/configuracion/impuestos",   icon: Percent,        roles: ["admin", "abogada", "contador"] },
     ],
@@ -126,7 +129,7 @@ export const TABS: TabDef[] = [
     items: [
       { label: "Panel Admin",   href: "/legal/admin",               icon: Shield,   roles: ["admin"] },
       { label: "Usuarios",      href: "/legal/admin/usuarios",      icon: Users,    roles: ["admin"] },
-      { label: "Auditoría",     href: "/legal/admin/auditoria",     icon: FileText, roles: ["admin"] },
+      { label: "Bitácora Legal", href: "/legal/admin/auditoria",    icon: FileText, roles: ["admin"] },
       { label: "Configuración", href: "/legal/admin/configuracion", icon: Settings, roles: ["admin"] },
     ],
   },

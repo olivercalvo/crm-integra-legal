@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }));
 
   try {
-    const r = await aplicarSaldoAFavor(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, aplicaciones);
+    const r = await aplicarSaldoAFavor(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, params.id, aplicaciones);
     return NextResponse.json(r, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {

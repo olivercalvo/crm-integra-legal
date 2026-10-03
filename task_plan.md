@@ -1,5 +1,20 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 6) — RUC NT, CLI-036, CLIENTES DE PRUEBA <<<
+
+- ✅ Resultado de producción: 22 RUC jurídicos autorizados. La regla rechazaba 3 (propiedad horizontal,
+  `8-NT-2-735096`). Ahora acepta NT (jurídica y natural) y PE con tres grupos; los 22 están en un test.
+  La ficha técnica sólo nombra `8-NT-000-00` y `PE-4-000-000`; no publica otra tabla de formatos.
+- ✅ CLI-036 (persona natural sin tipo de receptor ni DV): el tipo se deduce en UN lugar
+  (`tipoReceptorEfectivo`) que usan el mapper, el gate fiscal y las validaciones: viaja como `02`
+  consumidor final y no se bloquea. Sin migración.
+- ✅ Consulta de producción actualizada con los mismos patrones y el tipo que viaja (probada en staging).
+- ✅ Fecha B = 01/07/2026 confirmada. Propuesta de clientes de prueba (§9 de
+  `docs/finanzas/propuesta-corte-quickbooks.md`), sin construir: FAC-HON-000459/460/461/463.
+- ⏳ Oliver revisa y manda el borrador a ideati (pregunta 3: ¿en qué ambiente se autorizaron las pruebas?).
+- ⏳ Opcional, solo lectura en producción: ver en `fe_emisiones.request_payload` con qué tipo de receptor
+  viajó la factura autorizada de CLI-036.
+
 ## >>> 03/10/2026 (cierre 5) — VALIDACIONES PREVIAS A LA DGI Y PENDIENTES <<<
 
 - ✅ `085` aplicada en staging. Pruebas en staging y sandbox (`docs/efactura/prueba-validaciones-previas.txt`):

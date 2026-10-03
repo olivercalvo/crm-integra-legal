@@ -8,7 +8,7 @@
 | Fecha | Qué es | Valor | Quién la define |
 |---|---|---|---|
 | **A. Apertura contable** | El día de los saldos iniciales: un asiento de apertura con las cuentas de balance. Sin ingresos ni gastos acumulados. | **31/12/2025** (P-9a, Josuarth 02/10) | Fija |
-| **B. Inicio del posteo automático** | Desde este día, cada documento del CRM genera su asiento. Lo anterior queda **«contabilizado fuera»**: vive como documento, sin asiento. | **Propuesta 01/07/2026**, configurable, sin confirmar | Parámetro del bufete |
+| **B. Inicio del posteo automático** | Desde este día, cada documento del CRM genera su asiento. Lo anterior queda **«contabilizado fuera»**: vive como documento, sin asiento. | **01/07/2026, confirmada por Oliver el 03/10/2026** | Parámetro del bufete |
 
 **Entre A y B (enero a junio de 2026)** el libro del CRM se llena con la **importación de asientos** que
 carga Josuarth desde QuickBooks, con el tercero en cada línea de 100004 y 200001 (la importación ya lo
@@ -29,7 +29,8 @@ Con esto no hay choque con P-9a:
 
 ## 2. El dato de producción que ordena todo
 
-- El CRM autoriza facturas ante la DGI **desde junio de 2026**: 3 facturas, B/. 300.
+- Las 3 facturas autorizadas de junio (B/. 300) **fueron pruebas internas**, igual que FAC-HON-000463 de julio
+  (dato de Oliver, 03/10/2026). La facturación real desde el CRM empieza en **julio**. Ver §9.
 - **Mayo fue de prueba.**
 - Desde marzo hay facturas, cobros y gastos de trámite en el CRM. Antes de la fecha B ninguno tiene asiento, y el libro de producción está vacío (plan del Bloque 1, §3).
 
@@ -179,9 +180,10 @@ Es la regla del 09/09 tal como está.
 
 ## 8. Dudas
 
-1. **¿El 01/07/2026 es la fecha B?** Coincide con el arranque de la DGI desde el CRM (junio), pero no tiene
-   por qué: B es contable, la DGI es fiscal.
-2. **Las facturas de prueba de mayo en producción:** si quedaron `emitida` con saldo, salen en la
+1. ~~**¿El 01/07/2026 es la fecha B?**~~ **Confirmada** por Oliver el 03/10/2026. La facturación real desde el
+   CRM empieza en julio; las facturas de junio fueron pruebas (§9).
+2. **Las facturas de prueba en producción:** respondida en §9 para las cuatro de junio y julio. Para las de
+   mayo sigue en pie: si quedaron `emitida` con saldo, salen en la
    antigüedad como pendientes reales y ensucian el residuo. ¿Se anulan antes de fijar B? ¿O ya están
    anuladas o tienen otro estado?
 3. **¿La importación de enero a junio trae las ventas por factura o por cliente y mes?** Las dos funcionan
@@ -191,3 +193,91 @@ Es la regla del 09/09 tal como está.
    trámites (130003) o como anticipos (200004)? Si sí, entran por la importación y el CRM no cambia.
 5. Un documento con fecha de documento antes de B y fecha de registro después: la propuesta usa la de
    **registro**. Es la que define el período del asiento.
+
+## 9. Clientes de prueba (03/10/2026, solo diseño)
+
+### 9.1 El caso
+
+En producción hay cuatro facturas que fueron **pruebas internas**, creadas por Oliver, `emitida` y
+autorizadas:
+
+| Factura | Fecha | Total | Cliente |
+|---|---|---|---|
+| FAC-HON-000459 | 03/06/2026 | 100.00 | 0TEST-FE-001 (receptor 02) |
+| FAC-HON-000460 | 03/06/2026 | 100.00 | 0TEST-FE-002 (con el RUC del propio emisor) |
+| FAC-HON-000461 | 04/06/2026 | 100.00 | 0TEST-FE-001 |
+| FAC-HON-000463 | 08/07/2026 | 1.07 | 0TEST-FE-002 |
+
+Las tres de junio quedan antes de B y la marca de §3 las saca del libro, pero **no** de la antigüedad
+(siguen con saldo) ni de las ventas. **FAC-HON-000463 es de julio, después de B: sin otra regla se
+contabilizaría** como venta real de 1.07 con su ITBMS.
+
+### 9.2 La marca: en el cliente, copiada a cada documento
+
+- `clients.es_de_prueba boolean NOT NULL DEFAULT false`, con `es_de_prueba_motivo` (obligatorio al
+  marcar), `es_de_prueba_por` y `es_de_prueba_en`. La marcan **admin y contador** (es una decisión
+  contable). Queda en el `audit_log` como cualquier cambio.
+- `de_prueba boolean NOT NULL DEFAULT false` en los documentos del cliente: `invoices` (facturas y ND),
+  `credit_notes`, `payments`, `client_payments` y `expenses` (gasto de trámite, por el cliente de su caso).
+  Lo pone un trigger desde el cliente al insertar, y se propaga a los documentos existentes al marcar.
+- **Guardada, no calculada**, por la misma razón que §3.2: los reportes filtran con una columna, y
+  desmarcar un cliente no puede devolver en silencio documentos a las ventas de un mes cerrado.
+
+Es una marca distinta de `contabilizado_fuera`: un documento «contabilizado fuera» es real y está en
+QuickBooks (cuenta en ventas, sale en listados); uno de prueba **no existe para el bufete**.
+
+### 9.3 Reglas que pone la base
+
+1. No se marca un cliente con algún documento **con asiento**, ni con una línea del libro que lo nombre
+   (`journal_entry_lines.client_id`). La operación aborta y lista los documentos. En producción el libro
+   está vacío, así que hoy no hay ninguno.
+2. `post_journal_entry` **rechaza** un asiento de un documento `de_prueba` y una línea con un cliente de
+   prueba como tercero. Es el mismo parche verificado que §3.3 regla 2, con una condición más.
+3. Desmarcar (`true → false`) solo con una llave tipo SOP-017, y solo si ningún documento del cliente cayó
+   en un período cerrado.
+4. 🔴 **Un documento de un cliente de prueba no se manda a la DGI de producción** (409 en la puerta
+   `enviar-a-la-dgi.ts`, antes del correlativo; en staging sí, para poder probar). Así no se repite el
+   caso de estas cuatro.
+
+### 9.4 Dónde deja de contar
+
+| Lugar | Cambio |
+|---|---|
+| Libro (Mayor, Diario, Estado de Resultado, Balance) | Sin cambio de código: nunca tiene el asiento (regla 2) |
+| Ventas mensuales, dashboard de Finanzas | Excluye `de_prueba` |
+| Resumen de ITBMS (`vat-calculo.ts`) | Excluye `de_prueba` en débito y en las NC |
+| Antigüedad por cobrar y estado de cuenta | Excluye `de_prueba`; el cliente no aparece |
+| Cuadre al corte (§4.3) y residuo por tercero | Excluye `de_prueba` |
+| Pendientes de enviar a la DGI | Excluye `de_prueba` |
+| Exportaciones Excel | Las mismas funciones que la pantalla, así que heredan el filtro |
+| Listados de facturas, NC, cobros | Ocultos por defecto, con el filtro «Mostrar pruebas» y un badge «Prueba» |
+| Ficha del cliente | Banda «Cliente de prueba: sus documentos no cuentan en los libros ni en los reportes» |
+
+Un solo predicado en código (`esDocumentoReal()` o un `.eq("de_prueba", false)` centralizado en los
+loaders) y un test que recorra las fuentes de reportes y falle si alguna no lo usa, como `nav-guard`.
+
+### 9.5 Lo fiscal es otra pregunta
+
+La marca saca los documentos de **nuestros** libros, no de la DGI. Si las cuatro se autorizaron en el
+ambiente de **producción** de la DGI, para la DGI son ventas reales del bufete con su ITBMS, y la
+declaración de junio y julio no las incluye. La ventana de 182 h para anular ya pasó para las cuatro. La
+pregunta va a ideati (borrador del 03/10): en qué ambiente se autorizaron y, si fue en producción, cómo
+se anulan. Hasta tener la respuesta, la marca no cambia: lo que se haga ante la DGI se registra aparte.
+
+### 9.6 Migración que haría falta (sin escribirla)
+
+`0xx_clientes_de_prueba`, después de la de §7.2 y **antes** de activar el posteo de lo posterior a B:
+- columnas de 9.2, trigger de herencia y propagación;
+- reglas 1 a 3 de 9.3 (la 2 dentro del mismo parche de `post_journal_entry`);
+- pre-flight que aborta si un cliente a marcar tiene asientos.
+
+Marcar 0TEST-FE-001 y 0TEST-FE-002 en producción es un **cambio de datos**: va como paso del runbook en la
+ventana, con la pausa obligatoria, después de una consulta de solo lectura que liste todos los documentos
+de esos dos clientes (facturas, NC, cobros) y cualquier otro cliente `0TEST-*`.
+
+### 9.7 Dudas
+
+1. ¿Hay más clientes de prueba en producción (otros `0TEST-*`, o las facturas de mayo de §8.2)?
+2. ¿Marca admin y contador, o solo admin?
+3. ¿Las pruebas de cotizaciones de esos clientes también se ocultan? La propuesta no las toca: no entran a
+   ningún reporte contable.

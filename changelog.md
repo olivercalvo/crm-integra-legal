@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [RUC NT, tipo de receptor deducido y clientes de prueba] - 2026-10-03
+
+- Las validaciones previas aceptan el RUC de propiedad horizontal (`8-NT-2-735096`) y la cédula PE con
+  tres grupos. Probado con los 22 RUC jurídicos que la DGI ya autorizó en producción.
+- Un cliente sin «Tipo de receptor FE» ya no se bloquea si se puede deducir: persona jurídica o natural
+  con DV → contribuyente; natural sin DV → consumidor final. Mapper, gate y validaciones usan la misma
+  función.
+- `sql/verificacion/produccion-ruc-clientes-autorizados.sql` con los patrones nuevos y el tipo que viaja.
+- Propuesta (sin construir) para marcar clientes de prueba; fecha B del corte confirmada en 01/07/2026.
+- Borrador para ideati con la pregunta de las facturas de prueba (no enviado).
+
 ## [Validaciones previas a la DGI y pendientes] - 2026-10-03
 
 - `085` aplicada en staging: `fe_motivo_pendiente` en facturas y NC.

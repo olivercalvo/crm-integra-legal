@@ -287,6 +287,11 @@ const MARCADORES = {
     nota: "3.5, 25/09. Una sola transaccion (numero + NC + lineas + asiento). credited_total derivada y balance_due generada en business_expenses; el status se deriva contra el total neto. Defaults de Josuarth (J-2, J-3, J-5, J-10, J-11) en el encabezado.",
   },
 
+  "084_audit_log_solo_agregar.sql": {
+    que: "audit_log: politica FOR SELECT (misma expresion de bufete), sin UPDATE/DELETE/TRUNCATE para anon/authenticated y trigger de solo agregar",
+    tipo: "funcion", nombre: "audit_log_solo_agregar",
+    nota: "Hotfix de seguridad. APLICADA EN PRODUCCION el 03/10/2026 por Oliver (sola: produccion = 024 + 084). En la ventana 025 -> 083 entra igual y no cambia nada (idempotente, probado en staging).",
+  },
   "067_importacion_de_asientos.sql": {
     que: "Importar asientos desde Excel: lote, vinculo, alta en una transaccion y reversion del lote",
     tipo: "tabla", tabla: "journal_imports",

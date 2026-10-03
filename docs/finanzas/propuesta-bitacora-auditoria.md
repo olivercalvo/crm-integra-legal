@@ -1,8 +1,10 @@
 # Propuesta: bitácoras automáticas de auditoría (contable y legal)
 
 > 03/10/2026 · Pedido de Josuarth: quién, qué, cuándo, sobre qué documento, valor anterior y nuevo.
-> **Decisión de Oliver (03/10): DOS bitácoras, una por módulo**, cada una con su tabla, su cadena de hash,
-> su pantalla y sus permisos.
+> **Decisiones de Oliver (03/10):**
+> - **DOS bitácoras, una por módulo**, cada una con su tabla, su cadena de hash, su pantalla y sus permisos.
+> - **Aprobado:** lo que afecta cifras o permisos contables se copia a la contable (opción 1 de b.2).
+> - **El admin ve la bitácora contable, solo en lectura.**
 > **Solo diagnóstico y diseño: nada construido, ninguna migración escrita.**
 > Diagnóstico hecho contra el esquema de staging (`xtyenhakplrkyifbcaow`) y el código de la rama
 > `feat/bloque1-contable`.
@@ -50,7 +52,7 @@
 | Tablas con trigger | `invoices`, `invoice_lines`, `credit_notes`, `credit_note_lines`, `credit_note_applications`, `fe_emisiones`, `fe_anulaciones`, `payments`, `payment_applications`, `payment_reversals`, `business_expenses`, `expense_lines`, `supplier_payments`, `supplier_credit_notes`, `supplier_credit_note_applications`, `journal_entries` (solo INSERT), `journal_imports`, `accounting_periods`, `chart_of_accounts`, `tax_codes`, `numbering_sequences`, `services_catalog`, `finanzas_parametros`, `quotes`, `quote_lines`, `quote_terms_template`, `suppliers` | `clients`, `cases`, `documents`, `tasks`, comentarios, `cat_*`, `expenses`, `client_payments`, `users` |
 | Cadena de hash | Propia | Propia |
 | Ancla | Al cerrar cada período contable (en `accounting_chain_anchors`) | Diaria, con el respaldo: Legal no tiene períodos |
-| Quién la ve | **El contador** (decisión del 03/10) | **El admin del bufete** |
+| Quién la ve | **El contador**, y **el admin en solo lectura** (decisiones del 03/10) | **El admin del bufete** |
 | Pantalla | `/finanzas/auditoria` | `/legal/admin/auditoria` (reemplaza la de hoy, que lee `audit_log`) |
 | Nadie la edita ni la borra | Sí, ni el admin ni el contador (b.4) | Igual |
 
@@ -75,7 +77,7 @@ Hay tres casos:
 3. **Gastos de trámite** (`expenses`): se cargan en el caso y generan un asiento (130003 / 200001) y su pago.
    Los cobros del caso (`client_payments`) no generan asiento: son solo de Legal.
 
-**Opción 1 (recomendada): cada tabla tiene UN módulo dueño, y lo que tiene efecto contable se escribe
+**Opción 1 (APROBADA el 03/10): cada tabla tiene UN módulo dueño, y lo que tiene efecto contable se escribe
 también en la contable.** Una sola transacción, dos filas, con el mismo `evento_id` para unirlas.
 
 | Tabla | Bitácora del dueño | Además en la contable |
@@ -94,8 +96,8 @@ de Legal (la descripción de un caso, sus documentos). El admin ve el cambio com
   se manda a la DGI) ni de que alguien se dio el rol de contador.
 - Y el admin no ve en Legal la edición de un gasto de su caso.
 
-**Recomiendo la opción 1.** La duplicación es chica (solo los campos con efecto contable) y deja cada
-pantalla completa para quien la mira.
+**Se eligió la opción 1** (Oliver, 03/10). La duplicación es chica (solo los campos con efecto contable) y
+deja cada pantalla completa para quien la mira.
 
 ### b.3 Campos de cada fila (iguales en las dos)
 
@@ -121,7 +123,8 @@ Lo mismo para las dos tablas:
 3. Triggers `BEFORE UPDATE OR DELETE` y `BEFORE TRUNCATE` que rechazan salvo al superusuario: **el mismo
    mecanismo de la `084`**, ya simulado en staging (11/11).
 4. Lectura por RPC `SECURITY DEFINER` que filtra por el `tenant_id` del perfil y por rol (contable:
-   contador; legal: admin).
+   contador y admin; legal: admin). Es la única puerta: no hay RPC ni ruta que escriba. «Solo lectura» para
+   el admin es lo mismo que para el contador: los dos ven y exportan, y ninguno modifica.
 5. Cadena de hash por bitácora y ancla externa (b.1).
 
 **El límite:** `supabase_admin` (el superusuario de la plataforma) puede quitar un trigger. No se puede
@@ -142,7 +145,7 @@ impedir dentro de la base; la cadena con ancla lo detecta, como en el ledger.
 | | Contable | Legal |
 |---|---|---|
 | Ruta | `/finanzas/auditoria` (nueva) | `/legal/admin/auditoria` (la de hoy, que pasa a leer la bitácora nueva) |
-| Quién | Contador | Admin |
+| Quién | Contador; admin en solo lectura | Admin |
 | Filtros | Fechas (Panamá), usuario, acción, módulo (ventas, cobros, compras, libro, catálogos, configuración), documento, origen | Fechas, usuario, acción, cliente, caso, tabla, origen |
 | Exportar | Excel con `exportar-xlsx.ts`, mismos roles. Se agrega a `EXPORTS` de `nav-guard.test.ts` | Igual |
 | Integridad | «Verificar integridad» contra el ancla del período | Contra el ancla diaria |
@@ -181,8 +184,8 @@ Las líneas del ledger no se auditan: son inmutables y ya están en el libro.
 
 ### b.9 Migraciones necesarias (no escritas)
 
-1. **`084` (ya escrita, SIN APLICAR):** `audit_log` solo de agregar. Hotfix independiente, aplica limpio en
-   `main`. Va primero, sola.
+1. **`084` (aplicada en staging el 03/10; hotfix de producción en `hotfix/audit-log-solo-agregar`, ver
+   `docs/finanzas/hotfix-084-produccion.md`):** `audit_log` solo de agregar. Va primero, sola.
 2. **Esquema y tablas:** `auditoria.bitacora_contable` y `auditoria.bitacora_legal`, los `REVOKE`, los
    triggers de solo agregar, los índices y los RPC de lectura por rol.
 3. **Función genérica y triggers** en las tablas de b.1, con el ruteo de b.2.
@@ -196,10 +199,8 @@ Las líneas del ledger no se auditan: son inmutables y ya están en el libro.
 
 ## Dudas para Josuarth y Oliver
 
-1. ¿El **admin** también ve la bitácora contable (en lectura)? La decisión dice «la ve el contador», y hoy el
-   admin entra a todo Finanzas.
-2. ¿Lecturas sensibles (quién descargó un Excel o un PDF)? No son cambios de fila: harían falta registros
+1. ¿Lecturas sensibles (quién descargó un Excel o un PDF)? No son cambios de fila: harían falta registros
    desde el código en esas rutas.
-3. ¿Cuánto tiempo se guardan? La propuesta: para siempre (son chicas).
-4. Tareas y comentarios de Legal: ¿todos los cambios, o solo estado y asignación? Es lo más voluminoso de
+2. ¿Cuánto tiempo se guardan? La propuesta: para siempre (son chicas).
+3. Tareas y comentarios de Legal: ¿todos los cambios, o solo estado y asignación? Es lo más voluminoso de
    Legal.

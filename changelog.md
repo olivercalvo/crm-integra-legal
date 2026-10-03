@@ -1,5 +1,13 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [084 aplicada en staging y hotfix de producción preparado] - 2026-10-03
+
+- `084` aplicada en staging (11/11). Idempotente: una segunda corrida no cambia nada.
+- Retirado `scripts/run_all_pending.sql` (consolidado de abril que vaciaba la base; chocaba con la 084).
+- Hotfix de producción preparado en `hotfix/audit-log-solo-agregar` (sin aplicar): procedimiento, consulta de
+  solo lectura antes/después y script para deshacer.
+- Bitácoras: copia a la contable aprobada; el admin ve la contable en solo lectura.
+
 ## [084 audit_log solo de agregar (sin aplicar) y dos bitácoras] - 2026-10-03
 
 - ⚠️ `084` **escrita, SIN APLICAR**: `audit_log` pasa a lectura por bufete para el usuario, sin UPDATE,

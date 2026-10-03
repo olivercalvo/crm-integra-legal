@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 03/10/2026 (cierre 3) — 084 APLICADA EN STAGING Y HOTFIX DE PRODUCCIÓN LISTO <<<
+
+- ✅ `084` aplicada en staging. `verificacion-084`: **11 ok, 0 fallas**. Corrida dos veces: la segunda no cambia
+  nada (política, triggers, permisos y filas iguales).
+- 🗑️ `scripts/run_all_pending.sql` retirado: nada lo usaba y vaciaba la base entera (clientes, casos,
+  `audit_log`…). Sigue en el historial (`9ff68bf`).
+- ⏳ **Hotfix de producción listo, sin aplicar ni pushear**: rama `hotfix/audit-log-solo-agregar` desde `main`
+  (24b227a). Procedimiento para Oliver: `docs/finanzas/hotfix-084-produccion.md`. Consulta antes/después:
+  `sql/verificacion/produccion-audit-log-permisos.sql`. Deshacer (probado en staging en transacción):
+  `sql/hotfix/084_deshacer.sql`. Recomendación: merge a `main` después de aplicarla y luego `main` → `develop`.
+- ✅ Bitácoras: aprobada la copia a la contable de lo que afecta cifras o permisos; el admin ve la contable en
+  solo lectura.
+
 ## >>> 03/10/2026 (cierre 2) — 084 Y DOS BITÁCORAS <<<
 
 - ⏳ **`084` escrita, SIN APLICAR** (espera «aplica»): `audit_log` solo de agregar. Confirmado en producción
@@ -8,7 +21,7 @@
   11/11 en una transacción deshecha. **Hotfix independiente**: aplica limpio en `main` (24b227a), sin
   depender de nada posterior a la 024. ⚠️ En Supabase `postgres` no es superusuario: después de la 084 nadie
   borra filas de `audit_log` sin quitar el trigger (y borrar un bufete entero queda bloqueado por la
-  cascada). `scripts/run_all_pending.sql` (viejo) hace `DELETE FROM audit_log`: ya no correría.
+  cascada). `scripts/run_all_pending.sql` (viejo, vaciaba la base) se retiró el 03/10.
 - 📐 Propuesta de bitácora separada en contable (la ve el contador) y legal (la ve el admin), con el
   ruteo de clientes, usuarios y gastos de trámite (opción 1: dueño + copia contable de lo fiscal) y el
   reparto del legado.

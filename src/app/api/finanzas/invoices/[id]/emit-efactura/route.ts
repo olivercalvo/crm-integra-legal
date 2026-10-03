@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { enviarFacturaALaDgi } from "@/lib/finanzas/efactura/orchestration/enviar-a-la-dgi";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -25,7 +26,7 @@ interface RouteParams {
  *
  * Permisos: admin y abogada (mismo gate que /emit y /dgi).
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -54,4 +55,4 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     );
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

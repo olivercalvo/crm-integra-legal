@@ -4,6 +4,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreatePayment } from "@/lib/finanzas/validators/payment";
 import { createPayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,7 @@ export const runtime = "nodejs";
  * listado de cobros pero no registra). El tenant sale del contexto
  * autenticado, nunca del body.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -66,4 +67,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createPayment (multi) unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { registrarCufeDelPortal } from "@/lib/finanzas/api/invoices";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -26,7 +27,7 @@ interface RouteParams {
  *
  * Body esperado: { cufe }
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -65,4 +66,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[api] POST invoices/[id]/cufe failed", err);
     return NextResponse.json({ error: "No se pudo guardar el CUFE" }, { status: 500 });
   }
-}
+});

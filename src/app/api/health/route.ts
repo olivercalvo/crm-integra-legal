@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/health
@@ -6,7 +7,7 @@ import { NextResponse } from "next/server";
  * is reachable. Returns no sensitive data. Cache-Control: no-store ensures
  * the browser never serves a cached response as proof of connectivity.
  */
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   return NextResponse.json(
     { status: "ok", timestamp: new Date().toISOString() },
     {
@@ -17,4 +18,4 @@ export async function GET() {
       },
     }
   );
-}
+});

@@ -70,6 +70,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * Quién puede REGISTRAR el gasto en el libro. Coincide con `EXPENSE_WRITE_ROLES`
@@ -78,7 +79,7 @@ import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
  */
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -126,4 +127,4 @@ export async function POST(
     console.error("[expenses/post-to-ledger] unexpected", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

@@ -341,6 +341,13 @@ const MARCADORES = {
     sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'tomar_candados')`,
     nota: "03/10. Encontrada en la prueba 2 (deadlock 40P01 reproducido con dos sesiones). Va despues de la 089.",
   },
+  "091_bitacoras_error_claro.sql": {
+    que: "Si falla el registro de auditoria, error AU001 con un mensaje claro para la persona y el original en el detalle (la app lo deja en el log del servidor)",
+    tipo: "dato",
+    // Solo catálogo, por la misma razón que la 088.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'registrar' AND p.prosrc LIKE '%AU001%')`,
+    nota: "03/10. Prueba 3. Va despues de la 090, junto con el codigo de conManejoDeAuditoria y fetchConAuditoria (sin la 091 el codigo no cambia nada).",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

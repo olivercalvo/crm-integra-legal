@@ -5,6 +5,7 @@ import { validateUpdateSupplier } from "@/lib/finanzas/validators/supplier";
 import { updateSupplier, deleteSupplier } from "@/lib/finanzas/api/suppliers";
 import { getSupplier } from "@/lib/finanzas/queries/suppliers";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const ROLES = ["admin", "abogada", "contador"] as const;
 
@@ -13,7 +14,7 @@ function sinPermiso(rol: string): boolean {
 }
 
 /** GET /api/finanzas/suppliers/[id] */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (sinPermiso(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -26,10 +27,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Proveedor no encontrado" }, { status: 404 });
   }
   return NextResponse.json(supplier, { status: 200 });
-}
+});
 
 /** PATCH /api/finanzas/suppliers/[id] */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (sinPermiso(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -69,10 +70,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     console.error("[finanzas] updateSupplier unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /** DELETE /api/finanzas/suppliers/[id] */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (sinPermiso(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -88,4 +89,4 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     console.error("[finanzas] deleteSupplier unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

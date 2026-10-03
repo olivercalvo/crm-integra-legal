@@ -28,10 +28,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   let body: unknown;
   try {
     body = await request.json();
@@ -73,4 +74,4 @@ export async function POST(request: NextRequest) {
 
   // Respuesta uniforme exista o no el usuario.
   return NextResponse.json({ ok: true });
-}
+});

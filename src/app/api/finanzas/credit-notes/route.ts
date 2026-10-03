@@ -25,12 +25,13 @@ import { validateCreateCreditNoteInput } from "@/lib/finanzas/validators/credit-
 import { emitCreditNote } from "@/lib/finanzas/api/credit-notes";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { aplicarEnvioAlEmitir, leerModoDeEnvio, type ResultadoDelEnvio } from "@/lib/finanzas/efactura/orchestration/envio-al-emitir";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
 const MUTATING_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -84,4 +85,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] emitCreditNote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

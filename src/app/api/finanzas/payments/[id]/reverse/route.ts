@@ -6,6 +6,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reversePayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -30,7 +31,7 @@ interface RouteParams {
  *
  * Body esperado: { reason, fecha_registro? } — sin fecha, hoy en Panamá.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -78,4 +79,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] reversePayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

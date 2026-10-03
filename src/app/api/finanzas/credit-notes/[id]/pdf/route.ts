@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { getCreditNoteById } from "@/lib/finanzas/api/credit-notes";
 import { generateCreditNotePdfBuffer } from "@/lib/finanzas/pdf/generate-credit-note-pdf";
 import type { CreditNoteDocumentProps } from "@/lib/finanzas/pdf/CreditNoteDocument";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -23,7 +24,7 @@ const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
  *
  * Permisos: admin/abogada/contador del tenant. Asistente queda fuera.
  */
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -135,4 +136,4 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});

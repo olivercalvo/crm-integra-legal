@@ -6,6 +6,7 @@ import {
   fallbackClientSearchIds,
   tryUniversalSearchIds,
 } from "@/lib/utils/search-server";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/search?q=texto
@@ -18,7 +19,7 @@ import {
  * (sql/pending/002_enable_unaccent_and_search_rpcs.sql); si no, cae
  * al fallback SDK.
  */
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
     const {
@@ -83,4 +84,4 @@ export async function GET(request: NextRequest) {
     console.error("Error in /api/search:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

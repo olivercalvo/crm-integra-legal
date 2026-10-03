@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { deshacerImportacion } from "@/lib/finanzas/api/importacion-asientos";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -13,7 +14,7 @@ export const runtime = "nodejs";
  */
 const ROLES_ASIENTO_MANUAL = ["admin", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES_ASIENTO_MANUAL);
   if (denied) return denied;
@@ -35,4 +36,4 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.error("[finanzas] deshacer importacion unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

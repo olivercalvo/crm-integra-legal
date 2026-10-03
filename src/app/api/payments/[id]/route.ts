@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // PATCH /api/payments/[id] — Update a payment
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -107,10 +108,10 @@ export async function PATCH(
     console.error("Unexpected error in PATCH /api/payments/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/payments/[id] — Delete a payment
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -186,4 +187,4 @@ export async function DELETE(
     console.error("Unexpected error in DELETE /api/payments/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UserRole } from "@/types/database";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente", "contador"];
 
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -123,9 +124,9 @@ export async function PATCH(
     console.error("Unexpected error in PATCH /api/admin/users/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -205,4 +206,4 @@ export async function DELETE(
     console.error("Unexpected error in DELETE /api/admin/users/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

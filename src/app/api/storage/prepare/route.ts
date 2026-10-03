@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // GET /api/storage/prepare — Returns tenantId + userId for direct uploads
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -29,4 +30,4 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { getAncla } from "@/lib/finanzas/queries/anclas";
 import { generateConstanciaDeCierrePdfBuffer } from "@/lib/finanzas/pdf/generate-constancia-de-cierre-pdf";
 import { formatDateTime } from "@/lib/utils/format-date";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -18,7 +19,7 @@ const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "
  * La constancia de cierre (075, R-1b) que el contador guarda FUERA del sistema.
  * El tenant sale del perfil; un ancla de otro bufete da 404.
  */
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export const GET = conManejoDeAuditoria(async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -52,4 +53,4 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       "Content-Disposition": `attachment; filename="${nombre}"`,
     },
   });
-}
+});

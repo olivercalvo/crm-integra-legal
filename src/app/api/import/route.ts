@@ -3,12 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseImportFile, validateImport } from "@/lib/utils/import-parser";
 import { allocateClientNumber } from "@/lib/clients/numbering";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // ---------------------------------------------------------------------------
 // POST /api/import — Parse & validate (preview mode) or execute import
 // ---------------------------------------------------------------------------
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -310,4 +311,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

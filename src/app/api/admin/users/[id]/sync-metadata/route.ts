@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Endpoint idempotente para reparar usuarios cuyo auth.users.app_metadata
 // quedó desincronizado respecto a public.users (típicamente porque fueron
@@ -8,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // El middleware (src/middleware.ts) autoriza por app_metadata.user_role,
 // por lo que sin estos campos el usuario entra en loop /login?error=no-role.
 // Solo admin del mismo tenant puede invocarlo.
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -142,4 +143,4 @@ export async function POST(
     console.error("Unexpected error in POST /api/admin/users/[id]/sync-metadata:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

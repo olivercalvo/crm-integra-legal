@@ -7,6 +7,7 @@ import { resolverTercerosDeDocumentos, resolverTercerosDeLineas } from "@/lib/fi
 import { hojaDeAntiguedad } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/finanzas/reportes/aging/export?tipo=cobrar|pagar
@@ -23,7 +24,7 @@ export const runtime = "nodejs";
 
 const ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole as (typeof ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -85,4 +86,4 @@ export async function GET(request: NextRequest) {
     console.error("[finanzas] export de la antigüedad falló:", err);
     return NextResponse.json({ error: "Error al generar el archivo" }, { status: 500 });
   }
-}
+});

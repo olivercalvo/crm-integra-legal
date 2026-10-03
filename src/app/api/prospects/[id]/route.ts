@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -44,9 +45,9 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -74,4 +75,4 @@ export async function DELETE(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

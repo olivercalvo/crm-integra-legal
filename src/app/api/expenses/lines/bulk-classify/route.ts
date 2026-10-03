@@ -53,6 +53,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -62,7 +63,7 @@ const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 /** Tope por request. Con 128 líneas en producción alcanza de sobra. */
 const MAX_LINEAS = 500;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
     const {
@@ -194,4 +195,4 @@ export async function POST(request: NextRequest) {
     console.error("[expenses/lines/bulk-classify] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

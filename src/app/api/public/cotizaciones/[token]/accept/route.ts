@@ -23,6 +23,7 @@ import {
   validateAcceptInput,
 } from "@/lib/finanzas/api/quote-portal";
 import { runAcceptanceCascade } from "@/lib/finanzas/api/quote-portal-cascade";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { token: string };
@@ -44,7 +45,7 @@ function extractIp(req: NextRequest): string | null {
   return (req as unknown as { ip?: string | null }).ip ?? null;
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const token = params.token?.trim() ?? "";
   if (!UUID_RE.test(token)) {
     return NextResponse.json(
@@ -131,4 +132,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});

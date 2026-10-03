@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // POST /api/todos/[id]/documents/register — Save todo document metadata after direct upload
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -61,4 +62,4 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

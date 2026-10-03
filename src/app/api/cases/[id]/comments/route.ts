@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -70,4 +71,4 @@ export async function POST(
     console.error("Unexpected error:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

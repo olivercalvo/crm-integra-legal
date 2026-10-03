@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { fetchConAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export function createClient() {
   const cookieStore = cookies();
@@ -8,6 +9,8 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // 091: un fallo del registro de auditoría queda en el log del servidor.
+      global: { fetch: fetchConAuditoria() },
       cookies: {
         get(name: string) {
           return cookieStore.get(name)?.value;

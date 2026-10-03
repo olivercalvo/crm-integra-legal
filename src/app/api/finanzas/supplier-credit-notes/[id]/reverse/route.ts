@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reverseSupplierCreditNote } from "@/lib/finanzas/api/supplier-credit-notes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ interface RouteParams {
  */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -49,4 +50,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] reverseSupplierCreditNote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

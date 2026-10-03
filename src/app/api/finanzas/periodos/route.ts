@@ -58,6 +58,7 @@ import {
   validarMotivoReapertura,
   valorAuditadoDeReapertura,
 } from "@/lib/finanzas/contabilidad/periodos";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -98,7 +99,7 @@ async function contexto() {
   return { admin, user, tenantId: profile.tenant_id as string };
 }
 
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   try {
     const ctx = await contexto();
     if ("error" in ctx) return ctx.error;
@@ -109,9 +110,9 @@ export async function GET() {
     console.error("[finanzas/periodos GET] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest) {
   try {
     const ctx = await contexto();
     if ("error" in ctx) return ctx.error;
@@ -271,4 +272,4 @@ export async function PATCH(request: NextRequest) {
     console.error("[finanzas/periodos PATCH] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

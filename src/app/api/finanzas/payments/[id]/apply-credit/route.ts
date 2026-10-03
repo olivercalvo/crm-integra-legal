@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { aplicarSaldoAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -25,7 +26,7 @@ interface RouteParams {
  * Body: { applications: [{ invoice_id, amount }] }. El tenant sale del perfil,
  * nunca del body (SOP-014).
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -56,4 +57,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] apply-credit unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

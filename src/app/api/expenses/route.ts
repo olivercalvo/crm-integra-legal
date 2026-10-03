@@ -9,6 +9,7 @@ import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -16,7 +17,7 @@ import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 // autenticado podía crear un gasto llamando el endpoint directamente.
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -318,4 +319,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/expenses:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

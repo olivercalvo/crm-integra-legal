@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { fetchConAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * Cliente de SERVICIO (salta RLS). Sólo en el servidor.
@@ -14,6 +15,9 @@ import { createClient } from "@supabase/supabase-js";
  *
  * La base sólo cree el header cuando la llamada viene con la clave de servicio,
  * que nunca sale del servidor.
+ *
+ * `fetchConAuditoria` (091): si la base contesta que falló el registro de auditoría,
+ * deja el error real en el log del servidor y la ruta responde con el mensaje claro.
  */
 export function createAdminClient(actorId: string | null) {
   return createClient(
@@ -24,7 +28,10 @@ export function createAdminClient(actorId: string | null) {
         autoRefreshToken: false,
         persistSession: false,
       },
-      ...(actorId ? { global: { headers: { "x-actor-id": actorId } } } : {}),
+      global: {
+        fetch: fetchConAuditoria(),
+        ...(actorId ? { headers: { "x-actor-id": actorId } } : {}),
+      },
     }
   );
 }

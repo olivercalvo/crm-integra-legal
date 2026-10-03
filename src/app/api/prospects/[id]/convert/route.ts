@@ -4,9 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { allocateClientNumber } from "@/lib/clients/numbering";
 import { validateClientType } from "@/lib/clients/fiscal-fields";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // POST — convert prospect to client
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -90,4 +91,4 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

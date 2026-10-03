@@ -7,10 +7,11 @@ import {
   getClassificationPrefix,
   getMaxCaseNumberForPrefix,
 } from "@/lib/utils/case-code";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const MAX_CODE_RECALC_RETRIES = 3;
 
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -356,4 +357,4 @@ export async function PATCH(
     console.error("Unexpected error:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

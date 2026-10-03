@@ -10,9 +10,10 @@ import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-f
 import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
 import { rucFieldWrites } from "@/lib/clients/ruc-sync";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -40,9 +41,9 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -184,4 +185,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/clients:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

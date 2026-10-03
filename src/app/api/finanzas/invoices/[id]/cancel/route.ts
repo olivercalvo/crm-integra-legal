@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { anularFacturaAnteDgi } from "@/lib/finanzas/efactura/orchestration/anular-factura-ante-dgi";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -45,7 +46,7 @@ interface RouteParams {
  * pide la DGI para `cancellationReason`. Lo valida el orquestador con el mismo
  * módulo que usa el diálogo, y el CHECK de la `058` lo sostiene en la base.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -123,4 +124,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] cancelInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

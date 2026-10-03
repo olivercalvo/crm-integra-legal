@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { generarPlantillaDeAsientos } from "@/lib/finanzas/import/asientos-workbook";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
 /** GET /api/finanzas/asientos/importar/plantilla: la plantilla, con el plan activo. */
 const ROLES_ASIENTO_MANUAL = ["admin", "contador"] as const;
 
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES_ASIENTO_MANUAL);
   if (denied) return denied;
@@ -24,4 +25,4 @@ export async function GET() {
       "Content-Disposition": 'attachment; filename="plantilla-asientos.xlsx"',
     },
   });
-}
+});

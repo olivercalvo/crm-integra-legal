@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -11,7 +12,7 @@ const ALLOWED_TYPES = [
 ];
 
 // POST /api/payments/[id]/receipt — Upload receipt for a payment
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -119,10 +120,10 @@ export async function POST(
     console.error("Unexpected error uploading payment receipt:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/payments/[id]/receipt — Remove receipt from a payment
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -189,4 +190,4 @@ export async function DELETE(
     console.error("Unexpected error deleting payment receipt:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

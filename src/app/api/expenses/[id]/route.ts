@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Mismo criterio que POST /api/expenses: gastos es admin/abogada. El asistente
 // quedó fuera del alcance de gastos el 24/08/2026, el contador tiene su propio
@@ -9,7 +10,7 @@ import { requireRole } from "@/lib/supabase/server-query";
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
 // PATCH /api/expenses/[id] — Update an expense
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -142,10 +143,10 @@ export async function PATCH(
     console.error("Unexpected error in PATCH /api/expenses/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/expenses/[id] — Delete an expense
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -223,4 +224,4 @@ export async function DELETE(
     console.error("Unexpected error in DELETE /api/expenses/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

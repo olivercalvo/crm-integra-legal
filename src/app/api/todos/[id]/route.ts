@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // PATCH — update todo (mark complete, edit description/deadline)
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -61,10 +62,10 @@ export async function PATCH(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 // DELETE — remove a todo
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -95,4 +96,4 @@ export async function DELETE(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

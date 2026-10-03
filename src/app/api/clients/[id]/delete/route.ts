@@ -9,8 +9,9 @@ import {
   GENERIC_FK_BLOCK_MESSAGE,
   type FinancialCounts,
 } from "@/lib/clients/delete-guards";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -171,4 +172,4 @@ export async function POST(
     console.error("Unexpected error deleting client:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

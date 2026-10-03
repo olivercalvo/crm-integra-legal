@@ -17,6 +17,7 @@ import {
 import { hojaDelMayor } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/finanzas/reportes/mayor/export?cuenta=CODE&desde=&hasta=&modulo=CO,AD
@@ -47,7 +48,7 @@ const ROLES = ["admin", "abogada", "contador"] as const;
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole as (typeof ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -140,4 +141,4 @@ export async function GET(request: NextRequest) {
     console.error("[finanzas] export del mayor falló:", err);
     return NextResponse.json({ error: "Error al generar el archivo" }, { status: 500 });
   }
-}
+});

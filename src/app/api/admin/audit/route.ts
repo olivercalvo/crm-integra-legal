@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -107,4 +108,4 @@ export async function GET(request: NextRequest) {
     console.error("Unexpected error in GET /api/admin/audit:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

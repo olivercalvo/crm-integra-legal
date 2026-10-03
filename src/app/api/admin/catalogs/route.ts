@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const ALLOWED_TABLES = [
   "cat_classifications",
@@ -15,7 +16,7 @@ function isAllowedTable(table: string | null): table is AllowedTable {
   return ALLOWED_TABLES.includes(table as AllowedTable);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -66,9 +67,9 @@ export async function GET(request: NextRequest) {
     console.error("Unexpected error in GET /api/admin/catalogs:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -157,4 +158,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/admin/catalogs:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

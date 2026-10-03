@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { exportarBitacora } from "@/lib/auditoria/rutas";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/finanzas/auditoria/export: la bitácora contable en Excel, con los filtros de la pantalla (admin y contador).
@@ -11,9 +12,9 @@ export const runtime = "nodejs";
 
 const ROLES = ["admin", "contador"] as const;
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES);
   if (denied) return denied;
   return exportarBitacora(request, "contable", { db: ctx.db, tenantId: ctx.tenantId, userId: ctx.userId });
-}
+});

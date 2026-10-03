@@ -28,6 +28,7 @@ import {
 } from "@/lib/finanzas/pdf/ensure-quote-pdf";
 import { sendQuoteEmail } from "@/lib/finanzas/email/send-quote-email";
 import { getPublicAppUrl } from "@/lib/utils/public-url";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -39,7 +40,7 @@ export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -200,4 +201,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     sent_to_email: validation.data.sent_to_email,
     sent_at: sentAt,
   });
-}
+});

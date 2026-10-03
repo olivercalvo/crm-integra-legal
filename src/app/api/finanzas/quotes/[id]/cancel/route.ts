@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { cancelQuote, validateCancelQuote } from "@/lib/finanzas/api/quotes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -15,7 +16,7 @@ const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
  *
  * Body opcional: { reason?: string }
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -55,4 +56,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] cancelQuote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -8,6 +8,7 @@ import { createBusinessExpense } from "@/lib/finanzas/api/business-expenses";
 import { listBusinessExpenses } from "@/lib/finanzas/queries/business-expenses";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import type { BusinessExpenseStatus } from "@/lib/finanzas/types/business-expense";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const ALLOWED_STATUSES = new Set<BusinessExpenseStatus>([
   "pendiente_pago",
@@ -25,7 +26,7 @@ const READING_ROLES = ["admin", "abogada", "contador"] as const;
  * abogada y contador. Los asistentes ya quedan fuera de /finanzas por
  * middleware; igual rechazamos acá por defensa en profundidad.
  */
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!READING_ROLES.includes(ctx.userRole as (typeof READING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json(result, { status: 200 });
-}
+});
 
 /**
  * POST /api/finanzas/business-expenses
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
  * Asistente queda fuera por middleware de /finanzas y por defensa en
  * profundidad acá.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -114,4 +115,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createBusinessExpense unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

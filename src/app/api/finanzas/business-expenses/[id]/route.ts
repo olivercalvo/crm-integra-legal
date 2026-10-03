@@ -7,12 +7,13 @@ import {
 } from "@/lib/finanzas/api/business-expenses";
 import { getBusinessExpenseById } from "@/lib/finanzas/queries/business-expenses";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 const READING_ROLES = ["admin", "abogada", "contador"] as const;
 
 /** GET — detalle. Admin/abogada/contador. */
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!READING_ROLES.includes(ctx.userRole as (typeof READING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -23,10 +24,10 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
   }
   return NextResponse.json({ data: row }, { status: 200 });
-}
+});
 
 /** PATCH — actualizar campos. Admin + abogada + contador. */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -66,10 +67,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     console.error("[finanzas] updateBusinessExpense unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /** DELETE — hard delete + cleanup de receipt. Admin + abogada + contador. */
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -86,4 +87,4 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     console.error("[finanzas] deleteBusinessExpense unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -1,8 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function POST(request: Request) {
+export const POST = conManejoDeAuditoria(async function POST(request: Request) {
   const cookieStore = cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,4 +29,4 @@ export async function POST(request: Request) {
   return NextResponse.redirect(`${origin}/login`, {
     status: 302,
   });
-}
+});

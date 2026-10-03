@@ -4,6 +4,7 @@ import { validateCreateChartAccount } from "@/lib/finanzas/validators/chart-of-a
 import { createChartAccount } from "@/lib/finanzas/api/chart-of-accounts";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Mismo set de roles que el resto de /finanzas. El asistente ya queda fuera
 // por middleware; igual lo rechazamos acá por defensa en profundidad.
@@ -14,20 +15,20 @@ const FINANZAS_ROLES = ["admin", "abogada", "contador"] as const;
  * Lista todas las cuentas del tenant (activas + inactivas) para la pantalla de
  * gestión del Plan de Cuentas.
  */
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, FINANZAS_ROLES);
   if (denied) return denied;
 
   const accounts = await listChartAccounts(ctx.db, ctx.tenantId);
   return NextResponse.json({ accounts }, { status: 200 });
-}
+});
 
 /**
  * POST /api/finanzas/configuracion/chart-of-accounts
  * Crea una cuenta contable. Código único por tenant → 409 accionable si dup.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, FINANZAS_ROLES);
   if (denied) return denied;
@@ -65,4 +66,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createChartAccount unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

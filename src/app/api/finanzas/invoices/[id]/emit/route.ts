@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { emitInvoice, InvoiceMutationError } from "@/lib/finanzas/api/invoices";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { aplicarEnvioAlEmitir, leerModoDeEnvio, type ResultadoDelEnvio } from "@/lib/finanzas/efactura/orchestration/envio-al-emitir";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -22,7 +23,7 @@ export const runtime = "nodejs";
  * lee `envio` (03/10/2026): «dgi» o «interna», y sólo para una NOTA DE DÉBITO.
  * Sin `envio`, la emisión es la de siempre.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -80,4 +81,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] emitInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

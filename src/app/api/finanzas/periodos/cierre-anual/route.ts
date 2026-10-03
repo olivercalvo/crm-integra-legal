@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { cerrarEjercicio, prepararCierre } from "@/lib/finanzas/api/cierre-anual";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ function anioDe(v: unknown): number {
  * La vista previa del asiento de cierre (o el cierre vigente, si ya existe).
  * 🔑 El tenant sale del perfil; los RPC van con el cliente de servicio.
  */
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES);
   if (denied) return denied;
@@ -34,14 +35,14 @@ export async function GET(request: NextRequest) {
     console.error("[finanzas] GET cierre-anual unexpected error", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /**
  * POST /api/finanzas/periodos/cierre-anual  { anio: 2026 }
  * Postea el asiento de cierre. Las líneas NO vienen del body: se vuelven a
  * armar acá con los saldos de la base, y el RPC las verifica.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES);
   if (denied) return denied;
@@ -60,4 +61,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] POST cierre-anual unexpected error", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

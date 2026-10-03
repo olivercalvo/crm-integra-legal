@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { anclasDesdeArchivo } from "@/lib/finanzas/contabilidad/anclas";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ const ROLES = ["admin", "contador"];
  * 🔑 SOP-014: el RPC va con el cliente de servicio; el tenant sale del perfil y
  * del archivo sólo se toman las filas de ESE bufete.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -54,4 +55,4 @@ export async function POST(request: NextRequest) {
     problemas,
     coincide: problemas.length === 0,
   });
-}
+});

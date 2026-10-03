@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // CREAR tareas es admin/abogada. El asistente las CUMPLE (PATCH /api/tasks/[id]),
 // no las reparte: el selector de responsable del formulario lista a todos los
@@ -9,7 +10,7 @@ import { requireRole } from "@/lib/supabase/server-query";
 // Antes del 24/08/2026 este endpoint NO validaba rol en absoluto.
 const TASK_CREATE_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -66,4 +67,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/tasks:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

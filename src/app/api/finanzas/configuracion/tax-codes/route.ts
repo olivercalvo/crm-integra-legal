@@ -6,6 +6,7 @@ import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-quer
 import { createTaxCode, listTaxCodes } from "@/lib/finanzas/api/tax-codes";
 import { validateCreateTaxCode } from "@/lib/finanzas/validators/tax-code";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Leer el catálogo: mismo set que el resto de /finanzas. El contador tiene que
 // poder verlo — es su materia.
@@ -23,7 +24,7 @@ const ROLES_ESCRITURA = ["admin", "contador"] as const;
  * GET /api/finanzas/configuracion/tax-codes
  * Catálogo de impuestos del tenant, activos e inactivos.
  */
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, FINANZAS_ROLES);
   if (denied) return denied;
@@ -38,7 +39,7 @@ export async function GET() {
     console.error("[finanzas] GET tax-codes unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /**
  * POST /api/finanzas/configuracion/tax-codes
@@ -49,7 +50,7 @@ export async function GET() {
  * va a guardar: quien carga piensa en "7%", la base guarda 0.0700, y los dos
  * tienen que verse para que nadie cargue 700%.
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES_ESCRITURA);
   if (denied) return denied;
@@ -76,4 +77,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] POST tax-codes unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

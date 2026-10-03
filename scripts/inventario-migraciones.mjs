@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
     nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
   },
+  "084_audit_log_solo_agregar.sql": {
+    que: "audit_log: politica FOR SELECT (misma expresion de bufete), sin UPDATE/DELETE/TRUNCATE para anon/authenticated y trigger de solo agregar",
+    tipo: "funcion", nombre: "audit_log_solo_agregar",
+    nota: "Hotfix de seguridad del 03/10, independiente: no depende de nada posterior a la 024 y aplica limpio en main (24b227a). Todas las escrituras usan el cliente de servicio.",
+  },
   "083_fe_estado_interna.sql": {
     que: "fe_estado 'interna' en invoices y credit_notes (NC/ND emitida sin enviarse a la DGI), terminal por trigger",
     tipo: "funcion", nombre: "finanzas_fe_estado_interna_guard",

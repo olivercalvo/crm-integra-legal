@@ -308,6 +308,25 @@ const MARCADORES = {
     tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
     nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
   },
+  "086_bitacoras_nucleo.sql": {
+    que: "Esquema auditoria: bitacora_contable y bitacora_legal (solo agregar, cadena de hash por bufete), anclas diarias y al cerrar periodo, lectura y verificacion por RPC solo service_role",
+    tipo: "funcion", nombre: "bitacora_leer",
+    nota: "03/10. Propuesta aprobada de bitacoras. Contable: admin y contador; legal: admin. Lo exige la base, no solo la app. No toca filas ni el libro.",
+  },
+  "087_bitacoras_captura.sql": {
+    que: "Trigger trg_auditoria en 41 tablas: cada cambio a su bitacora, y lo fiscal de clientes, gastos de tramite y usuarios tambien a la contable",
+    tipo: "dato",
+    sql: `SELECT count(*) = 41 FROM pg_trigger WHERE tgname = 'trg_auditoria' AND NOT tgisinternal`,
+    nota: "03/10. Requiere la 086. Falla cerrado: si la bitacora no se puede escribir, la operacion se deshace. El usuario sale de auth.uid() o del header x-actor-id (createAdminClient(usuario)).",
+  },
+  "088_bitacoras_legado.sql": {
+    que: "Copia una vez las filas de audit_log a las bitacoras como origen legado (usuario y fecha originales), con verificacion de conteos",
+    tipo: "dato",
+    // Solo catálogo: nombrar las tablas de auditoria rompería la consulta única
+    // en una base sin la 086. La función nace en la MISMA transacción que la copia.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'escribir_legado')`,
+    nota: "03/10. ESCRITA Y SIN APLICAR a proposito: va cuando las bitacoras nuevas esten escribiendo y verificadas. Requiere 086 y 087.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

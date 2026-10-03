@@ -63,7 +63,9 @@ export async function POST(request: NextRequest) {
       createAdminClient(),
       ctx.tenantId,
       ctx.userId,
-      validation.data
+      validation.data,
+      // Sólo la NC que va a la DGI pasa por las validaciones previas.
+      { validarParaDgi: envio === "dgi" }
     );
     // La NC ya existe con su asiento. «dgi» la manda (04 con factura, 06 sin
     // ella); «interna» la marca y no llama al PAC. Un rechazo no la deshace.

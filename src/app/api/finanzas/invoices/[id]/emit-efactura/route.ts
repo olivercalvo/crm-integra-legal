@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { MutationError } from "@/lib/finanzas/api/errors";
-import { emitInvoiceToEfactura } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
+import { enviarFacturaALaDgi } from "@/lib/finanzas/efactura/orchestration/enviar-a-la-dgi";
 
 interface RouteParams {
   params: { id: string };
@@ -32,7 +32,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const result = await emitInvoiceToEfactura(
+    const result = await enviarFacturaALaDgi(
       ctx.db,
       ctx.tenantId,
       ctx.userId,

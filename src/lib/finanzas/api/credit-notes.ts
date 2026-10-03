@@ -16,6 +16,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
+import { cargarReceptor } from "@/lib/finanzas/efactura/data/datos-para-validar";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
@@ -94,7 +96,9 @@ export async function createCreditNote(
   db: DB,
   tenantId: string,
   userId: string,
-  input: CreateCreditNoteInput
+  input: CreateCreditNoteInput,
+  /** `validarParaDgi`: la NC va a la DGI (03/10/2026). La interna no se valida. */
+  opciones?: { validarParaDgi?: boolean }
 ): Promise<{ id: string; credit_note_number: string; total: number }> {
   // 1. La factura (opcional) y sus líneas. Sin factura, el cliente del pedido.
   type FacturaParaNc = {
@@ -105,6 +109,7 @@ export async function createCreditNote(
     balance_due: number;
     issue_date: string;
     accounting_date: string | null;
+    dgi_cufe: string | null;
   };
   let invoice: FacturaParaNc | null = null;
   let facturadas: LineaFacturada[] = [];
@@ -114,7 +119,7 @@ export async function createCreditNote(
   if (input.invoice_id) {
     const { data: inv, error: errInv } = await db
       .from("invoices")
-      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date")
+      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date, dgi_cufe")
       .eq("tenant_id", tenantId)
       .eq("id", input.invoice_id)
       .maybeSingle();
@@ -192,6 +197,38 @@ export async function createCreditNote(
   });
   if (!validacion.ok) {
     throw new MutationError(validacion.mensaje, validacion.status, undefined, validacion.fieldErrors);
+  }
+
+  // 3.a 🔴 LO QUE LA DGI RECHAZARÍA, ANTES DEL NÚMERO (03/10/2026). Sólo si la NC
+  //     va a la DGI: la interna no se valida. Como todavía no existe, un rechazo
+  //     acá no deja nada creado: el formulario muestra el motivo y lo marca.
+  if (opciones?.validarParaDgi) {
+    const problemas = validarParaLaDgi({
+      clase: "nota_credito",
+      receptor: await cargarReceptor(db, tenantId, clientId),
+      lineas: validacion.lineas.map((l) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_rate: l.tax_rate,
+      })),
+      totales: null,
+      fechaDocumento: hoyEnPanama(),
+      referencia: invoice
+        ? { numero: String(invoice.invoice_number), fecha: String(invoice.issue_date), cufe: invoice.dgi_cufe ?? null }
+        : null,
+    });
+    if (problemas.length > 0) {
+      throw new MutationError(
+        `No se puede emitir la nota de crédito para la DGI. Corrija esto o emítala como interna:
+${resumirProblemas(problemas)}`,
+        422,
+        undefined,
+        Object.fromEntries(
+          Object.entries(erroresPorCampo(problemas)).map(([k, v]) => [k.replace(/^lines\./, "lineas."), v])
+        )
+      );
+    }
   }
 
   // 3.b La fecha de REGISTRO: la elige el contador, en un período abierto y
@@ -361,9 +398,10 @@ export async function emitCreditNote(
   ledgerDb: DB,
   tenantId: string,
   userId: string,
-  input: CreateCreditNoteInput
+  input: CreateCreditNoteInput,
+  opciones?: { validarParaDgi?: boolean }
 ): Promise<{ id: string; credit_note_number: string; total: number; entry_id: string }> {
-  const nc = await createCreditNote(db, tenantId, userId, input);
+  const nc = await createCreditNote(db, tenantId, userId, input, opciones);
 
   const datos = await cargarNotaDeCreditoParaAsiento(ledgerDb, tenantId, nc.id);
   if (!datos) {
@@ -464,7 +502,7 @@ export async function getCreditNoteById(
         id, credit_note_number, invoice_id, client_id, issue_date, accounting_date, reason,
         observations, status, currency, subtotal_total, tax_total, grand_total,
         fe_estado, dgi_cufe, dgi_fecha_autorizacion,
-        created_at, created_by,
+        created_at, created_by, fe_motivo_pendiente, fe_motivo_pendiente_en,
         invoice:invoices!credit_notes_invoice_id_fkey(
           id, invoice_number, invoice_kind, issue_date, status, grand_total
         ),

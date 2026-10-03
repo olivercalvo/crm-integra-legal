@@ -14,8 +14,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
-import { emitInvoiceToEfactura } from "./emit-invoice-to-efactura";
-import { emitCreditNoteToEfactura } from "./emit-credit-note-to-efactura";
+import { enviarFacturaALaDgi, enviarNotaDeCreditoALaDgi } from "./enviar-a-la-dgi";
 
 type DB = SupabaseClient;
 
@@ -72,11 +71,11 @@ export async function aplicarEnvioAlEmitir(
   }
   try {
     if (doc.tabla === "invoices") {
-      const r = await emitInvoiceToEfactura(db, tenantId, userId, doc.id);
+      const r = await enviarFacturaALaDgi(db, tenantId, userId, doc.id);
       const ok = r.feEstado === "authorized";
       return { envio: "dgi", fe: { ok, feEstado: r.feEstado, mensaje: ok ? null : r.errorMessage } };
     }
-    const r = await emitCreditNoteToEfactura(db, tenantId, userId, doc.id);
+    const r = await enviarNotaDeCreditoALaDgi(db, tenantId, userId, doc.id);
     return { envio: "dgi", fe: { ok: r.ok, feEstado: r.feEstado, mensaje: r.ok ? null : r.mensaje } };
   } catch (err) {
     const mensaje = err instanceof Error ? err.message : String(err);

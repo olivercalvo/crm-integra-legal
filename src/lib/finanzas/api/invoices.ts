@@ -21,6 +21,8 @@ import type {
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
+import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
+import { cargarFacturaParaValidar, guardarMotivoPendiente } from "@/lib/finanzas/efactura/data/datos-para-validar";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createCreditNoteFromInvoice, compensarNotaDeCredito } from "@/lib/finanzas/api/credit-notes";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
@@ -548,7 +550,14 @@ export async function emitInvoice(
   tenantId: string,
   invoiceId: string,
   ledgerDb: DB,
-  userId: string | null
+  userId: string | null,
+  /**
+   * `validarParaDgi`: correr las validaciones previas a la DGI antes del número
+   * (03/10/2026). Lo decide quien llama: la ruta de emisión lo pide SIEMPRE para
+   * la factura (siempre va a la DGI) y para la ND sólo si eligió «Enviar a la
+   * DGI». Sin opción, no valida (los tests del núcleo de la emisión).
+   */
+  opciones?: { validarParaDgi?: boolean }
 ) {
   // 1. Cargar la factura para conocer su kind (necesario para sequence_type).
   const { data: inv, error: errFetch } = await db
@@ -613,6 +622,28 @@ export async function emitInvoice(
     inv.invoice_kind as InvoiceKind,
     lineas
   );
+
+  // 2c. 🔴 LO QUE LA DGI RECHAZARÍA, ANTES DEL NÚMERO (03/10/2026).
+  //     Las 4 facturas de producción que quedaron emitidas sin llegar a la DGI:
+  //     un dato que la DGI rechaza se descubría recién al enviar, con el número
+  //     y el asiento ya puestos. Ahora no se emite, y el motivo queda guardado
+  //     en la factura (085) para verlo al reabrirla, no sólo una vez en pantalla.
+  if (opciones?.validarParaDgi) {
+    const problemas = validarParaLaDgi(await cargarFacturaParaValidar(db, tenantId, invoiceId));
+    if (problemas.length > 0) {
+      const resumen = resumirProblemas(problemas);
+      await guardarMotivoPendiente(db, tenantId, "invoices", invoiceId, `No se pudo emitir.
+${resumen}`);
+      throw new InvoiceMutationError(
+        `No se puede emitir: la DGI la rechazaría. Corrija esto y vuelva a emitir:
+${resumen}`,
+        422,
+        undefined,
+        erroresPorCampo(problemas)
+      );
+    }
+    await guardarMotivoPendiente(db, tenantId, "invoices", invoiceId, null);
+  }
 
   // 3. EL NÚMERO. Antes de pedirle uno nuevo a la secuencia, mirar si esta
   //    factura YA tiene asiento: sería el reintento de una emisión que posteó y

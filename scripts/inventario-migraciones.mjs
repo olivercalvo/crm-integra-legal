@@ -308,6 +308,11 @@ const MARCADORES = {
     tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
     nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
   },
+  "085_motivo_pendiente_dgi.sql": {
+    que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
+    tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",
+    nota: "03/10. Validaciones previas a la DGI y lista de pendientes. Solo usa invoices y credit_notes (existen desde antes de la 025).",
+  },
   "084_audit_log_solo_agregar.sql": {
     que: "audit_log: politica FOR SELECT (misma expresion de bufete), sin UPDATE/DELETE/TRUNCATE para anon/authenticated y trigger de solo agregar",
     tipo: "funcion", nombre: "audit_log_solo_agregar",

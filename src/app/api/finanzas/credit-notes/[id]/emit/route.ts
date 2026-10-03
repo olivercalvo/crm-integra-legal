@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
-import { emitCreditNoteToEfactura } from "@/lib/finanzas/efactura/orchestration/emit-credit-note-to-efactura";
+import { enviarNotaDeCreditoALaDgi } from "@/lib/finanzas/efactura/orchestration/enviar-a-la-dgi";
 import { MutationError } from "@/lib/finanzas/api/errors";
 
 interface RouteParams {
@@ -34,7 +34,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const result = await emitCreditNoteToEfactura(
+    const result = await enviarNotaDeCreditoALaDgi(
       ctx.db,
       ctx.tenantId,
       ctx.userId,

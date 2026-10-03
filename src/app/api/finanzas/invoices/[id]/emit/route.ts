@@ -29,18 +29,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   let envio: ReturnType<typeof leerModoDeEnvio> = null;
+  let esNotaDeDebito = false;
   try {
     const body = await request.json().catch(() => ({}));
     envio = leerModoDeEnvio((body as { envio?: unknown })?.envio);
+    const { data: k } = await ctx.db
+      .from("invoices")
+      .select("invoice_kind")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("id", params.id)
+      .maybeSingle();
+    esNotaDeDebito = k?.invoice_kind === "NOTA_DEBITO";
     if (envio) {
       // Sólo la ND elige al emitir; una factura sigue con «Enviar a la DGI» aparte.
-      const { data: k } = await ctx.db
-        .from("invoices")
-        .select("invoice_kind")
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", params.id)
-        .maybeSingle();
-      if (k?.invoice_kind !== "NOTA_DEBITO") {
+      if (!esNotaDeDebito) {
         return NextResponse.json({ error: "Sólo una nota de débito elige el envío al emitirse." }, { status: 400 });
       }
     }
@@ -50,12 +52,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
+    // La ND se valida para la DGI sólo si va a la DGI; la factura, siempre
+    // (es el valor por defecto de emitInvoice).
     const result = await emitInvoice(
       ctx.db,
       ctx.tenantId,
       params.id,
       createAdminClient(),
-      ctx.userId
+      ctx.userId,
+      // 🔴 03/10/2026: la factura SIEMPRE se valida para la DGI antes del número;
+      //    la ND, sólo si va a la DGI. La interna no.
+      { validarParaDgi: esNotaDeDebito ? envio === "dgi" : true }
     );
     // La emisión ya ocurrió (número y asiento). El envío no la deshace.
     let envioResultado: ResultadoDelEnvio | null = null;
@@ -68,7 +75,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     if (err instanceof InvoiceMutationError) {
       console.error("[finanzas] emitInvoice failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors ?? undefined }, { status: err.status });
     }
     console.error("[finanzas] emitInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

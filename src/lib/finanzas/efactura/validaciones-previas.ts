@@ -22,6 +22,7 @@
  * verificados un algoritmo equivocado bloquearía clientes legítimos. Que el RUC
  * EXISTA sólo lo sabe la DGI [1602]: ideati no tiene endpoint para consultarlo.
  */
+import { tipoReceptorEfectivo } from "@/lib/finanzas/efactura/mapper/derive-tipo-receptor-fe";
 import {
   DESCRIPCION_LINEA_MAX,
   validarDescripcionDeLinea,
@@ -35,6 +36,8 @@ export interface ReceptorParaValidar {
   client_type: string | null;
   client_status: string | null;
   tipo_receptor_fe: string | null;
+  /** Para deducir el tipo de receptor cuando no está cargado (igual que el mapper). */
+  tax_id_type?: string | null;
   tax_id: string | null;
   ruc: string | null;
   digito_verificador: string | null;
@@ -85,18 +88,35 @@ export const TOTAL_MAXIMO_CONSUMIDOR_FINAL = 10_000; // [2515]
 export const DIAS_MAXIMOS_NOTA_REFERENCIADA = 180; // [1714]
 
 /**
- * Estructura del RUC de una PERSONA NATURAL (cédula): provincia 1 a 13, o los
- * prefijos de la cédula panameña (PE, E, N, AV, PI, NT), y dos grupos numéricos.
- *   8-742-1183 · PE-12-345 · E-8-123456 · N-12-345 · 8AV-12-345 · 8NT-1-1234
+ * El formato NT («número tributario»): provincia-NT-folio-asiento. Lo usan las
+ * propiedades horizontales y quien no tiene cédula ni inscripción en el Registro.
+ * Aparece en la ficha técnica (`8-NT-000-00`, ejemplo del CUFE) y en producción
+ * hay tres clientes JURÍDICOS ya autorizados por la DGI con él (03/10/2026):
+ *   8-NT-2-735096 · 8-NT-2-47098 · 8-NT-2-752906
+ * Se acepta con o sin guion entre la provincia y el NT (`8NT-2-…`).
  */
-const CEDULA = /^(?:(?:[1-9]|1[0-3])(?:AV|PI|NT)?|PE|E|N)-\d{1,4}-\d{1,6}$/;
+const NT = String.raw`(?:[1-9]|1[0-3])-?NT-\d{1,4}-\d{1,7}`;
 
 /**
- * Estructura del RUC de una PERSONA JURÍDICA: tres grupos numéricos
- * (tomo-folio-asiento, o ficha-rollo-imagen en el formato nuevo).
- *   25046169-3-2021 · 155123456-2-2015 · 1499876-1-690043
+ * Estructura del RUC de una PERSONA NATURAL (cédula): provincia 1 a 13, o los
+ * prefijos de la cédula panameña (PE, E, N, AV, PI), y dos grupos numéricos.
+ * PE también con tres grupos, como el ejemplo de la ficha (`PE-4-000-000`).
+ *   8-742-1183 · PE-12-345 · PE-4-123-456 · E-8-123456 · N-12-345 · 8AV-12-345 · 8-NT-1-1234
  */
-const JURIDICA = /^\d{1,10}-\d{1,4}-\d{1,7}$/;
+const CEDULA = new RegExp(
+  String.raw`^(?:(?:(?:[1-9]|1[0-3])(?:AV|PI)?|PE|E|N)-\d{1,4}-\d{1,6}|PE-\d{1,2}-\d{1,4}-\d{1,6}|${NT})$`
+);
+
+/**
+ * Estructura del RUC de una PERSONA JURÍDICA. Dos formas, las dos con clientes
+ * de producción ya autorizados por la DGI (03/10/2026):
+ *   · tres grupos numéricos: tomo-folio-asiento (sociedades antiguas:
+ *     147-569-40208, 42071-105-286474), ficha-rollo-imagen (2676824-1-844561) y
+ *     el formato nuevo con el año (155669878-2-2018, 25046169-3-2021). Las
+ *     fundaciones y cooperativas se inscriben con estas mismas formas;
+ *   · NT (propiedad horizontal): 8-NT-2-735096.
+ */
+const JURIDICA = new RegExp(String.raw`^(?:\d{1,10}-\d{1,4}-\d{1,7}|${NT})$`);
 
 /** El RUC como se compara: mayúsculas y sin espacios. */
 export function normalizarRuc(raw: string | null | undefined): string {
@@ -109,7 +129,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export function validarParaLaDgi(doc: DocumentoParaValidar): ProblemaParaLaDgi[] {
   const p: ProblemaParaLaDgi[] = [];
   const c = doc.receptor;
-  const tipo = String(c.tipo_receptor_fe ?? "").trim();
+  // El tipo que de verdad viaja: el explícito o el que deduce el mapper (CLI-036).
+  const tipo = tipoReceptorEfectivo(c) ?? "";
 
   // ── El cliente (el receptor) ──────────────────────────────────────────────
   if (c.client_status !== "active") {
@@ -120,7 +141,9 @@ export function validarParaLaDgi(doc: DocumentoParaValidar): ProblemaParaLaDgi[]
       donde: "cliente",
       campo: "tipo_receptor_fe",
       codigoDgi: "1600",
-      mensaje: "Falta el tipo de receptor de la factura electrónica (contribuyente, consumidor final, gobierno o extranjero) en la ficha del cliente.",
+      mensaje:
+        "Falta el tipo de receptor de la factura electrónica (contribuyente, consumidor final, gobierno o extranjero) en la ficha del cliente, " +
+        "y no se puede deducir: no tiene tipo de documento ni tipo de cliente.",
     });
   }
 

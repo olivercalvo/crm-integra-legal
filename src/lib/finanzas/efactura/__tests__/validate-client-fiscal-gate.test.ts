@@ -182,8 +182,16 @@ test("receptor 04 (extranjero) sin id_extranjero ni país FALLA", () => {
   );
 });
 
-test("receptor sin tipo_receptor_fe FALLA", () => {
-  const row = { ...receptor01SinUbicacion(), tipo_receptor_fe: null };
+test("sin tipo_receptor_fe pero deducible (CLI-036, 03/10/2026): NO falla, se usa el tipo que manda el mapper", () => {
+  // Persona natural, sin tipo de receptor y sin DV: consumidor final.
+  const row = { ...receptor01SinUbicacion(), tipo_receptor_fe: null, client_type: "persona_natural", tax_id: "8-857-1322", digito_verificador: null };
+  assert.doesNotThrow(() => validateClientFiscalGate(row));
+  // Persona jurídica sin tipo: contribuyente, con sus requisitos (RUC y DV).
+  assert.doesNotThrow(() => validateClientFiscalGate({ ...receptor01SinUbicacion(), tipo_receptor_fe: null }));
+});
+
+test("receptor sin tipo_receptor_fe y sin nada para deducirlo FALLA", () => {
+  const row = { ...receptor01SinUbicacion(), tipo_receptor_fe: null, client_type: null, tax_id_type: null };
   assert.throws(
     () => validateClientFiscalGate(row),
     (err: unknown) => {

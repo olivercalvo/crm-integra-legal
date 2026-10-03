@@ -15,7 +15,7 @@ import type {
 type DB = SupabaseClient;
 
 const RECEPTOR_SELECT =
-  "name, client_type, client_status, tipo_receptor_fe, tax_id, ruc, digito_verificador, id_extranjero, pais_receptor";
+  "name, client_type, client_status, tipo_receptor_fe, tax_id_type, tax_id, ruc, digito_verificador, id_extranjero, pais_receptor";
 
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v : null);
 
@@ -30,6 +30,7 @@ export async function cargarReceptor(db: DB, tenantId: string, clientId: string)
     client_type: s(r.client_type),
     client_status: s(r.client_status),
     tipo_receptor_fe: s(r.tipo_receptor_fe),
+    tax_id_type: s(r.tax_id_type),
     tax_id: s(r.tax_id),
     ruc: s(r.ruc),
     digito_verificador: s(r.digito_verificador),

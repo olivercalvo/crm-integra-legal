@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { InvoiceKind, InvoiceStatus } from "@/lib/finanzas/types/invoice";
+import { tipoReceptorEfectivo, type ClienteParaTipoReceptor } from "@/lib/finanzas/efactura/mapper/derive-tipo-receptor-fe";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import type {
   InvoiceEfacturaBundle,
@@ -209,7 +210,10 @@ export function validateClientFiscalGate(row: Record<string, unknown>): void {
     );
   }
 
-  const tipoReceptor = row.tipo_receptor_fe;
+  // 03/10/2026: el MISMO tipo que manda el mapper (`tipoReceptorEfectivo`).
+  // Antes se exigía explícito y un cliente que el mapper sí sabía deducir
+  // (CLI-036 de producción) nunca llegaba al PAC.
+  const tipoReceptor = tipoReceptorEfectivo(row as ClienteParaTipoReceptor);
   if (!tipoReceptor) {
     missing.push("tipo de receptor FE");
   }

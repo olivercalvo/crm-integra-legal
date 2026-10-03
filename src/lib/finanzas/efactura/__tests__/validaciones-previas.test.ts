@@ -50,9 +50,41 @@ test("RUC de persona jurídica: tres grupos numéricos; el del emisor y los de s
   }
 });
 
+test("🔴 los 22 RUC jurídicos que la DGI YA autorizó en producción pasan todos (03/10/2026)", () => {
+  // Resultado de sql/verificacion/produccion-ruc-clientes-autorizados.sql, sin
+  // nombres: tipo de cliente, receptor, RUC y DV. Tres son propiedades
+  // horizontales (formato NT) que la primera versión de la regla rechazaba.
+  const autorizados: [string, string][] = [
+    ["8-NT-2-735096", "90"], ["8-NT-2-47098", "0"], ["8-NT-2-752906", "36"],
+    ["2676824-1-844561", "85"], ["355536-1-418137", "02"], ["155669878-2-2018", "90"],
+    ["147-569-40208", "18"], ["1264372-1-596297", "94"], ["1725894-1-691335", "01"],
+    ["42071-105-286474", "00"], ["2283159-1-787269", "25"], ["155773283-2-2025", "21"],
+    ["54550-119-331163", "26"], ["155673726-2-2018", "0"], ["10354-127-105722", "87"],
+    ["155764022-2-2025", "1"], ["155591383-2-2015", "14"], ["155789377-2-2026", "1"],
+    ["2020220-1-743234", "0"], ["1725664-1-691300", "87"], ["2171478-1-768790", "54"],
+    ["1725575-1-691288", "55"],
+  ];
+  assert.equal(autorizados.length, 22);
+  for (const [ruc, dv] of autorizados) {
+    const r = { ...base().receptor, client_type: "persona_juridica", tipo_receptor_fe: "01", tax_id: ruc, digito_verificador: dv };
+    assert.deepEqual(validarParaLaDgi(base({ receptor: r })), [], `${ruc} DV ${dv}`);
+  }
+});
+
+test("CLI-036: persona natural sin tipo de receptor ni DV, ya facturada: se deduce consumidor final y NO se bloquea", () => {
+  const r = { ...base().receptor, client_type: "persona_natural", tipo_receptor_fe: null, tax_id: "8-857-1322", digito_verificador: null };
+  assert.deepEqual(validarParaLaDgi(base({ receptor: r })), []);
+  // Con DV se deduce contribuyente, y ahí el DV y la cédula se validan.
+  const conDv = { ...r, digito_verificador: "05" };
+  assert.deepEqual(validarParaLaDgi(base({ receptor: conDv })), []);
+  // Sin nada para deducir, sí se pide completar la ficha.
+  const nada = { ...r, client_type: null };
+  assert.ok(codigos(base({ receptor: nada })).includes("1600"));
+});
+
 test("RUC de persona natural: forma de cédula panameña (con sus prefijos)", () => {
   const nat = (ruc: string) => base({ receptor: { ...base().receptor, client_type: "persona_natural", tax_id: ruc } });
-  for (const ruc of ["8-742-1183", "2-706-2214", "PE-12-345", "E-8-123456", "N-12-345", "8AV-12-345", "8NT-1-1234", "13-1-1"]) {
+  for (const ruc of ["8-742-1183", "2-706-2214", "PE-12-345", "PE-4-123-456", "E-8-123456", "N-12-345", "8AV-12-345", "8NT-1-1234", "8-NT-1-1234", "13-1-1"]) {
     assert.deepEqual(validarParaLaDgi(nat(ruc)), [], ruc);
   }
   for (const ruc of ["14-1-1", "8-742", "1499876-1-690043", "pasaporte123"]) {

@@ -1,6 +1,8 @@
-# Propuesta: bitácora automática de auditoría del módulo contable
+# Propuesta: bitácoras automáticas de auditoría (contable y legal)
 
 > 03/10/2026 · Pedido de Josuarth: quién, qué, cuándo, sobre qué documento, valor anterior y nuevo.
+> **Decisión de Oliver (03/10): DOS bitácoras, una por módulo**, cada una con su tabla, su cadena de hash,
+> su pantalla y sus permisos.
 > **Solo diagnóstico y diseño: nada construido, ninguna migración escrita.**
 > Diagnóstico hecho contra el esquema de staging (`xtyenhakplrkyifbcaow`) y el código de la rama
 > `feat/bloque1-contable`.
@@ -15,7 +17,7 @@
 | Quién escribe | **El código de la app**, a mano, en ~32 archivos (`src/app/api/clients`, `cases`, `documents`, `admin/users`, `admin/catalogs`, y en Finanzas: `business-expenses`, `suppliers`, `tax-codes`, `chart-of-accounts`, `periodos`, `quotes`, `saldo-a-favor`) |
 | Qué tiene en staging | 32 filas: compras (crear), períodos (cerrar o reabrir), tasas, proveedores, clientes, un cobro, un documento borrado, una cuenta |
 | Qué **no** registra | Emitir una factura, NC o ND; cobros y su reversión; pagos a proveedores; gastos de trámite; asientos manuales; importaciones; cierre anual; envíos y anulaciones ante la DGI; series; parámetros (ISR). Si una ruta se olvida de llamarla, no hay registro y nada lo detecta |
-| 🔴 **¿Se puede alterar?** | **Sí.** Política RLS `audit_tenant_isolation` **FOR ALL** con `tenant_id = tenant_id()`. Grants de `INSERT, UPDATE, DELETE, TRUNCATE` a `anon` y `authenticated`. Sin triggers de protección. **Cualquier usuario logueado puede editar o borrar la bitácora de su propio bufete** con el cliente de Supabase del navegador. No sirve como prueba de auditoría |
+| 🔴 **¿Se puede alterar?** | **Sí** (confirmado también en producción el 03/10; la `084` lo corrige, ver b.8). Política RLS `audit_tenant_isolation` **FOR ALL** con `tenant_id = tenant_id()`. Grants de `INSERT, UPDATE, DELETE, TRUNCATE` a `anon` y `authenticated`. Sin triggers de protección. **Cualquier usuario logueado puede editar o borrar la bitácora de su propio bufete** con el cliente de Supabase del navegador. No sirve como prueba de auditoría |
 
 ### a.2 Lo que ya es auditable sin bitácora
 
@@ -37,149 +39,167 @@
   configuración, usuarios, envíos.
 - La bitácora que hay no es confiable: se puede borrar y depende de que cada ruta se acuerde de escribirla.
 
-## b. Propuesta
+## b. Propuesta: dos bitácoras, una por módulo
 
-### b.1 Eventos
+### b.1 Qué va en cada una
 
-| Grupo | Eventos | Tablas que los disparan |
+| | **Bitácora contable** | **Bitácora legal** |
 |---|---|---|
-| Documentos de venta | crear, editar borrador, emitir, anular, NC, ND, aplicar saldo a favor | `invoices`, `invoice_lines`, `credit_notes`, `credit_note_lines`, `credit_note_applications` |
-| DGI | enviar, autorizada, rechazada, anular ante la DGI, cargar CUFE del portal, marcar interna | `fe_emisiones`, `fe_anulaciones`, columnas `fe_estado`, `dgi_cufe*` de `invoices` y `credit_notes` |
-| Cobros | registrar, aplicar, reversar, eliminar (los sin asiento) | `payments`, `payment_applications`, `payment_reversals` |
-| Compras y pagos | crear, editar, pagar, reversar pago, NC de proveedor | `business_expenses`, `expense_lines`, `supplier_payments`, `supplier_credit_notes`, `supplier_credit_note_applications` |
-| Gastos de trámite | crear, editar, registrar en el libro, reversar, pagar | `expenses` |
-| Libro | asiento manual, reversión, importación y su reversión, cierre anual | `journal_entries` (solo INSERT: es inmutable), `journal_imports` |
-| Períodos | cerrar, reabrir | `accounting_periods` |
-| Catálogos contables | plan de cuentas (incluida la subcategoría y la cuenta control), tasas, series | `chart_of_accounts`, `tax_codes`, `numbering_sequences`, `services_catalog` |
-| Configuración | tasa de ISR y los parámetros que vengan (fecha de corte, etc.) | `finanzas_parametros`, `quote_terms_template` |
-| Terceros | clientes (datos fiscales: RUC, DV, tipo), proveedores (RUC, DV, plazo, cuenta por defecto) | `clients`, `suppliers` |
-| Usuarios y roles | alta, baja, cambio de rol, activar o desactivar | `users` |
+| Tabla | `auditoria.bitacora_contable` | `auditoria.bitacora_legal` |
+| Contenido | Todo el módulo Finanzas (lista abajo) | Todo el módulo Legal: clientes (ficha y estado), casos, documentos, tareas, comentarios, catálogos legales (`cat_*`), gastos del caso y cobros del caso (`client_payments`) |
+| Tablas con trigger | `invoices`, `invoice_lines`, `credit_notes`, `credit_note_lines`, `credit_note_applications`, `fe_emisiones`, `fe_anulaciones`, `payments`, `payment_applications`, `payment_reversals`, `business_expenses`, `expense_lines`, `supplier_payments`, `supplier_credit_notes`, `supplier_credit_note_applications`, `journal_entries` (solo INSERT), `journal_imports`, `accounting_periods`, `chart_of_accounts`, `tax_codes`, `numbering_sequences`, `services_catalog`, `finanzas_parametros`, `quotes`, `quote_lines`, `quote_terms_template`, `suppliers` | `clients`, `cases`, `documents`, `tasks`, comentarios, `cat_*`, `expenses`, `client_payments`, `users` |
+| Cadena de hash | Propia | Propia |
+| Ancla | Al cerrar cada período contable (en `accounting_chain_anchors`) | Diaria, con el respaldo: Legal no tiene períodos |
+| Quién la ve | **El contador** (decisión del 03/10) | **El admin del bufete** |
+| Pantalla | `/finanzas/auditoria` | `/legal/admin/auditoria` (reemplaza la de hoy, que lee `audit_log`) |
+| Nadie la edita ni la borra | Sí, ni el admin ni el contador (b.4) | Igual |
 
-### b.2 Campos de cada fila
+**Qué entra en la bitácora contable:**
+- facturas, NC y ND: crear, editar borrador, emitir, anular, aplicar saldo a favor;
+- DGI: envíos, anulaciones, CUFE cargado a mano y documentos «interna»;
+- cobros: registrar, aplicar, reversar, eliminar;
+- compras, pagos a proveedores y NC de proveedor;
+- asientos manuales, reversiones e importaciones;
+- períodos (cerrar y reabrir) y cierre anual;
+- plan de cuentas (incluidas subcategoría y cuenta control), tasas de impuesto, series
+  (`numbering_sequences`) y servicios del catálogo;
+- parámetros contables (ISR, fecha de corte);
+- cotizaciones y su plantilla;
+- proveedores.
+
+### b.2 Lo que toca a los dos módulos
+
+Hay tres casos:
+1. **Usuarios y roles.**
+2. **Clientes**: son de Legal, pero su RUC, DV, nombre y tipo van en cada factura y en el 100004.
+3. **Gastos de trámite** (`expenses`): se cargan en el caso y generan un asiento (130003 / 200001) y su pago.
+   Los cobros del caso (`client_payments`) no generan asiento: son solo de Legal.
+
+**Opción 1 (recomendada): cada tabla tiene UN módulo dueño, y lo que tiene efecto contable se escribe
+también en la contable.** Una sola transacción, dos filas, con el mismo `evento_id` para unirlas.
+
+| Tabla | Bitácora del dueño | Además en la contable |
+|---|---|---|
+| `clients` | Legal, todo el cambio | Solo si cambia un campo fiscal: `name`, `ruc`/`tax_id`, `digito_verificador`, `tax_id_type`, `client_type`, `tipo_receptor_fe`, ubicación fiscal, `client_status` (activo = facturable) |
+| `expenses` | Legal, todo el cambio | Si cambia algo que entra al asiento (monto, cuenta, proveedor, `supplier_invoice_number`, fecha de registro) o el gasto se registra en el libro, se reversa o se paga |
+| `client_payments` | Legal | Nunca (no postea) |
+| `users` | Legal (el admin administra usuarios) | Si el cambio toca quién ve Finanzas: alta o baja de un usuario admin, abogada o contador, o un cambio de rol desde o hacia esos roles |
+
+Así el contador ve en su bitácora todo lo que puede cambiar una cifra o un permiso contable, sin ver el resto
+de Legal (la descripción de un caso, sus documentos). El admin ve el cambio completo en la legal.
+
+**Opción 2: una sola bitácora por tabla, sin duplicar.**
+- `clients` y `users` solo en Legal; `expenses` solo en la contable.
+- Es más simple, pero el contador no se entera de que alguien cambió el RUC de un cliente (que cambia lo que
+  se manda a la DGI) ni de que alguien se dio el rol de contador.
+- Y el admin no ve en Legal la edición de un gasto de su caso.
+
+**Recomiendo la opción 1.** La duplicación es chica (solo los campos con efecto contable) y deja cada
+pantalla completa para quien la mira.
+
+### b.3 Campos de cada fila (iguales en las dos)
 
 | Campo | Contenido |
 |---|---|
-| `id` | bigint identity (ordena y numera) |
+| `id` | bigint identity, por bitácora |
+| `evento_id` | uuid. El mismo en las dos bitácoras cuando un cambio se escribe en ambas (b.2) |
 | `tenant_id` | del registro, nunca del request |
-| `ocurrido_en` | `timestamptz` (UTC en la base). **Se muestra en hora de Panamá** (`America/Panama`) en la pantalla y el Excel |
-| `usuario_id`, `usuario_nombre`, `rol` | el nombre y el rol **se copian** en el momento: si el usuario cambia de rol o se da de baja, la fila sigue diciendo lo que era |
-| `accion` | `crear`, `editar`, `emitir`, `anular`, `reversar`, `enviar_dgi`, `cerrar`, `reabrir`, `eliminar`, … (derivada del cambio, ver b.4) |
-| `tabla`, `registro_id` | la fila tocada |
-| `documento` | número legible: `FAC-HON-000022`, `CO-000012`, `AD-000003`, `2026-08` (período) |
-| `cambios` | `jsonb`, **solo lo que cambió**: `{"status": ["emitida", "anulada"], "cancellation_reason": [null, "…"]}`. En un alta, los campos clave. En una baja, la fila entera |
-| `origen` | `usuario` o `sistema` (un trigger derivado, como `amount_paid` de T7a, con `pg_trigger_depth() > 1`) |
-| `hash`, `hash_anterior` | cadena como la del ledger (b.3) |
+| `ocurrido_en` | `timestamptz` (UTC en la base), **mostrado en hora de Panamá** en pantalla y Excel |
+| `usuario_id`, `usuario_nombre`, `rol` | nombre y rol **copiados** en el momento |
+| `accion` | `crear`, `editar`, `emitir`, `anular`, `reversar`, `enviar_dgi`, `cerrar`, `reabrir`, `eliminar`, `legado`… |
+| `tabla`, `registro_id`, `documento` | la fila y su número legible (`FAC-HON-000022`, el código del caso, `2026-08`) |
+| `cambios` | `jsonb` con **solo lo que cambió**: `{"campo": [antes, después]}` |
+| `origen` | `usuario`, `sistema` (trigger derivado) o `legado` (filas de `audit_log`) |
+| `hash`, `hash_anterior` | cadena propia de esa bitácora |
 
-Columnas que **no** se registran porque cambian solas y no dicen nada: `updated_at`. Las derivadas
-(`amount_paid`, `credited_total`, `status` de T7a) sí, con `origen = sistema`. Explican por qué una factura pasó
-a «pagada».
+### b.4 Solo agregar: nadie edita ni borra, ni el admin
 
-### b.3 Solo agregar: nadie edita ni borra, ni el admin
+Lo mismo para las dos tablas:
+1. Esquema `auditoria`, fuera de `public`: PostgREST no lo expone.
+2. `REVOKE ALL` a `anon`, `authenticated` y `service_role`. Se escribe solo por la función del trigger
+   (`SECURITY DEFINER`, cuyo dueño es un rol sin login).
+3. Triggers `BEFORE UPDATE OR DELETE` y `BEFORE TRUNCATE` que rechazan salvo al superusuario: **el mismo
+   mecanismo de la `084`**, ya simulado en staging (11/11).
+4. Lectura por RPC `SECURITY DEFINER` que filtra por el `tenant_id` del perfil y por rol (contable:
+   contador; legal: admin).
+5. Cadena de hash por bitácora y ancla externa (b.1).
 
-Cómo se garantiza en Supabase, en capas:
+**El límite:** `supabase_admin` (el superusuario de la plataforma) puede quitar un trigger. No se puede
+impedir dentro de la base; la cadena con ancla lo detecta, como en el ledger.
 
-1. **Esquema propio `auditoria`**, fuera de `public`: PostgREST no lo expone, así que no hay endpoint REST
-   que lo toque.
-2. **`REVOKE ALL` a `anon`, `authenticated` y `service_role`.** Nadie tiene `INSERT`, `UPDATE`, `DELETE`
-   ni `TRUNCATE` directo. La escritura es solo por la función del trigger, `SECURITY DEFINER`, cuyo dueño es
-   un rol sin login.
-3. **Triggers `BEFORE UPDATE OR DELETE` y `BEFORE TRUNCATE`** que lanzan excepción siempre, como los de
-   inmutabilidad del ledger (`023`).
-4. **Lectura** por una vista o RPC `SECURITY DEFINER` que filtra por el `tenant_id` del perfil y por rol
-   (admin y contador). Es el mismo patrón de las rutas de export: el tenant sale del perfil, nunca del request.
-5. **Cadena de hash** (`hash = sha256(hash_anterior ‖ contenido canónico)`, el `finanzas_contenido_v5` del
-   ledger) **y ancla externa**: al cerrar cada período se graba el último `hash` en la misma
-   `accounting_chain_anchors`, y sale en el respaldo diario.
+### b.5 Captura: triggers en la base (recomendado)
 
-**El límite honesto:** el dueño del proyecto (`postgres` en el SQL Editor) es superusuario y puede
-desactivar un trigger. Eso no se puede impedir dentro de la base. La cadena con ancla lo **detecta** igual
-que en el ledger: si alguien borra o edita una fila, el verificador lo encuentra contra el ancla del
-respaldo. Es la misma garantía que ya tiene el libro.
+- **Una función genérica** `auditoria.registrar(modulo)`. El trigger de cada tabla dice a qué bitácora va, y
+  en las tablas de b.2 la función decide si además escribe en la contable.
+- **El usuario:** `auth.uid()` con la sesión, o el header `x-actor-id` que pone el servidor al crear el
+  cliente de servicio (`current_setting('request.headers')`). Sin ninguno, `sistema`. Hoy **todo** se escribe
+  con el cliente de servicio (revisado el 03/10), así que el header es el camino principal.
+- **Por qué triggers y no código:** las 32 escrituras de `audit_log` son a mano, y emitir, cobrar y anular
+  nunca escribieron. Un trigger no se olvida.
 
-### b.4 Captura: triggers en la base (recomendado), no desde el código
+### b.6 Pantallas
 
-| | Triggers | Desde el código |
+| | Contable | Legal |
 |---|---|---|
-| Cobertura | Toda escritura, por cualquier camino: rutas, RPC, importaciones, scripts, el SQL Editor | Solo las rutas que se acuerdan. Hoy ya pasó: emitir, cobrar y anular no escriben `audit_log` |
-| Antes y después | Exactos (`OLD` / `NEW`) | El código tiene que leer antes de escribir |
-| Mantenimiento | Una función genérica; agregar una tabla es una línea | Una llamada por ruta, más su test |
-| El usuario | 🔴 **El problema**: mucho se escribe con el cliente de servicio (todo el posteo, por SOP-014), y ahí `auth.uid()` es NULL | Lo tiene a mano |
+| Ruta | `/finanzas/auditoria` (nueva) | `/legal/admin/auditoria` (la de hoy, que pasa a leer la bitácora nueva) |
+| Quién | Contador | Admin |
+| Filtros | Fechas (Panamá), usuario, acción, módulo (ventas, cobros, compras, libro, catálogos, configuración), documento, origen | Fechas, usuario, acción, cliente, caso, tabla, origen |
+| Exportar | Excel con `exportar-xlsx.ts`, mismos roles. Se agrega a `EXPORTS` de `nav-guard.test.ts` | Igual |
+| Integridad | «Verificar integridad» contra el ancla del período | Contra el ancla diaria |
 
-**Recomendación: triggers, con el usuario por dos vías.**
-1. **Sesión del usuario** (escrituras con RLS): `auth.uid()`.
-2. **Cliente de servicio:** el servidor crea su cliente con un header `x-actor-id` (el `userId` del contexto
-   autenticado). El trigger lo lee de `current_setting('request.headers', true)`, que PostgREST expone por
-   request. El header solo lo puede poner quien tiene la clave de servicio, que vive en el servidor.
-   `createAdminClient(userId)` pasa a exigir el usuario, y un test lo verifica en las rutas que mutan.
-3. **Sin ninguno de los dos:** `usuario = sistema`. Es una migración o un script, y queda dicho.
+Las dos se agregan a `route-access.ts` y `nav-config.ts`; `nav-guard.test.ts` verifica que no se separen.
 
-La `accion` se deriva en el trigger:
-- INSERT → `crear`; DELETE → `eliminar`;
-- un cambio de `status` a `emitida` → `emitir`, a `anulada` → `anular`;
-- un `fe_estado` → `enviar_dgi`;
-- en `accounting_periods`, `status` → `cerrar` / `reabrir`;
-- el resto → `editar`.
+### b.7 Las filas viejas de `audit_log`, como «legado»
 
-Lo que no es un cambio de fila (por ejemplo «descargó el PDF») queda fuera: no es una modificación.
+No se borran ni se editan (con la `084` ya no se puede). Se **copian** una vez a la bitácora que corresponde:
+- con `origen = legado`, y el usuario y la fecha originales;
+- con `cambios` armado desde `field`, `old_value` y `new_value`;
+- entrando a la cadena de hash de la bitácora nueva al copiarse: la cadena garantiza desde ese momento, no
+  antes.
 
-### b.5 Pantalla para el contador
+| `entity` en `audit_log` | Bitácora |
+|---|---|
+| `cases`, `documents`, `client_payments`, `cat_classifications`, `cat_team` y los demás `cat_*` | Legal |
+| `clients` | Legal; **también contable** si `field` es un campo fiscal (b.2) |
+| `users` | Legal; **también contable** si el cambio es de rol o de un usuario de Finanzas |
+| `expenses` | Legal; **también contable** si `field` tiene efecto contable o es el comprobante del gasto |
+| `business_expenses`, `payment`, `accounting_period`, `chart_of_accounts`, `suppliers`, `tax_codes`, `quotes` | Contable |
+| Cualquier otro valor | Legal, marcado `sin clasificar` para revisarlo a mano (no se adivina) |
 
-- **`/finanzas/auditoria`**: admin y contador. Se agrega a `route-access.ts` y `nav-config.ts`;
-  `nav-guard.test.ts` lo verifica.
-- **Filtros:**
-  - rango de fechas (en hora de Panamá);
-  - usuario;
-  - acción;
-  - módulo (ventas, cobros, compras, libro, catálogos, configuración, usuarios);
-  - número de documento (búsqueda);
-  - origen (usuario o sistema).
-- **Tabla:** fecha y hora, usuario (rol), acción, documento con enlace, y un resumen «qué cambió».
-  Al expandir: antes y después campo por campo.
-- **Exportar a Excel** con el motor de `exportar-xlsx.ts`, el mismo filtro y la misma lista de roles.
-  Se suma a `EXPORTS` en `nav-guard.test.ts`. Celdas vacías sin «—».
-- **Botón «Verificar integridad»:** recorre la cadena contra el ancla, como hoy en Períodos Contables.
+`audit_log` queda **de solo lectura** como respaldo del original. Se retira del código cuando las dos
+bitácoras nuevas estén escribiendo y la copia esté verificada (conteo por `entity` igual en el origen y en el
+destino).
 
-### b.6 Rendimiento y almacenamiento
+### b.8 Rendimiento y almacenamiento
 
-- **Escritura:** un INSERT por fila modificada dentro de la misma transacción. Con el volumen del bufete
-  (decenas o cientos de documentos al día) es imperceptible.
-  - Lo más pesado es una importación de asientos: cada asiento inserta su cabecera y líneas, y las líneas del
-    ledger **no** se auditan (son inmutables y ya están en el libro). Solo la cabecera y `journal_imports`.
-  - El hash de la cadena obliga a serializar las inserciones por bufete, con un `FOR UPDATE` sobre el último,
-    como el ledger. Con este volumen no compite.
-- **Almacenamiento:** ~0.5 a 2 KB por fila (el JSONB solo lleva lo que cambió). Estimando 2,000 eventos al
-  mes: **~2 a 4 MB por mes, menos de 50 MB por año.** Índices: `(tenant_id, ocurrido_en)`,
-  `(tenant_id, tabla, registro_id)` y `(tenant_id, documento)`. No hace falta particionar antes de varios años.
-- **Lectura:** paginada por fecha con el índice. El Excel con un tope (por ejemplo 50,000 filas) y aviso.
+Lo mismo que se estimó para una, repartido:
+- unos 2 a 4 MB por mes en total, menos de 50 MB por año;
+- índices `(tenant_id, ocurrido_en)`, `(tenant_id, tabla, registro_id)` y `(tenant_id, documento)` en cada una;
+- el hash serializa las inserciones **por bitácora y por bufete**: separarlas reduce la contención.
 
-### b.7 Migraciones necesarias (no escritas)
+Las líneas del ledger no se auditan: son inmutables y ya están en el libro.
 
-1. **Esquema y tabla:** `auditoria.bitacora`, los `REVOKE`, los triggers que bloquean UPDATE, DELETE y
-   TRUNCATE, los índices y la vista o RPC de lectura por tenant y rol.
-2. **Función genérica** `auditoria.registrar()` (diff de `OLD`/`NEW`, actor por JWT o header, acción derivada,
-   documento legible por tabla, hash encadenado) y los triggers `AFTER INSERT OR UPDATE OR DELETE` en la lista
-   de b.1.
-3. **Ancla:** `accounting_chain_anchors` guarda también el último hash de la bitácora al cerrar período.
-   Va al respaldo diario.
-4. **`audit_log` vieja:**
-   - corregir YA su RLS a solo lectura (`FOR SELECT`) y `REVOKE UPDATE, DELETE, TRUNCATE` a `anon` y
-     `authenticated`. Es una corrección de seguridad independiente de esta propuesta;
-   - después, migrar sus filas a la bitácora nueva como `origen = legado` y retirarla del código.
-5. En código, sin migración:
-   - `createAdminClient(userId)` con el header;
-   - el test que lo exige;
-   - la pantalla y el export.
+### b.9 Migraciones necesarias (no escritas)
 
-**Orden sugerido:**
-1. La corrección de `audit_log` (punto 4, primera parte). Es chica y cierra un agujero hoy.
-2. Después la bitácora nueva, en una ventana posterior al despliegue del Bloque 1. No toca el libro y
-   puede ir sola.
+1. **`084` (ya escrita, SIN APLICAR):** `audit_log` solo de agregar. Hotfix independiente, aplica limpio en
+   `main`. Va primero, sola.
+2. **Esquema y tablas:** `auditoria.bitacora_contable` y `auditoria.bitacora_legal`, los `REVOKE`, los
+   triggers de solo agregar, los índices y los RPC de lectura por rol.
+3. **Función genérica y triggers** en las tablas de b.1, con el ruteo de b.2.
+4. **Anclas:** la contable en `accounting_chain_anchors` al cerrar período; la legal en anclas diarias. Las dos
+   salen en el respaldo.
+5. **Copia del legado** (b.7), con verificación de conteos que aborta si no coinciden.
+6. Código, sin migración:
+   - `createAdminClient(userId)` con el header `x-actor-id`, y un test que lo exige en las rutas que mutan;
+   - las dos pantallas y sus exports;
+   - quitar las escrituras manuales a `audit_log` cuando todo lo anterior esté verificado.
 
-## Dudas para Josuarth
+## Dudas para Josuarth y Oliver
 
-1. ¿Quiere ver también **lecturas** sensibles (quién descargó el Excel de la antigüedad o el PDF de una
-   factura)? No es un cambio de fila: necesitaría registro desde el código, solo en esas rutas.
-2. ¿Cuánto tiempo se guarda? La propuesta es **para siempre** (es chica). Si la ley pide un mínimo, se
-   respeta.
-3. ¿El módulo Legal (casos, documentos, tareas) entra también, o solo el contable? Técnicamente es la misma
-   función. Es una decisión de alcance y de quién puede verlo.
+1. ¿El **admin** también ve la bitácora contable (en lectura)? La decisión dice «la ve el contador», y hoy el
+   admin entra a todo Finanzas.
+2. ¿Lecturas sensibles (quién descargó un Excel o un PDF)? No son cambios de fila: harían falta registros
+   desde el código en esas rutas.
+3. ¿Cuánto tiempo se guardan? La propuesta: para siempre (son chicas).
+4. Tareas y comentarios de Legal: ¿todos los cambios, o solo estado y asignación? Es lo más voluminoso de
+   Legal.

@@ -12,7 +12,7 @@
   propósito). Probadas en staging dentro de una transacción con ROLLBACK: captura con usuario por header,
   copia fiscal a la contable, «sistema» sin usuario, cadena íntegra, UPDATE/DELETE/TRUNCATE rechazados,
   lectura por rol (contador no lee la legal, abogada no lee la contable), 088 con conteos iguales.
-- ✅ `createAdminClient(usuario)` en las 96 llamadas; pantallas, Excel y «Verificar integridad».
+- ✅ `createAdminClient(usuario)` en las 97 llamadas (más un comentario); pantallas, Excel y «Verificar integridad».
 - ⏳ **Esperando «aplica»** de la 086 y la 087 en staging. Después: el recorrido del punto 7 (crear,
   editar, anular y reversar documentos contables y legales, usuario, antes/después, cadena, intentos de
   editar y borrar).

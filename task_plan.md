@@ -30,10 +30,13 @@
   traba en 18 de 18. Obligatoria en el paso −1 del runbook junto con la de las 41 tablas (131/131 con la 090).
 - ✅ Prueba 4: admin ve las dos, contador sólo la contable, abogada y asistente ninguna (24 de 24 por las
   rutas, más el navegador). «Verificar integridad» desde la pantalla: contable 66 y legal 26, íntegras.
-- ⏳ **Prueba 3, esperando «aplica» de la `091`**: AU001 con el mensaje claro y el error real en el log
-  (`fetchConAuditoria` en los dos clientes, `conManejoDeAuditoria` en los 120 archivos de rutas, 9 tests).
-  El código ya está; sin la 091 no cambia nada. Después: verlo en pantalla con una trampa temporal en staging
-  (se muestra antes).
+- ✅ `091` aplicada en staging: si falla la bitácora, AU001. Probado en pantalla como abogada con una trampa
+  temporal autorizada (18 s, sólo comentarios con «PRUEBA-AU001»): mensaje claro en pantalla, error real en el log
+  con tabla, operación y llamada; trampa retirada y verificada en el catálogo; el mismo comentario después se guarda.
+  Sin la trampa: 131/131 y cero deadlocks en 120 rondas.
+- 📌 **Cierre del 03/10**: staging tiene aplicado todo hasta la `091` (inventario regenerado). Sin aplicar: `088`
+  (a propósito). En producción, en la ventana: 086, 087, 089, 090, 091 (y la 088 cuando se decida), con las dos
+  pruebas obligatorias del paso −1 antes. Datos de prueba que quedaron: `docs/finanzas/prueba-bitacoras.txt` §15.
 - 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
   tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
 - 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y

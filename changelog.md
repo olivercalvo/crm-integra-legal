@@ -1,5 +1,12 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Bitácoras: 091 aplicada, mensaje claro probado en pantalla] - 2026-10-03
+
+- `091` aplicada en staging. Probado como abogada: si el registro de auditoría falla, el comentario no se
+  guarda y la pantalla dice «No se pudo guardar porque falló el registro de auditoría. Intenta de nuevo y, si se
+  repite, avisa al administrador.»; el error real queda en el log del servidor.
+- Staging queda con todo aplicado hasta la `091`. La `088` (copia del registro anterior) sigue sin aplicar.
+
 ## [Bitácoras: 090 aplicada, prueba de concurrencia, mensaje claro si falla la auditoría] - 2026-10-03
 
 - `090` aplicada en staging: la importación de asientos y la nota de crédito de compra ya no se traban con

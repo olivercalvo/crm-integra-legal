@@ -2,9 +2,9 @@ PRUEBA DE LAS BITÁCORAS DE AUDITORÍA EN STAGING
 03/10/2026 · rama feat/bloque1-contable · staging xtyenhakplrkyifbcaow
 Producción no se tocó. La 088 (legado) NO se aplicó.
 
-ESTADO: 086, 087, 089 y 090 aplicadas en staging. Punto 7 y pruebas 1, 2 y 4
-        completas y bien. Prueba 3: migración 091 y manejo de errores escritos,
-        091 SIN APLICAR (esperando «aplica»). La 088 sigue sin aplicar a propósito.
+ESTADO (cierre del 03/10): 086, 087, 089, 090 y 091 aplicadas en staging.
+        Punto 7 y pruebas 1 a 4 completas y bien. La 088 sigue sin aplicar a
+        propósito. Ver la sección 14.
 
 ======================================================================
 1. APLICACIÓN
@@ -423,7 +423,7 @@ forzada de 150 ms: una espera, no un error.
   verificación 087 ✅ las 41 tablas capturan en su bitácora
 
 ======================================================================
-12. PRUEBA 3: SI FALLA LA BITÁCORA (091 ESCRITA, SIN APLICAR)
+12. PRUEBA 3: SI FALLA LA BITÁCORA (091, APLICADA EL 03/10; PANTALLA EN LA SECCIÓN 14)
 ======================================================================
 Base: sql/pending/091_bitacoras_error_claro.sql
   auditoria.registrar y el ancla al cerrar un período relanzan cualquier falla con
@@ -503,3 +503,74 @@ En el navegador (localhost:3000):
       «Íntegra: 26 registros encadenados y 0 anclas que coinciden.»
   (0 anclas: todas las filas son de hoy; la primera ancla diaria se graba con el
   primer cambio de mañana.)
+
+======================================================================
+14. 091 APLICADA Y PRUEBA 3 EN PANTALLA (CON TRAMPA TEMPORAL)
+======================================================================
+091_bitacoras_error_claro.sql  aplicada 03/10, 331 ms
+  NOTICE: 091 ✅ falla de la bitácora → AU001, mensaje claro, original en el detalle: [P0001] falla forzada por la verificación 091
+
+Trampa temporal, autorizada por Oliver, SÓLO en staging: auditoria.documento_de
+copiada tal cual de la 089 más cuatro líneas que fallan únicamente si la tabla es
+comments y el texto contiene «PRUEBA-AU001». No quedó en el repo.
+  puesta  19:49:25 (hora de Panamá) · catálogo: trampa_puesta = true
+  quitada 19:49:43 (18 s después): documento_de restituida exactamente como la 089.
+
+En el navegador, como abogada (Ileana Barrios), caso EXP-001 → Seguimiento →
+Nuevo comentario «PRUEBA-AU001 comentario marcado para la prueba 3» → Comentar:
+  En pantalla, debajo del comentario, en rojo:
+    «No se pudo guardar porque falló el registro de auditoría. Intenta de nuevo y,
+    si se repite, avisa al administrador.»
+  (captura: screenshot-1791074974839-4.jpg)
+  El comentario NO se guardó: comentarios con PRUEBA-AU001 en la base = 0.
+  Log del servidor:
+    [auditoria] falló el registro de auditoría; la operación se deshizo: {"original":"[P0001] trampa temporal de la prueba 3: comentario marcado PRUEBA-AU001","donde":"auditoria.registrar · INSERT comments","peticion":"POST /rest/v1/comments"}
+    Error creating comment: { code: 'AU001', details: '[P0001] trampa temporal …', hint: 'auditoria.registrar · INSERT comments', message: 'No se pudo guardar porque …' }
+    POST /api/cases/067ffc7f-…/comments 500
+
+Sin la trampa:
+  Catálogo (auditoria y public): funciones con «PRUEBA-AU001» = 0;
+  documento_de con case_number::text (la de la 089) = 1.
+  El MISMO comentario, «Comentar» otra vez: se guardó (captura:
+  screenshot-1791074993785-5.jpg) y la bitácora legal lo registra: crear ·
+  comments · EXP-001 · Ileana Barrios (STAGING) · abogada · usuario.
+
+Prueba de las 41 tablas, sin la trampa:
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+  verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+Concurrencia, sin la trampa, 20 rondas por combinación:
+  ▶ Concurrencia bitácora ↔ libro contra staging · 20 rondas por combinación
+  
+    importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 742 ms
+    importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 619 ms
+    importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 776 ms
+    NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 1082 ms
+    NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 921 ms
+    NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 1059 ms
+  
+  Total: 120 rondas · deadlocks 0 · otros errores 0
+  ✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+======================================================================
+15. CIERRE DEL 03/10
+======================================================================
+Aplicado en staging (inventario regenerado desde el esquema,
+docs/staging/inventario-migraciones.md): 94 migraciones, todas hasta la 091.
+Escrito y SIN aplicar: 088_bitacoras_legado.sql (a propósito). Los otros tres
+«NO» del inventario son scripts de datos que sólo tienen sentido en producción.
+
+Datos de prueba que quedaron en staging (todos ficticios):
+  - FAC-HON-000029 anulada, con NC-000024 (la de la anulación) y el cobro
+    CO-000013 reversado.
+  - FAC-HON-000030, 031 y 032 emitidas, B/. 10.70 cada una, sin cobrar
+    (prueba 2 por la API).
+  - FAC-CO-000004 gasto de trámite reversado; FAC-CO-000005, 006 y 007 gastos
+    de trámite de B/. 3.00 asentados y pendientes de pago (prueba 2).
+  - Caso EXP-001 de FERRETERÍA VALLARINO (CLI-001): 2 comentarios (uno con
+    «PRUEBA-AU001»), 1 tarea cumplida, 1 cobro del caso de B/. 25.00.
+  - CLI-001: el DV se cambió y se devolvió (queda 08, como estaba).
+  - Bitácoras: contable 66 filas, legal 28, 0 anclas (la primera diaria se graba
+    con el primer cambio de mañana).
+  - Todo lo demás (mediciones, 41 tablas, concurrencia) corrió en ROLLBACK: no
+    dejó filas, sólo huecos en los id de las bitácoras y de algunas secuencias.

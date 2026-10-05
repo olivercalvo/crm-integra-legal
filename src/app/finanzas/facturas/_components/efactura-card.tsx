@@ -38,6 +38,8 @@ interface Props {
   numeroDocumento: number | null;
   /** Si el usuario puede disparar el envío (admin|abogada). */
   canEmitToPac: boolean;
+  /** 092: registrada como emitida fuera del CRM. Nunca se ofrece enviarla. */
+  emitidaFuera?: boolean;
   /**
    * 🔴 Lo que dijo la DGI en el último envío fallido, ya traducido.
    *
@@ -84,6 +86,7 @@ export function EfacturaCard({
   numeroDocumento,
   canEmitToPac,
   rechazo,
+  emitidaFuera = false,
 }: Props) {
   return (
     <section className="rounded-xl border bg-white p-5 shadow-sm">
@@ -94,13 +97,15 @@ export function EfacturaCard({
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Estado fiscal:</span>
-          <FeEstadoBadge estado={feEstado} />
+          <FeEstadoBadge estado={feEstado} origen={emitidaFuera ? "externo" : null} />
         </div>
       </div>
 
       {feEstado === "no_emitida" && (
         <NoEmitidaSection
           yaExisteAnteLaDgi={!!cufe && cufe.trim().length > 0}
+          emitidaFuera={emitidaFuera}
+          cufe={cufe}
           invoiceId={invoiceId}
           invoiceNumber={invoiceNumber}
           grandTotal={grandTotal}
@@ -154,6 +159,8 @@ export function EfacturaCard({
 
 function NoEmitidaSection({
   yaExisteAnteLaDgi,
+  emitidaFuera,
+  cufe,
   invoiceId,
   invoiceNumber,
   grandTotal,
@@ -162,6 +169,8 @@ function NoEmitidaSection({
   canEmitToPac,
 }: {
   yaExisteAnteLaDgi: boolean;
+  emitidaFuera: boolean;
+  cufe: string | null;
   invoiceId: string;
   invoiceNumber: string;
   grandTotal: number;
@@ -173,6 +182,19 @@ function NoEmitidaSection({
   // `fe_estado` sigue en `no_emitida` a propósito. Ofrecer «Enviar a la DGI» acá
   // emitía un segundo documento fiscal por la misma venta. El servidor también
   // lo rechaza (409 en emitInvoiceToEfactura).
+  // 092: emitida FUERA del CRM. Nunca se envía desde acá (el guard de la base
+  // congela su estado fiscal).
+  if (emitidaFuera) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5 text-center">
+        <p className="text-sm text-gray-700">
+          Esta factura se emitió fuera del CRM y ya existe ante la DGI. El CRM sólo la registra en sus
+          libros: no se envía a la DGI desde acá.
+        </p>
+        {cufe && <p className="mt-2 break-all font-mono text-xs text-gray-500">CUFE {cufe}</p>}
+      </div>
+    );
+  }
   if (yaExisteAnteLaDgi) {
     return (
       <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5 text-center">

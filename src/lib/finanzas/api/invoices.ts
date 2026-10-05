@@ -32,6 +32,7 @@ import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
 import { validarCufe } from "@/lib/finanzas/validators/cufe";
+import { facturaConElCufe, mensajeDeCufeRepetido } from "@/lib/finanzas/api/cufe-unico";
 import {
   validarConsistenciaDeKind,
   motivoDeInconsistenciaDeKind,
@@ -98,7 +99,7 @@ async function resolverServiciosPorId(
  * advertencia dismissible es el mismo mecanismo por el que ya pasó tres veces
  * en producción (tres facturas FAC-REI-* con líneas HON-COR, jul-ago/2026).
  */
-async function validarLineasContraKind(
+export async function validarLineasContraKind(
   db: DB,
   tenantId: string,
   invoiceKind: InvoiceKind,
@@ -975,6 +976,20 @@ export async function updateInvoiceDgiData(
       400
     );
   }
+  // 092: los datos fiscales de una factura emitida fuera no se tocan (la base
+  // también lo rechaza), y un CUFE no puede quedar en dos facturas.
+  if (inv.dgi_cufe_origen === "externo") {
+    throw new InvoiceMutationError(
+      `La factura ${inv.invoice_number} se emitió fuera del CRM: sus datos ante la DGI no se modifican.`,
+      409
+    );
+  }
+  if (input.dgi_cufe) {
+    const otra = await facturaConElCufe(db, tenantId, input.dgi_cufe, invoiceId);
+    if (otra) {
+      throw new InvoiceMutationError(mensajeDeCufeRepetido(otra), 409);
+    }
+  }
 
   const { error: errUpd } = await db
     .from("invoices")
@@ -1334,6 +1349,11 @@ export async function registrarCufeDelPortal(
         "cargarle un CUFE a mano.",
       409
     );
+  }
+  // 092: un CUFE, una factura (también contra las del 051 y las externas).
+  const otra = await facturaConElCufe(db, tenantId, revisado.valor, invoiceId);
+  if (otra) {
+    throw new MutationError(mensajeDeCufeRepetido(otra), 409);
   }
 
   const { error: errUpd } = await db

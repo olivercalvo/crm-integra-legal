@@ -250,6 +250,11 @@ export const ADMIN_CONTADOR_ONLY_PREFIXES = [
   // solo lectura (decisión de Oliver). La abogada no: es la auditoría del
   // trabajo contable, y Josuarth la pidió para el contador.
   "/finanzas/auditoria",
+  // Facturas emitidas fuera del CRM (05/10/2026, migración 092). Registrar en el
+  // libro una venta que la DGI ya autorizó desde otro punto (QuickBooks, portal)
+  // es trabajo de cierre contable: admin y contador, la abogada no (Oliver).
+  // El listado y el alta; el detalle de cada una es /finanzas/facturas/{id}.
+  "/finanzas/facturas-externas",
 ];
 
 /**

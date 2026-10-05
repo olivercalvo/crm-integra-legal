@@ -135,6 +135,13 @@ export interface EstadoDeFactura {
   amountPaid: number;
   /** ¿El período contable del mes de `issue_date` está cerrado? */
   mesCerrado: boolean;
+  /**
+   * `invoices.dgi_cufe_origen = 'externo'` (092): la DGI la autorizó desde OTRO
+   * punto (QuickBooks, portal) y el CRM sólo la registró. Nunca se anula ante
+   * la DGI desde acá: dentro de plazo y sin bloqueos se anula sólo en el libro,
+   * avisando que hay que anularla también donde se emitió.
+   */
+  emitidaFueraDelCrm?: boolean;
 }
 
 export interface Ventana {
@@ -350,6 +357,19 @@ export function decidirAccionFiscal(
   }
   if (ventana.vencida) {
     motivos.push(`venció el plazo de ${HORAS_PARA_ANULAR} horas para anular ante la DGI`);
+  }
+
+  // 8b. 🔴 Emitida FUERA del CRM (092): no se habla con el PAC. Se anula en el
+  //     libro y la pantalla avisa que el documento sigue vivo ante la DGI hasta
+  //     que se anule en el sistema que lo emitió.
+  if (motivos.length === 0 && estado.emitidaFueraDelCrm) {
+    return {
+      accion: "anular_solo_en_el_libro",
+      mensaje: "Esta factura se anula en el libro contable y se genera su nota de crédito total.",
+      advertencia:
+        "Esta factura se emitió fuera del CRM. Anularla acá NO la anula ante la DGI: hay que " +
+        "anularla también en el sistema donde se emitió (QuickBooks o el portal de facturación).",
+    };
   }
 
   if (motivos.length === 0) {

@@ -348,6 +348,11 @@ const MARCADORES = {
     sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'registrar' AND p.prosrc LIKE '%AU001%')`,
     nota: "03/10. Prueba 3. Va despues de la 090, junto con el codigo de conManejoDeAuditoria y fetchConAuditoria (sin la 091 el codigo no cambia nada).",
   },
+  "092_factura_emitida_fuera.sql": {
+    que: "Registrar factura emitida fuera: origen 'externo', indice unico de CUFE por bufete, serie FAC-EXT- (invoice_ext), guard que congela el estado fiscal y RPC register_external_invoice (numero, factura, asiento y CUFE en una transaccion)",
+    tipo: "funcion", nombre: "register_external_invoice",
+    nota: "05/10. Pre-flight: aborta si hay un CUFE repetido entre facturas. Va junto con el codigo de facturas-externas (sin la 092 la pantalla nueva falla al guardar; lo demas no cambia).",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

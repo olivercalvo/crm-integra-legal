@@ -101,7 +101,7 @@ export function InvoicesList({ invoices }: Props) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <FeEstadoBadge estado={inv.fe_estado} />
+                  <FeEstadoBadge estado={inv.fe_estado} origen={inv.dgi_cufe_origen} />
                 </td>
               </tr>
             ))}
@@ -141,7 +141,7 @@ export function InvoicesList({ invoices }: Props) {
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <InvoiceStatusBadge status={inv.status} />
                 {acreditadaTotal(inv) && <AcreditadaTotalBadge />}
-                <FeEstadoBadge estado={inv.fe_estado} />
+                <FeEstadoBadge estado={inv.fe_estado} origen={inv.dgi_cufe_origen} />
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">

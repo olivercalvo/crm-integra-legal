@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   FileWarning,
+  FileInput,
   FileMinus,
   LayoutDashboard,
   Users,
@@ -86,6 +87,9 @@ export const TABS: TabDef[] = [
       // Notas de crédito como módulo propio (E8, 01/10/2026). Venta: emiten
       // admin y abogada, como las facturas. El contador sigue entrando sólo al
       // DETALLE (patrón en route-access.ts), no al listado ni al alta.
+      // Facturas emitidas fuera del CRM (092): admin y contador. Gate real en
+      // ADMIN_CONTADOR_ONLY_PREFIXES de route-access.ts.
+      { label: "Facturas Emitidas Fuera", href: "/finanzas/facturas-externas",  icon: FileInput,   roles: ["admin", "contador"] },
       { label: "Notas de Crédito",  href: "/finanzas/notas-credito",              icon: FileMinus,   roles: ["admin", "abogada"] },
       // Cobros (recibos de caja, Bloque 2 — 21/09/2026). El contador entra
       // desde el mismo día por respuesta de Josuarth ("SÍ debe ver la pantalla

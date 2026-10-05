@@ -196,6 +196,12 @@ export interface InvoiceRow {
   // Schema: migration 20260506000001_finanzas_b4_schema_prep_dgi.sql
   dgi_numero_documento: string | null;
   dgi_cufe: string | null;
+  /**
+   * De dónde salió el CUFE (061/064/092): `crm` lo devolvió el PAC, `portal_050`
+   * se cargó a mano, `externo` es una factura emitida fuera del CRM y registrada
+   * con «Registrar factura emitida fuera».
+   */
+  dgi_cufe_origen?: "crm" | "portal_050" | "externo" | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
   // ----- eFactura PAC (orquestación T0-T4). Migration:

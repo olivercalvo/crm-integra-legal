@@ -424,3 +424,34 @@ test("las DIEZ acciones se pueden alcanzar, y todas traen mensaje para la pantal
   }
   assert.equal(vistas.size, 10, `acciones alcanzadas: ${Array.from(vistas).join(", ")}`);
 });
+
+// ---------------------------------------------------------------------------
+// 092: una factura EMITIDA FUERA del CRM nunca se anula ante la DGI desde acá.
+// ---------------------------------------------------------------------------
+const EXTERNA = {
+  status: "emitida",
+  feEstado: "no_emitida" as const,
+  dgiCufe: "FE0120000025046169-3-2021-4000002026071400000000021000112431062839",
+  issueDate: "2026-07-14",
+  dgiFechaAutorizacion: null,
+  creditedTotal: 0,
+  amountPaid: 0,
+  mesCerrado: false,
+  emitidaFueraDelCrm: true,
+};
+
+test("092: emitida fuera, dentro de plazo y sin bloqueos: sólo en el libro, con aviso", () => {
+  const r = decidirAccionFiscal(EXTERNA, new Date("2026-07-15T12:00:00-05:00"));
+  assert.equal(r.accion, "anular_solo_en_el_libro");
+  if (r.accion === "anular_solo_en_el_libro") assert.match(r.advertencia, /fuera del CRM/);
+});
+
+test("092: emitida fuera y fuera de plazo: nota de crédito, como cualquier factura con CUFE", () => {
+  const r = decidirAccionFiscal(EXTERNA, new Date("2026-10-05T12:00:00-05:00"));
+  assert.equal(r.accion, "nc_04");
+});
+
+test("092: la misma factura SIN la marca sí se anularía ante la DGI (la marca es lo que cambia)", () => {
+  const r = decidirAccionFiscal({ ...EXTERNA, emitidaFueraDelCrm: false }, new Date("2026-07-15T12:00:00-05:00"));
+  assert.equal(r.accion, "anular_en_dgi_y_libro");
+});

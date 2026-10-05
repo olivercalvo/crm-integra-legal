@@ -40,11 +40,36 @@ export function esDeUnMesAnterior(fechaDocumento: string, hoy: string = hoyEnPan
 /** Los estados desde los que un envío tiene sentido; los demás los rechaza el orquestador. */
 const ENVIABLE = new Set(["no_emitida", "error"]);
 
+/**
+ * Un documento que YA existe ante la DGI no se manda, y se corta ANTES que el
+ * resto: antes del mes anterior (que daría un motivo equivocado) y antes de las
+ * validaciones previas (que le guardarían un `fe_motivo_pendiente` a una
+ * factura que la DGI ya autorizó). `externo` = emitida fuera del CRM (092);
+ * cualquier otro CUFE con `no_emitida`/`error` = cargado del portal (caso B).
+ * El orquestador tiene su propio corte para el caso B; éste es el primero.
+ */
+export function motivoParaNoEnviar(origen: string | null | undefined, cufe: string | null | undefined): string | null {
+  if (origen === "externo") {
+    return "Esta factura se emitió fuera del CRM y ya existe ante la DGI: el CRM sólo la registra en sus libros y no la envía.";
+  }
+  if (cufe && cufe.trim().length > 0) {
+    return "Este documento ya existe ante la DGI: tiene un CUFE cargado. No se vuelve a enviar, porque sería un segundo documento fiscal por la misma operación.";
+  }
+  return null;
+}
+
 async function metaDelDocumento(db: DB, tenantId: string, tabla: "invoices" | "credit_notes", id: string) {
-  const { data, error } = await db.from(tabla).select("issue_date, fe_estado").eq("tenant_id", tenantId).eq("id", id).maybeSingle();
+  const columnas = tabla === "invoices" ? "issue_date, fe_estado, dgi_cufe, dgi_cufe_origen" : "issue_date, fe_estado, dgi_cufe";
+  const { data, error } = await db.from(tabla).select(columnas).eq("tenant_id", tenantId).eq("id", id).maybeSingle();
   if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
   if (!data) throw new MutationError("Documento no encontrado", 404);
-  return { issueDate: String(data.issue_date), feEstado: String(data.fe_estado ?? "no_emitida") };
+  const d = data as unknown as { issue_date: string; fe_estado: string | null; dgi_cufe?: string | null; dgi_cufe_origen?: string | null };
+  return {
+    issueDate: String(d.issue_date),
+    feEstado: String(d.fe_estado ?? "no_emitida"),
+    cufe: d.dgi_cufe ?? null,
+    origen: d.dgi_cufe_origen ?? null,
+  };
 }
 
 async function antesDeEnviar(
@@ -56,6 +81,9 @@ async function antesDeEnviar(
   const meta = await metaDelDocumento(db, tenantId, tabla, id);
   // Autorizada, en curso o interna: que conteste el orquestador con su mensaje.
   if (!ENVIABLE.has(meta.feEstado)) return false;
+
+  const yaExiste = motivoParaNoEnviar(meta.origen, meta.cufe);
+  if (yaExiste) throw new MutationError(yaExiste, 409);
 
   if (esDeUnMesAnterior(meta.issueDate)) {
     throw new MutationError(MENSAJE_MES_ANTERIOR, 409);

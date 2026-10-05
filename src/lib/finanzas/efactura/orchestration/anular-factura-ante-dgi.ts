@@ -429,7 +429,7 @@ async function cargarEstadoDeFactura(
   const { data, error } = await db
     .from("invoices")
     .select(
-      "id, status, fe_estado, dgi_cufe, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid"
+      "id, status, fe_estado, dgi_cufe, dgi_cufe_origen, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid"
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -452,6 +452,8 @@ async function cargarEstadoDeFactura(
     creditedTotal: Number(data.credited_total ?? 0),
     amountPaid: Number(data.amount_paid ?? 0),
     mesCerrado: registro ? await periodoDeLaFacturaCerrado(db, tenantId, String(registro)) : false,
+    // 092: emitida fuera del CRM. La matriz nunca la manda al PAC.
+    emitidaFueraDelCrm: (data as { dgi_cufe_origen?: string | null }).dgi_cufe_origen === "externo",
   };
 }
 

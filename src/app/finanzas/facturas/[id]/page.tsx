@@ -39,6 +39,7 @@ import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
+import { NOMBRE_DE_PUNTO } from "@/lib/finanzas/efactura/cufe/leer-cufe";
 import { MotivoPendienteDgi } from "@/components/finanzas/motivo-pendiente-dgi";
 import { MENSAJE_ND_SIN_DGI, PERMITIR_ND_A_LA_DGI } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
 import { notasDeDebitoDeLaFactura, referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
@@ -145,6 +146,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   //    sueltas, y el servidor las volvía a evaluar por su cuenta. Ahora la
   //    pantalla y la ruta llaman a la MISMA función (SOP-038): si discrepan, es
   //    un bug de una sola implementación, no de dos que se desincronizaron.
+  // 092: registrada con «Registrar factura emitida fuera». La DGI la autorizó
+  //      desde otro punto: el CRM no la envía ni la anula ante la DGI.
+  const emitidaFuera = invoice.dgi_cufe_origen === "externo";
   const accionFiscal = decidirAccionFiscal(
     {
       status: invoice.status,
@@ -155,6 +159,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       creditedTotal,
       amountPaid: Number(invoice.amount_paid ?? 0),
       mesCerrado,
+      emitidaFueraDelCrm: emitidaFuera,
     },
     new Date()
   );
@@ -279,11 +284,16 @@ export default async function FacturaDetallePage({ params }: PageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Descargar PDF disponible en todos los estados — documento interno. */}
-          <DownloadInvoicePdfButton
-            invoiceId={invoice.id}
-            invoiceLabel={displayNumber}
-          />
+          {/* Descargar PDF disponible en todos los estados — documento interno.
+              Salvo la emitida fuera (092): su comprobante es el del sistema que
+              la emitió, y un PDF del CRM con otro número se podría entregar
+              como si fuera el fiscal. */}
+          {!emitidaFuera && (
+            <DownloadInvoicePdfButton
+              invoiceId={invoice.id}
+              invoiceLabel={displayNumber}
+            />
+          )}
           {editable && (
             <Link href={`/finanzas/facturas/${invoice.id}/editar`}>
               <Button variant="outline" className="min-h-[48px]">
@@ -377,6 +387,21 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               Motivo enviado a la DGI: «{intentoDeAnulacion.motivo}»
             </span>
           )}
+        </div>
+      )}
+
+      {emitidaFuera && (
+        <div role="note" className="rounded-md border-l-4 border-integra-gold bg-integra-gold/10 p-3 text-sm text-integra-navy">
+          <p className="font-semibold">Factura emitida fuera del CRM</p>
+          <p className="mt-1">
+            La DGI la autorizó desde el punto {invoice.punto_facturacion}
+            {invoice.punto_facturacion && NOMBRE_DE_PUNTO[invoice.punto_facturacion]
+              ? ` (${NOMBRE_DE_PUNTO[invoice.punto_facturacion]})`
+              : ""}
+            , documento n.º {invoice.numero_documento}. El CRM la registra en sus libros con el número{" "}
+            {invoice.invoice_number}: no la envía a la DGI ni la anula ante la DGI. Su comprobante fiscal es
+            el del sistema que la emitió.
+          </p>
         </div>
       )}
 
@@ -634,7 +659,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               qrContent={invoice.qr_content}
               puntoFacturacion={invoice.punto_facturacion}
               numeroDocumento={invoice.numero_documento}
-              canEmitToPac={canEmitToPac}
+              canEmitToPac={canEmitToPac && !emitidaFuera}
+              emitidaFuera={emitidaFuera}
               rechazo={rechazoDgi}
             />
           )}

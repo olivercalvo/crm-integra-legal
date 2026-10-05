@@ -42,6 +42,22 @@ export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
+  // 092: una factura emitida fuera del CRM no tiene PDF del CRM. Su comprobante
+  // fiscal es el del sistema que la emitió; un PDF con el número FAC-EXT- se
+  // podría entregar como si fuera el fiscal.
+  const { data: origen } = await ctx.db
+    .from("invoices")
+    .select("dgi_cufe_origen")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", params.id)
+    .maybeSingle();
+  if ((origen as { dgi_cufe_origen?: string | null } | null)?.dgi_cufe_origen === "externo") {
+    return NextResponse.json(
+      { error: "Esta factura se emitió fuera del CRM: su comprobante es el del sistema que la emitió." },
+      { status: 409 }
+    );
+  }
+
   try {
     const result = await ensureInvoicePdfRow(
       ctx.db,

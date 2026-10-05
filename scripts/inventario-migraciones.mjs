@@ -353,6 +353,17 @@ const MARCADORES = {
     tipo: "funcion", nombre: "register_external_invoice",
     nota: "05/10. Pre-flight: aborta si hay un CUFE repetido entre facturas. Va junto con el codigo de facturas-externas (sin la 092 la pantalla nueva falla al guardar; lo demas no cambia).",
   },
+  "093_compra_nace_pendiente.sql": {
+    que: "DEFAULT de business_expenses.status pasa de 'pagado' (010) a 'pendiente_pago', el unico valor que el guard de la 048 acepta al crear",
+    tipo: "dato",
+    sql: `SELECT pg_get_expr(d.adbin, d.adrelid) = '''pendiente_pago''::text' FROM pg_attrdef d JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum WHERE d.adrelid = 'public.business_expenses'::regclass AND a.attname = 'status'`,
+    nota: "05/10. Hallazgo del ensayo de la ventana. Va justo despues de la 048. No toca filas.",
+  },
+  "094_documentos_de_prueba.sql": {
+    que: "Marca de prueba por DOCUMENTO (de_prueba en invoices, credit_notes, payments, client_payments, expenses) y clients.es_de_prueba solo para lo nuevo; guards de marcar (sin asiento) y desmarcar (llave)",
+    tipo: "columna", tabla: "invoices", columna: "de_prueba",
+    nota: "05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

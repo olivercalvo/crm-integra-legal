@@ -3647,3 +3647,33 @@ correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir
 5. **Referencia obligatoria** al crear (validador, pantalla, trigger). Un cobro viejo sin
    referencia se sigue pudiendo reversar.
 
+
+---
+
+## SOP-049: Desactivar un usuario, compras que nacen pendientes y documentos de prueba (05/10/2026)
+
+### Desactivar = bloquear en Auth
+
+1. **«Desactivar» en Administración › Usuarios bloquea al usuario en Supabase Auth** (`ban_duration`),
+   además de `public.users.active = false`. Reactivar lo desbloquea. Una implementación:
+   `src/lib/auth/acceso-de-usuario.ts` (`sincronizarAccesoEnAuth`), que llaman el `DELETE` y el `PATCH`
+   de `/api/admin/users/[id]`, **antes** de tocar el perfil: si Auth falla, no se marca inactivo.
+2. Por qué: ni el login ni el middleware leen `active` (el middleware autoriza con el rol del JWT).
+   Hasta el 05/10 un usuario «inactivo» seguía entrando; medido en staging.
+3. Una sesión ya abierta dura hasta que vence su token (1 h); el bloqueo corta la renovación.
+4. Usuarios desactivados antes de este cambio NO quedaron bloqueados: se reactivan y se vuelven a
+   desactivar. `sql/verificacion/produccion-accesos-contador.sql` los lista («inactivo pero puede entrar»).
+5. No hay invitación por correo: un usuario nuevo se crea con una contraseña descartable que nadie
+   conoce y define la suya con «¿Olvidaste tu contraseña?» (runbook `ventana-bloque-1.md` §6).
+
+### Una compra nace pendiente
+
+`ESTADO_INICIAL_DE_COMPRA = "pendiente_pago"` (`validators/business-expense.ts`): la pantalla arranca
+ahí, la API toma un alta sin `status` como pendiente y la base lo dice desde la `093`. «Pagado» en el
+alta sigue existiendo y sigue siendo «registrar el pago al crear, con banco».
+
+### Documentos de prueba (`094`)
+
+La marca que cuenta es la del DOCUMENTO (`de_prueba`); la del cliente (`es_de_prueba`) sólo hace nacer
+de prueba lo nuevo. Se marca por número, nunca un documento con asiento, y se desmarca sólo con la
+llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-quickbooks.md` §9.

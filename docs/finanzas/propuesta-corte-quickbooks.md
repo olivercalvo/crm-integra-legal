@@ -194,7 +194,7 @@ Es la regla del 09/09 tal como está.
 5. Un documento con fecha de documento antes de B y fecha de registro después: la propuesta usa la de
    **registro**. Es la que define el período del asiento.
 
-## 9. Clientes de prueba (03/10/2026, solo diseño)
+## 9. Clientes de prueba (03/10/2026; ajustado el 05/10/2026: marca por documento)
 
 ### 9.1 El caso
 
@@ -212,32 +212,54 @@ Las tres de junio quedan antes de B y la marca de §3 las saca del libro, pero *
 (siguen con saldo) ni de las ventas. **FAC-HON-000463 es de julio, después de B: sin otra regla se
 contabilizaría** como venta real de 1.07 con su ITBMS.
 
-### 9.2 La marca: en el cliente, copiada a cada documento
+### 9.2 La marca es del DOCUMENTO; la del cliente sólo vale para lo nuevo (ajustada el 05/10/2026)
 
-- `clients.es_de_prueba boolean NOT NULL DEFAULT false`, con `es_de_prueba_motivo` (obligatorio al
-  marcar), `es_de_prueba_por` y `es_de_prueba_en`. La marcan **admin y contador** (es una decisión
-  contable). Queda en el `audit_log` como cualquier cambio.
-- `de_prueba boolean NOT NULL DEFAULT false` en los documentos del cliente: `invoices` (facturas y ND),
-  `credit_notes`, `payments`, `client_payments` y `expenses` (gasto de trámite, por el cliente de su caso).
-  Lo pone un trigger desde el cliente al insertar, y se propaga a los documentos existentes al marcar.
-- **Guardada, no calculada**, por la misma razón que §3.2: los reportes filtran con una columna, y
-  desmarcar un cliente no puede devolver en silencio documentos a las ventas de un mes cerrado.
+> **Cambio del 05/10/2026.** La versión del 03/10 copiaba la marca del cliente a todos sus documentos.
+> Con el resultado de `produccion-datos-de-prueba.sql` eso no sirve: **FAC-HON-000463 es real ante la
+> DGI y su cliente es 0TEST-FE-002**, que es de prueba. Copiada desde el cliente, la 463 saldría de las
+> ventas y del ITBMS del CRM mientras la DGI la tiene. La exclusión pasa a ser **por documento**.
+
+- `de_prueba boolean NOT NULL DEFAULT false` y `de_prueba_motivo` (obligatorio al marcar) en cada documento:
+  `invoices` (facturas y ND), `credit_notes`, `payments`, `client_payments` y `expenses`. **Es la única marca
+  que leen los reportes.**
+- `clients.es_de_prueba`, con `es_de_prueba_motivo`, `es_de_prueba_por` y `es_de_prueba_en`. **No se
+  propaga a lo que ya existe**: sólo hace que los documentos NUEVOS de ese cliente nazcan `de_prueba`, y
+  sirve para la regla fiscal de 9.3.4.
+- Los documentos existentes se marcan **uno por uno, por número**, con una lista aprobada. Lo que no está en
+  la lista no se marca, aunque su cliente sea de prueba: **ésa es la excepción explícita de la 463**, y queda
+  escrita en el motivo del cliente («Excepción: FAC-HON-000463 … es real ante la DGI y sigue contando»).
+- **Guardada, no calculada**, por la misma razón que §3.2: desmarcar no puede devolver en silencio documentos a
+  las ventas de un mes cerrado.
+- Lo marcan **admin y contador** (es una decisión contable). En la ventana, lo marca Oliver con el paso del
+  runbook; la pantalla para marcar es posterior.
 
 Es una marca distinta de `contabilizado_fuera`: un documento «contabilizado fuera» es real y está en
 QuickBooks (cuenta en ventas, sale en listados); uno de prueba **no existe para el bufete**.
 
+Lista aprobada el 05/10/2026 (resultado de `produccion-datos-de-prueba.sql`):
+
+| Qué | De prueba | Se queda real |
+|---|---|---|
+| Clientes | CLI-066, CLI-069, CLI-070, 0TEST-FE-001, 0TEST-FE-002 | CLI-026 (INTEGRA LEGAL) |
+| Facturas | FAC-HON-000454, FAC-REI-000038, FAC-HON-000455, 456, 457, 459, 460, 461 | **FAC-HON-000463** (cliente 0TEST-FE-002) |
+| Gastos | — | el gasto ADM-001 de 1.00 |
+| Usuarios | — | `contador.test@integra-panama.com` no se marca: se desactiva en el paso «Accesos» |
+
 ### 9.3 Reglas que pone la base
 
-1. No se marca un cliente con algún documento **con asiento**, ni con una línea del libro que lo nombre
-   (`journal_entry_lines.client_id`). La operación aborta y lista los documentos. En producción el libro
-   está vacío, así que hoy no hay ninguno.
-2. `post_journal_entry` **rechaza** un asiento de un documento `de_prueba` y una línea con un cliente de
-   prueba como tercero. Es el mismo parche verificado que §3.3 regla 2, con una condición más.
-3. Desmarcar (`true → false`) solo con una llave tipo SOP-017, y solo si ningún documento del cliente cayó
-   en un período cerrado.
-4. 🔴 **Un documento de un cliente de prueba no se manda a la DGI de producción** (409 en la puerta
+1. **No se marca un DOCUMENTO con asiento** (sacarlo de los reportes dejaría el libro sin documento detrás),
+   ni una factura con un cobro aplicado que no sea de prueba. El cliente sí se puede marcar aunque tenga
+   documentos reales con asiento: su marca no los toca. En producción el libro está vacío, así que hoy no hay
+   ninguno.
+2. `post_journal_entry` **rechaza** un asiento cuyo documento sea `de_prueba`. Ya **no** rechaza una línea por
+   tener como tercero a un cliente de prueba: la 463 llevará a 0TEST-FE-002 en su línea de 100004 y es real.
+   Un asiento MANUAL con un cliente de prueba como tercero sí se rechaza (no hay documento que lo decida).
+3. Desmarcar (`true → false`), en el documento o en el cliente, solo con la llave `finanzas.de_prueba_override`
+   (como SOP-017), y solo si el documento no cayó en un período cerrado.
+4. 🔴 **Un documento NUEVO de un cliente de prueba no se manda a la DGI de producción** (409 en la puerta
    `enviar-a-la-dgi.ts`, antes del correlativo; en staging sí, para poder probar). Así no se repite el
-   caso de estas cuatro.
+   caso de las de junio. Nace `de_prueba` (regla de 9.2): para facturarle algo real a ese cliente, primero
+   se desmarca el cliente con la llave.
 
 ### 9.4 Dónde deja de contar
 
@@ -268,24 +290,26 @@ La marca saca los documentos de **nuestros** libros, no de la DGI. Corrección d
   con una **NC 04** con su CUFE, y esa NC también sería un documento fiscal real.
 - La consulta de confirmación por `fe_emisiones.i_amb` está en el cruce (I-3); la corre Oliver.
 
-Consecuencia para la propuesta: las tres de junio se marcan de prueba sin ningún paso fiscal. La 463 es una
-decisión de Josuarth: marcarla de prueba (fuera de ventas e ITBMS del CRM, aunque la DGI la tenga) o
-dejarla como venta real de 1.07 y acreditarla con NC. La pregunta 3 del borrador a ideati sobra.
+Consecuencia para la propuesta: las tres de junio se marcan de prueba sin ningún paso fiscal. ~~La 463 es una
+decisión de Josuarth~~ **Decidido el 05/10/2026: la 463 se queda REAL** (cuenta en libro, ventas e ITBMS
+como la tiene la DGI); si hay que corregirla, es con una NC 04 con su CUFE. Por eso la marca pasó a ser
+por documento (9.2). La pregunta 3 del borrador a ideati sobra.
 
-### 9.6 Migración que haría falta (sin escribirla)
+### 9.6 Migración y paso de la ventana (escritos el 05/10/2026)
 
-`0xx_clientes_de_prueba`, después de la de §7.2 y **antes** de activar el posteo de lo posterior a B:
-- columnas de 9.2, trigger de herencia y propagación;
-- reglas 1 a 3 de 9.3 (la 2 dentro del mismo parche de `post_journal_entry`);
-- pre-flight que aborta si un cliente a marcar tiene asientos.
-
-Marcar 0TEST-FE-001 y 0TEST-FE-002 en producción es un **cambio de datos**: va como paso del runbook en la
-ventana, con la pausa obligatoria, después de una consulta de solo lectura que liste todos los documentos
-de esos dos clientes (facturas, NC, cobros) y cualquier otro cliente `0TEST-*`.
+- **`094_documentos_de_prueba.sql`** (escrita, sin aplicar en staging; ensayada en local): columnas de 9.2,
+  nacimiento `de_prueba` de lo nuevo de un cliente de prueba y las reglas 1 y 3 de 9.3. Va al final del
+  Bloque C. Verificación: `sql/tests/verificacion-094-documentos-de-prueba.sql` (9/9 en el ensayo).
+- **No incluye** la regla 2 (parche de `post_journal_entry`), la 4 (código) ni el filtro de 9.4. Hasta que
+  existan, la marca no cambia ningún número: deja marcado lo que es de prueba para cuando se cableen.
+- **El paso de datos** `sql/ventana/marcar-datos-de-prueba.sql`, sin DELETE, con la pausa obligatoria, entre
+  `sql/verificacion/produccion-datos-de-prueba-a-marcar.sql` antes y después (runbook
+  `ventana-bloque-1.md`, Bloque C). Aborta si un cliente de prueba tiene un documento que no está en la lista.
 
 ### 9.7 Dudas
 
-1. ¿Hay más clientes de prueba en producción (otros `0TEST-*`, o las facturas de mayo de §8.2)?
+1. ~~¿Hay más clientes de prueba en producción?~~ Respondida el 05/10 con `produccion-datos-de-prueba.sql`: la
+   lista de 9.2. La consulta de antes del paso vuelve a buscar otros `0TEST-*` y lo que cuelgue de esos clientes.
 2. ¿Marca admin y contador, o solo admin?
 3. ¿Las pruebas de cotizaciones de esos clientes también se ocultan? La propuesta no las toca: no entran a
    ningún reporte contable.

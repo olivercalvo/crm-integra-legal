@@ -60,7 +60,7 @@ export const BLOQUE_A = [
 export const BLOQUE_B = [
   "035_reembolso_a_fondos_legales", "043_relink_servicios_plan_vigente",
   "040_compras_con_lineas", "037_expense_lines_cuenta_obligatoria", "045_expense_lines_tax_code_id",
-  "048_pagos_a_proveedores", "049_pago_de_gasto_de_tramite", "050_reversion_de_gasto_de_tramite",
+  "048_pagos_a_proveedores", "093_compra_nace_pendiente", "049_pago_de_gasto_de_tramite", "050_reversion_de_gasto_de_tramite",
   "066_nc_de_compra", "058_motivo_de_anulacion_minimo_15", "061_cufe_cargado_a_mano",
   "064_cufe_origen_no_nulo", "025_niif18_tipo_costo_y_subcategorias",
 ].map((n) => p(`${n}.sql`));
@@ -72,6 +72,8 @@ export const BLOQUE_B = [
  *   · la 079 (subcategorías) parte de las de la 025;
  *   · la 071 no es compatible con el código de `main` (va con el merge).
  * La 084 ya está en producción: entra igual y no cambia nada (idempotente).
+ * La 094 (marca de prueba por documento) va al final: después de ella, el paso
+ * de datos sql/ventana/marcar-datos-de-prueba.sql (ensayo: fase `marcar-pruebas`).
  * La 056 está reservada (saldos iniciales, P-2(b)) y no existe.
  */
 export const BLOQUE_C = [
@@ -81,6 +83,7 @@ export const BLOQUE_C = [
   "078_parametros_del_bufete_isr", "079_subcategorias_y_cuentas_nuevas", "080_cierre_anual",
   "081_correcciones_076_y_079", "082_otros_servicios_y_nc_sin_bancos", "083_fe_estado_interna",
   "084_audit_log_solo_agregar", "085_motivo_pendiente_dgi", "092_factura_emitida_fuera",
+  "094_documentos_de_prueba",
 ].map((n) => p(`${n}.sql`));
 
 /** Ventana APARTE, después de la del Bloque 1. La 088 (legado) no va todavía. */
@@ -100,6 +103,7 @@ export const VERIFICACIONES = {
   [p("046_reversion_de_cobro.sql")]: ["sql/tests/verificacion-046-reversion-cobro.sql"],
   [p("047_recibo_de_caja.sql")]: ["sql/tests/verificacion-047-recibo-de-caja.sql"],
   [p("048_pagos_a_proveedores.sql")]: ["sql/tests/verificacion-048-pagos-a-proveedores.sql"],
+  [p("093_compra_nace_pendiente.sql")]: ["sql/tests/verificacion-093-compra-nace-pendiente.sql"],
   [p("049_pago_de_gasto_de_tramite.sql")]: ["sql/tests/verificacion-049-pago-de-gasto-de-tramite.sql"],
   [p("050_reversion_de_gasto_de_tramite.sql")]: ["sql/tests/verificacion-050-reversion-de-gasto-de-tramite.sql"],
   [p("051_nota_de_credito_contable.sql")]: ["sql/tests/verificacion-051-nota-de-credito.sql"],
@@ -128,5 +132,6 @@ export const VERIFICACIONES = {
   [p("080_cierre_anual.sql")]: ["sql/tests/verificacion-080-cierre-anual.sql"],
   [p("082_otros_servicios_y_nc_sin_bancos.sql")]: ["sql/tests/verificacion-082-otros-servicios-y-bancos.sql"],
   [p("083_fe_estado_interna.sql")]: ["sql/tests/verificacion-083-fe-estado-interna.sql"],
+  [p("094_documentos_de_prueba.sql")]: ["sql/tests/verificacion-094-documentos-de-prueba.sql"],
   [p("084_audit_log_solo_agregar.sql")]: ["sql/tests/verificacion-084-audit-log-solo-agregar.sql"],
 };

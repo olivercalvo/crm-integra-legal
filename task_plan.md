@@ -1,5 +1,37 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 (5) — COMPRAS PENDIENTES, DATOS DE PRUEBA EN LA VENTANA Y ACCESOS <<<
+
+- ✅ **Una compra nueva nace «Pendiente de pago».** La pantalla arrancaba en «Pagado» (y eso registra
+  un pago con banco al guardar). Ahora arranca pendiente, la API toma un alta sin `status` como
+  pendiente y la `093` (escrita, SIN APLICAR en staging) cambia el `DEFAULT 'pagado'` de la 010.
+  Rutas que crean compras: una sola (`createBusinessExpense`, pantalla y `POST
+  /api/finanzas/business-expenses`); no hay importación de compras. Tests: `compra-nace-pendiente.test.ts`.
+  Probado en staging por la pantalla: FAC-CO-000008 quedó `pendiente_pago`, sin pago.
+  Runbook: la `048` y este código van en el mismo despliegue (B congelado + merge de D·6).
+- ✅ **Datos de prueba en la ventana, sin DELETE.** Propuesta §9 ajustada: la marca es del DOCUMENTO
+  y la del cliente sólo vale para lo nuevo; así FAC-HON-000463 (real ante la DGI, cliente
+  0TEST-FE-002) sigue contando. `094_documentos_de_prueba.sql` (escrita, SIN APLICAR en staging),
+  `sql/verificacion/produccion-datos-de-prueba-a-marcar.sql` (antes y después, corre hoy con la
+  024) y el paso `sql/ventana/marcar-datos-de-prueba.sql` (aborta si hay algo sin decidir).
+  Ensayado en una copia de `prod_024` con los mismos números: aborta con un cobro sin decidir;
+  marca 8 facturas y 5 clientes; 463, CLI-026 y ADM-001 quedan reales; re-ejecutable.
+- ✅ Ventana re-ensayada con la 093 y la 094: 63 migraciones, 0 errores; bitácoras 5/5; 41 tablas
+  131/131; concurrencia 180 rondas sin deadlocks, `--control` 27/27. Producción es Postgres 17.6.
+- 🔴 **Desactivar un usuario no le quitaba el acceso** (hallado ensayando «Accesos» en staging):
+  un contador desactivado volvía a entrar. Corregido: desactivar lo bloquea en Supabase Auth,
+  reactivar lo desbloquea (`acceso-de-usuario.ts`, test `desactivar-quita-el-acceso.test.ts`).
+  Re-probado en staging: `user_banned`.
+- ✅ Runbook §6 «Accesos»: usuario de Josuarth (contador) con contraseña descartable, su contraseña
+  por «¿Olvidaste tu contraseña?» (no hay invitación por correo), desactivar contador.test,
+  `sql/verificacion/produccion-accesos-contador.sql`. Día ~5 h 35 min, congelado ~3 h 05 min.
+- ⏳ Oliver: «aplica» para la 093 y la 094 en staging (ninguna está aplicada); confirmar el correo de
+  Josuarth; correr `produccion-datos-de-prueba-a-marcar.sql` en producción antes del día (sólo lectura).
+- ⏳ Pendiente de la propuesta §9: el filtro `de_prueba` en ventas, ITBMS, antigüedad, pendientes DGI y
+  listados, y el rechazo en `post_journal_entry`. Hasta entonces la marca no cambia ningún número.
+- 🧹 Staging: quedan dos usuarios de ensayo (`contador.ensayo.0510@` y `contador.ensayo2.0510@staging.test`),
+  desactivados y bloqueados, y la compra FAC-CO-000008 de la prueba.
+
 ## >>> 05/10/2026 (4) — ENSAYO DE LA VENTANA DEL BLOQUE 1 Y DATOS DE PRUEBA EN PRODUCCIÓN <<<
 
 - ✅ **Ensayo contra una base LOCAL igual a producción** (Postgres 17.9 por npm, sin Docker;

@@ -4,6 +4,9 @@
  *   node scripts/ensayo-ventana/ensayo.mjs base        → arma `prod_024`: igual a producción
  *   node scripts/ensayo-ventana/ensayo.mjs ventana     → copia `prod_024` a `ventana` y aplica A, B y C
  *   node scripts/ensayo-ventana/ensayo.mjs bitacoras   → sobre `ventana`, la ventana aparte de las bitácoras
+ *   node scripts/ensayo-ventana/ensayo.mjs marcar-pruebas → copia `prod_024` a `pruebas` con datos
+ *        equivalentes a los de prueba de producción, aplica A, B y C y ensaya el paso
+ *        sql/ventana/marcar-datos-de-prueba.sql con su consulta de antes y después
  *
  * La base local: Postgres 17 en localhost:54329 (ENSAYO_PORT), superusuario
  * `supabase_admin` y `postgres` SIN superusuario, como en Supabase. Cómo se
@@ -68,6 +71,18 @@ async function correr(user, database, ruta, { commit, bloque, fixups } = {}) {
   const ms = Math.round(performance.now() - t0);
   await c.end().catch(() => {});
   return { archivo: ruta.replace(/^.*\//, ""), bloque, ms, error, avisos };
+}
+
+/** Una consulta de SÓLO LECTURA (archivo con un SELECT): devuelve las filas. */
+async function consultar(database, ruta) {
+  const c = await cliente("postgres", database);
+  await c.query("BEGIN READ ONLY");
+  try {
+    return (await c.query(sql(ruta))).rows;
+  } finally {
+    await c.query("ROLLBACK").catch(() => {});
+    await c.end().catch(() => {});
+  }
 }
 
 function imprimir(r) {
@@ -317,7 +332,67 @@ if (fase === "verificar") {
   guardar(process.argv.includes("--primer-uso") ? "verificar-primer-uso" : "verificar", { pasos: registro });
 }
 
-if (!["base", "ventana", "bitacoras", "verificar"].includes(fase)) {
-  console.error("uso: node scripts/ensayo-ventana/ensayo.mjs base | ventana [--seguir] | bitacoras [--seguir] | verificar [--primer-uso]");
+if (fase === "marcar-pruebas") {
+  const CONSULTA = "sql/verificacion/produccion-datos-de-prueba-a-marcar.sql";
+  const PASO = "sql/ventana/marcar-datos-de-prueba.sql";
+  const registro = { pasos: [], consultas: {} };
+  const paso = (r) => { imprimir(r); registro.pasos.push(r); for (const a of r.avisos.filter((x) => !/does not exist, skipping/.test(x.texto))) console.log(`     ${a.texto}`); return r; };
+  const mostrar = (titulo, filas) => {
+    registro.consultas[titulo] = filas.map(({ id, ...f }) => f);
+    console.log(`\n   ${titulo}: ${filas.length} filas`);
+    for (const f of filas) console.log(`     ${[f.plan.padEnd(16), f.tabla.padEnd(9), String(f.referencia).padEnd(15), `marca=${f.marca_hoy ?? "—"}`, `asiento=${f.con_asiento}`, f.monto ?? ""].join(" ")}`);
+  };
+  const quedan = (filas) => filas.filter((f) => ["REVISAR", "NO ENCONTRADO"].includes(f.plan)).length;
+
+  await recrear("pruebas", "prod_024");
+  if (paso(await correr("supabase_admin", "pruebas", "scripts/ensayo-ventana/datos-de-prueba-equivalentes.sql", { bloque: "datos" })).error) process.exit(1);
+
+  const hoy = await consultar("pruebas", CONSULTA);
+  mostrar("antes, esquema de hoy (024)", hoy);
+
+  console.log("\n── Ventana A → B → C (sin verificaciones: las corre la fase `ventana`)");
+  let ms = 0;
+  for (const ruta of [...BLOQUE_A, ...BLOQUE_B, ...BLOQUE_C]) {
+    const r = await correr("postgres", "pruebas", ruta, { bloque: "ventana" });
+    ms += r.ms;
+    if (r.error) { imprimir(r); process.exit(1); }
+  }
+  console.log(`✅ ${BLOQUE_A.length + BLOQUE_B.length + BLOQUE_C.length} migraciones, ${ms} ms`);
+
+  const antes = await consultar("pruebas", CONSULTA);
+  mostrar("antes del paso (después de la 094)", antes);
+
+  // El paso tiene que ABORTAR si un cliente de prueba tiene algo que no está en la lista.
+  console.log("\n── Caso de aborto: un cobro de CLI-066 que nadie decidió");
+  const a = await cliente("supabase_admin", "pruebas");
+  await a.query(`SET session_replication_role = replica`);
+  const { rows: [extra] } = await a.query(
+    `INSERT INTO payments (tenant_id, client_id, payment_date, amount, method, reference, status)
+     SELECT tenant_id, id, current_date, 1.07, 'transferencia', 'ENSAYO-ABORTO', 'registrado' FROM clients WHERE client_number = 'CLI-066'
+     RETURNING id`);
+  const aborto = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso (aborta)" }));
+  const { rows: [m] } = await a.query(`SELECT (SELECT count(*) FROM invoices WHERE de_prueba)::int f, (SELECT count(*) FROM clients WHERE es_de_prueba)::int c`);
+  await a.query(`DELETE FROM payments WHERE id = $1`, [extra.id]);
+  await a.end();
+  registro.aborto = { abortó: Boolean(aborto.error), marcas_despues: m };
+  console.log(`     ${aborto.error ? "✅ abortó" : "❌ NO abortó"} · marcas después: ${m.f} facturas, ${m.c} clientes`);
+
+  console.log("\n── El paso");
+  const r1 = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso" }));
+  const despues = await consultar("pruebas", CONSULTA);
+  mostrar("después del paso", despues);
+  const r2 = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso (otra vez)" }));
+
+  const mal = despues.filter((f) =>
+    (f.plan === "marcar de prueba" && f.marca_hoy !== "true") || (f.plan === "se queda real" && f.marca_hoy !== "false"));
+  const ok = !r1.error && !r2.error && aborto.error && m.f === 0 && m.c === 0 && quedan(antes) === 0 && mal.length === 0;
+  registro.resultado = { ok, revisar_antes: quedan(antes), marcas_incorrectas: mal.length };
+  guardar("marcar-pruebas", registro);
+  console.log(`\n${ok ? "✅" : "❌"} marcar-pruebas · ${mal.length} marcas incorrectas · ${quedan(antes)} filas REVISAR/NO ENCONTRADO antes`);
+  process.exit(ok ? 0 : 1);
+}
+
+if (!["base", "ventana", "bitacoras", "verificar", "marcar-pruebas"].includes(fase)) {
+  console.error("uso: node scripts/ensayo-ventana/ensayo.mjs base | ventana [--seguir] | bitacoras [--seguir] | verificar [--primer-uso] | marcar-pruebas");
   process.exit(1);
 }

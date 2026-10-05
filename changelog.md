@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Compras pendientes, datos de prueba en la ventana y desactivar usuarios] - 2026-10-05
+
+- Una compra nueva ahora arranca en «Pendiente de pago». Antes arrancaba en «Pagado», y guardarla así
+  registraba un pago. La API hace lo mismo si no recibe estado, y la migración `093` (escrita, sin
+  aplicar) cambia el valor por defecto de la base. Va en el mismo despliegue que la `048`.
+- **Corregido: desactivar un usuario en Administración › Usuarios no le impedía entrar.** Ahora lo
+  bloquea en el inicio de sesión, y reactivarlo lo desbloquea. Probado en staging.
+- Datos de prueba de producción: la marca pasa a ser por documento (la factura FAC-HON-000463 es real
+  aunque su cliente sea de prueba). Migración `094` (escrita, sin aplicar), consulta de antes y después
+  y el paso de la ventana que marca 5 clientes y 8 facturas sin borrar nada, ensayado en local.
+- Runbook de la ventana: Postgres 17.6 en producción, la `093` y la `094` en el orden, el paso de datos
+  de prueba y el paso final «Accesos» (usuario de Josuarth y desactivar contador.test), con su consulta.
+
 ## [Ensayo de la ventana del Bloque 1 y consulta de datos de prueba] - 2026-10-05
 
 - Ensayo completo de la ventana de producción contra una base local igual a producción: las 61

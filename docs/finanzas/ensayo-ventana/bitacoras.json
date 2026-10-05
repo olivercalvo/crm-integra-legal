@@ -4,7 +4,7 @@
     {
       "archivo": "086_bitacoras_nucleo.sql",
       "bloque": "bitácoras",
-      "ms": 82,
+      "ms": 80,
       "error": null,
       "avisos": [
         {
@@ -44,7 +44,7 @@
     {
       "archivo": "087_bitacoras_captura.sql",
       "bloque": "bitácoras",
-      "ms": 36,
+      "ms": 39,
       "error": null,
       "avisos": [
         {
@@ -220,7 +220,7 @@
     {
       "archivo": "089_bitacoras_documento_de_casos.sql",
       "bloque": "bitácoras",
-      "ms": 11,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -244,7 +244,7 @@
     {
       "archivo": "091_bitacoras_error_claro.sql",
       "bloque": "bitácoras",
-      "ms": 32,
+      "ms": 31,
       "error": null,
       "avisos": [
         {

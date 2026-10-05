@@ -1,0 +1,648 @@
+{
+  "pasos": [
+    {
+      "archivo": "datos-de-prueba-equivalentes.sql",
+      "bloque": "datos",
+      "ms": 82,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "equivalentes: 6 clientes, 9 facturas, caso ADM-001 con gasto de 1.00"
+        }
+      ]
+    },
+    {
+      "archivo": "marcar-datos-de-prueba.sql",
+      "bloque": "paso (aborta)",
+      "ms": 29,
+      "error": {
+        "mensaje": "Hay documentos de clientes de prueba que no están en la lista: cobro ENSAYO-ABORTO. Decidir y agregarlos antes. No se marcó nada.",
+        "detalle": null,
+        "donde": "PL/pgSQL function inline_code_block line 48 at RAISE",
+        "codigo": "P0001"
+      },
+      "avisos": []
+    },
+    {
+      "archivo": "marcar-datos-de-prueba.sql",
+      "bloque": "paso",
+      "ms": 45,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Marcadas ahora: 8 facturas y 5 clientes (8 y 5 en total). Reales sin marca: FAC-HON-000463, CLI-026 y el gasto ADM-001 de 1.00."
+        }
+      ]
+    },
+    {
+      "archivo": "marcar-datos-de-prueba.sql",
+      "bloque": "paso (otra vez)",
+      "ms": 39,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Marcadas ahora: 0 facturas y 0 clientes (8 y 5 en total). Reales sin marca: FAC-HON-000463, CLI-026 y el gasto ADM-001 de 1.00."
+        }
+      ]
+    }
+  ],
+  "consultas": {
+    "antes, esquema de hoy (024)": [
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-001",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-002",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-066",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-069",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-070",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000454",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000455",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000456",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000457",
+        "cliente": "CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "27/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000459",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000460",
+        "cliente": "0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000461",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "04/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-REI-000038",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": null,
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.00",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-026",
+        "cliente": "BUFETE EMISOR (EQUIVALENTE A CLI-026)",
+        "plan": "se queda real",
+        "marca_hoy": null,
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "expenses",
+        "referencia": "ADM-001",
+        "cliente": "CLI-026",
+        "plan": "se queda real",
+        "marca_hoy": null,
+        "estado": "tramite",
+        "monto": "1.00",
+        "fecha": "04/03/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000463",
+        "cliente": "0TEST-FE-002",
+        "plan": "se queda real",
+        "marca_hoy": null,
+        "estado": "emitida · fe authorized · amb 1",
+        "monto": "1.07",
+        "fecha": "08/07/2026",
+        "con_asiento": false,
+        "cobrado": null
+      }
+    ],
+    "antes del paso (después de la 094)": [
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-001",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-002",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-066",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-069",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-070",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000454",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000455",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000456",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000457",
+        "cliente": "CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "27/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000459",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000460",
+        "cliente": "0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000461",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "04/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-REI-000038",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "false",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.00",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-026",
+        "cliente": "BUFETE EMISOR (EQUIVALENTE A CLI-026)",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "expenses",
+        "referencia": "ADM-001",
+        "cliente": "CLI-026",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "tramite",
+        "monto": "1.00",
+        "fecha": "04/03/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000463",
+        "cliente": "0TEST-FE-002",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "emitida · fe authorized · amb 1",
+        "monto": "1.07",
+        "fecha": "08/07/2026",
+        "con_asiento": false,
+        "cobrado": null
+      }
+    ],
+    "después del paso": [
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-001",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "0TEST-FE-002",
+        "cliente": "CLIENTE EQUIVALENTE A 0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-066",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-069",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-070",
+        "cliente": "CLIENTE EQUIVALENTE A CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000454",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000455",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000456",
+        "cliente": "CLI-069",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe error",
+        "monto": "1.07",
+        "fecha": "22/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000457",
+        "cliente": "CLI-070",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.07",
+        "fecha": "27/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000459",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000460",
+        "cliente": "0TEST-FE-002",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "03/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000461",
+        "cliente": "0TEST-FE-001",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe authorized · amb 2",
+        "monto": "100.00",
+        "fecha": "04/06/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-REI-000038",
+        "cliente": "CLI-066",
+        "plan": "marcar de prueba",
+        "marca_hoy": "true",
+        "estado": "emitida · fe no_emitida",
+        "monto": "1.00",
+        "fecha": "20/05/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "clients",
+        "referencia": "CLI-026",
+        "cliente": "BUFETE EMISOR (EQUIVALENTE A CLI-026)",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "active",
+        "monto": null,
+        "fecha": "03/09/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "expenses",
+        "referencia": "ADM-001",
+        "cliente": "CLI-026",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "tramite",
+        "monto": "1.00",
+        "fecha": "04/03/2026",
+        "con_asiento": false,
+        "cobrado": null
+      },
+      {
+        "tabla": "invoices",
+        "referencia": "FAC-HON-000463",
+        "cliente": "0TEST-FE-002",
+        "plan": "se queda real",
+        "marca_hoy": "false",
+        "estado": "emitida · fe authorized · amb 1",
+        "monto": "1.07",
+        "fecha": "08/07/2026",
+        "con_asiento": false,
+        "cobrado": null
+      }
+    ]
+  },
+  "aborto": {
+    "abortó": true,
+    "marcas_despues": {
+      "f": 0,
+      "c": 0
+    }
+  },
+  "resultado": {
+    "ok": true,
+    "revisar_antes": 0,
+    "marcas_incorrectas": 0
+  }
+}

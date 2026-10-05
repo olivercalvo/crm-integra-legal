@@ -1,0 +1,32 @@
+Prueba del 1519 (fecha de emisión antigua) · SANDBOX de ideati
+Fecha: 2026-10-05T14:23Z · EFACTURA_I_AMB=2 · APP_ENV=local (staging xtyenhakplrkyifbcaow) · punto 001
+Script temporal fuera del repo (mismo método que prueba-tipos-05-06-07.txt): payload de
+mapInvoiceToEfacturaRequest con options.fechaEmision forzada, número de allocateFeNumero,
+POST /api/v1/Invoices?qr=true&xml=false.
+Base: FAC-HON-000021 (staging, HONORARIOS, 21.40 con ITBMS, due_date 2026-10-25), tipoDocumento 01.
+Cliente apuntado al RUC/DV del emisor (el sandbox rechaza RUC ficticios) y restaurado al final: «cliente restaurado».
+
+→ A · 45 días atrás · fechaEmision=2026-08-21T10:00:00-05:00 · nº 58
+   ✅ AUTORIZÓ · gResProc = [0260] Autorizado el uso de la FE  (único código; no vino 1519)
+   CUFE FE0120000025046169-3-2021-4000002026082100000000580010122286028903
+   dFecProc 2026-10-05T14:23:40.039Z · protocolo 00001528364-1-65300620260000000000061872
+
+→ B · 15 días atrás · fechaEmision=2026-09-20T10:00:00-05:00 · nº 59
+   ✅ AUTORIZÓ · gResProc = [0260] Autorizado el uso de la FE  (único código)
+   CUFE FE0120000025046169-3-2021-4000002026092000000000590010125403515891
+   dFecProc 2026-10-05T14:23:42.033Z · protocolo 00001528364-1-65300620260000000000061873
+
+Lectura:
+- El sandbox AUTORIZA una factura con fecha de documento de 45 días atrás y NO devuelve el 1519, ni como
+  rechazo ni como aviso. La de 15 días atrás, igual. En las dos la lista gResProc trae un solo elemento.
+- El CUFE lleva la fecha del DOCUMENTO (20260821 / 20260920), no la del envío: ante la DGI la factura
+  queda con la fecha que se mandó.
+- ⚠️ Límite de la prueba: es el sandbox. Que acá no aparezca el 1519 no prueba que producción no lo
+  devuelva (la ficha lo describe como notificación con más de 30 días). Para decidir J-4 con certeza,
+  preguntarle a ideati si el sandbox valida el 1519. Lo que sí queda probado: un 1519, si llega, no
+  impide la autorización en el sandbox, y la fecha antigua no se rechaza.
+- Consecuencia para propuesta-alerta-no-enviadas.md §d: la opción «mandar siempre issue_date» deja de
+  estar bloqueada por la duda del rechazo. La decisión sigue siendo de Josuarth (J-4).
+- Los números 58 y 59 del punto 001 quedaron consumidos en staging (fe_secuencias) y existen como
+  documentos autorizados en el sandbox, contra el RUC del propio emisor. La factura FAC-HON-000021 de
+  staging no se modificó (no se escribió su CUFE ni su fe_estado).

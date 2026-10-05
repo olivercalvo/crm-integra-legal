@@ -1,5 +1,13 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cruce del facturador, prueba del 1519 y propuesta de facturas emitidas fuera] - 2026-10-05
+
+- Prueba en sandbox: una factura con fecha de documento de 45 días atrás y otra de 15 días atrás se
+  autorizan sin el aviso 1519 (`docs/efactura/prueba-fecha-antigua-1519.txt`).
+- Cruce del facturador de la DGI contra el CRM, de enero al 05/10 (`docs/finanzas/cruce-facturador-2026-10-05.md`).
+- Propuesta para registrar en el CRM facturas emitidas en QuickBooks o en el portal, con su CUFE, sin enviarlas
+  a la DGI (`docs/finanzas/propuesta-facturas-emitidas-fuera.md`). Sin código.
+
 ## [Bitácoras: 091 aplicada, mensaje claro probado en pantalla] - 2026-10-03
 
 - `091` aplicada en staging. Probado como abogada: si el registro de auditoría falla, el comentario no se

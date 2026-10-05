@@ -1,5 +1,23 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 — CRUCE DEL FACTURADOR, PRUEBA DEL 1519, FACTURAS EMITIDAS FUERA <<<
+
+- ✅ Prueba del `1519` en sandbox (`docs/efactura/prueba-fecha-antigua-1519.txt`): factura con fecha de documento
+  de 45 días atrás (21/08) y de 15 días atrás (20/09) → **las dos autorizadas, `[0260]` como único código, sin
+  1519**. El CUFE lleva la fecha del documento. Límite: es el sandbox. Destraba J-4 (mandar `issue_date`
+  al reintentar), que sigue siendo decisión de Josuarth. Consumidos los n.º 58 y 59 del punto 001 en staging.
+- ✅ Cruce del facturador (`docs/finanzas/cruce-facturador-2026-10-05.md`): 238 documentos; 230 facturas
+  autorizadas (112,099.03 + ITBMS 4,706.28), 2 NC, 6 anuladas (todas del 050). Huecos verificados, iguales a
+  los informados. 3 del punto 100 y 7 de QuickBooks (01–03/07) verificados. Hallados además: NC 100-1 (04/03,
+  Serfasa) y NC genérica 050-461 (19/02, Condado Plaza), territorio de QuickBooks.
+- ⚪ 489/503 → 52/75 y 496/508 nunca emitidas: el archivo es consistente (huecos 51 y 74 justo antes de 52 y
+  75), pero la mitad CRM sólo se confirma con `produccion-facturas-no-enviadas-detalle.sql` (Oliver).
+- 📐 Propuesta sin construir: `docs/finanzas/propuesta-facturas-emitidas-fuera.md`. «Registrar factura
+  emitida fuera»: factura + CUFE + asiento en una transacción, serie `FAC-EXT-`, origen `externo`, punto y
+  número fiscal guardados, CUFE leído y verificado, índice único de CUFE. Sin migración escrita.
+- ⏳ Preguntas: Josuarth (¿julio y agosto abiertos en producción?, ¿los 7 de QuickBooks por importación o por
+  CRM?), Oliver (¿serie `FAC-EXT-`?, ¿el contador registra?).
+
 ## >>> 03/10/2026 (cierre 7) — CRUCE DE PREGUNTAS Y BITÁCORAS DE AUDITORÍA <<<
 
 - ✅ Parte 1: `docs/finanzas/cruce-preguntas-pendientes.md`. De 15 preguntas, 4 ya respondidas, 3 se

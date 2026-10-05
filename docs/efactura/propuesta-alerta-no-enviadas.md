@@ -103,7 +103,8 @@ Hoy el payload lleva como fecha de emisión **el momento del envío**, no la fec
    - los 180 días de la NC/ND (`1714`), que la DGI cuenta desde la fecha de emisión de la factura (la de hoy).
 4. **La alternativa** es mandar la fecha del documento (`issue_date`):
    - pasados 30 días la DGI responde `1519`, que según la ficha es **notificación, no rechazo** (falta
-     probarlo en sandbox);
+     probarlo en sandbox). ✅ **Probado el 05/10** (`prueba-fecha-antigua-1519.txt`): con 45 y 15 días
+     atrás el sandbox **autoriza con `[0260]` y sin `1519`**, y el CUFE lleva la fecha del documento;
    - el documento fiscal tendría la fecha correcta, pero con un aviso de «muy antigua»;
    - con más de 2 días hábiles al futuro, rechazo (`1520`); no aplica acá.
 

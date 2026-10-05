@@ -8,7 +8,9 @@ Datos: CUFE, fecha, punto, número y montos REALES de las 3 del punto 100
 S.A.», RUC 155000001-2-2026 / 155000002-2-2026 / 155000003-2-2026 (jurídica, tres grupos).
 Ni el RPC ni la app comparan un RUC con el cliente: el único RUC del CUFE es el del EMISOR.
 
-Antes: la 092 ya estaba en staging, idéntica al archivo (comparado función por función). Se volvió a
+Antes: la 092 ya estaba en staging, idéntica al archivo (comparado función por función). La aplicó la
+sesión anterior (e91c0405) a las 15:19:31 UTC, con el «aplica» de Oliver de las 15:19:26; la sesión se
+cerró antes de dejarlo escrito. Se volvió a
 correr completa (es idempotente): «092 OK: serie FAC-EXT-, índice único de CUFE, guard y RPC.
 Facturas externas hoy: 0.» Períodos: julio abierto, agosto CERRADO, octubre abierto.
 

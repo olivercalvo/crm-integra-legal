@@ -40,6 +40,8 @@ interface Props {
   canEmitToPac: boolean;
   /** 092: registrada como emitida fuera del CRM. Nunca se ofrece enviarla. */
   emitidaFuera?: boolean;
+  /** `invoices.dgi_cufe_origen`: decide el texto del estado fiscal (FeEstadoBadge). */
+  cufeOrigen?: string | null;
   /**
    * 🔴 Lo que dijo la DGI en el último envío fallido, ya traducido.
    *
@@ -87,6 +89,7 @@ export function EfacturaCard({
   canEmitToPac,
   rechazo,
   emitidaFuera = false,
+  cufeOrigen = null,
 }: Props) {
   return (
     <section className="rounded-xl border bg-white p-5 shadow-sm">
@@ -97,7 +100,7 @@ export function EfacturaCard({
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500">Estado fiscal:</span>
-          <FeEstadoBadge estado={feEstado} origen={emitidaFuera ? "externo" : null} />
+          <FeEstadoBadge estado={feEstado} origen={cufeOrigen ?? (emitidaFuera ? "externo" : null)} />
         </div>
       </div>
 

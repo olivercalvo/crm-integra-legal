@@ -110,8 +110,9 @@ test("«Enviar a la DGI» corta una externa PRIMERO, antes del mes anterior y de
 });
 
 test("el badge fiscal no dice «Sin enviar» de una externa (listado y tarjeta)", () => {
-  assert.ok(leer("src/components/finanzas/fe-estado-badge.tsx").includes('origen === "externo"'));
+  assert.ok(leer("src/components/finanzas/fe-estado-badge.tsx").includes("etiquetaDeEstadoFiscal(estado, origen)"));
   const lista = leer("src/app/finanzas/facturas/_components/invoices-list.tsx");
   assert.equal((lista.match(/<FeEstadoBadge estado=\{inv\.fe_estado\} origen=\{inv\.dgi_cufe_origen\} \/>/g) ?? []).length, 2);
-  assert.ok(leer("src/app/finanzas/facturas/_components/efactura-card.tsx").includes('origen={emitidaFuera ? "externo" : null}'));
+  assert.ok(leer("src/app/finanzas/facturas/_components/efactura-card.tsx").includes('origen={cufeOrigen ?? (emitidaFuera ? "externo" : null)}'));
+  assert.ok(leer("src/app/finanzas/facturas/[id]/page.tsx").includes("cufeOrigen={invoice.dgi_cufe_origen ?? null}"));
 });

@@ -661,6 +661,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               numeroDocumento={invoice.numero_documento}
               canEmitToPac={canEmitToPac && !emitidaFuera}
               emitidaFuera={emitidaFuera}
+              cufeOrigen={invoice.dgi_cufe_origen ?? null}
               rechazo={rechazoDgi}
             />
           )}

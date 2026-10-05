@@ -1,5 +1,13 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Estado fiscal de las facturas con CUFE del portal] - 2026-10-05
+
+- Una factura emitida en el portal de facturación y con su CUFE cargado en el CRM ya no dice «Sin enviar»:
+  dice «Autorizada en el portal», en el listado de facturas y en la tarjeta de Facturación Electrónica. Las
+  emitidas fuera del CRM siguen diciendo «Emitida fuera del CRM».
+- Aclarado: la `092` la había aplicado en staging la sesión anterior, con la aprobación de Oliver; no hubo
+  ningún paso automático.
+
 ## [Registrar factura emitida fuera: 092 en staging y pruebas] - 2026-10-05
 
 - Nueva pantalla **Finanzas › Facturas emitidas fuera** (admin y contador): una factura que la DGI ya

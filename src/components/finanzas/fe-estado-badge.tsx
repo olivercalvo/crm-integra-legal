@@ -1,15 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import type { FeEstado } from "@/lib/finanzas/types/invoice";
-import { FE_ESTADO_LABEL } from "@/lib/finanzas/types/invoice";
+import { etiquetaDeEstadoFiscal } from "@/lib/finanzas/types/invoice";
 
 interface FeEstadoBadgeProps {
   estado: FeEstado;
   /**
    * `invoices.dgi_cufe_origen`. Una factura emitida fuera del CRM (`externo`,
-   * 092) tiene `fe_estado = 'no_emitida'` para siempre a propósito (el guard lo
-   * congela para que nunca vaya al PAC), pero NO está «sin enviar»: la DGI ya la
-   * autorizó desde otro punto. Sin esto el listado y la tarjeta la mostraban
-   * como pendiente.
+   * 092) o con el CUFE cargado del portal (`portal_050`) tiene `fe_estado =
+   * 'no_emitida'` a propósito, pero NO está «sin enviar»: la DGI ya la
+   * autorizó. La regla vive en `etiquetaDeEstadoFiscal`.
    */
   origen?: string | null;
 }
@@ -34,16 +33,11 @@ function estadoClasses(estado: FeEstado): string {
 }
 
 export function FeEstadoBadge({ estado, origen }: FeEstadoBadgeProps) {
-  if (origen === "externo") {
-    return (
-      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 font-medium">
-        Emitida fuera del CRM
-      </Badge>
-    );
-  }
+  const { texto, porOrigen } = etiquetaDeEstadoFiscal(estado, origen);
+  const clases = porOrigen ? "bg-green-50 text-green-700 border-green-200" : estadoClasses(estado);
   return (
-    <Badge variant="outline" className={`${estadoClasses(estado)} font-medium`}>
-      {FE_ESTADO_LABEL[estado] ?? estado}
+    <Badge variant="outline" className={`${clases} font-medium`}>
+      {texto}
     </Badge>
   );
 }

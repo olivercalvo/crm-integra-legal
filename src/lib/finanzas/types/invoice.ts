@@ -302,6 +302,31 @@ export const FE_ESTADO_LABEL: Record<FeEstado, string> = {
 };
 
 /**
+ * Lo que dice el estado fiscal cuando la factura YA existe ante la DGI pero no
+ * la envió el CRM. En las dos `fe_estado` queda en `no_emitida` a propósito
+ * (para que nada la mande al PAC), y «Sin enviar» mentía:
+ *   · `externo`    (092): emitida fuera del CRM y registrada con su CUFE.
+ *   · `portal_050` (061, caso B): emitida a mano en el portal de ideati y su
+ *                  CUFE cargado después en la factura del CRM.
+ */
+export const ETIQUETA_FISCAL_POR_ORIGEN: Record<string, string> = {
+  externo: "Emitida fuera del CRM",
+  portal_050: "Autorizada en el portal",
+};
+
+/**
+ * El texto del estado fiscal de una factura. Sólo `no_emitida` se reemplaza
+ * por el origen del CUFE: `error`, `canceled` o `authorized` dicen algo que
+ * pasó de verdad y se muestran como siempre. Una sola regla para el listado y
+ * la tarjeta.
+ */
+export function etiquetaDeEstadoFiscal(estado: FeEstado, origen?: string | null): { texto: string; porOrigen: boolean } {
+  const delOrigen = estado === "no_emitida" && origen ? ETIQUETA_FISCAL_POR_ORIGEN[origen] : undefined;
+  if (delOrigen) return { texto: delOrigen, porOrigen: true };
+  return { texto: FE_ESTADO_LABEL[estado] ?? estado, porOrigen: false };
+}
+
+/**
  * Si una factura puede dispararse al PAC eFactura. Replica el gate
  * server-side de emitInvoiceToEfactura (T0 pre-check): la factura tiene
  * que estar emitida internamente y fe_estado en no_emitida o error

@@ -1,9 +1,28 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 (3) — DE DÓNDE SALIÓ LA 092 «YA APLICADA» Y CUFE DEL PORTAL EN EL LISTADO <<<
+
+- ✅ **La 092 se aplicó con tu «aplica», en la sesión anterior.** Registro de la sesión `e91c0405`: a las
+  15:19:26 UTC llegó tu mensaje «aplica la 092 en staging…» (el mismo que después se volvió a pegar en
+  esta sesión); a las 15:19:31 corrió `node scripts/run-sql.mjs sql/pending/092_factura_emitida_fuera.sql`
+  y a las 15:19:34 terminó («092 OK»). La sesión se cerró a las 10:20 de Panamá, antes de dejarlo escrito.
+  Lo confirma la base: la fila `invoice_ext` de `numbering_sequences` tiene `created_at` 15:19:33.807 UTC
+  y la bitácora contable la registra como `crear`, sin usuario (conexión directa). La 2.ª corrida de esta
+  sesión no la creó (la migración inserta sólo si no existe).
+- ✅ **No hay ningún paso automático.** `run-sql.mjs` y `apply-staging-sql.mjs` sólo corren a mano; el seed
+  y los tests nombran `sql/pending` en comentarios o lo leen como texto. Nada que quitar.
+- ✅ El estado fiscal de una factura con CUFE cargado del portal (`portal_050`) decía «Sin enviar»: ahora
+  «Autorizada en el portal». Regla única `etiquetaDeEstadoFiscal` (`types/invoice.ts`): sólo `no_emitida`
+  se reemplaza por el origen; `error`, `canceled`, `authorized` se muestran igual. Test
+  `etiqueta-estado-fiscal.test.ts`. Visto en pantalla: FAC-HON-000002 en el listado y en la tarjeta.
+- 🧹 El `TaskStop` del dev server dejaba vivo el proceso de Next (puerto 3000 ocupado y el siguiente en 3001
+  con los estáticos en 404). Se mató el proceso por PID después de verificar que era el de este repo.
+
 ## >>> 05/10/2026 (2) — FACTURAS EMITIDAS FUERA: 092 EN STAGING Y PRUEBAS <<<
 
-- ✅ `092` en staging. ⚠️ Ya estaba aplicada (sin registro en el changelog), idéntica al archivo función por
-  función; se volvió a correr completa con el «aplica» de Oliver (idempotente, pre-flight y verificación OK).
+- ✅ `092` en staging. Ya estaba aplicada, idéntica al archivo función por función: la aplicó la sesión
+  anterior con el mismo «aplica» (ver la entrada (3)). Se volvió a correr completa (idempotente, pre-flight y
+  verificación OK).
 - ✅ El RPC no compara ningún RUC con el cliente: el único RUC del CUFE es el del EMISOR. Clientes ficticios
   «CLIENTE EXT PRUEBA 1/2/3» (CLI-016 a 018) con los CUFE, fechas, puntos, números y montos reales del punto 100.
 - ✅ `scripts/verificar-factura-externa.mts`: 1.ª corrida 48/51 (los 3 fallos eran del script), 2.ª en modo
@@ -28,8 +47,7 @@
   «sí», la 092 aborta: decidir antes qué factura conserva el CUFE.
 - ⏳ Siguen abiertas: Josuarth (¿julio y agosto abiertos en producción? ¿los 7 de QuickBooks por importación
   o por el CRM?). `sop.md` sin SOP propio todavía para esta pantalla.
-- ⚪ Observado, sin tocar: una factura con CUFE del portal (`portal_050`) también dice «Sin enviar» en el
-  listado. Mismo arreglo si se quiere.
+- ✅ ~~Observado: una factura con CUFE del portal (`portal_050`) también dice «Sin enviar».~~ Corregido en (3).
 
 ## >>> 05/10/2026 — CRUCE DEL FACTURADOR, PRUEBA DEL 1519, FACTURAS EMITIDAS FUERA <<<
 

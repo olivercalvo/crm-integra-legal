@@ -1,5 +1,37 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PARA RETOMAR (cierre del 05/10/2026)
+
+**Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
+Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
+**Último hash de trabajo:** `0e9bdc4` (este cierre agrega sólo el commit de esta sección).
+
+**Staging (`xtyenhakplrkyifbcaow`):**
+- Aplicado: todo `sql/pending` hasta la **`094`** inclusive (la `093` y la `094` el 05/10, con el «aplica»),
+  incluidas las bitácoras `086`, `087`, `089`, `090` y `091`. La `056` está reservada y no existe.
+- Escrito y **SIN APLICAR**: **`095`** (el libro no recibe documentos de prueba; ensayada en local, 6/6) y
+  **`088`** (copia del `audit_log` a las bitácoras; no va todavía, a propósito).
+- Detalle generado: `docs/staging/inventario-migraciones.md`.
+
+**Pendiente siguiente:**
+1. «aplica» de la **`095`** en staging, y correr `sql/tests/verificacion-095-documentos-de-prueba-fuera-del-libro.sql`.
+2. Corregir el mensaje **«El documento quedó ANULADO ante la DGI…»** al anular una factura **sin CUFE**: en
+   `efactura/orchestration/anular-factura-ante-dgi.ts`, `cerrarEnElLibro` se usa también en el camino sin CUFE,
+   y si el libro falla dice que la DGI la anuló aunque no se habló con el PAC. Afecta a **FAC-HON-000489** y
+   **FAC-HON-000503** de producción (facturas sin CUFE).
+
+**Datos de prueba que quedaron en staging:**
+- **FAC-HON-900001**: factura creada por SQL sin asiento (copia de FAC-HON-000022, CLI-009), **marcada de
+  prueba**, para ver el badge «Prueba» y la banda. CLI-013 se marcó y se desmarcó con la llave: quedó como estaba.
+- Usuarios `contador.ensayo.0510@staging.test` y `contador.ensayo2.0510@staging.test` (contador), desactivados
+  y bloqueados en Auth.
+- **FAC-CO-000008**: compra de la prueba de «nace pendiente» (pendiente de pago, con su asiento).
+- **FAC-EXT-000001 a 000003**: facturas emitidas fuera (prueba de la `092`), de los clientes ficticios
+  **CLI-016 a CLI-018** («CLIENTE EXT PRUEBA 1/2/3»).
+
+**Para Oliver, en producción (sólo lectura, antes de la ventana):** `produccion-datos-de-prueba-a-marcar.sql`
+(16 filas, ninguna «REVISAR»), `produccion-cufe-repetidos.sql`; correo de Josuarth para «Accesos».
+
 ## >>> 05/10/2026 (6) — 093 Y 094 EN STAGING, LAS MARCAS DE PRUEBA FILTRAN EN TODO <<<
 
 - ✅ **`093` y `094` aplicadas en staging** con el «aplica» de Oliver. Verificaciones: 093 2/2, 094 9/9.

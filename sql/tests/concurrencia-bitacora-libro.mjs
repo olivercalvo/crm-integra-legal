@@ -17,7 +17,8 @@
  *
  * QUÉ HACE, en cada ronda y para cada combinación
  *   X ∈ { importación de asientos (post_journal_entries_batch),
- *         NC de compra (create_supplier_credit_note) }
+ *         NC de compra (create_supplier_credit_note),
+ *         factura emitida fuera (register_external_invoice, 092) }
  *   Y ∈ { emisión de factura, cobro, gasto de trámite }   (escrituras + posteo, en una transacción)
  * fuerza el PEOR orden:
  *   1. X ya pasó su primera escritura auditada (auditoria.tomar_candados, lo mismo que
@@ -66,7 +67,8 @@ const banco = (await uno("select payment_account_code c from payments where tena
 const serv = await uno("select s.id, s.revenue_account from services_catalog s where tenant_id=$1 and active and service_type='honorarios' order by code limit 1", [T]);
 const caso = (await uno("select id from cases where tenant_id=$1 order by created_at limit 1", [T])).id;
 const hoy = (await uno("select ((now() at time zone 'America/Panama')::date)::text d")).d;
-if (!admin || !prov || !gasto || !fac || !banco || !serv || !caso) { console.error("❌ Faltan datos de referencia en staging"); process.exit(1); }
+const exento = await uno("select id, code, rate from tax_codes where tenant_id=$1 and rate=0 order by code limit 1", [T]);
+if (!admin || !prov || !gasto || !fac || !banco || !serv || !caso || !exento) { console.error("❌ Faltan datos de referencia en staging"); process.exit(1); }
 
 const sesion = async (c) => {
   await c.query("BEGIN");
@@ -84,6 +86,16 @@ const X = {
   "NC de compra": (c, n) => c.query("select create_supplier_credit_note($1,null,$2,$3,$4::date,null,'Prueba de concurrencia',$4::date,$5::jsonb,$6::jsonb,$7)", [T, prov, `CONC-${Date.now()}-${n}`, hoy,
     JSON.stringify([{ expense_line_id: null, chart_account_code: gasto, description: "Línea", amount: 1, tax_code_id: null, tax_amount: 0 }]),
     JSON.stringify([{ account_code: "200001", debit: 1, credit: 0, description: "NC", supplier_id: prov }, { account_code: gasto, debit: 0, credit: 1, description: "Línea" }]), admin]),
+  // 092: número FAC-EXT-, factura y líneas (auditadas) ANTES del posteo, como la NC de compra.
+  // CUFE inventado con la forma de la DGI (punto 100, ambiente 1), distinto en cada ronda; todo en ROLLBACK.
+  "factura emitida fuera": (c, n) => {
+    const numero = (Date.now() % 1e9) * 10 + (n % 10);
+    const cufe = "FE0120000025046169-3-2021-400000" + hoy.replaceAll("-", "") + String(numero).padStart(10, "0") + "1000111234567890";
+    return c.query("select register_external_invoice($1,$2,'HONORARIOS',null,$3::date,$3::date,$3::date,null,$4,'100',$5,10,0,$6::jsonb,$7::jsonb,$8)", [T, fac.client_id, hoy, cufe, numero,
+      JSON.stringify([{ service_id: serv.id, description: "Concurrencia", quantity: 1, unit_price: 10, tax_code_id: exento.id, tax_code: exento.code, tax_rate: Number(exento.rate) }]),
+      JSON.stringify([{ account_code: "100004", debit: 10, credit: 0, description: "Factura {numero}", client_id: fac.client_id },
+        { account_code: serv.revenue_account, debit: 0, credit: 10, description: "Concurrencia" }]), admin]);
+  },
 };
 
 // ── Lo que hace Y: las escrituras del documento y su posteo, en una transacción ──
@@ -136,7 +148,9 @@ for (const [nx, fx] of Object.entries(X)) {
       await y.query("ROLLBACK");
       for (const e of [ex, ry.e]) {
         if (!e) continue;
-        if (e.code === "40P01") r.deadlocks++;
+        // Desde la 091 un deadlock dentro de la bitácora sale como AU001 con el
+        // código original en el DETAIL («[40P01] deadlock detected»).
+        if (e.code === "40P01" || (e.code === "AU001" && /^\[40P01\]/.test(e.detail ?? ""))) r.deadlocks++;
         else r.otros.push(codigo(e));
       }
       if (!ex && !ry.e) r.ok++;

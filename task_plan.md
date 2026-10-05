@@ -1,5 +1,36 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 (2) — FACTURAS EMITIDAS FUERA: 092 EN STAGING Y PRUEBAS <<<
+
+- ✅ `092` en staging. ⚠️ Ya estaba aplicada (sin registro en el changelog), idéntica al archivo función por
+  función; se volvió a correr completa con el «aplica» de Oliver (idempotente, pre-flight y verificación OK).
+- ✅ El RPC no compara ningún RUC con el cliente: el único RUC del CUFE es el del EMISOR. Clientes ficticios
+  «CLIENTE EXT PRUEBA 1/2/3» (CLI-016 a 018) con los CUFE, fechas, puntos, números y montos reales del punto 100.
+- ✅ `scripts/verificar-factura-externa.mts`: 1.ª corrida 48/51 (los 3 fallos eran del script), 2.ª en modo
+  revisión 44/44. FAC-EXT-000001 (contador) y 000002 (admin) del 14/07; Mi Condado con registro 01/08 → 422 sin
+  dejar nada ni hueco, con registro 05/10 → FAC-EXT-000003. Abogada 403. CUFE repetido 409 (app, RPC, carga
+  manual del caso B e índice en minúsculas). Fecha, número y monto que no coinciden: 400 en la app y rechazo en
+  el RPC. Guard, sin PDF, `fe_secuencias` igual, cadena íntegra.
+- ✅ En ventas (ER y Mayor 400001), ITBMS (julio +21.00, octubre +24.50), CxC (Mayor 100004), antigüedad y
+  libro. Fuera de Pendientes DGI y de los cuatro avisos (29 antes y después). «Ventas Mensuales» sigue siendo
+  pantalla de relleno.
+- 🐛 Encontrado y corregido: listado y tarjeta fiscal decían «Sin enviar» de una FAC-EXT → «Emitida fuera del
+  CRM». «Enviar a la DGI» la cortaba por «mes anterior» y, en el mes en curso, le habría guardado un
+  `fe_motivo_pendiente`: ahora `motivoParaNoEnviar` va primero. Dos tests nuevos.
+- ✅ Navegador (Chromium de Playwright; la extensión no conectaba): listado, alta (escritorio y 390 px),
+  detalle, listado de facturas y Pendientes DGI. Sin errores de consola salvo `/favicon.ico` (ya existía).
+- ✅ 41 tablas 131/131. Concurrencia con «factura emitida fuera» como X: 180 rondas, 0 deadlocks.
+  🐛 `--control` fallaba desde la 091 (el deadlock llega como AU001 con `[40P01]` en el DETAIL): corregido,
+  27/27.
+- ✅ `sql/verificacion/produccion-cufe-repetidos.sql` (sólo SELECT), probado en staging: vacío hoy, y con un
+  duplicado forzado en ROLLBACK lo lista.
+- ⏳ Oliver corre `produccion-cufe-repetidos.sql` en producción antes de la ventana. Si devuelve filas con
+  «sí», la 092 aborta: decidir antes qué factura conserva el CUFE.
+- ⏳ Siguen abiertas: Josuarth (¿julio y agosto abiertos en producción? ¿los 7 de QuickBooks por importación
+  o por el CRM?). `sop.md` sin SOP propio todavía para esta pantalla.
+- ⚪ Observado, sin tocar: una factura con CUFE del portal (`portal_050`) también dice «Sin enviar» en el
+  listado. Mismo arreglo si se quiere.
+
 ## >>> 05/10/2026 — CRUCE DEL FACTURADOR, PRUEBA DEL 1519, FACTURAS EMITIDAS FUERA <<<
 
 - ✅ Prueba del `1519` en sandbox (`docs/efactura/prueba-fecha-antigua-1519.txt`): factura con fecha de documento

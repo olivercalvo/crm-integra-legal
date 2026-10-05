@@ -1,5 +1,24 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Registrar factura emitida fuera: 092 en staging y pruebas] - 2026-10-05
+
+- Nueva pantalla **Finanzas › Facturas emitidas fuera** (admin y contador): una factura que la DGI ya
+  autorizó desde QuickBooks o el portal entra al CRM con su CUFE, número propio `FAC-EXT-` y asiento, en
+  una sola transacción. Nunca se envía a la DGI ni usa la numeración del CRM.
+- `092` aplicada en staging (ya estaba, idéntica al archivo; se volvió a correr completa). Producción: en la
+  ventana, después de correr `sql/verificacion/produccion-cufe-repetidos.sql` (nuevo, sólo lectura).
+- Probado con las 3 del punto 100 (CUFE, fechas y montos reales, clientes ficticios): FAC-EXT-000001 a 003.
+  Mi Condado con fecha de registro 01/08 (agosto cerrado) se rechaza; con la de hoy entra. Rechazos de CUFE
+  repetido, fecha, número y monto que no coinciden, y la abogada recibe 403.
+- Están en el Estado de Resultado, el ITBMS, el Libro Mayor (100004 y 400001) y la antigüedad por cobrar;
+  no están en Pendientes DGI ni en el aviso de documentos sin autorización.
+- Corregido: el listado de facturas y la tarjeta fiscal decían «Sin enviar» de una factura emitida fuera;
+  ahora dicen «Emitida fuera del CRM». «Enviar a la DGI» la corta primero, sin guardarle un motivo de
+  pendiente.
+- Prueba de concurrencia: suma la factura emitida fuera (180 rondas, cero bloqueos) y el modo `--control`
+  vuelve a reconocer el bloqueo, que desde la 091 llega como AU001. Prueba de las 41 tablas: 131/131.
+- Registro completo: `docs/finanzas/prueba-facturas-externas.txt`.
+
 ## [Cruce del facturador, prueba del 1519 y propuesta de facturas emitidas fuera] - 2026-10-05
 
 - Prueba en sandbox: una factura con fecha de documento de 45 días atrás y otra de 15 días atrás se

@@ -1,0 +1,194 @@
+PRUEBA · «Registrar factura emitida fuera» (092) en staging · 05/10/2026
+========================================================================
+Base: staging (xtyenhakplrkyifbcaow). App: localhost:3000 (dev). Sesiones reales: contador
+(STAGING_UI), admin y abogada de los fixtures.
+
+Datos: CUFE, fecha, punto, número y montos REALES de las 3 del punto 100
+(docs/finanzas/cruce-facturador-2026-10-05.md §4). Clientes FICTICIOS: «CLIENTE EXT PRUEBA 1/2/3,
+S.A.», RUC 155000001-2-2026 / 155000002-2-2026 / 155000003-2-2026 (jurídica, tres grupos).
+Ni el RPC ni la app comparan un RUC con el cliente: el único RUC del CUFE es el del EMISOR.
+
+Antes: la 092 ya estaba en staging, idéntica al archivo (comparado función por función). Se volvió a
+correr completa (es idempotente): «092 OK: serie FAC-EXT-, índice único de CUFE, guard y RPC.
+Facturas externas hoy: 0.» Períodos: julio abierto, agosto CERRADO, octubre abierto.
+
+Quedaron registradas (no se borran: el libro es inmutable):
+  FAC-EXT-000001  100-2  MEI Tower 1C → CLIENTE EXT PRUEBA 1  14/07  150.00 + 10.50  asiento 129  (contador)
+  FAC-EXT-000002  100-3  MEI Tower 2B → CLIENTE EXT PRUEBA 2  14/07  150.00 + 10.50  asiento 130  (admin)
+  FAC-EXT-000003  100-4  Mi Condado   → CLIENTE EXT PRUEBA 3  doc 01/08, registro 05/10
+                                                              350.00 + 24.50  asiento 131  (contador)
+
+------------------------------------------------------------------------
+1.ª CORRIDA (registra). 48 bien · 3 mal. Los 3 eran del SCRIPT, no del sistema:
+  7a/7b  el saldo de 400001 es ACREEDOR: se movió −300.00 (julio) y −350.00 (octubre), lo correcto;
+         el script esperaba el signo al revés.
+  9d     el listado busca con ?q=, el script mandaba ?search=.
+Además 6a pasó por la razón equivocada (409 «documento de un mes anterior», no «emitida fuera»):
+se corrigió en el código (ver abajo) y la 2.ª corrida exige el mensaje correcto.
+------------------------------------------------------------------------
+Clientes listos: 1C=aff98f93, 2B=af32bc3c, MC=6b55e499
+Antes: {"seq":{"invoice_reim":5,"invoice_ext":0,"invoice_hon":32,"debit_note":4},"fe":"[{\"punto_facturacion\":\"001\",\"ultimo_numero\":\"59\"}]","ventasJul":{"ingresoCuenta":0,"er":7114},"ventasOct":{"ingresoCuenta":-415,"er":7164},"itbmsJul":0,"itbmsOct":26.94,"avisos":{"cuenta":29,"facturas":29,"reportes":29,"legal":29}}
+✅ 1. la abogada recibe 403 (403)
+✅ 5a. fecha que no coincide con el CUFE: 400 · «El CUFE es de un documento del 14/07/2026.»
+✅ 5b. monto que no coincide con el documento: 400 · «Las líneas dan una base de B/. 150.00 y el documento dice B/. 160.00.»
+✅ 5c. el número de la OTRA factura de MEI Tower: 400 · «El CUFE es del documento n.º 2.»
+✅ 2. MEI Tower 1C (contador): 201 FAC-EXT-000001
+✅ 2. MEI Tower 2B (admin): 201 FAC-EXT-000002
+✅ 3a. Mi Condado con registro 01/08 (agosto cerrado): 422 · «El período 2026-08 está cerrado: elige una fecha de registro en un mes abierto, o pide que se reabra en Períodos Contables.» · no quedó nada
+✅ 3b. Mi Condado con la fecha de registro elegida (2026-10-05): 201 FAC-EXT-000003
+✅ 2·1C. FAC-EXT-000001: emitida, CUFE y origen externo, punto 100 n.º 2, sin enviar, 150 + 10.5, documento 2026-07-14, registro 2026-07-14
+✅ 2·1C. asiento n.º 129: factura del 2026-07-14, 100004 160.5 a nombre del cliente, 400001 150, 200003 10.5, CUFE y referencia 100-0000000002
+✅ 2·1C. bitácora contable: 4 filas (invoices, journal_entries), todas del contador
+✅ 2·2B. FAC-EXT-000002: emitida, CUFE y origen externo, punto 100 n.º 3, sin enviar, 150 + 10.5, documento 2026-07-14, registro 2026-07-14
+✅ 2·2B. asiento n.º 130: factura del 2026-07-14, 100004 160.5 a nombre del cliente, 400001 150, 200003 10.5, CUFE y referencia 100-0000000003
+✅ 2·2B. bitácora contable: 4 filas (invoices, journal_entries), todas del admin
+✅ 2·MC. FAC-EXT-000003: emitida, CUFE y origen externo, punto 100 n.º 4, sin enviar, 350 + 24.5, documento 2026-08-01, registro 2026-10-05
+✅ 2·MC. asiento n.º 131: factura del 2026-10-05, 100004 374.5 a nombre del cliente, 400001 350, 200003 24.5, CUFE y referencia 100-0000000004
+✅ 2·MC. bitácora contable: 4 filas (invoices, journal_entries), todas del contador
+✅ 4a. CUFE repetido (la 1C otra vez): 409 · «Ese CUFE ya está registrado en la factura FAC-EXT-000001. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4b. el CUFE de FAC-HON-000003 (emitida por el CRM) contra el RPC: «Ese CUFE ya está registrado en la factura FAC-HON-000003. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4c. el CUFE de la 1C cargado a mano en FAC-HON-000012: 409 · «Ese CUFE ya está registrado en la factura FAC-EXT-000001. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4d. el índice único rechaza el mismo CUFE en minúsculas en otra factura: «23505 duplicate key value violates unique constraint "invoices_cufe_unico"»
+✅ 5d. RPC con la fecha distinta del CUFE: «El CUFE es de un documento del 14/07/2026 y la fecha del documento se cargó como 15/07/2026.»
+✅ 5e. RPC con el monto distinto del documento: «Los montos no coinciden con el documento autorizado: las líneas dan base B/. 150.00 e ITBMS B/. 10.50, y el documento dice base B/. 160.00 e ITBMS B/. 10.50.»
+✅ 6a. «Enviar a la DGI» sobre FAC-EXT-000001: 409 · «Consultar con el contador antes de reenviar: el documento es de un mes anterior. Ante la DGI quedaría con la fecha de hoy y su ITBMS ya está en el mes del documento.»
+✅ 6b. sin PDF del CRM: 409 · «Esta factura se emitió fuera del CRM: su comprobante es el del sistema que la emitió.»
+✅ 6c. la base no deja pasarla a pending: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6c. la base no deja cambiarle el CUFE: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6c. la base no deja cambiarle el punto: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6d. nadie marca 'externo' fuera del RPC: «Una factura emitida fuera del CRM sólo se registra con «Registrar factura emitida fuera».»
+✅ 6e. fe_secuencias (correlativo del PAC) no se movió: [{"punto_facturacion":"001","ultimo_numero":"59"}]
+Después: {"ventasJul":{"ingresoCuenta":-300,"er":7158},"ventasOct":{"ingresoCuenta":-765,"er":7164},"itbmsJul":21,"itbmsOct":51.44}
+❌ 7a. Estado de Resultado de julio: la cuenta 400001 sube 300.00 (las dos de MEI Tower)
+     {"antes":{"ingresoCuenta":0,"er":7114},"despues":{"ingresoCuenta":-300,"er":7158}}
+❌ 7b. Estado de Resultado de 2026-10: sube 350.00 (Mi Condado, registrada hoy)
+     {"antes":{"ingresoCuenta":-415,"er":7164},"despues":{"ingresoCuenta":-765,"er":7164}}
+✅ 7c. ITBMS de julio (exportación del contador): débito 0 → 21 (+21.00)
+✅ 7d. ITBMS de 2026-10: débito 26.94 → 51.44 (+24.50)
+✅ 7e. antigüedad por cobrar (exportación): las 3 (FAC-EXT-000001, FAC-EXT-000002, FAC-EXT-000003)
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 1
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 2
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 3
+✅ 7f. Libro Mayor de 100004: las 3 con su número (FAC-EXT-000001, FAC-EXT-000002, FAC-EXT-000003)
+✅ 7f. el Mayor trae el RUC del cliente de cada una
+✅ 7g. Libro Mayor de 400001 (ventas): las 3
+✅ 9a. contador de pendientes y avisos iguales antes y después: {"cuenta":29,"facturas":29,"reportes":29,"legal":29}
+✅ 9b. listarPendientesDgi (29 documentos) no trae ninguna FAC-EXT
+✅ 9c. la pantalla /finanzas/pendientes-dgi no muestra ninguna FAC-EXT
+❌ 9d. el listado de facturas sí las muestra (buscando FAC-EXT)
+✅ 9e. detalle de FAC-EXT-000001: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 9e. detalle de FAC-EXT-000002: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 9e. detalle de FAC-EXT-000003: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 8a. FAC-EXT- avanzó 3 (= facturas registradas): los rechazos no dejaron hueco
+✅ 8b. FAC-HON- (32) y FAC-REI- (5) no se movieron
+✅ 8c. cadena del libro íntegra (0 eslabones rotos)
+
+48 bien · 3 mal
+Registradas: 1C → FAC-EXT-000001 (20ecc43c-2d6b-4d89-bf72-607cb5804506) · 2B → FAC-EXT-000002 (1a0bedff-cdf9-4110-8171-d7fc6b91e58b) · MC → FAC-EXT-000003 (a0b1bad5-70b5-4bc4-816d-0161ffb277cc)
+
+------------------------------------------------------------------------
+CORRECCIONES después de la 1.ª corrida
+  · El listado de facturas y la tarjeta «Facturación Electrónica» decían «Sin enviar» de una FAC-EXT
+    (fe_estado queda en 'no_emitida' a propósito). Ahora: «Emitida fuera del CRM».
+  · «Enviar a la DGI»: el corte por CUFE existente va PRIMERO (motivoParaNoEnviar), antes del mes
+    anterior y de las validaciones previas, que le habrían guardado un fe_motivo_pendiente a una
+    factura que la DGI ya autorizó.
+------------------------------------------------------------------------
+2.ª CORRIDA (modo revisión: las 3 ya estaban). 44 bien · 0 mal.
+------------------------------------------------------------------------
+Clientes listos: 1C=aff98f93, 2B=af32bc3c, MC=6b55e499
+ℹ️ Segunda corrida: ya registradas FAC-EXT-000001, FAC-EXT-000002, FAC-EXT-000003. Se verifica lo que quedó.
+Antes: {"seq":{"invoice_reim":5,"invoice_ext":3,"invoice_hon":32,"debit_note":4},"fe":"[{\"punto_facturacion\":\"001\",\"ultimo_numero\":\"59\"}]","ventasJul":{"ingresoCuenta":-300,"er":7158},"ventasOct":{"ingresoCuenta":-765,"er":7164},"itbmsJul":21,"itbmsOct":51.44,"avisos":{"cuenta":29,"facturas":29,"reportes":29,"legal":29}}
+✅ 1. la abogada recibe 403 (403)
+✅ 5a. fecha que no coincide con el CUFE: 400 · «El CUFE es de un documento del 14/07/2026.»
+✅ 5b. monto que no coincide con el documento: 400 · «Las líneas dan una base de B/. 150.00 y el documento dice B/. 160.00.»
+✅ 5c. el número de la OTRA factura de MEI Tower: 400 · «El CUFE es del documento n.º 2.»
+✅ 2·1C. FAC-EXT-000001: emitida, CUFE y origen externo, punto 100 n.º 2, sin enviar, 150 + 10.5, documento 2026-07-14, registro 2026-07-14
+✅ 2·1C. asiento n.º 129: factura del 2026-07-14, 100004 160.5 a nombre del cliente, 400001 150, 200003 10.5, CUFE y referencia 100-0000000002
+✅ 2·1C. bitácora contable: 4 filas (invoices, journal_entries), todas del contador
+✅ 2·2B. FAC-EXT-000002: emitida, CUFE y origen externo, punto 100 n.º 3, sin enviar, 150 + 10.5, documento 2026-07-14, registro 2026-07-14
+✅ 2·2B. asiento n.º 130: factura del 2026-07-14, 100004 160.5 a nombre del cliente, 400001 150, 200003 10.5, CUFE y referencia 100-0000000003
+✅ 2·2B. bitácora contable: 4 filas (invoices, journal_entries), todas del admin
+✅ 2·MC. FAC-EXT-000003: emitida, CUFE y origen externo, punto 100 n.º 4, sin enviar, 350 + 24.5, documento 2026-08-01, registro 2026-10-05
+✅ 2·MC. asiento n.º 131: factura del 2026-10-05, 100004 374.5 a nombre del cliente, 400001 350, 200003 24.5, CUFE y referencia 100-0000000004
+✅ 2·MC. bitácora contable: 4 filas (invoices, journal_entries), todas del contador
+✅ 4a. CUFE repetido (la 1C otra vez): 409 · «Ese CUFE ya está registrado en la factura FAC-EXT-000001. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4b. el CUFE de FAC-HON-000003 (emitida por el CRM) contra el RPC: «Ese CUFE ya está registrado en la factura FAC-HON-000003. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4c. el CUFE de la 1C cargado a mano en FAC-HON-000012: 409 · «Ese CUFE ya está registrado en la factura FAC-EXT-000001. Un documento autorizado por la DGI entra al CRM una sola vez.»
+✅ 4d. el índice único rechaza el mismo CUFE en minúsculas en otra factura: «23505 duplicate key value violates unique constraint "invoices_cufe_unico"»
+✅ 5d. RPC con la fecha distinta del CUFE: «El CUFE es de un documento del 14/07/2026 y la fecha del documento se cargó como 15/07/2026.»
+✅ 5e. RPC con el monto distinto del documento: «Los montos no coinciden con el documento autorizado: las líneas dan base B/. 150.00 e ITBMS B/. 10.50, y el documento dice base B/. 160.00 e ITBMS B/. 10.50.»
+✅ 6a. «Enviar a la DGI» sobre FAC-EXT-000001: 409 · «Esta factura se emitió fuera del CRM y ya existe ante la DGI: el CRM sólo la registra en sus libros y no la envía.»
+✅ 6b. sin PDF del CRM: 409 · «Esta factura se emitió fuera del CRM: su comprobante es el del sistema que la emitió.»
+✅ 6c. la base no deja pasarla a pending: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6c. la base no deja cambiarle el CUFE: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6c. la base no deja cambiarle el punto: «La factura FAC-EXT-000001 se emitió fuera del CRM: su CUFE, su punto, su número …»
+✅ 6d. nadie marca 'externo' fuera del RPC: «Una factura emitida fuera del CRM sólo se registra con «Registrar factura emitida fuera».»
+✅ 6e. fe_secuencias (correlativo del PAC) no se movió: [{"punto_facturacion":"001","ultimo_numero":"59"}]
+Después: {"ventasJul":{"ingresoCuenta":-300,"er":7158},"ventasOct":{"ingresoCuenta":-765,"er":7164},"itbmsJul":21,"itbmsOct":51.44}
+✅ 7e. antigüedad por cobrar (exportación): las 3 (FAC-EXT-000001, FAC-EXT-000002, FAC-EXT-000003)
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 1
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 2
+✅ 7e. antigüedad por cobrar nombra a CLIENTE EXT PRUEBA 3
+✅ 7f. Libro Mayor de 100004: las 3 con su número (FAC-EXT-000001, FAC-EXT-000002, FAC-EXT-000003)
+✅ 7f. el Mayor trae el RUC del cliente de cada una
+✅ 7g. Libro Mayor de 400001 (ventas): las 3
+✅ 9a. contador de pendientes y avisos iguales antes y después: {"cuenta":29,"facturas":29,"reportes":29,"legal":29}
+✅ 9b. listarPendientesDgi (29 documentos) no trae ninguna FAC-EXT
+✅ 9c. la pantalla /finanzas/pendientes-dgi no muestra ninguna FAC-EXT
+✅ 9d. el listado de facturas sí las muestra (buscando FAC-EXT)
+✅ 9f. en el listado su estado fiscal dice «Emitida fuera del CRM», ninguna dice «Sin enviar»
+✅ 9e. detalle de FAC-EXT-000001: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 9e. detalle de FAC-EXT-000002: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 9e. detalle de FAC-EXT-000003: «Factura emitida fuera del CRM», sin «Enviar a la DGI» ni aviso de no emitida
+✅ 8a. FAC-EXT- avanzó 0 (= facturas registradas): los rechazos no dejaron hueco
+✅ 8b. FAC-HON- (32) y FAC-REI- (5) no se movieron
+✅ 8c. cadena del libro íntegra (0 eslabones rotos)
+
+44 bien · 0 mal
+Registradas: 1C → FAC-EXT-000001 (20ecc43c-2d6b-4d89-bf72-607cb5804506) · 2B → FAC-EXT-000002 (1a0bedff-cdf9-4110-8171-d7fc6b91e58b) · MC → FAC-EXT-000003 (a0b1bad5-70b5-4bc4-816d-0161ffb277cc)
+
+------------------------------------------------------------------------
+NAVEGADOR (Chromium de Playwright, sin interfaz: la extensión de Chrome no estaba conectada)
+  /finanzas/facturas-externas (contador)        200 · 3 filas, punto-n.º, dos fechas, saldo
+  /finanzas/facturas-externas/nueva (contador)  200 · escritorio y móvil 390 px
+  /finanzas/facturas/{Mi Condado} (contador)    200 · banda «Factura emitida fuera del CRM», documento
+                                                01/08 y registro 05/10, estado fiscal «Emitida fuera del
+                                                CRM», sin «Enviar a la DGI» ni PDF
+  /finanzas/facturas?q=FAC-EXT (admin)          200 · las 3, columna Fiscal «Emitida fuera del CRM»;
+                                                aviso «29 documentos sin autorización» = el de antes
+  /finanzas/pendientes-dgi (admin)              200 · ninguna FAC-EXT
+  Consola: un solo error, /favicon.ico 404 (ya existía).
+
+PRUEBA DE LAS 41 TABLAS (sql/tests/verificacion-087-captura-41-tablas.sql)
+   [NOTICE] Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+   [NOTICE] verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+CONCURRENCIA (sql/tests/concurrencia-bitacora-libro.mjs, ahora con «factura emitida fuera» como X)
+▶ Concurrencia bitácora ↔ libro contra staging · 20 rondas por combinación
+  importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 3025 ms
+  importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 597 ms
+  importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 951 ms
+  NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 990 ms
+  NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 932 ms
+  NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 747 ms
+  factura emitida fuera × emisión de factura       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 1034 ms
+  factura emitida fuera × cobro                    rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 611 ms
+  factura emitida fuera × gasto de trámite         rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 721 ms
+Total: 180 rondas · deadlocks 0 · otros errores 0
+✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+CONTROL (--control, orden viejo). 1.ª vez: ❌ 27 «otros errores» AU001: desde la 091 un deadlock dentro
+de la bitácora sale como AU001 con «[40P01] …» en el DETAIL. Se corrigió el contador del test. 2.ª vez:
+▶ Concurrencia bitácora ↔ libro contra staging · 3 rondas por combinación · MODO CONTROL (orden viejo)
+  importación de asientos × emisión de factura     rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1114 ms
+  importación de asientos × cobro                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1118 ms
+  importación de asientos × gasto de trámite       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1110 ms
+  NC de compra × emisión de factura                rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1111 ms
+  NC de compra × cobro                             rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1108 ms
+  NC de compra × gasto de trámite                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1108 ms
+  factura emitida fuera × emisión de factura       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1116 ms
+  factura emitida fuera × cobro                    rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1113 ms
+  factura emitida fuera × gasto de trámite         rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1453 ms
+Total: 27 rondas · deadlocks 27 · otros errores 0
+✅ control: con el orden viejo el deadlock aparece en todas las rondas (la prueba lo detecta)

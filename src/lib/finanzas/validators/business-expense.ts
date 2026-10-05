@@ -39,6 +39,14 @@ export type ValidationResult<T> =
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const VALID_STATUSES: BusinessExpenseStatus[] = ["pendiente_pago", "pagado"];
+
+/**
+ * El estado con el que nace una compra si nadie dice otra cosa: la pantalla
+ * arranca acá y la API lo usa cuando el body no trae `status`. La base dice lo
+ * mismo desde la `093` (antes su DEFAULT era 'pagado', de la 010, y la 048 lo
+ * rechaza en el alta).
+ */
+export const ESTADO_INICIAL_DE_COMPRA: BusinessExpenseStatus = "pendiente_pago";
 /** Tolerancia (B/.) del ITBMS de una línea contra `amount × tax_rate`. Espejo de trámite. */
 export const TOLERANCIA_IMPUESTO_LINEA = 0.02;
 const VALID_PAYMENT_METHODS: BusinessExpensePaymentMethod[] = [
@@ -293,8 +301,13 @@ export function validateCreateBusinessExpense(
   // status. En el alta es la INTENCIÓN: 'pagado' = registrar el pago al crear,
   // y entonces el banco es obligatorio (048: el banco vive en el pago).
   // 'parcialmente_pagado' lo deriva el trigger; no se manda.
-  const status = raw.status as BusinessExpenseStatus | undefined;
-  if (!status || !VALID_STATUSES.includes(status) || status === "parcialmente_pagado") {
+  // Sin `status` (una llamada a la API que no lo manda) la compra queda
+  // PENDIENTE, nunca pagada: un pago se pide, no se supone (05/10/2026).
+  const statusCrudo = raw.status as unknown;
+  const status = (statusCrudo == null || statusCrudo === ""
+    ? ESTADO_INICIAL_DE_COMPRA
+    : statusCrudo) as BusinessExpenseStatus;
+  if (!VALID_STATUSES.includes(status) || status === "parcialmente_pagado") {
     errors.status = "Estado inválido";
   }
   let paymentAccountCode: string | null = null;

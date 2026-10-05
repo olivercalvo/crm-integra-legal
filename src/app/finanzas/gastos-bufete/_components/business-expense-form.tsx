@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   validateCreateBusinessExpense,
+  ESTADO_INICIAL_DE_COMPRA,
   type ValidationErrors,
 } from "@/lib/finanzas/validators/business-expense";
 import {
@@ -185,7 +186,10 @@ export function BusinessExpenseForm(props: Props) {
     ];
   });
   const [description, setDescription] = useState<string>(init?.description ?? "");
-  const [status, setStatus] = useState<BusinessExpenseStatus>(init?.status ?? "pagado");
+  // Una compra nueva arranca PENDIENTE (05/10/2026): «ya está pagada» es una
+  // decisión de quien carga, con banco, no un valor por defecto que crea un
+  // pago sin que nadie lo haya pedido.
+  const [status, setStatus] = useState<BusinessExpenseStatus>(init?.status ?? ESTADO_INICIAL_DE_COMPRA);
   const [paymentDate, setPaymentDate] = useState<string>(
     init?.payment_date ?? todayIso()
   );

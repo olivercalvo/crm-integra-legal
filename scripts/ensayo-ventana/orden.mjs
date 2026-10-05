@@ -83,7 +83,7 @@ export const BLOQUE_C = [
   "078_parametros_del_bufete_isr", "079_subcategorias_y_cuentas_nuevas", "080_cierre_anual",
   "081_correcciones_076_y_079", "082_otros_servicios_y_nc_sin_bancos", "083_fe_estado_interna",
   "084_audit_log_solo_agregar", "085_motivo_pendiente_dgi", "092_factura_emitida_fuera",
-  "094_documentos_de_prueba",
+  "094_documentos_de_prueba", "095_documentos_de_prueba_fuera_del_libro",
 ].map((n) => p(`${n}.sql`));
 
 /** Ventana APARTE, después de la del Bloque 1. La 088 (legado) no va todavía. */
@@ -133,5 +133,6 @@ export const VERIFICACIONES = {
   [p("082_otros_servicios_y_nc_sin_bancos.sql")]: ["sql/tests/verificacion-082-otros-servicios-y-bancos.sql"],
   [p("083_fe_estado_interna.sql")]: ["sql/tests/verificacion-083-fe-estado-interna.sql"],
   [p("094_documentos_de_prueba.sql")]: ["sql/tests/verificacion-094-documentos-de-prueba.sql"],
+  [p("095_documentos_de_prueba_fuera_del_libro.sql")]: ["sql/tests/verificacion-095-documentos-de-prueba-fuera-del-libro.sql"],
   [p("084_audit_log_solo_agregar.sql")]: ["sql/tests/verificacion-084-audit-log-solo-agregar.sql"],
 };

@@ -297,11 +297,19 @@ por documento (9.2). La pregunta 3 del borrador a ideati sobra.
 
 ### 9.6 Migración y paso de la ventana (escritos el 05/10/2026)
 
-- **`094_documentos_de_prueba.sql`** (escrita, sin aplicar en staging; ensayada en local): columnas de 9.2,
+- **`094_documentos_de_prueba.sql`** (aplicada en staging el 05/10/2026 con el «aplica» de Oliver): columnas de 9.2,
   nacimiento `de_prueba` de lo nuevo de un cliente de prueba y las reglas 1 y 3 de 9.3. Va al final del
   Bloque C. Verificación: `sql/tests/verificacion-094-documentos-de-prueba.sql` (9/9 en el ensayo).
-- **No incluye** la regla 2 (parche de `post_journal_entry`), la 4 (código) ni el filtro de 9.4. Hasta que
-  existan, la marca no cambia ningún número: deja marcado lo que es de prueba para cuando se cableen.
+- **`095_documentos_de_prueba_fuera_del_libro.sql`** (escrita, sin aplicar en staging; ensayada en local, 6/6):
+  la regla 2 con un trigger en `journal_entries` y otro en `journal_entry_lines` (sin tocar el motor), la NC
+  que hereda la marca de su factura y la regla de no mezclar cobro y factura de prueba y reales.
+- **El filtro de 9.4 está hecho (05/10)**: `.eq(DE_PRUEBA, false)` en antigüedad (y su cuadre), estado de
+  cuenta, ITBMS, Pendientes DGI y sus contadores, aviso de errores DGI, selectores de cobro, NC y ND;
+  exportaciones por los mismos loaders. Los listados las muestran con el badge «Prueba» y el detalle con
+  una banda (no se ocultan: la propuesta decía «ocultas por defecto», se eligió verlas marcadas). La regla 4
+  y la de la propuesta (no emitir, cobrar, acreditar ni anular un documento de prueba) se cortan con 409
+  antes del número. 🔒 `documentos-de-prueba-filtrados.test.ts`. Probado en staging:
+  `docs/finanzas/prueba-documentos-de-prueba.txt` (37/37, con el caso 463).
 - **El paso de datos** `sql/ventana/marcar-datos-de-prueba.sql`, sin DELETE, con la pausa obligatoria, entre
   `sql/verificacion/produccion-datos-de-prueba-a-marcar.sql` antes y después (runbook
   `ventana-bloque-1.md`, Bloque C). Aborta si un cliente de prueba tiene un documento que no está en la lista.

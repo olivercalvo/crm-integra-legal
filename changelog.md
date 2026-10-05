@@ -1,5 +1,19 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Los documentos de prueba no cuentan en ningún reporte] - 2026-10-05
+
+- Una factura, nota de crédito o cobro marcado como de prueba ya no aparece en la antigüedad, el estado de
+  cuenta, el resumen de ITBMS, Pendientes DGI (ni en sus avisos), el aviso de errores ante la DGI, los
+  selectores para cobrar o acreditar ni las exportaciones. En los listados se ve con la etiqueta «Prueba» y
+  en su detalle con una banda que lo explica.
+- Un documento de prueba no se emite, no se cobra, no se acredita, no se anula y no se envía a la DGI; un
+  cliente de prueba no recibe cobros ni notas de crédito nuevos. Se rechaza antes de usar un número.
+- Una factura real de un cliente marcado como de prueba (el caso de FAC-HON-000463) sigue contando en todo.
+- Migraciones `093` y `094` aplicadas en staging. La `095` (el libro no recibe documentos de prueba) está
+  escrita y ensayada, sin aplicar.
+- Runbook: el arreglo de usuarios desactivados va en la ventana del Bloque 1, y el paso «Accesos» bloquea
+  también a los dos usuarios que ya estaban desactivados.
+
 ## [Compras pendientes, datos de prueba en la ventana y desactivar usuarios] - 2026-10-05
 
 - Una compra nueva ahora arranca en «Pendiente de pago». Antes arrancaba en «Pagado», y guardarla así

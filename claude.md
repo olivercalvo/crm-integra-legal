@@ -714,6 +714,16 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Pantallas `/finanzas/auditoria` y `/legal/admin/auditoria` (la lectura vieja de `audit_log` queda en
   `/anterior` hasta aplicar la `088`).
 
+### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
+- 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
+  cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:
+  FAC-HON-000463 es real ante la DGI aunque su cliente sea 0TEST-FE-002.
+- 🔒 **Toda consulta de un reporte a esas tablas lleva `.eq(DE_PRUEBA, false)`** o declara
+  `// de-prueba-ok: <motivo>`; lo hace cumplir `documentos-de-prueba-filtrados.test.ts`, también con
+  `.from(tabla)` en variable (así se escapó el contador de Pendientes DGI la primera vez).
+- El libro no los recibe (`095`); emitir, cobrar, acreditar, anular y enviar a la DGI responden 409 antes
+  del número. En la ventana se marcan por número con `sql/ventana/marcar-datos-de-prueba.sql`. SOP-049.
+
 ### Errores de la DGI — prevenir y mostrar (desde 2026-09-23)
 - 🔴 **Descripción de línea: 2 a 500 caracteres** (`controles-dgi.ts`). El tope es de la DGI
   (`10105`) y ya rebotó una factura con **545**. Contador visible en el campo (`312/500`), rojo

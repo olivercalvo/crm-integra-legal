@@ -1,7 +1,7 @@
 # Ventana del Bloque 1 — orden final, tiempo y ensayo
 
-**Qué es:** el orden de aplicación en producción de las **63 migraciones** de la `025` a la
-`094` (todas menos la `056`, reservada, y las bitácoras) y del paso de datos que marca lo de prueba,
+**Qué es:** el orden de aplicación en producción de las **64 migraciones** de la `025` a la
+`095` (todas menos la `056`, reservada, y las bitácoras) y del paso de datos que marca lo de prueba,
 ensayado de punta a punta el **05/10/2026** contra una base local igual a producción. Al final, el
 paso «Accesos» (§6). Las bitácoras (`086`, `087`, `089`,
 `090`, `091`) van en una **ventana aparte**, después.
@@ -21,7 +21,7 @@ ahí, se vuelve a ensayar y se copia acá.
 | Fase | Pasos | Errores | Tiempo de base |
 |---|---:|---:|---:|
 | Base = producción: `main` 24b227a (hasta la 024, 48 archivos) + datos + la 084 | 50 | 0 | 2,2 s |
-| Ventana Bloque 1: A (29) → B (14) → C (20) | 63 migraciones + 35 verificaciones | **0** en migraciones | 10,4 s en total |
+| Ventana Bloque 1: A (29) → B (14) → C (21) | 64 migraciones + 36 verificaciones | **0** en migraciones | 9,8 s en total |
 | Paso «Marcar los datos de prueba» (base `pruebas`, datos equivalentes) | consulta → aborto → paso → consulta → paso otra vez | 0 marcas incorrectas | — |
 | Ventana de bitácoras: 086 → 087 → 089 → 090 → 091 | 5 | 0 | 0,2 s |
 | Prueba de las 41 tablas (después de las bitácoras) | 131 operaciones | 0 | — |
@@ -73,7 +73,7 @@ Registro completo, migración por migración, con cada NOTICE: `docs/finanzas/en
 
 Sin cambios de orden en las migraciones: el de §3 y §5 del runbook viejo funciona tal cual, y el
 Bloque C va **después** del B. Cambia el orden de **tres verificaciones** (ver §4). Se suman dos
-migraciones nuevas del 05/10 (`093` en el B, `094` al final del C) y el paso de datos de prueba.
+migraciones nuevas del 05/10 (`093` en el B, `094` y `095` al final del C) y el paso de datos de prueba.
 
 ### Bloque A — con la app de `main` arriba (29)
 
@@ -110,11 +110,11 @@ Nadie emite, anula, cobra ni carga un CUFE hasta que el deploy esté arriba.
   reemplazan la `079` (HON-FAM → 400009) y la `082` (HON-OTROS → 400010), que van en el Bloque C.
   Si Josuarth elige otra cuenta para alguno, se cambia después de la ventana desde el catálogo.
 
-### Bloque C — congelado, inmediatamente después de la 025 (20)
+### Bloque C — congelado, inmediatamente después de la 025 (21)
 
 ```
 068 → 069 → 070 → 071 → 072 → 073 → 074 → 075 → 076 → 077 → 078
- → 079 → 080 → 081 → 082 → 083 → 084 → 085 → 092 → 094
+ → 079 → 080 → 081 → 082 → 083 → 084 → 085 → 092 → 094 → 095
  → paso de datos «Marcar los datos de prueba»
 ```
 
@@ -128,8 +128,18 @@ sólo puede ir en la parte congelada. La `084` ya está en producción: entra y 
   «sí», la `092` aborta: decidir antes qué factura conserva el CUFE.
 - `094` (05/10): la marca de prueba es del DOCUMENTO (`de_prueba` en facturas, NC, cobros, cobros y
   gastos del caso) y la del cliente sólo vale para lo nuevo. Propuesta: `propuesta-corte-quickbooks.md`
-  §9. Verificación: `verificacion-094` (9/9). Todavía ningún reporte filtra por ella (§9.4): marca, no
-  cambia números.
+  §9. Verificación: `verificacion-094` (9/9).
+- `095` (05/10): el libro rechaza el asiento de un documento de prueba y un asiento manual con un cliente
+  de prueba como tercero; la NC hereda la marca de su factura; un cobro y la factura a la que se aplica no
+  mezclan prueba y real. La factura REAL de un cliente de prueba (la 463) sigue entrando al libro.
+  Verificación: `verificacion-095` (6/6).
+- 🔴 **Los filtros de los reportes son CÓDIGO y llegan con el merge de D·6**, en esta misma ventana:
+  antigüedad (y su cuadre), estado de cuenta, ITBMS, Pendientes DGI y sus contadores (listado, hub de
+  reportes, dashboard de la abogada), el aviso de errores DGI, los selectores de cobro, NC y ND, y las
+  exportaciones (usan los mismos loaders). La factura de prueba no se emite, no se cobra, no se acredita,
+  no se anula y **no va a la DGI** (409, antes del número). En los listados sigue, con el badge «Prueba».
+  Entre el paso de datos y el deploy las marcas existen y la app de `main` las ignora: está congelado.
+  Probado en staging el 05/10 (`docs/finanzas/prueba-documentos-de-prueba.txt`).
 
 #### Paso de datos «Marcar los datos de prueba» (después de la 094, todavía congelado)
 
@@ -190,19 +200,19 @@ marcar. Estimado con 2,5 min por migración (4 en las que tienen números que co
 | D·3 | reload + verificación del A | 15 min |
 | D·4 | Congelar y avisar | 5 min |
 | D·5a | Bloque B: 14 migraciones + 8 verificaciones (con la de la `067`) + comparar la `025` con P-1(e) | 1 h |
-| D·5b | Bloque C: 20 migraciones + 14 verificaciones + los dos chequeos previos | 1 h 10 min |
+| D·5b | Bloque C: 21 migraciones + 15 verificaciones + los dos chequeos previos | 1 h 15 min |
 | D·5c | Marcar los datos de prueba: consulta, pausa, paso, consulta | 15 min |
 | D·6–D·8 | merge, deploy, post-deploy, descongelar | 35 min |
-| D·9 | Accesos (§6): usuario de Josuarth, su contraseña, desactivar contador.test, consulta | 20 min |
-| | **Total del día** | **~5 h 35 min** |
-| | **Congelado (D·4 a D·8)** | **~3 h 05 min** |
+| D·9 | Accesos (§6): usuario de Josuarth, su contraseña, desactivar contador.test y re-desactivar los dos inactivos, consulta | 25 min |
+| | **Total del día** | **~5 h 45 min** |
+| | **Congelado (D·4 a D·8)** | **~3 h 10 min** |
 
 Ventana de bitácoras: 5 migraciones + recarga + prueba de humo en la app (guardar un comentario,
 emitir y anular una factura de prueba no: es producción; basta con guardar y leer una bitácora) ≈
 **30 min**.
 
 > El runbook viejo estimaba 3 h 45 min para 42 migraciones. Con las 20 del C y el paso de datos, el
-> congelado pasa de ~1 h 30 min a ~3 h 05 min. «Accesos» no necesita congelar. Si hace falta acortarlo: la `048`→`049`→`050`→`066` están en el B
+> congelado pasa de ~1 h 30 min a ~3 h 10 min. «Accesos» no necesita congelar. Si hace falta acortarlo: la `048`→`049`→`050`→`066` están en el B
 > sólo porque rompen el módulo de compras de `main`, y producción tiene **cero compras**; pasarlas
 > al A acortaría el congelado unos 15 min. **No se hizo**: es mover un orden verificado y lo decide
 > Oliver. Si se decide, se cambia `orden.mjs` y se vuelve a ensayar.
@@ -242,8 +252,10 @@ Ninguna migración falló. Lo que salió son problemas de las VERIFICACIONES y d
    estado como pendiente. Va con la `048` (§2, Bloque B).
 7. **Desactivar un usuario no le quitaba el acceso** (encontrado ensayando §6 en staging el 05/10): sólo
    marcaba `public.users.active`, que ni el login ni el middleware miran. Un contador desactivado volvía a
-   entrar y `/finanzas/reportes` le respondía 200. **Corregido en el código de esta ventana**: desactivar
-   lo bloquea en Supabase Auth y reactivar lo desbloquea. Por eso «Accesos» va DESPUÉS del deploy.
+   entrar y `/finanzas/reportes` le respondía 200. **El arreglo va en ESTA ventana, con el código del
+   Bloque 1** (merge de D·6), no como un despliegue aparte (Oliver, 05/10: en producción hay dos usuarios
+   desactivados y ninguno entra desde abril). Desactivar lo bloquea en Supabase Auth y reactivar lo
+   desbloquea. Por eso «Accesos» va DESPUÉS del deploy, y ahí se re-desactivan esos dos (§6, paso 4).
 
 ---
 
@@ -283,7 +295,8 @@ node sql/tests/concurrencia-bitacora-libro.mjs 3 --control
 ## 6. Accesos (después de la verificación de la app)
 
 Último paso del día, con la app nueva arriba y descongelada. **Tiene que ir después del deploy**: con el
-código de `main`, «Desactivar» no le quita el acceso a nadie (§4, punto 7).
+código de `main`, «Desactivar» no le quita el acceso a nadie (§4, punto 7). El arreglo de usuarios
+desactivados viaja en el merge del Bloque 1 (`30df55c`); no hay otro despliegue para eso.
 
 **Antes del día:** confirmar con Josuarth el correo personal que va a usar (a confirmar). En el proyecto de
 producción, la plantilla de correo «Reset Password» tiene que llevar `{{ .TokenHash }}` y mandar a
@@ -309,12 +322,17 @@ producción, la plantilla de correo «Reset Password» tiene que llevar `{{ .Tok
    `contador.test@integra-panama.com`**. Desde este deploy, desactivar lo bloquea en Supabase Auth: el login
    le responde «user_banned». ⚠️ Una sesión que ya estuviera abierta dura hasta que vence su token (1 h):
    si hay dudas, hacer este paso con esa sesión cerrada.
-4. **Comprobar** con `sql/verificacion/produccion-accesos-contador.sql` (sólo lectura; poner antes el correo
+4. **Los dos desactivados de antes.** Producción tiene dos usuarios desactivados (ninguno entra desde
+   abril). Como se desactivaron con el código viejo, en Supabase Auth siguen habilitados: la consulta del
+   paso 5 los muestra como «inactivo pero puede entrar». Para cada uno, en Administración › Usuarios:
+   **Activar y enseguida Desactivar** (con el código nuevo, desactivar los bloquea). Son dos clics por
+   usuario; en el medio queda activo unos segundos (Administración › Usuarios muestra los inactivos con
+   su botón «Activar»).
+5. **Comprobar** con `sql/verificacion/produccion-accesos-contador.sql` (sólo lectura; poner antes el correo
    de Josuarth en la primera línea del `WITH`). Esperado: una sola fila «contador» activa y es la de
    Josuarth, con «puede_entrar» y «ya_entró» en «sí»; contador.test con «activo = no» y «puede_entrar = no»;
-   ninguna fila «inactivo pero puede entrar»; **VEREDICTO = OK**. Si aparece un usuario inactivo que todavía
-   puede entrar (desactivado antes de este deploy), se lo reactiva y se lo vuelve a desactivar desde la
-   pantalla.
+   ninguna fila «inactivo pero puede entrar» (si queda alguna, es que falta el paso 4 con ese usuario);
+   **VEREDICTO = OK**.
 
 **Ensayado en staging el 05/10/2026** con dos usuarios ficticios (`contador.ensayo.0510@staging.test` y
 `contador.ensayo2.0510@staging.test`; los dos quedaron desactivados y bloqueados): alta con contraseña
@@ -322,4 +340,4 @@ descartable (201) → «¿Olvidaste tu contraseña?» → enlace → «Elige tu 
 → la descartable ya no sirve (400). Desactivar con el código anterior: **seguía entrando** (200, y
 `/finanzas/reportes` 200). Con el arreglo: `user_banned` (400); reactivar → entra (200); desactivar otra vez →
 400. El correo en sí no se envió (dominio de prueba): el enlace se generó con el mismo token que pone la
-plantilla. La consulta del punto 4 se probó en staging (sólo lectura): «OK» simulando los dos correos.
+plantilla. La consulta del punto 5 se probó en staging (sólo lectura): «OK» simulando los dos correos.

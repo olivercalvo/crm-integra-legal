@@ -158,8 +158,9 @@
 | `090_bitacoras_orden_de_candados.sql` | **sí** | La bitacora toma el candado del correlativo del libro antes que el suyo: un solo orden con post_journal_entry (la importacion de asientos y la NC de compra se trababan con un posteo suelto) · <sub>marcador: resuelto por el dato, no por el esquema</sub> 03/10. Encontrada en la prueba 2 (deadlock 40P01 reproducido con dos sesiones). Va despues de la 089. |
 | `091_bitacoras_error_claro.sql` | **sí** | Si falla el registro de auditoria, error AU001 con un mensaje claro para la persona y el original en el detalle (la app lo deja en el log del servidor) · <sub>marcador: resuelto por el dato, no por el esquema</sub> 03/10. Prueba 3. Va despues de la 090, junto con el codigo de conManejoDeAuditoria y fetchConAuditoria (sin la 091 el codigo no cambia nada). |
 | `092_factura_emitida_fuera.sql` | **sí** | Registrar factura emitida fuera: origen 'externo', indice unico de CUFE por bufete, serie FAC-EXT- (invoice_ext), guard que congela el estado fiscal y RPC register_external_invoice (numero, factura, asiento y CUFE en una transaccion) · <sub>marcador: función register_external_invoice()</sub> 05/10. Pre-flight: aborta si hay un CUFE repetido entre facturas. Va junto con el codigo de facturas-externas (sin la 092 la pantalla nueva falla al guardar; lo demas no cambia). |
-| `093_compra_nace_pendiente.sql` | **NO** | DEFAULT de business_expenses.status pasa de 'pagado' (010) a 'pendiente_pago', el unico valor que el guard de la 048 acepta al crear · <sub>marcador: resuelto por el dato, no por el esquema</sub> 05/10. Hallazgo del ensayo de la ventana. Va justo despues de la 048. No toca filas. |
-| `094_documentos_de_prueba.sql` | **NO** | Marca de prueba por DOCUMENTO (de_prueba en invoices, credit_notes, payments, client_payments, expenses) y clients.es_de_prueba solo para lo nuevo; guards de marcar (sin asiento) y desmarcar (llave) · <sub>marcador: invoices.de_prueba</sub> 05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql. |
+| `093_compra_nace_pendiente.sql` | **sí** | DEFAULT de business_expenses.status pasa de 'pagado' (010) a 'pendiente_pago', el unico valor que el guard de la 048 acepta al crear · <sub>marcador: resuelto por el dato, no por el esquema</sub> 05/10. Hallazgo del ensayo de la ventana. Va justo despues de la 048. No toca filas. |
+| `094_documentos_de_prueba.sql` | **sí** | Marca de prueba por DOCUMENTO (de_prueba en invoices, credit_notes, payments, client_payments, expenses) y clients.es_de_prueba solo para lo nuevo; guards de marcar (sin asiento) y desmarcar (llave) · <sub>marcador: invoices.de_prueba</sub> 05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql. |
+| `095_documentos_de_prueba_fuera_del_libro.sql` | **NO** | El libro rechaza asientos de documentos de prueba y asientos manuales con un cliente de prueba como tercero; la NC hereda la marca de su factura; cobro y factura no se mezclan (prueba/real) · <sub>marcador: función finanzas_libro_sin_documentos_de_prueba()</sub> 05/10. Va despues de la 094. La factura REAL de un cliente de prueba (FAC-HON-000463) sigue entrando al libro. |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -174,12 +175,11 @@
 
 ## 3. La cola, en orden
 
-Faltan **5** migraciones de `sql/pending/`, en este orden:
+Faltan **4** migraciones de `sql/pending/`, en este orden:
 
 ```
 088_bitacoras_legado
-093_compra_nace_pendiente
-094_documentos_de_prueba
+095_documentos_de_prueba_fuera_del_libro
 cleanup-test-users-2026-05-02
 hotfix_cli116_client_type
 ```
@@ -191,4 +191,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-10-05 20:26._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-10-05 21:41._

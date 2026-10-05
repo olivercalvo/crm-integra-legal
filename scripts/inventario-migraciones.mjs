@@ -364,6 +364,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "invoices", columna: "de_prueba",
     nota: "05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql.",
   },
+  "095_documentos_de_prueba_fuera_del_libro.sql": {
+    que: "El libro rechaza asientos de documentos de prueba y asientos manuales con un cliente de prueba como tercero; la NC hereda la marca de su factura; cobro y factura no se mezclan (prueba/real)",
+    tipo: "funcion", nombre: "finanzas_libro_sin_documentos_de_prueba",
+    nota: "05/10. Va despues de la 094. La factura REAL de un cliente de prueba (FAC-HON-000463) sigue entrando al libro.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

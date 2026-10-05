@@ -3677,3 +3677,14 @@ alta sigue existiendo y sigue siendo «registrar el pago al crear, con banco».
 La marca que cuenta es la del DOCUMENTO (`de_prueba`); la del cliente (`es_de_prueba`) sólo hace nacer
 de prueba lo nuevo. Se marca por número, nunca un documento con asiento, y se desmarca sólo con la
 llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-quickbooks.md` §9.
+
+1. **Todo reporte filtra** con `.eq(DE_PRUEBA, false)` (`lib/finanzas/documentos-de-prueba.ts`): antigüedad
+   y su cuadre, estado de cuenta, ITBMS, Pendientes DGI y sus contadores, aviso de errores DGI, selectores.
+   Un reporte nuevo que lea `invoices`, `credit_notes`, `payments`, `client_payments` o `expenses` lo
+   agrega, o declara `// de-prueba-ok: <motivo>`; si no, falla `documentos-de-prueba-filtrados.test.ts`.
+   **Nunca se filtra por el cliente**: FAC-HON-000463 es real con cliente de prueba.
+2. **El libro no filtra: no los recibe** (`095`). Un asiento de un documento de prueba lo rechaza la base.
+3. **No se emite, cobra, acredita, anula ni manda a la DGI** un documento de prueba, ni se crea un cobro o
+   una NC para un cliente de prueba: 409 antes del número (no deja huecos). Para facturarle algo real a un
+   cliente marcado, primero se lo desmarca con la llave.
+4. Listados: se ven, con el badge «Prueba». Detalle: banda gris, sin botones de acción.

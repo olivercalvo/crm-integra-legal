@@ -1,5 +1,32 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 (6) — 093 Y 094 EN STAGING, LAS MARCAS DE PRUEBA FILTRAN EN TODO <<<
+
+- ✅ **`093` y `094` aplicadas en staging** con el «aplica» de Oliver. Verificaciones: 093 2/2, 094 9/9.
+- ✅ **Los documentos marcados de prueba ya no salen en ningún reporte**: antigüedad por cobrar (y su
+  cuadre contra 100004), estado de cuenta, ITBMS (detalle y líneas), Pendientes DGI y sus tres contadores
+  (listado de facturas, hub de reportes, dashboard de la abogada), el aviso de errores DGI, los selectores de
+  cobro, NC y ND, y las exportaciones de antigüedad e ITBMS. Una constante (`DE_PRUEBA`) y un test que recorre
+  las fuentes (`documentos-de-prueba-filtrados.test.ts`, también `.from(variable)`).
+- ✅ **Una factura de prueba no se emite, cobra, acredita, anula ni va a la DGI** (409 antes del número; la
+  pantalla no ofrece los botones y muestra banda y badge «Prueba»). Un cobro o una NC nuevos de un cliente de
+  prueba, igual. **`095`** (escrita, SIN APLICAR en staging, 6/6 en local): el libro rechaza asientos de
+  documentos de prueba; la NC hereda la marca de su factura; cobro y factura no mezclan prueba y real.
+- ✅ **Probado en staging** (`docs/finanzas/prueba-documentos-de-prueba.txt`, 37/37): FAC-HON-900001 (creada
+  sin asiento, como las de producción) sale de todo al marcarla, el libro no cambia, ningún correlativo se
+  mueve y nada llega al PAC. **Caso 463**: CLI-013 marcado de prueba y su FAC-HON-000023 (real, con asiento)
+  sigue igual en todos los reportes; un cobro nuevo de CLI-013 → 409 sin número. CLI-013 se desmarcó.
+- ✅ Ensayo local con la 095: 64 migraciones sin errores, paso de datos correcto, bitácoras 5/5, 41 tablas
+  131/131, concurrencia 0 deadlocks, `--control` 27/27.
+- ✅ Runbook: la 095 y los filtros (código, merge de D·6) en el Bloque C; el arreglo de usuarios desactivados
+  va en la ventana del Bloque 1, y «Accesos» re-desactiva los dos usuarios inactivos de producción para que
+  queden bloqueados. Día ~5 h 45 min, congelado ~3 h 10 min.
+- ⚠️ Encontrado de paso, sin tocar: en `anular-factura-ante-dgi.ts`, en el camino SIN CUFE, si el libro falla
+  el mensaje dice «quedó ANULADO ante la DGI» aunque no se habló con el PAC (`cerrarEnElLibro` se usa en los
+  dos caminos). Engaña a quien lo lee; corregirlo es otro cambio.
+- ⏳ Oliver: «aplica» para la 095 en staging.
+- 🧹 Staging: queda FAC-HON-900001 (factura de prueba, marcada) para ver el badge y la banda.
+
 ## >>> 05/10/2026 (5) — COMPRAS PENDIENTES, DATOS DE PRUEBA EN LA VENTANA Y ACCESOS <<<
 
 - ✅ **Una compra nueva nace «Pendiente de pago».** La pantalla arrancaba en «Pagado» (y eso registra

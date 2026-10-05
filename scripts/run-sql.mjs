@@ -34,12 +34,20 @@ if (!SQL_REL) {
   process.exit(1);
 }
 
+// ENSAYO DE LA VENTANA (05/10/2026): ENSAYO_DATABASE_URL apunta a una base
+// LOCAL (scripts/ensayo-ventana/). Sólo se acepta si el host es esta máquina;
+// en ese caso no se leen las credenciales de staging.
+const ENSAYO = process.env.ENSAYO_DATABASE_URL?.trim();
+if (ENSAYO && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(ENSAYO).hostname)) {
+  console.error("🛑 ENSAYO_DATABASE_URL sólo puede apuntar a una base local (localhost).");
+  process.exit(1);
+}
 const envPath = resolve(ROOT, ".env.staging-db.local");
-if (!existsSync(envPath)) {
+if (!ENSAYO && !existsSync(envPath)) {
   console.error(`❌ Falta ${envPath}`);
   process.exit(1);
 }
-const CONN = (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]
+const CONN = ENSAYO || (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]
   ?.trim()
   .replace(/^["']|["']$/g, "");
 
@@ -58,7 +66,7 @@ for (const ref of PROD_PROJECT_REFS) {
 
 const sqlPath = resolve(ROOT, SQL_REL);
 const sql = readFileSync(sqlPath, "utf8");
-console.log(`▶ Aplicando ${SQL_REL} contra staging…\n`);
+console.log(`▶ Aplicando ${SQL_REL} contra ${ENSAYO ? "la base LOCAL de ensayo" : "staging"}…\n`);
 
 const client = new pg.Client({ connectionString: CONN });
 await client.connect();

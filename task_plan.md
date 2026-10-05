@@ -1,5 +1,29 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## >>> 05/10/2026 (4) — ENSAYO DE LA VENTANA DEL BLOQUE 1 Y DATOS DE PRUEBA EN PRODUCCIÓN <<<
+
+- ✅ **Ensayo contra una base LOCAL igual a producción** (Postgres 17.9 por npm, sin Docker;
+  `postgres` sin superusuario y helpers de RLS en `auth`, como en producción; esquema de `main`
+  24b227a + la 084; seed de staging recortado a la 024, 97 cuentas como producción). Herramienta:
+  `scripts/ensayo-ventana/` (`orden.mjs` es la fuente única del orden). Staging sólo se leyó.
+- ✅ **Bloque 1: 61 migraciones (A 29 → B 13 → C 19), cero errores**, 2,3 s de SQL. Bitácoras
+  (086 → 087 → 089 → 090 → 091) aparte: 5/5. Después: 41 tablas 131/131, concurrencia 180 rondas
+  sin deadlocks, `--control` 27/27. Cadena íntegra; nada llama a `tenant_id()` sin esquema.
+- 📐 **Runbook nuevo con el orden final y el tiempo:** `docs/finanzas/runbooks/ventana-bloque-1.md`.
+  Día ~4 h 50 min, congelado ~2 h 40 min, bitácoras ~30 min. El viejo apunta a éste.
+- 🔴 Hallazgos: (1) la verificación de la `067` va después de la `025`; (2) siete verificaciones no
+  prueban nada en producción (libro vacío, sin compras ni proveedores) y la `066` y la `076` fallan
+  por eso: «sin datos», no motivo de parar; (3) las verificaciones son de su momento: corridas al
+  final, diez fallan; (4) el paso −1 «en staging con el mismo esquema» no es posible (staging ya
+  tiene todo) y en producción las dos pruebas no corren: el paso −1 pasa a ser el ensayo local;
+  (5) la `025` no aborta si su POST-CHECK no coincide (confirmado): P-1(e) sigue siendo la defensa;
+  (6) el paso «Reasignar» de P-15 ya no va (079/082); (7) menor: `business_expenses.status`
+  DEFAULT 'pagado' contra el guard de la 048.
+- ⏳ Oliver: `SELECT version()` en producción (el ensayo es 17.9); decidir si la 048–050 y 066
+  pasan al Bloque A para acortar el congelado (~15 min; producción tiene cero compras).
+- ✅ `sql/verificacion/produccion-datos-de-prueba.sql` (sólo SELECT, columnas hasta la 024, probada
+  contra el esquema exacto de producción en `prod_024`). ⏳ La corre Oliver.
+
 ## >>> 05/10/2026 (3) — DE DÓNDE SALIÓ LA 092 «YA APLICADA» Y CUFE DEL PORTAL EN EL LISTADO <<<
 
 - ✅ **La 092 se aplicó con tu «aplica», en la sesión anterior.** Registro de la sesión `e91c0405`: a las

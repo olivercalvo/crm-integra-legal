@@ -1,0 +1,1364 @@
+{
+  "pasos": [
+    {
+      "archivo": "datos-primer-uso.sql",
+      "bloque": "primer uso",
+      "ms": 96,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "primer uso: proveedor bc89b22e-f17e-47a2-8929-93a9ea6a69be, compra 22df6d19-43ef-462f-adba-fa9c04f16070, 4 asientos en el libro, 1 cobro(s) con banco"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-038-inmutabilidad.sql",
+      "bloque": "verificación",
+      "ms": 37,
+      "error": {
+        "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 155 at RAISE\nSQL statement \"SELECT public.post_journal_entry(\r\n    v_tenant, v_fecha, 'Gasto de trámite — verificación 038',\r\n    'gasto_tramite',\r\n    jsonb_build_array(\r\n      jsonb_build_object('account_code','130003','debit',\r\n        (SELECT line_total FROM public.expense_lines WHERE id = v_linea),'credit',0,'description','prueba'),\r\n      jsonb_build_object('account_code','200001','debit',0,'credit',\r\n        (SELECT line_total FROM public.expense_lines WHERE id = v_linea),'description','prueba')\r\n    ),\r\n    v_gasto, NULL, NULL, NULL, NULL, NULL\r\n  )\"\nPL/pgSQL function inline_code_block line 33 at SQL statement",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "=== Gasto de prueba: 62c6e34d-2b19-4067-a37e-731c626be5e8 (línea d01ee8b4-97f8-45f3-9762-2011cbaf13fc) ==="
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[0] clasificar la línea antes del asiento .............. OK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-039-manual.sql",
+      "bloque": "verificación",
+      "ms": 19,
+      "error": {
+        "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 43 at RAISE\nSQL statement \"SELECT public.post_journal_entry(\r\n    v_tenant, current_date, 'Ajuste manual de prueba', 'manual', v_lineas,\r\n    NULL, NULL, NULL, NULL, NULL, NULL, 'MEMO-2026-014', v_key\r\n  )\"\nPL/pgSQL function inline_code_block line 20 at SQL statement",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[0] cadena de los asientos previos ............ ✅ ÍNTEGRA"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-045-tax-code-id.sql",
+      "bloque": "verificación",
+      "ms": 41,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[0] backfill de compras ....................... ✅ 0 sin código, 0 con tasa ≠ catálogo"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] línea de compra sin tax_code_id ........... ✅ RECHAZADA por el CHECK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] compra mixta (7% + exento) ................ ✅ 2 líneas, cada una con su código"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] tax_code_id inexistente ................... ✅ RECHAZADO por la FK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] línea de trámite sin tax_code_id .......... ✅ ACEPTADA (el CHECK es solo para compras)"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-046-reversion-cobro.sql",
+      "bloque": "verificación",
+      "ms": 9,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "⚠️ No hay ningún cobro contabilizado sin reversar en staging: nada que verificar."
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-047-recibo-de-caja.sql",
+      "bloque": "verificación",
+      "ms": 46,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Tenant a0000000-0000-0000-0000-000000000001 · 13 cobros"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] secuencias client/supplier/payment ....... ✅ las tres existen"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] todos numerados, formato REC-###### ...... ❌ 0 sin número, 3 con otro formato"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] last_number = mayor asignado ............. ✅ 10"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] orden por payment_date, created_at, id ... ❌ 30 pares invertidos"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] segunda corrida .......................... ✅ 0 numerados, last_number 10 intacto"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] renumerar los 2 últimos .................. ✅ REC-000010 y REC-000009 vuelven iguales; last_number 10 recuperado"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] REC- duplicado ........................... ✅ RECHAZADO por el índice"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] get_next_sequence_number('payment') ..... ✅ 11 (siguiente REC-000011)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] documents payment/auto_receipt_pdf ....... ✅ acepta la fila"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] source inventado ......................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "════════ 047: 8 ✅ · 2 ❌ ════════"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-048-pagos-a-proveedores.sql",
+      "bloque": "verificación",
+      "ms": 38,
+      "error": {
+        "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 155 at RAISE\nPL/pgSQL function inline_code_block line 166 at assignment",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Compra 22df6d19-43ef-462f-adba-fa9c04f16070 · total 321.00"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] saldos heredados .......................... ✅ 0 saldos heredados; toda compra pagada tiene pagos por su total"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] amount_paid de las pagadas ................. ✅ todas >= total"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] heredado con número ....................... ✅ RECHAZADO por el CHECK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] pago sin banco ............................ ✅ RECHAZADO por el CHECK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] pago parcial .............................. ✅ parcialmente_pagado · pagado 160.50 · fecha 2026-10-04"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] segundo pago, saldo cero .................. ✅ pagado · 321.00 · fecha 2026-10-05"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] UPDATE amount_paid a mano ................. ✅ RECHAZADO por el guard"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] UPDATE status a mano ...................... ✅ RECHAZADO por el guard"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] DELETE del pago ........................... ✅ vuelve a parcialmente_pagado · 160.50"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] reversar un saldo heredado ............... ⚠️ no hay heredados, se omite"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-049-pago-de-gasto-de-tramite.sql",
+      "bloque": "verificación",
+      "ms": 69,
+      "error": {
+        "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 155 at RAISE\nPL/pgSQL function inline_code_block line 177 at assignment",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00 · compra 22df6d19-43ef-462f-adba-fa9c04f16070 · gasto asentado <NULL>"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] pago sin destino .......................... ✅ RECHAZADO por el CHECK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] pago con dos destinos ..................... ✅ RECHAZADO por el CHECK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] gasto nace pagado ......................... ✅ RECHAZADO por el guard"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] pago parcial .............................. ✅ parcialmente_pagado · 1.50"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] pago del resto ............................ ✅ pagado · 3.00"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] amount_paid a mano ........................ ✅ RECHAZADO por el guard"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] anulado con llave ......................... ✅ pasa con la llave, y el recálculo conserva anulado (monto 1.50)"
+        },
+        {
+          "nivel": "WARNING",
+          "texto": "finanzas.amount_paid_override: escritura MANUAL de amount_paid/status en el gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a (UPDATE). Ver sop.md SOP-017."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] DELETE del pago ........................... ✅ vuelve a pendiente_pago · 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] lado compra intacto ....................... ✅ parcial con 1.00 y vuelve a pendiente"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-050-reversion-de-gasto-de-tramite.sql",
+      "bloque": "verificación",
+      "ms": 33,
+      "error": {
+        "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 155 at RAISE\nPL/pgSQL function inline_code_block line 59 at assignment",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Gasto a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] gasto sin asiento ......................... ✅ RECHAZADO: Este gasto no está en el libro contable, así que no hay nada"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-051-nota-de-credito.sql",
+      "bloque": "verificación",
+      "ms": 39,
+      "error": {
+        "mensaje": "El cobro necesita una referencia: número de transferencia, cheque o recibo.",
+        "detalle": null,
+        "donde": "PL/pgSQL function finanzas_cobro_referencia_obligatoria() line 4 at RAISE\nSQL statement \"INSERT INTO payments (tenant_id, client_id, payment_number, payment_date, amount, method, payment_account_code, status, created_by)\r\n  VALUES (v_tenant, v_client, 'REC-999901', current_date, v_grand - v_parte, 'transferencia', '100001', 'registrado', v_user)\r\n  RETURNING id\"\nPL/pgSQL function inline_code_block line 95 at SQL statement",
+        "codigo": "23514"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Factura 32863c42-abc3-4e09-affa-dffb00f522d0 · total 10.70 · NC parcial de 2.68"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] columnas fiscales ......................... ✅ 13, fe_estado nace no_emitida"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] NC parcial ................................ ✅ credited 2.68 · saldo 8.02 · emitida"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] credited_total a mano ..................... ✅ RECHAZADO por el guard"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] acreditada al 100% (D3) .................. ✅ emitida · credited = total · saldo 0 · NO pagada"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-052-anulacion-con-reversion.sql",
+      "bloque": "verificación",
+      "ms": 15,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "⚠️ No hay facturas emitidas con asiento y sin pagos en staging: nada que verificar."
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-053-anulacion-con-nc-parcial.sql",
+      "bloque": "verificación",
+      "ms": 13,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "⚠️ No hay facturas emitidas con asiento, sin pagos y con el mes abierto en staging: nada que verificar."
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-054-tercero-por-linea.sql",
+      "bloque": "verificación",
+      "ms": 111,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] el tercero se guarda por línea .............. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] sin tercero se postea igual ................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] cliente Y proveedor en una línea ........... ✅ RECHAZADO: Línea(s) 1 con cliente Y proveedor a la vez: una línea nombr"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] cliente de otro bufete ..................... ✅ RECHAZADO: Cliente(s) inexistentes o de otro bufete: 00000000-0000-0000"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] CHECK jel_tercero_unico .................... ✅ CHECK ((num_nonnulls(client_id, supplier_id) <= 1))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] borrar un cliente del libro ................ ✅ RECHAZADO por la FK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] el tercero cambia el content_hash .......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] verify_accounting_chain sin roturas ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] falla después de postear: correlativo vuelve ✅ (quedó en 7)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 054: 9 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-055-reversion-de-asiento.sql",
+      "bloque": "verificación",
+      "ms": 11,
+      "error": {
+        "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 43 at RAISE\nPL/pgSQL function inline_code_block line 23 at assignment",
+        "codigo": "P0001"
+      },
+      "avisos": []
+    },
+    {
+      "archivo": "verificacion-057-proveedor-campos.sql",
+      "bloque": "verificación",
+      "ms": 41,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "════════ VERIFICACIÓN 057 ════════"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  1. las 4 columnas existen"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  2. las 4 son nullable"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  3. los 4 CHECK existen"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  4. phone/email de la empresa siguen ahí"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  5. las cuatro en NULL se aceptan (son opcionales)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  6. las cuatro cargadas se aceptan"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  7. contact_phone/email conviven con los de la empresa"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  8a. rechaza contact_name de 1 carácter"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  8b. rechaza contact_email demasiado corto"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  8c. rechaza default_chart_account_code de 21 caracteres"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok  9. sin FK real a chart_of_accounts (FK lógico, ver el encabezado)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "──────── 11 correctas, 0 fallidas ────────"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ·  dentro de la transacción hay 2 proveedor(es) de prueba"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "  ok 10. el ROLLBACK dejó la tabla intacta: 0 proveedores de prueba"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "════════ 057 VERIFICADA — 10/10 ════════"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-058-motivo-anulacion.sql",
+      "bloque": "verificación",
+      "ms": 26,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 1/6  el CHECK existe: CHECK (((cancellation_reason IS NULL) OR ((char_length(btrim(cancellation_reason)) >= 15) AND (char_length(btrim(cancellation_reason)) <= 1000))))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 2/6  declara los dos extremos (15 y 1000)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 3/6  NULL sigue permitido (una factura no anulada no tiene motivo)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 4/6  15 caracteres justos entran (el borde es inclusivo)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 5/6  14 caracteres REBOTAN, como tiene que ser"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 6/6  el relleno de espacios NO alcanza el mínimo (el CHECK usa btrim)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "─────────────────────────────────"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "058 — 6/6 OK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "─────────────────────────────────"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-059-registro-anulaciones.sql",
+      "bloque": "verificación",
+      "ms": 21,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 1/9  un intento se registra"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 2/9  'sin_respuesta' es un estado válido al insertar"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 3/9  'indeterminada' se guarda como estado, no como error"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 4/9  el reintento NO pisa al primero: los dos quedan"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 5/9  (invoice_id, intento) es único: no hay dos intentos 2"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 6/9  un resultado fuera de la lista REBOTA"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 7/9  un motivo de menos de 15 REBOTA (igual que en invoices)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 8/9  un CUFE vacío REBOTA"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✔ 9/9  i_amb sólo admite 1 (producción DGI) o 2 (sandbox)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "─────────────────────────────────"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "059 — 9/9 OK"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "─────────────────────────────────"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-060-reversion-nota-de-credito.sql",
+      "bloque": "verificación",
+      "ms": 149,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "Factura FAC-HON-000009 · total 1605.00 · pagado 300.00 · saldo 1305.00 · \"parcialmente_pagada\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[0] montaje: 2 NC (2.00 + 1.00) ............... ✅ acreditado 3.00 · saldo 1305.00 → 1302.00"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] motivo de 2 caracteres .................... ✅ RECHAZADO: La reversión necesita un motivo de al menos 3 caracteres (DE"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] fecha anterior al original ................ ✅ RECHAZADA: La reversión (2026-10-04) no puede ser anterior al asiento q"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] líneas que no son el espejo ............... ✅ RECHAZADAS: Las líneas recibidas no son el espejo exacto del asiento 5 d"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] NC sin asiento propio ..................... ✅ RECHAZADA: La nota de crédito NC-TEST-SIN no tiene asiento propio: salió de la anulación de la factur"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] falla forzada tras el posteo .............. ✅ TODO DESHECHO (0 espejos, NC sigue \"emitida\", correlativo 6 intacto)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] reversión ................................. ✅ asiento 7 revierte al 5"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "    ✅ acreditado 3.00 → 1.00 (queda solo NC-B) · saldo 1302.00 → 1304.00 · NC \"anulada\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "    ✅ status de la factura \"parcialmente_pagada\": lo recalculó el trigger"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] el asiento espejo ......................... ✅ reversion · reverses_entry_id · fecha 2026-10-05 · cuadra (2.00 = 2.00)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] reversar dos veces ........................ ✅ RECHAZADA (sigue habiendo 1 espejo): La nota de crédito NC-TEST-A ya está anulada."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] la otra NC parcial ........................ ✅ sigue \"emitida\" y sin reversar"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] las dos NC anuladas ...................... ✅ acreditado 0 · saldo 1305.00 (el original) · status \"parcialmente_pagada\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[11] cadena de hash ........................... ✅ ÍNTEGRA"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-063-anular-con-nc-reversada.sql",
+      "bloque": "verificación",
+      "ms": 193,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"_pje_lineas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Montadas 3 facturas de B/. 100.00 con su asiento."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "NC montadas: [A] 1 vigente · [B] 1 reversada · [C] 1 reversada + 1 vigente"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[A] NC VIGENTE .................. ✅ BLOQUEADA: La factura FAC-T063-A ya tiene la nota de crédito NC-T063-A1 vigente en el lib"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[B] única NC REVERSADA ......... ✅ ya no bloquea por la NC (anuló)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[C] NC VIGENTE .................. ✅ BLOQUEADA: La factura FAC-T063-C ya tiene la nota de crédito NC-T063-C2 vigente en el lib"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-066-nc-de-compra.sql",
+      "bloque": "verificación",
+      "ms": 16,
+      "error": {
+        "mensaje": "function public.create_supplier_credit_note(uuid, uuid, unknown, date, unknown, unknown, date, jsonb, jsonb, unknown) does not exist",
+        "detalle": null,
+        "donde": "PL/pgSQL function inline_code_block line 39 at assignment",
+        "codigo": "42883"
+      },
+      "avisos": []
+    },
+    {
+      "archivo": "verificacion-067-importacion-de-asientos.sql",
+      "bloque": "verificación",
+      "ms": 152,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "1 ✅ lote d84f9da1-b029-4538-98a4-c7a29c074128 · asientos [5, 6] · total débitos 125.50"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "2 ✅ hash duplicado: Este archivo ya se importó y sigue contabilizado. Si hay que corregirl"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "3 · rechazado: Cuenta(s) inexistentes o inactivas en el plan: 4101"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "3 ✅ todo o nada: ni lote, ni asiento, ni número consumido"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "4 ✅ deshecha: {\"reversados\": 2, \"ya_reversados\": 0}"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "5 ✅ una sola vez: Esta importación ya se deshizo."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "6 ✅ reimportado tras deshacer: lote e234679c-e0ec-42ae-a1f0-600df62bb3d1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "7 ✅ el lote no se borra"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-068-069-fecha-de-registro.sql",
+      "bloque": "verificación",
+      "ms": 29,
+      "error": {
+        "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
+        "detalle": null,
+        "donde": "PL/pgSQL function post_journal_entry(uuid,date,text,text,jsonb,uuid,text,uuid,text,uuid,date,text,text,text) line 43 at RAISE\nPL/pgSQL function inline_code_block line 45 at assignment",
+        "codigo": "P0001"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] accounting_date NOT NULL en 4 tablas ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] factura emitida congelada ................... ✅ RECHAZADO"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-071-motor-v4.sql",
+      "bloque": "verificación",
+      "ms": 196,
+      "error": {
+        "mensaje": "function \"public.create_supplier_credit_note(uuid,uuid,text,date,text,text,date,jsonb,jsonb,uuid)\" does not exist",
+        "detalle": null,
+        "donde": "PL/pgSQL function inline_code_block line 277 at IF",
+        "codigo": "42883"
+      },
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] 100004 sin cliente ......................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] p_reference en asiento de diario ........... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] AD- propio y referencia externa ............ ✅ AD-000001 / CHEQUE 123"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] AD- consecutivos ........................... ✅ AD-000002"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] el que falla no consume AD- ................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] hash v4 con la referencia externa .......... ❌ v4=f sin_ext=f"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] la reversión hereda la referencia externa .. ✅ AD-000001 / CHEQUE 123"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] gasto sin proveedor ........................ ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] cliente en 200001 .......................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] factura sin cliente en 100004 ............. ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[11] lote: AD- seguidos, ref. externa, sin huecos ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[12] purchase_number: formato e inmutable ....... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[13] factura del proveedor congelada ........... (sin gastos asentados sin número: se salta)"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-072-hash-v5-verificador.sql",
+      "bloque": "verificación",
+      "ms": 66,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] nace con hash_version = 5 ................. ✅ (asiento 5)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] el contenido v5 se reproduce de las columnas ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] verificador: cero problemas (v1 a v5) ...... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] v4 ambigua con \"|\", v5 no .................. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] monto cambiado en un asiento v2 ........... ❌ no detectado"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] referencia externa cambiada en un v5 ....... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] content_hash rehecho: lo delata el eslabón ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] sin versión: lo dice, no lo inventa ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 072: 7 ok, 1 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-073-074.sql",
+      "bloque": "verificación",
+      "ms": 83,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] toda tasa tiene cuenta ...................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] cuenta inexistente ......................... ✅ RECHAZADA"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] cuenta de control .......................... ✅ RECHAZADA: La cuenta 100004 es de clientes o de proveedores: no puede r"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] tasa nueva, cuenta propia y cambiable sin uso ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] tasa usada no cambia de cuenta ............. ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] cobro sin referencia ....................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] cobro viejo sin referencia se modifica ..... ✅ (2 fila/s)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] aplicar 30 de 50: factura 67.00 → 37.00, quedan 20 ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] más de lo disponible ....................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] factura de otro cliente ................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[11] cobro sin asiento ......................... ✅ RECHAZADO"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 073/074: 11 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-075-ancla.sql",
+      "bloque": "verificación",
+      "ms": 26,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] ancla inicial y coincide ................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] cerrar graba el ancla (asiento 4) .......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] reabrir no ancla; cerrar otra vez sí ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] un ancla no se modifica ni se borra ......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] anclas de afuera que coinciden ............. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] hash distinto y asiento inexistente ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] reescritura del asiento anclado: delatada .. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] service_role no escribe anclas a mano ....... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 075: 8 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-076-nc-modulo.sql",
+      "bloque": "verificación",
+      "ms": 106,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"_pje_lineas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] NC sin compra, con asiento y proveedor ........ ✅ NC-CO-000001"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "relation \"_ncp_lineas\" already exists, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] asiento que no coincide: rechazado ........... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] aplicar baja el saldo de la compra (321.00 → 316.00) .. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] no se aplica más que el saldo de la NC ....... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] reversar devuelve el saldo de la compra ...... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] una NC con factura no tiene saldo que aplicar  ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] una aplicación no se borra ................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] RPC y aplicaciones fuera de la sesión ......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 076: 8 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-077-nota-de-debito.sql",
+      "bloque": "verificación",
+      "ms": 26,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] borrador de nota de débito con referencia ...... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] referencia de otro cliente: rechazada .......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] referencia fuera de una nota de débito: rechazada ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] secuencia debit_note: ND-000001 ................. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] referencia congelada al emitir (T4) ............ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 077: 5 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-078-parametros-isr.sql",
+      "bloque": "verificación",
+      "ms": 13,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] fila del bufete en 0 ....................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] 0.25 entra, 25 (porcentaje) se rechaza ....... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] tasa negativa rechazada ..................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] lectura, alta y edición; sin borrado ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 078: 4 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-079-plan-de-cuentas.sql",
+      "bloque": "verificación",
+      "ms": 32,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] balance activa sin subcategoría: rechazada ... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] subcategorías viejas rechazadas ............ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] patrimonio en tres ........................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] el valor por defecto se corrige .............. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] Familia, otros ingresos, HON-FAM y OTR-ING ... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] HON-OTROS en una cuenta activa ............... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] ninguna activa fuera del CHECK .............. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 079: 7 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-080-cierre-anual.sql",
+      "bloque": "verificación",
+      "ms": 167,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] líneas que no son las del libro: rechazo .... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"_pje_lineas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] cierre 2026: asiento 5 (AD-000001) al 31/12 ......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] cuentas de resultado en 0 después del cierre ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] segundo cierre del mismo año: rechazo ...... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] 2027 no se cierra con 2026 abierto ......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] reversado, se vuelve a cerrar (asiento 7) ... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] diciembre cerrado: el motor rechaza ........ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 080: 7 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-082-otros-servicios-y-bancos.sql",
+      "bloque": "verificación",
+      "ms": 61,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] 400010 Otros servicios y HON-OTROS ............ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] banco 100001 en una línea: rechazado ............ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"_pje_lineas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] cuenta de gasto 500001 sigue entrando ........... ✅ NC-CO-000001"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 082: 3 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-083-fe-estado-interna.sql",
+      "bloque": "verificación",
+      "ms": 18,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] no_emitida → interna (NC y factura) ......... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] interna → pending: rechazado ................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] sin NC autorizada en staging: se omite"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] valor inventado: rechazado .................. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 083: 3 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-084-audit-log-solo-agregar.sql",
+      "bloque": "verificación",
+      "ms": 41,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "[1] autenticado lee su bufete (37 filas).......................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[2] autenticado no ve otro bufete (0 filas ajenas)................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[3] autenticado no puede editar (sin permiso)..................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[4] autenticado no puede borrar (sin permiso)..................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[5] autenticado no inserta con su sesión (ninguna ruta lo hace)... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[6] anon no puede ni leer......................................... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[7] service_role sigue insertando (las 32 rutas).................. ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[8] service_role no puede editar (trigger)........................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[9] service_role no puede borrar (trigger)........................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[10] postgres no puede borrar (no es superusuario en Supabase)..... ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "[11] nadie puede vaciar la tabla (TRUNCATE)........................ ✅"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": ""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "======== 084: 11 ok, 0 fallas (todo se deshace) ========"
+        }
+      ]
+    }
+  ]
+}

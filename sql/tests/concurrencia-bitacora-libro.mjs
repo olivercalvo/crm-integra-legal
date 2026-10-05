@@ -45,9 +45,14 @@ const CONTROL = process.argv.includes("--control");
 const T = "a0000000-0000-0000-0000-000000000001";
 const PAUSA = 150;
 
+// ENSAYO_DATABASE_URL: base LOCAL del ensayo de la ventana (sólo localhost).
+const ENSAYO = process.env.ENSAYO_DATABASE_URL?.trim();
+if (ENSAYO && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(ENSAYO).hostname)) {
+  console.error("🛑 ENSAYO_DATABASE_URL sólo puede apuntar a una base local (localhost)."); process.exit(1);
+}
 const envPath = resolve(ROOT, ".env.staging-db.local");
-if (!existsSync(envPath)) { console.error(`❌ Falta ${envPath}`); process.exit(1); }
-const CONN = (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]?.trim().replace(/^["']|["']$/g, "");
+if (!ENSAYO && !existsSync(envPath)) { console.error(`❌ Falta ${envPath}`); process.exit(1); }
+const CONN = ENSAYO || (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 if (!CONN) { console.error("❌ No se pudo leer STAGING_DATABASE_URL"); process.exit(1); }
 for (const ref of PROD_PROJECT_REFS) {
   if (CONN.includes(ref)) { console.error(`\n🛑 ABORTADO: la connection string apunta a PRODUCCIÓN (${ref}).\n`); process.exit(1); }
@@ -128,7 +133,7 @@ const Y = {
 
 const codigo = (e) => (e ? `${e.code ?? "?"} ${e.message}` : "ok");
 const resumen = [];
-console.log(`▶ Concurrencia bitácora ↔ libro contra staging · ${RONDAS} rondas por combinación${CONTROL ? " · MODO CONTROL (orden viejo)" : ""}\n`);
+console.log(`▶ Concurrencia bitácora ↔ libro contra ${ENSAYO ? "la base LOCAL de ensayo" : "staging"} · ${RONDAS} rondas por combinación${CONTROL ? " · MODO CONTROL (orden viejo)" : ""}\n`);
 
 for (const [nx, fx] of Object.entries(X)) {
   for (const [ny, fy] of Object.entries(Y)) {

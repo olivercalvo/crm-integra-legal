@@ -1,0 +1,1395 @@
+{
+  "pasos": [
+    {
+      "archivo": "supabase-shim.sql",
+      "bloque": "shim",
+      "ms": 106,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"authenticator\" has already been granted membership in role \"anon\" by role \"supabase_admin\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"authenticator\" has already been granted membership in role \"authenticated\" by role \"supabase_admin\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"authenticator\" has already been granted membership in role \"service_role\" by role \"supabase_admin\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"postgres\" has already been granted membership in role \"anon\" by role \"supabase_admin\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"postgres\" has already been granted membership in role \"authenticated\" by role \"supabase_admin\""
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "role \"postgres\" has already been granted membership in role \"service_role\" by role \"supabase_admin\""
+        }
+      ]
+    },
+    {
+      "archivo": "20260402000001_initial_schema.sql",
+      "bloque": "base 024",
+      "ms": 196,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "extension \"uuid-ossp\" already exists, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260402000002_seed_data.sql",
+      "bloque": "base 024",
+      "ms": 35,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000001_fix_rls_jwt_claims.sql",
+      "bloque": "base 024",
+      "ms": 5,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000002_add_case_fields.sql",
+      "bloque": "base 024",
+      "ms": 25,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_comment_update_followup\" for relation \"comments\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260403000003_add_assistant_id.sql",
+      "bloque": "base 024",
+      "ms": 12,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000004_add_client_fields.sql",
+      "bloque": "base 024",
+      "ms": 4,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000005_responsible_id_to_users.sql",
+      "bloque": "base 024",
+      "ms": 12,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000012_todos_and_prospects.sql",
+      "bloque": "base 024",
+      "ms": 90,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260403000013_extend_document_entity_types.sql",
+      "bloque": "base 024",
+      "ms": 6,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260404000001_v1_1_feedback_changes_fixed.sql",
+      "bloque": "base 024",
+      "ms": 37,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260404000002_payment_type.sql",
+      "bloque": "base 024",
+      "ms": 14,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260405000001_client_responsible_lawyer.sql",
+      "bloque": "base 024",
+      "ms": 11,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260504000001_add_contador_role.sql",
+      "bloque": "base 024",
+      "ms": 13,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260505000001_finanzas_extend_clients.sql",
+      "bloque": "base 024",
+      "ms": 37,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_tax_id_type_check\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_default_payment_terms_days_check\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_collection_status_check\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_credit_limit_check\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Backfill clients.ruc -> clients.tax_id: 0 filas actualizadas."
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000002_finanzas_catalogos.sql",
+      "bloque": "base 024",
+      "ms": 135,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"chart_of_accounts_tenant_isolation\" for relation \"chart_of_accounts\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_chart_of_accounts_updated_at\" for relation \"chart_of_accounts\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tax_codes_tenant_isolation\" for relation \"tax_codes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_tax_codes_updated_at\" for relation \"tax_codes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"services_catalog_tenant_isolation\" for relation \"services_catalog\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_services_catalog_updated_at\" for relation \"services_catalog\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"numbering_sequences_tenant_isolation\" for relation \"numbering_sequences\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_numbering_sequences_updated_at\" for relation \"numbering_sequences\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000003_finanzas_b3a_quotes.sql",
+      "bloque": "base 024",
+      "ms": 71,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"quotes_tenant_isolation\" for relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_quotes_updated_at\" for relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"quote_lines_tenant_isolation\" for relation \"quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_quote_lines_updated_at\" for relation \"quote_lines\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000004_finanzas_b3b_invoices.sql",
+      "bloque": "base 024",
+      "ms": 88,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"invoice_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"invoices_tenant_isolation\" for relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_invoices_updated_at\" for relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"invoice_lines_tenant_isolation\" for relation \"invoice_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_invoice_lines_updated_at\" for relation \"invoice_lines\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000005_finanzas_b3c_credit_notes.sql",
+      "bloque": "base 024",
+      "ms": 60,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"credit_note_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"credit_notes_tenant_isolation\" for relation \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_credit_notes_updated_at\" for relation \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"credit_note_lines_tenant_isolation\" for relation \"credit_note_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_credit_note_lines_updated_at\" for relation \"credit_note_lines\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000006_finanzas_b3d_payments.sql",
+      "bloque": "base 024",
+      "ms": 60,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "FIXUP",
+          "texto": "idx_payments_tenant choca con el índice de client_payments (initial_schema)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"payment_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "table \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"payments_tenant_isolation\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_payments_updated_at\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"payment_applications_tenant_isolation\" for relation \"payment_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_payment_applications_updated_at\" for relation \"payment_applications\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260505000007_finanzas_b3e_triggers.sql",
+      "bloque": "base 024",
+      "ms": 63,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_quote_status_transition\" for relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_invoice_status_transition\" for relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_payment_status_transition\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_invoice_immutability\" for relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_credit_note_immutability\" for relation \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_quote_lines_immutability\" for relation \"quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_invoice_lines_immutability\" for relation \"invoice_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_credit_note_lines_immutability\" for relation \"credit_note_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_no_delete_protected\" for relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_no_delete_protected\" for relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_no_delete_protected\" for relation \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_no_delete_protected\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_invoice_amount_paid\" for relation \"payment_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_payment_amount_unapplied\" for relation \"payment_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_set_initial_payment_unapplied\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_payment_unapplied_on_amount_change\" for relation \"payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_quote_totals\" for relation \"quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_invoice_totals\" for relation \"invoice_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_recalc_credit_note_totals\" for relation \"credit_note_lines\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260506000001_finanzas_b4_schema_prep_dgi.sql",
+      "bloque": "base 024",
+      "ms": 24,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260507000001_finanzas_b4_anular_factura.sql",
+      "bloque": "base 024",
+      "ms": 25,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "20260508000001_clients_add_status_and_type.sql",
+      "bloque": "base 024",
+      "ms": 59,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_status_valid\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_type_valid\" of relation \"clients\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260508000002_quotes_extension_and_terms_template.sql",
+      "bloque": "base 024",
+      "ms": 53,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "FIXUP",
+          "texto": "sección 5 (dropear columnas GENERATED) — nunca se aplicó en producción, se omite"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"quotes_subtotal_kind_non_negative\" of relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"quote_lines_invoice_kind_valid\" of relation \"quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"quote_terms_template_tenant_isolation\" for relation \"quote_terms_template\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "20260508000003_clients_drop_active_legacy.sql",
+      "bloque": "base 024",
+      "ms": 25,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "clients.active eliminada correctamente."
+        }
+      ]
+    },
+    {
+      "archivo": "002_enable_unaccent_and_search_rpcs.sql",
+      "bloque": "base 024",
+      "ms": 43,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "005_add_familia_classification.sql",
+      "bloque": "base 024",
+      "ms": 26,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "add_extrajudicial_classification.sql",
+      "bloque": "base 024",
+      "ms": 17,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "update-classification-colors.sql",
+      "bloque": "base 024",
+      "ms": 8,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "add_payment_description_receipt.sql",
+      "bloque": "base 024",
+      "ms": 5,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "add-receipt-to-expenses.sql",
+      "bloque": "base 024",
+      "ms": 5,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "006_extend_documents_for_auto_pdfs.sql",
+      "bloque": "base 024",
+      "ms": 51,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Constraint actual: CHECK ((entity_type = ANY (ARRAY['client'::text, 'case'::text, 'task'::text, 'comment'::text])))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Filas actuales en documents: 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"documents_source_check\" of relation \"documents\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "entity_type CHECK actualizado: CHECK ((entity_type = ANY (ARRAY['client'::text, 'case'::text, 'task'::text, 'comment'::text, 'quote'::text, 'invoice'::text])))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "source CHECK creado: CHECK ((source = ANY (ARRAY['manual'::text, 'auto_quote_pdf'::text, 'auto_invoice_pdf'::text])))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Columnas nuevas presentes (esperado 4): 4"
+        }
+      ]
+    },
+    {
+      "archivo": "007_quotes_add_title.sql",
+      "bloque": "base 024",
+      "ms": 35,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "PRE: 0 cotizaciones total, columna title existe: 0"
+        }
+      ]
+    },
+    {
+      "archivo": "008_extend_chart_of_accounts.sql",
+      "bloque": "base 024",
+      "ms": 68,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla chart_of_accounts existe: 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Cuentas actuales para tenant Integra: 17 (esperado 17 antes de esta migración)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Columna account_name_qb ya presente (re-aplicación segura): 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Total cuentas tenant Integra: 34 (esperado 34)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Cuentas is_system=true: 5 (esperado 5)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Cuentas con account_name_qb mapeado: 11 (esperado 11: 8 existentes + 3 nuevas)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Columnas nuevas presentes: 3 (esperado 3)"
+        }
+      ]
+    },
+    {
+      "archivo": "009_create_tax_payments.sql",
+      "bloque": "base 024",
+      "ms": 69,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla tax_payments existe: 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Función update_updated_at() existe: 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla public.users existe (para FK created_by): 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_tax_payments_updated_at\" for relation \"tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tax_payments_select\" for relation \"tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tax_payments_insert\" for relation \"tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tax_payments_update\" for relation \"tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tax_payments_delete\" for relation \"tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Filas iniciales: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "RLS habilitado: t (esperado true)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policies creadas: 4 (esperado 4: select/insert/update/delete)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Índices creados: 4 (esperado 4: pkey + 3 idx)"
+        }
+      ]
+    },
+    {
+      "archivo": "010_create_business_expenses.sql",
+      "bloque": "base 024",
+      "ms": 70,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla business_expenses existe: 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Función update_updated_at() existe: 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla public.users existe (para FK created_by): 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla chart_of_accounts existe (FK lógica a code): 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_business_expenses_updated_at\" for relation \"business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"business_expenses_select\" for relation \"business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"business_expenses_insert\" for relation \"business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"business_expenses_update\" for relation \"business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"business_expenses_delete\" for relation \"business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Filas iniciales: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "RLS habilitado: t (esperado true)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policies creadas: 4 (esperado 4: select/insert/update/delete)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Índices creados: 5 (esperado 5: pkey + 4 idx)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "CHECK constraints: 10 (esperado 9: 7 valores + 2 coherencia)"
+        }
+      ]
+    },
+    {
+      "archivo": "011_business_expenses_rls_abogada.sql",
+      "bloque": "base 024",
+      "ms": 25,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla business_expenses existe: 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy insert (qual actual): N/A"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy update (qual actual): ((tenant_id = get_tenant_id()) AND (get_user_role() = ANY (ARRAY['admin'::text, 'contador'::text])))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy delete (qual actual): ((tenant_id = get_tenant_id()) AND (get_user_role() = ANY (ARRAY['admin'::text, 'contador'::text])))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policies totales: 4 (esperado 4)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy insert incluye abogada: <NULL> (esperado true)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy update incluye abogada: t (esperado true)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policy delete incluye abogada: t (esperado true)"
+        }
+      ]
+    },
+    {
+      "archivo": "012_extend_services_quotes_observations.sql",
+      "bloque": "base 024",
+      "ms": 66,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "services_catalog filas tenant Integra: 9 (esperado 9 si sprint nuevo)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "quotes.observations existe: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "credit_notes.observations existe: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "services_catalog.sort_order existe: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"quotes_observations_length_check\" of relation \"quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"credit_notes_observations_length_check\" of relation \"credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "services_catalog filas: 13 (esperado 13)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "services REIM-* nuevas: 4 (esperado 4)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "quotes.observations existe: 1 (esperado 1)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "credit_notes.observations existe: 1 (esperado 1)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "services_catalog.sort_order existe: 1 (esperado 1)"
+        }
+      ]
+    },
+    {
+      "archivo": "013_create_observation_templates.sql",
+      "bloque": "base 024",
+      "ms": 46,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla observation_templates existe: 0 (esperado 0)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_observation_templates_updated_at\" for relation \"observation_templates\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"observation_templates_tenant_isolation\" for relation \"observation_templates\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Seeds insertados: 6 (esperado 6)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "RLS habilitado: t (esperado true)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Policies creadas: 1 (esperado 1)"
+        }
+      ]
+    },
+    {
+      "archivo": "014_quotes_estado_emitida.sql",
+      "bloque": "base 024",
+      "ms": 10,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "015_quote_acceptances_rejections.sql",
+      "bloque": "base 024",
+      "ms": 53,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"quote_acceptances_tenant_isolation\" for relation \"quote_acceptances\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"quote_rejections_tenant_isolation\" for relation \"quote_rejections\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "016_quotes_source_quote_id.sql",
+      "bloque": "base 024",
+      "ms": 23,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "019_efactura_fase_1a_modelo_datos.sql",
+      "bloque": "base 024",
+      "ms": 105,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— PRE-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Tabla clients: 1, invoices: 1, users: 1, tenants: 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Función public.get_tenant_id(): 1, public.update_updated_at(): 1"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "fe_emisiones ya existe: 0, fe_secuencias ya existe: 0"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"clients_tipo_receptor_fe_check\" of relation \"clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"invoices_fe_estado_check\" of relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"invoices_i_amb_check\" of relation \"invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"fe_emisiones_tenant_isolation\" for relation \"fe_emisiones\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"fe_secuencias_tenant_isolation\" for relation \"fe_secuencias\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_fe_secuencias_updated_at\" for relation \"fe_secuencias\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "020_efactura_allocator.sql",
+      "bloque": "base 024",
+      "ms": 8,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "021_client_numbering_sequence.sql",
+      "bloque": "base 024",
+      "ms": 26,
+      "error": null,
+      "avisos": []
+    },
+    {
+      "archivo": "023_contabilidad_fase1_ledger.sql",
+      "bloque": "base 024",
+      "ms": 129,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "extension \"pgcrypto\" already exists, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_je_no_update\" for relation \"public.journal_entries\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_je_no_delete\" for relation \"public.journal_entries\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_jel_no_update\" for relation \"public.journal_entry_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_jel_no_delete\" for relation \"public.journal_entry_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_leg_no_update\" for relation \"public.accounting_legajos\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_leg_no_delete\" for relation \"public.accounting_legajos\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tenant_isolation\" for relation \"public.accounting_periods\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tenant_isolation\" for relation \"public.accounting_sequences\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tenant_isolation\" for relation \"public.journal_entries\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tenant_isolation\" for relation \"public.journal_entry_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"tenant_isolation\" for relation \"public.accounting_legajos\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "024_chart_of_accounts_saldo_subcategoria.sql",
+      "bloque": "base 024",
+      "ms": 26,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "— POST-CHECK —"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "Columnas nuevas presentes: 2 (esperado 2)"
+        }
+      ]
+    },
+    {
+      "archivo": "storage_rls_tenant_scoped.sql",
+      "bloque": "base 024",
+      "ms": 17,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Allow authenticated deletes\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Allow authenticated reads\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Allow authenticated uploads\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Authenticated users can delete files\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Authenticated users can read files\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Authenticated users can update files\" for relation \"storage.objects\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"Authenticated users can upload files\" for relation \"storage.objects\" does not exist, skipping"
+        }
+      ]
+    },
+    {
+      "archivo": "084_audit_log_solo_agregar.sql",
+      "bloque": "hotfix 084",
+      "ms": 16,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "084: política FOR ALL reemplazada por FOR SELECT USING ((tenant_id = auth.tenant_id()))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_audit_log_solo_agregar\" for relation \"public.audit_log\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_audit_log_sin_truncate\" for relation \"public.audit_log\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "084 ✅ audit_log: lectura por bufete, sin UPDATE/DELETE/TRUNCATE para nadie salvo el superusuario"
+        }
+      ]
+    }
+  ],
+  "datos": {
+    "informe": [
+      {
+        "tabla": "accounting_legajos",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "accounting_periods",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "accounting_sequences",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "audit_log",
+        "staging": 36,
+        "cargadas": 36
+      },
+      {
+        "tabla": "business_expenses",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "cases",
+        "staging": 31,
+        "cargadas": 31
+      },
+      {
+        "tabla": "cat_classifications",
+        "staging": 9,
+        "cargadas": 9
+      },
+      {
+        "tabla": "cat_institutions",
+        "staging": 5,
+        "cargadas": 5
+      },
+      {
+        "tabla": "cat_statuses",
+        "staging": 2,
+        "cargadas": 2
+      },
+      {
+        "tabla": "cat_team",
+        "staging": 3,
+        "cargadas": 3
+      },
+      {
+        "tabla": "chart_of_accounts",
+        "staging": 102,
+        "cargadas": 97,
+        "creadas_despues": 5
+      },
+      {
+        "tabla": "client_payments",
+        "staging": 1,
+        "cargadas": 1
+      },
+      {
+        "tabla": "clients",
+        "staging": 18,
+        "cargadas": 18
+      },
+      {
+        "tabla": "comments",
+        "staging": 3,
+        "cargadas": 3
+      },
+      {
+        "tabla": "credit_note_lines",
+        "staging": 20,
+        "cargadas": 20
+      },
+      {
+        "tabla": "credit_notes",
+        "staging": 20,
+        "cargadas": 16,
+        "rechazadas": 4,
+        "motivos": [
+          "new row for relation \"credit_notes\" violates check constraint \"credit_notes_status_check\"",
+          "null value in column \"invoice_id\" of relation \"credit_notes\" violates not-null constraint"
+        ]
+      },
+      {
+        "tabla": "documents",
+        "staging": 9,
+        "cargadas": 2,
+        "rechazadas": 7,
+        "motivos": [
+          "new row for relation \"documents\" violates check constraint \"documents_entity_type_check\""
+        ]
+      },
+      {
+        "tabla": "expenses",
+        "staging": 32,
+        "cargadas": 32
+      },
+      {
+        "tabla": "fe_emisiones",
+        "staging": 28,
+        "cargadas": 21,
+        "rechazadas": 7,
+        "motivos": [
+          "null value in column \"invoice_id\" of relation \"fe_emisiones\" violates not-null constraint"
+        ]
+      },
+      {
+        "tabla": "fe_secuencias",
+        "staging": 1,
+        "cargadas": 1
+      },
+      {
+        "tabla": "invoice_lines",
+        "staging": 50,
+        "cargadas": 47,
+        "creadas_despues": 3
+      },
+      {
+        "tabla": "invoices",
+        "staging": 47,
+        "cargadas": 40,
+        "creadas_despues": 3,
+        "rechazadas": 4,
+        "motivos": [
+          "new row for relation \"invoices\" violates check constraint \"invoices_invoice_kind_check\"",
+          "new row for relation \"invoices\" violates check constraint \"invoices_fe_estado_check\""
+        ]
+      },
+      {
+        "tabla": "journal_entries",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "journal_entry_lines",
+        "staging": null,
+        "cargadas": 0,
+        "nota": "vacía en producción"
+      },
+      {
+        "tabla": "numbering_sequences",
+        "staging": 13,
+        "cargadas": 5,
+        "rechazadas": 8,
+        "motivos": [
+          "new row for relation \"numbering_sequences\" violates check constraint \"numbering_sequences_sequence_type_check\""
+        ]
+      },
+      {
+        "tabla": "observation_templates",
+        "staging": 6,
+        "cargadas": 6
+      },
+      {
+        "tabla": "payment_applications",
+        "staging": 10,
+        "cargadas": 10
+      },
+      {
+        "tabla": "payments",
+        "staging": 13,
+        "cargadas": 13
+      },
+      {
+        "tabla": "personal_todos",
+        "staging": 5,
+        "cargadas": 5
+      },
+      {
+        "tabla": "prospect_comments",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "prospect_documents",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "prospects",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "quote_acceptances",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "quote_lines",
+        "staging": 11,
+        "cargadas": 11
+      },
+      {
+        "tabla": "quote_rejections",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "quote_terms_template",
+        "staging": 1,
+        "cargadas": 1
+      },
+      {
+        "tabla": "quotes",
+        "staging": 8,
+        "cargadas": 8
+      },
+      {
+        "tabla": "services_catalog",
+        "staging": 14,
+        "cargadas": 13,
+        "creadas_despues": 1
+      },
+      {
+        "tabla": "tasks",
+        "staging": 8,
+        "cargadas": 8
+      },
+      {
+        "tabla": "tax_codes",
+        "staging": 6,
+        "cargadas": 6
+      },
+      {
+        "tabla": "tax_payments",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "tenants",
+        "staging": 1,
+        "cargadas": 1
+      },
+      {
+        "tabla": "todo_comments",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "todo_documents",
+        "staging": 0,
+        "cargadas": 0
+      },
+      {
+        "tabla": "users",
+        "staging": 5,
+        "cargadas": 5
+      }
+    ],
+    "usuarios": 5
+  }
+}

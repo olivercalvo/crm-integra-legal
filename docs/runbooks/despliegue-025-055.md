@@ -1,5 +1,12 @@
 # Runbook del despliegue 025 → 055
 
+> 🧭 **ORDEN FINAL (05/10/2026): `docs/finanzas/runbooks/ventana-bloque-1.md`.** Ensayado contra una
+> base local igual a producción: las 61 migraciones de la `025` a la `092` en tres bloques (A, B y
+> C), las bitácoras en una ventana aparte y el tiempo estimado. Este archivo sigue siendo el
+> detalle de cada paso (pre-flight, respaldo, qué anotar, rollback); el ORDEN y el paso −1 son los
+> de allá. Cambios: la verificación de la `067` va después de la `025`; el paso «Reasignar» de P-15
+> ya no va (lo hacen la `079` y la `082`); el paso −1 es el ensayo local.
+
 **Qué es:** la corrida completa de las **42** migraciones contables pendientes a
 la base de producción, más el merge de `develop` a `main`:
 **`025` a `055`, `057` y `058` a `067`** — toda la cola que existe hoy en `develop`.

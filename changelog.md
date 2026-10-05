@@ -1,5 +1,19 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Ensayo de la ventana del Bloque 1 y consulta de datos de prueba] - 2026-10-05
+
+- Ensayo completo de la ventana de producción contra una base local igual a producción: las 61
+  migraciones de la `025` a la `092` en tres bloques, sin errores, y las bitácoras en una ventana
+  aparte, también sin errores. Después, la prueba de las 41 tablas (131/131) y la de concurrencia
+  (cero bloqueos) pasan. Nada se aplicó en staging ni en producción.
+- Runbook con el orden final y el tiempo estimado: `docs/finanzas/runbooks/ventana-bloque-1.md`
+  (día ~4 h 50 min, ~2 h 40 min con la operación congelada). El runbook anterior apunta a éste.
+- Cambios al runbook que salieron del ensayo: la verificación de la `067` va después de la `025`,
+  el paso «Reasignar» de P-15 ya no va, y el paso −1 es este ensayo.
+- Nueva consulta de solo lectura para producción: `sql/verificacion/produccion-datos-de-prueba.sql`
+  (clientes, casos, facturas, cobros, gastos, usuarios y documentos que parecen de prueba).
+- `run-sql.mjs` y la prueba de concurrencia aceptan `ENSAYO_DATABASE_URL`, sólo si apunta a localhost.
+
 ## [Estado fiscal de las facturas con CUFE del portal] - 2026-10-05
 
 - Una factura emitida en el portal de facturación y con su CUFE cargado en el CRM ya no dice «Sin enviar»:

@@ -1,0 +1,257 @@
+{
+  "total_ms": 477,
+  "pasos": [
+    {
+      "archivo": "086_bitacoras_nucleo.sql",
+      "bloque": "bitácoras",
+      "ms": 82,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_solo_agregar\" for relation \"auditoria.bitacora_contable\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_sin_truncate\" for relation \"auditoria.bitacora_contable\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_solo_agregar\" for relation \"auditoria.bitacora_legal\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_sin_truncate\" for relation \"auditoria.bitacora_legal\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_solo_agregar\" for relation \"auditoria.anclas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_sin_truncate\" for relation \"auditoria.anclas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria_zz_ancla_cierre\" for relation \"public.accounting_periods\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "086 ✅ bitácoras contable y legal: solo agregar, cadena, anclas, lectura por rol"
+        }
+      ]
+    },
+    {
+      "archivo": "087_bitacoras_captura.sql",
+      "bloque": "bitácoras",
+      "ms": 36,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.invoices\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.invoice_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.credit_note_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.credit_note_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.fe_emisiones\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.fe_anulaciones\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.payment_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.payment_reversals\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.business_expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.supplier_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.supplier_credit_notes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.supplier_credit_note_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.supplier_credit_note_applications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.journal_imports\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.accounting_periods\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.chart_of_accounts\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.tax_codes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.numbering_sequences\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.services_catalog\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.finanzas_parametros\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.quotes\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.quote_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.quote_terms_template\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.suppliers\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.tax_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.cases\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.documents\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.tasks\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.comments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.cat_classifications\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.cat_institutions\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.cat_statuses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.cat_team\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.client_payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.clients\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.expenses\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.expense_lines\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.users\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_auditoria\" for relation \"public.journal_entries\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "087 ✅ 41 tablas con captura en su bitácora"
+        }
+      ]
+    },
+    {
+      "archivo": "089_bitacoras_documento_de_casos.sql",
+      "bloque": "bitácoras",
+      "ms": 11,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "089 ✅ documento_de: tareas, comentarios y cobros del caso devuelven el número del caso (CORP-001)"
+        }
+      ]
+    },
+    {
+      "archivo": "090_bitacoras_orden_de_candados.sql",
+      "bloque": "bitácoras",
+      "ms": 15,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "090 ✅ bitácora y libro: un solo orden de candados (correlativo del libro, después bitácora)"
+        }
+      ]
+    },
+    {
+      "archivo": "091_bitacoras_error_claro.sql",
+      "bloque": "bitácoras",
+      "ms": 32,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "091 ✅ falla de la bitácora → AU001, mensaje claro, original en el detalle: [P0001] falla forzada por la verificación 091"
+        }
+      ]
+    }
+  ]
+}

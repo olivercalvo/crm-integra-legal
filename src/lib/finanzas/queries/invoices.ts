@@ -11,6 +11,7 @@ import type {
   InvoiceKind,
   InvoiceStatus,
 } from "@/lib/finanzas/types/invoice";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -57,6 +58,7 @@ export async function listInvoices(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // de-prueba-ok: listado de facturas: las de prueba se ven con el badge «Prueba»
   let q = db
     .from("invoices")
     .select(
@@ -68,7 +70,7 @@ export async function listInvoices(
         dgi_numero_documento, dgi_cufe, dgi_cufe_origen, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,
         punto_facturacion, numero_documento, ef_invoice_uuid,
-        cancellation_reason, cancelled_at,
+        cancellation_reason, cancelled_at, de_prueba, de_prueba_motivo,
         client:clients!invoices_client_id_fkey(id, name, client_number),
         case:cases!invoices_case_id_fkey(id, case_code)
       `,
@@ -112,6 +114,7 @@ export async function getInvoiceById(
   tenantId: string,
   id: string
 ): Promise<InvoiceWithRelations | null> {
+  // de-prueba-ok: detalle de un documento (lleva la banda de prueba)
   const { data: header, error: errHeader } = await db
     .from("invoices")
     .select(
@@ -123,7 +126,7 @@ export async function getInvoiceById(
         dgi_numero_documento, dgi_cufe, dgi_cufe_origen, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,
         punto_facturacion, numero_documento, ef_invoice_uuid,
-        cancellation_reason, cancelled_at,
+        cancellation_reason, cancelled_at, de_prueba, de_prueba_motivo,
         fe_motivo_pendiente, fe_motivo_pendiente_en,
         client:clients!invoices_client_id_fkey(id, name, client_number, ruc),
         case:cases!invoices_case_id_fkey(id, case_code, description)
@@ -180,6 +183,7 @@ export async function facturasAjustables(db: DB, tenantId: string): Promise<Fact
     .from("invoices")
     .select("id, invoice_number, client_id, invoice_kind")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada", "pagada"])
     .order("issue_date", { ascending: false });
   if (error) {
@@ -201,9 +205,11 @@ export async function referenciaDeNotaDeDebito(
   tenantId: string,
   invoiceId: string
 ): Promise<{ id: string; invoice_number: string } | null> {
+  // de-prueba-ok: detalle de un documento
   const { data } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", invoiceId).maybeSingle();
   const refId = (data as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id ?? null;
   if (!refId) return null;
+  // de-prueba-ok: detalle de un documento
   const { data: ref } = await db
     .from("invoices")
     .select("id, invoice_number")
@@ -226,6 +232,7 @@ export async function notasDeDebitoDeLaFactura(
   tenantId: string,
   invoiceId: string
 ): Promise<{ id: string; invoice_number: string | null; status: string; grand_total: number }[]> {
+  // de-prueba-ok: las ND de una factura, en su detalle
   const { data, error } = await db
     .from("invoices")
     .select("id, invoice_number, status, grand_total, invoice_kind")

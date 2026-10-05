@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DePruebaBadge, DePruebaBanda } from "@/components/finanzas/de-prueba-badge";
 import { notFound } from "next/navigation";
 import {
   Pencil,
@@ -79,8 +80,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // Las rutas de API le responden 403 igual, pero un botón que falla al
   // apretarlo es exactamente el problema que este cambio vino a resolver.
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
+  // 094: una factura de prueba no se emite, no se cobra, no se acredita, no se
+  // anula ni va a la DGI (el servidor responde 409; acá no se ofrece).
+  const esDePrueba = invoice.de_prueba === true;
   const editable = puedeAccionar && isEditable(invoice.status);
-  const emittable = puedeAccionar && isEmittable(invoice.status);
+  const emittable = puedeAccionar && isEmittable(invoice.status) && !esDePrueba;
   const deletable = puedeAccionar && isDeletable(invoice.status);
   const isEmitida = invoice.status === "emitida";
   const isAnulada = invoice.status === "anulada";
@@ -95,7 +99,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     invoice.status === "pagada";
   // Sprint 2C, D4: solo admin + abogada pueden registrar/eliminar pagos
   // y anular facturas. Asistente y contador → READ-only.
-  const canMutate = puedeAccionar;
+  const canMutate = puedeAccionar && !esDePrueba;
   // REVERSAR un cobro contabilizado es otra bandera, y el contador SÍ la tiene
   // (17/09/2026): corregir el libro es su trabajo por la guía de RM, igual que
   // los asientos manuales y los períodos. Es el ÚNICO botón de mutación que ve
@@ -105,7 +109,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // 074 (Oliver, 01/10/2026): aplicar el saldo a favor de un cliente también lo
   // hace el contador: no registra dinero nuevo, sólo dice qué factura cancela un
   // cobro que ya está en el libro. Es una bandera aparte de `canMutate`.
-  const canApplyCredit = puedeAccionar || userRole === "contador";
+  const canApplyCredit = (puedeAccionar || userRole === "contador") && !esDePrueba;
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -276,6 +280,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               </h1>
               <InvoiceStatusBadge status={invoice.status} />
               {acreditadaTotal && <AcreditadaTotalBadge />}
+              {invoice.de_prueba && <DePruebaBadge />}
             </div>
             <p className="mt-1 text-sm text-gray-500">
               Creada el {formatDateTime(invoice.created_at)}
@@ -390,6 +395,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
         </div>
       )}
 
+      {esDePrueba && <DePruebaBanda motivo={invoice.de_prueba_motivo} />}
+
       {emitidaFuera && (
         <div role="note" className="rounded-md border-l-4 border-integra-gold bg-integra-gold/10 p-3 text-sm text-integra-navy">
           <p className="font-semibold">Factura emitida fuera del CRM</p>
@@ -406,7 +413,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       )}
 
       {/* 03/10/2026: por qué no se emitió o no llegó a la DGI, guardado (085). */}
-      <MotivoPendienteDgi motivo={invoice.fe_motivo_pendiente} en={invoice.fe_motivo_pendiente_en} />
+      {!esDePrueba && (
+        <MotivoPendienteDgi motivo={invoice.fe_motivo_pendiente} en={invoice.fe_motivo_pendiente_en} />
+      )}
 
       {/* 🔴 SIN CUFE NO HAY NOTA DE CRÉDITO ELECTRÓNICA (Bloque 9C).
           La matriz devuelve `nc_04_requiere_cufe` cuando la factura no se puede
@@ -659,7 +668,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               qrContent={invoice.qr_content}
               puntoFacturacion={invoice.punto_facturacion}
               numeroDocumento={invoice.numero_documento}
-              canEmitToPac={canEmitToPac && !emitidaFuera}
+              canEmitToPac={canEmitToPac && !emitidaFuera && !esDePrueba}
               emitidaFuera={emitidaFuera}
               cufeOrigen={invoice.dgi_cufe_origen ?? null}
               rechazo={rechazoDgi}

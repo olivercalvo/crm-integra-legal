@@ -96,6 +96,7 @@ import {
 import { clasificarRespuestaDeAnulacion } from "@/lib/finanzas/efactura/orchestration/clasificar-respuesta-de-anulacion";
 import { anularEnPac } from "@/lib/finanzas/efactura/transport/anulacion-en-pac";
 import { validarMotivoDeAnulacion } from "@/lib/finanzas/validators/cancel-invoice";
+import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -429,7 +430,7 @@ async function cargarEstadoDeFactura(
   const { data, error } = await db
     .from("invoices")
     .select(
-      "id, status, fe_estado, dgi_cufe, dgi_cufe_origen, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid"
+      "id, status, fe_estado, dgi_cufe, dgi_cufe_origen, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid, invoice_number, de_prueba"
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -437,6 +438,11 @@ async function cargarEstadoDeFactura(
 
   if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
   if (!data) throw new MutationError("Factura no encontrada", 404);
+  // 094: una factura de prueba no se anula: no tiene asiento que reversar y no
+  // se le habla al PAC. Es lo primero que se mira, antes de la matriz.
+  if ((data as { de_prueba?: boolean }).de_prueba === true) {
+    throw new MutationError(mensajeDeDocumentoDePrueba((data as { invoice_number?: string | null }).invoice_number ?? null), 409);
+  }
 
   const issueDate = data.issue_date ? String(data.issue_date) : null;
   // El "mes de la factura" es el de su fecha de REGISTRO (el período de su

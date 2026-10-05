@@ -37,6 +37,7 @@ import {
   SOURCE_TYPES_DE_PARTIDA,
   type LineaDeControl,
 } from "@/lib/finanzas/reports/partidas-de-diario";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -204,6 +205,7 @@ async function facturasPendientes(db: DB, tenantId: string): Promise<DocumentoPe
     .from("invoices")
     .select("id, invoice_number, due_date, balance_due, client_id, clients!inner(id, name)")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada"])
     .order("due_date");
 
@@ -251,6 +253,7 @@ async function saldosAFavor(db: DB, tenantId: string): Promise<DocumentoPendient
     .from("payments")
     .select("id, payment_number, payment_date, amount_unapplied, client_id, clients!inner(id, name)")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .neq("status", "anulado")
     .gt("amount_unapplied", 0.005);
   if (error) {
@@ -303,6 +306,7 @@ async function saldosAFavorDeNotas(db: DB, tenantId: string, tipo: TipoAntigueda
         .from("credit_notes")
         .select("id, credit_note_number, accounting_date, grand_total, client_id, clients!inner(name)")
         .eq("tenant_id", tenantId)
+        .eq(DE_PRUEBA, false)
         .eq("status", "emitida")
         .is("invoice_id", null)
     : await db
@@ -463,6 +467,7 @@ async function gastosTramitePendientes(db: DB, tenantId: string): Promise<Docume
     .from("expenses")
     .select("id, supplier_id, concept, date, due_date, amount, amount_paid, status, posted_entry_id")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .not("posted_entry_id", "is", null)
     .in("status", ["pendiente_pago", "parcialmente_pagado"])
     .order("due_date");
@@ -553,6 +558,7 @@ async function sinAsientoCobrar(db: DB, tenantId: string): Promise<SinAsiento> {
     .from("invoices")
     .select("id, balance_due")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada"]);
 
   const documentos = { cantidad: 0, monto: 0 };

@@ -27,6 +27,7 @@ import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversi
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
+import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import {
   construirAsientoDeGastoTramite,
   SOURCE_TYPE_GASTO_TRAMITE,
@@ -77,7 +78,7 @@ export async function postearGastoTramite(
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
     .select(
-      `id, date, accounting_date, concept, posted_entry_id, supplier_id,
+      `id, date, accounting_date, concept, posted_entry_id, supplier_id, de_prueba,
        purchase_number, supplier_invoice_number,
        cases(case_code),
        suppliers(legal_name)`
@@ -92,6 +93,11 @@ export async function postearGastoTramite(
   }
   if (!gasto) {
     throw new MutationError("Gasto no encontrado", 404);
+  }
+  // Gasto de un caso de un cliente de prueba (nace de prueba, 094): no entra al
+  // libro (095). Se corta antes del número FAC-CO-.
+  if ((gasto as { de_prueba?: boolean }).de_prueba === true) {
+    throw new MutationError(mensajeDeDocumentoDePrueba(null), 409);
   }
 
   // ── CAPA 1: el cache ──────────────────────────────────────────────────────

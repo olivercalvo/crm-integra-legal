@@ -163,6 +163,7 @@ export async function loadAsientosDelDiario(
 
   for (const [tipo, ids] of Array.from(idsPorTipo.entries())) {
     const { tabla, campo, truncar } = DOCUMENTO_DE[tipo];
+    // de-prueba-ok: rótulo del documento de un asiento; uno de prueba no tiene asiento (095)
     const { data, error: errDoc } = await db
       .from(tabla)
       .select(`id, ${campo}`)

@@ -57,6 +57,7 @@ test("listInvoicesCobrables: emitida/parcialmente_pagada, saldo > 0, del tenant 
     filtros(llamadas, "invoices").map((l) => [l.op, ...l.args]),
     [
       ["eq", "tenant_id", TENANT],
+      ["eq", "de_prueba", false],
       ["in", "status", ["emitida", "parcialmente_pagada"]],
       ["gt", "balance_due", 0],
       ["eq", "client_id", "c1"],

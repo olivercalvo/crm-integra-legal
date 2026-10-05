@@ -1,0 +1,96 @@
+Prueba en STAGING de los documentos de prueba (094 aplicada, filtros de los reportes, bloqueos)
+05/10/2026 · npx tsx scripts/verificar-documentos-de-prueba.mts (con npm run dev arriba)
+A: FAC-HON-900001, factura emitida SIN asiento (copia de FAC-HON-000022, CLI-009), creada por SQL para la prueba.
+B: el caso FAC-HON-000463 con FAC-HON-000023 (real, con asiento) y su cliente CLI-013 marcado de prueba (desmarcado al final con la llave).
+Es la segunda corrida: la factura A se desmarca con la llave para volver a medir el «antes».
+
+(segunda corrida: FAC-HON-900001 se desmarcó con la llave para medir otra vez)
+✅ FAC-HON-900001 no tiene asiento
+
+── A. FAC-HON-900001 sin marca → marcada de prueba
+    ≠ antigüedad: la factura está                                    true → false
+    ≠ antigüedad: total                                              7171.5 → 6101.5
+    ≠ antigüedad: diferencia con 100004                              192670.55 → 193740.55
+    = estado de cuenta: el cliente está                              true
+    ≠ estado de cuenta: la factura está                              true → false
+    ≠ estado de cuenta: saldo del cliente                            3026 → 1956
+    ≠ ITBMS: la factura está                                         true → false
+    ≠ ITBMS: líneas                                                  "1=5880 2=4870 3=333.9 4=1683.6 5=1900 6=133 7=200.9 8=0 9=0 10=200.9" → "1=4880 2=3870 3=263.9 4=1683.6 5=1900 6=133 7=130.9 8=0 9=0 10=130.9"
+    ≠ Pendientes DGI: la factura está                                true → false
+    ≠ Pendientes DGI: cantidad (listado de facturas y hub de reportes) 30 → 29
+    ≠ Pendientes DGI: cantidad en el dashboard de quien la creó      9 → 8
+    ≠ aviso «facturas con error en la DGI»                           4 → 3
+    ≠ selector de cobros: la factura está                            true → false
+    ≠ selector de NC: la factura está                                true → false
+    ≠ selector de NC del cliente: la factura está                    true → false
+    ≠ selector de ND: la factura está                                true → false
+    = libro: 100004                                                  199842.05
+    = libro: ingresos del Estado de Resultado                        -298722.06
+    = libro: activos del Balance                                     265179.38
+    ≠ export antigüedad: la factura está                             true → false
+    ≠ export ITBMS: la factura está                                  true → false
+    ≠ listado de facturas: badge «Prueba»                            false → true
+✅ antigüedad: sale
+✅ antigüedad: el total baja 1070
+✅ estado de cuenta: sale
+✅ estado de cuenta: el saldo baja 1070
+✅ ITBMS: sale del detalle
+✅ ITBMS: el débito baja (70 de ITBMS)
+✅ Pendientes DGI: sale
+✅ Pendientes DGI: el contador baja 1
+✅ dashboard de la abogada: baja 1
+✅ aviso de errores DGI: baja 1
+✅ selector de cobros: sale
+✅ selector de NC: sale
+✅ selector de NC del cliente: sale
+✅ selector de ND: sale
+✅ libro: 100004: igual (nunca tuvo asiento)
+✅ libro: ingresos del Estado de Resultado: igual (nunca tuvo asiento)
+✅ libro: activos del Balance: igual (nunca tuvo asiento)
+✅ export de antigüedad: sale
+✅ export de ITBMS: sale
+✅ listado de facturas: sigue, con el badge «Prueba»
+✅ FAC-HON-900001 — enviar a la DGI: 409 «Este documento está marcado de prueba: no se envía a la DGI ni cuenta en los reportes.»
+✅ FAC-HON-900001 — registrar cobro: 409 «El documento FAC-HON-900001 está marcado de prueba: no se emite ni se registra en el libro.»
+✅ FAC-HON-900001 — nota de crédito: 409 «El documento FAC-HON-900001 está marcado de prueba: no se emite ni se registra en el libro.»
+✅ FAC-HON-900001 — anular: 409 «El documento FAC-HON-900001 está marcado de prueba: no se emite ni se registra en el libro.»
+✅ ningún correlativo se movió
+✅ ningún intento ante el PAC (fe_emisiones y fe_anulaciones igual)
+✅ FAC-HON-000023 tiene asiento (cuenta en el libro)
+
+── B. CLI-013 marcado de prueba; FAC-HON-000023 sigue real
+    = antigüedad: la factura está                                    true
+    = antigüedad: total                                              6101.5
+    = antigüedad: diferencia con 100004                              193740.55
+    = estado de cuenta: el cliente está                              true
+    = estado de cuenta: la factura está                              true
+    = estado de cuenta: saldo del cliente                            1170
+    = ITBMS: la factura está                                         true
+    = ITBMS: líneas                                                  "1=4880 2=3870 3=263.9 4=1683.6 5=1900 6=133 7=130.9 8=0 9=0 10=130.9"
+    = Pendientes DGI: la factura está                                true
+    = Pendientes DGI: cantidad (listado de facturas y hub de reportes) 29
+    = Pendientes DGI: cantidad en el dashboard de quien la creó      8
+    = aviso «facturas con error en la DGI»                           3
+    = selector de cobros: la factura está                            true
+    = selector de NC: la factura está                                true
+    = selector de NC del cliente: la factura está                    true
+    = selector de ND: la factura está                                true
+    = libro: 100004                                                  199842.05
+    = libro: ingresos del Estado de Resultado                        -298722.06
+    = libro: activos del Balance                                     265179.38
+    = export antigüedad: la factura está                             true
+    = export ITBMS: la factura está                                  true
+    = listado de facturas: badge «Prueba»                            false
+✅ FAC-HON-000023 sigue contando en todo (nada cambió)
+✅ FAC-HON-000023 — antigüedad
+✅ FAC-HON-000023 — estado de cuenta
+✅ FAC-HON-000023 — ITBMS
+✅ FAC-HON-000023 — Pendientes DGI
+✅ FAC-HON-000023 — export antigüedad
+✅ FAC-HON-000023 — export ITBMS
+✅ cobro nuevo de CLI-013: 409 «El cliente CLI-013 está marcado de prueba: sus documentos no se emiten ni se registran en el libro. Si es un cliente real, hay que desmarcarlo primero.»
+✅ sin número quemado (secuencia 'payment' 13 → 13)
+
+(CLI-013 desmarcado con la llave: queda como estaba. FAC-HON-900001 queda marcada de prueba.)
+
+✅ 37 OK, 0 FALLAS

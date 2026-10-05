@@ -10,6 +10,7 @@ import type { LineaDeCompraParaNc } from "@/lib/finanzas/contabilidad/asiento-no
 import { cuentasDeTasas } from "@/lib/finanzas/queries/factura-para-asiento";
 import { esTipoValidoParaGasto } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -61,6 +62,7 @@ export async function facturasAbiertasParaNc(
     .from("invoices")
     .select("id, invoice_number, invoice_kind, client_id, issue_date, accounting_date, balance_due, grand_total, fe_estado")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada"])
     .gt("balance_due", 0.005)
     .order("issue_date", { ascending: true });
@@ -140,6 +142,7 @@ export interface NotaDeCreditoEnListado {
 }
 
 export async function listarNotasDeCredito(db: DB, tenantId: string): Promise<NotaDeCreditoEnListado[]> {
+  // de-prueba-ok: listado de NC: las de prueba se ven con su badge
   const { data, error } = await db
     .from("credit_notes")
     .select(
@@ -192,6 +195,7 @@ export async function saldoDeNotaDeCredito(
     tipo === "venta"
       ? "documento:invoices(id, invoice_number)"
       : "documento:business_expenses(id, description, purchase_number)";
+  // de-prueba-ok: saldo de UNA nota de crédito, en su detalle
   const { data, error } = await db
     .from(tabla)
     .select(`amount_applied, created_at, ${doc}`)
@@ -224,6 +228,7 @@ export async function facturasConSaldoDelCliente(
     .from("invoices")
     .select("id, invoice_number, balance_due")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .eq("client_id", clientId)
     .in("status", ["emitida", "parcialmente_pagada"])
     .gt("balance_due", 0.005)

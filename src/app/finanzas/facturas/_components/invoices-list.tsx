@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DePruebaBadge } from "@/components/finanzas/de-prueba-badge";
 import { FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
@@ -53,6 +54,7 @@ export function InvoicesList({ invoices }: Props) {
                       <span className="italic text-gray-400">Sin número</span>
                     )}
                   </Link>
+                  {inv.de_prueba && <span className="ml-2"><DePruebaBadge /></span>}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
                   {INVOICE_KIND_LABEL[inv.invoice_kind]}
@@ -124,6 +126,7 @@ export function InvoicesList({ invoices }: Props) {
                   <span className="font-mono text-sm font-medium text-integra-navy">
                     {inv.invoice_number || "Sin número"}
                   </span>
+                  {inv.de_prueba && <DePruebaBadge />}
                 </div>
                 <p className="mt-2 text-sm font-medium text-gray-900 truncate">
                   {inv.client?.name ?? "—"}

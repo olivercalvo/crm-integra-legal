@@ -76,7 +76,7 @@ test("🔒 aplicar el saldo a favor va por el RPC y no postea", () => {
   assert.doesNotMatch(api, /postJournalEntry\(/);
   // Oliver, 01/10/2026: también el contador. La ruta y la pantalla se mueven juntas.
   assert.match(leer("src/app/api/finanzas/payments/[id]/apply-credit/route.ts"), /\["admin", "abogada", "contador"\]/);
-  assert.match(leer("src/app/finanzas/facturas/[id]/page.tsx"), /const canApplyCredit = puedeAccionar \|\| userRole === "contador"/);
+  assert.match(leer("src/app/finanzas/facturas/[id]/page.tsx"), /const canApplyCredit = \(puedeAccionar \|\| userRole === "contador"\)/);
 });
 
 test("🔒 vocabulario (01/10/2026): un cobro se «registra», no se «paga», y los montos van en B/.", () => {

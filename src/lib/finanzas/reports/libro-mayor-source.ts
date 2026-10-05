@@ -394,6 +394,7 @@ export async function loadDestinosDeOrigen(
     const ids = idsPorTipo.get(tipo);
     if (!ids || ids.size === 0) continue;
 
+    // de-prueba-ok: enlace al documento de un asiento; uno de prueba no tiene asiento (095)
     const { data, error } = await db
       .from(tabla)
       .select("id")
@@ -449,6 +450,7 @@ export async function loadDestinosDeOrigen(
   //    que exista y se enlaza a su pantalla, igual que el asiento original.
   const idsReversion = Array.from(idsPorTipo.get("reversion") ?? []).filter((id) => !destinos.has(id));
   if (idsReversion.length > 0) {
+    // de-prueba-ok: resuelve el documento de un asiento; uno de prueba no tiene asiento (095)
     const [facs, tramites, ncps] = await Promise.all([
       db.from("invoices").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
       db.from("expenses").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
@@ -509,6 +511,7 @@ export async function loadDestinosDeOrigen(
       }
     }
     if (multiples.length > 0) {
+      // de-prueba-ok: resuelve el documento de un asiento; uno de prueba no tiene asiento (095)
       const { data: recibos, error: errRecibos } = await db
         .from("payments")
         .select("id, payment_number")

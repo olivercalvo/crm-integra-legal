@@ -15,6 +15,7 @@
  * UPDATE manual de subtotal_total / tax_total / grand_total.
  */
 
+import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
 import { cargarReceptor } from "@/lib/finanzas/efactura/data/datos-para-validar";
@@ -119,7 +120,7 @@ export async function createCreditNote(
   if (input.invoice_id) {
     const { data: inv, error: errInv } = await db
       .from("invoices")
-      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date, dgi_cufe")
+      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date, dgi_cufe, de_prueba")
       .eq("tenant_id", tenantId)
       .eq("id", input.invoice_id)
       .maybeSingle();
@@ -128,6 +129,10 @@ export async function createCreditNote(
     }
     if (!inv) {
       throw new MutationError("Factura no encontrada", 404);
+    }
+    // Factura de prueba: su NC nacería de prueba (095) y no tendría qué acreditar en el libro.
+    if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+      throw new MutationError(mensajeDeDocumentoDePrueba(String(inv.invoice_number ?? "")), 409);
     }
     invoice = { ...(inv as Record<string, unknown>), balance_due: Number(inv.balance_due ?? 0) } as FacturaParaNc;
     if (input.client_id && input.client_id !== invoice.client_id) {
@@ -181,6 +186,13 @@ export async function createCreditNote(
       .maybeSingle();
     if (!cli) throw new MutationError("Cliente no encontrado", 404);
     clientId = input.client_id;
+  }
+
+  // Cliente de prueba: la NC nacería de prueba y no entraría al libro (094/095).
+  // Se corta antes del número NC-.
+  const clienteMarcado = await clienteDePrueba(db, tenantId, clientId);
+  if (clienteMarcado !== null) {
+    throw new MutationError(mensajeDeClienteDePrueba(clienteMarcado), 409);
   }
 
   // 3. La regla contable (pura), con el catálogo de tasas: la tasa de una línea

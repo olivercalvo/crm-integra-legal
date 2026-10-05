@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CodigoDgi } from "@/lib/finanzas/efactura/mensajes-dgi";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 /**
  * EL ÚLTIMO ENVÍO AL PAC QUE NO SALIÓ BIEN.
@@ -86,6 +87,7 @@ export async function contarFacturasConErrorDgi(
     .from("invoices")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .eq("fe_estado", "error");
 
   if (error) return 0;

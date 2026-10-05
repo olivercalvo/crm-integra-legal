@@ -32,6 +32,7 @@ import type {
   ReversionDeCobro,
 } from "@/lib/finanzas/types/payment";
 import { SOURCE_TYPE_COBRO } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -369,6 +370,7 @@ export async function listPayments(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // de-prueba-ok: listado de cobros: los de prueba se ven con su badge
   let q = db
     .from("payments")
     .select(
@@ -538,6 +540,7 @@ export async function listInvoicesCobrables(
         "client:clients!invoices_client_id_fkey(name, client_number)"
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada"])
     .gt("balance_due", 0)
     .order("issue_date", { ascending: true });

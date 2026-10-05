@@ -14,6 +14,7 @@
  *   · lo anterior a `PENDIENTES_DGI_DESDE`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -57,6 +58,7 @@ export async function listarPendientesDgi(db: DB, tenantId: string, soloDe?: str
       "id, invoice_number, invoice_kind, issue_date, grand_total, fe_estado, fe_motivo_pendiente, fe_motivo_pendiente_en, created_by, client:clients!invoices_client_id_fkey(name), creador:users!invoices_created_by_fkey(full_name)"
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ESTADOS_DE_FACTURA_EMITIDA)
     .in("fe_estado", PENDIENTE)
     .is("dgi_cufe", null)
@@ -69,6 +71,7 @@ export async function listarPendientesDgi(db: DB, tenantId: string, soloDe?: str
       "id, credit_note_number, issue_date, grand_total, fe_estado, fe_motivo_pendiente, fe_motivo_pendiente_en, created_by, client:clients!credit_notes_client_id_fkey(name), creador:users!credit_notes_created_by_fkey(full_name)"
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .eq("status", "emitida")
     .in("fe_estado", PENDIENTE)
     .is("dgi_cufe", null)
@@ -117,6 +120,7 @@ export async function contarPendientesDgi(db: DB, tenantId: string, soloDe?: str
       .from(tabla)
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantId)
+      .eq(DE_PRUEBA, false)
       .in("fe_estado", PENDIENTE)
       .is("dgi_cufe", null)
       .gte("issue_date", PENDIENTES_DGI_DESDE);

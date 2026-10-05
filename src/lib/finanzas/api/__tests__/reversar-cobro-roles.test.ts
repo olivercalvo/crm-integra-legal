@@ -54,7 +54,8 @@ test("eliminar un cobro sigue siendo admin y abogada: el contador NO", () => {
 
 test("la pantalla tiene canReverse aparte de canMutate, y solo canReverse incluye al contador", () => {
   const src = leer(PAGINA);
-  assert.match(src, /const canMutate = puedeAccionar;/);
+  // Desde la 094 tampoco sobre una factura de prueba; el contador sigue fuera.
+  assert.match(src, /const canMutate = puedeAccionar && !esDePrueba;/);
   assert.match(src, /const canReverse = puedeAccionar \|\| userRole === "contador";/);
   assert.match(src, /canReverse=\{canReverse\}/, "y se la pasa a la sección de pagos");
 });

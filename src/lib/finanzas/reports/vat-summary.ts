@@ -35,6 +35,7 @@ import {
 } from "@/lib/finanzas/reports/vat-calculo";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -223,11 +224,12 @@ export async function mesesConActividad(
       .from("invoices")
       .select("accounting_date")
       .eq("tenant_id", tenantId)
+      .eq(DE_PRUEBA, false)
       .in("status", ["emitida", "parcialmente_pagada", "pagada", "anulada"]),
     db.from("business_expenses").select("accounting_date").eq("tenant_id", tenantId),
     db.from("tax_payments").select("payment_date").eq("tenant_id", tenantId),
     // Un mes que sólo tiene una NC (de una factura de otro mes) también cuenta.
-    db.from("credit_notes").select("accounting_date").eq("tenant_id", tenantId),
+    db.from("credit_notes").select("accounting_date").eq("tenant_id", tenantId).eq(DE_PRUEBA, false),
     // En la NC de compra la fecha de registro se llama `issue_date` (066).
     db.from("supplier_credit_notes").select("accounting_date:issue_date").eq("tenant_id", tenantId),
   ]);
@@ -279,6 +281,7 @@ export async function getVatSummary(
        client:clients!invoices_client_id_fkey(name, client_number)`
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     // Por fecha de REGISTRO (P-1a). La fecha que se muestra sigue siendo la del documento.
     .gte("accounting_date", from)
     .lte("accounting_date", to)
@@ -298,6 +301,7 @@ export async function getVatSummary(
        client:clients!credit_notes_client_id_fkey(name, client_number)`
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .gte("accounting_date", from)
     .lte("accounting_date", to)
     .order("accounting_date", { ascending: true })

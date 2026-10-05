@@ -77,7 +77,7 @@ test("admin y contador, nadie más: la ruta de API y la pantalla dicen lo mismo"
 
 test("la pantalla de la factura no ofrece «Enviar a la DGI» ni el PDF del CRM a una externa", () => {
   const pagina = leer("src/app/finanzas/facturas/[id]/page.tsx");
-  assert.ok(pagina.includes("canEmitToPac={canEmitToPac && !emitidaFuera}"));
+  assert.ok(pagina.includes("canEmitToPac={canEmitToPac && !emitidaFuera"));
   assert.ok(pagina.includes("emitidaFueraDelCrm: emitidaFuera"));
   assert.match(pagina, /\{!emitidaFuera && \(\s*<DownloadInvoicePdfButton/);
   const pdf = leer("src/app/api/finanzas/invoices/[id]/pdf/route.ts");

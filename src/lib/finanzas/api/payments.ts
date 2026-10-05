@@ -18,6 +18,7 @@
  * 'pagada'→'emitida' / 'parc'→'emitida'; la whitelist de T2 ya lo permite).
  */
 
+import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreatePaymentInput } from "@/lib/finanzas/types/payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -123,7 +124,7 @@ export async function createPayment(
   const ids = input.applications.map((a) => a.invoice_id);
   const { data: invs, error: errInv } = await db
     .from("invoices")
-    .select("id, invoice_number, client_id, status, grand_total, amount_paid, balance_due")
+    .select("id, invoice_number, client_id, status, grand_total, amount_paid, balance_due, de_prueba")
     .eq("tenant_id", tenantId)
     .in("id", ids);
 
@@ -155,6 +156,18 @@ export async function createPayment(
     );
   }
   const clientId = Array.from(clientes)[0];
+
+  // Un cliente de prueba no cobra: su cobro nacería de prueba (094) y la base
+  // no lo dejaría entrar al libro (095). Se corta antes del número.
+  const clienteMarcado = await clienteDePrueba(db, tenantId, clientId);
+  if (clienteMarcado !== null) {
+    throw new MutationError(mensajeDeClienteDePrueba(clienteMarcado), 409);
+  }
+  // Ni una factura de prueba: su cobro no tiene contra qué ir en el libro (095).
+  const facturaDePrueba = Array.from(porId.values()).find((i) => (i as { de_prueba?: boolean }).de_prueba === true);
+  if (facturaDePrueba) {
+    throw new MutationError(mensajeDeDocumentoDePrueba(facturaDePrueba.invoice_number), 409);
+  }
 
   for (const app of input.applications) {
     const inv = porId.get(app.invoice_id)!;

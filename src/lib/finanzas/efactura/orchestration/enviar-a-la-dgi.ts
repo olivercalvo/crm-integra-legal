@@ -48,6 +48,10 @@ const ENVIABLE = new Set(["no_emitida", "error"]);
  * cualquier otro CUFE con `no_emitida`/`error` = cargado del portal (caso B).
  * El orquestador tiene su propio corte para el caso B; éste es el primero.
  */
+/** Por qué un documento de prueba no se manda a la DGI. */
+export const MENSAJE_DOCUMENTO_DE_PRUEBA_A_LA_DGI =
+  "Este documento está marcado de prueba: no se envía a la DGI ni cuenta en los reportes.";
+
 export function motivoParaNoEnviar(origen: string | null | undefined, cufe: string | null | undefined): string | null {
   if (origen === "externo") {
     return "Esta factura se emitió fuera del CRM y ya existe ante la DGI: el CRM sólo la registra en sus libros y no la envía.";
@@ -59,16 +63,21 @@ export function motivoParaNoEnviar(origen: string | null | undefined, cufe: stri
 }
 
 async function metaDelDocumento(db: DB, tenantId: string, tabla: "invoices" | "credit_notes", id: string) {
-  const columnas = tabla === "invoices" ? "issue_date, fe_estado, dgi_cufe, dgi_cufe_origen" : "issue_date, fe_estado, dgi_cufe";
+  const columnas = tabla === "invoices"
+    ? "issue_date, fe_estado, dgi_cufe, dgi_cufe_origen, de_prueba"
+    : "issue_date, fe_estado, dgi_cufe, de_prueba";
   const { data, error } = await db.from(tabla).select(columnas).eq("tenant_id", tenantId).eq("id", id).maybeSingle();
   if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
   if (!data) throw new MutationError("Documento no encontrado", 404);
-  const d = data as unknown as { issue_date: string; fe_estado: string | null; dgi_cufe?: string | null; dgi_cufe_origen?: string | null };
+  const d = data as unknown as {
+    issue_date: string; fe_estado: string | null; dgi_cufe?: string | null; dgi_cufe_origen?: string | null; de_prueba?: boolean;
+  };
   return {
     issueDate: String(d.issue_date),
     feEstado: String(d.fe_estado ?? "no_emitida"),
     cufe: d.dgi_cufe ?? null,
     origen: d.dgi_cufe_origen ?? null,
+    dePrueba: d.de_prueba === true,
   };
 }
 
@@ -79,6 +88,10 @@ async function antesDeEnviar(
   id: string
 ): Promise<boolean> {
   const meta = await metaDelDocumento(db, tenantId, tabla, id);
+  // 🔴 Un documento de prueba (094) nunca va a la DGI, en ningún estado. Las de
+  // prueba de producción tienen fe_estado `error` o `no_emitida`: sin esto,
+  // «Reenviar a la DGI» las mandaría.
+  if (meta.dePrueba) throw new MutationError(MENSAJE_DOCUMENTO_DE_PRUEBA_A_LA_DGI, 409);
   // Autorizada, en curso o interna: que conteste el orquestador con su mensaje.
   if (!ENVIABLE.has(meta.feEstado)) return false;
 

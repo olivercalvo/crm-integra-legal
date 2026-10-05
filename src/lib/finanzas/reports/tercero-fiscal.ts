@@ -214,6 +214,7 @@ export async function resolverTercerosFiscales(
   ) {
     const xs = porTipo(tipo);
     if (xs.length === 0) return;
+    // de-prueba-ok: tercero del documento de un asiento; uno de prueba no tiene asiento (095)
     const { data } = await db
       .from(tabla)
       .select(`id, ${columna}${extra ? `, ${extra}` : ""}`)
@@ -338,6 +339,7 @@ export async function resolverTercerosDeDocumentos(
   if (ids.length === 0) return resultado;
 
   if (tipo === "cobrar") {
+    // de-prueba-ok: tercero de documentos que la antigüedad ya filtró
     const { data } = await db
       .from("invoices")
       .select("id, clients!inner(name, ruc, digito_verificador)")

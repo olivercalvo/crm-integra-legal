@@ -13,6 +13,7 @@
  * anticipaba esta RPC.
  */
 
+import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateInvoiceInput,
@@ -563,7 +564,7 @@ export async function emitInvoice(
   // 1. Cargar la factura para conocer su kind (necesario para sequence_type).
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, invoice_kind, status")
+    .select("id, invoice_kind, status, de_prueba")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -579,6 +580,11 @@ export async function emitInvoice(
       `No se puede emitir la factura: está en estado ${inv.status}`,
       400
     );
+  }
+  // Una factura de prueba (094: la de un cliente de prueba nace así) no se
+  // emite: su asiento lo rechaza la base (095). Antes del número.
+  if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+    throw new InvoiceMutationError(mensajeDeDocumentoDePrueba(null), 409);
   }
 
   // 2. Validación de líneas: el trigger T8b mantiene los totales pero NO
@@ -1068,7 +1074,7 @@ export async function cancelInvoice(
   // 1. Status y pagos
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date")
+    .select("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date, de_prueba")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -1081,6 +1087,9 @@ export async function cancelInvoice(
   }
   if (inv.status === "anulada") {
     throw new InvoiceMutationError("La factura ya está anulada.", 400);
+  }
+  if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+    throw new InvoiceMutationError(mensajeDeDocumentoDePrueba(inv.invoice_number), 409);
   }
   if (inv.status === "borrador" || inv.status === "cancelada_pre_emision") {
     throw new InvoiceMutationError(

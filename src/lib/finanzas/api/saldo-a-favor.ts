@@ -12,6 +12,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -37,6 +38,7 @@ export async function listarSaldosAFavor(db: DB, tenantId: string, clientId: str
     .from("payments")
     .select("id, payment_number, payment_date, amount_unapplied, status")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .eq("client_id", clientId)
     .neq("status", "anulado")
     .gt("amount_unapplied", 0.005)

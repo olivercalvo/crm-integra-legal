@@ -103,7 +103,7 @@ test("cancelInvoice rechaza una factura con NC parcial (053) antes de crear la N
   const gate = fn.indexOf("MENSAJE_YA_ACREDITADA(creditedTotal)");
   const nc = fn.indexOf("createCreditNoteFromInvoice(");
   assert.ok(gate > 0 && nc > 0 && gate < nc, "el gate va antes de crear la NC total");
-  assert.match(fn, /select\("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date"\)/);
+  assert.match(fn, /select\("id, status, invoice_number, amount_paid, credited_total, issue_date, accounting_date, de_prueba"\)/);
   // E1: la fecha de registro de la anulación se valida ANTES de crear la NC total.
   const fecha = fn.indexOf("resolverFechaDeAnulacion(");
   assert.ok(fecha > 0 && fecha < nc, "la fecha se valida antes de crear la NC total");

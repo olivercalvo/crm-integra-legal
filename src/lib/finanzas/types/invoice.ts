@@ -202,6 +202,9 @@ export interface InvoiceRow {
    * con «Registrar factura emitida fuera».
    */
   dgi_cufe_origen?: "crm" | "portal_050" | "externo" | null;
+  /** 094: documento de prueba. No cuenta en ningún reporte (`documentos-de-prueba.ts`). */
+  de_prueba?: boolean;
+  de_prueba_motivo?: string | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
   // ----- eFactura PAC (orquestación T0-T4). Migration:

@@ -1,5 +1,20 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Anular sin CUFE ya no dice «anulada ante la DGI»] - 2026-10-06
+
+- **Corregido:** anular una factura sin CUFE (como FAC-HON-000489 y FAC-HON-000503 de producción) decía,
+  si fallaba el libro contable, «El documento quedó ANULADO ante la DGI», aunque no se envía nada a la DGI.
+  Ahora dice que la anulación no se completó en el libro y que la factura sigue emitida, sin cambios.
+- Al anular sin CUFE, una factura interna o una emitida fuera del CRM, el mensaje dice que quedó anulada en
+  el CRM y por qué no se envió nada a la DGI. El aviso verde dice «Anulada en el CRM. No se envió nada a la
+  DGI»; con CUFE, «Anulada ante la DGI y en el libro contable». Las notas de débito se nombran como tales.
+- Reversar una nota de crédito que nunca se autorizó dice que no se envió nada a la DGI, y si falla el libro,
+  que la nota sigue vigente, sin cambios.
+- Probado en staging con FAC-HON-000030, en el estado de la 489: con falla forzada del libro y después la
+  anulación normal. Va en el merge del Bloque 1 (runbook, §4 punto 8).
+- Migración `095` aplicada en staging (verificación 6/6). Ensayo de la ventana repetido en la base local con
+  la `095`: 64 migraciones sin errores, 41 tablas 131/131, concurrencia sin deadlocks.
+
 ## [Los documentos de prueba no cuentan en ningún reporte] - 2026-10-05
 
 - Una factura, nota de crédito o cobro marcado como de prueba ya no aparece en la antigüedad, el estado de

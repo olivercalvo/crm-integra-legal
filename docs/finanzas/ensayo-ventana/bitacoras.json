@@ -1,10 +1,10 @@
 {
-  "total_ms": 478,
+  "total_ms": 569,
   "pasos": [
     {
       "archivo": "086_bitacoras_nucleo.sql",
       "bloque": "bitácoras",
-      "ms": 78,
+      "ms": 86,
       "error": null,
       "avisos": [
         {
@@ -44,7 +44,7 @@
     {
       "archivo": "087_bitacoras_captura.sql",
       "bloque": "bitácoras",
-      "ms": 34,
+      "ms": 31,
       "error": null,
       "avisos": [
         {
@@ -232,7 +232,7 @@
     {
       "archivo": "090_bitacoras_orden_de_candados.sql",
       "bloque": "bitácoras",
-      "ms": 19,
+      "ms": 17,
       "error": null,
       "avisos": [
         {
@@ -244,7 +244,7 @@
     {
       "archivo": "091_bitacoras_error_claro.sql",
       "bloque": "bitácoras",
-      "ms": 45,
+      "ms": 42,
       "error": null,
       "avisos": [
         {

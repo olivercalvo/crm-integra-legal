@@ -2,7 +2,8 @@
 
 **Qué es:** el orden de aplicación en producción de las **64 migraciones** de la `025` a la
 `095` (todas menos la `056`, reservada, y las bitácoras) y del paso de datos que marca lo de prueba,
-ensayado de punta a punta el **05/10/2026** contra una base local igual a producción. Al final, el
+ensayado de punta a punta el **05/10/2026** contra una base local igual a producción, y **otra vez
+el 06/10/2026** con la `095` y el arreglo de los mensajes de anulación (§4, punto 8): mismo resultado. Al final, el
 paso «Accesos» (§6). Las bitácoras (`086`, `087`, `089`,
 `090`, `091`) van en una **ventana aparte**, después.
 
@@ -16,7 +17,13 @@ ahí, se vuelve a ensayar y se copia acá.
 
 ---
 
-## 1. Resultado del ensayo (05/10/2026)
+## 1. Resultado del ensayo (05/10/2026, repetido el 06/10/2026)
+
+El 06/10 dio lo mismo, fila por fila: 64 migraciones sin errores (la `095` con su verificación 6/6), las
+mismas verificaciones «sin datos» y «tarde» de §4, marcas 8 y 5 con el aborto esperado, bitácoras 5/5, 41
+tablas 131/131 y concurrencia 180 rondas sin deadlocks (`--control` 27/27). El arreglo de anulación es
+sólo código: se probó en staging (§4, punto 8).
+
 
 | Fase | Pasos | Errores | Tiempo de base |
 |---|---:|---:|---:|
@@ -174,6 +181,9 @@ de CLI-066 sin decidir, abortó sin marcar nada; sin él, marcó 8 y 5 y dejó l
 `NOTIFY pgrst, 'reload schema';` → merge `develop` → `main` con aprobación de Oliver → verificación
 post-deploy (§6 y §10.3 del runbook viejo) → descongelar → **Accesos (§6 de este documento)**.
 
+El merge lleva, además de lo de cada migración, dos arreglos de código sin migración: usuarios
+desactivados (§4, punto 7) y los mensajes de anulación sin CUFE (§4, punto 8).
+
 ### Ventana aparte: bitácoras (5), otro día
 
 ```
@@ -256,6 +266,18 @@ Ninguna migración falló. Lo que salió son problemas de las VERIFICACIONES y d
    Bloque 1** (merge de D·6), no como un despliegue aparte (Oliver, 05/10: en producción hay dos usuarios
    desactivados y ninguno entra desde abril). Desactivar lo bloquea en Supabase Auth y reactivar lo
    desbloquea. Por eso «Accesos» va DESPUÉS del deploy, y ahí se re-desactivan esos dos (§6, paso 4).
+8. **Anular una factura sin CUFE decía «quedó ANULADO ante la DGI»** si fallaba el libro (encontrado
+   el 05/10, corregido el 06/10 en `d6f2a3d`). En ese camino no se le habla al PAC. Afecta a **FAC-HON-000489** y
+   **FAC-HON-000503** de producción, las dos sin CUFE. **El arreglo va en ESTA ventana, con el código
+   del Bloque 1** (merge de D·6). No lleva migración ni paso de datos. Ahora sin CUFE, interna o emitida
+   fuera: el éxito dice «quedó anulada en el CRM… No se envió nada a la DGI» (aviso «Anulada en el
+   CRM. No se envió nada a la DGI») y la falla dice «no se completó en el libro contable… sigue emitida,
+   sin cambios», sin nombrar a la DGI (la NC total se compensa: no hay estado intermedio). Con CUFE,
+   los mensajes no cambian de sentido. La reversión de una NC sin DGI de por medio sigue el mismo
+   criterio. Probado en staging el 06/10 con FAC-HON-000030, en el estado de la 489: falla forzada del
+   libro y después anulación normal (`scripts/verificar-anulacion-sin-cufe.mts`,
+   `docs/finanzas/prueba-anulacion-sin-cufe.txt`). En producción **no se prueba anulando**: si alguna
+   de las dos se anula después de la ventana, el mensaje que se lee es el nuevo.
 
 ---
 

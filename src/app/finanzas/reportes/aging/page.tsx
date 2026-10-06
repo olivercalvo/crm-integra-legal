@@ -1,3 +1,4 @@
+import { cargarInicioContable, fechaCorta } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AlertTriangle, Info } from "lucide-react";
@@ -35,6 +36,7 @@ export default async function AntiguedadPage({
   const esCobrar = tipo === "cobrar";
 
   const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo);
+  const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
   const reporte = buildAntiguedad(documentos, control);
 
   // ¿Hay una segunda causa además del saldo de apertura? Si no, el desglose no
@@ -87,6 +89,29 @@ export default async function AntiguedadPage({
           </strong>{" "}
           contra esta cuenta, que mueven el mayor sin pasar por un documento
           {sa.manuales!.terceros.length > 0 && <> ({sa.manuales!.terceros.join(", ")})</>}
+        </>
+      )}
+      {/* 096: lo CONTABILIZADO FUERA no es cableado que falta. Es anterior al
+          inicio contable: su efecto está en el saldo inicial de la cuenta. */}
+      {((sa.contabilizadosFuera?.documentos.cantidad ?? 0) > 0 ||
+        (sa.contabilizadosFuera?.cobros.cantidad ?? 0) > 0) && (
+        <>
+          . De todo eso,{" "}
+          <strong>
+            {sa.contabilizadosFuera!.documentos.cantidad} {esCobrar ? "factura(s)" : "gasto(s)"} por{" "}
+            {money(sa.contabilizadosFuera!.documentos.monto)}
+          </strong>
+          {sa.contabilizadosFuera!.cobros.cantidad > 0 && (
+            <>
+              {" "}y{" "}
+              <strong>
+                {sa.contabilizadosFuera!.cobros.cantidad} {esCobrar ? "cobro(s)" : "pago(s)"} por{" "}
+                {money(sa.contabilizadosFuera!.cobros.monto)}
+              </strong>
+            </>
+          )}{" "}
+          son anteriores al inicio contable ({fechaCorta(inicio)}): están contabilizados fuera y su
+          efecto va en el saldo inicial, no en un asiento del CRM
         </>
       )}
     </>
@@ -332,7 +357,7 @@ export default async function AntiguedadPage({
         />
       </div>
 
-      <AntiguedadTable reporte={reporte} destinos={destinos} />
+      <AntiguedadTable reporte={reporte} destinos={destinos} inicio={inicio} />
     </div>
   );
 }

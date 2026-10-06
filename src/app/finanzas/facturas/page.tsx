@@ -1,3 +1,4 @@
+import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { Plus, Receipt } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
@@ -57,7 +58,7 @@ export default async function FacturasListPage({ searchParams }: PageProps) {
   const clientId = searchParams.client?.trim() || null;
   const soloConErrorDgi = searchParams.fe === "error";
 
-  const [invoicesResult, clients, pendientesDgi] = await Promise.all([
+  const [invoicesResult, clients, pendientesDgi, inicio] = await Promise.all([
     listInvoices(db, tenantId, {
       search,
       status,
@@ -72,6 +73,8 @@ export default async function FacturasListPage({ searchParams }: PageProps) {
     //    desaparecería justo cuando alguien está mirando otra cosa — que es
     //    cuando hace falta que se vea.
     contarPendientesDgi(db, tenantId),
+    // 096: para la etiqueta «Contabilizado fuera».
+    cargarInicioContable(db, tenantId),
   ]);
 
   const hasFilters = !!(search || status || kind || clientId || soloConErrorDgi);
@@ -136,7 +139,7 @@ export default async function FacturasListPage({ searchParams }: PageProps) {
         />
       ) : (
         <>
-          <InvoicesList invoices={invoicesResult.rows} />
+          <InvoicesList invoices={invoicesResult.rows} inicio={inicio} />
           <PagePagination
             page={invoicesResult.page}
             totalPages={invoicesResult.totalPages}

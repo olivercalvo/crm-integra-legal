@@ -24,6 +24,7 @@ import {
   BookOpenCheck,
   CalendarClock,
   Percent,
+  SlidersHorizontal,
 } from "lucide-react";
 
 export type Role = "admin" | "abogada" | "asistente" | "contador";
@@ -121,6 +122,9 @@ export const TABS: TabDef[] = [
       { label: "Bitácora Contable", href: "/finanzas/auditoria",                 icon: FileText,       roles: ["admin", "contador"] },
       { label: "Plan de Cuentas",   href: "/finanzas/configuracion/cuentas",      icon: BookOpenCheck,  roles: ["admin", "abogada", "contador"] },
       { label: "Impuestos",         href: "/finanzas/configuracion/impuestos",   icon: Percent,        roles: ["admin", "abogada", "contador"] },
+      // 096: el inicio contable. Leen los tres; editan admin y contador (la
+      // pantalla y la ruta). Entra por el prefijo `/finanzas/configuracion`.
+      { label: "Parámetros contables", href: "/finanzas/configuracion/parametros", icon: SlidersHorizontal, roles: ["admin", "abogada", "contador"] },
     ],
   },
   {

@@ -21,6 +21,7 @@
  * El `tenant_id` llega de la ruta, que lo saca del perfil autenticado (SOP-014).
  */
 
+import { cargarInicioContable, esContabilizadoFuera, explicacionContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
@@ -98,6 +99,13 @@ export async function postearGastoTramite(
   // libro (095). Se corta antes del número FAC-CO-.
   if ((gasto as { de_prueba?: boolean }).de_prueba === true) {
     throw new MutationError(mensajeDeDocumentoDePrueba(null), 409);
+  }
+  // 096: un gasto anterior al inicio contable está contabilizado FUERA. El
+  // botón «Registrar en el libro contable» no aparece, y si alguien llama a la
+  // ruta igual: 409. Postearlo duplicaría lo que ya está en QuickBooks.
+  const inicio = await cargarInicioContable(db, tenantId);
+  if (esContabilizadoFuera(String(gasto.date), inicio)) {
+    throw new MutationError(`Este gasto está contabilizado fuera. ${explicacionContabilizadoFuera(inicio)}`, 409);
   }
 
   // ── CAPA 1: el cache ──────────────────────────────────────────────────────

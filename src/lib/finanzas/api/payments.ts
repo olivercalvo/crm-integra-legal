@@ -18,6 +18,7 @@
  * 'pagada'→'emitida' / 'parc'→'emitida'; la whitelist de T2 ya lo permite).
  */
 
+import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreatePaymentInput } from "@/lib/finanzas/types/payment";
@@ -273,6 +274,15 @@ export async function createPayment(
   }
 
   // ---- 5) EL ASIENTO -----------------------------------------------------
+  // 096: un cobro con fecha anterior al inicio contable está contabilizado
+  // fuera: queda registrado y aplicado, sin asiento. Lo que decide es la fecha
+  // DEL COBRO, no la de la factura: uno posterior aplicado a una factura de
+  // antes del inicio SÍ postea (acredita el 100004 del cliente, que viene del
+  // saldo inicial).
+  if (await documentoContabilizadoFuera(db, tenantId, input.payment_date)) {
+    return { id: paymentId, payment_number: paymentNumber };
+  }
+
   const cobro = await cargarCobroParaAsiento(ledgerDb, tenantId, paymentId);
   if (!cobro) {
     await deshacerCobro(

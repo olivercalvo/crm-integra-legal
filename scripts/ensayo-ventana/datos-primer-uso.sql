@@ -57,6 +57,8 @@ BEGIN
     SELECT i.* FROM invoices i
      WHERE i.tenant_id = T AND i.status IN ('emitida', 'parcialmente_pagada') AND i.balance_due >= 5
        AND NOT EXISTS (SELECT 1 FROM journal_entries j WHERE j.source_type = 'factura' AND j.source_id = i.id)
+       -- 096: lo anterior al inicio contable (01/07/2026) está contabilizado fuera.
+       AND i.issue_date >= DATE '2026-07-01'
      ORDER BY i.created_at LIMIT 3
   LOOP
     v_lineas := jsonb_build_array(

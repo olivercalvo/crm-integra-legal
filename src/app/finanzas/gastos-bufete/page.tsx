@@ -1,3 +1,4 @@
+import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus, ShoppingBag } from "lucide-react";
@@ -64,11 +65,12 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
       : hasItbmsRaw === "false" ? false
       : null;
 
-  const [result, accounts] = await Promise.all([
+  const [result, accounts, inicio] = await Promise.all([
     listBusinessExpenses(db, tenantId, {
       status, accountCode, fromDate, toDate, hasItbms, search, page,
     }),
     listExpenseAccountOptions(db, tenantId),
+    cargarInicioContable(db, tenantId),
   ]);
 
   const hasFilters = !!(search || status || accountCode || fromDate || toDate || hasItbms !== null);
@@ -132,7 +134,7 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
         />
       ) : (
         <>
-          <BusinessExpenseList expenses={result.rows} />
+          <BusinessExpenseList expenses={result.rows} inicio={inicio} />
           <PagePagination page={result.page} totalPages={result.totalPages} />
         </>
       )}

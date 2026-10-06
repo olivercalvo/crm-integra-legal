@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote, ArrowLeft, Plus } from "lucide-react";
@@ -53,6 +55,8 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   }
 
   const expense = await getBusinessExpenseById(ctx.db, ctx.tenantId, params.id);
+  // 096: para la etiqueta «Contabilizado fuera» de la compra y de sus pagos.
+  const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
   if (!expense) notFound();
   const pagos = await getSupplierPaymentsForExpense(ctx.db, ctx.tenantId, params.id);
   // NC del proveedor (3.5, 066): la lista y las líneas con lo ya acreditado.
@@ -125,6 +129,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               <Calendar size={14} />
               <span>{formatDate(expense.expense_date)}</span>
               <BusinessExpenseStatusBadge status={expense.status} />
+              {esContabilizadoFuera(expense.expense_date, inicio) && <ContabilizadoFueraBadge inicio={inicio} />}
             </div>
           </div>
         </div>
@@ -299,6 +304,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             payments={pagos}
             bancos={bancos}
             canMutate={canMutate}
+            inicio={inicio}
           />
 
           {compraParaNc && (

@@ -221,7 +221,7 @@ function linea(over: Record<string, string> = {}) {
 }
 
 // E3 (01/10/2026): el proveedor es obligatorio (200001 nunca sin tercero).
-const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-03-15", supplier_id: "prov-1" };
+const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-08-15", supplier_id: "prov-1" };
 
 // ===========================================================================
 // 1. LAS LÍNEAS SON OBLIGATORIAS
@@ -331,10 +331,10 @@ test("las líneas se guardan con su orden y su cuenta", { skip: skipNoMocks }, a
 test("el proveedor y el vencimiento se guardan en el ENCABEZADO", { skip: skipNoMocks }, async () => {
   reset();
   await POST(
-    req({ ...BASE, supplier_id: "prov-1", due_date: "2026-04-14", lines: [linea()] })
+    req({ ...BASE, supplier_id: "prov-1", due_date: "2026-09-14", lines: [linea()] })
   );
   assert.equal(state.capturado.expenseInsert?.supplier_id, "prov-1");
-  assert.equal(state.capturado.expenseInsert?.due_date, "2026-04-14");
+  assert.equal(state.capturado.expenseInsert?.due_date, "2026-09-14");
 });
 
 test("sin vencimiento se guarda como NULL, no vacío", { skip: skipNoMocks }, async () => {
@@ -519,12 +519,23 @@ test("🔴 el gasto se postea al crearse: DEBE la cuenta de cada línea / HABER 
 });
 
 test("🔴 si el posteo falla (período cerrado), el gasto se DESHACE y el error llega con su motivo", { skip: skipNoMocks }, async () => {
-  reset({ rpcError: { message: "El período 2026-03 está cerrado: no se admiten asientos con esa fecha." } });
+  reset({ rpcError: { message: "El período 2026-08 está cerrado: no se admiten asientos con esa fecha." } });
   const res = await POST(req({ ...BASE, lines: [linea()] }));
   assert.equal(res.status, 422);
   const body = await res.json();
   assert.match(body.error, /El gasto no se registró: /);
-  assert.match(body.error, /período 2026-03 está cerrado/);
+  assert.match(body.error, /período 2026-08 está cerrado/);
   assert.equal(state.capturado.borroElGasto, true, "DELETE compensatorio del gasto (las líneas caen por CASCADE)");
   assert.equal(state.capturado.cacheEscrito, null, "no se escribió posted_entry_id");
+});
+
+test("096: un gasto anterior al inicio contable se registra SIN asiento (contabilizado fuera)", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, date: "2026-03-15", lines: [linea()] }));
+  assert.equal(res.status, 201);
+  const body = await res.json();
+  assert.equal(body.asiento, null);
+  assert.equal(body.contabilizado_fuera, true);
+  assert.equal(state.capturado.rpcArgs ?? null, null, "no se llamó al RPC de posteo");
+  assert.equal(state.capturado.borroElGasto, false, "el gasto queda registrado");
 });

@@ -29,7 +29,7 @@ function fakeDb(datos: Record<string, unknown[]>) {
   const tabla = (nombre: string) => {
     const q: Record<string, unknown> = {};
     const self = () => q;
-    for (const op of ["select", "eq", "neq", "in", "not", "order", "is"]) q[op] = self;
+    for (const op of ["select", "eq", "neq", "in", "not", "order", "is", "or", "lt"]) q[op] = self;
     q.maybeSingle = async () => ({ data: (datos[nombre] ?? [])[0] ?? null, error: null });
     q.then = (r: (v: unknown) => unknown) => r({ data: datos[nombre] ?? [], error: null });
     return q;
@@ -90,6 +90,11 @@ test("🔒 Antigüedad por pagar: la consulta de trámite exige asiento y excluy
   // porque el fake no filtra.
   const src = readFileSync(`${process.cwd()}/src/lib/finanzas/reports/antiguedad-source.ts`, "utf8");
   const fn = src.slice(src.indexOf("async function gastosTramitePendientes"), src.indexOf("LOS DOCUMENTOS QUE TODAVÍA NO LLEGAN AL MAYOR"));
-  assert.match(fn, /\.not\("posted_entry_id", "is", null\)/, "solo los que están en el libro (en 200001)");
+  // 096: en el libro (en 200001) O contabilizados fuera (su saldo está en el saldo inicial).
+  assert.match(
+    fn,
+    /\.or\(`posted_entry_id\.not\.is\.null,date\.lt\.\$\{inicio\}`\)/,
+    "solo los que están en el libro o los contabilizados fuera"
+  );
   assert.match(fn, /\.in\("status", \["pendiente_pago", "parcialmente_pagado"\]\)/, "ni pagados ni anulados");
 });

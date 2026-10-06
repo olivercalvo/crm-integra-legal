@@ -8,6 +8,7 @@
  * action='create|update|delete').
  */
 
+import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateBusinessExpenseInput,
@@ -259,14 +260,21 @@ export async function createBusinessExpense(
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);
 
+  // 096: una compra con fecha anterior al inicio contable está contabilizada
+  // fuera: se registra sin asiento, y por eso su fecha de registro no pasa por
+  // el período (no hay asiento que la necesite).
+  const contabilizadaFuera = await documentoContabilizadoFuera(db, tenantId, input.expense_date);
+
   // La fecha de REGISTRO (la del asiento): período abierto. Se valida antes de
   // insertar para que un mes cerrado no llegue a un DELETE compensatorio.
-  const fechaDeRegistro = await resolverFechaDeRegistro(
-    db,
-    tenantId,
-    input.accounting_date ?? input.expense_date,
-    { que: "la compra", campo: "accounting_date" }
-  );
+  const fechaDeRegistro = contabilizadaFuera
+    ? input.accounting_date ?? input.expense_date
+    : await resolverFechaDeRegistro(
+        db,
+        tenantId,
+        input.accounting_date ?? input.expense_date,
+        { que: "la compra", campo: "accounting_date" }
+      );
 
   // 🔴 LA TASA DE CADA LÍNEA SALE DEL CATÁLOGO, NO DEL BODY (migración `045`).
   //    El body trae `tax_code_id` (qué eligió la persona) y `tax_rate` (lo que
@@ -394,35 +402,38 @@ export async function createBusinessExpense(
   }
 
   // ---- EL ASIENTO -------------------------------------------------------
-  const compra = await cargarCompraParaAsiento(ledgerDb, tenantId, compraId);
-  if (!compra) {
-    await deshacerRegistro(
-      new MutationError("La compra se registró pero no se pudo releer para contabilizarla.", 500)
-    );
-  }
+  // (096: no lo hay si la compra está contabilizada fuera.)
+  if (!contabilizadaFuera) {
+    const compra = await cargarCompraParaAsiento(ledgerDb, tenantId, compraId);
+    if (!compra) {
+      await deshacerRegistro(
+        new MutationError("La compra se registró pero no se pudo releer para contabilizarla.", 500)
+      );
+    }
 
-  const armado = construirAsientoDeCompra(compra as NonNullable<typeof compra>);
-  if (!armado.ok) {
-    // 422: la compra está bien formada como documento; lo que está mal es la
-    // clasificación contable de una línea. El mensaje ya nombra cuál.
-    await deshacerRegistro(new MutationError(armado.mensaje, 422));
-  }
+    const armado = construirAsientoDeCompra(compra as NonNullable<typeof compra>);
+    if (!armado.ok) {
+      // 422: la compra está bien formada como documento; lo que está mal es la
+      // clasificación contable de una línea. El mensaje ya nombra cuál.
+      await deshacerRegistro(new MutationError(armado.mensaje, 422));
+    }
 
-  try {
-    await postJournalEntry(
-      ledgerDb,
-      tenantId,
-      (armado as { ok: true; asiento: AsientoInput }).asiento,
-      userId
-    );
-  } catch (err) {
-    // El asiento ya existía: solo puede pasar si este mismo `compraId` ya se
-    // posteó, y como el id lo acaba de generar el INSERT, es prácticamente
-    // imposible. Se trata igual que cualquier otro fallo —deshacer— en vez de
-    // dejarlo pasar como en `emitInvoice`: allá el reintento era de un documento
-    // que YA existía; acá la compra es nueva, así que un choque significa que
-    // algo está mal, no que se reintentó.
-    await deshacerRegistro(err);
+    try {
+      await postJournalEntry(
+        ledgerDb,
+        tenantId,
+        (armado as { ok: true; asiento: AsientoInput }).asiento,
+        userId
+      );
+    } catch (err) {
+      // El asiento ya existía: solo puede pasar si este mismo `compraId` ya se
+      // posteó, y como el id lo acaba de generar el INSERT, es prácticamente
+      // imposible. Se trata igual que cualquier otro fallo —deshacer— en vez de
+      // dejarlo pasar como en `emitInvoice`: allá el reintento era de un documento
+      // que YA existía; acá la compra es nueva, así que un choque significa que
+      // algo está mal, no que se reintentó.
+      await deshacerRegistro(err);
+    }
   }
 
   await db.from("audit_log").insert({

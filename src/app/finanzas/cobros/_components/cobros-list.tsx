@@ -5,11 +5,15 @@ import { fmtImporte } from "@/lib/utils/importe";
 import { PAYMENT_METHOD_LABEL, type PaymentListItem } from "@/lib/finanzas/types/payment";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
 import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 
 interface Props {
   payments: PaymentListItem[];
   /** Admin, abogada y contador. El botón solo aparece si el cobro tiene asiento. */
   canReverse: boolean;
+  /** Inicio contable (096): un cobro anterior lleva «Contabilizado fuera». */
+  inicio: string;
 }
 
 /**
@@ -24,7 +28,7 @@ interface Props {
  * No hay detalle de cobro (`/finanzas/cobros/{id}`) en este bloque: el enlace
  * de cada fila lleva a la factura, que es donde vive el cobro.
  */
-export function CobrosList({ payments, canReverse }: Props) {
+export function CobrosList({ payments, canReverse, inicio }: Props) {
   return (
     <>
       {/* Desktop */}
@@ -52,7 +56,12 @@ export function CobrosList({ payments, canReverse }: Props) {
                   <td className={`px-4 py-3 font-mono text-xs whitespace-nowrap ${reversado ? tachado : "font-semibold text-integra-navy"}`}>
                     {p.payment_number ?? ""}
                   </td>
-                  <td className={`px-4 py-3 whitespace-nowrap ${tachado}`}>{formatDate(p.payment_date)}</td>
+                  <td className={`px-4 py-3 whitespace-nowrap ${tachado}`}>
+                    {formatDate(p.payment_date)}
+                    {esContabilizadoFuera(p.payment_date, inicio) && (
+                      <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className={`font-medium ${reversado ? "" : "text-gray-900"}`}>{p.client_name}</div>
                     {p.client_number && (
@@ -102,6 +111,9 @@ export function CobrosList({ payments, canReverse }: Props) {
                     {p.payment_number ?? ""}
                   </div>
                   <div className={`text-xs ${reversado ? "line-through" : "text-gray-500"}`}>{formatDate(p.payment_date)}</div>
+                  {esContabilizadoFuera(p.payment_date, inicio) && (
+                    <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                  )}
                 </div>
                 <div className={`font-mono font-semibold ${reversado ? "line-through" : "text-emerald-700"}`}>
                   ${fmtImporte(Number(p.amount))}

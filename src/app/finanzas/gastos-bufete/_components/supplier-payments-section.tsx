@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { Banknote, CircleDollarSign, FileText, History, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { fmtImporte } from "@/lib/utils/importe";
@@ -21,6 +23,8 @@ interface Props {
   bancos: { code: string; name: string }[];
   /** Admin, abogada y contador (los que mutan compras). */
   canMutate: boolean;
+  /** Inicio contable (096): un pago anterior lleva «Contabilizado fuera». */
+  inicio?: string;
 }
 
 /**
@@ -40,7 +44,7 @@ interface Props {
  *     documentar algo que no pasó.
  *   - Un pago reversado sigue en la lista, tachado, con "Reversado · asiento N".
  */
-export function SupplierPaymentsSection({ expenseId, destino = "compra", expenseLabel, total, amountPaid, creditedTotal = 0, payments, bancos, canMutate }: Props) {
+export function SupplierPaymentsSection({ expenseId, destino = "compra", expenseLabel, total, amountPaid, creditedTotal = 0, payments, bancos, canMutate, inicio }: Props) {
   const saldo = Math.round((total - amountPaid - creditedTotal) * 100) / 100;
   const vigentes = payments.filter((p) => p.status === "registrado");
   const reversados = payments.filter((p) => p.status === "anulado").length;
@@ -136,7 +140,12 @@ export function SupplierPaymentsSection({ expenseId, destino = "compra", expense
                         p.payment_number ?? ""
                       )}
                     </td>
-                    <td className={`py-2 pr-3 whitespace-nowrap ${reversado ? "line-through" : "text-gray-900"}`}>{formatDate(p.payment_date)}</td>
+                    <td className={`py-2 pr-3 whitespace-nowrap ${reversado ? "line-through" : "text-gray-900"}`}>
+                      {formatDate(p.payment_date)}
+                      {inicio && !heredado && esContabilizadoFuera(p.payment_date, inicio) && (
+                        <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                      )}
+                    </td>
                     <td className={`py-2 pr-3 text-right font-mono font-medium whitespace-nowrap ${reversado ? "line-through" : "text-emerald-700"}`}>
                       B/. {fmtImporte(p.amount)}
                     </td>

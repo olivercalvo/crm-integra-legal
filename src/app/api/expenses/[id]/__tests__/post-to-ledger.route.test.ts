@@ -90,7 +90,7 @@ function reset(over: Partial<typeof state> = {}) {
   state.profile = { role: "abogada", tenant_id: "t-real" };
   state.gasto = {
     id: "e1",
-    date: "2026-03-15",
+    date: "2026-08-15",
     concept: "Trámites Registro Público",
     posted_entry_id: null,
     cases: { case_code: "CIV-014" },
@@ -281,7 +281,7 @@ test("un gasto clasificado se postea y devuelve 201", { skip: skipNoMocks }, asy
   const args = state.capturado.rpcArgs!;
   assert.equal(args.p_source_type, "gasto_tramite");
   assert.equal(args.p_source_id, "e1");
-  assert.equal(args.p_transaction_date, "2026-03-15", "la fecha del GASTO, no la de hoy");
+  assert.equal(args.p_transaction_date, "2026-08-15", "la fecha del GASTO, no la de hoy");
 
   const lineas = args.p_lines as { account_code: string; debit: number; credit: number }[];
   assert.equal(lineas.length, 3, "2 débitos + 1 crédito");
@@ -326,7 +326,7 @@ test(
     reset({
       gasto: {
         id: "e1",
-        date: "2026-03-15",
+        date: "2026-08-15",
         concept: "X",
         posted_entry_id: "entry-viejo",
         cases: { case_code: "CIV-014" },
@@ -400,11 +400,11 @@ test(
   { skip: skipNoMocks },
   async () => {
     reset({
-      rpcError: { message: "El período contable 2026-03 está cerrado." },
+      rpcError: { message: "El período contable 2026-08 está cerrado." },
     });
     const res = await POST(req, ctx);
     assert.equal(res.status, 422);
-    assert.match((await res.json()).error, /período contable 2026-03 está cerrado/);
+    assert.match((await res.json()).error, /período contable 2026-08 está cerrado/);
   }
 );
 
@@ -463,4 +463,13 @@ test("un gasto de otro bufete o inexistente → 404", { skip: skipNoMocks }, asy
   const res = await POST(req, ctx);
   assert.equal(res.status, 404);
   assert.equal(state.capturado.rpcLlamado, false);
+});
+
+test("096: un gasto anterior al inicio contable está contabilizado fuera → 409, sin llamar al RPC", { skip: skipNoMocks }, async () => {
+  reset();
+  state.gasto = { ...(state.gasto as Record<string, unknown>), date: "2026-03-15" } as typeof state.gasto;
+  const res = await POST(req, ctx);
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /contabilizado fuera/);
+  assert.equal(state.capturado.rpcLlamado, false, "postearlo duplicaría lo que ya está en QuickBooks");
 });

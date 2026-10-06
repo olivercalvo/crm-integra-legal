@@ -84,6 +84,8 @@ export const BLOQUE_C = [
   "081_correcciones_076_y_079", "082_otros_servicios_y_nc_sin_bancos", "083_fe_estado_interna",
   "084_audit_log_solo_agregar", "085_motivo_pendiente_dgi", "092_factura_emitida_fuera",
   "094_documentos_de_prueba", "095_documentos_de_prueba_fuera_del_libro",
+  // 06/10: el inicio contable (lo anterior al 01/07/2026, contabilizado fuera).
+  "096_inicio_contable",
 ].map((n) => p(`${n}.sql`));
 
 /** Ventana APARTE, después de la del Bloque 1. La 088 (legado) no va todavía. */
@@ -134,5 +136,6 @@ export const VERIFICACIONES = {
   [p("083_fe_estado_interna.sql")]: ["sql/tests/verificacion-083-fe-estado-interna.sql"],
   [p("094_documentos_de_prueba.sql")]: ["sql/tests/verificacion-094-documentos-de-prueba.sql"],
   [p("095_documentos_de_prueba_fuera_del_libro.sql")]: ["sql/tests/verificacion-095-documentos-de-prueba-fuera-del-libro.sql"],
+  [p("096_inicio_contable.sql")]: ["sql/tests/verificacion-096-inicio-contable.sql"],
   [p("084_audit_log_solo_agregar.sql")]: ["sql/tests/verificacion-084-audit-log-solo-agregar.sql"],
 };

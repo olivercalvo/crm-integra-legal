@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, FileText } from "lucide-react";
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
 
 import {
   TRAMOS,
@@ -40,9 +41,11 @@ function Monto({ value, bold }: { value: number; bold?: boolean }) {
 function Tercero({
   fila,
   destinos,
+  inicio,
 }: {
   fila: FilaTercero;
   destinos: Map<string, string>;
+  inicio: string;
 }) {
   const [abierto, setAbierto] = useState(false);
 
@@ -91,6 +94,7 @@ function Tercero({
                   ) : (
                     <span className="font-medium text-gray-700">{doc.numero}</span>
                   )}
+                  {doc.contabilizadoFuera && <ContabilizadoFueraBadge inicio={inicio} />}
                   <span className="font-mono text-gray-500">{doc.fechaReferencia}</span>
                   <span className="text-gray-500">
                     {doc.diasVencido > 0
@@ -121,10 +125,13 @@ function Tercero({
 export function AntiguedadTable({
   reporte,
   destinos,
+  inicio,
 }: {
   reporte: Antiguedad;
   /** id del documento → ruta. Lo que no está acá no se enlaza. */
   destinos: Map<string, string>;
+  /** Inicio contable (096), para el texto de «Contabilizado fuera». */
+  inicio: string;
 }) {
   if (reporte.filas.length === 0) {
     return (
@@ -153,7 +160,7 @@ export function AntiguedadTable({
         </thead>
         <tbody>
           {reporte.filas.map((f) => (
-            <Tercero key={f.terceroId ?? f.tercero} fila={f} destinos={destinos} />
+            <Tercero key={f.terceroId ?? f.tercero} fila={f} destinos={destinos} inicio={inicio} />
           ))}
         </tbody>
         <tfoot>

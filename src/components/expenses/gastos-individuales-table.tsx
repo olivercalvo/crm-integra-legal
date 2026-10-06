@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, History, ListFilter, Loader2, X } from "lucide-react";
@@ -76,6 +78,8 @@ interface Props {
   totalLineas: number;
   /** true si el filtro "sin clasificar" está activo. */
   filtroActivo: boolean;
+  /** Inicio contable (096): un gasto anterior lleva «Contabilizado fuera». */
+  inicio: string;
 }
 
 function fmtMoney(n: number): string {
@@ -91,6 +95,7 @@ export function GastosIndividualesTable({
   sinClasificar,
   totalLineas,
   filtroActivo,
+  inicio,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -413,6 +418,9 @@ export function GastosIndividualesTable({
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap text-gray-600">
                       {r.date}
+                      {esContabilizadoFuera(r.date, inicio) && (
+                        <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                      )}
                     </td>
                     <td className="px-3 py-2.5">
                       {/* nav-guard-ok: /legal/gastos es admin y abogada, los dos

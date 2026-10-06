@@ -1,3 +1,4 @@
+import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { Plus, HandCoins } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
@@ -51,9 +52,10 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
       ? searchParams.estado
       : null;
 
-  const [result, clients] = await Promise.all([
+  const [result, clients, inicio] = await Promise.all([
     listPayments(db, tenantId, { search, client_id: clientId, from, to, estado, page }),
     listClientsActive(db, tenantId),
+    cargarInicioContable(db, tenantId),
   ]);
 
   const hasFilters = !!(search || clientId || from || to || estado);
@@ -110,7 +112,7 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
         />
       ) : (
         <>
-          <CobrosList payments={result.rows} canReverse={canReverse} />
+          <CobrosList payments={result.rows} canReverse={canReverse} inicio={inicio} />
           <PagePagination page={result.page} totalPages={result.totalPages} />
         </>
       )}

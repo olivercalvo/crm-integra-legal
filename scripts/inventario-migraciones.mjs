@@ -369,6 +369,11 @@ const MARCADORES = {
     tipo: "funcion", nombre: "finanzas_libro_sin_documentos_de_prueba",
     nota: "05/10. Va despues de la 094. La factura REAL de un cliente de prueba (FAC-HON-000463) sigue entrando al libro.",
   },
+  "096_inicio_contable.sql": {
+    que: "Inicio contable (finanzas_parametros.fecha_inicio_contable, 01/07/2026): el libro rechaza el asiento de un documento con fecha anterior (contabilizado fuera); el inicio no se mueve si cruza documentos",
+    tipo: "columna", tabla: "finanzas_parametros", columna: "fecha_inicio_contable",
+    nota: "06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

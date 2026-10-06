@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { CircleDollarSign, Banknote, FileText, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
@@ -37,6 +39,8 @@ interface Props {
    * `canMutate`: el contador aplica un saldo a favor pero no registra cobros.
    */
   canApplyCredit?: boolean;
+  /** Inicio contable (096): un cobro anterior lleva «Contabilizado fuera». */
+  inicio?: string;
 }
 
 /**
@@ -62,6 +66,7 @@ export function PaymentsSection({
   canReverse,
   saldosAFavor = [],
   canApplyCredit = false,
+  inicio,
 }: Props) {
   const vigentes = payments.filter((p) => !p.reversion);
   const reversados = payments.length - vigentes.length;
@@ -208,6 +213,9 @@ export function PaymentsSection({
                     </td>
                     <td className={`py-2 pr-3 ${reversado ? "line-through" : "text-gray-900"}`}>
                       {formatDate(p.payment_date)}
+                      {inicio && esContabilizadoFuera(p.payment_date, inicio) && (
+                        <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                      )}
                     </td>
                     <td
                       className={`py-2 pr-3 text-right font-mono font-medium ${

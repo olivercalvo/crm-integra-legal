@@ -73,6 +73,21 @@ await client.connect();
 
 client.on("notice", (n) => console.log(`   [NOTICE] ${n.message}`));
 
+// LLAVE DE SESIÓN (06/10/2026): RUN_SQL_SET="finanzas.inicio_contable_existentes=aceptar"
+// la fija antes del archivo, para toda la sesión. Así una llave que sólo vale en
+// staging se ve en el comando y no vive escrita en la migración.
+const SET = process.env.RUN_SQL_SET?.trim();
+if (SET) {
+  const m = SET.match(/^([a-z_]+\.[a-z_]+)=([A-Za-z0-9_-]+)$/);
+  if (!m) {
+    console.error("❌ RUN_SQL_SET tiene que ser «esquema.llave=valor».");
+    process.exit(1);
+  }
+  await client.query("SELECT set_config($1, $2, false)", [m[1], m[2]]);
+  console.log(`   [SET] ${m[1]} = ${m[2]} (sólo esta sesión)
+`);
+}
+
 try {
   const res = await client.query(sql);
   const results = Array.isArray(res) ? res : [res];

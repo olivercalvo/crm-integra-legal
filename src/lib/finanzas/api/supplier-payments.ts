@@ -26,6 +26,7 @@
  * contra information_schema el 21/09/2026.
  */
 
+import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { destinoDePago, type CreateSupplierPaymentInput } from "@/lib/finanzas/types/supplier-payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -98,7 +99,7 @@ export async function createSupplierPayment(
   } else {
     const { data: gasto, error: errGasto } = await db
       .from("expenses")
-      .select("id, concept, status, amount, amount_paid, posted_entry_id")
+      .select("id, concept, status, amount, amount_paid, posted_entry_id, date")
       .eq("tenant_id", tenantId)
       .eq("id", destino.id)
       .maybeSingle();
@@ -114,7 +115,12 @@ export async function createSupplierPayment(
     // 🔴 Sin el asiento del gasto no hay cuenta por pagar en el libro: pagar
     //    ahora debitaría 200001 por una deuda que el mayor no tiene. Los gastos
     //    anteriores al posteo automático primero se registran en el libro.
-    if (!gasto.posted_entry_id) {
+    //    096: salvo que esté contabilizado FUERA (anterior al inicio contable):
+    //    su cuenta por pagar está en el saldo inicial y el pago la cancela.
+    if (
+      !gasto.posted_entry_id &&
+      !(await documentoContabilizadoFuera(db, tenantId, (gasto as { date?: string | null }).date ?? null))
+    ) {
       throw new MutationError(
         "Este gasto todavía no está registrado en el libro contable: regístrelo primero " +
           '(botón "Registrar en el libro contable") y después registre su pago.',
@@ -193,7 +199,13 @@ export async function createSupplierPayment(
     throw causa;
   }
 
-  // 3. El asiento
+  // 3. El asiento. 096: un pago con fecha anterior al inicio contable está
+  //    contabilizado fuera: queda registrado, sin asiento. Uno posterior a una
+  //    compra anterior SÍ postea (debita el 200001 del proveedor, que viene del
+  //    saldo inicial).
+  if (await documentoContabilizadoFuera(db, tenantId, input.payment_date)) {
+    return { id: pagoId, payment_number: paymentNumber };
+  }
   const datos = await cargarPagoProveedorParaAsiento(ledgerDb, tenantId, pagoId);
   if (!datos) {
     await deshacerPago(

@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { redirect, notFound } from "next/navigation";
 import {
   AlertTriangle,
@@ -144,6 +146,11 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
   const anulado = gasto.status === "anulado";
+  // 096: anterior al inicio contable → contabilizado fuera. No se registra en el
+  // libro (la ruta responde 409) y se paga igual: la cuenta por pagar está en
+  // el saldo inicial.
+  const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
+  const contabilizadoFuera = !posteado && esContabilizadoFuera(gasto.date, inicio);
 
   // Reversar: con asiento, no anulado, sin pagos registrados (primero los
   // pagos, 050) y con rol. El botón se oculta cuando no se puede apretar; el
@@ -161,6 +168,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
   const puedePostear =
     POSTING_ROLES.includes(ctx.userRole) &&
     !posteado &&
+    !contabilizadoFuera &&
     !sinClasificar &&
     gasto.lineas.length > 0;
 
@@ -197,6 +205,8 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
                 <BookOpenCheck size={14} />
                 Asiento {gasto.entry_number}
               </span>
+            ) : contabilizadoFuera ? (
+              <ContabilizadoFueraBadge inicio={inicio} />
             ) : (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
                 Sin registrar en el libro
@@ -302,10 +312,12 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
         )}
       </div>
 
+      {contabilizadoFuera && <ContabilizadoFueraBanda inicio={inicio} />}
+
       <SupplierPaymentSuccessToast />
 
       {/* ── Pagos (049): la segunda transacción ─────────────────────── */}
-      {posteado && !anulado && (
+      {(posteado || contabilizadoFuera) && !anulado && (
         <SupplierPaymentsSection
           expenseId={gasto.id}
           destino="tramite"
@@ -315,6 +327,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           payments={pagos}
           bancos={bancos}
           canMutate={PAYING_ROLES.includes(ctx.userRole)}
+          inicio={inicio}
         />
       )}
 
@@ -365,7 +378,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           se rompió nada. Es TRABAJO PENDIENTE que hasta hoy era invisible: el
           gasto se cargó cuando el sistema no pedía la cuenta. El ícono es un
           reloj y no un triángulo por el mismo motivo. */}
-      {sinClasificar && (
+      {sinClasificar && !contabilizadoFuera && (
         <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <History size={18} className="mt-0.5 shrink-0 text-amber-600" />
           <div className="text-sm text-amber-800">

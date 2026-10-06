@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { DePruebaBadge, DePruebaBanda } from "@/components/finanzas/de-prueba-badge";
 import { notFound } from "next/navigation";
@@ -83,6 +85,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // 094: una factura de prueba no se emite, no se cobra, no se acredita, no se
   // anula ni va a la DGI (el servidor responde 409; acá no se ofrece).
   const esDePrueba = invoice.de_prueba === true;
+  // 096: fecha del documento anterior al inicio contable → contabilizada fuera:
+  // no tiene asiento ni lo va a tener (tampoco al emitirla o anularla). La de
+  // prueba lleva su propia banda.
+  const inicio = await cargarInicioContable(db, tenantId);
+  const contabilizadaFuera =
+    !esDePrueba && invoice.status !== "cancelada_pre_emision" && esContabilizadoFuera(invoice.issue_date, inicio);
   const editable = puedeAccionar && isEditable(invoice.status);
   const emittable = puedeAccionar && isEmittable(invoice.status) && !esDePrueba;
   const deletable = puedeAccionar && isDeletable(invoice.status);
@@ -281,6 +289,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <InvoiceStatusBadge status={invoice.status} />
               {acreditadaTotal && <AcreditadaTotalBadge />}
               {invoice.de_prueba && <DePruebaBadge />}
+              {contabilizadaFuera && <ContabilizadoFueraBadge inicio={inicio} />}
             </div>
             <p className="mt-1 text-sm text-gray-500">
               Creada el {formatDateTime(invoice.created_at)}
@@ -396,6 +405,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       )}
 
       {esDePrueba && <DePruebaBanda motivo={invoice.de_prueba_motivo} />}
+      {contabilizadaFuera && <ContabilizadoFueraBanda inicio={inicio} />}
 
       {emitidaFuera && (
         <div role="note" className="rounded-md border-l-4 border-integra-gold bg-integra-gold/10 p-3 text-sm text-integra-navy">
@@ -641,6 +651,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               canReverse={canReverse}
               saldosAFavor={saldosAFavor}
               canApplyCredit={canApplyCredit && !anulacionAMedias}
+              inicio={inicio}
             />
           )}
 

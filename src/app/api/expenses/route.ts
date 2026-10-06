@@ -1,3 +1,4 @@
+import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -209,9 +210,15 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
     // La fecha de REGISTRO (Bloque 1, E1): la del asiento, que define el
     // período. Si no viene, la del documento. Se valida ANTES del insert: un
     // mes cerrado no tiene que llegar al DELETE compensatorio de más abajo.
+    // 096: un gasto con fecha anterior al inicio contable está contabilizado
+    // fuera: se registra sin asiento, y su fecha de registro no pasa por el
+    // período (no hay asiento que la necesite).
+    const contabilizadoFuera = await documentoContabilizadoFuera(admin, profile.tenant_id, date);
     let fechaDeRegistro: string;
     try {
-      fechaDeRegistro = await resolverFechaDeRegistro(
+      fechaDeRegistro = contabilizadoFuera
+        ? (typeof accounting_date === "string" && accounting_date ? accounting_date : date)
+        : await resolverFechaDeRegistro(
         admin,
         profile.tenant_id,
         typeof accounting_date === "string" && accounting_date ? accounting_date : date,
@@ -289,6 +296,13 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
     // caen por el CASCADE de la 036; el trigger de la 038 lo deja pasar porque
     // todavía no hay asiento). Es el mismo criterio que las compras: "una
     // compra que no se puede contabilizar no queda registrada".
+    if (contabilizadoFuera) {
+      return NextResponse.json(
+        { ...expense, lineas: validadas.data.lineas.length, asiento: null, contabilizado_fuera: true },
+        { status: 201 }
+      );
+    }
+
     let posteo;
     try {
       posteo = await postearGastoTramite(admin, profile.tenant_id, expense.id, user.id);

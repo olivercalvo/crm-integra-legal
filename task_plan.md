@@ -1,42 +1,44 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 06/10/2026)
+## ▶ PARA RETOMAR (cierre del 06/10/2026, tarde)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
-**Últimos hashes de trabajo:** `d6f2a3d` (arreglo de anulación) y `25ced8c` (docs y ensayo); este cierre
-agrega sólo el commit de esta sección.
+**Últimos hashes:** `df661f3` y `1b39974` (inicio contable), más el commit de este cierre.
 
 **Staging (`xtyenhakplrkyifbcaow`):**
-- Aplicado: todo `sql/pending` hasta la **`095`** inclusive (la `095` el 06/10, con el «aplica»; verificación
-  6/6). La `056` está reservada y no existe.
-- Escrito y **SIN APLICAR**: **`088`** (copia del `audit_log` a las bitácoras; no va todavía, a propósito).
-- Detalle generado: `docs/staging/inventario-migraciones.md`.
+- Aplicado: todo `sql/pending` hasta la **`096`** inclusive (la `096` el 06/10 con el «aplica», con la llave
+  `finanzas.inicio_contable_existentes = 'aceptar'`: aceptó 10 asientos de antes del corte). Verificación 20/20.
+- Escrito y **SIN APLICAR**: **`088`** (no va todavía, a propósito).
 
-**Hecho el 06/10:**
-- Anular sin CUFE ya no dice «quedó ANULADO ante la DGI» (`d6f2a3d`): éxito «anulada en el CRM… No se
-  envió nada a la DGI», falla del libro `no_se_anulo_en_el_libro` sin nombrar a la DGI, aviso según
-  `alcance`. Revisados también: con CUFE, ND, internas, emitidas fuera y la reversión de NC. Probado en
-  staging con FAC-HON-000030 (falla forzada y anulación normal). Va en el merge del Bloque 1 (runbook §4.8).
-- Ensayo de la ventana repetido en local con la `095`: igual que el 05/10 (64 migraciones sin errores,
-  41 tablas 131/131, 0 deadlocks).
-- Suite: 1690/1690. Lint: 0 errores nuevos.
+**Hecho el 06/10 (tarde): inicio contable (096).**
+- Lo anterior al 01/07/2026 está «contabilizado fuera»: no genera asiento, no se crea, no se mueve, no se anula
+  ni se elimina (todos los tipos, FAC-EXT y NC de compra incluidas). NC posterior y cobro cruzado sí postean.
+- Prueba de punta a punta con la app en staging: `scripts/verificar-inicio-contable.mts` → TODO OK
+  (`docs/finanzas/prueba-inicio-contable.txt`); capturas en `docs/finanzas/capturas-inicio-contable/`.
+- Ensayo completo con la 096 (SIN llave): 65 migraciones sin errores, verificación 096 19/19, 41 tablas
+  131/131, 0 deadlocks. Ojo: la base del ensayo tiene el ESQUEMA de producción, no sus datos.
+- Semillas de staging: bajan el inicio mientras siembran y lo devuelven (`seed-data/inicio-contable-semilla.ts`).
+- Suite 1726/1726. Lint sin errores nuevos.
 
-**Pendiente siguiente:** nada abierto de esta tanda. Lo de producción sigue en manos de Oliver (abajo).
+**Pendiente:**
+1. **Oliver, en producción (sólo lectura):** `sql/verificacion/produccion-documentos-antes-del-inicio.sql`.
+   Sección 0 = 0 asientos (si no, la 096 aborta); b y c vacías; anotar a2 y d.
+2. 🔴 **Decisión (Oliver/Josuarth): los documentos reales desde el 01/07 hasta la ventana quedan SIN asiento**
+   (ninguna migración ni paso de la ventana los postea). Opciones en el runbook §4 punto 9.
+3. **El `--reset` de staging aplica hasta la `048`**: de la `049` a la `096` no hay paso escrito. Pendiente
+   aparte (orquestador de regeneración), no probado porque exige resetear staging.
+4. **Apertura** (siguiente tarea): en espera del visto bueno del diseño.
+5. Texto viejo de la antigüedad («Documentos anteriores al cableado contable… antes del 09/09/2026»): queda
+   para la apertura, que reescribe ese cuadre.
 
-**Datos de prueba que quedaron en staging:**
-- **FAC-HON-000030**: anulada en la prueba del 06/10 (NC-000026, asiento 133). **NC-000025** es un hueco
-  (la NC compensada de la falla forzada, SOP-031).
-- **FAC-HON-900001**: factura creada por SQL sin asiento (copia de FAC-HON-000022, CLI-009), **marcada de
-  prueba**, para ver el badge «Prueba» y la banda. CLI-013 se marcó y se desmarcó con la llave: quedó como estaba.
-- Usuarios `contador.ensayo.0510@staging.test` y `contador.ensayo2.0510@staging.test` (contador), desactivados
-  y bloqueados en Auth.
-- **FAC-CO-000008**: compra de la prueba de «nace pendiente» (pendiente de pago, con su asiento).
-- **FAC-EXT-000001 a 000003**: facturas emitidas fuera (prueba de la `092`), de los clientes ficticios
-  **CLI-016 a CLI-018** («CLIENTE EXT PRUEBA 1/2/3»).
-
-**Para Oliver, en producción (sólo lectura, antes de la ventana):** `produccion-datos-de-prueba-a-marcar.sql`
-(16 filas, ninguna «REVISAR»), `produccion-cufe-repetidos.sql`; correo de Josuarth para «Accesos».
+**Datos de prueba que quedaron en staging (además de los de antes):**
+- **FAC-HON-900002** (20/06, creada por SQL con los triggers de la 096 apagados en esa transacción, como las de
+  producción), **NC-000027**, **CO-000014**, **FAC-HON-000033** (01/07, con asiento) y dos borradores de hoy
+  «Prueba 096: edición de fecha» de CLI-016.
+- **FAC-HON-000030** anulada (NC-000026) y el hueco **NC-000025** (prueba del 06/10, mañana).
+- **FAC-HON-900001** (de prueba), usuarios `contador.ensayo*.0510@staging.test` desactivados,
+  **FAC-CO-000008**, **FAC-EXT-000001 a 000003** (CLI-016 a CLI-018).
 
 ## >>> 05/10/2026 (6) — 093 Y 094 EN STAGING, LAS MARCAS DE PRUEBA FILTRAN EN TODO <<<
 

@@ -433,6 +433,15 @@ entre la cabecera y el detalle: le agrega las líneas que faltan, siempre que si
 `borrador`.
 
 Para regenerar todo de cero: `node scripts/apply-staging-sql.mjs --reset` y de nuevo el seed.
+
+**Inicio contable (096, 06/10/2026).** La semilla crea documentos de marzo a junio, anteriores al inicio
+contable. `seed:staging`, `seed:asientos` y `seed-gasto-tramite-demo` bajan el inicio a 01/01/2025 al
+empezar y lo devuelven al 01/07/2026 al terminar, también si fallan
+(`scripts/seed-data/inicio-contable-semilla.ts`, con el guard del parámetro desactivado dentro de una
+transacción: es la misma aceptación que la llave de la 096 en staging). Necesitan `.env.staging-db.local`.
+Si la 096 todavía no está en la base, no hacen nada y la 096 se aplica después con
+`RUN_SQL_SET="finanzas.inicio_contable_existentes=aceptar" node scripts/run-sql.mjs sql/pending/096_inicio_contable.sql`.
+⚠️ El `--reset` aplica hasta la `048`; de la `049` a la `096` no hay un paso escrito (pendiente).
 El `--reset` dropea el esquema `public` y lo recrea con los grants de Supabase; **no toca
 `auth`**, así que los usuarios de prueba sobreviven y no hay que volver a repartir claves.
 

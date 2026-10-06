@@ -1,10 +1,10 @@
 {
-  "total_ms": 522,
+  "total_ms": 1513,
   "pasos": [
     {
       "archivo": "086_bitacoras_nucleo.sql",
       "bloque": "bitácoras",
-      "ms": 91,
+      "ms": 216,
       "error": null,
       "avisos": [
         {
@@ -44,7 +44,7 @@
     {
       "archivo": "087_bitacoras_captura.sql",
       "bloque": "bitácoras",
-      "ms": 42,
+      "ms": 84,
       "error": null,
       "avisos": [
         {
@@ -220,7 +220,7 @@
     {
       "archivo": "089_bitacoras_documento_de_casos.sql",
       "bloque": "bitácoras",
-      "ms": 15,
+      "ms": 27,
       "error": null,
       "avisos": [
         {
@@ -232,7 +232,7 @@
     {
       "archivo": "090_bitacoras_orden_de_candados.sql",
       "bloque": "bitácoras",
-      "ms": 17,
+      "ms": 36,
       "error": null,
       "avisos": [
         {
@@ -244,7 +244,7 @@
     {
       "archivo": "091_bitacoras_error_claro.sql",
       "bloque": "bitácoras",
-      "ms": 37,
+      "ms": 78,
       "error": null,
       "avisos": [
         {

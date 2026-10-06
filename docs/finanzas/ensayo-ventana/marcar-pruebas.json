@@ -3,7 +3,7 @@
     {
       "archivo": "datos-de-prueba-equivalentes.sql",
       "bloque": "datos",
-      "ms": 48,
+      "ms": 188,
       "error": null,
       "avisos": [
         {
@@ -15,7 +15,7 @@
     {
       "archivo": "marcar-datos-de-prueba.sql",
       "bloque": "paso (aborta)",
-      "ms": 35,
+      "ms": 132,
       "error": {
         "mensaje": "Hay documentos de clientes de prueba que no están en la lista: cobro ENSAYO-ABORTO. Decidir y agregarlos antes. No se marcó nada.",
         "detalle": null,
@@ -27,7 +27,7 @@
     {
       "archivo": "marcar-datos-de-prueba.sql",
       "bloque": "paso",
-      "ms": 48,
+      "ms": 140,
       "error": null,
       "avisos": [
         {
@@ -39,7 +39,7 @@
     {
       "archivo": "marcar-datos-de-prueba.sql",
       "bloque": "paso (otra vez)",
-      "ms": 33,
+      "ms": 124,
       "error": null,
       "avisos": [
         {

@@ -719,6 +719,27 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Pantallas `/finanzas/auditoria` y `/legal/admin/auditoria` (la lectura vieja de `audit_log` queda en
   `/anterior` hasta aplicar la `088`).
 
+### Inicio contable: lo anterior está «contabilizado fuera» (desde 2026-10-06 — `096` aplicada SOLO en staging)
+- 🔴 **`finanzas_parametros.fecha_inicio_contable` (01/07/2026)**. Lo anterior ya está en los libros del
+  contador (QuickBooks): **no genera asiento, no se crea, no se mueve a una fecha anterior, no se anula ni se
+  elimina**. Se compara la **fecha del DOCUMENTO** (issue_date, payment_date, expense_date, date,
+  supplier_document_date), cada documento con la suya. Sin excepciones (regla 3.3.5), FAC-EXT y NC de compra
+  incluidas. Se corrige con una NC (venta), una NC del proveedor (compra, gasto de trámite) o un asiento de
+  diario (cobro, pago), con fecha igual o posterior al inicio; esos SÍ postean (un cobro de agosto de una
+  factura de junio: HABER 100004 del cliente, que tiene que venir de la apertura).
+- **Una sola regla en `contabilidad/inicio-contable.ts`** (`asegurarFechaDesdeElInicio` en altas y ediciones,
+  antes del número; `asegurarQueNoEsContabilizadoFuera` en anular/eliminar; la matriz fiscal responde
+  `contabilizada_fuera` ANTES del PAC). La base lo vuelve a exigir con los MISMOS textos (triggers de la 096);
+  el del libro es el respaldo. 🔒 `inicio-contable.test.ts` lee el código y falla si un camino no pregunta.
+- **El inicio no se mueve si cruza documentos** (hacia adelante: con asiento; hacia atrás: sin asiento). Se
+  cambia en Configuración › Parámetros contables (admin y contador; la bitácora contable lo registra).
+- Etiqueta «Contabilizado fuera» en listados, detalles y antigüedad; los documentos siguen en la antigüedad
+  y el estado de cuenta, y el cuadre los nombra aparte de lo que falta cablear.
+- 🔴 **Ninguna migración ni paso de la ventana pasa al libro un documento existente**: lo de producción desde
+  el 01/07 hasta la ventana queda sin asiento hasta que se decida cómo entra (runbook §4 punto 9).
+- **Staging:** la 096 se aplicó con la llave `finanzas.inicio_contable_existentes = 'aceptar'` (10 asientos de
+  antes del corte). Las semillas bajan el inicio mientras siembran (`seed-data/inicio-contable-semilla.ts`).
+
 ### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
 - 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
   cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:

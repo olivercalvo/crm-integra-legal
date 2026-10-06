@@ -1,9 +1,10 @@
 # Ventana del Bloque 1 — orden final, tiempo y ensayo
 
-**Qué es:** el orden de aplicación en producción de las **64 migraciones** de la `025` a la
-`095` (todas menos la `056`, reservada, y las bitácoras) y del paso de datos que marca lo de prueba,
-ensayado de punta a punta el **05/10/2026** contra una base local igual a producción, y **otra vez
-el 06/10/2026** con la `095` y el arreglo de los mensajes de anulación (§4, punto 8): mismo resultado. Al final, el
+**Qué es:** el orden de aplicación en producción de las **65 migraciones** de la `025` a la
+`096` (todas menos la `056`, reservada, y las bitácoras) y del paso de datos que marca lo de prueba,
+ensayado de punta a punta el **05/10/2026** contra una base local con el ESQUEMA de producción, y **otra vez
+el 06/10/2026** con la `095`, el arreglo de los mensajes de anulación (§4, punto 8) y la `096` (inicio
+contable): mismo resultado. Al final, el
 paso «Accesos» (§6). Las bitácoras (`086`, `087`, `089`,
 `090`, `091`) van en una **ventana aparte**, después.
 
@@ -19,16 +20,21 @@ ahí, se vuelve a ensayar y se copia acá.
 
 ## 1. Resultado del ensayo (05/10/2026, repetido el 06/10/2026)
 
-El 06/10 dio lo mismo, fila por fila: 64 migraciones sin errores (la `095` con su verificación 6/6), las
-mismas verificaciones «sin datos» y «tarde» de §4, marcas 8 y 5 con el aborto esperado, bitácoras 5/5, 41
-tablas 131/131 y concurrencia 180 rondas sin deadlocks (`--control` 27/27). El arreglo de anulación es
-sólo código: se probó en staging (§4, punto 8).
+El 06/10 dio lo mismo, fila por fila: 65 migraciones sin errores (la `095` con su verificación 6/6 y la
+`096` con la suya 19/19, SIN la llave), las mismas verificaciones «sin datos» y «tarde» de §4, marcas 8 y 5
+con el aborto esperado, bitácoras 5/5, 41 tablas 131/131 y concurrencia 180 rondas sin deadlocks
+(`--control` 27/27). El arreglo de anulación es sólo código: se probó en staging (§4, punto 8).
+
+> 🔴 **La base del ensayo tiene el ESQUEMA de producción, no sus DATOS.** Los datos son el seed de
+> staging recortado (ficticios). Que el pre-flight de la `096` diga «0 asientos» ahí prueba el
+> mecanismo, no producción. Lo que decide en producción es su libro: tiene que estar vacío, y lo
+> confirma la sección 0 de `sql/verificacion/produccion-documentos-antes-del-inicio.sql` (§2, Bloque C).
 
 
 | Fase | Pasos | Errores | Tiempo de base |
 |---|---:|---:|---:|
 | Base = producción: `main` 24b227a (hasta la 024, 48 archivos) + datos + la 084 | 50 | 0 | 2,2 s |
-| Ventana Bloque 1: A (29) → B (14) → C (21) | 64 migraciones + 36 verificaciones | **0** en migraciones | 9,8 s en total |
+| Ventana Bloque 1: A (29) → B (14) → C (22) | 65 migraciones + 37 verificaciones | **0** en migraciones | 11,1 s en total |
 | Paso «Marcar los datos de prueba» (base `pruebas`, datos equivalentes) | consulta → aborto → paso → consulta → paso otra vez | 0 marcas incorrectas | — |
 | Ventana de bitácoras: 086 → 087 → 089 → 090 → 091 | 5 | 0 | 0,2 s |
 | Prueba de las 41 tablas (después de las bitácoras) | 131 operaciones | 0 | — |
@@ -117,11 +123,11 @@ Nadie emite, anula, cobra ni carga un CUFE hasta que el deploy esté arriba.
   reemplazan la `079` (HON-FAM → 400009) y la `082` (HON-OTROS → 400010), que van en el Bloque C.
   Si Josuarth elige otra cuenta para alguno, se cambia después de la ventana desde el catálogo.
 
-### Bloque C — congelado, inmediatamente después de la 025 (21)
+### Bloque C — congelado, inmediatamente después de la 025 (22)
 
 ```
 068 → 069 → 070 → 071 → 072 → 073 → 074 → 075 → 076 → 077 → 078
- → 079 → 080 → 081 → 082 → 083 → 084 → 085 → 092 → 094 → 095
+ → 079 → 080 → 081 → 082 → 083 → 084 → 085 → 092 → 094 → 095 → 096
  → paso de datos «Marcar los datos de prueba»
 ```
 
@@ -140,6 +146,19 @@ sólo puede ir en la parte congelada. La `084` ya está en producción: entra y 
   de prueba como tercero; la NC hereda la marca de su factura; un cobro y la factura a la que se aplica no
   mezclan prueba y real. La factura REAL de un cliente de prueba (la 463) sigue entrando al libro.
   Verificación: `verificacion-095` (6/6).
+- 📋 **Antes de la `096`** (puede correr días antes, es sólo lectura):
+  `sql/verificacion/produccion-documentos-antes-del-inicio.sql`. Sección **0** tiene que dar **0 asientos**:
+  si no, la `096` aborta (su pre-flight) y **se para**. Secciones **b** y **c** tienen que salir vacías
+  (borradores de antes del inicio; facturas anuladas ante la DGI y vivas en el CRM): si no, se resuelven
+  ANTES de la ventana, porque después la `096` no deja emitir ni anular nada anterior al inicio. **d**
+  (cobros cruzados) y **a2** (documentos desde el 01/07 sin asiento, §4 punto 9) se anotan.
+- `096` (06/10): **inicio contable** (`finanzas_parametros.fecha_inicio_contable`, 01/07/2026). Lo anterior
+  está contabilizado fuera: no genera asiento, no se crea, no se mueve a una fecha anterior, no se anula
+  ni se elimina (factura, ND, FAC-EXT, NC, cobro, compra, gasto de trámite, pago, NC de compra); se corrige
+  con una NC o un asiento de diario posterior. El inicio no se mueve si cruza documentos. **Va SIN la
+  llave** `finanzas.inicio_contable_existentes` (ésa es sólo de staging). Verificación: `verificacion-096`
+  (19/19 en el ensayo; 20/20 en staging, donde sí hay compras). El código (etiqueta «Contabilizado
+  fuera», bloqueos en pantalla y en la API, antigüedad) llega con el merge de D·6.
 - 🔴 **Los filtros de los reportes son CÓDIGO y llegan con el merge de D·6**, en esta misma ventana:
   antigüedad (y su cuadre), estado de cuenta, ITBMS, Pendientes DGI y sus contadores (listado, hub de
   reportes, dashboard de la abogada), el aviso de errores DGI, los selectores de cobro, NC y ND, y las
@@ -210,12 +229,12 @@ marcar. Estimado con 2,5 min por migración (4 en las que tienen números que co
 | D·3 | reload + verificación del A | 15 min |
 | D·4 | Congelar y avisar | 5 min |
 | D·5a | Bloque B: 14 migraciones + 8 verificaciones (con la de la `067`) + comparar la `025` con P-1(e) | 1 h |
-| D·5b | Bloque C: 21 migraciones + 15 verificaciones + los dos chequeos previos | 1 h 15 min |
+| D·5b | Bloque C: 22 migraciones + 16 verificaciones + los tres chequeos previos | 1 h 20 min |
 | D·5c | Marcar los datos de prueba: consulta, pausa, paso, consulta | 15 min |
 | D·6–D·8 | merge, deploy, post-deploy, descongelar | 35 min |
 | D·9 | Accesos (§6): usuario de Josuarth, su contraseña, desactivar contador.test y re-desactivar los dos inactivos, consulta | 25 min |
-| | **Total del día** | **~5 h 45 min** |
-| | **Congelado (D·4 a D·8)** | **~3 h 10 min** |
+| | **Total del día** | **~5 h 50 min** |
+| | **Congelado (D·4 a D·8)** | **~3 h 15 min** |
 
 Ventana de bitácoras: 5 migraciones + recarga + prueba de humo en la app (guardar un comentario,
 emitir y anular una factura de prueba no: es producción; basta con guardar y leer una bitácora) ≈
@@ -278,6 +297,19 @@ Ninguna migración falló. Lo que salió son problemas de las VERIFICACIONES y d
    libro y después anulación normal (`scripts/verificar-anulacion-sin-cufe.mts`,
    `docs/finanzas/prueba-anulacion-sin-cufe.txt`). En producción **no se prueba anulando**: si alguna
    de las dos se anula después de la ventana, el mensaje que se lee es el nuevo.
+9. 🔴 **Ninguna migración ni paso de la ventana pasa al libro un documento que ya existe** (revisado el
+   06/10: los bloques que nombran `post_journal_entry` sólo leen su definición). Con la `096` eso está bien
+   para lo anterior al 01/07 (contabilizado fuera), pero **los documentos reales DESDE el 01/07 hasta el día
+   de la ventana quedan SIN asiento** también: el libro de producción está vacío y el posteo automático
+   recién arranca con el deploy. La sección **a2** de la consulta los cuenta. **Decisión pendiente**
+   (Oliver/Josuarth), antes de la ventana: (a) un paso de datos que los postee con su fecha, después de la
+   `096` y con el código nuevo; (b) que Josuarth los cargue por la importación de asientos; o (c) mover el
+   inicio contable al día de la ventana (entonces quedan contabilizados fuera y tienen que estar en
+   QuickBooks). Hasta decidirlo, la antigüedad los muestra como «documentos sin asiento».
+10. **Regenerar staging con la `096`:** las semillas (`seed:staging`, `seed:asientos` y
+   `seed-gasto-tramite-demo`) bajan el inicio a 01/01/2025 mientras siembran y lo devuelven al 01/07/2026
+   al terminar, también si fallan (`scripts/seed-data/inicio-contable-semilla.ts`). Ojo: el aplicador del
+   `--reset` llega hasta la `048`; de la `049` a la `096` no hay un paso escrito (pendiente aparte).
 
 ---
 

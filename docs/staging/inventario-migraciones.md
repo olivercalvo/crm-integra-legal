@@ -161,6 +161,7 @@
 | `093_compra_nace_pendiente.sql` | **sí** | DEFAULT de business_expenses.status pasa de 'pagado' (010) a 'pendiente_pago', el unico valor que el guard de la 048 acepta al crear · <sub>marcador: resuelto por el dato, no por el esquema</sub> 05/10. Hallazgo del ensayo de la ventana. Va justo despues de la 048. No toca filas. |
 | `094_documentos_de_prueba.sql` | **sí** | Marca de prueba por DOCUMENTO (de_prueba en invoices, credit_notes, payments, client_payments, expenses) y clients.es_de_prueba solo para lo nuevo; guards de marcar (sin asiento) y desmarcar (llave) · <sub>marcador: invoices.de_prueba</sub> 05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql. |
 | `095_documentos_de_prueba_fuera_del_libro.sql` | **sí** | El libro rechaza asientos de documentos de prueba y asientos manuales con un cliente de prueba como tercero; la NC hereda la marca de su factura; cobro y factura no se mezclan (prueba/real) · <sub>marcador: función finanzas_libro_sin_documentos_de_prueba()</sub> 05/10. Va despues de la 094. La factura REAL de un cliente de prueba (FAC-HON-000463) sigue entrando al libro. |
+| `096_inicio_contable.sql` | **sí** | Inicio contable (finanzas_parametros.fecha_inicio_contable, 01/07/2026): el libro rechaza el asiento de un documento con fecha anterior (contabilizado fuera); el inicio no se mueve si cruza documentos · <sub>marcador: finanzas_parametros.fecha_inicio_contable</sub> 06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes. |
 | `add-receipt-to-expenses.sql` | **sí** | expenses.receipt_url/receipt_filename · <sub>marcador: expenses.receipt_url</sub> |
 | `add_extrajudicial_classification.sql` | **sí** | Clasificación EXTRAJUDICIAL (EXT) · <sub>marcador: resuelto por el dato, no por el esquema</sub> _(heurístico)_ |
 | `add_payment_description_receipt.sql` | **sí** | client_payments.description/receipt_url/receipt_filename · <sub>marcador: client_payments.description</sub> |
@@ -190,4 +191,4 @@ Las dependencias reales (036 antes de 037, 048 antes de 049, 030 antes de 039,
 
 ---
 
-_Generado por `scripts/inventario-migraciones.mjs` el 2026-10-06 19:45._
+_Generado por `scripts/inventario-migraciones.mjs` el 2026-10-06 22:38._

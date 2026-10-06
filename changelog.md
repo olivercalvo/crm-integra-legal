@@ -1,5 +1,23 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Inicio contable: lo anterior está «contabilizado fuera»] - 2026-10-06
+
+- Nuevo parámetro del bufete: **inicio contable**, 01/07/2026 (Finanzas › Configuración › Parámetros
+  contables; lo cambian admin y contador, y cada cambio queda en la bitácora contable). Los documentos con
+  fecha anterior ya están en los libros del contador: el CRM no les genera asiento y los muestra con la
+  etiqueta **«Contabilizado fuera»** en los listados, el detalle y la antigüedad de saldos, donde siguen
+  contando.
+- Lo anterior al inicio **no se crea, no se mueve a una fecha anterior, no se anula ni se elimina**, en
+  ningún tipo de documento (incluidas la factura emitida fuera y la NC de compra). El botón no aparece o
+  queda deshabilitado con el motivo, y el servidor y la base lo rechazan con el mismo texto. Se corrige con
+  una nota de crédito o un asiento de diario con fecha igual o posterior al inicio, que sí se registran.
+- Un cobro o un pago posterior aplicado a un documento anterior sí se registra en el libro.
+- El inicio no se puede mover si dejaría documentos del lado equivocado; el mensaje dice cuáles.
+- Migración `096` aplicada en staging (verificación 20/20) y probada de punta a punta con la app
+  (`docs/finanzas/prueba-inicio-contable.txt`, capturas en `docs/finanzas/capturas-inicio-contable/`).
+- Regenerar staging: las semillas mueven solas el inicio mientras siembran.
+- Consulta de solo lectura para producción: `sql/verificacion/produccion-documentos-antes-del-inicio.sql`.
+
 ## [Anular sin CUFE ya no dice «anulada ante la DGI»] - 2026-10-06
 
 - **Corregido:** anular una factura sin CUFE (como FAC-HON-000489 y FAC-HON-000503 de producción) decía,

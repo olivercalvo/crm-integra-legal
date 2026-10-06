@@ -1,26 +1,32 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 05/10/2026)
+## ▶ PARA RETOMAR (cierre del 06/10/2026)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
-**Último hash de trabajo:** `0e9bdc4` (este cierre agrega sólo el commit de esta sección).
+**Últimos hashes de trabajo:** `d6f2a3d` (arreglo de anulación) y `25ced8c` (docs y ensayo); este cierre
+agrega sólo el commit de esta sección.
 
 **Staging (`xtyenhakplrkyifbcaow`):**
-- Aplicado: todo `sql/pending` hasta la **`094`** inclusive (la `093` y la `094` el 05/10, con el «aplica»),
-  incluidas las bitácoras `086`, `087`, `089`, `090` y `091`. La `056` está reservada y no existe.
-- Escrito y **SIN APLICAR**: **`095`** (el libro no recibe documentos de prueba; ensayada en local, 6/6) y
-  **`088`** (copia del `audit_log` a las bitácoras; no va todavía, a propósito).
+- Aplicado: todo `sql/pending` hasta la **`095`** inclusive (la `095` el 06/10, con el «aplica»; verificación
+  6/6). La `056` está reservada y no existe.
+- Escrito y **SIN APLICAR**: **`088`** (copia del `audit_log` a las bitácoras; no va todavía, a propósito).
 - Detalle generado: `docs/staging/inventario-migraciones.md`.
 
-**Pendiente siguiente:**
-1. «aplica» de la **`095`** en staging, y correr `sql/tests/verificacion-095-documentos-de-prueba-fuera-del-libro.sql`.
-2. Corregir el mensaje **«El documento quedó ANULADO ante la DGI…»** al anular una factura **sin CUFE**: en
-   `efactura/orchestration/anular-factura-ante-dgi.ts`, `cerrarEnElLibro` se usa también en el camino sin CUFE,
-   y si el libro falla dice que la DGI la anuló aunque no se habló con el PAC. Afecta a **FAC-HON-000489** y
-   **FAC-HON-000503** de producción (facturas sin CUFE).
+**Hecho el 06/10:**
+- Anular sin CUFE ya no dice «quedó ANULADO ante la DGI» (`d6f2a3d`): éxito «anulada en el CRM… No se
+  envió nada a la DGI», falla del libro `no_se_anulo_en_el_libro` sin nombrar a la DGI, aviso según
+  `alcance`. Revisados también: con CUFE, ND, internas, emitidas fuera y la reversión de NC. Probado en
+  staging con FAC-HON-000030 (falla forzada y anulación normal). Va en el merge del Bloque 1 (runbook §4.8).
+- Ensayo de la ventana repetido en local con la `095`: igual que el 05/10 (64 migraciones sin errores,
+  41 tablas 131/131, 0 deadlocks).
+- Suite: 1690/1690. Lint: 0 errores nuevos.
+
+**Pendiente siguiente:** nada abierto de esta tanda. Lo de producción sigue en manos de Oliver (abajo).
 
 **Datos de prueba que quedaron en staging:**
+- **FAC-HON-000030**: anulada en la prueba del 06/10 (NC-000026, asiento 133). **NC-000025** es un hueco
+  (la NC compensada de la falla forzada, SOP-031).
 - **FAC-HON-900001**: factura creada por SQL sin asiento (copia de FAC-HON-000022, CLI-009), **marcada de
   prueba**, para ver el badge «Prueba» y la banda. CLI-013 se marcó y se desmarcó con la llave: quedó como estaba.
 - Usuarios `contador.ensayo.0510@staging.test` y `contador.ensayo2.0510@staging.test` (contador), desactivados

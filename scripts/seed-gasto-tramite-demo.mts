@@ -86,6 +86,8 @@ const db = createClient(URL_SB, env.SUPABASE_SERVICE_ROLE_KEY as string, {
 });
 
 const { postJournalEntry } = await import("../src/lib/finanzas/contabilidad/posting.ts");
+const semilla = await import("./seed-data/inicio-contable-semilla.ts");
+const { bajarInicioParaSembrar } = ((semilla as { default?: typeof semilla }).default ?? semilla) as typeof import("./seed-data/inicio-contable-semilla.ts");
 const { construirAsientoDeGastoTramite } = await import(
   "../src/lib/finanzas/contabilidad/asiento-gasto-tramite.ts"
 );
@@ -252,8 +254,14 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-// 1. El encabezado.
+// 096: el gasto es del 15/03, anterior al inicio contable. Se baja el inicio
+// sólo mientras se crea y se postea, y se devuelve en el `finally`.
+const restaurarInicio = await bajarInicioParaSembrar(TENANT);
 let expenseId = existente?.id as string | undefined;
+let entryId: string;
+let armado: ReturnType<typeof construirAsientoDeGastoTramite>;
+try {
+// 1. El encabezado.
 if (!expenseId) {
   const { data: creado, error } = await db
     .from("expenses")
@@ -298,7 +306,7 @@ const { data: lineasDb } = await db
   .eq("expense_id", expenseId)
   .order("line_order");
 
-const armado = construirAsientoDeGastoTramite(
+armado = construirAsientoDeGastoTramite(
   {
     id: expenseId!,
     date: FECHA,
@@ -313,11 +321,14 @@ const armado = construirAsientoDeGastoTramite(
 );
 
 if (!armado.ok) {
-  console.error(`\n🛑 El asiento no se pudo armar: ${armado.mensaje}\n`);
-  process.exit(1);
+  throw new Error(`El asiento no se pudo armar: ${(armado as { mensaje?: string }).mensaje}`);
 }
 
-const entryId = await postJournalEntry(db, TENANT, armado.asiento, usuario.id);
+entryId = await postJournalEntry(db, TENANT, armado.asiento, usuario.id);
+} finally {
+  await restaurarInicio();
+}
+if (!armado.ok) throw new Error("inalcanzable");
 const { data: asiento } = await db
   .from("journal_entries")
   .select("entry_number")

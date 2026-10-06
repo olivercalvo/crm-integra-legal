@@ -819,9 +819,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <p>
                 En estado{" "}
                 <span className="font-mono">{invoice.status}</span> no se permite
-                editar líneas ni cabecera. Para corregirla: anularla dentro del
-                mes (genera la nota de crédito total) o emitir una nota de
-                crédito por las líneas que correspondan.
+                editar líneas ni cabecera.{" "}
+                {contabilizadaFuera
+                  ? // 096: no se anula; sólo una NC con fecha igual o posterior al inicio.
+                    "Para corregirla: emitir una nota de crédito por las líneas que correspondan, con fecha igual o posterior al inicio contable."
+                  : "Para corregirla: anularla dentro del mes (genera la nota de crédito total) o emitir una nota de crédito por las líneas que correspondan."}
               </p>
             </div>
           )}

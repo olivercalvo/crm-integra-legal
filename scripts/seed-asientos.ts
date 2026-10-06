@@ -86,6 +86,7 @@ import { resolve } from "path";
 
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import { TENANT_ID } from "./seed-data/staging-fixtures";
+import { bajarInicioParaSembrar } from "./seed-data/inicio-contable-semilla";
 import { verificarAmountPaidDerivado } from "../src/lib/finanzas/integridad/verificar-amount-paid";
 import type { SourceType } from "../src/lib/finanzas/contabilidad/posting";
 
@@ -835,7 +836,19 @@ async function yaExiste(a: AsientoAPostear): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
-main().catch((e) => {
+// 096: crea compras y cobros de febrero a junio y les postea asiento, anteriores
+// al inicio contable. Se baja el inicio mientras siembra y se devuelve al
+// terminar, también si falla. Ver `seed-data/inicio-contable-semilla.ts`.
+async function conInicioParaSembrar() {
+  const restaurarInicio = await bajarInicioParaSembrar(TENANT_ID);
+  try {
+    await main();
+  } finally {
+    await restaurarInicio();
+  }
+}
+
+conInicioParaSembrar().catch((e) => {
   console.error("\n❌", e.message);
   process.exit(1);
 });

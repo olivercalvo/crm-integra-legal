@@ -255,3 +255,21 @@ test("matriz: el mismo día del inicio, sin el dato o ya anulada, no cambia nada
   assert.notEqual(decidirAccionFiscal({ ...BASE_MATRIZ }, AHORA).accion, "contabilizada_fuera", "sin inicio no decide por esto");
   assert.equal(decidirAccionFiscal({ ...BASE_MATRIZ, status: "anulada", inicioContable: INICIO }, AHORA).accion, "nada_que_hacer");
 });
+
+// ---------------------------------------------------------------------------
+// Regenerar staging: las semillas bajan el inicio y lo devuelven SIEMPRE
+// ---------------------------------------------------------------------------
+
+test("🔒 las tres semillas bajan el inicio contable y lo devuelven en un finally", () => {
+  for (const f of ["scripts/seed-staging.ts", "scripts/seed-asientos.ts", "scripts/seed-gasto-tramite-demo.mts"]) {
+    const src = leer(f);
+    const baja = src.indexOf("bajarInicioParaSembrar(");
+    const fin = src.indexOf("finally {", baja);
+    const restaura = src.indexOf("await restaurarInicio()", fin);
+    assert.ok(baja > 0 && fin > baja && restaura > fin, `${f}: el inicio no se devuelve en un finally`);
+  }
+  const helper = leer("scripts/seed-data/inicio-contable-semilla.ts");
+  assert.match(helper, /INICIO_DE_STAGING = "2026-07-01"/);
+  assert.match(helper, /uqmmkklbhzxqybljiecs/, "candado anti-producción");
+  assert.match(helper, /DISABLE TRIGGER trg_inicio_contable_guard[\s\S]*ENABLE TRIGGER trg_inicio_contable_guard[\s\S]*COMMIT/);
+});

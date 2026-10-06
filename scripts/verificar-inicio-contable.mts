@@ -269,10 +269,18 @@ await pgc.query("ROLLBACK");
 // ── D. NC de hoy ─────────────────────────────────────────────────────────────
 console.log(`\nD. NC de hoy de ${FIXTURE}`);
 const [lin] = await q<{ id: string }>("select id from invoice_lines where invoice_id=$1 order by line_order limit 1", [fix.id]);
-const nc = await emitCreditNote(db as never, db as never, T, admin.userId, {
-  invoice_id: fix.id, reason: "Prueba del inicio contable: NC posterior", observations: null,
-  lineas: [{ invoice_line_id: lin.id, quantity: 1, unit_price: 5 }],
-} as never);
+// Reintento: si una corrida anterior ya la emitió, se usa esa (el saldo no alcanza para otra).
+let [nc] = await q<{ id: string; credit_note_number: string }>(
+  "select id, credit_note_number from credit_notes where invoice_id=$1 and reason='Prueba del inicio contable: NC posterior' limit 1",
+  [fix.id]
+);
+if (!nc) {
+  const r = await emitCreditNote(db as never, db as never, T, admin.userId, {
+    invoice_id: fix.id, reason: "Prueba del inicio contable: NC posterior", observations: null,
+    lineas: [{ invoice_line_id: lin.id, quantity: 1, unit_price: 5 }],
+  } as never);
+  nc = { id: r.id, credit_note_number: r.credit_note_number };
+}
 const lineasNc = await q<{ code: string; debit: string; credit: string; client_id: string | null }>(
   `select c.code, l.debit::text, l.credit::text, l.client_id from journal_entries j join journal_entry_lines l on l.entry_id=j.id
      join chart_of_accounts c on c.id=l.account_id where j.tenant_id=$1 and j.source_type='nota_credito' and j.source_id=$2`,
@@ -283,10 +291,16 @@ ok(lineasNc.some((l) => l.code === "100004" && Number(l.credit) > 0 && l.client_
 
 // ── E. Cobro de hoy ──────────────────────────────────────────────────────────
 console.log(`\nE. Cobro de hoy aplicado a ${FIXTURE}`);
-const cobro = await createPayment(db as never, T, admin.userId, {
-  payment_account_code: "100001", applications: [{ invoice_id: fix.id, amount: 2 }], payment_date: hoy, amount: 2,
-  method: "transferencia", reference: "PRUEBA-096-COBRO", notes: null,
-} as never, db as never);
+let [cobro] = await q<{ id: string; payment_number: string }>(
+  "select id, payment_number from payments where tenant_id=$1 and reference='PRUEBA-096-COBRO' limit 1",
+  [T]
+);
+if (!cobro) {
+  cobro = await createPayment(db as never, T, admin.userId, {
+    payment_account_code: "100001", applications: [{ invoice_id: fix.id, amount: 2 }], payment_date: hoy, amount: 2,
+    method: "transferencia", reference: "PRUEBA-096-COBRO", notes: null,
+  } as never, db as never);
+}
 const lineasCobro = await q<{ code: string; credit: string; client_id: string | null }>(
   `select c.code, l.credit::text, l.client_id from journal_entries j join journal_entry_lines l on l.entry_id=j.id
      join chart_of_accounts c on c.id=l.account_id where j.tenant_id=$1 and j.source_type='pago' and j.source_id=$2`,

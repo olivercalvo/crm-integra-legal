@@ -49,6 +49,7 @@ import { JOSUAR_ACCOUNTS } from "../src/lib/finanzas/reports/__tests__/josuar-ac
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import { inicioPeriodoFiscal } from "../src/lib/finanzas/contabilidad/periodo-fiscal";
 import { verificarAmountPaidDerivado } from "../src/lib/finanzas/integridad/verificar-amount-paid";
+import { bajarInicioParaSembrar } from "./seed-data/inicio-contable-semilla";
 import {
   SEED_CASES,
   SEED_CLASSIFICATIONS,
@@ -1356,14 +1357,23 @@ async function main(): Promise<void> {
   });
 
   await seedTenant();
-  await seedUsers();
-  await seedCatalogs();
-  await seedChartOfAccounts();
-  await seedClients();
-  await seedCases();
-  await seedExpenses();
-  await seedTasks();
-  await seedFinanzas();
+
+  // 096: la semilla crea documentos de marzo a junio, anteriores al inicio
+  // contable. Se baja el inicio mientras se siembra y se devuelve al 01/07/2026
+  // al terminar, también si algo falla. Ver `seed-data/inicio-contable-semilla.ts`.
+  const restaurarInicio = await bajarInicioParaSembrar(TENANT_ID);
+  try {
+    await seedUsers();
+    await seedCatalogs();
+    await seedChartOfAccounts();
+    await seedClients();
+    await seedCases();
+    await seedExpenses();
+    await seedTasks();
+    await seedFinanzas();
+  } finally {
+    await restaurarInicio();
+  }
 
   // CIERRE — que una siembra incoherente falle acá y no en una pantalla dentro
   // de seis días. Ver `sop.md` SOP-017.

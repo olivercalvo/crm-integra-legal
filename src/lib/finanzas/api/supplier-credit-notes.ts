@@ -11,6 +11,7 @@
  * base lo verifica contra los montos que calcula ella.
  */
 
+import { asegurarFechaDesdeElInicio } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import {
@@ -241,6 +242,16 @@ export async function createSupplierCreditNote(
   userId: string,
   input: CrearNcDeCompraInput
 ): Promise<NcDeCompraCreada> {
+  // 096 (regla 3.3.5): la NC del proveedor no lleva fecha de documento anterior
+  // al inicio contable. Antes del RPC (que toma el número y postea).
+  await asegurarFechaDesdeElInicio(
+    db,
+    tenantId,
+    "nota_credito_compra",
+    input.supplier_document_date,
+    "supplier_document_date"
+  );
+
   // La compra (opcional). Sin compra, el proveedor con su ficha.
   let compra: CompraConLineasParaNc | null = null;
   let paraAsiento: CompraParaNc;

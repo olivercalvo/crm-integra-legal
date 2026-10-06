@@ -3,7 +3,7 @@
     {
       "archivo": "datos-primer-uso.sql",
       "bloque": "primer uso",
-      "ms": 206,
+      "ms": 119,
       "error": null,
       "avisos": [
         {
@@ -12,14 +12,14 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "primer uso: proveedor 04578baf-cbbb-432c-a387-7314bdb663aa, compra 9e33cf4c-cb74-4f52-9a40-efb953f83a0a, 4 asientos en el libro, 1 cobro(s) con banco"
+          "texto": "primer uso: proveedor db3e08a5-bad4-46d9-82b1-4a982ae7c6c5, compra 049e4322-a5f6-488c-87ef-407fd41274ba, 4 asientos en el libro, 1 cobro(s) con banco"
         }
       ]
     },
     {
       "archivo": "verificacion-038-inmutabilidad.sql",
       "bloque": "verificación",
-      "ms": 63,
+      "ms": 32,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -29,7 +29,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "=== Gasto de prueba: 62c6e34d-2b19-4067-a37e-731c626be5e8 (línea 337b3b49-2492-41ba-8c29-bb1f36518f00) ==="
+          "texto": "=== Gasto de prueba: 62c6e34d-2b19-4067-a37e-731c626be5e8 (línea 2d7cfe7a-63cf-481f-8cfb-977cca13b989) ==="
         },
         {
           "nivel": "NOTICE",
@@ -44,7 +44,7 @@
     {
       "archivo": "verificacion-039-manual.sql",
       "bloque": "verificación",
-      "ms": 32,
+      "ms": 18,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -61,7 +61,7 @@
     {
       "archivo": "verificacion-045-tax-code-id.sql",
       "bloque": "verificación",
-      "ms": 58,
+      "ms": 44,
       "error": null,
       "avisos": [
         {
@@ -89,7 +89,7 @@
     {
       "archivo": "verificacion-046-reversion-cobro.sql",
       "bloque": "verificación",
-      "ms": 16,
+      "ms": 10,
       "error": null,
       "avisos": [
         {
@@ -101,7 +101,7 @@
     {
       "archivo": "verificacion-047-recibo-de-caja.sql",
       "bloque": "verificación",
-      "ms": 55,
+      "ms": 39,
       "error": null,
       "avisos": [
         {
@@ -161,7 +161,7 @@
     {
       "archivo": "verificacion-048-pagos-a-proveedores.sql",
       "bloque": "verificación",
-      "ms": 58,
+      "ms": 49,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -171,7 +171,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Compra 9e33cf4c-cb74-4f52-9a40-efb953f83a0a · total 321.00"
+          "texto": "Compra 049e4322-a5f6-488c-87ef-407fd41274ba · total 321.00"
         },
         {
           "nivel": "NOTICE",
@@ -222,7 +222,7 @@
     {
       "archivo": "verificacion-093-compra-nace-pendiente.sql",
       "bloque": "verificación",
-      "ms": 14,
+      "ms": 10,
       "error": null,
       "avisos": [
         {
@@ -242,7 +242,7 @@
     {
       "archivo": "verificacion-049-pago-de-gasto-de-tramite.sql",
       "bloque": "verificación",
-      "ms": 104,
+      "ms": 82,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -252,7 +252,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00 · compra 9e33cf4c-cb74-4f52-9a40-efb953f83a0a · gasto asentado <NULL>"
+          "texto": "Gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00 · compra 049e4322-a5f6-488c-87ef-407fd41274ba · gasto asentado <NULL>"
         },
         {
           "nivel": "NOTICE",
@@ -303,7 +303,7 @@
     {
       "archivo": "verificacion-050-reversion-de-gasto-de-tramite.sql",
       "bloque": "verificación",
-      "ms": 55,
+      "ms": 30,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -328,7 +328,7 @@
     {
       "archivo": "verificacion-051-nota-de-credito.sql",
       "bloque": "verificación",
-      "ms": 96,
+      "ms": 50,
       "error": {
         "mensaje": "El cobro necesita una referencia: número de transferencia, cheque o recibo.",
         "detalle": null,
@@ -361,7 +361,7 @@
     {
       "archivo": "verificacion-052-anulacion-con-reversion.sql",
       "bloque": "verificación",
-      "ms": 23,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -373,7 +373,7 @@
     {
       "archivo": "verificacion-053-anulacion-con-nc-parcial.sql",
       "bloque": "verificación",
-      "ms": 29,
+      "ms": 13,
       "error": null,
       "avisos": [
         {
@@ -385,7 +385,7 @@
     {
       "archivo": "verificacion-054-tercero-por-linea.sql",
       "bloque": "verificación",
-      "ms": 188,
+      "ms": 117,
       "error": null,
       "avisos": [
         {
@@ -441,7 +441,7 @@
     {
       "archivo": "verificacion-055-reversion-de-asiento.sql",
       "bloque": "verificación",
-      "ms": 11,
+      "ms": 9,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -453,7 +453,7 @@
     {
       "archivo": "verificacion-057-proveedor-campos.sql",
       "bloque": "verificación",
-      "ms": 47,
+      "ms": 45,
       "error": null,
       "avisos": [
         {
@@ -525,7 +525,7 @@
     {
       "archivo": "verificacion-058-motivo-anulacion.sql",
       "bloque": "verificación",
-      "ms": 25,
+      "ms": 24,
       "error": null,
       "avisos": [
         {
@@ -569,7 +569,7 @@
     {
       "archivo": "verificacion-059-registro-anulaciones.sql",
       "bloque": "verificación",
-      "ms": 22,
+      "ms": 20,
       "error": null,
       "avisos": [
         {
@@ -625,7 +625,7 @@
     {
       "archivo": "verificacion-060-reversion-nota-de-credito.sql",
       "bloque": "verificación",
-      "ms": 152,
+      "ms": 146,
       "error": null,
       "avisos": [
         {
@@ -697,7 +697,7 @@
     {
       "archivo": "verificacion-063-anular-con-nc-reversada.sql",
       "bloque": "verificación",
-      "ms": 197,
+      "ms": 214,
       "error": null,
       "avisos": [
         {
@@ -729,7 +729,7 @@
     {
       "archivo": "verificacion-066-nc-de-compra.sql",
       "bloque": "verificación",
-      "ms": 16,
+      "ms": 13,
       "error": {
         "mensaje": "function public.create_supplier_credit_note(uuid, uuid, unknown, date, unknown, unknown, date, jsonb, jsonb, unknown) does not exist",
         "detalle": null,
@@ -741,7 +741,7 @@
     {
       "archivo": "verificacion-067-importacion-de-asientos.sql",
       "bloque": "verificación",
-      "ms": 155,
+      "ms": 160,
       "error": null,
       "avisos": [
         {
@@ -750,7 +750,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "1 ✅ lote b890e6ab-946c-42a6-9a2d-dc1d9ba4fa46 · asientos [5, 6] · total débitos 125.50"
+          "texto": "1 ✅ lote 17a206ce-4586-4b4a-9395-721d3d8084f2 · asientos [5, 6] · total débitos 125.50"
         },
         {
           "nivel": "NOTICE",
@@ -774,7 +774,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "6 ✅ reimportado tras deshacer: lote 273e4a9f-27b3-40b3-a715-48c1583d881c"
+          "texto": "6 ✅ reimportado tras deshacer: lote 4b13d7fd-e8ea-4e9f-91ba-05c8e4936076"
         },
         {
           "nivel": "NOTICE",
@@ -785,7 +785,7 @@
     {
       "archivo": "verificacion-068-069-fecha-de-registro.sql",
       "bloque": "verificación",
-      "ms": 33,
+      "ms": 27,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -806,7 +806,7 @@
     {
       "archivo": "verificacion-071-motor-v4.sql",
       "bloque": "verificación",
-      "ms": 186,
+      "ms": 183,
       "error": {
         "mensaje": "function \"public.create_supplier_credit_note(uuid,uuid,text,date,text,text,date,jsonb,jsonb,uuid)\" does not exist",
         "detalle": null,
@@ -879,7 +879,7 @@
     {
       "archivo": "verificacion-072-hash-v5-verificador.sql",
       "bloque": "verificación",
-      "ms": 76,
+      "ms": 73,
       "error": null,
       "avisos": [
         {
@@ -931,7 +931,7 @@
     {
       "archivo": "verificacion-073-074.sql",
       "bloque": "verificación",
-      "ms": 97,
+      "ms": 105,
       "error": null,
       "avisos": [
         {
@@ -995,7 +995,7 @@
     {
       "archivo": "verificacion-075-ancla.sql",
       "bloque": "verificación",
-      "ms": 33,
+      "ms": 23,
       "error": null,
       "avisos": [
         {
@@ -1043,7 +1043,7 @@
     {
       "archivo": "verificacion-076-nc-modulo.sql",
       "bloque": "verificación",
-      "ms": 142,
+      "ms": 123,
       "error": null,
       "avisos": [
         {
@@ -1099,7 +1099,7 @@
     {
       "archivo": "verificacion-077-nota-de-debito.sql",
       "bloque": "verificación",
-      "ms": 45,
+      "ms": 33,
       "error": null,
       "avisos": [
         {
@@ -1167,7 +1167,7 @@
     {
       "archivo": "verificacion-079-plan-de-cuentas.sql",
       "bloque": "verificación",
-      "ms": 36,
+      "ms": 34,
       "error": null,
       "avisos": [
         {
@@ -1211,7 +1211,7 @@
     {
       "archivo": "verificacion-080-cierre-anual.sql",
       "bloque": "verificación",
-      "ms": 214,
+      "ms": 172,
       "error": null,
       "avisos": [
         {
@@ -1259,7 +1259,7 @@
     {
       "archivo": "verificacion-082-otros-servicios-y-bancos.sql",
       "bloque": "verificación",
-      "ms": 80,
+      "ms": 75,
       "error": null,
       "avisos": [
         {
@@ -1291,7 +1291,7 @@
     {
       "archivo": "verificacion-083-fe-estado-interna.sql",
       "bloque": "verificación",
-      "ms": 21,
+      "ms": 16,
       "error": null,
       "avisos": [
         {
@@ -1323,59 +1323,19 @@
     {
       "archivo": "verificacion-094-documentos-de-prueba.sql",
       "bloque": "verificación",
-      "ms": 91,
-      "error": null,
-      "avisos": [
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [0] factura de un cliente normal: nace real"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [1] marcar el cliente no toca sus facturas"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [2] una de prueba y la otra real, del mismo cliente"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [3] sin motivo: rechazado"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [4] desmarcar sin llave: rechazado"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [5] desmarcar el cliente sin llave: rechazado"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "schema \"pg_temp\" does not exist, skipping"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [6] con asiento: El documento VERIF-094-REAL (invoices) tiene asiento en el libro: no se marca de prueba. Corríjalo en el libro (reversión, NC o anulación)."
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [7] factura nueva de un cliente de prueba: nace de prueba"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "✅ [8] cobro nuevo de un cliente de prueba: nace de prueba"
-        },
-        {
-          "nivel": "NOTICE",
-          "texto": "094: 9 OK, 0 FALLAS"
-        }
-      ]
+      "ms": 40,
+      "error": {
+        "mensaje": "La fecha de la factura (20/05/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.",
+        "detalle": null,
+        "donde": "PL/pgSQL function finanzas_documento_desde_el_inicio() line 21 at RAISE\nSQL statement \"INSERT INTO invoices (id, tenant_id, invoice_number, invoice_kind, quote_id, client_id, case_id, issue_date, due_date, status, currency, subtotal_total, tax_total, grand_total, amount_paid, notes, created_at, updated_at, created_by, dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url, cancellation_reason, cancelled_at, fe_estado, dgi_protocolo_autorizacion, i_amb, punto_facturacion, numero_documento, qr_content, cafe_storage_key, xml_storage_key, ef_invoice_uuid, credited_total, dgi_cufe_origen, accounting_date, referenced_invoice_id, fe_motivo_pendiente, fe_motivo_pendiente_en, de_prueba, de_prueba_motivo) SELECT id, tenant_id, invoice_number, invoice_kind, quote_id, client_id, case_id, issue_date, due_date, status, currency, subtotal_total, tax_total, grand_total, amount_paid, notes, created_at, updated_at, created_by, dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url, cancellation_reason, cancelled_at, fe_estado, dgi_protocolo_autorizacion, i_amb, punto_facturacion, numero_documento, qr_content, cafe_storage_key, xml_storage_key, ef_invoice_uuid, credited_total, dgi_cufe_origen, accounting_date, referenced_invoice_id, fe_motivo_pendiente, fe_motivo_pendiente_en, de_prueba, de_prueba_motivo FROM jsonb_populate_record(NULL::invoices, $1) RETURNING id\"\nPL/pgSQL function inline_code_block line 34 at EXECUTE",
+        "codigo": "23514"
+      },
+      "avisos": []
     },
     {
       "archivo": "verificacion-095-documentos-de-prueba-fuera-del-libro.sql",
       "bloque": "verificación",
-      "ms": 124,
+      "ms": 138,
       "error": null,
       "avisos": [
         {
@@ -1413,6 +1373,110 @@
         {
           "nivel": "NOTICE",
           "texto": "095: 6 OK, 0 FALLAS"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-096-inicio-contable.sql",
+      "bloque": "verificación",
+      "ms": 262,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "inicio contable del bufete: 2026-07-01"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [1] El documento VERIF-096-ANTES es del 30/06/2026, anterior al inicio contable (01/07/2026): está contabilizado fuera y no genera asiento."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [2] factura del mismo día del inicio: entra"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [3] factura posterior al inicio: entra"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [4] cobro posterior a una factura anterior: entra (DEBE 100001 / HABER 100004 del cliente)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [5] El documento cobro sin número es del 28/06/2026, anterior al inicio contable (01/07/2026): está contabilizado fuera y no genera asiento."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [6] RPC: La factura VERIF-096-ANTES (30/06/2026) está contabilizada fuera: su fecha es anterior al inicio contable (01/07/2026). No se anula: se corrige con una nota de crédito con fecha igual o posterior al inicio."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [6b] UPDATE directo a anulada: rechazado"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [7] NC posterior de una factura anterior: entra (DEBE ingreso / HABER 100004 del cliente)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [8] El documento VERIF-096-PRUEBA es de prueba: no se registra en el libro."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [9] No se puede mover el inicio contable del 01/07/2026 al 02/07/2026: 1 documento(s) quedarían del lado equivocado. factura VERIF-096-MISMO (01/07/2026): tiene el asiento 5 y quedaría antes del inicio."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [10] No se puede mover el inicio contable del 01/07/2026 al 30/06/2026: 2 documento(s) quedarían del lado equivocado. factura VERIF-096-ANTES (30/06/2026): no tiene asiento y quedaría después del inicio; factura VERIF-096-ANTES-2 (30/06/2026): no tiene asiento y quedaría después del inicio."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [11a] La fecha de la factura (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [11b] La fecha del cobro (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [11c] La fecha de la compra (21/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [11d] La fecha del gasto de trámite (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [11e] La fecha de la nota de crédito (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [12] La fecha de la factura (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [13] La fecha de la factura (29/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [14a] El cobro (28/06/2026) está contabilizado fuera: su fecha es anterior al inicio contable (01/07/2026). No se elimina: se corrige con un asiento de diario con fecha igual o posterior al inicio."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [14b] El gasto de trámite Gasto prueba de concurrencia (26/06/2026) está contabilizado fuera: su fecha es anterior al inicio contable (01/07/2026). No se elimina: se corrige con una nota de crédito del proveedor con fecha igual o posterior al inicio."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "096: 20 OK, 0 FALLAS"
         }
       ]
     },

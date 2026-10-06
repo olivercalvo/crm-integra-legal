@@ -18,7 +18,7 @@
  * 'pagada'→'emitida' / 'parc'→'emitida'; la whitelist de T2 ya lo permite).
  */
 
-import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreatePaymentInput } from "@/lib/finanzas/types/payment";
@@ -120,6 +120,11 @@ export async function createPayment(
   if (!input.applications || input.applications.length === 0) {
     throw new MutationError("Elija al menos una factura a la que aplicar el cobro.", 400);
   }
+
+  // 096 (regla 3.3.5): un cobro nuevo no lleva fecha anterior al inicio
+  // contable. Antes del número. Uno posterior aplicado a una factura de antes
+  // del inicio sí se registra y postea (HABER 100004 del cliente).
+  await asegurarFechaDesdeElInicio(db, tenantId, "cobro", input.payment_date, "payment_date");
 
   // 1. Lookup de las facturas + estado + cap por balance_due, POR factura
   const ids = input.applications.map((a) => a.invoice_id);
@@ -274,15 +279,6 @@ export async function createPayment(
   }
 
   // ---- 5) EL ASIENTO -----------------------------------------------------
-  // 096: un cobro con fecha anterior al inicio contable está contabilizado
-  // fuera: queda registrado y aplicado, sin asiento. Lo que decide es la fecha
-  // DEL COBRO, no la de la factura: uno posterior aplicado a una factura de
-  // antes del inicio SÍ postea (acredita el 100004 del cliente, que viene del
-  // saldo inicial).
-  if (await documentoContabilizadoFuera(db, tenantId, input.payment_date)) {
-    return { id: paymentId, payment_number: paymentNumber };
-  }
-
   const cobro = await cargarCobroParaAsiento(ledgerDb, tenantId, paymentId);
   if (!cobro) {
     await deshacerCobro(
@@ -327,7 +323,7 @@ export async function deletePayment(
   // Lookup para distinguir "not found" de "permission". Más diagnóstico.
   const { data: pay, error: errFetch } = await db
     .from("payments")
-    .select("id, status")
+    .select("id, status, payment_number, payment_date")
     .eq("tenant_id", tenantId)
     .eq("id", paymentId)
     .maybeSingle();
@@ -338,6 +334,14 @@ export async function deletePayment(
   if (!pay) {
     throw new MutationError("Pago no encontrado", 404);
   }
+  // 096: un cobro contabilizado fuera (anterior al inicio) no se elimina.
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    "cobro",
+    (pay as { payment_number?: string | null }).payment_number ?? null,
+    (pay as { payment_date?: string | null }).payment_date ?? null
+  );
 
   // ---- 🔴 GATE CONTABLE ---------------------------------------------------
   // Un cobro que ya está en el libro NO se borra. Mismo patrón que

@@ -1,3 +1,5 @@
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { MutationError } from "@/lib/finanzas/api/errors";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -72,6 +74,15 @@ export const PATCH = conManejoDeAuditoria(async function PATCH(
     }
 
     if (date !== undefined && date !== existing.date) {
+      // 096: la fecha no se mueve a antes del inicio contable (la base lo exige igual).
+      try {
+        await asegurarFechaDesdeElInicio(admin, profile.tenant_id, "gasto_tramite", date, "date");
+      } catch (err) {
+        if (err instanceof MutationError) {
+          return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
+        }
+        throw err;
+      }
       updates.date = date;
       auditEntries.push({ field: "date", old_value: existing.date, new_value: date });
     }
@@ -183,6 +194,17 @@ export const DELETE = conManejoDeAuditoria(async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
+    }
+
+    // 096: un gasto contabilizado fuera (anterior al inicio) no se elimina. Antes
+    // de tocar el storage.
+    try {
+      await asegurarQueNoEsContabilizadoFuera(admin, profile.tenant_id, "gasto_tramite", existing.concept ?? null, existing.date);
+    } catch (err) {
+      if (err instanceof MutationError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
     }
 
     // If expense has a receipt in storage, delete it

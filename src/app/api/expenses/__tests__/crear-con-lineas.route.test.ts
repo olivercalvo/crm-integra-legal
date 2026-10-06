@@ -529,13 +529,13 @@ test("🔴 si el posteo falla (período cerrado), el gasto se DESHACE y el error
   assert.equal(state.capturado.cacheEscrito, null, "no se escribió posted_entry_id");
 });
 
-test("096: un gasto anterior al inicio contable se registra SIN asiento (contabilizado fuera)", { skip: skipNoMocks }, async () => {
+test("096: un gasto con fecha anterior al inicio contable NO se registra (regla 3.3.5)", { skip: skipNoMocks }, async () => {
   reset();
   const res = await POST(req({ ...BASE, date: "2026-03-15", lines: [linea()] }));
-  assert.equal(res.status, 201);
+  assert.equal(res.status, 422);
   const body = await res.json();
-  assert.equal(body.asiento, null);
-  assert.equal(body.contabilizado_fuera, true);
-  assert.equal(state.capturado.rpcArgs ?? null, null, "no se llamó al RPC de posteo");
-  assert.equal(state.capturado.borroElGasto, false, "el gasto queda registrado");
+  assert.match(body.error, /La fecha del gasto de trámite \(15\/03\/2026\) es anterior al inicio contable/);
+  assert.match(body.fieldErrors?.date ?? "", /anterior al inicio contable/, "el error va al campo de la fecha");
+  assert.equal(state.capturado.expenseInsert ?? null, null, "no se insertó nada");
+  assert.equal(state.capturado.rpcArgs ?? null, null, "ni se llamó al RPC");
 });

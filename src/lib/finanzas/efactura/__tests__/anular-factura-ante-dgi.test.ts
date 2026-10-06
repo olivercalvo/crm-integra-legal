@@ -156,6 +156,10 @@ class FakeQuery {
   private resolver(): unknown {
     const e = escenario;
 
+    // 096: el inicio contable. No se anota: no es parte del orden que se congela.
+    if (this.tabla === "finanzas_parametros" && this.op === "select") {
+      return { data: { fecha_inicio_contable: "2026-07-01" }, error: null };
+    }
     if (this.tabla === "invoices" && this.op === "select") {
       e.diario.push("SELECT invoices (estado fiscal e interno)");
       return { data: e.invoice, error: null };
@@ -811,4 +815,30 @@ test("marcada canceled sin CUFE: no se consultó a la DGI, y si el libro falla l
   assert.equal(falla.r.estado, "anulada_en_dgi_falta_el_libro");
   assert.match(falla.r.mensaje, /no se completó en el libro contable/);
   assert.doesNotMatch(falla.r.mensaje, /quedó ANULADA ante la DGI/);
+});
+
+// ---------------------------------------------------------------------------
+// 096: CONTABILIZADA FUERA → NO SE ANULA (06/10/2026)
+// ---------------------------------------------------------------------------
+
+test("🔴 096: una factura anterior al inicio contable no se anula, ni ante la DGI ni en el libro", { skip: skipNoMocks }, async () => {
+  for (const factura of [
+    { ...nuevoEscenario().invoice, issue_date: "2026-06-20", invoice_number: "FAC-HON-000489" },
+    { ...SIN_CUFE, issue_date: "2026-06-20" },
+  ]) {
+    escenario = nuevoEscenario({ invoice: factura });
+    await assert.rejects(
+      anularFacturaAnteDgi(db as never, db as never, TENANT, USER, INVOICE, MOTIVO, null, HOY),
+      (err: unknown) => {
+        assert.equal((err as { status?: number }).status, 409);
+        assert.match(String((err as Error).message), /está contabilizada fuera/);
+        assert.match(String((err as Error).message), /se corrige con una nota de crédito con fecha igual o posterior al inicio/);
+        return true;
+      }
+    );
+    const d = escenario.diario;
+    assert.ok(!d.some((l) => l.startsWith("POST")), "no se le habló al PAC");
+    assert.ok(!d.some((l) => l.startsWith("INSERT fe_anulaciones")), "ni se registró un intento");
+    assert.ok(!d.some((l) => l.startsWith("→ cancelInvoice")), "ni se tocó el libro");
+  }
 });

@@ -1,5 +1,5 @@
 import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
-import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { CircleDollarSign, Banknote, FileText, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
@@ -195,8 +195,11 @@ export function PaymentsSection({
                 const label = `B/. ${fmtImporte(amount)} del ${formatDate(p.payment_date)}`;
                 const reversado = !!p.reversion;
                 // Sin asiento se ELIMINA; con asiento se REVERSA. Nunca las dos.
+                // 096: un cobro contabilizado fuera (anterior al inicio) no se
+                // elimina. La ruta responde 409 y la base lo rechaza igual.
+                const fuera = !!inicio && esContabilizadoFuera(p.payment_date, inicio);
                 const canDelete =
-                  !reversado && canMutate && p.status === "registrado" && !p.asiento;
+                  !reversado && canMutate && p.status === "registrado" && !p.asiento && !fuera;
                 const canReverseThis =
                   !reversado && canReverse && p.status === "registrado" && !!p.asiento;
                 return (
@@ -286,7 +289,14 @@ export function PaymentsSection({
                           />
                         ) : canDelete ? (
                           <DeletePaymentButton paymentId={p.id} paymentLabel={label} />
-                        ) : reversado ? null : (
+                        ) : reversado ? null : fuera && !p.asiento && canMutate ? (
+                          <span
+                            className="text-xs text-slate-600"
+                            title={mensajeContabilizadoFueraNoSeAnula("cobro", p.payment_number ?? null, p.payment_date, inicio!)}
+                          >
+                            No se elimina
+                          </span>
+                        ) : (
                           <span
                             className="text-xs text-gray-400"
                             title={

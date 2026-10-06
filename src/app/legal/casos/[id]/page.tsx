@@ -1,4 +1,5 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { cargarInicioContable, esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
@@ -63,6 +64,8 @@ export default async function ExpedienteDetailPage({
   // Solo cuentas ACTIVAS: los reportes filtran por `active`, así que ofrecer una
   // inactiva sería ofrecer una clasificación que después no se ve en ningún lado.
   // La ruta de API lo vuelve a validar — el dropdown no es un permiso.
+  // 096: un gasto anterior al inicio contable no se elimina (contabilizado fuera).
+  const inicio = await cargarInicioContable(db, tenantId);
   const [cuentasPlan, proveedores, taxCodes, bancos] = await Promise.all([
     listChartAccounts(db, tenantId),
     listSupplierOptions(db, tenantId),
@@ -686,6 +689,11 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEliminar={
+                            esContabilizadoFuera(e.date, inicio)
+                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                              : null
+                          }
                           colorClass="text-red-600"
                         />
                       ))}
@@ -786,6 +794,11 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEliminar={
+                            esContabilizadoFuera(e.date, inicio)
+                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                              : null
+                          }
                           colorClass="text-red-600"
                         />
                       ))}

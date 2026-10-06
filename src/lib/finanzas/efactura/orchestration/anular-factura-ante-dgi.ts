@@ -97,6 +97,7 @@ import { clasificarRespuestaDeAnulacion } from "@/lib/finanzas/efactura/orchestr
 import { anularEnPac } from "@/lib/finanzas/efactura/transport/anulacion-en-pac";
 import { validarMotivoDeAnulacion } from "@/lib/finanzas/validators/cancel-invoice";
 import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
+import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 
 type DB = SupabaseClient;
 
@@ -602,6 +603,10 @@ async function cargarEstadoDeFactura(
   };
 
   const estado: EstadoDeFactura = {
+    // 096: la matriz responde `contabilizada_fuera` ANTES de hablar con el PAC.
+    inicioContable: await cargarInicioContable(db, tenantId),
+    esNotaDeDebito: documento.nombre === "nota de débito",
+    numero: documento.numero,
     status: String(data.status),
     feEstado: (data.fe_estado as FeEstado) ?? "no_emitida",
     dgiCufe: (data.dgi_cufe as string | null) ?? null,

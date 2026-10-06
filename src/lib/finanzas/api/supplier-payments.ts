@@ -26,7 +26,11 @@
  * contra information_schema el 21/09/2026.
  */
 
-import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import {
+  asegurarFechaDesdeElInicio,
+  asegurarQueNoEsContabilizadoFuera,
+  documentoContabilizadoFuera,
+} from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { destinoDePago, type CreateSupplierPaymentInput } from "@/lib/finanzas/types/supplier-payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -68,6 +72,9 @@ export async function createSupplierPayment(
       400
     );
   }
+
+  // 096 (regla 3.3.5): un pago nuevo no lleva fecha anterior al inicio contable.
+  await asegurarFechaDesdeElInicio(db, tenantId, "pago_proveedor", input.payment_date, "payment_date");
 
   // 1. El documento y su saldo (049: una compra O un gasto de trámite)
   const destino = destinoDePago(input);
@@ -199,13 +206,8 @@ export async function createSupplierPayment(
     throw causa;
   }
 
-  // 3. El asiento. 096: un pago con fecha anterior al inicio contable está
-  //    contabilizado fuera: queda registrado, sin asiento. Uno posterior a una
-  //    compra anterior SÍ postea (debita el 200001 del proveedor, que viene del
-  //    saldo inicial).
-  if (await documentoContabilizadoFuera(db, tenantId, input.payment_date)) {
-    return { id: pagoId, payment_number: paymentNumber };
-  }
+  // 3. El asiento. Un pago posterior a una compra o un gasto anteriores al
+  //    inicio contable SÍ postea (DEBE 200001 del proveedor, del saldo inicial).
   const datos = await cargarPagoProveedorParaAsiento(ledgerDb, tenantId, pagoId);
   if (!datos) {
     await deshacerPago(
@@ -244,6 +246,15 @@ export async function deleteSupplierPayment(
   if (!pago) {
     throw new MutationError("Pago no encontrado", 404);
   }
+  // 096: un pago contabilizado fuera (anterior al inicio) no se elimina. Los
+  // saldos heredados de la 048 tampoco, si su fecha es anterior.
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    "pago_proveedor",
+    (pago as { payment_number?: string | null }).payment_number ?? null,
+    (pago as { payment_date?: string | null }).payment_date ?? null
+  );
 
   const { data: asiento } = await db
     .from("journal_entries")

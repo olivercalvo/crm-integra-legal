@@ -21,6 +21,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MutationError } from "@/lib/finanzas/api/errors";
 
 type DB = SupabaseClient;
 
@@ -105,4 +106,125 @@ export function validarInicioContable(
     return { ok: false, error: "La fecha de inicio contable está fuera de rango." };
   }
   return { ok: true, fecha: f };
+}
+
+// ---------------------------------------------------------------------------
+// 096 (ajuste del 06/10/2026): lo anterior al inicio NO se crea, NO se mueve a
+// una fecha anterior, y NO se anula ni se elimina. La base lo vuelve a exigir
+// con los mismos textos (triggers de la 096); acá se dice antes de tocar nada,
+// y antes de tomar un número.
+// ---------------------------------------------------------------------------
+
+export type TipoDeDocumento =
+  | "factura"
+  | "nota_debito"
+  | "nota_credito"
+  | "cobro"
+  | "compra"
+  | "gasto_tramite"
+  | "pago_proveedor"
+  | "factura_externa"
+  | "nota_credito_compra";
+
+/** «la factura», «el cobro»… para armar las frases. */
+const NOMBRE: Record<TipoDeDocumento, string> = {
+  factura: "la factura",
+  nota_debito: "la nota de débito",
+  nota_credito: "la nota de crédito",
+  cobro: "el cobro",
+  compra: "la compra",
+  gasto_tramite: "el gasto de trámite",
+  pago_proveedor: "el pago al proveedor",
+  factura_externa: "la factura emitida fuera",
+  nota_credito_compra: "la nota de crédito del proveedor",
+};
+
+/**
+ * Con qué se corrige un documento contabilizado fuera. Una venta y una compra,
+ * con una nota de crédito; un cobro o un pago no tienen nota de crédito: con un
+ * asiento de diario (siempre con fecha igual o posterior al inicio).
+ */
+const SE_CORRIGE_CON: Record<TipoDeDocumento, string> = {
+  factura: "una nota de crédito",
+  nota_debito: "una nota de crédito",
+  nota_credito: "un asiento de diario",
+  cobro: "un asiento de diario",
+  compra: "una nota de crédito del proveedor",
+  gasto_tramite: "una nota de crédito del proveedor",
+  pago_proveedor: "un asiento de diario",
+  factura_externa: "una nota de crédito",
+  nota_credito_compra: "un asiento de diario",
+};
+
+/** Los masculinos: «el cobro … está contabilizado fuera». */
+const MASCULINO = new Set<TipoDeDocumento>(["cobro", "gasto_tramite", "pago_proveedor"]);
+
+function mayuscula(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** «de la factura» / «del cobro» (de + el = del). */
+function deNombre(tipo: TipoDeDocumento): string {
+  const n = NOMBRE[tipo];
+  return n.startsWith("el ") ? `del ${n.slice(3)}` : `de ${n}`;
+}
+
+/** Alta o edición con una fecha anterior al inicio. */
+export function mensajeFechaAnteriorAlInicio(tipo: TipoDeDocumento, fecha: string, inicio: string): string {
+  return (
+    `La fecha ${deNombre(tipo)} (${fechaCorta(fecha)}) es anterior al inicio contable ` +
+    `(${fechaCorta(inicio)}). Lo anterior al inicio está en los libros del contador: no se ` +
+    `registran documentos con esa fecha.`
+  );
+}
+
+/** Anular (factura, ND) o eliminar (los demás) un documento contabilizado fuera. */
+export function mensajeContabilizadoFueraNoSeAnula(
+  tipo: TipoDeDocumento,
+  numero: string | null,
+  fecha: string,
+  inicio: string
+): string {
+  const verbo = tipo === "factura" || tipo === "nota_debito" || tipo === "factura_externa" ? "anula" : "elimina";
+  const doc = numero ? `${NOMBRE[tipo]} ${numero}` : NOMBRE[tipo];
+  return (
+    `${mayuscula(doc)} (${fechaCorta(fecha)}) está ${MASCULINO.has(tipo) ? "contabilizado" : "contabilizada"} fuera: ` +
+    `su fecha es anterior al ` +
+    `inicio contable (${fechaCorta(inicio)}). No se ${verbo}: se corrige con ` +
+    `${SE_CORRIGE_CON[tipo]} con fecha igual o posterior al inicio.`
+  );
+}
+
+/**
+ * Alta o edición: la fecha del documento no puede ser anterior al inicio. 422,
+ * con el error en el campo (`campo`) para que el formulario lo marque.
+ */
+export async function asegurarFechaDesdeElInicio(
+  db: DB,
+  tenantId: string,
+  tipo: TipoDeDocumento,
+  fecha: string | null | undefined,
+  campo: string
+): Promise<void> {
+  if (!fecha) return;
+  const inicio = await cargarInicioContable(db, tenantId);
+  if (esContabilizadoFuera(fecha, inicio)) {
+    const mensaje = mensajeFechaAnteriorAlInicio(tipo, fecha, inicio);
+    throw new MutationError(mensaje, 422, undefined, { [campo]: mensaje });
+  }
+}
+
+/** Anular o eliminar: un documento contabilizado fuera no se toca. 409. */
+export async function asegurarQueNoEsContabilizadoFuera(
+  db: DB,
+  tenantId: string,
+  tipo: TipoDeDocumento,
+  numero: string | null,
+  fecha: string | null | undefined
+): Promise<void> {
+  if (!fecha) return;
+  const inicio = await cargarInicioContable(db, tenantId);
+  if (esContabilizadoFuera(fecha, inicio)) {
+    throw new MutationError(mensajeContabilizadoFueraNoSeAnula(tipo, numero, fecha, inicio), 409);
+  }
 }

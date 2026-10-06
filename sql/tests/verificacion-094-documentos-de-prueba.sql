@@ -41,7 +41,11 @@ BEGIN
     FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'invoices' AND is_generated = 'NEVER';
   v_base := v_base || jsonb_build_object('client_id', v_cli, 'dgi_cufe', NULL, 'dgi_cufe_origen', NULL,
-                                         'amount_paid', 0, 'credited_total', 0, 'de_prueba', false, 'de_prueba_motivo', NULL);
+                                         'amount_paid', 0, 'credited_total', 0, 'de_prueba', false, 'de_prueba_motivo', NULL,
+                                         -- 096: con la fecha de HOY. Copiar la de la factura vieja
+                                         -- sería crear un documento anterior al inicio contable.
+                                         'issue_date', current_date, 'accounting_date', current_date,
+                                         'due_date', current_date + 30);
   EXECUTE format('INSERT INTO invoices (%s) SELECT %s FROM jsonb_populate_record(NULL::invoices, $1) RETURNING id', v_cols, v_cols)
     USING v_base || jsonb_build_object('id', gen_random_uuid(), 'invoice_number', 'VERIF-094-REAL') INTO v_real;
 

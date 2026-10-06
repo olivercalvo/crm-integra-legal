@@ -1,5 +1,5 @@
 import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
-import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { Banknote, CircleDollarSign, FileText, History, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { fmtImporte } from "@/lib/utils/importe";
@@ -121,7 +121,9 @@ export function SupplierPaymentsSection({ expenseId, destino = "compra", expense
                 const reversado = p.status === "anulado";
                 const heredado = p.kind === "migrated_balance";
                 const label = `${heredado ? "Saldo heredado" : p.payment_number ?? "Pago"} · B/. ${fmtImporte(p.amount)} del ${formatDate(p.payment_date)}`;
-                const canDelete = !reversado && canMutate && !p.asiento;
+                // 096: un pago contabilizado fuera (anterior al inicio) no se elimina.
+                const fuera = !!inicio && !!p.payment_date && esContabilizadoFuera(p.payment_date, inicio);
+                const canDelete = !reversado && canMutate && !p.asiento && !fuera;
                 const canReverse = !reversado && canMutate && !!p.asiento && !heredado;
                 // Solo un PAGO tiene comprobante; el heredado no (ver arriba).
                 const tieneComprobante = !heredado && !!p.payment_number;
@@ -204,6 +206,13 @@ export function SupplierPaymentsSection({ expenseId, destino = "compra", expense
                           />
                         ) : canDelete ? (
                           <DeleteSupplierPaymentButton paymentId={p.id} paymentLabel={label} heredado={heredado} />
+                        ) : fuera && !p.asiento && canMutate && !reversado ? (
+                          <span
+                            className="text-xs text-slate-600"
+                            title={mensajeContabilizadoFueraNoSeAnula("pago_proveedor", p.payment_number ?? null, p.payment_date, inicio!)}
+                          >
+                            No se elimina
+                          </span>
                         ) : null}
                       </div>
                     </td>

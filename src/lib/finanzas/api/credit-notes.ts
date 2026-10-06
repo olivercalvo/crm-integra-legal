@@ -15,7 +15,6 @@
  * UPDATE manual de subtotal_total / tax_total / grand_total.
  */
 
-import { documentoContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
@@ -23,6 +22,7 @@ import { cargarReceptor } from "@/lib/finanzas/efactura/data/datos-para-validar"
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { asegurarFechaDesdeElInicio } from "@/lib/finanzas/contabilidad/inicio-contable";
 import {
   MENSAJE_NC_VENTA_SIN_FACTURA,
   PERMITIR_NC_VENTA_SIN_FACTURA,
@@ -257,6 +257,10 @@ ${resumirProblemas(problemas)}`,
   });
 
   // 4. El número, después de todas las validaciones (un 400 no quema correlativo)
+  // 096: la NC nace con la fecha de hoy. Si el inicio contable estuviera en el
+  // futuro, la base rechazaría el alta DESPUÉS del número: se dice antes.
+  await asegurarFechaDesdeElInicio(db, tenantId, "nota_credito", hoyEnPanama(), "issue_date");
+
   const { data: nextNumber, error: errSeq } = await db.rpc("get_next_sequence_number", {
     p_tenant_id: tenantId,
     p_sequence_type: "credit_note",
@@ -413,20 +417,8 @@ export async function emitCreditNote(
   userId: string,
   input: CreateCreditNoteInput,
   opciones?: { validarParaDgi?: boolean }
-): Promise<{ id: string; credit_note_number: string; total: number; entry_id: string | null }> {
+): Promise<{ id: string; credit_note_number: string; total: number; entry_id: string }> {
   const nc = await createCreditNote(db, tenantId, userId, input, opciones);
-
-  // 096: una NC con fecha anterior al inicio contable está contabilizada fuera:
-  // queda emitida y acredita su factura, sin asiento. La base lo rechazaría.
-  const { data: fechaNc } = await db
-    .from("credit_notes")
-    .select("issue_date")
-    .eq("tenant_id", tenantId)
-    .eq("id", nc.id)
-    .maybeSingle();
-  if (await documentoContabilizadoFuera(db, tenantId, (fechaNc as { issue_date?: string | null } | null)?.issue_date ?? null)) {
-    return { ...nc, entry_id: null };
-  }
 
   const datos = await cargarNotaDeCreditoParaAsiento(ledgerDb, tenantId, nc.id);
   if (!datos) {

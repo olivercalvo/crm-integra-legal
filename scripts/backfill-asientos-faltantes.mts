@@ -92,6 +92,7 @@ const db = createClient(URL_SB, env.SUPABASE_SERVICE_ROLE_KEY as string, {
 });
 
 const { postJournalEntry } = await import("../src/lib/finanzas/contabilidad/posting.ts");
+const { esContabilizadoFuera, cargarInicioContable } = await import("../src/lib/finanzas/contabilidad/inicio-contable.ts");
 
 const money = (n: number) =>
   n.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -188,12 +189,19 @@ console.log("═".repeat(78));
 console.log("POSTEO");
 console.log("═".repeat(78));
 
+const inicioContable = await cargarInicioContable(db as never, tenantId);
 let posteados = 0;
 for (const f of FALTANTES) {
   const doc = await f.buscar();
   if (!doc) {
     console.error(`  ❌ ${f.etiqueta}: el documento NO EXISTE en staging. Se aborta.`);
     process.exit(1);
+  }
+  // 096: un documento anterior al inicio contable está contabilizado fuera: no se
+  // postea (la base lo rechazaría). Los dos de este script son de abril y junio.
+  if (esContabilizadoFuera(doc.fecha, inicioContable)) {
+    console.log(`  ⏭  ${f.etiqueta}: contabilizado fuera (anterior al ${inicioContable}). No se postea.`);
+    continue;
   }
 
   const { data: yaTiene } = await db

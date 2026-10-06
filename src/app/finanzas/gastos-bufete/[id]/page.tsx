@@ -1,5 +1,5 @@
 import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
-import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { cargarInicioContable, esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote, ArrowLeft, Plus } from "lucide-react";
@@ -145,7 +145,15 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               </Button>
             </Link>
           )}
-          <BusinessExpenseActions id={expense.id} canMutate={canMutate} />
+          <BusinessExpenseActions
+            id={expense.id}
+            canMutate={canMutate}
+            bloqueoEliminar={
+              esContabilizadoFuera(expense.expense_date, inicio)
+                ? mensajeContabilizadoFueraNoSeAnula("compra", expense.description ?? null, expense.expense_date, inicio)
+                : null
+            }
+          />
         </div>
       </div>
 

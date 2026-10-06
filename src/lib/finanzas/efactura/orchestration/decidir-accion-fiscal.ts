@@ -90,6 +90,8 @@
  */
 
 /** Ventana de anulación ante la DGI. ideati, 22/09/2026. */
+import { esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
+
 export const HORAS_PARA_ANULAR = 182;
 
 /**
@@ -142,6 +144,16 @@ export interface EstadoDeFactura {
    * avisando que hay que anularla también donde se emitió.
    */
   emitidaFueraDelCrm?: boolean;
+  /**
+   * 096: el inicio contable del bufete (`YYYY-MM-DD`). Con `issueDate` anterior,
+   * la factura está CONTABILIZADA FUERA (QuickBooks) y no se anula: se corrige
+   * con una nota de crédito posterior al inicio. Sin el dato no se decide nada
+   * por esto (los llamadores viejos y los tests de la matriz).
+   */
+  inicioContable?: string | null;
+  /** Para el mensaje: nota de débito o factura, y su número. */
+  esNotaDeDebito?: boolean;
+  numero?: string | null;
 }
 
 export interface Ventana {
@@ -187,7 +199,13 @@ export type AccionSobreFactura =
   /** Borrador o cancelada antes de emitir: no hay documento que corregir. */
   | { accion: "no_aplica"; mensaje: string }
   /** Los datos se contradicen. Nadie debería actuar sobre esto sin mirarlo. */
-  | { accion: "inconsistente"; mensaje: string };
+  | { accion: "inconsistente"; mensaje: string }
+  /**
+   * 096: anterior al inicio contable. No se anula (ni ante la DGI ni en el
+   * libro): se corrige con una nota de crédito con fecha igual o posterior al
+   * inicio, que sí postea.
+   */
+  | { accion: "contabilizada_fuera"; mensaje: string };
 
 export type ClaveDeAccion = AccionSobreFactura["accion"];
 
@@ -210,6 +228,26 @@ export function decidirAccionFiscal(
       mensaje:
         "Esta factura todavía no se emitió: no hay nada que anular ni que acreditar. " +
         "Para descartarla está el botón Eliminar.",
+    };
+  }
+
+  // 0.b 096: CONTABILIZADA FUERA. Antes que todo lo demás, incluso que el estado
+  //     intermedio: la base rechaza la anulación de una factura anterior al
+  //     inicio (trigger de la 096), así que ofrecer «Completar anulación» sería
+  //     ofrecer algo que falla. Una ya anulada sigue en «nada que hacer».
+  if (
+    estado.inicioContable &&
+    estado.status !== "anulada" &&
+    esContabilizadoFuera(estado.issueDate, estado.inicioContable)
+  ) {
+    return {
+      accion: "contabilizada_fuera",
+      mensaje: mensajeContabilizadoFueraNoSeAnula(
+        estado.esNotaDeDebito ? "nota_debito" : "factura",
+        estado.numero ?? null,
+        String(estado.issueDate),
+        estado.inicioContable
+      ),
     };
   }
 

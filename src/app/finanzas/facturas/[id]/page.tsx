@@ -172,6 +172,10 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       amountPaid: Number(invoice.amount_paid ?? 0),
       mesCerrado,
       emitidaFueraDelCrm: emitidaFuera,
+      // 096: anterior al inicio contable → no se anula; se corrige con una NC.
+      inicioContable: esDePrueba ? null : inicio,
+      esNotaDeDebito: invoice.invoice_kind === "NOTA_DEBITO",
+      numero: invoice.invoice_number ?? null,
     },
     new Date()
   );

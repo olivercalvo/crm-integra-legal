@@ -33,6 +33,7 @@
  * venta en el libro sin emitir nada, y eso es trabajo de cierre contable.
  */
 
+import { asegurarFechaDesdeElInicio } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -85,6 +86,10 @@ export async function registrarFacturaExterna(
 
   // 2. Las líneas, contra el tipo (SOP-029): la misma regla que una factura del CRM.
   await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
+
+  // 2.b 096 (regla 3.3.5): tampoco una factura emitida fuera con fecha anterior al
+  //     inicio contable. Antes del RPC (que toma el número y postea).
+  await asegurarFechaDesdeElInicio(db, tenantId, "factura_externa", input.issue_date, "issue_date");
 
   // 3. Un CUFE, una factura. La base lo vuelve a exigir con un índice único;
   //    esto es para decirlo en el campo, nombrando la factura que ya lo tiene.

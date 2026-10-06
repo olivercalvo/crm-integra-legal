@@ -16,7 +16,7 @@ import {
 
 /**
  * Toast de éxito para acciones del módulo Facturas. Lee `?saved`, `?emitted`,
- * `?dgi=saved`, `?cancelled=1`, `?converted=<N>` o `?fe=sent|pending|error`
+ * `?dgi=saved`, `?cancelled=dgi_y_libro|solo_crm`, `?converted=<N>` o `?fe=sent|pending|error`
  * del URL — análogo a DeleteSuccessToast pero específico para Facturas.
  *
  * `?converted=N` viene del flujo de Cotizaciones cuando ConvertToInvoicesDialog
@@ -106,7 +106,14 @@ export function InvoiceSuccessToast() {
     message = `${emitted.startsWith("ND-") ? "Nota de débito emitida" : "Factura emitida"} con número ${emitted}`;
   } else if (cancelled) {
     icon = <XCircle size={18} className="text-red-600 shrink-0" />;
-    message = "Factura anulada correctamente";
+    // `?cancelled=dgi_y_libro|solo_crm` lo pone el diálogo según lo que hizo la
+    // ruta. Nunca se dice «ante la DGI» si no se le habló al PAC.
+    message =
+      cancelled === "dgi_y_libro"
+        ? "Anulada ante la DGI y en el libro contable"
+        : cancelled === "solo_crm"
+          ? "Anulada en el CRM. No se envió nada a la DGI"
+          : "Anulación registrada";
     palette = "danger";
   } else if (dgi === "saved") {
     icon = <FileBadge size={18} className="text-green-600 shrink-0" />;

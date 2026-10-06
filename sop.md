@@ -3190,6 +3190,24 @@ ser el mismo.
 Y **la pantalla ya no decide**: `showCancel` sale de `decidirAccionFiscal` (SOP-038), la misma
 función que usa el servidor.
 
+### Los mensajes dicen sólo lo que pasó (06/10/2026)
+
+Cinco caminos terminan en el libro (`cerrarEnElLibro`) y antes compartían los mensajes. Por eso una
+factura **sin CUFE** con el libro fallando decía «quedó ANULADO ante la DGI» sin que se le hablara al
+PAC. Ahora el orquestador le dice al libro qué pasó del lado de la DGI (`LadoDgi`):
+
+| Lado | Éxito | Falla del libro |
+|---|---|---|
+| PAC anuló / `0622` / reintento confirmado | «anulada ante la DGI y en el libro» (o «la DGI informó que ya estaba anulada») | estado intermedio, 409, «quedó ANULADA ante la DGI…» |
+| Sin CUFE, interna, emitida fuera | «quedó anulada en el CRM… No se envió nada a la DGI: <por qué>» | `no_se_anulo_en_el_libro`, el código del error, «no se completó en el libro contable… sigue emitida, sin cambios», **sin nombrar a la DGI** |
+| Marca `canceled` sin CUFE | «se completó en el libro… No se consultó a la DGI» | estado intermedio, sin decir que la DGI anuló |
+
+Sin DGI de por medio no hay estado intermedio: `cancelInvoice` es una transacción y la NC total se
+compensa. Igual se relee la factura: si la compensación también falló (`credited_total` ≠ 0), el
+mensaje pide soporte en vez de decir «sin cambios». El éxito trae `alcance` (`dgi_y_libro` |
+`solo_crm`) y el aviso de la pantalla sale de ahí, nunca del texto. La reversión de una NC sin DGI de
+por medio sigue el mismo criterio. Prueba en staging: `scripts/verificar-anulacion-sin-cufe.mts`.
+
 
 ---
 

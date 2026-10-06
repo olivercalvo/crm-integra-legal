@@ -12,6 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { reversarNotaDeCredito } from "../orchestration/anular-nota-de-credito-ante-dgi";
+import { MutationError } from "@/lib/finanzas/api/errors";
 
 Object.assign(process.env, {
   EFACTURA_EMISOR_RUC: "1234567",
@@ -203,4 +204,42 @@ test("la fecha elegida llega tal cual al libro", async () => {
     reversarEnElLibro: async (_m, f) => { fechaDelLibro = f; return LIBRO_OK() as never; },
   }, "2026-10-02");
   assert.equal(fechaDelLibro, "2026-10-02");
+});
+
+// ---------------------------------------------------------------------------
+// LOS MENSAJES DICEN SÓLO LO QUE PASÓ (06/10/2026)
+// ---------------------------------------------------------------------------
+
+test("🔴 sin DGI de por medio: el éxito dice por qué no se envió nada", async () => {
+  for (const [fe, porque] of [
+    ["no_emitida", /no estaba autorizada por la DGI/],
+    ["interna", /documento interno/],
+  ] as const) {
+    const { db, diario } = escenario({ fe_estado: fe, dgi_cufe: null });
+    const r = await reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, "Monto mal", AHORA,
+      deps(diario, () => { throw new Error("no debería llamarse"); }));
+    assert.equal(r.estado, "reversada");
+    assert.match(r.mensaje, /No se envió nada a la DGI/);
+    assert.match(r.mensaje, porque);
+    assert.doesNotMatch(r.mensaje, /anulada ante la DGI/i);
+  }
+});
+
+test("🔴 sin DGI de por medio y el libro falla: no nombra a la DGI ni deja estado intermedio", async () => {
+  const { db, diario, estado } = escenario({ fe_estado: "no_emitida", dgi_cufe: null });
+  await assert.rejects(
+    reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, "Monto mal", AHORA,
+      deps(diario, () => { throw new Error("no debería llamarse"); },
+        async () => { throw new MutationError("El período 2026-09 está cerrado", 409); })),
+    (e: unknown) => {
+      const m = String((e as Error).message);
+      assert.match(m, /no se completó en el libro contable/);
+      assert.match(m, /sigue vigente, sin cambios/);
+      assert.doesNotMatch(m, /DGI/);
+      assert.equal((e as MutationError).status, 409);
+      return true;
+    }
+  );
+  assert.deepEqual(diario, ["RPC reverse_credit_note"], "ni intento ni PAC ni marca");
+  assert.equal(estado.nc.fe_estado, "no_emitida");
 });

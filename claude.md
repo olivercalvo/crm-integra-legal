@@ -667,6 +667,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   anulación» como VARIANTE del mismo diálogo, motivo precargado con el que ya viajó a la DGI, y
   cobros y NC bloqueados mientras dure — pero **reversar cobros sigue disponible**, porque es
   lo que hay que hacer para poder completarla. Detalle en `sop.md` SOP-040.
+- 🔴 **Ningún mensaje dice «ante la DGI» si no se le habló al PAC** (06/10/2026). Sin CUFE, interna o
+  emitida fuera: «quedó anulada en el CRM… No se envió nada a la DGI», y si falla el libro,
+  `no_se_anulo_en_el_libro` («no se completó en el libro contable… sin cambios», sin nombrar a la DGI).
+  El aviso de la pantalla sale de `alcance` (`dgi_y_libro` | `solo_crm`), no del texto. Antes la falla
+  sin CUFE decía «quedó ANULADO ante la DGI» (FAC-HON-000489 y 000503 de producción). SOP-040.
 
 ### Validaciones previas a la DGI y pendientes (desde 2026-10-03 — `085` aplicada SOLO en staging)
 - 🔴 **Lo que la DGI rechazaría se valida ANTES del número**: `validarParaLaDgi()`

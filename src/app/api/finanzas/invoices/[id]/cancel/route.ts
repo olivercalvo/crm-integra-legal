@@ -33,6 +33,12 @@ interface RouteParams {
  *   422 `rechazada_por_la_dgi`           — la DGI dijo que no. NADA cambió.
  *   502 `no_sabemos`                     — no se pudo confirmar si llegó. NADA
  *       cambió. Es un problema del intermediario, de ahí el 502.
+ *   4xx/5xx `no_se_anulo_en_el_libro`   — sin DGI de por medio (sin CUFE,
+ *       interna, emitida fuera) y el libro falló. NADA cambió; el código es el
+ *       del error del libro. El mensaje no nombra a la DGI (06/10/2026).
+ *
+ * En `anulada`, `alcance` dice si la DGI anuló (`dgi_y_libro`) o si fue sólo
+ * en el CRM (`solo_crm`): el aviso de la pantalla sale de ahí.
  *
  * El cuerpo SIEMPRE trae `estado`, para que la pantalla no tenga que deducirlo
  * del código, y `error` cuando corresponde, porque es lo que el resto del
@@ -108,6 +114,10 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
       case "no_sabemos":
         console.error("[finanzas] anulación sin confirmar:", params.id, `intento #${r.intento}`);
         return NextResponse.json({ id: params.id, error: r.mensaje, ...r }, { status: 502 });
+
+      case "no_se_anulo_en_el_libro":
+        console.error("[finanzas] anulación sin DGI, el libro falló:", params.id, r.detalle);
+        return NextResponse.json({ id: params.id, error: r.mensaje, ...r }, { status: r.status });
     }
   } catch (err) {
     // `InvoiceMutationError` es un alias de `MutationError` (api/invoices.ts:129),

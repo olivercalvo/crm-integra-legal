@@ -101,9 +101,14 @@ import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba"
 type DB = SupabaseClient;
 
 export type ResultadoDeAnulacionFiscal =
-  /** Anulada ante la DGI y en el libro. El camino feliz. */
+  /**
+   * Anulada en el libro. `alcance` dice si además se anuló ante la DGI
+   * (`dgi_y_libro`) o sólo en el CRM (`solo_crm`: sin CUFE, interna o emitida
+   * fuera). La pantalla elige su aviso por `alcance`, no por el mensaje.
+   */
   | {
       estado: "anulada";
+      alcance: AlcanceDeLaAnulacion;
       mensaje: string;
       credit_note_id: string | null;
       credit_note_number: string | null;
@@ -111,10 +116,44 @@ export type ResultadoDeAnulacionFiscal =
     }
   /** 🔴 Estado intermedio (D4): muerta ante la DGI, viva en el libro. */
   | { estado: "anulada_en_dgi_falta_el_libro"; mensaje: string; detalle: string }
+  /**
+   * Sin DGI de por medio (sin CUFE, interna, emitida fuera) y el libro falló.
+   * No hay estado intermedio: `cancelInvoice` es una transacción y la NC total
+   * se compensa. El mensaje no nombra a la DGI porque no se le habló.
+   */
+  | { estado: "no_se_anulo_en_el_libro"; mensaje: string; detalle: string; status: number }
   /** La DGI rechazó. Nada cambió. */
   | { estado: "rechazada_por_la_dgi"; mensaje: string; pista: string | null }
   /** No sabemos si llegó. Nada cambió. Escala a una persona. */
   | { estado: "no_sabemos"; mensaje: string; intento: number };
+
+export type AlcanceDeLaAnulacion = "dgi_y_libro" | "solo_crm";
+
+/**
+ * Qué pasó del lado de la DGI antes de llegar al libro. Es lo único que cambia
+ * los mensajes de `cerrarEnElLibro`: el libro es el mismo en los seis casos.
+ *
+ *   · `anulada_ahora`  — el PAC aceptó la anulación en esta llamada.
+ *   · `ya_anulada`     — el PAC contestó `0622` en el primer intento.
+ *   · `confirmada`     — reintento de «Completar anulación», confirmado por el PAC.
+ *   · `marca_sin_cufe` — reintento sobre una factura marcada `canceled` sin CUFE:
+ *                        no hay a quién preguntarle, la marca es nuestra.
+ *   · `sin_cufe` / `interna` / `externa` — no se le habló a la DGI.
+ */
+type LadoDgi =
+  | "anulada_ahora"
+  | "ya_anulada"
+  | "confirmada"
+  | "marca_sin_cufe"
+  | "sin_cufe"
+  | "interna"
+  | "externa";
+
+/** «factura FAC-HON-000489» / «nota de débito ND-000004». Las dos son femeninas. */
+interface Documento {
+  nombre: "factura" | "nota de débito";
+  numero: string | null;
+}
 
 /**
  * @param db        Cliente de la sesión (lecturas y escrituras bajo RLS).
@@ -139,8 +178,10 @@ export async function anularFacturaAnteDgi(
   // T0 — Qué se puede hacer con esta factura. Se vuelve a preguntar acá: lo que
   //      la pantalla creía cuando se apretó el botón puede haber cambiado.
   // ---------------------------------------------------------------------------
-  const estado = await cargarEstadoDeFactura(db, tenantId, invoiceId);
+  const { estado, documento } = await cargarEstadoDeFactura(db, tenantId, invoiceId);
   const accion = decidirAccionFiscal(estado, ahora);
+  const cerrar = (lado: LadoDgi) =>
+    cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha, documento, lado);
 
   // Las tres acciones que terminan en una factura anulada. Escritas una por una
   // y no con un `includes`, porque así TypeScript estrecha el tipo y los
@@ -208,7 +249,7 @@ export async function anularFacturaAnteDgi(
       // Marcada como anulada ante la DGI pero sin CUFE guardado: no hay a quién
       // preguntarle. Se completa en el libro, que es lo único que queda por
       // hacer, y la advertencia de la matriz ya lo explica en pantalla.
-      return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
+      return await cerrar("marca_sin_cufe");
     }
 
     const confirmacion = await confirmarAnulacionEnPac(
@@ -231,7 +272,7 @@ export async function anularFacturaAnteDgi(
       };
     }
 
-    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
+    return await cerrar("confirmada");
   }
 
   // ---------------------------------------------------------------------------
@@ -242,9 +283,15 @@ export async function anularFacturaAnteDgi(
   //   Esta rama existe para que el comportamiento actual NO cambie: quitarla
   //   convertiría en imposible algo que hoy funciona, y eso es una decisión de
   //   política del bufete, no de este archivo.
+  //
+  // 🔴 No se le habla al PAC, así que ningún mensaje de esta rama puede decir
+  //    que la DGI anuló nada (06/10/2026: el de falla decía «quedó ANULADO ante
+  //    la DGI» sobre facturas sin CUFE, como FAC-HON-000489 de producción).
   // ---------------------------------------------------------------------------
   if (accion.accion === "anular_solo_en_el_libro") {
-    return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
+    const lado: LadoDgi =
+      estado.feEstado === "interna" ? "interna" : estado.emitidaFueraDelCrm ? "externa" : "sin_cufe";
+    return await cerrar(lado);
   }
 
   // ---------------------------------------------------------------------------
@@ -375,7 +422,7 @@ export async function anularFacturaAnteDgi(
   // ---------------------------------------------------------------------------
   // T4 — El libro. Si falla, queda el estado intermedio de D4 (camino 3).
   // ---------------------------------------------------------------------------
-  return await cerrarEnElLibro(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
+  return await cerrar(clasificacion.clase === "ya_anulada" ? "ya_anulada" : "anulada_ahora");
 }
 
 // ---------------------------------------------------------------------------
@@ -386,9 +433,15 @@ export async function anularFacturaAnteDgi(
  * La mitad contable: nota de crédito total + reversión del asiento + `anulada`,
  * en una transacción, con `cancelInvoice` sin cambios.
  *
- * Si falla, NO se relanza: se devuelve el estado intermedio. Es deliberado —
- * un 500 acá haría creer que no pasó nada, cuando en realidad el documento ya
- * está anulado ante la DGI y lo que falta es un paso que se puede reintentar.
+ * Los mensajes dicen lo que pasó del lado de la DGI (`lado`), y nada más:
+ *
+ *   · Si la DGI anuló (o confirmó) y el libro falla, NO se relanza: se devuelve
+ *     el estado intermedio. Un 500 haría creer que no pasó nada, cuando el
+ *     documento ya está anulado ante la DGI y falta un paso que se reintenta.
+ *   · Si no se le habló a la DGI (sin CUFE, interna, emitida fuera) y el libro
+ *     falla, no hay estado intermedio: `cancelInvoice` es una transacción y la
+ *     NC total se compensa. Se relee la factura para decirlo con certeza, y el
+ *     mensaje no nombra a la DGI.
  */
 async function cerrarEnElLibro(
   db: DB,
@@ -398,39 +451,133 @@ async function cerrarEnElLibro(
   invoiceId: string,
   motivo: string,
   observations: string | null,
-  fecha: string
+  fecha: string,
+  documento: Documento,
+  lado: LadoDgi
 ): Promise<ResultadoDeAnulacionFiscal> {
+  const doc = nombrarDocumento(documento);
+  const habloConLaDgi = lado === "anulada_ahora" || lado === "ya_anulada" || lado === "confirmada";
+
   try {
     const r = await cancelInvoice(db, ledgerDb, tenantId, userId, invoiceId, motivo, observations, fecha);
     return {
       estado: "anulada",
-      mensaje: "Factura anulada ante la DGI y en el libro contable.",
+      alcance: habloConLaDgi ? "dgi_y_libro" : "solo_crm",
+      mensaje: mensajeDeAnulada(doc, lado, r.credit_note_number ?? null),
       credit_note_id: r.credit_note_id ?? null,
       credit_note_number: r.credit_note_number ?? null,
       reversal_entry_number: r.reversal_entry_number ?? null,
     };
   } catch (err) {
     const detalle = err instanceof Error ? err.message : String(err);
+
+    if (habloConLaDgi) {
+      return {
+        estado: "anulada_en_dgi_falta_el_libro",
+        mensaje:
+          `La ${doc} quedó ANULADA ante la DGI, pero la anulación en el libro contable ` +
+          "no se completó. No acepta cobros ni notas de crédito en este estado. " +
+          "Use «Completar anulación» para terminarla.",
+        detalle: recortar(detalle, 400),
+      };
+    }
+
+    if (lado === "marca_sin_cufe") {
+      // La marca `canceled` es nuestra y sigue ahí: la factura sigue en el
+      // estado intermedio, pero nadie le confirmó nada a nadie.
+      return {
+        estado: "anulada_en_dgi_falta_el_libro",
+        mensaje:
+          `La anulación de la ${doc} no se completó en el libro contable. Sigue marcada en el CRM ` +
+          "como anulada ante la DGI, sin CUFE guardado para confirmarlo. " +
+          "Use «Completar anulación» para terminarla. Detalle: " +
+          recortar(detalle, 200),
+        detalle: recortar(detalle, 400),
+      };
+    }
+
+    const status = err instanceof MutationError ? err.status : 500;
+    const quedoIgual = await sigueSinAnular(db, tenantId, invoiceId);
     return {
-      estado: "anulada_en_dgi_falta_el_libro",
-      mensaje:
-        "El documento quedó ANULADO ante la DGI, pero la anulación en el libro contable " +
-        "no se completó. La factura no acepta cobros ni notas de crédito en este estado. " +
-        "Use «Completar anulación» para terminarla.",
+      estado: "no_se_anulo_en_el_libro",
+      status,
+      mensaje: quedoIgual
+        ? `La anulación de la ${doc} no se completó en el libro contable. ` +
+          `La ${documento.nombre} sigue emitida, sin cambios. Detalle: ${recortar(detalle, 200)}`
+        : `La anulación de la ${doc} no se completó en el libro contable, y la ${documento.nombre} ` +
+          "no quedó como estaba (tiene una nota de crédito sin su asiento). No reintente: avise a " +
+          `soporte con el número de la ${documento.nombre}. Detalle: ${recortar(detalle, 200)}`,
       detalle: recortar(detalle, 400),
     };
   }
+}
+
+function nombrarDocumento(d: Documento): string {
+  return d.numero ? `${d.nombre} ${d.numero}` : d.nombre;
+}
+
+/** El mensaje de éxito: el libro siempre; la DGI sólo si se le habló. */
+function mensajeDeAnulada(doc: string, lado: LadoDgi, nc: string | null): string {
+  const libro = nc
+    ? `se reversó su asiento y se generó la nota de crédito ${nc}`
+    : "se reversó su asiento y se generó su nota de crédito total";
+  switch (lado) {
+    case "anulada_ahora":
+      return `La ${doc} quedó anulada ante la DGI y en el libro contable: ${libro}.`;
+    case "ya_anulada":
+      return `La DGI informó que la ${doc} ya estaba anulada. Se completó la anulación en el libro contable: ${libro}.`;
+    case "confirmada":
+      return `La DGI confirmó la anulación de la ${doc} y se completó en el libro contable: ${libro}.`;
+    case "marca_sin_cufe":
+      return (
+        `Se completó la anulación de la ${doc} en el libro contable: ${libro}. ` +
+        "No se consultó a la DGI: no tiene CUFE guardado."
+      );
+    case "sin_cufe":
+      return (
+        `La ${doc} quedó anulada en el CRM: ${libro}. ` +
+        "No se envió nada a la DGI: sin CUFE, no había nada que anular ante la DGI."
+      );
+    case "interna":
+      return (
+        `La ${doc} quedó anulada en el CRM: ${libro}. ` +
+        "No se envió nada a la DGI: es un documento interno y nunca se envió."
+      );
+    case "externa":
+      return (
+        `La ${doc} quedó anulada en el CRM: ${libro}. ` +
+        "No se anuló ante la DGI: se emitió fuera del CRM, así que hay que anularla también " +
+        "en el sistema donde se emitió."
+      );
+  }
+}
+
+/**
+ * Después de una falla del libro sin DGI de por medio: ¿la factura quedó igual?
+ * `cancelInvoice` compensa la NC total; si la compensación también falló, la
+ * NC queda emitida y `credited_total` deja de ser 0. Si ni siquiera se puede
+ * leer, se asume lo peor: mejor pedir soporte de más que decir «sin cambios».
+ */
+async function sigueSinAnular(db: DB, tenantId: string, invoiceId: string): Promise<boolean> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("status, credited_total")
+    .eq("tenant_id", tenantId)
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (error || !data) return false;
+  return String(data.status) !== "anulada" && Number(data.credited_total ?? 0) === 0;
 }
 
 async function cargarEstadoDeFactura(
   db: DB,
   tenantId: string,
   invoiceId: string
-): Promise<EstadoDeFactura> {
+): Promise<{ estado: EstadoDeFactura; documento: Documento }> {
   const { data, error } = await db
     .from("invoices")
     .select(
-      "id, status, fe_estado, dgi_cufe, dgi_cufe_origen, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid, invoice_number, de_prueba"
+      "id, status, fe_estado, dgi_cufe, dgi_cufe_origen, issue_date, accounting_date, dgi_fecha_autorizacion, credited_total, amount_paid, invoice_number, invoice_kind, de_prueba"
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -449,7 +596,12 @@ async function cargarEstadoDeFactura(
   // asiento) desde la `068`. La ventana de 182 h sigue contando desde `issue_date`.
   const registro = (data as { accounting_date?: string | null }).accounting_date ?? issueDate;
 
-  return {
+  const documento: Documento = {
+    nombre: (data as { invoice_kind?: string | null }).invoice_kind === "NOTA_DEBITO" ? "nota de débito" : "factura",
+    numero: (data as { invoice_number?: string | null }).invoice_number ?? null,
+  };
+
+  const estado: EstadoDeFactura = {
     status: String(data.status),
     feEstado: (data.fe_estado as FeEstado) ?? "no_emitida",
     dgiCufe: (data.dgi_cufe as string | null) ?? null,
@@ -461,6 +613,7 @@ async function cargarEstadoDeFactura(
     // 092: emitida fuera del CRM. La matriz nunca la manda al PAC.
     emitidaFueraDelCrm: (data as { dgi_cufe_origen?: string | null }).dgi_cufe_origen === "externo",
   };
+  return { estado, documento };
 }
 
 async function proximoIntento(db: DB, tenantId: string, invoiceId: string): Promise<number> {

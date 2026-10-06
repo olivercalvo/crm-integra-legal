@@ -75,6 +75,8 @@ interface Escenario {
   fallaDelLibro: Error | null;
   /** `null` = la fecha de registro se acepta; un Error = se rechaza (mes cerrado). */
   fechaRechazada: Error | null;
+  /** La compensación de la NC total también falló: queda acreditada. */
+  ncHuerfana?: boolean;
   invoice: Row;
   anulaciones: Array<Row & { id: string }>;
   diario: string[];
@@ -209,7 +211,10 @@ before(async () => {
     namedExports: {
       cancelInvoice: async () => {
         escenario.diario.push("→ cancelInvoice (NC total + reversión + 'anulada')");
-        if (escenario.fallaDelLibro) throw escenario.fallaDelLibro;
+        if (escenario.fallaDelLibro) {
+          if (escenario.ncHuerfana) escenario.invoice.credited_total = 100;
+          throw escenario.fallaDelLibro;
+        }
         escenario.invoice.status = "anulada";
         return {
           id: INVOICE,
@@ -689,4 +694,121 @@ test("🔴 fecha de registro rechazada: se corta ANTES del intento y del PAC", {
   assert.ok(!d.some((l) => l.startsWith("POST")), "sin llamada al PAC");
   assert.ok(!d.some((l) => l.startsWith("UPDATE invoices")), "sin la marca canceled");
   assert.ok(!d.some((l) => l.startsWith("→ cancelInvoice")), "sin tocar el libro");
+});
+
+// ---------------------------------------------------------------------------
+// LOS MENSAJES DICEN SÓLO LO QUE PASÓ (06/10/2026)
+//
+// Anular una factura SIN CUFE con el libro fallando decía «El documento quedó
+// ANULADO ante la DGI», sin haberle hablado al PAC (FAC-HON-000489 y
+// FAC-HON-000503 de producción no tienen CUFE). Cada camino dice ahora lo que
+// pasó de verdad, y el éxito trae `alcance` para el aviso de la pantalla.
+// ---------------------------------------------------------------------------
+
+const SIN_CUFE = {
+  id: INVOICE,
+  status: "emitida",
+  fe_estado: "no_emitida",
+  dgi_cufe: null,
+  issue_date: EMISION,
+  dgi_fecha_autorizacion: null,
+  credited_total: 0,
+  amount_paid: 0,
+  invoice_number: "FAC-HON-000489",
+  invoice_kind: "HONORARIOS",
+};
+
+test("🔴 sin CUFE, éxito: «anulada en el CRM», nada enviado a la DGI", { skip: skipNoMocks }, async () => {
+  const { r } = await correr({ invoice: { ...SIN_CUFE } });
+  assert.equal(r.estado, "anulada");
+  if (r.estado !== "anulada") return;
+  assert.equal(r.alcance, "solo_crm");
+  assert.match(r.mensaje, /factura FAC-HON-000489 quedó anulada en el CRM/);
+  assert.match(r.mensaje, /NC-000001/);
+  assert.match(r.mensaje, /No se envió nada a la DGI/);
+  assert.match(r.mensaje, /no había nada que anular ante la DGI/);
+  assert.doesNotMatch(r.mensaje, /anulada ante la DGI/i);
+});
+
+test(
+  "🔴 sin CUFE, el libro falla: «no se completó en el libro», sin nombrar a la DGI, y la factura igual",
+  { skip: skipNoMocks },
+  async () => {
+    const { r, diario, e } = await correr({
+      invoice: { ...SIN_CUFE },
+      fallaDelLibro: new Error("cancel_invoice_with_reversal: el período 2026-10 está cerrado"),
+    });
+    assert.equal(r.estado, "no_se_anulo_en_el_libro");
+    if (r.estado !== "no_se_anulo_en_el_libro") return;
+    assert.match(r.mensaje, /^La anulación de la factura FAC-HON-000489 no se completó en el libro contable\./);
+    assert.match(r.mensaje, /sigue emitida, sin cambios/);
+    assert.doesNotMatch(r.mensaje, /DGI/, "no se le habló a la DGI: el mensaje no puede nombrarla");
+    assert.equal(r.status, 500);
+    assert.equal(diario.filter((l) => l.startsWith("POST ")).length, 0, "sin PAC");
+    assert.equal(diario.filter((l) => l.startsWith("UPDATE invoices")).length, 0, "sin marca canceled");
+    assert.equal(e.anulaciones.length, 0, "sin intento");
+    assert.equal(e.invoice.fe_estado, "no_emitida");
+    assert.equal(e.invoice.status, "emitida");
+  }
+);
+
+test(
+  "sin CUFE, el libro falla Y la NC total no se pudo compensar: pide soporte en vez de «sin cambios»",
+  { skip: skipNoMocks },
+  async () => {
+    const { r } = await correr({ invoice: { ...SIN_CUFE }, fallaDelLibro: new Error("boom"), ncHuerfana: true });
+    assert.equal(r.estado, "no_se_anulo_en_el_libro");
+    assert.doesNotMatch(r.mensaje, /sin cambios/);
+    assert.match(r.mensaje, /avise a soporte/i);
+    assert.doesNotMatch(r.mensaje, /DGI/);
+  }
+);
+
+test("interna y emitida fuera: cada una dice por qué no se anuló ante la DGI", { skip: skipNoMocks }, async () => {
+  const interna = await correr({ invoice: { ...SIN_CUFE, fe_estado: "interna" } });
+  assert.equal(interna.r.estado, "anulada");
+  if (interna.r.estado === "anulada") {
+    assert.equal(interna.r.alcance, "solo_crm");
+    assert.match(interna.r.mensaje, /documento interno y nunca se envió/);
+  }
+  const externa = await correr({
+    invoice: { ...SIN_CUFE, fe_estado: "authorized", dgi_cufe: CUFE, dgi_cufe_origen: "externo" },
+  });
+  assert.equal(externa.r.estado, "anulada");
+  if (externa.r.estado === "anulada") {
+    assert.equal(externa.r.alcance, "solo_crm");
+    assert.match(externa.r.mensaje, /No se anuló ante la DGI: se emitió fuera del CRM/);
+  }
+  assert.equal(externa.diario.filter((l) => l.startsWith("POST ")).length, 0);
+});
+
+test("con CUFE: el éxito dice DGI y libro, y la falla del libro sigue siendo el estado intermedio", { skip: skipNoMocks }, async () => {
+  const ok = await correr({ invoice: { ...nuevoEscenario().invoice, invoice_number: "FAC-HON-000700" } });
+  assert.equal(ok.r.estado, "anulada");
+  if (ok.r.estado === "anulada") {
+    assert.equal(ok.r.alcance, "dgi_y_libro");
+    assert.match(ok.r.mensaje, /FAC-HON-000700 quedó anulada ante la DGI y en el libro contable/);
+  }
+  const ya = await correr({ respuestaDelPac: () => RESPUESTA_0622 });
+  if (ya.r.estado === "anulada") assert.match(ya.r.mensaje, /La DGI informó que la factura ya estaba anulada/);
+  else assert.fail(`esperaba anulada, vino ${ya.r.estado}`);
+  const falla = await correr({ fallaDelLibro: new Error("boom") });
+  assert.equal(falla.r.estado, "anulada_en_dgi_falta_el_libro");
+  assert.match(falla.r.mensaje, /quedó ANULADA ante la DGI/, "acá sí: el PAC la anuló");
+});
+
+test("una nota de débito se nombra como tal", { skip: skipNoMocks }, async () => {
+  const { r } = await correr({ invoice: { ...SIN_CUFE, fe_estado: "interna", invoice_kind: "NOTA_DEBITO", invoice_number: "ND-000004" } });
+  assert.equal(r.estado, "anulada");
+  assert.match(r.mensaje, /^La nota de débito ND-000004 quedó anulada en el CRM/);
+});
+
+test("marcada canceled sin CUFE: no se consultó a la DGI, y si el libro falla lo dice", { skip: skipNoMocks }, async () => {
+  const ok = await correr({ invoice: { ...A_MEDIAS, dgi_cufe: null } });
+  assert.equal(ok.r.estado, "anulada");
+  assert.match(ok.r.mensaje, /No se consultó a la DGI/);
+  const falla = await correr({ invoice: { ...A_MEDIAS, dgi_cufe: null }, fallaDelLibro: new Error("boom") });
+  assert.equal(falla.r.estado, "anulada_en_dgi_falta_el_libro");
+  assert.match(falla.r.mensaje, /no se completó en el libro contable/);
+  assert.doesNotMatch(falla.r.mensaje, /quedó ANULADA ante la DGI/);
 });

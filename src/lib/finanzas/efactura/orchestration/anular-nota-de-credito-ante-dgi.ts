@@ -149,15 +149,38 @@ export async function reversarNotaDeCredito(
   const fecha = await d.resolverFecha(fechaDeRegistro);
 
   // ── Sin DGI de por medio: sólo el libro ──────────────────────────────────
+  //    🔴 No se le habla al PAC: los mensajes dicen por qué, y una falla del
+  //    libro no nombra a la DGI (06/10/2026, mismo criterio que la factura).
+  //    `reverse_credit_note` es una transacción: si falla, nada cambió.
   if (!viajaALaDgi && !esReintento) {
-    const r = await d.reversarEnElLibro(motivo, fecha);
-    return {
-      estado: "reversada",
-      anuladaAnteLaDgi: false,
-      entry_number: r.entry_number,
-      credit_note_number: r.credit_note_number,
-      mensaje: `Nota de crédito ${r.credit_note_number} reversada en el libro (asiento ${r.entry_number}).`,
-    };
+    const sinDgi =
+      nc.fe_estado === "interna"
+        ? "es un documento interno y nunca se envió"
+        : nc.fe_estado === "canceled"
+          ? "ya figuraba como anulada ante la DGI"
+          : "no estaba autorizada por la DGI";
+    try {
+      const r = await d.reversarEnElLibro(motivo, fecha);
+      return {
+        estado: "reversada",
+        anuladaAnteLaDgi: false,
+        entry_number: r.entry_number,
+        credit_note_number: r.credit_note_number,
+        mensaje:
+          `Nota de crédito ${r.credit_note_number} reversada en el libro (asiento ${r.entry_number}). ` +
+          `No se envió nada a la DGI: ${sinDgi}.`,
+      };
+    } catch (err) {
+      if (!(err instanceof MutationError)) throw err;
+      // 400 → 409: la ruta pone todo 400 bajo el campo del motivo, y esto no es
+      // un problema del motivo (ya se validó arriba).
+      throw new MutationError(
+        `La reversión no se completó en el libro contable. La nota de crédito sigue vigente, sin cambios. ${err.message}`,
+        err.status === 400 ? 409 : err.status,
+        err.detail,
+        err.fieldErrors
+      );
+    }
   }
 
   // ── T1 + T2: el intento registrado ANTES del POST, y el POST ────────────

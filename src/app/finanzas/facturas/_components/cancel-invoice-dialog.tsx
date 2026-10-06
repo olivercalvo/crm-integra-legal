@@ -204,7 +204,12 @@ export function CancelInvoiceDialog({
         // surface el mensaje. router.refresh recarga el server component.
         setOpen(false);
         const url = new URL(window.location.href);
-        url.searchParams.set("cancelled", "1");
+        // `alcance` dice si la DGI anuló o si fue sólo en el CRM: el aviso no
+        // puede decir «ante la DGI» de una factura sin CUFE (06/10/2026).
+        url.searchParams.set(
+          "cancelled",
+          data.alcance === "dgi_y_libro" || data.alcance === "solo_crm" ? data.alcance : "1"
+        );
         router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {

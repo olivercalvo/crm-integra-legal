@@ -400,38 +400,50 @@ plantilla. La consulta del punto 5 se probó en staging (sólo lectura): «OK» 
 ## 7. Después de la ventana: contabilizar los documentos existentes, un mes por vez
 
 **No es parte de la ventana.** Es un paso aparte, uno por mes (julio, agosto, septiembre, octubre hasta el
-día del deploy), cuando Josuarth revisa ese mes. 🔴 **El botón «Contabilizar el mes» lo aprieta una
+día del deploy), cuando Josuarth revisa ese mes.
+
+**Volumen real (producción, consulta de solo lectura del 07/10/2026), desde el 01/07/2026:** 91 facturas,
+6 notas de crédito, 8 cobros y 85 gastos de trámite. **Ninguna compra.** **0 cobros cruzados** (ningún
+cobro desde el 01/07 aplicado a una factura anterior), así que la apertura no tiene que dejar saldo de
+100004 para eso. 🔴 **Antes de contabilizar julio hay que completar los proveedores y las cuentas de los
+85 gastos de trámite y el banco de los 8 cobros** (ninguno los tiene). 🔴 **El botón «Contabilizar el mes» lo aprieta una
 persona desde la pantalla. Nunca un agente ni un script** (`scripts/backfill-asientos-faltantes.mts` es
 sólo de staging y tiene candado).
 
 **Una vez, antes del primer mes (pausa obligatoria: cambio de esquema en producción):**
 1. Respaldo de producción (la tarea programada «Respaldo Base Integra»).
-2. Aplicar `097` y `098` (sólo crean dos tablas, una función y un trigger; no tocan datos). Verificación:
-   `sql/tests/verificacion-097-posteo-de-documentos-existentes.sql` (en ROLLBACK, 9 casos).
+2. Aplicar `097`, `098` y `099` (crean dos tablas, una función y dos triggers; no tocan datos).
+   Verificación: `sql/tests/verificacion-097-posteo-de-documentos-existentes.sql` (en ROLLBACK, 12 casos con
+   la 099).
 
 **Requisitos de cada mes (si falta uno, la pantalla lo dice y no deja contabilizar):**
 - 🔴 **Gastos de trámite con proveedor y con cuenta en cada línea.** En producción ningún gasto de
-  trámite tiene proveedor (la 049 agrega la columna vacía) y las líneas de la 036 nacen sin cuenta.
-  ⚠️ **Hoy la app NO deja asignar el proveedor a un gasto ya cargado** (`PATCH /api/expenses/[id]` no
-  lo recibe) y la cuenta sólo se clasifica desde `/legal/gastos` cuando el gasto tiene UNA línea.
-  Falta construirlo antes de julio (propuesta en `task_plan.md`).
+  trámite tiene proveedor (la 049 agrega la columna vacía) y las líneas de la 036 nacen sin cuenta. Se
+  completan **en lote** en *Documentos existentes › Proveedores y cuentas de los gastos* (admin y
+  contador): marcar varios gastos o líneas y asignarles el mismo proveedor o la misma cuenta.
 - 🔴 **Cobros con banco.** Ningún cobro de producción tiene `payment_account_code` (llega con la 041,
-  vacío). ⚠️ **Hoy nada deja completarlo** en un cobro registrado. Falta construirlo (misma propuesta).
+  vacío). Se completa **en lote** en *Documentos existentes › Bancos de los cobros*.
+- Las dos pantallas sólo muestran documentos SIN asiento, reales y desde el inicio contable; un documento
+  con asiento no se toca (409, y la base lo vuelve a exigir). La bitácora contable registra cada cambio con
+  su usuario. Cada fila de «Con problemas» lleva un botón «Corregir» a la pantalla que lo arregla.
 - Compras con ficha de proveedor: la 033 la crea desde el nombre; revisar las que no enlazaron.
 - Los meses anteriores ya contabilizados (van en orden) y el mes **abierto**. Después de la ventana
   todos los meses de 2026 quedan abiertos (ninguna migración cierra períodos; verificado en el ensayo:
   la base `ventana` tiene 1 a 12 en «abierto»). Si alguno estuviera cerrado, se reabre en Períodos
   Contables con motivo.
-- 🔴 **Un mes se carga por un solo método.** Si el mes ya tiene asientos manuales o importados, no se
-  contabiliza (y los nombra). Ojo: eso incluye los **ajustes a mano** (depreciación, provisiones):
-  cargarlos DESPUÉS de contabilizar los documentos del mes. Al revés, la importación masiva no entra en un
-  mes ya contabilizado desde los documentos; el ajuste a mano sí.
+- 🔴 **Un mes se carga por un solo método** (099, Oliver 07/10). Si el mes tiene asientos **importados**
+  vigentes, no se contabiliza (y los nombra). Los **ajustes a mano** (depreciación, provisiones) NO lo
+  impiden: la pantalla y el Excel los listan en «Asientos manuales del mes» con el aviso «Revisa que ninguno
+  registre un documento que también está en la hoja Asientos». Al revés, la importación masiva no entra en
+  un mes ya contabilizado desde los documentos; el ajuste a mano sí.
 
 **Cada mes:**
 1. Josuarth (o Oliver) abre **Finanzas › Asientos de Diario › Documentos existentes, por mes**, elige el
    mes y baja **«Descargar en seco (Excel)»**. No escribe nada. Se puede hacer ANTES de aplicar la 097.
-2. Josuarth revisa el Excel: hojas Léame, Asientos, Totales por cuenta, No se contabilizan, Con problemas.
-3. Se completa en el CRM lo de «Con problemas» y se vuelve a bajar hasta que no quede nada.
+2. Josuarth revisa el Excel: hojas Léame, Asientos, Totales por cuenta, No se contabilizan, Con problemas
+   y Asientos manuales del mes.
+3. Se completa lo de «Con problemas» (botón «Corregir» de cada fila, o las dos pantallas en lote) y se
+   vuelve a bajar hasta que no quede nada.
 4. Con su visto bueno, **«Contabilizar el mes»** (confirmación). Entra todo el mes o nada. Si algo falla,
    el mes queda como estaba y el mensaje dice qué.
 5. Volver a abrir el mes: tiene que decir «0 asientos» (repetirlo no duplica).

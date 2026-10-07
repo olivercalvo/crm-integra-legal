@@ -1,5 +1,22 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Completar proveedores, cuentas y bancos en lote] - 2026-10-07
+
+- Dos pantallas nuevas en **Documentos existentes** (admin y contador): **Proveedores y cuentas de los
+  gastos** y **Bancos de los cobros**. Muestran los gastos de trámite y los cobros del mes que todavía no
+  están en el libro contable. Se marcan varios y se les asigna el mismo proveedor, cuenta o banco de una vez;
+  la cuenta va por línea, también en gastos con varias líneas.
+- Un documento que ya está en el libro no aparece y no se toca: si uno del lote no se puede, no se cambia
+  ninguno y el mensaje dice cuál. La bitácora contable registra cada cambio con quién lo hizo.
+- En la pantalla del mes, cada documento «Con problemas» tiene un botón **Corregir** que lleva a donde se
+  arregla.
+- **Los asientos de ajuste cargados a mano ya no impiden contabilizar el mes**: sólo los importados. La
+  pantalla y el Excel en seco los listan en «Asientos manuales del mes» para revisar que ninguno repita un
+  documento.
+- **Corregido:** editar una compra perdía los cambios de sus líneas (cuenta, descripción, monto) sin avisar.
+  Ahora se guardan.
+- Migración `098` aplicada en staging (verificación 9/9); `099` escrita, sin aplicar.
+
 ## [Contabilizar los documentos existentes, un mes por vez] - 2026-10-07
 
 - Nueva pantalla **Finanzas › Asientos de Diario › Documentos existentes, por mes** (admin y contador).

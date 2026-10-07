@@ -1,44 +1,41 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 07/10/2026)
+## ▶ PARA RETOMAR (cierre del 07/10/2026, tarde)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
-**Últimos hashes:** `7212a03` (posteo por mes, 097), `643caa3` (098 y concurrencia), más el de este cierre.
+**Últimos hashes:** `7212a03` (097), `643caa3` (098), `0f1ec80` (docs), más los de este cierre.
 
 **Staging (`xtyenhakplrkyifbcaow`):**
-- Aplicado: todo `sql/pending` hasta la **`097`** inclusive (la 097 el 07/10 con el «aplica»; verificación 7/7).
-- Escrito y **SIN APLICAR**: **`098`** (espera el «aplica») y **`088`** (no va todavía, a propósito).
-- Julio y agosto de 2026 contabilizados con la herramienta (lotes de 10 y 4 asientos, 137 a 150). Agosto se
-  reabrió con motivo y se volvió a cerrar (el cierre grabó otra ancla, 075). Huecos FAC-CO-000010, 12, 14,
-  16 y 18 (las dos corridas a la vez numeraron los gastos; criterio SOP-031).
+- Aplicado: todo `sql/pending` hasta la **`098`** inclusive (la 098 el 07/10 con el «aplica»; verificación 9/9).
+- Escrito y **SIN APLICAR**: **`099`** (espera el «aplica»; probada en la base local del ensayo, 10/10) y **`088`**.
+- Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
+- Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
+  CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las
+  capturas). Correr el script otra vez los vuelve a dejar sin datos.
 
-**Hecho el 07/10: posteo de documentos existentes, por mes (después de la ventana, runbook §7).**
-- Pantalla `/finanzas/asientos/documentos-existentes` (admin y contador): Excel en seco (GET, no escribe) y
-  «Contabilizar el mes» (todo o nada, `post_documentos_existentes`, 097). Mismos constructores que la app.
-- Un mes, un solo método en los dos sentidos (098: trigger de la importación; los ajustes a mano no se bloquean).
-- Idempotencia: `journal_entries_un_asiento_por_documento` (tenant, source_type, source_id) cubre TODOS los
-  tipos; `journal_entries_idempotency_key_unique` además las llaves `factura:`, `nota-credito:`, `cobro:`,
-  `compra:`, `pago-proveedor:` (gasto de trámite y reversión van sin llave; los cubre el primero y, la
-  reversión, `una_reversion_por_asiento`). Dos corridas a la vez: 10/10 en la base local, y julio en staging.
-- Suite 1737/1737.
+**Hecho el 07/10 (tarde):**
+- Asignación en lote: proveedor y cuenta por línea a gastos de trámite sin asiento, banco a cobros sin asiento
+  (admin y contador, bitácora contable). Botón «Corregir» en cada problema. Capturas en
+  `docs/finanzas/capturas-asignaciones-en-lote/`.
+- Un solo método: bloquean sólo los asientos IMPORTADOS; los manuales se listan («Asientos manuales del mes»).
+  En la app ya; en la base, con la 099.
+- FND-013: editar una compra no guardaba sus líneas. Corregido, con test.
+- Consultas de solo lectura para producción: `produccion-borradores-a-revisar.sql` (los 5 borradores) y
+  `produccion-documentos-de-un-mes.sql`.
+- Suite 1745/1745.
 
 **Pendiente:**
-1. **«aplica» de la `098` en staging** (después: verificación 097 con los casos 8 y 9).
-2. 🔴 **Antes de contabilizar julio en producción, faltan dos acciones en la app** (propuesta, sin construir):
-   (a) asignar el **proveedor** a un gasto de trámite sin asiento (hoy `PATCH /api/expenses/[id]` no lo
-   recibe) y clasificar sus líneas desde Finanzas (hoy sólo desde `/legal/gastos` con una línea);
-   (b) asignar el **banco** a un cobro sin asiento (hoy nada escribe `payments.payment_account_code`).
-   Sin esto, julio queda «con problemas» para siempre: en producción ningún gasto tiene proveedor y ningún
-   cobro tiene banco.
-3. 🐞 **Editar una compra pierde las cuentas de las líneas sin avisar**: `updateBusinessExpense` recalcula
-   totales con `lineas` pero nunca escribe `expense_lines` (`business-expenses.ts:537`). Hallazgo del 07/10.
-4. Decidir si los **ajustes a mano** también deben dejar de bloquear el posteo de documentos (hoy la 097
-   rechaza el mes con CUALQUIER asiento manual vigente; el pedido del 06/10 decía «manuales o importados»).
-5. **Oliver, en producción (sólo lectura):** `sql/verificacion/produccion-documentos-antes-del-inicio.sql` y
-   `sql/verificacion/produccion-documentos-de-un-mes.sql` (julio).
-6. **El `--reset` de staging aplica hasta la `048`** (pendiente aparte).
-7. **Apertura**: en espera.
+1. **«aplica» de la `099` en staging** (después: verificación 097 con los casos 4, 4b y 10).
+2. 🔴 **FAC-HON-000463 (real, 1.07) y su cliente 0TEST-FE-002.** Con el cliente marcado de prueba (paso de la
+   ventana), la 463 sigue contando en reportes y entra al libro, pero NO se le puede registrar un cobro ni
+   una NC (409, `clienteDePrueba` en payments.ts y credit-notes.ts) y la anulación pasa por una NC. Propuesta:
+   sacar 0TEST-FE-002 de la lista de clientes a marcar (sus facturas de sandbox se marcan por número). Espera
+   el visto bueno de Oliver.
+3. **Oliver, en producción (sólo lectura):** `produccion-borradores-a-revisar.sql`; decidir los 5 borradores
+   antes de la ventana.
+4. **El `--reset` de staging aplica hasta la `048`** (pendiente aparte).
+5. **Apertura**: en espera.
 
 **Datos de prueba que quedaron en staging (además de los de antes):**
 - **FAC-HON-900002** (20/06, creada por SQL con los triggers de la 096 apagados en esa transacción, como las de

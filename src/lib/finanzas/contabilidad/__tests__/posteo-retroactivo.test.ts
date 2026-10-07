@@ -119,7 +119,7 @@ test("las listas del plan se leen por páginas (PostgREST corta en 1000)", () =>
     const antes = fuente.slice(Math.max(0, m.index! - 80), m.index!);
     const sentencia = fuente.slice(m.index!, fuente.indexOf(";", m.index!));
     if (/paginado\(\(a, b\) =>\s*(db)?\s*$/.test(antes)) continue;
-    if (/maybeSingle|\.single\(|\.update\(|\.in\("(id|code)"/.test(sentencia)) continue;
+    if (/maybeSingle|\.single\(|\.update\(|\.in\("(id|code|entry_id)"/.test(sentencia)) continue;
     if (m[1] === "accounting_periods") continue; // doce filas por año
     sinPaginar.push(`${m[1]}: ${sentencia.slice(0, 80)}`);
   }
@@ -131,4 +131,16 @@ test("098: el número del gasto se relee después de numerar (dos corridas a la 
   const tramo = fuente.slice(i, i + 1500);
   assert.match(tramo, /\.is\("purchase_number", null\)/);
   assert.match(tramo, /select\("purchase_number"\)/);
+});
+
+test("099: bloquean sólo los asientos IMPORTADOS; los manuales se listan con su aviso", () => {
+  const i = fuente.indexOf("// ── Un mes, un solo método");
+  const tramo = fuente.slice(i, fuente.indexOf("// ── Períodos cerrados", i));
+  assert.match(tramo, /from\("journal_import_entries"\)/);
+  assert.match(tramo, /plan\.manuales = vigentes/);
+  assert.match(tramo, /asiento\(s\) importados/);
+  assert.doesNotMatch(tramo, /manuales o importados/);
+  const excel = readFileSync(path.join(process.cwd(), "src/lib/finanzas/contabilidad/posteo-retroactivo-excel.ts"), "utf8");
+  assert.match(excel, /nombre: "Asientos manuales del mes"/);
+  assert.match(excel, /AVISO_ASIENTOS_MANUALES/);
 });

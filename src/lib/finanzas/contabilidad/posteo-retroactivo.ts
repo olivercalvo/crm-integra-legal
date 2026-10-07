@@ -14,8 +14,9 @@
  * 🔴 Cada documento con SU fecha de registro, en orden cronológico; nunca nada
  *    anterior al inicio contable (y la base lo rechaza igual, 096).
  * 🔴 Todo o nada: el mes se postea en UNA transacción (`post_documentos_existentes`).
- * 🔴 Un mes se carga por un solo método: si ya tiene asientos manuales o
- *    importados, el modo real se niega (aquí y en la base).
+ * 🔴 Un mes se carga por un solo método: si ya tiene asientos IMPORTADOS, el
+ *    modo real se niega (aquí y en la base). Los manuales de ajuste no
+ *    bloquean: se listan para revisar (Oliver, 07/10/2026).
  *
  * No se postean: documentos de prueba (094), las facturas emitidas que nunca
  * llegaron a la DGI (`FACTURAS_SIN_DGI_EXCLUIDAS`) y lo que cuelga de ellas,
@@ -109,7 +110,25 @@ export interface Fuera {
   numero: string;
   fecha: string;
   motivo: string;
+  /** Dónde se corrige (las asignaciones en lote, o el documento). */
+  enlace?: string;
 }
+
+/** Un asiento manual del mes: NO bloquea (Oliver, 07/10), se lista para revisar. */
+export interface AsientoManualDelMes {
+  numero: string;
+  fecha: string;
+  descripcion: string;
+  monto: number;
+}
+
+/** El aviso de la hoja «Asientos manuales del mes» (pantalla y Excel). */
+export const AVISO_ASIENTOS_MANUALES =
+  "Revisa que ninguno registre un documento que también está en la hoja Asientos.";
+
+/** Pantallas de asignación en lote (admin y contador). */
+export const RUTA_ASIGNAR_GASTOS = "/finanzas/asientos/documentos-existentes/gastos";
+export const RUTA_ASIGNAR_BANCOS = "/finanzas/asientos/documentos-existentes/bancos";
 
 export interface Plan {
   tenantId: string;
@@ -121,8 +140,10 @@ export interface Plan {
   excluidos: Fuera[];
   /** No se pueden postear: hay que corregir el documento primero. */
   problemas: Fuera[];
-  /** Impiden el modo real (meses anteriores pendientes, asientos manuales, período cerrado…). */
+  /** Impiden el modo real (meses anteriores pendientes, asientos IMPORTADOS, período cerrado…). */
   bloqueos: string[];
+  /** Asientos manuales (no importados) del período: no bloquean, se revisan. */
+  manuales: AsientoManualDelMes[];
   /** Avisos para el contador; no impiden nada. */
   avisos: string[];
   /** Nombres para el Excel. */
@@ -218,7 +239,7 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
   const desde = desdePedido < inicio ? inicio : desdePedido;
   const hasta = hastaPedido;
   const plan: Plan = {
-    tenantId, desde, hasta, inicio, items: [], excluidos: [], problemas: [], bloqueos: [], avisos: [],
+    tenantId, desde, hasta, inicio, items: [], excluidos: [], problemas: [], bloqueos: [], avisos: [], manuales: [],
     cuentas: {}, terceros: {},
   };
   if (desdePedido < inicio) {
@@ -409,7 +430,12 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     }
     const datos = await cargarCobroParaAsiento(db, tenantId, c.id);
     const armado = datos ? construirAsientoDeCobro(datos) : { ok: false as const, mensaje: "No se pudo leer el cobro." };
-    if (!armado.ok) { problema({ ...base, motivo: armado.mensaje }); continue; }
+    if (!armado.ok) {
+      const sinBanco = "motivo" in armado && (armado.motivo === "sin_banco" || armado.motivo === "banco_invalido");
+      problema({ ...base, motivo: armado.mensaje,
+        enlace: sinBanco ? `${RUTA_ASIGNAR_BANCOS}?mes=${fecha.slice(0, 7)}&sel=${c.id}` : `/finanzas/cobros` });
+      continue;
+    }
     agregar({ ...base, documentoId: c.id, fechaDocumento: fecha, asiento: armado.asiento });
   }
 
@@ -431,7 +457,7 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     if (tiene("gasto", b.id)) continue;
     const datos = await cargarCompraParaAsiento(db, tenantId, b.id);
     const armado = datos ? construirAsientoDeCompra(datos) : { ok: false as const, mensaje: "No se pudo leer la compra." };
-    if (!armado.ok) { problema({ ...base, motivo: armado.mensaje }); continue; }
+    if (!armado.ok) { problema({ ...base, motivo: armado.mensaje, enlace: `/finanzas/gastos-bufete/${b.id}/editar` }); continue; }
     agregar({ ...base, documentoId: b.id, fechaDocumento: String(b.expense_date).slice(0, 10), asiento: armado.asiento });
   }
 
@@ -456,7 +482,7 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     if (g.status === "anulado") { excluir({ ...base, motivo: "Gasto anulado: no se contabiliza." }); continue; }
     const lineas = await getLineasDeGastoTramite(db, tenantId, id);
     const armado = construirAsientoDeGastoTramite(datosDeGastoParaAsiento(g), lineas);
-    if (!armado.ok) { problema({ ...base, motivo: armado.mensaje }); continue; }
+    if (!armado.ok) { problema({ ...base, motivo: armado.mensaje, enlace: `${RUTA_ASIGNAR_GASTOS}?mes=${fecha.slice(0, 7)}&sel=${id}` }); continue; }
     agregar({
       ...base, documentoId: id, fechaDocumento: String(g.date).slice(0, 10), asiento: armado.asiento,
       numeroPendiente: !g.purchase_number,
@@ -520,11 +546,13 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     );
   }
 
-  // ── Un mes, un solo método ──────────────────────────────────────────────
+  // ── Un mes, un solo método (Oliver, 07/10/2026) ─────────────────────────
+  // Bloquean sólo los asientos IMPORTADOS vigentes (journal_import_entries).
+  // Los manuales de ajuste no bloquean: se listan en «Asientos manuales del mes».
   const { data: manuales } = await paginado((a, b) =>
     db
     .from("journal_entries")
-    .select("id, entry_number, reference, transaction_date, description, source_type")
+    .select("id, entry_number, reference, transaction_date, description, source_type, journal_entry_lines(debit)")
     .eq("tenant_id", tenantId)
     .in("source_type", ["manual", "apertura"])
     .gte("transaction_date", desde)
@@ -542,15 +570,36 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     .range(a, b)
   );
   const reversados = new Set(((reversiones ?? []) as { reverses_entry_id: string }[]).map((r) => r.reverses_entry_id));
-  const vigentes = ((manuales ?? []) as { id: string; entry_number: number; reference: string | null; transaction_date: string; description: string }[])
-    .filter((m) => !reversados.has(m.id));
+  type Manual = { id: string; entry_number: number; reference: string | null; transaction_date: string; description: string; journal_entry_lines: { debit: number }[] };
+  const vigentes = ((manuales ?? []) as Manual[]).filter((m) => !reversados.has(m.id));
+  const importados = new Set<string>();
   if (vigentes.length > 0) {
+    const { data: imp, error: errI } = await db
+      .from("journal_import_entries")
+      .select("entry_id")
+      .eq("tenant_id", tenantId)
+      .in("entry_id", vigentes.map((m) => m.id));
+    if (errI) throw new MutationError(pgErrorToMessage(errI), 500, errI);
+    for (const x of (imp ?? []) as { entry_id: string }[]) importados.add(x.entry_id);
+  }
+  const nombre = (m: Manual) => m.reference ?? `asiento ${m.entry_number}`;
+  const deImportacion = vigentes.filter((m) => importados.has(m.id));
+  if (deImportacion.length > 0) {
     plan.bloqueos.push(
-      `El período ya tiene ${vigentes.length} asiento(s) manuales o importados: ` +
-        vigentes.map((m) => `${m.reference ?? `asiento ${m.entry_number}`} (${fechaCorta(m.transaction_date)}, ${m.description})`).join("; ") +
+      `El período ya tiene ${deImportacion.length} asiento(s) importados: ` +
+        deImportacion.map((m) => `${nombre(m)} (${fechaCorta(m.transaction_date)}, ${m.description})`).join("; ") +
         ". Un mes se carga por un solo método: no se contabilizan los documentos."
     );
   }
+  plan.manuales = vigentes
+    .filter((m) => !importados.has(m.id))
+    .sort((x, y) => x.entry_number - y.entry_number)
+    .map((m) => ({
+      numero: nombre(m),
+      fecha: String(m.transaction_date).slice(0, 10),
+      descripcion: m.description,
+      monto: Math.round(m.journal_entry_lines.reduce((t, l) => t + Number(l.debit), 0) * 100) / 100,
+    }));
 
   // ── Períodos cerrados ───────────────────────────────────────────────────
   const meses = Array.from(new Set(plan.items.map((i) => i.fecha.slice(0, 7))));

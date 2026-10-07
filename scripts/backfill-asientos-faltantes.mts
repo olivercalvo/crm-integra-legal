@@ -92,6 +92,7 @@ console.log(`   No se contabilizan: ${plan.excluidos.length} · Con problemas: $
 for (const x of plan.excluidos) console.log(`     ⏭  ${retro.ETIQUETA_DE_TIPO[x.tipo]} ${x.numero} (${x.fecha}): ${x.motivo}`);
 for (const x of plan.problemas) console.log(`     ⚠️  ${retro.ETIQUETA_DE_TIPO[x.tipo]} ${x.numero} (${x.fecha}): ${x.motivo}`);
 for (const a of plan.avisos) console.log(`   ℹ️  ${a}`);
+for (const m of plan.manuales) console.log(`   ✍️  Asiento manual ${m.numero} (${m.fecha}): ${m.descripcion}, ${m.monto.toFixed(2)}`);
 for (const b of plan.bloqueos) console.log(`   🛑 ${b}`);
 
 mkdirSync(SALIDA, { recursive: true });

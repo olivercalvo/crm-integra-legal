@@ -10,7 +10,7 @@
 
 import { generarXlsx, texto, numero, fecha, entero, VACIA, type Celda, type HojaExport } from "@/lib/finanzas/reports/exportar-xlsx";
 import { fechaCorta } from "@/lib/finanzas/contabilidad/inicio-contable";
-import { ETIQUETA_DE_TIPO, terceroDelAsiento, totalesPorCuenta, type Plan } from "@/lib/finanzas/contabilidad/posteo-retroactivo";
+import { AVISO_ASIENTOS_MANUALES, ETIQUETA_DE_TIPO, terceroDelAsiento, totalesPorCuenta, type Plan } from "@/lib/finanzas/contabilidad/posteo-retroactivo";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -44,12 +44,14 @@ export function hojasDelPlan(plan: Plan, generadoEl: string): HojaExport[] {
     [texto("¿Cuadra?"), texto(Math.abs(debitos - creditos) < 0.005 ? "Sí: débitos = créditos." : "NO: revisar antes de contabilizar.")],
     [texto("No se contabilizan (a propósito)"), entero(plan.excluidos.length)],
     [texto("Con problemas (hay que corregirlos antes)"), entero(plan.problemas.length)],
+    [texto("Asientos manuales del mes (revisar)"), entero(plan.manuales.length)],
     [VACIA],
     [texto("Cómo leer las hojas")],
     [texto("Asientos: una fila por línea de cada asiento, en orden de fecha. Débito y crédito en balboas.")],
     [texto("Totales por cuenta: lo que el período movería en cada cuenta.")],
     [texto("No se contabilizan: documentos que quedan fuera a propósito, con el motivo.")],
     [texto("Con problemas: documentos que no se pueden registrar hasta corregirlos (por ejemplo, un gasto sin proveedor o un cobro sin banco).")],
+    [texto(`Asientos manuales del mes: los ajustes cargados a mano en el período. No impiden contabilizar. ${AVISO_ASIENTOS_MANUALES}`)],
     [VACIA],
     [texto(plan.bloqueos.length > 0 ? "Antes de contabilizar" : "Listo para contabilizar")],
     ...(plan.bloqueos.length > 0
@@ -130,6 +132,15 @@ export function hojasDelPlan(plan: Plan, generadoEl: string): HojaExport[] {
       nombre: "Con problemas",
       columnas: [{ titulo: "Tipo", ancho: 20 }, { titulo: "Documento", ancho: 24 }, { titulo: "Fecha", ancho: 12 }, { titulo: "Qué falta", ancho: 90 }],
       filas: lista(plan.problemas),
+    },
+    {
+      nombre: "Asientos manuales del mes",
+      columnas: [{ titulo: "Número", ancho: 16 }, { titulo: "Fecha", ancho: 12 }, { titulo: "Descripción", ancho: 70 }, { titulo: "Monto", ancho: 16 }],
+      filas: [
+        [texto(AVISO_ASIENTOS_MANUALES), VACIA, VACIA, VACIA],
+        [VACIA, VACIA, VACIA, VACIA],
+        ...plan.manuales.map((m) => [texto(m.numero), fecha(m.fecha), texto(m.descripcion), numero(m.monto)]),
+      ],
     },
   ];
 }

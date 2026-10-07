@@ -23,6 +23,9 @@
 --   [8] (098) la IMPORTACIÓN MASIVA en un mes ya contabilizado desde los
 --       documentos: rechazada con la fecha, sin asientos
 --   [9] (098) un asiento de AJUSTE cargado a mano en ese mismo mes: entra
+--   Con la 099 el [4] cambia: bloquea un asiento IMPORTADO del mes, y
+--   [4b] un asiento MANUAL de ajuste ya NO bloquea; [10] el banco de un cobro
+--   contabilizado no cambia.
 --   La concurrencia (dos corridas del mismo mes a la vez) necesita dos
 --   sesiones: sql/tests/concurrencia-posteo-retroactivo.mjs
 -- ============================================================================
@@ -51,12 +54,18 @@ DECLARE
   v_ea     uuid;
   v_rev    uuid;
   v_err    text;
+  v_099    boolean;
+  v_cob    uuid;
+  v_m4     date;
+  v_banco2 text;
   v_ok     int := 0;
   v_fail   int := 0;
 BEGIN
   PERFORM set_config('request.jwt.claims', '{"role":"service_role"}', true);
   v_ini := public.finanzas_inicio_contable(T);
   v_fin := (date_trunc('month', v_ini) + interval '1 month - 1 day')::date;
+  v_099 := position('journal_import_entries' in
+    pg_get_functiondef('public.post_documentos_existentes(uuid, date, date, jsonb, uuid)'::regprocedure)) > 0;
   RAISE NOTICE 'mes de prueba: % a %', v_ini, v_fin;
 
   SELECT to_jsonb(i) INTO v_base FROM invoices i
@@ -98,6 +107,52 @@ BEGIN
     jsonb_build_object('account_code', '400001', 'debit', 0, 'credit', 10, 'description', 'Verificación 097'));
 
   SELECT count(*) INTO v_lotes0 FROM posteos_retroactivos WHERE tenant_id = T;
+
+  -- [4] y [4b] (099): antes del [1], porque con un posteo en el mes la 098 ya
+  --     no deja importar.
+  IF v_099 THEN
+    -- [4] un asiento IMPORTADO en el mes bloquea el posteo y se nombra. En un
+    --     mes abierto SIN posteo (en uno con posteo la 098 no deja importar).
+    SELECT make_date(ap.year, ap.month, 1) INTO v_m4
+      FROM accounting_periods ap
+     WHERE ap.tenant_id = T AND ap.status = 'abierto' AND make_date(ap.year, ap.month, 1) >= v_ini
+       AND make_date(ap.year, ap.month, 1) <= (now() AT TIME ZONE 'America/Panama')::date
+       AND NOT EXISTS (SELECT 1 FROM posteos_retroactivos pr WHERE pr.tenant_id = T
+                        AND make_date(ap.year, ap.month, 1) BETWEEN date_trunc('month', pr.desde) AND pr.hasta)
+     ORDER BY 1 LIMIT 1;
+    IF v_m4 IS NULL THEN
+      RAISE NOTICE '⏭  [4] no hay un mes abierto sin posteo para probar.';
+    ELSE
+    BEGIN
+      PERFORM post_journal_entries_batch(T, 'verificacion-099.xlsx', md5(random()::text), 2,
+        jsonb_build_array(jsonb_build_object('group_label', '1', 'first_row', 2, 'transaction_date', v_m4 + 6,
+          'description', 'Importado de la verificación 099', 'reference', NULL, 'lines', v_fac)), NULL);
+      PERFORM post_documentos_existentes(T, v_m4, (v_m4 + interval '1 month - 1 day')::date, jsonb_build_array(
+        jsonb_build_object('transaction_date', v_m4 + 2, 'description', 'Factura VERIF-097-C', 'source_type', 'factura',
+          'source_id', v_c, 'reference', 'VERIF-097-C', 'lines', v_fac)), NULL);
+      v_fail := v_fail + 1; RAISE NOTICE '❌ [4] contabilizó un mes que ya tenía un asiento importado';
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+      IF v_err LIKE 'Este período ya tiene asientos importados:%verificación 099%un solo método%' THEN
+        v_ok := v_ok + 1; RAISE NOTICE '✅ [4] %', v_err;
+      ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [4] otro motivo: %', v_err; END IF;
+    END;
+    END IF;
+    -- [4b] un asiento MANUAL de ajuste en el mes NO bloquea (se deshace al final del bloque).
+    BEGIN
+      PERFORM post_journal_entry(T, v_ini + 6, 'Depreciación de la verificación 099', 'manual',
+        v_fac, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'VERIF-099-AJUSTE');
+      PERFORM post_documentos_existentes(T, v_ini, v_fin, jsonb_build_array(
+        jsonb_build_object('transaction_date', v_ini + 2, 'description', 'Factura VERIF-097-C', 'source_type', 'factura',
+          'source_id', v_c, 'reference', 'VERIF-097-C', 'lines', v_fac)), NULL);
+      RAISE EXCEPTION USING ERRCODE = 'P0099', MESSAGE = 'deshacer';
+    EXCEPTION
+      WHEN SQLSTATE 'P0099' THEN v_ok := v_ok + 1; RAISE NOTICE '✅ [4b] con un ajuste a mano en el mes, el posteo entra';
+      WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+        v_fail := v_fail + 1; RAISE NOTICE '❌ [4b] el ajuste a mano bloqueó: %', v_err;
+    END;
+  END IF;
 
   -- [1] Lote bueno.
   v_items := jsonb_build_array(
@@ -176,20 +231,23 @@ BEGIN
     ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [3] quedó algo a medias: %', v_err; END IF;
   END;
 
-  -- [4] Un mes por un solo método.
-  BEGIN
-    PERFORM post_journal_entry(T, v_ini + 6, 'Asiento manual de la verificación 097', 'manual',
-      v_fac, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'VERIF-097-MANUAL');
-    PERFORM post_documentos_existentes(T, v_ini, v_fin, jsonb_build_array(
-      jsonb_build_object('transaction_date', v_ini + 2, 'description', 'Factura VERIF-097-C', 'source_type', 'factura',
-        'source_id', v_c, 'reference', 'VERIF-097-C', 'lines', v_fac)), NULL);
-    v_fail := v_fail + 1; RAISE NOTICE '❌ [4] contabilizó un mes que ya tenía un asiento manual';
-  EXCEPTION WHEN check_violation THEN
-    GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    IF v_err LIKE '%un solo método%' AND v_err LIKE '%verificación 097%' THEN
-      v_ok := v_ok + 1; RAISE NOTICE '✅ [4] %', v_err;
-    ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [4] otro motivo: %', v_err; END IF;
-  END;
+  -- [4] (sin la 099) Un mes por un solo método: el asiento manual bloquea.
+  --     (con la 099 los casos 4 y 4b van ANTES del [1], más arriba).
+  IF NOT v_099 THEN
+    BEGIN
+      PERFORM post_journal_entry(T, v_ini + 6, 'Asiento manual de la verificación 097', 'manual',
+        v_fac, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'VERIF-097-MANUAL');
+      PERFORM post_documentos_existentes(T, v_ini, v_fin, jsonb_build_array(
+        jsonb_build_object('transaction_date', v_ini + 2, 'description', 'Factura VERIF-097-C', 'source_type', 'factura',
+          'source_id', v_c, 'reference', 'VERIF-097-C', 'lines', v_fac)), NULL);
+      v_fail := v_fail + 1; RAISE NOTICE '❌ [4] contabilizó un mes que ya tenía un asiento manual';
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+      IF v_err LIKE '%un solo método%' AND v_err LIKE '%verificación 097%' THEN
+        v_ok := v_ok + 1; RAISE NOTICE '✅ [4] %', v_err;
+      ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [4] otro motivo: %', v_err; END IF;
+    END;
+  END IF;
 
   -- [5] Antes del inicio contable.
   BEGIN
@@ -242,6 +300,30 @@ BEGIN
       GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
       v_fail := v_fail + 1; RAISE NOTICE '❌ [9] el ajuste a mano fue rechazado: %', v_err;
     END;
+  END IF;
+
+  -- [10] (099) el banco de un cobro con asiento no cambia.
+  IF v_099 THEN
+    SELECT p.id INTO v_cob FROM payments p
+     WHERE p.tenant_id = T AND EXISTS (SELECT 1 FROM journal_entries j WHERE j.tenant_id = T AND j.source_type = 'pago' AND j.source_id = p.id)
+     LIMIT 1;
+    SELECT code INTO v_banco2 FROM chart_of_accounts
+     WHERE tenant_id = T AND active AND account_type = 'asset' AND (name ILIKE '%banco%' OR name ILIKE '%caja%')
+       AND code IS DISTINCT FROM (SELECT payment_account_code FROM payments WHERE id = v_cob)
+     ORDER BY code LIMIT 1;
+    IF v_cob IS NULL OR v_banco2 IS NULL THEN
+      RAISE NOTICE '⏭  [10] no hay un cobro contabilizado u otro banco para probar.';
+    ELSE
+      BEGIN
+        UPDATE payments SET payment_account_code = v_banco2 WHERE id = v_cob;
+        v_fail := v_fail + 1; RAISE NOTICE '❌ [10] se cambió el banco de un cobro contabilizado';
+      EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+        v_ok := v_ok + 1; RAISE NOTICE '✅ [10] %', v_err;
+      END;
+    END IF;
+  ELSE
+    RAISE NOTICE '⏭  [4], [4b] y [10] de la 099: no está aplicada en esta base.';
   END IF;
 
   -- [7] Permisos.

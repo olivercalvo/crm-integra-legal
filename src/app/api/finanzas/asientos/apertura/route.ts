@@ -1,0 +1,67 @@
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
+import { contabilizarApertura, previsualizarApertura } from "@/lib/finanzas/api/apertura";
+import { WorkbookDeAperturaError } from "@/lib/finanzas/import/apertura-workbook";
+
+export const runtime = "nodejs";
+
+/**
+ * POST /api/finanzas/asientos/apertura (multipart: file, mode = preview | commit, hash)
+ *
+ * preview: valida la plantilla EN SECO (no escribe nada) y devuelve errores por
+ * fila, totales por cuenta, el cuadre al corte y lo que impide contabilizar.
+ * commit: el MISMO archivo de la vista previa (hash) → post_apertura (100), en
+ * una transacción. Lo aprieta una persona. Admin y contador (los de asientos).
+ * El tenant sale del perfil; el libro, con el usuario en x-actor-id.
+ */
+const ROLES = ["admin", "contador"] as const;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
+  const ctx = await getAuthenticatedContext();
+  const denied = requireRole(ctx.userRole, ROLES);
+  if (denied) return denied;
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Se esperaba un archivo" }, { status: 400 });
+  }
+  const mode = String(form.get("mode") ?? "preview");
+  const file = form.get("file");
+  if (!file || typeof file === "string") return NextResponse.json({ error: "Falta el archivo" }, { status: 400 });
+  if (file.size === 0) return NextResponse.json({ error: "El archivo está vacío" }, { status: 400 });
+  if (file.size > MAX_FILE_BYTES) return NextResponse.json({ error: "El archivo supera los 5 MB permitidos" }, { status: 400 });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  try {
+    if (mode === "preview") {
+      const v = await previsualizarApertura(ctx.db, ctx.tenantId, buffer);
+      return NextResponse.json({
+        hash: v.hash,
+        fecha: v.fecha,
+        errores: v.resultado.errores,
+        lineas: v.resultado.lineas.length,
+        totalDebitos: v.resultado.totalDebitos,
+        totalCreditos: v.resultado.totalCreditos,
+        porCuenta: v.resultado.porCuenta,
+        cuadre: v.cuadre,
+        bloqueos: v.bloqueos,
+      });
+    }
+    if (mode === "commit") {
+      const r = await contabilizarApertura(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, buffer, file.name,
+        String(form.get("hash") ?? ""));
+      return NextResponse.json(r, { status: 201 });
+    }
+    return NextResponse.json({ error: "Modo inválido (preview | commit)" }, { status: 400 });
+  } catch (err) {
+    if (err instanceof WorkbookDeAperturaError) return NextResponse.json({ error: err.message }, { status: 400 });
+    if (err instanceof MutationError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+});

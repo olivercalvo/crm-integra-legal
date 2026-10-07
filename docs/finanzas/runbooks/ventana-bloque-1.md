@@ -123,11 +123,12 @@ Nadie emite, anula, cobra ni carga un CUFE hasta que el deploy esté arriba.
   reemplazan la `079` (HON-FAM → 400009) y la `082` (HON-OTROS → 400010), que van en el Bloque C.
   Si Josuarth elige otra cuenta para alguno, se cambia después de la ventana desde el catálogo.
 
-### Bloque C — congelado, inmediatamente después de la 025 (22)
+### Bloque C — congelado, inmediatamente después de la 025 (27)
 
 ```
 068 → 069 → 070 → 071 → 072 → 073 → 074 → 075 → 076 → 077 → 078
  → 079 → 080 → 081 → 082 → 083 → 084 → 085 → 092 → 094 → 095 → 096
+ → 097 → 098 → 099 → 100 → 101
  → paso de datos «Marcar los datos de prueba»
 ```
 
@@ -169,6 +170,19 @@ sólo puede ir en la parte congelada. La `084` ya está en producción: entra y 
   llave** `finanzas.inicio_contable_existentes` (ésa es sólo de staging). Verificación: `verificacion-096`
   (19/19 en el ensayo; 20/20 en staging, donde sí hay compras). El código (etiqueta «Contabilizado
   fuera», bloqueos en pantalla y en la API, antigüedad) llega con el merge de D·6.
+- `097` → `098` → `099` y `100` → `101` (07/10): **aplicadas y SIN USAR** (Oliver, 07/10). No tocan datos:
+  crean tablas, funciones y triggers que nadie llama hasta después de la ventana. El posteo de documentos
+  por mes (`097`–`099`, §7) y la apertura (`100`–`101`, §8) se usan cuando Josuarth revise cada mes y
+  confirme la fecha de la apertura. Por qué acá y no en otra ventana: el código que las usa llega con el
+  merge de D·6; sin ellas, las pantallas nuevas fallarían al abrirse. Orden y dependencias: después de
+  la `096` (las cinco leen `finanzas_inicio_contable`), la `097` usa `journal_import_entries` (067) y la
+  `101` reemplaza `reverse_journal_entry` partiendo del cuerpo que deja la `080` (verificado idéntico al
+  de la ventana del ensayo el 07/10: si alguien cambia esa función antes de la ventana, hay que rehacer
+  la `101`). Verificaciones: `verificacion-097` después de la `099` (10/10 en el ensayo; el caso del
+  banco de un cobro contabilizado se salta porque el libro está vacío) y `verificacion-100-101` después
+  de la `101` (11/11; el caso de la factura se salta por lo mismo). Las dos van en ROLLBACK: no gastan
+  números del libro. ⚠️ Después del deploy las pantallas «Documentos existentes» y «Apertura» quedan a la
+  vista de admin y contador: **no se usan** hasta el visto bueno de Josuarth (§7 y §8).
 - 🔴 **Los filtros de los reportes son CÓDIGO y llegan con el merge de D·6**, en esta misma ventana:
   antigüedad (y su cuadre), estado de cuenta, ITBMS, Pendientes DGI y sus contadores (listado, hub de
   reportes, dashboard de la abogada), el aviso de errores DGI, los selectores de cobro, NC y ND, y las
@@ -252,12 +266,15 @@ marcar. Estimado con 2,5 min por migración (4 en las que tienen números que co
 | D·3 | reload + verificación del A | 15 min |
 | D·4 | Congelar y avisar | 5 min |
 | D·5a | Bloque B: 14 migraciones + 8 verificaciones (con la de la `067`) + comparar la `025` con P-1(e) | 1 h |
-| D·5b | Bloque C: 22 migraciones + 16 verificaciones + los tres chequeos previos | 1 h 20 min |
+| D·5b | Bloque C: 27 migraciones + 18 verificaciones + los tres chequeos previos | 1 h 35 min |
 | D·5c | Marcar los datos de prueba: consulta, pausa, paso, consulta | 15 min |
 | D·6–D·8 | merge, deploy, post-deploy, descongelar | 35 min |
 | D·9 | Accesos (§6): usuario de Josuarth, su contraseña, desactivar contador.test y re-desactivar los dos inactivos, consulta | 25 min |
-| | **Total del día** | **~5 h 50 min** |
-| | **Congelado (D·4 a D·8)** | **~3 h 15 min** |
+| | **Total del día** | **~6 h 05 min** |
+| | **Congelado (D·4 a D·8)** | **~3 h 30 min** |
+
+La `097` a la `101` suman en el ensayo 128 ms de SQL y 390 ms de verificaciones; lo que agregan es el
+trabajo de pegar y leer: 5 migraciones a 2,5 min y 2 verificaciones a 1 min ≈ **15 min** de congelado.
 
 Ventana de bitácoras: 5 migraciones + recarga + prueba de humo en la app (guardar un comentario,
 emitir y anular una factura de prueba no: es producción; basta con guardar y leer una bitácora) ≈
@@ -484,4 +501,33 @@ la app.
 contabilizó y la otra falló sin escribir nada; agosto (4 asientos, con la anulación de una factura de
 julio) con el mes reabierto y vuelto a cerrar; las dos repetidas, «no hay nada que contabilizar».
 Concurrencia en la base local del ensayo: `sql/tests/concurrencia-posteo-retroactivo.mjs`, 10 de 10.
+
+---
+
+## 8. Después de la ventana: el asiento de apertura
+
+**No es parte de la ventana** y no se carga antes de que Josuarth confirme la fecha y los saldos. 🔴 Lo carga
+una persona desde la pantalla, nunca un agente ni un script.
+
+1. **La fecha** (Finanzas › Configuración › Parámetros contables › Fecha de la apertura): 30/06/2026 (el día
+   anterior al inicio contable, el valor por defecto) o 31/12/2025 (con enero a junio importado por Asientos ›
+   Importar). Al 31/12 la apertura lleva sólo cuentas de balance; a mitad de año, también lo acumulado de las
+   cuentas de resultado. No cambia mientras haya una apertura vigente.
+2. **La plantilla** (Asientos de Diario › Apertura): con lo que conoce el CRM (hoy, una factura real anterior al
+   inicio) o vacía. 🔴 **Los saldos salen de QuickBooks**, también la cuenta por cobrar y por pagar al corte: lo
+   precargado es una ayuda, no la fuente. La hoja Léame y la pantalla lo dicen.
+3. **Revisar en seco**: errores por fila y columna, totales por cuenta y el «Cuadre al corte» con ese archivo. No
+   registra nada.
+4. **Contabilizar**: un asiento `apertura` (número AD-), una sola vez. Desde ese momento los reportes dejan de
+   sumar el `saldo_inicial` de las cuentas (y ya no se edita), y la antigüedad cuenta cada documento de la
+   apertura con su fecha y vencimiento, sin repetir los documentos anteriores al inicio.
+5. **Cuadre al corte** (misma pantalla y Excel): por cliente y proveedor, la apertura contra los documentos del
+   CRM al corte. Una diferencia no es un error en sí: el CRM sólo sabe lo que se cargó en él.
+6. **Corregir**: «Reversar la apertura» con motivo. La reversión lleva **la misma fecha** que la apertura y
+   **sólo mientras su mes siga abierto**; después se carga otra. 🔴 **No cerrar el mes de la apertura hasta que
+   Josuarth la dé por buena**: con el mes cerrado la pantalla no ofrece «Reversar» y la corrección va con un
+   asiento de ajuste a mano.
+
+**Probado:** `verificacion-100-101` 12/12 en una copia local con la ventana aplicada, 11/11 en el ensayo
+completo de la ventana. Prueba en staging con capturas: pendiente del «aplica» de la `100` y la `101`.
 

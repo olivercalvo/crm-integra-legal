@@ -1,5 +1,21 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Asiento de apertura (saldos iniciales)] - 2026-10-07
+
+- Nueva pantalla **Finanzas › Asientos de Diario › Apertura** (admin y contador): los saldos de cada cuenta al día
+  del corte, en un solo asiento, una vez. Se baja la plantilla (con lo que conoce el CRM o vacía), se revisa en
+  seco (errores por fila, totales por cuenta) y se contabiliza. Los saldos salen de los libros del contador
+  (QuickBooks): lo precargado es sólo una ayuda.
+- La **fecha de la apertura** es un parámetro (Configuración › Parámetros contables): por defecto el día anterior
+  al inicio contable. Al 31/12 lleva sólo cuentas de balance.
+- **Reversar la apertura**: con motivo, con la misma fecha que la apertura y sólo con su mes abierto. Después se
+  puede cargar otra.
+- Con apertura, los reportes dejan de sumar el saldo inicial de las cuentas (que ya no se edita) y la antigüedad
+  cuenta cada documento de la apertura con su fecha y vencimiento, sin repetir los anteriores al inicio.
+- **Cuadre al corte** por cliente y por proveedor, en pantalla y en Excel.
+- Migraciones `100` y `101` escritas (sin aplicar en staging); probadas en el ensayo de la ventana, donde entran
+  con la `097` a la `099`, aplicadas y sin usar.
+
 ## [La factura real FAC-HON-000463 se puede cobrar y acreditar; lista de datos de prueba] - 2026-10-07
 
 - En la ventana, el cliente **0TEST-FE-002 ya no se marca de prueba**: su factura FAC-HON-000463 es real

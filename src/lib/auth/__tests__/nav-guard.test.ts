@@ -466,6 +466,11 @@ const EXPORTS = [
     archivo: "src/app/api/finanzas/asientos/documentos-existentes/route.ts",
     pantalla: "/finanzas/asientos/documentos-existentes",
   },
+  // El «Cuadre al corte» de la apertura (100).
+  {
+    archivo: "src/app/api/finanzas/asientos/apertura/cuadre/export/route.ts",
+    pantalla: "/finanzas/asientos/apertura",
+  },
 ];
 
 /** Extrae la lista de roles declarada en el archivo de la ruta. */

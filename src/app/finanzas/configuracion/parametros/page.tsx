@@ -4,6 +4,8 @@ import { SlidersHorizontal } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { InicioContableCard } from "./_components/inicio-contable-card";
+import { FechaAperturaCard } from "./_components/fecha-apertura-card";
+import { cargarFechaDeApertura } from "@/lib/finanzas/api/apertura";
 
 // Ver: los tres roles de finanzas. Editar: admin y contador, el mismo criterio
 // que las tasas y la clasificación contable de una cuenta. Tiene que coincidir
@@ -21,6 +23,8 @@ export default async function ParametrosContablesPage() {
     redirect("/finanzas");
   }
   const fecha = await cargarInicioContable(ctx.db, ctx.tenantId);
+  const apertura = await cargarFechaDeApertura(ctx.db, ctx.tenantId);
+  const { data: vigente } = await ctx.db.from("aperturas").select("id").eq("tenant_id", ctx.tenantId).eq("estado", "vigente").limit(1);
 
   return (
     <div className="space-y-5">
@@ -35,6 +39,13 @@ export default async function ParametrosContablesPage() {
       </div>
 
       <InicioContableCard fecha={fecha} canEdit={ROLES_EDICION.includes(ctx.userRole)} />
+      <FechaAperturaCard
+        fecha={apertura.fecha}
+        esParametro={apertura.esParametro}
+        inicio={apertura.inicio}
+        conVigente={(vigente ?? []).length > 0}
+        canEdit={ROLES_EDICION.includes(ctx.userRole)}
+      />
     </div>
   );
 }

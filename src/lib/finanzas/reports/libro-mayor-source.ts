@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { aperturaRegistrada, saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import { claveDeTercero } from "@/lib/finanzas/reports/tercero-fiscal";
@@ -68,8 +69,10 @@ export async function loadCuentaDelMayor(
   if (!data) return null;
 
   const r = data as Record<string, unknown>;
-  const saldoInicial = Number(r.saldo_inicial ?? 0);
-  const saldoInicialFecha = (r.saldo_inicial_fecha as string | null) ?? null;
+  // 100: con apertura, el saldo inicial de la cuenta ya no cuenta (está en el libro).
+  const conApertura = await aperturaRegistrada(db, tenantId);
+  const saldoInicial = saldoInicialEfectivo(r.saldo_inicial as number | string | null, conApertura);
+  const saldoInicialFecha = conApertura ? null : (r.saldo_inicial_fecha as string | null) ?? null;
 
   const previos = rango.desde
     ? await sumaMovimientosAnteriores(db, tenantId, r.id as string, rango.desde)

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import Link from "next/link";
-import { BookOpenCheck, CalendarDays, FileSpreadsheet, History } from "lucide-react";
+import { BookOpenCheck, CalendarDays, FileSpreadsheet, History, FolderOpen } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
@@ -167,6 +167,13 @@ export default async function AsientosPage({
           >
             <History size={16} />
             Documentos existentes, por mes
+          </Link>
+          <Link
+            href="/finanzas/asientos/apertura"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+          >
+            <FolderOpen size={16} />
+            Apertura (saldos iniciales)
           </Link>
         </div>
       </div>

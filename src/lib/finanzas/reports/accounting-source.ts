@@ -53,6 +53,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { aperturaRegistrada, saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 import type { ReportAccount } from "@/lib/finanzas/reports/accounting-reports";
 
 type DB = SupabaseClient;
@@ -294,6 +295,8 @@ export async function loadReportAccounts(
   const excluirApertura = opciones.aperturaDeResultado === "excluir";
 
   const excluir = opciones.excluirCierre ? await asientosDeCierre(db, tenantId) : new Set<string>();
+  // 100: con apertura, el saldo_inicial ya no cuenta (está en el libro).
+  const conApertura = await aperturaRegistrada(db, tenantId);
   const [{ data, error }, movimientos, anteriores] = await Promise.all([
     db.from("chart_of_accounts").select(SELECT_COLS).eq("tenant_id", tenantId).order("code"),
     movimientosPorCuenta(db, tenantId, rango, excluir),
@@ -317,7 +320,7 @@ export async function loadReportAccounts(
       // desactivada con saldo se cayera del Balance por culpa del filtro, el
       // estado quedaría descuadrado sin decir por qué.
       if (movimientos.has(r.id) || anteriores.has(r.id)) return true;
-      return Math.abs(Number(r.saldo_inicial ?? 0)) >= 0.005;
+      return Math.abs(saldoInicialEfectivo(r.saldo_inicial, conApertura)) >= 0.005;
     })
     .map((r) => {
       const m = movimientos.get(r.id) ?? { debitos: 0, creditos: 0, neto: 0 };
@@ -326,7 +329,7 @@ export async function loadReportAccounts(
       // cálculo. Es lo que le permite a la pantalla decir CUÁNTO se dejó afuera:
       // un aviso con el número es un dato que el contador puede verificar; sin
       // el número es una disculpa.
-      const saldoApertura = round2(Number(r.saldo_inicial ?? 0));
+      const saldoApertura = saldoInicialEfectivo(r.saldo_inicial, conApertura);
       const excluida = excluirApertura && esDeResultado;
       const apertura = excluida ? 0 : saldoApertura;
       // 🔴 Corregido el 01/10/2026: en el Estado de Resultado por período la

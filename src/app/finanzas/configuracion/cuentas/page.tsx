@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { aperturaRegistrada } from "@/lib/finanzas/reports/apertura-registrada";
 import { BookOpenCheck } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
@@ -19,6 +20,8 @@ export default async function PlanDeCuentasPage() {
 
   const accounts = await listChartAccounts(ctx.db, ctx.tenantId);
   const canMutate = FINANZAS_ROLES.includes(ctx.userRole);
+  // 100: con apertura, el saldo inicial queda en sólo lectura (la base lo exige igual).
+  const conApertura = await aperturaRegistrada(ctx.db, ctx.tenantId);
 
   return (
     <div className="space-y-5">
@@ -37,7 +40,7 @@ export default async function PlanDeCuentasPage() {
         </div>
       </div>
 
-      <ChartOfAccountsManager initialAccounts={accounts} canMutate={canMutate} />
+      <ChartOfAccountsManager initialAccounts={accounts} canMutate={canMutate} conApertura={conApertura} />
     </div>
   );
 }

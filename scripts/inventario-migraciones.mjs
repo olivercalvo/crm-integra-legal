@@ -374,6 +374,16 @@ const MARCADORES = {
     tipo: "columna", tabla: "finanzas_parametros", columna: "fecha_inicio_contable",
     nota: "06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes.",
   },
+  "100_apertura.sql": {
+    que: "Asiento de apertura: finanzas_parametros.fecha_apertura, aperturas (una vigente) y apertura_partidas, post_apertura (service_role) y saldo_inicial en solo lectura con apertura",
+    tipo: "funcion", nombre: "post_apertura",
+    nota: "07/10. Ventana del Bloque 1, aplicada y sin usar. No toca datos.",
+  },
+  "101_reversar_apertura.sql": {
+    que: "reverse_journal_entry acepta la apertura: misma fecha que la apertura, mes abierto, y la marca reversada en la misma transaccion",
+    tipo: "funcion", nombre: "reverse_journal_entry",
+    nota: "07/10. Ventana del Bloque 1, despues de la 100. No toca datos.",
+  },
   "099_solo_importados_bloquean_y_banco_del_cobro.sql": {
     que: "post_documentos_existentes se niega solo con asientos IMPORTADOS vigentes (los manuales de ajuste se listan, no bloquean); el banco de un cobro con asiento no cambia (trigger)",
     tipo: "funcion", nombre: "finanzas_banco_de_cobro_contabilizado",

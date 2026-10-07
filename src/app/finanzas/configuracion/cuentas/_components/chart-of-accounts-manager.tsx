@@ -52,6 +52,8 @@ const API_BASE = "/api/finanzas/configuracion/chart-of-accounts";
 interface Props {
   initialAccounts: ChartAccountRow[];
   canMutate: boolean;
+  /** 100: con un asiento de apertura el saldo inicial ya no se usa ni se edita. */
+  conApertura?: boolean;
 }
 
 type FormState = {
@@ -102,7 +104,7 @@ function formatSaldo(n: number): string {
 const selectClass =
   "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none border-gray-300";
 
-export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
+export function ChartOfAccountsManager({ initialAccounts, canMutate, conApertura = false }: Props) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
   const [search, setSearch] = useState("");
@@ -592,7 +594,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 allowNegative
                 value={form.saldo_inicial}
                 onChange={(e) => setForm({ ...form, saldo_inicial: e.target.value })}
-                disabled={saving}
+                disabled={saving || conApertura}
                 placeholder="0.00"
                 className={
                   "text-right font-mono " +
@@ -600,7 +602,9 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 }
               />
               <p className="mt-1 text-xs text-gray-500">
-                Monto de apertura. Admite negativos.
+                {conApertura
+                  ? "Ya no se usa: el bufete tiene un asiento de apertura (Asientos de Diario › Apertura) y los saldos al corte están en el libro."
+                  : "Monto de apertura. Admite negativos."}
               </p>
               {fieldErrors.saldo_inicial && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.saldo_inicial}</p>
@@ -618,7 +622,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 onChange={(e) =>
                   setForm({ ...form, saldo_inicial_fecha: e.target.value })
                 }
-                disabled={saving || !saldoNoEsCero}
+                disabled={saving || !saldoNoEsCero || conApertura}
                 className={fieldErrors.saldo_inicial_fecha ? "border-red-300" : ""}
               />
               <p className="mt-1 text-xs text-gray-500">

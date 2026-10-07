@@ -1,6 +1,6 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 07/10/2026, noche)
+## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
@@ -9,7 +9,7 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 **Staging (`xtyenhakplrkyifbcaow`):**
 - Aplicado: todo `sql/pending` hasta la **`099`** inclusive (la 099 el 07/10 noche con el «aplica»;
   verificación 097 completa 11/11, con el caso 10: el banco de un cobro contabilizado no cambia).
-- Escrito y **SIN APLICAR**: **`088`** (no va todavía, a propósito).
+- Escrito y **SIN APLICAR**: **`100`** y **`101`** (apertura; esperan el «aplica»), **`088`** (no va todavía).
 - Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
 - Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
   CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las
@@ -25,6 +25,13 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 - Consultas de solo lectura para producción: `produccion-borradores-a-revisar.sql` (los 5 borradores) y
   `produccion-documentos-de-un-mes.sql`.
 - Suite 1745/1745.
+
+**Apertura (07/10, noche):** construida (pantalla, plantilla, reversión con la misma fecha, reportes sin
+`saldo_inicial`, antigüedad por documento, cuadre al corte con Excel, fecha como parámetro). `100` y `101`
+probadas en una copia local (12/12) y en el ensayo completo de la ventana con la `097` a la `101` (11/11; 41
+tablas 131/131; 0 deadlocks). Falta: el «aplica» y la prueba en staging con capturas (apertura ficticia al
+30/06, reversión, apertura nueva, cuadre). Para Josuarth: la fecha, la cuenta 300002 (P-11a) y si carga el
+vencimiento de cada partida.
 
 **Pendiente:**
 1. ✅ FAC-HON-000463: 0TEST-FE-002 sale de la lista de clientes a marcar (Oliver, 07/10). Ensayado: el paso

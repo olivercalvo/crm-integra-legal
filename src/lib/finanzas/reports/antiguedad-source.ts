@@ -25,6 +25,7 @@
  */
 
 import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { aperturaRegistrada, saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
@@ -35,6 +36,8 @@ import type {
 import {
   manualesSinTercero,
   partidasDeDiario,
+  partidasDeApertura,
+  type PartidaDeApertura,
   SOURCE_TYPES_DE_PARTIDA,
   type LineaDeControl,
 } from "@/lib/finanzas/reports/partidas-de-diario";
@@ -101,7 +104,8 @@ async function saldoDeCuentaControl(
     neto += Number(l.debit) - Number(l.credit);
   }
 
-  const apertura = round2(Number(c.saldo_inicial ?? 0));
+  // 100: con apertura, el saldo inicial de la cuenta ya no cuenta (está en el libro).
+  const apertura = saldoInicialEfectivo(c.saldo_inicial, await aperturaRegistrada(db, tenantId));
   return {
     saldoCuentaControl: round2(apertura + neto),
     saldoApertura: apertura,
@@ -713,6 +717,67 @@ async function sinAsientoPagar(db: DB, tenantId: string, inicio: string): Promis
   };
 }
 
+/**
+ * 100: las partidas de los asientos de apertura que aparecen en las líneas de
+ * la cuenta control, y si hay una apertura VIGENTE.
+ */
+async function partidasDeAperturaDelLibro(
+  db: DB,
+  tenantId: string,
+  lineas: LineaDeControl[]
+): Promise<{ partidas: PartidaDeApertura[]; conDetalle: Set<string>; vigente: boolean }> {
+  let vigente = false;
+  try {
+    const { data: vig, error: errV } = await db.from("aperturas").select("id").eq("tenant_id", tenantId).eq("estado", "vigente").limit(1);
+    // Antes de la 100 la tabla no existe: no hay apertura.
+    vigente = !errV && (vig ?? []).length > 0;
+  } catch {
+    vigente = false;
+  }
+  const ids = Array.from(new Set(lineas.filter((l) => l.sourceType === "apertura").map((l) => l.entryId)));
+  if (ids.length === 0) return { partidas: [], conDetalle: new Set(), vigente };
+  const { data, error } = await db
+    .from("apertura_partidas")
+    .select(
+      "id, entry_id, account_code, client_id, supplier_id, documento_externo, fecha_documento, vencimiento, debit, credit, " +
+        "clients(name), suppliers(legal_name, trade_name), aperturas(fecha), journal_entries(reference)"
+    )
+    .eq("tenant_id", tenantId)
+    .in("entry_id", ids);
+  if (error) {
+    console.error("[finanzas/antiguedad] apertura_partidas failed", error);
+    return { partidas: [], conDetalle: new Set(), vigente };
+  }
+  type Fila = {
+    id: string; entry_id: string; account_code: string; client_id: string | null; supplier_id: string | null;
+    documento_externo: string | null; fecha_documento: string | null; vencimiento: string | null;
+    debit: number | string; credit: number | string; clients: { name: string } | null;
+    suppliers: { legal_name: string; trade_name: string | null } | null; aperturas: { fecha: string } | null;
+    journal_entries: { reference: string | null } | null;
+  };
+  const partidas: PartidaDeApertura[] = [];
+  for (const f of (data ?? []) as unknown as Fila[]) {
+    const cuenta = f.account_code === CUENTA_CONTROL.cobrar ? "cobrar" : f.account_code === CUENTA_CONTROL.pagar ? "pagar" : null;
+    const terceroId = cuenta === "cobrar" ? f.client_id : cuenta === "pagar" ? f.supplier_id : null;
+    if (!cuenta || !terceroId) continue;
+    partidas.push({
+      id: f.id,
+      entryId: f.entry_id,
+      referencia: f.journal_entries?.reference ?? null,
+      cuenta,
+      terceroId,
+      terceroNombre: f.clients?.name ?? (f.suppliers ? f.suppliers.trade_name?.trim() || f.suppliers.legal_name : null),
+      documento: f.documento_externo,
+      fechaDocumento: f.fecha_documento ? String(f.fecha_documento).slice(0, 10) : null,
+      vencimiento: f.vencimiento ? String(f.vencimiento).slice(0, 10) : null,
+      fechaApertura: String(f.aperturas?.fecha ?? f.fecha_documento ?? "").slice(0, 10),
+      debit: Number(f.debit),
+      credit: Number(f.credit),
+    });
+  }
+  return { partidas, conDetalle: new Set(partidas.map((p) => p.entryId)), vigente };
+}
+
 export async function loadAntiguedad(
   db: DB,
   tenantId: string,
@@ -740,11 +805,37 @@ export async function loadAntiguedad(
     lineasDeDiarioContraControl(db, tenantId, CUENTA_CONTROL[tipo]),
   ]);
 
+  // 100: con una APERTURA VIGENTE, lo anterior al inicio contable ya está en el
+  // libro (en la apertura, por documento): esos documentos salen del auxiliar y
+  // de lo «sin asiento», y en su lugar cuentan las partidas de la apertura. Así
+  // la factura anterior al inicio aparece una sola vez. Sin apertura, como antes.
+  const apertura = await partidasDeAperturaDelLibro(db, tenantId, diario.lineas);
+  const conVigente = apertura.vigente;
+  const modulo = conVigente ? documentosDeModulo.filter((d) => !d.contabilizadoFuera) : documentosDeModulo;
+
   // E9: las partidas de diario y de apertura CON tercero son saldo de ese
   // tercero; las que no lo tienen siguen explicando la diferencia (D5).
-  const documentos = [...documentosDeModulo, ...partidasDeDiario(diario.lineas, tipo, diario.reversados)];
+  const documentos = [
+    ...modulo,
+    ...partidasDeDiario(diario.lineas, tipo, diario.reversados, new Date(), apertura.conDetalle),
+    ...partidasDeApertura(apertura.partidas, tipo, diario.reversados),
+  ];
+  const fuera = base.contabilizadosFuera;
   const sinAsiento: SinAsiento = {
-    ...base,
+    ...(conVigente && fuera
+      ? {
+          ...base,
+          documentos: {
+            cantidad: base.documentos.cantidad - fuera.documentos.cantidad,
+            monto: round2(base.documentos.monto - fuera.documentos.monto),
+          },
+          cobros: {
+            cantidad: base.cobros.cantidad - fuera.cobros.cantidad,
+            monto: round2(base.cobros.monto - fuera.cobros.monto),
+          },
+          contabilizadosFuera: { documentos: { cantidad: 0, monto: 0 }, cobros: { cantidad: 0, monto: 0 } },
+        }
+      : base),
     manuales: manualesSinTercero(diario.lineas, tipo, diario.reversados),
   };
 

@@ -70,11 +70,14 @@ export function partidasDeDiario(
   lineas: LineaDeControl[],
   tipo: TipoPartida,
   reversados: Set<string>,
-  hoy: Date = new Date()
+  hoy: Date = new Date(),
+  /** 100: asientos de apertura con detalle por documento (`partidasDeApertura`). */
+  conDetalle: Set<string> = new Set()
 ): DocumentoPendiente[] {
   const porClave = new Map<string, { linea: LineaDeControl; terceroId: string; saldo: number }>();
   for (const l of lineas) {
     if (reversados.has(l.entryId)) continue;
+    if (conDetalle.has(l.entryId)) continue;
     const terceroId = terceroDelAuxiliar(l, tipo);
     if (!terceroId) continue;
     const clave = `${l.entryId}:${terceroId}`;
@@ -131,4 +134,52 @@ export function manualesSinTercero(
     monto: round2(monto),
     terceros: Array.from(terceros).sort((a, b) => a.localeCompare(b, "es")),
   };
+}
+
+/**
+ * 100: una PARTIDA DE APERTURA por documento (apertura_partidas): el documento
+ * externo, su fecha y su vencimiento (o la fecha, si no tiene). Reemplaza a la
+ * partida única por tercero de `partidasDeDiario` para ese asiento, con el mismo
+ * total. Un asiento de apertura reversado no cuenta.
+ */
+export interface PartidaDeApertura {
+  id: string;
+  entryId: string;
+  referencia: string | null;
+  cuenta: "cobrar" | "pagar";
+  terceroId: string;
+  terceroNombre: string | null;
+  documento: string | null;
+  fechaDocumento: string | null;
+  vencimiento: string | null;
+  fechaApertura: string;
+  debit: number;
+  credit: number;
+}
+
+export function partidasDeApertura(
+  partidas: PartidaDeApertura[],
+  tipo: TipoPartida,
+  reversados: Set<string>,
+  hoy: Date = new Date()
+): DocumentoPendiente[] {
+  const out: DocumentoPendiente[] = [];
+  for (const p of partidas) {
+    if (p.cuenta !== tipo || reversados.has(p.entryId)) continue;
+    const saldo = round2(tipo === "cobrar" ? p.debit - p.credit : p.credit - p.debit);
+    if (Math.abs(saldo) < 0.005) continue;
+    const desde = p.vencimiento ?? p.fechaDocumento ?? p.fechaApertura;
+    out.push({
+      id: p.id,
+      numero: `${p.documento ?? p.referencia ?? "Apertura"} (apertura)`,
+      tercero: p.terceroNombre ?? "(sin nombre)",
+      terceroId: p.terceroId,
+      fechaReferencia: desde,
+      diasVencido: diasEntre(desde, hoy),
+      saldo,
+      sourceType: "apertura",
+      entryId: p.entryId,
+    });
+  }
+  return out;
 }

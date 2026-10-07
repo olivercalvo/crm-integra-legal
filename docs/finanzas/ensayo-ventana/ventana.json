@@ -1,10 +1,10 @@
 {
-  "total_ms": 31017,
+  "total_ms": 12847,
   "pasos": [
     {
       "archivo": "026_cuenta_distribucion_socias.sql",
       "bloque": "A (app arriba)",
-      "ms": 44,
+      "ms": 23,
       "error": null,
       "avisos": [
         {
@@ -16,7 +16,7 @@
     {
       "archivo": "027_saldo_inicial_fecha.sql",
       "bloque": "A (app arriba)",
-      "ms": 46,
+      "ms": 25,
       "error": null,
       "avisos": [
         {
@@ -44,7 +44,7 @@
     {
       "archivo": "028_fase2_motor_posteo.sql",
       "bloque": "A (app arriba)",
-      "ms": 84,
+      "ms": 36,
       "error": null,
       "avisos": [
         {
@@ -72,7 +72,7 @@
     {
       "archivo": "029_restaurar_check_reversion.sql",
       "bloque": "A (app arriba)",
-      "ms": 28,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -96,7 +96,7 @@
     {
       "archivo": "030_ledger_permisos_y_periodos.sql",
       "bloque": "A (app arriba)",
-      "ms": 67,
+      "ms": 29,
       "error": null,
       "avisos": [
         {
@@ -120,7 +120,7 @@
     {
       "archivo": "031_bucket_documents_privado.sql",
       "bloque": "A (app arriba)",
-      "ms": 27,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -144,7 +144,7 @@
     {
       "archivo": "032_amount_paid_derivado.sql",
       "bloque": "A (app arriba)",
-      "ms": 58,
+      "ms": 23,
       "error": null,
       "avisos": [
         {
@@ -164,7 +164,7 @@
     {
       "archivo": "033_proveedores_entidad.sql",
       "bloque": "A (app arriba)",
-      "ms": 185,
+      "ms": 72,
       "error": null,
       "avisos": [
         {
@@ -192,14 +192,14 @@
     {
       "archivo": "034_asiento_unico_por_documento.sql",
       "bloque": "A (app arriba)",
-      "ms": 31,
+      "ms": 12,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "036_expense_lines.sql",
       "bloque": "A (app arriba)",
-      "ms": 195,
+      "ms": 65,
       "error": null,
       "avisos": [
         {
@@ -263,7 +263,7 @@
     {
       "archivo": "038_gasto_tramite_al_ledger.sql",
       "bloque": "A (app arriba)",
-      "ms": 89,
+      "ms": 33,
       "error": null,
       "avisos": [
         {
@@ -299,12 +299,12 @@
     {
       "archivo": "verificacion-038-inmutabilidad.sql",
       "bloque": "  verificación",
-      "ms": 149,
+      "ms": 47,
       "error": null,
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "=== Gasto de prueba: fdf7f5ff-fdb0-4773-8c1d-37aca36e624b (línea 70d0500f-7c03-4f18-aa2e-9573faded4e3) ==="
+          "texto": "=== Gasto de prueba: fdf7f5ff-fdb0-4773-8c1d-37aca36e624b (línea da458ab9-09df-43e0-b461-9cc4d7f2acd7) ==="
         },
         {
           "nivel": "NOTICE",
@@ -359,7 +359,7 @@
     {
       "archivo": "039_asientos_manuales.sql",
       "bloque": "A (app arriba)",
-      "ms": 102,
+      "ms": 38,
       "error": null,
       "avisos": [
         {
@@ -391,7 +391,7 @@
     {
       "archivo": "verificacion-039-manual.sql",
       "bloque": "  verificación",
-      "ms": 222,
+      "ms": 78,
       "error": null,
       "avisos": [
         {
@@ -431,7 +431,7 @@
     {
       "archivo": "041_banco_del_cobro.sql",
       "bloque": "A (app arriba)",
-      "ms": 69,
+      "ms": 24,
       "error": null,
       "avisos": [
         {
@@ -475,7 +475,7 @@
     {
       "archivo": "042_pago_proveedor_source_type.sql",
       "bloque": "A (app arriba)",
-      "ms": 40,
+      "ms": 15,
       "error": null,
       "avisos": [
         {
@@ -511,7 +511,7 @@
     {
       "archivo": "044_gasto_numero_factura_proveedor.sql",
       "bloque": "A (app arriba)",
-      "ms": 75,
+      "ms": 26,
       "error": null,
       "avisos": [
         {
@@ -531,7 +531,7 @@
     {
       "archivo": "046_reversion_de_cobro.sql",
       "bloque": "A (app arriba)",
-      "ms": 303,
+      "ms": 45,
       "error": null,
       "avisos": [
         {
@@ -563,7 +563,7 @@
     {
       "archivo": "verificacion-046-reversion-cobro.sql",
       "bloque": "  verificación",
-      "ms": 24,
+      "ms": 11,
       "error": null,
       "avisos": [
         {
@@ -575,7 +575,7 @@
     {
       "archivo": "047_recibo_de_caja.sql",
       "bloque": "A (app arriba)",
-      "ms": 83,
+      "ms": 49,
       "error": null,
       "avisos": [
         {
@@ -587,7 +587,7 @@
     {
       "archivo": "verificacion-047-recibo-de-caja.sql",
       "bloque": "  verificación",
-      "ms": 121,
+      "ms": 59,
       "error": null,
       "avisos": [
         {
@@ -647,7 +647,7 @@
     {
       "archivo": "051_nota_de_credito_contable.sql",
       "bloque": "A (app arriba)",
-      "ms": 406,
+      "ms": 171,
       "error": null,
       "avisos": [
         {
@@ -687,7 +687,7 @@
     {
       "archivo": "verificacion-051-nota-de-credito.sql",
       "bloque": "  verificación",
-      "ms": 195,
+      "ms": 57,
       "error": null,
       "avisos": [
         {
@@ -743,7 +743,7 @@
     {
       "archivo": "052_anulacion_con_reversion_y_nc.sql",
       "bloque": "A (app arriba)",
-      "ms": 39,
+      "ms": 20,
       "error": null,
       "avisos": [
         {
@@ -755,7 +755,7 @@
     {
       "archivo": "verificacion-052-anulacion-con-reversion.sql",
       "bloque": "  verificación",
-      "ms": 30,
+      "ms": 16,
       "error": null,
       "avisos": [
         {
@@ -767,7 +767,7 @@
     {
       "archivo": "053_anulacion_rechaza_nc_parcial.sql",
       "bloque": "A (app arriba)",
-      "ms": 23,
+      "ms": 12,
       "error": null,
       "avisos": [
         {
@@ -779,7 +779,7 @@
     {
       "archivo": "verificacion-053-anulacion-con-nc-parcial.sql",
       "bloque": "  verificación",
-      "ms": 38,
+      "ms": 15,
       "error": null,
       "avisos": [
         {
@@ -791,7 +791,7 @@
     {
       "archivo": "054_tercero_por_linea.sql",
       "bloque": "A (app arriba)",
-      "ms": 103,
+      "ms": 40,
       "error": null,
       "avisos": [
         {
@@ -807,7 +807,7 @@
     {
       "archivo": "verificacion-054-tercero-por-linea.sql",
       "bloque": "  verificación",
-      "ms": 28,
+      "ms": 10,
       "error": null,
       "avisos": [
         {
@@ -819,7 +819,7 @@
     {
       "archivo": "055_reversion_de_asiento_manual.sql",
       "bloque": "A (app arriba)",
-      "ms": 75,
+      "ms": 27,
       "error": null,
       "avisos": [
         {
@@ -831,7 +831,7 @@
     {
       "archivo": "verificacion-055-reversion-de-asiento.sql",
       "bloque": "  verificación",
-      "ms": 238,
+      "ms": 107,
       "error": null,
       "avisos": [
         {
@@ -856,7 +856,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "[5] reversión posteada ......................... ✅ asiento 2 del 2026-10-06"
+          "texto": "[5] reversión posteada ......................... ✅ asiento 2 del 2026-10-07"
         },
         {
           "nivel": "NOTICE",
@@ -887,7 +887,7 @@
     {
       "archivo": "057_proveedor_cuenta_por_defecto_y_contacto.sql",
       "bloque": "A (app arriba)",
-      "ms": 134,
+      "ms": 51,
       "error": null,
       "avisos": [
         {
@@ -955,7 +955,7 @@
     {
       "archivo": "verificacion-057-proveedor-campos.sql",
       "bloque": "  verificación",
-      "ms": 129,
+      "ms": 41,
       "error": null,
       "avisos": [
         {
@@ -1027,7 +1027,7 @@
     {
       "archivo": "059_registro_de_anulaciones_ante_la_dgi.sql",
       "bloque": "A (app arriba)",
-      "ms": 153,
+      "ms": 59,
       "error": null,
       "avisos": [
         {
@@ -1071,7 +1071,7 @@
     {
       "archivo": "verificacion-059-registro-anulaciones.sql",
       "bloque": "  verificación",
-      "ms": 45,
+      "ms": 19,
       "error": null,
       "avisos": [
         {
@@ -1127,7 +1127,7 @@
     {
       "archivo": "065_fe_anulaciones_de_nota_de_credito.sql",
       "bloque": "A (app arriba)",
-      "ms": 87,
+      "ms": 33,
       "error": null,
       "avisos": [
         {
@@ -1143,7 +1143,7 @@
     {
       "archivo": "060_reversion_de_nota_de_credito.sql",
       "bloque": "A (app arriba)",
-      "ms": 103,
+      "ms": 39,
       "error": null,
       "avisos": [
         {
@@ -1159,7 +1159,7 @@
     {
       "archivo": "verificacion-060-reversion-nota-de-credito.sql",
       "bloque": "  verificación",
-      "ms": 33,
+      "ms": 13,
       "error": null,
       "avisos": [
         {
@@ -1171,7 +1171,7 @@
     {
       "archivo": "062_fe_emisiones_de_nota_de_credito.sql",
       "bloque": "A (app arriba)",
-      "ms": 112,
+      "ms": 30,
       "error": null,
       "avisos": [
         {
@@ -1187,7 +1187,7 @@
     {
       "archivo": "063_anular_con_nc_reversada.sql",
       "bloque": "A (app arriba)",
-      "ms": 22,
+      "ms": 12,
       "error": null,
       "avisos": [
         {
@@ -1199,7 +1199,7 @@
     {
       "archivo": "verificacion-063-anular-con-nc-reversada.sql",
       "bloque": "  verificación",
-      "ms": 834,
+      "ms": 168,
       "error": null,
       "avisos": [
         {
@@ -1231,7 +1231,7 @@
     {
       "archivo": "067_importacion_de_asientos.sql",
       "bloque": "A (app arriba)",
-      "ms": 107,
+      "ms": 49,
       "error": null,
       "avisos": [
         {
@@ -1259,7 +1259,7 @@
     {
       "archivo": "035_reembolso_a_fondos_legales.sql",
       "bloque": "B (congelado)",
-      "ms": 30,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -1327,7 +1327,7 @@
     {
       "archivo": "043_relink_servicios_plan_vigente.sql",
       "bloque": "B (congelado)",
-      "ms": 56,
+      "ms": 23,
       "error": null,
       "avisos": [
         {
@@ -1347,7 +1347,7 @@
     {
       "archivo": "040_compras_con_lineas.sql",
       "bloque": "B (congelado)",
-      "ms": 80,
+      "ms": 32,
       "error": null,
       "avisos": [
         {
@@ -1383,7 +1383,7 @@
     {
       "archivo": "037_expense_lines_cuenta_obligatoria.sql",
       "bloque": "B (congelado)",
-      "ms": 37,
+      "ms": 15,
       "error": null,
       "avisos": [
         {
@@ -1423,7 +1423,7 @@
     {
       "archivo": "045_expense_lines_tax_code_id.sql",
       "bloque": "B (congelado)",
-      "ms": 98,
+      "ms": 37,
       "error": null,
       "avisos": [
         {
@@ -1459,7 +1459,7 @@
     {
       "archivo": "verificacion-045-tax-code-id.sql",
       "bloque": "  verificación",
-      "ms": 130,
+      "ms": 35,
       "error": null,
       "avisos": [
         {
@@ -1487,7 +1487,7 @@
     {
       "archivo": "048_pagos_a_proveedores.sql",
       "bloque": "B (congelado)",
-      "ms": 175,
+      "ms": 68,
       "error": null,
       "avisos": [
         {
@@ -1523,7 +1523,7 @@
     {
       "archivo": "verificacion-048-pagos-a-proveedores.sql",
       "bloque": "  verificación",
-      "ms": 23,
+      "ms": 16,
       "error": null,
       "avisos": [
         {
@@ -1535,14 +1535,14 @@
     {
       "archivo": "093_compra_nace_pendiente.sql",
       "bloque": "B (congelado)",
-      "ms": 30,
+      "ms": 14,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "verificacion-093-compra-nace-pendiente.sql",
       "bloque": "  verificación",
-      "ms": 21,
+      "ms": 13,
       "error": null,
       "avisos": [
         {
@@ -1562,7 +1562,7 @@
     {
       "archivo": "049_pago_de_gasto_de_tramite.sql",
       "bloque": "B (congelado)",
-      "ms": 153,
+      "ms": 69,
       "error": null,
       "avisos": [
         {
@@ -1590,7 +1590,7 @@
     {
       "archivo": "verificacion-049-pago-de-gasto-de-tramite.sql",
       "bloque": "  verificación",
-      "ms": 352,
+      "ms": 117,
       "error": null,
       "avisos": [
         {
@@ -1647,7 +1647,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "[11] reversión real ........................... ❌ gasto pagado · 10.00 · pago anulado · res {\"expense\": {\"id\": \"a2f64c28-bb20-4302-9e87-44131f05a51a\", \"kind\": \"tramite\", \"status\": \"pagado\", \"amount_paid\": 10.00}, \"entry_id\": \"f106e00c-3239-4979-a3e5-c56bf2d00d1e\", \"entry_number\": 2, \"transaction_date\": \"2026-10-06\", \"reversed_entry_number\": 1}"
+          "texto": "[11] reversión real ........................... ❌ gasto pagado · 10.00 · pago anulado · res {\"expense\": {\"id\": \"a2f64c28-bb20-4302-9e87-44131f05a51a\", \"kind\": \"tramite\", \"status\": \"pagado\", \"amount_paid\": 10.00}, \"entry_id\": \"22ac11ad-ea18-4664-aa0e-0711afc1a46e\", \"entry_number\": 2, \"transaction_date\": \"2026-10-07\", \"reversed_entry_number\": 1}"
         },
         {
           "nivel": "NOTICE",
@@ -1670,7 +1670,7 @@
     {
       "archivo": "050_reversion_de_gasto_de_tramite.sql",
       "bloque": "B (congelado)",
-      "ms": 22,
+      "ms": 13,
       "error": null,
       "avisos": [
         {
@@ -1682,7 +1682,7 @@
     {
       "archivo": "verificacion-050-reversion-de-gasto-de-tramite.sql",
       "bloque": "  verificación",
-      "ms": 302,
+      "ms": 83,
       "error": null,
       "avisos": [
         {
@@ -1703,7 +1703,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "[3] fecha anterior al original ................ ❌ falló por otra cosa: La reversión lleva la fecha en que se hace (hoy, 2026-10-06), nunca otra: llegó 2026-10-04"
+          "texto": "[3] fecha anterior al original ................ ❌ falló por otra cosa: La reversión lleva la fecha en que se hace (hoy, 2026-10-07), nunca otra: llegó 2026-10-05"
         },
         {
           "nivel": "NOTICE",
@@ -1742,7 +1742,7 @@
     {
       "archivo": "066_nc_de_compra.sql",
       "bloque": "B (congelado)",
-      "ms": 427,
+      "ms": 123,
       "error": null,
       "avisos": [
         {
@@ -1778,7 +1778,7 @@
     {
       "archivo": "verificacion-066-nc-de-compra.sql",
       "bloque": "  verificación",
-      "ms": 32,
+      "ms": 15,
       "error": {
         "mensaje": "no hay compra de prueba",
         "detalle": null,
@@ -1790,7 +1790,7 @@
     {
       "archivo": "058_motivo_de_anulacion_minimo_15.sql",
       "bloque": "B (congelado)",
-      "ms": 65,
+      "ms": 29,
       "error": null,
       "avisos": [
         {
@@ -1826,7 +1826,7 @@
     {
       "archivo": "verificacion-058-motivo-anulacion.sql",
       "bloque": "  verificación",
-      "ms": 58,
+      "ms": 26,
       "error": null,
       "avisos": [
         {
@@ -1870,7 +1870,7 @@
     {
       "archivo": "061_cufe_cargado_a_mano.sql",
       "bloque": "B (congelado)",
-      "ms": 87,
+      "ms": 28,
       "error": null,
       "avisos": [
         {
@@ -1886,7 +1886,7 @@
     {
       "archivo": "064_cufe_origen_no_nulo.sql",
       "bloque": "B (congelado)",
-      "ms": 101,
+      "ms": 32,
       "error": null,
       "avisos": [
         {
@@ -1910,7 +1910,7 @@
     {
       "archivo": "025_niif18_tipo_costo_y_subcategorias.sql",
       "bloque": "B (congelado)",
-      "ms": 94,
+      "ms": 36,
       "error": null,
       "avisos": [
         {
@@ -1966,7 +1966,7 @@
     {
       "archivo": "verificacion-067-importacion-de-asientos.sql",
       "bloque": "  verificación",
-      "ms": 403,
+      "ms": 123,
       "error": null,
       "avisos": [
         {
@@ -1975,7 +1975,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "1 ✅ lote f292045a-83c6-4a0e-9e7a-93e031b706d0 · asientos [1, 2] · total débitos 125.50"
+          "texto": "1 ✅ lote 533abd6b-496f-41d1-83d6-c3819d7c65f1 · asientos [1, 2] · total débitos 125.50"
         },
         {
           "nivel": "NOTICE",
@@ -1999,7 +1999,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "6 ✅ reimportado tras deshacer: lote a589f4f9-1bec-4ac7-b848-1f3fb30c4c01"
+          "texto": "6 ✅ reimportado tras deshacer: lote f7dfac7a-0ceb-4b67-8c16-cb51f9eae795"
         },
         {
           "nivel": "NOTICE",
@@ -2010,7 +2010,7 @@
     {
       "archivo": "068_fechas_de_registro.sql",
       "bloque": "C (congelado)",
-      "ms": 173,
+      "ms": 55,
       "error": null,
       "avisos": [
         {
@@ -2042,7 +2042,7 @@
     {
       "archivo": "069_reversion_con_fecha_elegida.sql",
       "bloque": "C (congelado)",
-      "ms": 109,
+      "ms": 44,
       "error": null,
       "avisos": [
         {
@@ -2058,7 +2058,7 @@
     {
       "archivo": "verificacion-068-069-fecha-de-registro.sql",
       "bloque": "  verificación",
-      "ms": 243,
+      "ms": 74,
       "error": null,
       "avisos": [
         {
@@ -2098,7 +2098,7 @@
     {
       "archivo": "070_gasto_tramite_factura_proveedor.sql",
       "bloque": "C (congelado)",
-      "ms": 65,
+      "ms": 28,
       "error": null,
       "avisos": [
         {
@@ -2110,7 +2110,7 @@
     {
       "archivo": "071_motor_v4_referencias_y_terceros.sql",
       "bloque": "C (congelado)",
-      "ms": 213,
+      "ms": 81,
       "error": null,
       "avisos": [
         {
@@ -2150,7 +2150,7 @@
     {
       "archivo": "verificacion-071-motor-v4.sql",
       "bloque": "  verificación",
-      "ms": 28,
+      "ms": 17,
       "error": null,
       "avisos": [
         {
@@ -2162,7 +2162,7 @@
     {
       "archivo": "072_hash_v5_y_verificador.sql",
       "bloque": "C (congelado)",
-      "ms": 168,
+      "ms": 61,
       "error": null,
       "avisos": [
         {
@@ -2186,7 +2186,7 @@
     {
       "archivo": "verificacion-072-hash-v5-verificador.sql",
       "bloque": "  verificación",
-      "ms": 169,
+      "ms": 72,
       "error": null,
       "avisos": [
         {
@@ -2238,7 +2238,7 @@
     {
       "archivo": "073_tasa_con_cuenta.sql",
       "bloque": "C (congelado)",
-      "ms": 55,
+      "ms": 25,
       "error": null,
       "avisos": [
         {
@@ -2262,7 +2262,7 @@
     {
       "archivo": "074_cobro_con_excedente.sql",
       "bloque": "C (congelado)",
-      "ms": 37,
+      "ms": 20,
       "error": null,
       "avisos": [
         {
@@ -2278,7 +2278,7 @@
     {
       "archivo": "verificacion-073-074.sql",
       "bloque": "  verificación",
-      "ms": 240,
+      "ms": 106,
       "error": null,
       "avisos": [
         {
@@ -2342,7 +2342,7 @@
     {
       "archivo": "075_ancla_de_la_cadena.sql",
       "bloque": "C (congelado)",
-      "ms": 129,
+      "ms": 60,
       "error": null,
       "avisos": [
         {
@@ -2370,7 +2370,7 @@
     {
       "archivo": "verificacion-075-ancla.sql",
       "bloque": "  verificación",
-      "ms": 60,
+      "ms": 37,
       "error": null,
       "avisos": [
         {
@@ -2418,7 +2418,7 @@
     {
       "archivo": "076_nc_modulo_propio.sql",
       "bloque": "C (congelado)",
-      "ms": 283,
+      "ms": 121,
       "error": null,
       "avisos": [
         {
@@ -2462,7 +2462,7 @@
     {
       "archivo": "verificacion-076-nc-modulo.sql",
       "bloque": "  verificación",
-      "ms": 52,
+      "ms": 22,
       "error": {
         "mensaje": "La nota de crédito acredita Cuentas por pagar (200001), y cada movimiento ahí dice de qué proveedor es: elige el proveedor.",
         "detalle": null,
@@ -2474,7 +2474,7 @@
     {
       "archivo": "077_nota_de_debito.sql",
       "bloque": "C (congelado)",
-      "ms": 82,
+      "ms": 37,
       "error": null,
       "avisos": [
         {
@@ -2494,7 +2494,7 @@
     {
       "archivo": "verificacion-077-nota-de-debito.sql",
       "bloque": "  verificación",
-      "ms": 55,
+      "ms": 25,
       "error": null,
       "avisos": [
         {
@@ -2530,7 +2530,7 @@
     {
       "archivo": "078_parametros_del_bufete_isr.sql",
       "bloque": "C (congelado)",
-      "ms": 57,
+      "ms": 31,
       "error": null,
       "avisos": [
         {
@@ -2554,7 +2554,7 @@
     {
       "archivo": "verificacion-078-parametros-isr.sql",
       "bloque": "  verificación",
-      "ms": 27,
+      "ms": 16,
       "error": null,
       "avisos": [
         {
@@ -2586,7 +2586,7 @@
     {
       "archivo": "079_subcategorias_y_cuentas_nuevas.sql",
       "bloque": "C (congelado)",
-      "ms": 100,
+      "ms": 54,
       "error": null,
       "avisos": [
         {
@@ -2610,7 +2610,7 @@
     {
       "archivo": "verificacion-079-plan-de-cuentas.sql",
       "bloque": "  verificación",
-      "ms": 83,
+      "ms": 38,
       "error": null,
       "avisos": [
         {
@@ -2654,7 +2654,7 @@
     {
       "archivo": "080_cierre_anual.sql",
       "bloque": "C (congelado)",
-      "ms": 46,
+      "ms": 22,
       "error": null,
       "avisos": [
         {
@@ -2670,7 +2670,7 @@
     {
       "archivo": "verificacion-080-cierre-anual.sql",
       "bloque": "  verificación",
-      "ms": 517,
+      "ms": 170,
       "error": null,
       "avisos": [
         {
@@ -2718,7 +2718,7 @@
     {
       "archivo": "081_correcciones_076_y_079.sql",
       "bloque": "C (congelado)",
-      "ms": 32,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -2730,7 +2730,7 @@
     {
       "archivo": "082_otros_servicios_y_nc_sin_bancos.sql",
       "bloque": "C (congelado)",
-      "ms": 96,
+      "ms": 35,
       "error": null,
       "avisos": [
         {
@@ -2742,7 +2742,7 @@
     {
       "archivo": "verificacion-082-otros-servicios-y-bancos.sql",
       "bloque": "  verificación",
-      "ms": 36,
+      "ms": 18,
       "error": null,
       "avisos": [
         {
@@ -2770,7 +2770,7 @@
     {
       "archivo": "083_fe_estado_interna.sql",
       "bloque": "C (congelado)",
-      "ms": 33,
+      "ms": 20,
       "error": null,
       "avisos": [
         {
@@ -2790,7 +2790,7 @@
     {
       "archivo": "verificacion-083-fe-estado-interna.sql",
       "bloque": "  verificación",
-      "ms": 40,
+      "ms": 15,
       "error": null,
       "avisos": [
         {
@@ -2822,7 +2822,7 @@
     {
       "archivo": "084_audit_log_solo_agregar.sql",
       "bloque": "C (congelado)",
-      "ms": 34,
+      "ms": 14,
       "error": null,
       "avisos": [
         {
@@ -2838,7 +2838,7 @@
     {
       "archivo": "verificacion-084-audit-log-solo-agregar.sql",
       "bloque": "  verificación",
-      "ms": 121,
+      "ms": 45,
       "error": null,
       "avisos": [
         {
@@ -2898,7 +2898,7 @@
     {
       "archivo": "085_motivo_pendiente_dgi.sql",
       "bloque": "C (congelado)",
-      "ms": 55,
+      "ms": 24,
       "error": null,
       "avisos": [
         {
@@ -2918,7 +2918,7 @@
     {
       "archivo": "092_factura_emitida_fuera.sql",
       "bloque": "C (congelado)",
-      "ms": 109,
+      "ms": 39,
       "error": null,
       "avisos": [
         {
@@ -2934,7 +2934,7 @@
     {
       "archivo": "094_documentos_de_prueba.sql",
       "bloque": "C (congelado)",
-      "ms": 91,
+      "ms": 32,
       "error": null,
       "avisos": [
         {
@@ -2994,7 +2994,7 @@
     {
       "archivo": "verificacion-094-documentos-de-prueba.sql",
       "bloque": "  verificación",
-      "ms": 287,
+      "ms": 79,
       "error": null,
       "avisos": [
         {
@@ -3046,7 +3046,7 @@
     {
       "archivo": "095_documentos_de_prueba_fuera_del_libro.sql",
       "bloque": "C (congelado)",
-      "ms": 85,
+      "ms": 25,
       "error": null,
       "avisos": [
         {
@@ -3074,7 +3074,7 @@
     {
       "archivo": "verificacion-095-documentos-de-prueba-fuera-del-libro.sql",
       "bloque": "  verificación",
-      "ms": 443,
+      "ms": 131,
       "error": null,
       "avisos": [
         {
@@ -3118,7 +3118,7 @@
     {
       "archivo": "096_inicio_contable.sql",
       "bloque": "C (congelado)",
-      "ms": 134,
+      "ms": 49,
       "error": null,
       "avisos": [
         {
@@ -3190,7 +3190,7 @@
     {
       "archivo": "verificacion-096-inicio-contable.sql",
       "bloque": "  verificación",
-      "ms": 863,
+      "ms": 244,
       "error": null,
       "avisos": [
         {
@@ -3284,6 +3284,254 @@
         {
           "nivel": "NOTICE",
           "texto": "096: 19 OK, 0 FALLAS"
+        }
+      ]
+    },
+    {
+      "archivo": "097_posteo_de_documentos_existentes.sql",
+      "bloque": "C (congelado)",
+      "ms": 28,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"posteos_retroactivos_select\" for relation \"public.posteos_retroactivos\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"posteo_retroactivo_asientos_select\" for relation \"public.posteo_retroactivo_asientos\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "097 ✅ post_documentos_existentes (un lote, una transacción; un mes por un solo método) y su registro"
+        }
+      ]
+    },
+    {
+      "archivo": "098_un_mes_un_metodo_en_los_dos_sentidos.sql",
+      "bloque": "C (congelado)",
+      "ms": 18,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_importacion_no_pisa_documentos\" for relation \"public.journal_import_entries\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "098 ✅ la importación no entra en un mes contabilizado desde los documentos; el posteo toma el candado antes de mirar el mes"
+        }
+      ]
+    },
+    {
+      "archivo": "099_solo_importados_bloquean_y_banco_del_cobro.sql",
+      "bloque": "C (congelado)",
+      "ms": 13,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_banco_de_cobro_contabilizado\" for relation \"public.payments\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "099 ✅ bloquean sólo los asientos importados; el banco de un cobro contabilizado no cambia"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-097-posteo-de-documentos-existentes.sql",
+      "bloque": "  verificación",
+      "ms": 243,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "mes de prueba: 2026-07-01 a 2026-07-31"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [4] Este período ya tiene asientos importados: AD-000001 (07/07/2026, Importado de la verificación 099). Un mes se carga por un solo método: no se contabilizan los documentos."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [4b] con un ajuste a mano en el mes, el posteo entra"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [1] lote de 3 asientos ([{\"orden\": 1, \"reference\": \"VERIF-097-A\", \"entry_number\": 1}, {\"orden\": 2, \"reference\": \"VERIF-097-B\", \"entry_number\": 2}, {\"orden\": 3, \"reference\": \"VERIF-097-B\", \"entry_number\": 3}]), la reversión apunta a su original del mismo lote (sin gasto para probar)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [2] la misma factura no entra dos veces (UNIQUE de la 034)"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [3] no quedó ningún asiento ni el lote (El asiento no cuadra: débitos 10.00 vs créditos 9.00 (diferencia 1.00))"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [5] El período empieza el 01/06/2026, antes del inicio contable (01/07/2026): lo anterior está contabilizado fuera."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [6] El asiento 1 (VERIF-097-C) tiene fecha 2026-07-03, fuera del período."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [8] Este mes ya se contabilizó desde los documentos del CRM el 07/10/2026. No se importan asientos de documentos para ese período."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [9] el asiento de ajuste a mano entra en el mismo mes"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "⏭  [10] no hay un cobro contabilizado u otro banco para probar."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [7] sólo service_role ejecuta la función"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "097: 10 bien, 0 mal"
+        }
+      ]
+    },
+    {
+      "archivo": "100_apertura.sql",
+      "bloque": "C (congelado)",
+      "ms": 55,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "constraint \"finanzas_parametros_apertura_antes_del_inicio\" of relation \"finanzas_parametros\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"aperturas_select\" for relation \"public.aperturas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "policy \"apertura_partidas_select\" for relation \"public.apertura_partidas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_apertura_inmutable\" for relation \"public.aperturas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_apertura_inmutable\" for relation \"public.apertura_partidas\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_fecha_apertura_fija\" for relation \"public.finanzas_parametros\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "trigger \"trg_saldo_inicial_con_apertura\" for relation \"public.chart_of_accounts\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "100 ✅ apertura: parámetro de fecha, una vigente por bufete, partidas inmutables, post_apertura y saldo_inicial en sólo lectura"
+        }
+      ]
+    },
+    {
+      "archivo": "101_reversar_apertura.sql",
+      "bloque": "C (congelado)",
+      "ms": 9,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "101 ✅ la apertura se reversa con su misma fecha, con el mes abierto, y queda reversada en la misma transacción"
+        }
+      ]
+    },
+    {
+      "archivo": "verificacion-100-101-apertura.sql",
+      "bloque": "  verificación",
+      "ms": 143,
+      "error": null,
+      "avisos": [
+        {
+          "nivel": "NOTICE",
+          "texto": "fecha efectiva de la apertura: 2026-06-30"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [1] Las líneas de cuentas por cobrar o por pagar llevan documento externo y una fecha del documento no posterior a la apertura: línea 1 (100004)."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [2] Una apertura al 31/12/2025 (cierre del año) lleva sólo cuentas de balance; el resultado del año va en resultados acumulados. Sobran: 400001. · sólo balance entra al 31/12/2025 y crea los períodos de 2025"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [3] El período 06/2026 está cerrado: la apertura no entra. Se reabre en Períodos contables."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "schema \"pg_temp\" does not exist, skipping"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [4] apertura AD-000001 (asiento 1), 2 partidas con documento y fecha"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [5] El bufete ya tiene una apertura vigente. Para cargar otra, primero se reversa la que está."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [6] El bufete ya tiene un asiento de apertura: el saldo inicial de las cuentas ya no se usa ni se edita. Los saldos al corte están en la apertura."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [7] Hay una apertura vigente al 30/06/2026: su fecha no cambia. Para cambiarla, primero se reversa la apertura."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [8] La reversión de la apertura lleva la misma fecha que la apertura (30/06/2026), no otra."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [9] El período 2026-06 está CERRADO: no admite asientos nuevos."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [10] reversión 2 al 2026-06-30, apertura reversada con su motivo; nueva apertura AD-000002 con el mismo archivo"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "⏭  [11] el libro no tiene asientos de facturas para probar."
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "✅ [12] sólo service_role ejecuta post_apertura"
+        },
+        {
+          "nivel": "NOTICE",
+          "texto": "100-101: 11 bien, 0 mal"
         }
       ]
     }

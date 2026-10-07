@@ -6,6 +6,7 @@ import { BookCheck, Download, FileSearch, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import type { CuadreAlCorte } from "@/lib/finanzas/contabilidad/apertura";
+import { MENSAJE_POSTEO_HISTORICO_APAGADO } from "@/lib/finanzas/posteo-historico-mensaje";
 
 const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`;
@@ -26,7 +27,7 @@ interface VistaPrevia {
  * Sin apertura vigente: bajar la plantilla (precargada o vacía), subirla,
  * revisarla EN SECO y contabilizarla. Lo aprieta una persona.
  */
-export function AperturaPanel({ fecha, mesAbierto }: { fecha: string; mesAbierto: boolean }) {
+export function AperturaPanel({ fecha, mesAbierto, habilitado }: { fecha: string; mesAbierto: boolean; habilitado: boolean }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [archivo, setArchivo] = useState<File | null>(null);
@@ -85,8 +86,8 @@ export function AperturaPanel({ fecha, mesAbierto }: { fecha: string; mesAbierto
           </a>
         </div>
         <p className="text-xs text-gray-500">
-          La precargada trae sólo los documentos del CRM con saldo al corte (hoy, la factura real anterior al inicio). Los
-          saldos de verdad salen de QuickBooks.
+          La precargada trae sólo los documentos del CRM con saldo al corte (en producción, hoy, una factura real anterior
+          al inicio). Los saldos de verdad salen de QuickBooks.
         </p>
       </div>
 
@@ -149,9 +150,10 @@ export function AperturaPanel({ fecha, mesAbierto }: { fecha: string; mesAbierto
             {money(vista.cuadre.totales.cliente.segunCrm)} en el CRM; proveedores {money(vista.cuadre.totales.proveedor.segunApertura)} contra{" "}
             {money(vista.cuadre.totales.proveedor.segunCrm)}. {vista.cuadre.filas.filter((f) => f.estado !== "cuadra").length} tercero(s) con diferencia.
           </p>
-          <Button type="button" className="min-h-[48px] gap-2" disabled={!puede || isPending} onClick={() => setConfirmar(true)}>
+          <Button type="button" className="min-h-[48px] gap-2" disabled={!habilitado || !puede || isPending} onClick={() => setConfirmar(true)}>
             <BookCheck size={16} /> 3. Contabilizar la apertura
           </Button>
+          {!habilitado && <p className="text-sm font-semibold text-amber-800">{MENSAJE_POSTEO_HISTORICO_APAGADO}</p>}
         </div>
       )}
 

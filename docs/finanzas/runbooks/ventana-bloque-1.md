@@ -450,7 +450,24 @@ cobro desde el 01/07 aplicado a una factura anterior), así que la apertura no t
 persona desde la pantalla. Nunca un agente ni un script** (`scripts/backfill-asientos-faltantes.mts` es
 sólo de staging y tiene candado).
 
-**Una vez, antes del primer mes (pausa obligatoria: cambio de esquema en producción):**
+**🔌 Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`** (variable de entorno de servidor, sin migración):
+- Controla los botones que escriben en el libro lo anterior a la ventana: «Contabilizar el mes» (documentos
+  existentes, §7) y «Contabilizar» y «Reversar» (apertura, §8).
+- **Apagado por defecto**: si la variable no existe (o tiene cualquier valor que no sea `true`), está apagado.
+  Las pantallas se ven y dejan bajar la plantilla, el Excel en seco y el cuadre al corte; los botones que
+  escriben quedan deshabilitados con «Disponible cuando el contador dé el visto bueno», y las rutas responden
+  **403** aunque alguien las llame directo (lo exige `posteo-historico.test.ts`).
+- **Producción: queda APAGADO en la ventana.** 🔴 Se prende **sólo con el visto bueno de Josuarth**, y lo prende
+  Oliver: Vercel › proyecto del cliente › Settings › Environment Variables › `FINANZAS_POSTEO_HISTORICO_HABILITADO`
+  = `true`, sólo en **Production**, y **Redeploy** (la variable se lee al arrancar). Es un cambio de env vars en
+  producción: pausa obligatoria (CLAUDE.md). Para volver a apagarlo, se borra la variable y se vuelve a desplegar.
+- Staging: prendido en `.env.local` (localhost). En los deploys de Preview no está cargada (apagado) hasta que
+  se agregue en Vercel para Preview.
+
+**Una vez, antes del primer mes:** las `097`, `098` y `099` ya están aplicadas desde la ventana (sin usar).
+Lo único que falta es prender el interruptor, con el visto bueno de Josuarth.
+
+**Antes, si la ventana no las incluyera (pausa obligatoria: cambio de esquema en producción):**
 1. Respaldo de producción (la tarea programada «Respaldo Base Integra»).
 2. Aplicar `097`, `098` y `099` (crean dos tablas, una función y dos triggers; no tocan datos).
    Verificación: `sql/tests/verificacion-097-posteo-de-documentos-existentes.sql` (en ROLLBACK, 12 casos con
@@ -507,7 +524,9 @@ Concurrencia en la base local del ensayo: `sql/tests/concurrencia-posteo-retroac
 ## 8. Después de la ventana: el asiento de apertura
 
 **No es parte de la ventana** y no se carga antes de que Josuarth confirme la fecha y los saldos. 🔴 Lo carga
-una persona desde la pantalla, nunca un agente ni un script.
+una persona desde la pantalla, nunca un agente ni un script. Las `100` y `101` ya están aplicadas desde la
+ventana; **«Contabilizar» y «Reversar» quedan apagados** por el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`
+(§7) hasta el visto bueno de Josuarth. Apagado, se puede bajar la plantilla, revisar en seco y ver el cuadre.
 
 1. **La fecha** (Finanzas › Configuración › Parámetros contables › Fecha de la apertura): 30/06/2026 (el día
    anterior al inicio contable, el valor por defecto) o 31/12/2025 (con enero a junio importado por Asientos ›
@@ -528,6 +547,10 @@ una persona desde la pantalla, nunca un agente ni un script.
    Josuarth la dé por buena**: con el mes cerrado la pantalla no ofrece «Reversar» y la corrección va con un
    asiento de ajuste a mano.
 
-**Probado:** `verificacion-100-101` 12/12 en una copia local con la ventana aplicada, 11/11 en el ensayo
-completo de la ventana. Prueba en staging con capturas: pendiente del «aplica» de la `100` y la `101`.
+**Probado:** `verificacion-100-101` 12/12 en staging (aplicadas el 07/10) y 11/11 en el ensayo completo de la
+ventana. Prueba en staging con capturas (`docs/finanzas/capturas-apertura/`): con el interruptor apagado, la
+revisión en seco funciona, el botón queda deshabilitado con el mensaje y las tres rutas responden 403 (plantilla,
+Excel en seco y cuadre, 200); prendido: apertura ficticia al 30/06/2026 (AD-000002), reversión con la misma fecha
+(asiento 152), apertura nueva corregida (AD-000003) con el cuadre de clientes en 0,00, la antigüedad sin el saldo
+inicial y con la partida de la apertura, y con junio cerrado la pantalla no ofrece «Reversar».
 

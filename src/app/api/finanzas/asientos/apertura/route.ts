@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { rechazoSiPosteoHistoricoApagado } from "@/lib/finanzas/posteo-historico";
 
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -54,6 +55,9 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
       });
     }
     if (mode === "commit") {
+      // Interruptor (07/10): apagado, revisar en seco sí, contabilizar no (403).
+      const apagado = rechazoSiPosteoHistoricoApagado();
+      if (apagado) return apagado;
       const r = await contabilizarApertura(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, buffer, file.name,
         String(form.get("hash") ?? ""));
       return NextResponse.json(r, { status: 201 });

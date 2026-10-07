@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Download, Loader2, BookCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { MENSAJE_POSTEO_HISTORICO_APAGADO } from "@/lib/finanzas/posteo-historico-mensaje";
 
 /**
  * Los dos botones del mes: el Excel EN SECO (no escribe nada) y «Contabilizar
@@ -15,10 +16,13 @@ export function ContabilizarMes({
   mes,
   puedeContabilizar,
   resumen,
+  habilitado,
 }: {
   mes: string;
   puedeContabilizar: boolean;
   resumen: string;
+  /** Interruptor FINANZAS_POSTEO_HISTORICO_HABILITADO (la ruta lo vuelve a exigir). */
+  habilitado: boolean;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -62,12 +66,13 @@ export function ContabilizarMes({
       <Button
         type="button"
         onClick={() => setAbierto(true)}
-        disabled={!puedeContabilizar || isPending}
+        disabled={!habilitado || !puedeContabilizar || isPending}
         className="min-h-[48px] gap-2"
       >
         <BookCheck size={16} />
         Contabilizar el mes
       </Button>
+      {!habilitado && <p className="text-sm font-semibold text-amber-800">{MENSAJE_POSTEO_HISTORICO_APAGADO}</p>}
       {ok && <p className="text-sm text-emerald-700">{ok}</p>}
       {error && <p className="text-sm text-red-700">{error}</p>}
       <ConfirmationModal

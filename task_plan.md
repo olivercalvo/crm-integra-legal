@@ -9,7 +9,10 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 **Staging (`xtyenhakplrkyifbcaow`):**
 - Aplicado: todo `sql/pending` hasta la **`099`** inclusive (la 099 el 07/10 noche con el «aplica»;
   verificación 097 completa 11/11, con el caso 10: el banco de un cobro contabilizado no cambia).
-- Escrito y **SIN APLICAR**: **`100`** y **`101`** (apertura; esperan el «aplica»), **`088`** (no va todavía).
+- Aplicadas también **`100`** y **`101`** (07/10 noche, verificación 12/12). Escrito y SIN APLICAR: **`088`**.
+- Apertura ficticia al 30/06/2026 en staging: AD-000002 reversada (asiento 152) y **AD-000003 vigente** (asiento
+  153). Desde ahí los reportes de staging ya no suman el `saldo_inicial` del plan de cuentas.
+- Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` en `.env.local` (no en Vercel Preview).
 - Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
 - Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
   CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las
@@ -29,8 +32,8 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 **Apertura (07/10, noche):** construida (pantalla, plantilla, reversión con la misma fecha, reportes sin
 `saldo_inicial`, antigüedad por documento, cuadre al corte con Excel, fecha como parámetro). `100` y `101`
 probadas en una copia local (12/12) y en el ensayo completo de la ventana con la `097` a la `101` (11/11; 41
-tablas 131/131; 0 deadlocks). Falta: el «aplica» y la prueba en staging con capturas (apertura ficticia al
-30/06, reversión, apertura nueva, cuadre). Para Josuarth: la fecha, la cuenta 300002 (P-11a) y si carga el
+tablas 131/131; 0 deadlocks). Probado en staging con capturas
+(`docs/finanzas/capturas-apertura/`), con el interruptor apagado y prendido. Para Josuarth: la fecha, la cuenta 300002 (P-11a) y si carga el
 vencimiento de cada partida.
 
 **Pendiente:**

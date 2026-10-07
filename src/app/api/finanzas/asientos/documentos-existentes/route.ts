@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { rechazoSiPosteoHistoricoApagado } from "@/lib/finanzas/posteo-historico";
 
 import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-query";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -52,6 +53,9 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES);
   if (denied) return denied;
+  // Interruptor (07/10): apagado, «Contabilizar el mes» no escribe (403).
+  const apagado = rechazoSiPosteoHistoricoApagado();
+  if (apagado) return apagado;
   let body: unknown;
   try {
     body = await request.json();

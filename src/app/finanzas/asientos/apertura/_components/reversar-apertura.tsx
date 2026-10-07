@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
+import { MENSAJE_POSTEO_HISTORICO_APAGADO } from "@/lib/finanzas/posteo-historico-mensaje";
 
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`;
 
 /** Reversar la apertura vigente: con su misma fecha y el mes abierto (101). */
-export function ReversarApertura({ fecha, referencia }: { fecha: string; referencia: string }) {
+export function ReversarApertura({ fecha, referencia, habilitado }: { fecha: string; referencia: string; habilitado: boolean }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -40,9 +41,10 @@ export function ReversarApertura({ fecha, referencia }: { fecha: string; referen
 
   return (
     <div>
-      <Button type="button" variant="outline" className="min-h-[48px] gap-2" onClick={() => setAbierto(true)}>
+      <Button type="button" variant="outline" className="min-h-[48px] gap-2" disabled={!habilitado} onClick={() => setAbierto(true)}>
         <Undo2 size={16} /> Reversar la apertura
       </Button>
+      {!habilitado && <p className="mt-2 text-sm font-semibold text-amber-800">{MENSAJE_POSTEO_HISTORICO_APAGADO}</p>}
       <ConfirmationModal
         open={abierto}
         onClose={() => !isPending && setAbierto(false)}

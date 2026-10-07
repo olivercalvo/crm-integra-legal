@@ -1,5 +1,14 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Interruptor del posteo histórico] - 2026-10-07
+
+- «Contabilizar el mes» (documentos existentes) y «Contabilizar» y «Reversar» (apertura) quedan **apagados** hasta
+  que el contador dé el visto bueno: los botones se ven deshabilitados con «Disponible cuando el contador dé el
+  visto bueno» y el servidor no acepta la operación. La plantilla, el Excel en seco y el cuadre al corte se
+  pueden bajar igual. Se prende con la variable `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` (en producción, en
+  Vercel, sólo con el visto bueno de Josuarth).
+- Migraciones `100` y `101` aplicadas en staging (verificación 12/12) y probadas en la app con capturas.
+
 ## [Asiento de apertura (saldos iniciales)] - 2026-10-07
 
 - Nueva pantalla **Finanzas › Asientos de Diario › Apertura** (admin y contador): los saldos de cada cuenta al día

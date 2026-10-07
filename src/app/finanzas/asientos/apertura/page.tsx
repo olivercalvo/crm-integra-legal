@@ -8,6 +8,7 @@ import { AVISO_FUENTE_DE_LA_APERTURA, ETIQUETA_DEL_ESTADO } from "@/lib/finanzas
 import { cargarCuadreAlCorte, cargarEstadoDeLaApertura, MENSAJE_MES_DE_APERTURA_CERRADO } from "@/lib/finanzas/api/apertura";
 import { AperturaPanel } from "./_components/apertura-panel";
 import { ReversarApertura } from "./_components/reversar-apertura";
+import { posteoHistoricoHabilitado } from "@/lib/finanzas/posteo-historico";
 
 export const metadata = { title: "Apertura · Asientos de Diario" };
 
@@ -23,6 +24,8 @@ export default async function AperturaPage() {
   const estado = await cargarEstadoDeLaApertura(ctx.db, ctx.tenantId);
   const { cuadre } = await cargarCuadreAlCorte(ctx.db, ctx.tenantId);
   const v = estado.vigente;
+  // Interruptor (07/10): las rutas lo vuelven a exigir con 403.
+  const habilitado = posteoHistoricoHabilitado();
   const conDiferencia = cuadre.filas.filter((f) => f.estado !== "cuadra");
 
   return (
@@ -59,13 +62,13 @@ export default async function AperturaPage() {
             {new Date(v.creadaEl).toLocaleString("es-PA", { timeZone: "America/Panama" })}
           </p>
           {estado.mesAbierto ? (
-            <ReversarApertura fecha={v.fecha} referencia={v.referencia ?? `asiento ${v.entryNumber}`} />
+            <ReversarApertura fecha={v.fecha} referencia={v.referencia ?? `asiento ${v.entryNumber}`} habilitado={habilitado} />
           ) : (
             <p className="rounded-md border border-gray-200 bg-gray-50 p-3 text-gray-700">{MENSAJE_MES_DE_APERTURA_CERRADO(v.fecha)}</p>
           )}
         </section>
       ) : (
-        <AperturaPanel fecha={estado.fecha} mesAbierto={estado.mesAbierto} />
+        <AperturaPanel fecha={estado.fecha} mesAbierto={estado.mesAbierto} habilitado={habilitado} />
       )}
 
       <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm text-sm">

@@ -9,6 +9,7 @@ import {
   planearPosteo, rangoDelMes, totalesPorCuenta,
 } from "@/lib/finanzas/contabilidad/posteo-retroactivo";
 import { ContabilizarMes } from "./_components/contabilizar-mes";
+import { posteoHistoricoHabilitado } from "@/lib/finanzas/posteo-historico";
 
 export const metadata = { title: "Documentos existentes · Finanzas" };
 
@@ -95,6 +96,7 @@ export default async function DocumentosExistentesPage({ searchParams }: PagePro
         <ContabilizarMes
           mes={mes}
           puedeContabilizar={plan.bloqueos.length === 0 && plan.items.length > 0}
+          habilitado={posteoHistoricoHabilitado()}
           resumen={`${plan.items.length} asiento(s) del ${fechaCorta(plan.desde)} al ${fechaCorta(plan.hasta)}, por ${money(debitos)}`}
         />
       </section>

@@ -461,6 +461,11 @@ const EXPORTS = [
     archivo: "src/app/api/admin/auditoria/export/route.ts",
     pantalla: "/legal/admin/auditoria",
   },
+  // Posteo de documentos existentes, por mes: el Excel en seco (097).
+  {
+    archivo: "src/app/api/finanzas/asientos/documentos-existentes/route.ts",
+    pantalla: "/finanzas/asientos/documentos-existentes",
+  },
 ];
 
 /** Extrae la lista de roles declarada en el archivo de la ruta. */

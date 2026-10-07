@@ -70,6 +70,33 @@ export interface PosteoDeGastoTramite {
  * `db` es el cliente de SERVICIO (postea) y `tenantId` viene del perfil del
  * usuario autenticado, nunca del request (SOP-014).
  */
+/**
+ * Las columnas del gasto que necesita su asiento, y cómo se pasan al
+ * constructor. UNA definición para el alta (`postearGastoTramite`) y el posteo
+ * de documentos existentes (`contabilidad/posteo-retroactivo.ts`).
+ */
+export const SELECT_GASTO_PARA_ASIENTO = `id, date, accounting_date, concept, posted_entry_id, supplier_id, de_prueba,
+       purchase_number, supplier_invoice_number, status,
+       cases(case_code),
+       suppliers(legal_name)`;
+
+export function datosDeGastoParaAsiento(gasto: Record<string, unknown>): Parameters<typeof construirAsientoDeGastoTramite>[0] {
+  const caso = (gasto as unknown as { cases: { case_code: string } | null }).cases;
+  const prov = (gasto as unknown as { suppliers: { legal_name: string } | null }).suppliers;
+  return {
+    id: String(gasto.id),
+    date: String(gasto.date),
+    accounting_date: String((gasto as { accounting_date?: string | null }).accounting_date ?? gasto.date),
+    concept: String(gasto.concept ?? ""),
+    case_code: caso?.case_code ?? null,
+    supplier_legal_name: prov?.legal_name ?? null,
+    supplier_id: (gasto as { supplier_id?: string | null }).supplier_id ?? null,
+    purchase_number: (gasto as { purchase_number?: string | null }).purchase_number ?? null,
+    supplier_invoice_number:
+      (gasto as { supplier_invoice_number?: string | null }).supplier_invoice_number ?? null,
+  };
+}
+
 export async function postearGastoTramite(
   db: DB,
   tenantId: string,
@@ -78,12 +105,7 @@ export async function postearGastoTramite(
 ): Promise<PosteoDeGastoTramite> {
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
-    .select(
-      `id, date, accounting_date, concept, posted_entry_id, supplier_id, de_prueba,
-       purchase_number, supplier_invoice_number,
-       cases(case_code),
-       suppliers(legal_name)`
-    )
+    .select(SELECT_GASTO_PARA_ASIENTO)
     .eq("id", expenseId)
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -143,24 +165,7 @@ export async function postearGastoTramite(
 
   // ── Las líneas y el armado ────────────────────────────────────────────────
   const lineas = await getLineasDeGastoTramite(db, tenantId, expenseId);
-  const caso = (gasto as unknown as { cases: { case_code: string } | null }).cases;
-  const prov = (gasto as unknown as { suppliers: { legal_name: string } | null }).suppliers;
-
-  const armado = construirAsientoDeGastoTramite(
-    {
-      id: String(gasto.id),
-      date: String(gasto.date),
-      accounting_date: String((gasto as { accounting_date?: string | null }).accounting_date ?? gasto.date),
-      concept: String(gasto.concept ?? ""),
-      case_code: caso?.case_code ?? null,
-      supplier_legal_name: prov?.legal_name ?? null,
-      supplier_id: (gasto as { supplier_id?: string | null }).supplier_id ?? null,
-      purchase_number: (gasto as { purchase_number?: string | null }).purchase_number ?? null,
-      supplier_invoice_number:
-        (gasto as { supplier_invoice_number?: string | null }).supplier_invoice_number ?? null,
-    },
-    lineas
-  );
+  const armado = construirAsientoDeGastoTramite(datosDeGastoParaAsiento(gasto), lineas);
   if (!armado.ok) {
     // Líneas sin clasificar, con su mensaje ya redactado y los números de
     // línea adentro. 422 y no 400: el request está bien formado, lo que falta

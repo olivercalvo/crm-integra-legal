@@ -161,6 +161,13 @@ export default async function AsientosPage({
             <History size={16} />
             Ver importaciones
           </Link>
+          <Link
+            href="/finanzas/asientos/documentos-existentes"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+          >
+            <History size={16} />
+            Documentos existentes, por mes
+          </Link>
         </div>
       </div>
 

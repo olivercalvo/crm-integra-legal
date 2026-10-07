@@ -374,6 +374,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "finanzas_parametros", columna: "fecha_inicio_contable",
     nota: "06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes.",
   },
+  "097_posteo_de_documentos_existentes.sql": {
+    que: "Posteo de documentos existentes por mes: post_documentos_existentes (un lote, una transaccion; se niega si el rango tiene asientos manuales o empieza antes del inicio) y su registro (posteos_retroactivos)",
+    tipo: "funcion", nombre: "post_documentos_existentes",
+    nota: "07/10. NO va en la ventana: se aplica despues, antes de contabilizar julio. No toca datos.",
+  },
   "085_motivo_pendiente_dgi.sql": {
     que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
     tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",

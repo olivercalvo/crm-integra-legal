@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateBusinessExpenseInput,
   UpdateBusinessExpenseInput,
+  LineaDeCompraInput,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
@@ -279,29 +280,7 @@ export async function createBusinessExpense(
   //    se guarda es el del catálogo. Si el body trajera 7% con un id de EXENTO,
   //    la línea se guarda exenta, y el ITBMS tecleado se rechaza abajo por no
   //    calzar con la tasa real.
-  const codigos = await resolverCodigosDeImpuesto(
-    db,
-    tenantId,
-    input.lineas.map((l) => l.tax_code_id)
-  );
-  const lineas = input.lineas.map((l, i) => {
-    const codigo = codigos.get(l.tax_code_id);
-    if (!codigo) {
-      // `resolverCodigosDeImpuesto` ya rechazó los que faltan; esto es el tipo.
-      throw new MutationError(`Línea ${i + 1}: el impuesto elegido no está en el catálogo.`, 400);
-    }
-    const esperado = round2(l.amount * codigo.rate);
-    if (Math.abs(l.tax_amount - esperado) > TOLERANCIA_ITBMS + 1e-9) {
-      throw new MutationError(
-        `Línea ${i + 1} ("${l.description}"): el impuesto elegido es ${codigo.code} ` +
-          `(${formatTaxRate(codigo.rate)}), así que el ITBMS ` +
-          `sería ${esperado.toFixed(2)} y no ${l.tax_amount.toFixed(2)}. Corrija el ` +
-          `importe o cambie el impuesto.`,
-        400
-      );
-    }
-    return { ...l, tax_rate: codigo.rate };
-  });
+  const lineas = await resolverLineasDeCompra(db, tenantId, input.lineas);
 
   // Los totales del encabezado los calcula el SERVIDOR sumando las líneas, no
   // llegan del cliente: si llegaran, un cliente podría mandar un total que no
@@ -491,6 +470,90 @@ export async function createBusinessExpense(
 // UPDATE
 // ---------------------------------------------------------------------------
 
+/**
+ * Las líneas con la tasa DEL CATÁLOGO (migración `045`): el alta y la edición
+ * usan esta misma función. Rechaza un ITBMS que no calza con la tasa real.
+ */
+async function resolverLineasDeCompra(db: DB, tenantId: string, lineasIn: LineaDeCompraInput[]) {
+  const codigos = await resolverCodigosDeImpuesto(
+    db,
+    tenantId,
+    lineasIn.map((l) => l.tax_code_id)
+  );
+  return lineasIn.map((l, i) => {
+    const codigo = codigos.get(l.tax_code_id);
+    if (!codigo) {
+      // `resolverCodigosDeImpuesto` ya rechazó los que faltan; esto es el tipo.
+      throw new MutationError(`Línea ${i + 1}: el impuesto elegido no está en el catálogo.`, 400);
+    }
+    const esperado = round2(l.amount * codigo.rate);
+    if (Math.abs(l.tax_amount - esperado) > TOLERANCIA_ITBMS + 1e-9) {
+      throw new MutationError(
+        `Línea ${i + 1} ("${l.description}"): el impuesto elegido es ${codigo.code} ` +
+          `(${formatTaxRate(codigo.rate)}), así que el ITBMS ` +
+          `sería ${esperado.toFixed(2)} y no ${l.tax_amount.toFixed(2)}. Corrija el ` +
+          `importe o cambie el impuesto.`,
+        400
+      );
+    }
+    return { ...l, tax_rate: codigo.rate };
+  });
+}
+
+/**
+ * Escribe las líneas editadas de una compra SIN asiento (el llamador ya pasó el
+ * gate contable). Por posición (`line_order`): actualiza las que siguen, agrega
+ * las nuevas y borra las que sobran. Así la línea conserva su id y la
+ * bitácora muestra qué cambió. Hasta el 07/10/2026 la edición recalculaba los
+ * totales con las líneas pero NUNCA las escribía: una cuenta cambiada en la
+ * pantalla se perdía sin aviso.
+ */
+async function sincronizarLineasDeCompra(
+  db: DB,
+  tenantId: string,
+  compraId: string,
+  lineas: (LineaDeCompraInput & { tax_rate: number })[]
+) {
+  const { data: actuales, error } = await db
+    .from("expense_lines")
+    .select("id, line_order")
+    .eq("tenant_id", tenantId)
+    .eq("business_expense_id", compraId)
+    .order("line_order");
+  if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
+  const existentes = (actuales ?? []) as { id: string; line_order: number }[];
+  const fila = (l: LineaDeCompraInput & { tax_rate: number }, i: number) => ({
+    line_order: i + 1,
+    description: l.description,
+    chart_account_code: l.chart_account_code,
+    amount: l.amount,
+    tax_code_id: l.tax_code_id,
+    tax_rate: l.tax_rate,
+    tax_amount: l.tax_amount,
+  });
+  // Las que sobran primero: libera los line_order antes de reasignarlos.
+  const sobran = existentes.slice(lineas.length).map((x) => x.id);
+  if (sobran.length > 0) {
+    const { error: e } = await db.from("expense_lines").delete().eq("tenant_id", tenantId).in("id", sobran);
+    if (e) throw new MutationError(`No se pudieron quitar las líneas: ${pgErrorToMessage(e)}`, 500, e);
+  }
+  for (let i = 0; i < lineas.length; i++) {
+    if (i < existentes.length) {
+      const { error: e } = await db
+        .from("expense_lines")
+        .update(fila(lineas[i], i))
+        .eq("tenant_id", tenantId)
+        .eq("id", existentes[i].id);
+      if (e) throw new MutationError(`Línea ${i + 1}: ${pgErrorToMessage(e)}`, 500, e);
+    } else {
+      const { error: e } = await db
+        .from("expense_lines")
+        .insert({ tenant_id: tenantId, business_expense_id: compraId, ...fila(lineas[i], i) });
+      if (e) throw new MutationError(`Línea ${i + 1}: ${pgErrorToMessage(e)}`, 500, e);
+    }
+  }
+}
+
 export async function updateBusinessExpense(
   db: DB,
   tenantId: string,
@@ -534,7 +597,9 @@ export async function updateBusinessExpense(
     throw new MutationError("El proveedor seleccionado no existe.", 400);
   }
   const dueDateUpdate = await resolverVencimiento(db, tenantId, input);
-  const importesEditados = importesDelEncabezado(input.lineas);
+  // Las líneas con la tasa del catálogo, como en el alta; los totales salen de ellas.
+  const lineasEditadas = await resolverLineasDeCompra(db, tenantId, input.lineas);
+  const importesEditados = importesDelEncabezado(lineasEditadas);
 
   const { error: errUpdate } = await db
     .from("business_expenses")
@@ -565,6 +630,9 @@ export async function updateBusinessExpense(
     console.error("[finanzas/api] updateBusinessExpense failed", errUpdate);
     throw new MutationError(pgErrorToMessage(errUpdate), 500, errUpdate);
   }
+
+  // 🔴 Las líneas: descripción, cuenta, monto e impuesto de cada una.
+  await sincronizarLineasDeCompra(db, tenantId, id, lineasEditadas);
 
   // Audit log: diff de campos modificados
   const fields = [

@@ -1,5 +1,14 @@
 # FINDINGS.MD — CRM INTEGRA LEGAL
 
+## FND-013: Editar una compra perdía las cuentas de sus líneas sin avisar
+**Fecha:** 2026-10-07
+**Contexto:** Revisión de por qué los documentos existentes no se podían completar desde la app para contabilizarlos (posteo por mes, 097).
+**Hallazgo:** `updateBusinessExpense` recibía las líneas del formulario (`lineas`) y sólo las usaba para recalcular subtotal e ITBMS del encabezado. Nunca escribía `expense_lines`: la única escritura a esa tabla era el INSERT del alta. Una cuenta, una descripción o un monto cambiados en «Editar compra» se perdían, y la compra se habría contabilizado después con la línea vieja. Además, los totales del encabezado salían de la tasa del body y no del catálogo.
+**Impacto:** Silencioso. La pantalla decía «guardado» y mostraba los totales nuevos sobre líneas viejas. Sólo afecta compras SIN asiento (con asiento la edición ya estaba bloqueada), que son justamente las que el posteo retroactivo va a contabilizar.
+**Decisión:** El alta y la edición resuelven las líneas con la MISMA función (`resolverLineasDeCompra`, tasa del catálogo) y la edición las escribe por posición (`sincronizarLineasDeCompra`: actualiza, agrega y borra las que sobran, conservando el id). Test `business-expense-editar-lineas.test.ts`, que falla con el código anterior («la línea no se escribió»).
+
+---
+
 ## FND-012: "Hoy" se calculaba en UTC: desde las 19:00 de Panamá el módulo contable fechaba "mañana"
 **Fecha:** 2026-09-30
 **Contexto:** Planificación del Bloque 1 (`docs/finanzas/plan-bloque1.md`), al relevar de dónde sale la fecha de cada reversión y cada nota de crédito.

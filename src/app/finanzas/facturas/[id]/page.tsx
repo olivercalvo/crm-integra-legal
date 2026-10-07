@@ -87,10 +87,14 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const esDePrueba = invoice.de_prueba === true;
   // 096: fecha del documento anterior al inicio contable → contabilizada fuera:
   // no tiene asiento ni lo va a tener (tampoco al emitirla o anularla). La de
-  // prueba lleva su propia banda.
+  // prueba lleva su propia banda. Un BORRADOR todavía no es un documento: se
+  // edita y, con la fecha movida a una posterior al inicio, se emite y postea
+  // (07/10/2026, caso DRAFT-cb03c1386ba0). Emitirlo con la fecha vieja lo
+  // rechaza el servidor con su mensaje.
   const inicio = await cargarInicioContable(db, tenantId);
   const contabilizadaFuera =
-    !esDePrueba && invoice.status !== "cancelada_pre_emision" && esContabilizadoFuera(invoice.issue_date, inicio);
+    !esDePrueba && !["cancelada_pre_emision", "borrador"].includes(invoice.status) &&
+    esContabilizadoFuera(invoice.issue_date, inicio);
   const editable = puedeAccionar && isEditable(invoice.status);
   const emittable = puedeAccionar && isEmittable(invoice.status) && !esDePrueba;
   const deletable = puedeAccionar && isDeletable(invoice.status);

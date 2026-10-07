@@ -28,7 +28,7 @@ WITH
 mes AS (SELECT DATE '2026-07-01' AS desde, DATE '2026-07-31' AS hasta),
 clientes_prueba AS (
   SELECT id FROM public.clients
-   WHERE client_number IN ('CLI-066', 'CLI-069', 'CLI-070', '0TEST-FE-001', '0TEST-FE-002')
+   WHERE client_number IN ('CLI-066', 'CLI-069', 'CLI-070', '0TEST-FE-001')  -- 0TEST-FE-002 se queda real (07/10)
 ),
 fac AS (
   SELECT i.*, c.name AS cliente, c.client_number,
@@ -36,7 +36,6 @@ fac AS (
            WHEN i.invoice_number IN ('FAC-HON-000454', 'FAC-REI-000038', 'FAC-HON-000455', 'FAC-HON-000456',
                                      'FAC-HON-000457', 'FAC-HON-000459', 'FAC-HON-000460', 'FAC-HON-000461')
              THEN 'documento de prueba'
-           WHEN i.invoice_number = 'FAC-HON-000463' THEN NULL
            WHEN i.client_id IN (SELECT id FROM clientes_prueba) THEN 'documento de prueba (cliente de prueba)'
            WHEN i.invoice_number IN ('FAC-HON-000496', 'FAC-HON-000508') THEN 'emitida sin CUFE ni autorización de la DGI: se lista aparte'
          END AS fuera

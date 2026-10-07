@@ -1,14 +1,15 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 07/10/2026, tarde)
+## ▶ PARA RETOMAR (cierre del 07/10/2026, noche)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
 **Últimos hashes:** `7212a03` (097), `643caa3` (098), `0f1ec80` (docs), más los de este cierre.
 
 **Staging (`xtyenhakplrkyifbcaow`):**
-- Aplicado: todo `sql/pending` hasta la **`098`** inclusive (la 098 el 07/10 con el «aplica»; verificación 9/9).
-- Escrito y **SIN APLICAR**: **`099`** (espera el «aplica»; probada en la base local del ensayo, 10/10) y **`088`**.
+- Aplicado: todo `sql/pending` hasta la **`099`** inclusive (la 099 el 07/10 noche con el «aplica»;
+  verificación 097 completa 11/11, con el caso 10: el banco de un cobro contabilizado no cambia).
+- Escrito y **SIN APLICAR**: **`088`** (no va todavía, a propósito).
 - Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
 - Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
   CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las
@@ -26,14 +27,11 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 - Suite 1745/1745.
 
 **Pendiente:**
-1. **«aplica» de la `099` en staging** (después: verificación 097 con los casos 4, 4b y 10).
-2. 🔴 **FAC-HON-000463 (real, 1.07) y su cliente 0TEST-FE-002.** Con el cliente marcado de prueba (paso de la
-   ventana), la 463 sigue contando en reportes y entra al libro, pero NO se le puede registrar un cobro ni
-   una NC (409, `clienteDePrueba` en payments.ts y credit-notes.ts) y la anulación pasa por una NC. Propuesta:
-   sacar 0TEST-FE-002 de la lista de clientes a marcar (sus facturas de sandbox se marcan por número). Espera
-   el visto bueno de Oliver.
-3. **Oliver, en producción (sólo lectura):** `produccion-borradores-a-revisar.sql`; decidir los 5 borradores
-   antes de la ventana.
+1. ✅ FAC-HON-000463: 0TEST-FE-002 sale de la lista de clientes a marcar (Oliver, 07/10). Ensayado: el paso
+   pasa (22 filas, 0 REVISAR), y la 463 se cobra y se acredita después.
+2. ✅ Los 5 borradores: los 4 de CLI-036 se marcan de prueba por número; DRAFT-cb03c1386ba0 (CLI-093) es real
+   y, después de la ventana, se le cambia la fecha a una posterior al inicio y se emite (probado en el ensayo).
+3. `run-sql.mjs` con lista blanca (staging o local) y el script de datos con guarda propia (07/10).
 4. **El `--reset` de staging aplica hasta la `048`** (pendiente aparte).
 5. **Apertura**: en espera.
 

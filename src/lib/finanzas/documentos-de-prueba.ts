@@ -5,9 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * `de_prueba` vive en cada DOCUMENTO (`invoices`, `credit_notes`, `payments`,
  * `client_payments`, `expenses`). La del cliente (`clients.es_de_prueba`) sólo
- * hace nacer de prueba lo NUEVO: FAC-HON-000463 es real ante la DGI aunque su
- * cliente (0TEST-FE-002) sea de prueba, y por eso ningún reporte filtra por el
- * cliente. Propuesta: docs/finanzas/propuesta-corte-quickbooks.md §9.
+ * hace nacer de prueba lo NUEVO, y por eso ningún reporte filtra por el
+ * cliente. FAC-HON-000463 es real ante la DGI aunque su cliente se llame
+ * 0TEST-FE-002; desde el 07/10/2026 ese cliente no se marca (marcado, la 463 no
+ * se podía cobrar ni acreditar) y su factura de sandbox se marca por número. Propuesta: docs/finanzas/propuesta-corte-quickbooks.md §9.
  *
  * Toda consulta de un reporte, una antigüedad, el ITBMS, Pendientes DGI, los
  * avisos y los selectores de documentos abiertos agrega:

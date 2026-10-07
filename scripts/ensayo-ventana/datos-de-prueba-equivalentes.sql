@@ -4,9 +4,12 @@
 -- Para ensayar el paso «Marcar los datos de prueba» (sql/ventana/marcar-datos-de-prueba.sql)
 -- sobre una copia de `prod_024`. Crea, con NOMBRES Y RUC FICTICIOS, los mismos
 -- NÚMEROS que dio produccion-datos-de-prueba.sql el 05/10/2026:
---   · clientes CLI-066, CLI-069, CLI-070, 0TEST-FE-001, 0TEST-FE-002 y CLI-026;
+--   · clientes CLI-066, CLI-069, CLI-070, 0TEST-FE-001, 0TEST-FE-002, CLI-026, CLI-036 y CLI-093;
 --   · facturas FAC-HON-000454 … 461 y FAC-REI-000038 (de prueba) y FAC-HON-000463
 --     (la real, de 1.07, con cliente 0TEST-FE-002);
+--   · borradores (07/10/2026): DRAFT-c4521fe4b503, DRAFT-0b8e6f42c4a4, DRAFT-4ee2dc819140 y
+--     DRAFT-2202765ef7bf de CLI-036 (29/05, 107.00, de prueba) y DRAFT-cb03c1386ba0 de
+--     CLI-093 (25/06, 6741.66, real);
 --   · el caso ADM-001 de CLI-026 con su gasto de 1.00.
 -- Copia filas existentes de la base (esquema de la 024) y cambia lo que importa,
 -- en modo réplica (sin triggers), como el resto de la carga del ensayo.
@@ -44,7 +47,9 @@ BEGIN
       ('CLI-070',      'CLIENTE EQUIVALENTE A CLI-070',      '155000070-2-2026'),
       ('0TEST-FE-001', 'CLIENTE EQUIVALENTE A 0TEST-FE-001', '8-000-001'),
       ('0TEST-FE-002', 'CLIENTE EQUIVALENTE A 0TEST-FE-002', '155000002-2-2026'),
-      ('CLI-026',      'BUFETE EMISOR (EQUIVALENTE A CLI-026)', '155000026-2-2026')
+      ('CLI-026',      'BUFETE EMISOR (EQUIVALENTE A CLI-026)', '155000026-2-2026'),
+      ('CLI-036',      'CLIENTE EQUIVALENTE A CLI-036',      '155000036-2-2026'),
+      ('CLI-093',      'CLIENTE EQUIVALENTE A CLI-093',      '155000093-2-2026')
     ) v(num, nombre, ruc)
   LOOP
     SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) INTO v_cols
@@ -68,14 +73,20 @@ BEGIN
       ('FAC-HON-000459', 'HONORARIOS', '0TEST-FE-001', '2026-06-03', 93.46, 6.54, 2,        'authorized'),
       ('FAC-HON-000460', 'HONORARIOS', '0TEST-FE-002', '2026-06-03', 93.46, 6.54, 2,        'authorized'),
       ('FAC-HON-000461', 'HONORARIOS', '0TEST-FE-001', '2026-06-04', 93.46, 6.54, 2,        'authorized'),
-      ('FAC-HON-000463', 'HONORARIOS', '0TEST-FE-002', '2026-07-08', 1.00, 0.07, 1,        'authorized')
+      ('FAC-HON-000463', 'HONORARIOS', '0TEST-FE-002', '2026-07-08', 1.00, 0.07, 1,        'authorized'),
+      ('DRAFT-c4521fe4b503', 'HONORARIOS', 'CLI-036',  '2026-05-29', 100.00, 7.00, NULL,    'no_emitida'),
+      ('DRAFT-0b8e6f42c4a4', 'HONORARIOS', 'CLI-036',  '2026-05-29', 100.00, 7.00, NULL,    'no_emitida'),
+      ('DRAFT-4ee2dc819140', 'HONORARIOS', 'CLI-036',  '2026-05-29', 100.00, 7.00, NULL,    'no_emitida'),
+      ('DRAFT-2202765ef7bf', 'HONORARIOS', 'CLI-036',  '2026-05-29', 100.00, 7.00, NULL,    'no_emitida'),
+      ('DRAFT-cb03c1386ba0', 'HONORARIOS', 'CLI-093',  '2026-06-25', 6300.62, 441.04, NULL, 'no_emitida')
     ) v(num, kind, cliente, fecha, base, itbms, amb, fe)
   LOOP
     EXECUTE format('INSERT INTO invoices (%s) SELECT %s FROM jsonb_populate_record(NULL::invoices, $1)', v_cols, v_cols)
       USING v_fac || jsonb_build_object(
         'id', gen_random_uuid(), 'invoice_number', r.num, 'invoice_kind', r.kind,
         'client_id', v_ids->>r.cliente, 'case_id', NULL, 'quote_id', NULL,
-        'issue_date', r.fecha, 'due_date', r.fecha, 'status', 'emitida',
+        'issue_date', r.fecha, 'due_date', r.fecha,
+        'status', CASE WHEN r.num LIKE 'DRAFT-%' THEN 'borrador' ELSE 'emitida' END,
         'subtotal_total', r.base, 'tax_total', r.itbms, 'grand_total', r.base + r.itbms, 'amount_paid', 0,
         'notes', NULL, 'fe_estado', r.fe, 'i_amb', r.amb,
         'punto_facturacion', CASE r.amb WHEN 1 THEN '051' WHEN 2 THEN '001' END,
@@ -102,7 +113,7 @@ BEGIN
   EXECUTE format('INSERT INTO expenses (%s) SELECT %s FROM jsonb_populate_record(NULL::expenses, $1)', v_cols, v_cols)
     USING v_gasto || jsonb_build_object('id', gen_random_uuid(), 'case_id', v_id, 'amount', 1.00, 'concept', 'Gasto administrativo (equivalente)');
 
-  RAISE NOTICE 'equivalentes: 6 clientes, % facturas, caso ADM-001 con gasto de 1.00', v_n;
+  RAISE NOTICE 'equivalentes: 8 clientes, % facturas, caso ADM-001 con gasto de 1.00', v_n;
 END $$;
 
 COMMIT;

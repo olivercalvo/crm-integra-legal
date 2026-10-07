@@ -1,5 +1,18 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [La factura real FAC-HON-000463 se puede cobrar y acreditar; lista de datos de prueba] - 2026-10-07
+
+- En la ventana, el cliente **0TEST-FE-002 ya no se marca de prueba**: su factura FAC-HON-000463 es real
+  ante la DGI y, con el cliente marcado, no se le podía registrar un cobro ni una nota de crédito. Su factura
+  de sandbox (FAC-HON-000460) se sigue marcando por número.
+- Se marcan de prueba, por número, los cuatro borradores de CLI-036 del 29/05 (pruebas). CLI-036 y el
+  borrador real de CLI-093 (DRAFT-cb03c1386ba0) no se tocan.
+- Un borrador con fecha anterior al inicio contable ya no muestra «Contabilizado fuera» en su detalle: se
+  edita y, con una fecha posterior al inicio, se emite normalmente.
+- Los scripts que corren SQL en staging aceptan sólo staging o una base local, y lo verifican antes de
+  conectarse.
+- Migración `099` aplicada en staging (verificación 11/11).
+
 ## [Completar proveedores, cuentas y bancos en lote] - 2026-10-07
 
 - Dos pantallas nuevas en **Documentos existentes** (admin y contador): **Proveedores y cuentas de los

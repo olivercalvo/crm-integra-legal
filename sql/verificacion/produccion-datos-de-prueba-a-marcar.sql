@@ -9,8 +9,13 @@
 -- Una fila por cosa de la lista aprobada el 05/10/2026 (resultado de
 -- produccion-datos-de-prueba.sql) y por todo lo demás que cuelga de esos clientes:
 --   plan = 'marcar de prueba'   → está en la lista; el paso lo marca.
---   plan = 'se queda real'      → excepción explícita (FAC-HON-000463, CLI-026, el
---                                  gasto ADM-001 de 1.00). Tiene que salir SIN marca.
+--   plan = 'se queda real'      → excepción explícita (FAC-HON-000463 y su cliente
+--                                  0TEST-FE-002, CLI-026, CLI-036, DRAFT-cb03c1386ba0,
+--                                  el gasto ADM-001 de 1.00). Tiene que salir SIN marca.
+--                                  0TEST-FE-002 NO se marca desde el 07/10/2026, para
+--                                  que la 463 se pueda cobrar y acreditar; su factura
+--                                  de sandbox FAC-HON-000460 se marca por número, y
+--                                  toda otra factura suya sale como REVISAR.
 --   plan = 'REVISAR'            → un documento de un cliente de prueba que NO está en
 --                                  la lista (un cobro, una NC, otra factura, un gasto
 --                                  del caso) u otro cliente 0TEST-*. El paso ABORTA si
@@ -31,8 +36,9 @@ lista(tabla, referencia, plan) AS (
     ('clients',  'CLI-069',        'marcar de prueba'),
     ('clients',  'CLI-070',        'marcar de prueba'),
     ('clients',  '0TEST-FE-001',   'marcar de prueba'),
-    ('clients',  '0TEST-FE-002',   'marcar de prueba'),
+    ('clients',  '0TEST-FE-002',   'se queda real'),
     ('clients',  'CLI-026',        'se queda real'),
+    ('clients',  'CLI-036',        'se queda real'),
     ('invoices', 'FAC-HON-000454', 'marcar de prueba'),
     ('invoices', 'FAC-REI-000038', 'marcar de prueba'),
     ('invoices', 'FAC-HON-000455', 'marcar de prueba'),
@@ -41,11 +47,20 @@ lista(tabla, referencia, plan) AS (
     ('invoices', 'FAC-HON-000459', 'marcar de prueba'),
     ('invoices', 'FAC-HON-000460', 'marcar de prueba'),
     ('invoices', 'FAC-HON-000461', 'marcar de prueba'),
-    ('invoices', 'FAC-HON-000463', 'se queda real')
+    ('invoices', 'DRAFT-c4521fe4b503', 'marcar de prueba'),
+    ('invoices', 'DRAFT-0b8e6f42c4a4', 'marcar de prueba'),
+    ('invoices', 'DRAFT-4ee2dc819140', 'marcar de prueba'),
+    ('invoices', 'DRAFT-2202765ef7bf', 'marcar de prueba'),
+    ('invoices', 'FAC-HON-000463', 'se queda real'),
+    ('invoices', 'DRAFT-cb03c1386ba0', 'se queda real')
 ),
 clientes_prueba AS (
   SELECT c.id FROM public.clients c
     JOIN lista l ON l.tabla = 'clients' AND l.referencia = c.client_number AND l.plan = 'marcar de prueba'
+),
+-- Cliente real con facturas de sandbox: toda factura suya se decide (07/10/2026).
+cliente_con_sandbox AS (
+  SELECT c.id FROM public.clients c WHERE c.client_number = '0TEST-FE-002'
 ),
 asentados AS (
   SELECT DISTINCT j.source_id FROM public.journal_entries j WHERE j.source_id IS NOT NULL
@@ -71,6 +86,7 @@ filas AS (
     JOIN public.clients c ON c.id = i.client_id
     LEFT JOIN lista l ON l.tabla = 'invoices' AND l.referencia = i.invoice_number
    WHERE l.referencia IS NOT NULL OR i.client_id IN (SELECT id FROM clientes_prueba)
+      OR i.client_id IN (SELECT id FROM cliente_con_sandbox)
 
   -- Notas de crédito y cobros de los clientes de prueba (o de sus facturas).
   UNION ALL

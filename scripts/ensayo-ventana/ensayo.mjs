@@ -383,10 +383,67 @@ if (fase === "marcar-pruebas") {
   mostrar("después del paso", despues);
   const r2 = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso (otra vez)" }));
 
+  // 07/10/2026: 0TEST-FE-002 se queda real para que FAC-HON-000463 se pueda cobrar
+  // y acreditar después de la ventana. Cada caso en su transacción, con ROLLBACK.
+  console.log("\n── FAC-HON-000463 después del paso (cobrar y acreditar, en ROLLBACK)");
+  const v = await cliente("postgres", "pruebas");
+  const uno = async (sql, p) => (await v.query(sql, p)).rows[0];
+  const f463 = await uno(`SELECT i.id, i.tenant_id, i.client_id, i.grand_total, i.de_prueba, c.es_de_prueba
+                            FROM invoices i JOIN clients c ON c.id = i.client_id WHERE i.invoice_number = 'FAC-HON-000463'`);
+  const casos463 = {};
+  // a) Cobro: nace real, se aplica a la 463 y su asiento entra al libro.
+  await v.query("BEGIN");
+  try {
+    const banco = (await uno(`SELECT code FROM chart_of_accounts WHERE tenant_id = $1 AND active AND account_type = 'asset'
+                               AND name ~* '(banco|caja|efectivo)' ORDER BY code LIMIT 1`, [f463.tenant_id])).code;
+    const p = await uno(`INSERT INTO payments (tenant_id, client_id, payment_date, amount, amount_unapplied, method, reference,
+                           status, payment_account_code)
+                         VALUES ($1, $2, current_date, $3, 0, 'transferencia', 'ENSAYO-COBRO-463', 'registrado', $4)
+                         RETURNING id, de_prueba`, [f463.tenant_id, f463.client_id, f463.grand_total, banco]);
+    await v.query(`INSERT INTO payment_applications (tenant_id, payment_id, invoice_id, amount_applied) VALUES ($1, $2, $3, $4)`,
+      [f463.tenant_id, p.id, f463.id, f463.grand_total]);
+    await v.query(`SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)`);
+    const e = await uno(`SELECT public.post_journal_entry($1, current_date, 'Cobro de la 463 (ensayo)', 'pago',
+                           jsonb_build_array(
+                             jsonb_build_object('account_code', $2::text, 'debit', $3::numeric, 'credit', 0, 'description', 'Cobro'),
+                             jsonb_build_object('account_code', '100004', 'debit', 0, 'credit', $3::numeric, 'description', 'Cobro', 'client_id', $4::uuid)),
+                           $5::uuid, NULL, NULL, NULL, NULL, NULL, 'ENSAYO-COBRO-463', 'cobro:' || $5::text, NULL) AS id`,
+      [f463.tenant_id, banco, f463.grand_total, f463.client_id, p.id]);
+    const fac = await uno(`SELECT status, amount_paid FROM invoices WHERE id = $1`, [f463.id]);
+    casos463.cobro = { ok: p.de_prueba === false && !!e.id && fac.status === "pagada", cobro_de_prueba: p.de_prueba, factura: fac };
+  } catch (err) {
+    casos463.cobro = { ok: false, error: err.message };
+  }
+  await v.query("ROLLBACK");
+  // b) Nota de crédito: nace real (no hereda marca del cliente ni de la factura) y acredita la 463.
+  await v.query("BEGIN");
+  try {
+    const cols = (await uno(`SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) c FROM information_schema.columns
+                              WHERE table_schema = 'public' AND table_name = 'credit_notes' AND is_generated = 'NEVER'`)).c;
+    const n = await uno(`INSERT INTO credit_notes (tenant_id, credit_note_number, invoice_id, client_id, issue_date, accounting_date,
+                           reason, status, currency, subtotal_total, tax_total, grand_total)
+                         VALUES ($1, 'NC-ENSAYO-463', $2, $3, current_date, current_date, 'Ensayo: acreditar la 463', 'emitida', 'USD',
+                           1.00, 0.07, 1.07)
+                         RETURNING id, de_prueba`, [f463.tenant_id, f463.id, f463.client_id]).catch(async (err) => {
+      throw new Error(`${err.message} (columnas: ${cols})`);
+    });
+    const fac = await uno(`SELECT credited_total, balance_due FROM invoices WHERE id = $1`, [f463.id]);
+    casos463.nota_de_credito = { ok: n.de_prueba === false && Number(fac.credited_total) === Number(f463.grand_total), nc_de_prueba: n.de_prueba, factura: fac };
+  } catch (err) {
+    casos463.nota_de_credito = { ok: false, error: err.message };
+  }
+  await v.query("ROLLBACK");
+  await v.end();
+  const ok463 = f463.de_prueba === false && f463.es_de_prueba === false && casos463.cobro.ok && casos463.nota_de_credito.ok;
+  registro.factura_463 = { ok: ok463, factura_de_prueba: f463.de_prueba, cliente_de_prueba: f463.es_de_prueba, ...casos463 };
+  console.log(`     ${ok463 ? "✅" : "❌"} 463: factura de_prueba=${f463.de_prueba}, cliente es_de_prueba=${f463.es_de_prueba}`);
+  console.log(`        cobro: ${JSON.stringify(casos463.cobro)}`);
+  console.log(`        NC:    ${JSON.stringify(casos463.nota_de_credito)}`);
+
   const mal = despues.filter((f) =>
     (f.plan === "marcar de prueba" && f.marca_hoy !== "true") || (f.plan === "se queda real" && f.marca_hoy !== "false"));
-  const ok = !r1.error && !r2.error && aborto.error && m.f === 0 && m.c === 0 && quedan(antes) === 0 && mal.length === 0;
-  registro.resultado = { ok, revisar_antes: quedan(antes), marcas_incorrectas: mal.length };
+  const ok = !r1.error && !r2.error && aborto.error && m.f === 0 && m.c === 0 && quedan(antes) === 0 && mal.length === 0 && ok463;
+  registro.resultado = { ok, revisar_antes: quedan(antes), marcas_incorrectas: mal.length, factura_463: ok463 };
   guardar("marcar-pruebas", registro);
   console.log(`\n${ok ? "✅" : "❌"} marcar-pruebas · ${mal.length} marcas incorrectas · ${quedan(antes)} filas REVISAR/NO ENCONTRADO antes`);
   process.exit(ok ? 0 : 1);

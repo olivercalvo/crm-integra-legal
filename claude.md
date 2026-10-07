@@ -743,7 +743,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 ### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
 - 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
   cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:
-  FAC-HON-000463 es real ante la DGI aunque su cliente sea 0TEST-FE-002.
+  FAC-HON-000463 es real ante la DGI aunque su cliente sea 0TEST-FE-002. Desde el 07/10/2026 **0TEST-FE-002
+  no se marca** (un cliente marcado no recibe cobros ni NC nuevos, y la 463 quedaba sin salida); su factura
+  de sandbox FAC-HON-000460 se marca por número.
 - 🔒 **Toda consulta de un reporte a esas tablas lleva `.eq(DE_PRUEBA, false)`** o declara
   `// de-prueba-ok: <motivo>`; lo hace cumplir `documentos-de-prueba-filtrados.test.ts`, también con
   `.from(tabla)` en variable (así se escapó el contador de Pendientes DGI la primera vez).

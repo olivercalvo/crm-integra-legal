@@ -152,6 +152,16 @@ sólo puede ir en la parte congelada. La `084` ya está en producción: entra y 
   (borradores de antes del inicio; facturas anuladas ante la DGI y vivas en el CRM): si no, se resuelven
   ANTES de la ventana, porque después la `096` no deja emitir ni anular nada anterior al inicio. **d**
   (cobros cruzados) y **a2** (documentos desde el 01/07 sin asiento, §4 punto 9) se anotan.
+  ✅ **Resultado del 07/10:** la sección **b** da 5 borradores (detalle con
+  `produccion-borradores-a-revisar.sql`). Decididos por Oliver:
+  - DRAFT-c4521fe4b503, DRAFT-0b8e6f42c4a4, DRAFT-4ee2dc819140 y DRAFT-2202765ef7bf (CLI-036, 29/05,
+    107.00, nada colgado) son pruebas: **se marcan de prueba por número** en el paso de datos (abajo).
+    CLI-036 es real y no se marca.
+  - DRAFT-cb03c1386ba0 (CLI-093 FOCUS GLOBAL ONTARIO CANADA, 25/06, 6741.66, con PDF) es **real**: no se
+    marca ni se toca. **Después de la ventana**, para emitirlo, se edita y se le pone una fecha IGUAL O
+    POSTERIOR al inicio (01/07/2026): la `096` rechaza emitirlo con el 25/06 y moverlo hacia atrás, pero
+    deja moverlo hacia adelante (probado en el ensayo el 07/10). Al emitirse postea como cualquier factura.
+  Con eso **b** deja de ser un bloqueo. **c** sigue teniendo que salir vacía.
 - `096` (06/10): **inicio contable** (`finanzas_parametros.fecha_inicio_contable`, 01/07/2026). Lo anterior
   está contabilizado fuera: no genera asiento, no se crea, no se mueve a una fecha anterior, no se anula
   ni se elimina (factura, ND, FAC-EXT, NC, cobro, compra, gasto de trámite, pago, NC de compra); se corrige
@@ -173,27 +183,40 @@ sólo puede ir en la parte congelada. La `084` ya está en producción: entra y 
 
 | Se marca de prueba | Se queda real |
 |---|---|
-| Clientes CLI-066, CLI-069, CLI-070, 0TEST-FE-001, 0TEST-FE-002 | CLI-026 (INTEGRA LEGAL) |
-| Facturas FAC-HON-000454, FAC-REI-000038, FAC-HON-000455, 456, 457, 459, 460, 461 | **FAC-HON-000463** (real ante la DGI aunque su cliente sea 0TEST-FE-002) |
+| Clientes CLI-066, CLI-069, CLI-070, 0TEST-FE-001 | CLI-026 (INTEGRA LEGAL), **0TEST-FE-002**, CLI-036 |
+| Facturas FAC-HON-000454, FAC-REI-000038, FAC-HON-000455, 456, 457, 459, 460, 461 | **FAC-HON-000463** (real ante la DGI, amb 1, 1.07, 08/07) |
+| Borradores DRAFT-c4521fe4b503, DRAFT-0b8e6f42c4a4, DRAFT-4ee2dc819140, DRAFT-2202765ef7bf (CLI-036) | DRAFT-cb03c1386ba0 (CLI-093) |
 | — | El gasto ADM-001 de 1.00 |
+
+🔴 **0TEST-FE-002 NO se marca (Oliver, 07/10/2026).** Con el cliente marcado, la 463 seguía contando y
+entrando al libro, pero la app no le dejaba registrar un cobro ni una NC (409 «El cliente 0TEST-FE-002 está
+marcado de prueba»), así que no se podía cobrar, acreditar ni anular. Su factura de sandbox FAC-HON-000460
+se marca **por número**, y el paso aborta si 0TEST-FE-002 tiene cualquier otra factura sin decidir.
 
 `contador.test@integra-panama.com` no se toca acá: se desactiva en «Accesos» (§6).
 
 1. **Antes:** `sql/verificacion/produccion-datos-de-prueba-a-marcar.sql` (sólo lectura; también corre hoy,
-   con el esquema de la 024). Tiene que dar **16 filas**: 13 «marcar de prueba» y 3 «se queda real»,
+   con el esquema de la 024). Tiene que dar **22 filas**: 16 «marcar de prueba» (4 clientes, 8 facturas
+   y 4 borradores) y 6 «se queda real» (0TEST-FE-002, CLI-026, CLI-036, FAC-HON-000463, DRAFT-cb03c1386ba0
+   y el gasto ADM-001),
    **ninguna «REVISAR» ni «NO ENCONTRADO»**, y `con_asiento = false` en todas. Si aparece un «REVISAR»
    (un cobro, una NC, otra factura o un gasto del caso de un cliente de prueba, u otro `0TEST-*`): parar,
    decidir, y agregarlo a la lista de los dos archivos.
 2. **El paso:** `sql/ventana/marcar-datos-de-prueba.sql`. Aborta sin cambiar nada si falta la `094`, si un
    número no existe, si hay algo sin decidir o si una factura de la lista tiene asiento. Termina con
-   `Marcadas ahora: 8 facturas y 5 clientes … Reales sin marca: FAC-HON-000463, CLI-026 y el gasto
-   ADM-001 de 1.00.` Re-ejecutable (la segunda vez dice «0 facturas y 0 clientes»).
-3. **Después:** la misma consulta del punto 1. `marca_hoy = true` en las 13 «marcar de prueba» y `false`
-   en las 3 «se queda real».
+   `Marcadas ahora: 12 facturas y borradores y 4 clientes (12 y 4 en total). Reales sin marca:
+   FAC-HON-000463, DRAFT-cb03c1386ba0; clientes CLI-026, 0TEST-FE-002, CLI-036; y el gasto ADM-001 de
+   1.00.` Re-ejecutable (la segunda vez dice «0 facturas y borradores y 0 clientes»).
+3. **Después:** la misma consulta del punto 1. `marca_hoy = true` en las 16 «marcar de prueba» y `false`
+   en las 6 «se queda real».
 
 Ensayado el 05/10 en una copia de `prod_024` con los mismos números y datos ficticios
 (`ensayo.mjs marcar-pruebas`, registro en `docs/finanzas/ensayo-ventana/marcar-pruebas.json`): con un cobro
 de CLI-066 sin decidir, abortó sin marcar nada; sin él, marcó 8 y 5 y dejó las tres reales sin marca.
+**Repetido el 07/10 con la lista nueva:** 22 filas antes y después, 0 «REVISAR»; abortó con el cobro sin
+decidir; marcó 12 facturas y borradores y 4 clientes; la segunda vez, 0 y 0. Después del paso, en ROLLBACK:
+un cobro nuevo de 0TEST-FE-002 nace real, deja la 463 «pagada» y su asiento entra al libro; una NC nueva
+nace real y la acredita (saldo 0.00).
 
 ### Merge y deploy (D·6, D·7)
 

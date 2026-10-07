@@ -6,11 +6,16 @@
 -- (cambio de datos), DESPUÉS de leer sql/verificacion/produccion-datos-de-prueba-a-marcar.sql.
 --
 -- Marca, SIN DELETE, lo que resultó de prueba en produccion-datos-de-prueba.sql (05/10/2026):
---   · clientes CLI-066, CLI-069, CLI-070, 0TEST-FE-001, 0TEST-FE-002;
+--   · clientes CLI-066, CLI-069, CLI-070 y 0TEST-FE-001;
 --   · facturas FAC-HON-000454, FAC-REI-000038, FAC-HON-000455, FAC-HON-000456,
---     FAC-HON-000457, FAC-HON-000459, FAC-HON-000460, FAC-HON-000461.
--- Se quedan REALES, y el post-check lo exige: FAC-HON-000463 (real ante la DGI,
--- aunque su cliente sea 0TEST-FE-002), CLI-026 y el gasto ADM-001 de 1.00.
+--     FAC-HON-000457, FAC-HON-000459, FAC-HON-000460, FAC-HON-000461;
+--   · borradores de CLI-036 (29/05, 107.00, pruebas de Oliver, 07/10/2026):
+--     DRAFT-c4521fe4b503, DRAFT-0b8e6f42c4a4, DRAFT-4ee2dc819140, DRAFT-2202765ef7bf.
+-- Se quedan REALES, y el post-check lo exige: FAC-HON-000463 (real ante la DGI),
+-- su cliente 0TEST-FE-002 (07/10/2026: NO se marca, para que la 463 se pueda
+-- cobrar y acreditar; su factura de sandbox FAC-HON-000460 se marca por número),
+-- CLI-026, CLI-036, el borrador DRAFT-cb03c1386ba0 (real, de CLI-093) y el gasto
+-- ADM-001 de 1.00.
 -- El usuario contador.test no se toca acá (paso «Accesos», al final del runbook).
 --
 -- ABORTA sin cambiar nada si: falta la 094; un número de la lista no existe o
@@ -23,14 +28,17 @@ BEGIN;
 
 DO $$
 DECLARE
-  c_clientes constant text[] := ARRAY['CLI-066', 'CLI-069', 'CLI-070', '0TEST-FE-001', '0TEST-FE-002'];
+  c_clientes constant text[] := ARRAY['CLI-066', 'CLI-069', 'CLI-070', '0TEST-FE-001'];
   c_facturas constant text[] := ARRAY['FAC-HON-000454', 'FAC-REI-000038', 'FAC-HON-000455', 'FAC-HON-000456',
-                                      'FAC-HON-000457', 'FAC-HON-000459', 'FAC-HON-000460', 'FAC-HON-000461'];
-  c_factura_real constant text := 'FAC-HON-000463';
-  c_cliente_real constant text := 'CLI-026';
+                                      'FAC-HON-000457', 'FAC-HON-000459', 'FAC-HON-000460', 'FAC-HON-000461',
+                                      'DRAFT-c4521fe4b503', 'DRAFT-0b8e6f42c4a4', 'DRAFT-4ee2dc819140', 'DRAFT-2202765ef7bf'];
+  c_facturas_reales constant text[] := ARRAY['FAC-HON-000463', 'DRAFT-cb03c1386ba0'];
+  c_clientes_reales constant text[] := ARRAY['CLI-026', '0TEST-FE-002', 'CLI-036'];
+  -- Cliente real con facturas de sandbox: cada factura suya tiene que estar en
+  -- una de las dos listas (ningún documento sin decidir).
+  c_cliente_con_sandbox constant text := '0TEST-FE-002';
   c_motivo_cliente constant text :=
-    'Cliente de prueba (produccion-datos-de-prueba.sql, 05/10/2026). Sus documentos NUEVOS nacen de prueba. '
-    'Excepción: FAC-HON-000463 de 0TEST-FE-002 es real ante la DGI y sigue contando.';
+    'Cliente de prueba (produccion-datos-de-prueba.sql, 05/10/2026). Sus documentos NUEVOS nacen de prueba.';
   c_motivo_factura constant text :=
     'Factura de prueba (produccion-datos-de-prueba.sql, 05/10/2026), marcada en la ventana del Bloque 1.';
   v_cli   uuid[];
@@ -47,10 +55,10 @@ BEGIN
 
   -- 1. Todo lo de la lista existe, una sola vez.
   SELECT string_agg(r, ', ') INTO v_txt FROM (
-    SELECT x AS r FROM unnest(c_clientes || c_cliente_real) x
+    SELECT x AS r FROM unnest(c_clientes || c_clientes_reales) x
      WHERE (SELECT count(*) FROM clients WHERE client_number = x) <> 1
     UNION ALL
-    SELECT x FROM unnest(c_facturas || c_factura_real) x
+    SELECT x FROM unnest(c_facturas || c_facturas_reales) x
      WHERE (SELECT count(*) FROM invoices WHERE invoice_number = x) <> 1
   ) f;
   IF v_txt IS NOT NULL THEN
@@ -61,7 +69,10 @@ BEGIN
   -- 2. Nada sin decidir: todo documento de un cliente de prueba está en la lista.
   SELECT string_agg(r, '; ') INTO v_txt FROM (
     SELECT 'factura ' || invoice_number AS r FROM invoices
-     WHERE client_id = ANY (v_cli) AND NOT (invoice_number = ANY (c_facturas || c_factura_real))
+     WHERE client_id = ANY (v_cli) AND NOT (invoice_number = ANY (c_facturas || c_facturas_reales))
+    UNION ALL SELECT 'factura ' || i.invoice_number || ' de ' || c_cliente_con_sandbox FROM invoices i
+      JOIN clients c ON c.id = i.client_id
+     WHERE c.client_number = c_cliente_con_sandbox AND NOT (i.invoice_number = ANY (c_facturas || c_facturas_reales))
     UNION ALL SELECT 'NC ' || credit_note_number FROM credit_notes WHERE client_id = ANY (v_cli)
     UNION ALL SELECT 'cobro ' || coalesce(payment_number, reference, id::text) FROM payments WHERE client_id = ANY (v_cli)
     UNION ALL SELECT 'cobro del caso ' || k.case_code FROM client_payments cp JOIN cases k ON k.id = cp.case_id WHERE k.client_id = ANY (v_cli)
@@ -91,22 +102,20 @@ BEGIN
 
   -- 5. Post-check: lo marcado, marcado; lo real, sin marca.
   SELECT count(*) INTO v_n FROM invoices WHERE invoice_number = ANY (c_facturas) AND de_prueba;
-  IF v_n <> 8 THEN RAISE EXCEPTION 'Post-check: % de 8 facturas marcadas.', v_n; END IF;
+  IF v_n <> 12 THEN RAISE EXCEPTION 'Post-check: % de 12 facturas y borradores marcados.', v_n; END IF;
   SELECT count(*) INTO v_n FROM clients WHERE client_number = ANY (c_clientes) AND es_de_prueba;
-  IF v_n <> 5 THEN RAISE EXCEPTION 'Post-check: % de 5 clientes marcados.', v_n; END IF;
-  IF (SELECT de_prueba FROM invoices WHERE invoice_number = c_factura_real) THEN
-    RAISE EXCEPTION 'Post-check: % quedó de prueba y es real.', c_factura_real;
-  END IF;
-  IF (SELECT es_de_prueba FROM clients WHERE client_number = c_cliente_real) THEN
-    RAISE EXCEPTION 'Post-check: % quedó de prueba y es real.', c_cliente_real;
-  END IF;
+  IF v_n <> 4 THEN RAISE EXCEPTION 'Post-check: % de 4 clientes marcados.', v_n; END IF;
+  SELECT string_agg(invoice_number, ', ') INTO v_txt FROM invoices WHERE invoice_number = ANY (c_facturas_reales) AND de_prueba;
+  IF v_txt IS NOT NULL THEN RAISE EXCEPTION 'Post-check: % quedó de prueba y es real.', v_txt; END IF;
+  SELECT string_agg(client_number, ', ') INTO v_txt FROM clients WHERE client_number = ANY (c_clientes_reales) AND es_de_prueba;
+  IF v_txt IS NOT NULL THEN RAISE EXCEPTION 'Post-check: % quedó de prueba y es real.', v_txt; END IF;
   IF EXISTS (SELECT 1 FROM expenses x JOIN cases k ON k.id = x.case_id
               WHERE k.case_code = 'ADM-001' AND x.amount = 1.00 AND x.de_prueba) THEN
     RAISE EXCEPTION 'Post-check: el gasto ADM-001 de 1.00 quedó de prueba y es real.';
   END IF;
 
-  RAISE NOTICE 'Marcadas ahora: % facturas y % clientes (8 y 5 en total). Reales sin marca: %, % y el gasto ADM-001 de 1.00.',
-    v_fm, v_cm, c_factura_real, c_cliente_real;
+  RAISE NOTICE 'Marcadas ahora: % facturas y borradores y % clientes (12 y 4 en total). Reales sin marca: %; clientes %; y el gasto ADM-001 de 1.00.',
+    v_fm, v_cm, array_to_string(c_facturas_reales, ', '), array_to_string(c_clientes_reales, ', ');
 END $$;
 
 COMMIT;

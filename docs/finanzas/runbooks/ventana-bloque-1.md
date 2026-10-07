@@ -301,11 +301,10 @@ Ninguna migración falló. Lo que salió son problemas de las VERIFICACIONES y d
    06/10: los bloques que nombran `post_journal_entry` sólo leen su definición). Con la `096` eso está bien
    para lo anterior al 01/07 (contabilizado fuera), pero **los documentos reales DESDE el 01/07 hasta el día
    de la ventana quedan SIN asiento** también: el libro de producción está vacío y el posteo automático
-   recién arranca con el deploy. La sección **a2** de la consulta los cuenta. **Decisión pendiente**
-   (Oliver/Josuarth), antes de la ventana: (a) un paso de datos que los postee con su fecha, después de la
-   `096` y con el código nuevo; (b) que Josuarth los cargue por la importación de asientos; o (c) mover el
-   inicio contable al día de la ventana (entonces quedan contabilizados fuera y tienen que estar en
-   QuickBooks). Hasta decidirlo, la antigüedad los muestra como «documentos sin asiento».
+   recién arranca con el deploy. La sección **a2** de la consulta los cuenta. ✅ **Decidido (Oliver,
+   07/10): NO se postean en la ventana.** Se postean **después**, un mes por vez, cuando Josuarth revisa
+   cada mes, con la pantalla de documentos existentes (§7). La ventana queda como está. Hasta entonces la
+   antigüedad los muestra como «documentos sin asiento».
 10. **Regenerar staging con la `096`:** las semillas (`seed:staging`, `seed:asientos` y
    `seed-gasto-tramite-demo`) bajan el inicio a 01/01/2025 mientras siembran y lo devuelven al 01/07/2026
    al terminar, también si fallan (`scripts/seed-data/inicio-contable-semilla.ts`). Ojo: el aplicador del
@@ -395,3 +394,59 @@ descartable (201) → «¿Olvidaste tu contraseña?» → enlace → «Elige tu 
 `/finanzas/reportes` 200). Con el arreglo: `user_banned` (400); reactivar → entra (200); desactivar otra vez →
 400. El correo en sí no se envió (dominio de prueba): el enlace se generó con el mismo token que pone la
 plantilla. La consulta del punto 5 se probó en staging (sólo lectura): «OK» simulando los dos correos.
+
+---
+
+## 7. Después de la ventana: contabilizar los documentos existentes, un mes por vez
+
+**No es parte de la ventana.** Es un paso aparte, uno por mes (julio, agosto, septiembre, octubre hasta el
+día del deploy), cuando Josuarth revisa ese mes. 🔴 **El botón «Contabilizar el mes» lo aprieta una
+persona desde la pantalla. Nunca un agente ni un script** (`scripts/backfill-asientos-faltantes.mts` es
+sólo de staging y tiene candado).
+
+**Una vez, antes del primer mes (pausa obligatoria: cambio de esquema en producción):**
+1. Respaldo de producción (la tarea programada «Respaldo Base Integra»).
+2. Aplicar `097` y `098` (sólo crean dos tablas, una función y un trigger; no tocan datos). Verificación:
+   `sql/tests/verificacion-097-posteo-de-documentos-existentes.sql` (en ROLLBACK, 9 casos).
+
+**Requisitos de cada mes (si falta uno, la pantalla lo dice y no deja contabilizar):**
+- 🔴 **Gastos de trámite con proveedor y con cuenta en cada línea.** En producción ningún gasto de
+  trámite tiene proveedor (la 049 agrega la columna vacía) y las líneas de la 036 nacen sin cuenta.
+  ⚠️ **Hoy la app NO deja asignar el proveedor a un gasto ya cargado** (`PATCH /api/expenses/[id]` no
+  lo recibe) y la cuenta sólo se clasifica desde `/legal/gastos` cuando el gasto tiene UNA línea.
+  Falta construirlo antes de julio (propuesta en `task_plan.md`).
+- 🔴 **Cobros con banco.** Ningún cobro de producción tiene `payment_account_code` (llega con la 041,
+  vacío). ⚠️ **Hoy nada deja completarlo** en un cobro registrado. Falta construirlo (misma propuesta).
+- Compras con ficha de proveedor: la 033 la crea desde el nombre; revisar las que no enlazaron.
+- Los meses anteriores ya contabilizados (van en orden) y el mes **abierto**. Después de la ventana
+  todos los meses de 2026 quedan abiertos (ninguna migración cierra períodos; verificado en el ensayo:
+  la base `ventana` tiene 1 a 12 en «abierto»). Si alguno estuviera cerrado, se reabre en Períodos
+  Contables con motivo.
+- 🔴 **Un mes se carga por un solo método.** Si el mes ya tiene asientos manuales o importados, no se
+  contabiliza (y los nombra). Ojo: eso incluye los **ajustes a mano** (depreciación, provisiones):
+  cargarlos DESPUÉS de contabilizar los documentos del mes. Al revés, la importación masiva no entra en un
+  mes ya contabilizado desde los documentos; el ajuste a mano sí.
+
+**Cada mes:**
+1. Josuarth (o Oliver) abre **Finanzas › Asientos de Diario › Documentos existentes, por mes**, elige el
+   mes y baja **«Descargar en seco (Excel)»**. No escribe nada. Se puede hacer ANTES de aplicar la 097.
+2. Josuarth revisa el Excel: hojas Léame, Asientos, Totales por cuenta, No se contabilizan, Con problemas.
+3. Se completa en el CRM lo de «Con problemas» y se vuelve a bajar hasta que no quede nada.
+4. Con su visto bueno, **«Contabilizar el mes»** (confirmación). Entra todo el mes o nada. Si algo falla,
+   el mes queda como estaba y el mensaje dice qué.
+5. Volver a abrir el mes: tiene que decir «0 asientos» (repetirlo no duplica).
+
+**Qué no entra:** documentos de prueba (094), FAC-HON-000496 y FAC-HON-000508 (emitidas sin CUFE ni
+autorización de la DGI: se listan aparte y se resuelven por su lado) y lo que cuelga de ellas, las NC de una
+anulación (su efecto es la anulación de la factura) y los cobros del caso de Legal. FAC-HON-000463 (real),
+FAC-HON-000489 y FAC-HON-000503 (duplicadas) **sí** entran.
+
+**Antes de la ventana, sólo lectura:** `sql/verificacion/produccion-documentos-de-un-mes.sql` lista los
+documentos del mes (julio por defecto), si entran y qué les falta. No son los asientos: esos sólo los arma
+la app.
+
+**Probado en staging el 07/10:** julio (10 asientos, 1.000,10) corrido con dos corridas a la vez: una
+contabilizó y la otra falló sin escribir nada; agosto (4 asientos, con la anulación de una factura de
+julio) con el mes reabierto y vuelto a cerrar; las dos repetidas, «no hay nada que contabilizar».
+Concurrencia en la base local del ensayo: `sql/tests/concurrencia-posteo-retroactivo.mjs`, 10 de 10.
+

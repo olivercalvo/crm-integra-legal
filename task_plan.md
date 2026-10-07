@@ -1,36 +1,44 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 06/10/2026, tarde)
+## ▶ PARA RETOMAR (cierre del 07/10/2026)
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
-**Últimos hashes:** `df661f3` y `1b39974` (inicio contable), más el commit de este cierre.
+**Últimos hashes:** `7212a03` (posteo por mes, 097), `643caa3` (098 y concurrencia), más el de este cierre.
 
 **Staging (`xtyenhakplrkyifbcaow`):**
-- Aplicado: todo `sql/pending` hasta la **`096`** inclusive (la `096` el 06/10 con el «aplica», con la llave
-  `finanzas.inicio_contable_existentes = 'aceptar'`: aceptó 10 asientos de antes del corte). Verificación 20/20.
-- Escrito y **SIN APLICAR**: **`088`** (no va todavía, a propósito).
+- Aplicado: todo `sql/pending` hasta la **`097`** inclusive (la 097 el 07/10 con el «aplica»; verificación 7/7).
+- Escrito y **SIN APLICAR**: **`098`** (espera el «aplica») y **`088`** (no va todavía, a propósito).
+- Julio y agosto de 2026 contabilizados con la herramienta (lotes de 10 y 4 asientos, 137 a 150). Agosto se
+  reabrió con motivo y se volvió a cerrar (el cierre grabó otra ancla, 075). Huecos FAC-CO-000010, 12, 14,
+  16 y 18 (las dos corridas a la vez numeraron los gastos; criterio SOP-031).
 
-**Hecho el 06/10 (tarde): inicio contable (096).**
-- Lo anterior al 01/07/2026 está «contabilizado fuera»: no genera asiento, no se crea, no se mueve, no se anula
-  ni se elimina (todos los tipos, FAC-EXT y NC de compra incluidas). NC posterior y cobro cruzado sí postean.
-- Prueba de punta a punta con la app en staging: `scripts/verificar-inicio-contable.mts` → TODO OK
-  (`docs/finanzas/prueba-inicio-contable.txt`); capturas en `docs/finanzas/capturas-inicio-contable/`.
-- Ensayo completo con la 096 (SIN llave): 65 migraciones sin errores, verificación 096 19/19, 41 tablas
-  131/131, 0 deadlocks. Ojo: la base del ensayo tiene el ESQUEMA de producción, no sus datos.
-- Semillas de staging: bajan el inicio mientras siembran y lo devuelven (`seed-data/inicio-contable-semilla.ts`).
-- Suite 1726/1726. Lint sin errores nuevos.
+**Hecho el 07/10: posteo de documentos existentes, por mes (después de la ventana, runbook §7).**
+- Pantalla `/finanzas/asientos/documentos-existentes` (admin y contador): Excel en seco (GET, no escribe) y
+  «Contabilizar el mes» (todo o nada, `post_documentos_existentes`, 097). Mismos constructores que la app.
+- Un mes, un solo método en los dos sentidos (098: trigger de la importación; los ajustes a mano no se bloquean).
+- Idempotencia: `journal_entries_un_asiento_por_documento` (tenant, source_type, source_id) cubre TODOS los
+  tipos; `journal_entries_idempotency_key_unique` además las llaves `factura:`, `nota-credito:`, `cobro:`,
+  `compra:`, `pago-proveedor:` (gasto de trámite y reversión van sin llave; los cubre el primero y, la
+  reversión, `una_reversion_por_asiento`). Dos corridas a la vez: 10/10 en la base local, y julio en staging.
+- Suite 1737/1737.
 
 **Pendiente:**
-1. **Oliver, en producción (sólo lectura):** `sql/verificacion/produccion-documentos-antes-del-inicio.sql`.
-   Sección 0 = 0 asientos (si no, la 096 aborta); b y c vacías; anotar a2 y d.
-2. 🔴 **Decisión (Oliver/Josuarth): los documentos reales desde el 01/07 hasta la ventana quedan SIN asiento**
-   (ninguna migración ni paso de la ventana los postea). Opciones en el runbook §4 punto 9.
-3. **El `--reset` de staging aplica hasta la `048`**: de la `049` a la `096` no hay paso escrito. Pendiente
-   aparte (orquestador de regeneración), no probado porque exige resetear staging.
-4. **Apertura** (siguiente tarea): en espera del visto bueno del diseño.
-5. Texto viejo de la antigüedad («Documentos anteriores al cableado contable… antes del 09/09/2026»): queda
-   para la apertura, que reescribe ese cuadre.
+1. **«aplica» de la `098` en staging** (después: verificación 097 con los casos 8 y 9).
+2. 🔴 **Antes de contabilizar julio en producción, faltan dos acciones en la app** (propuesta, sin construir):
+   (a) asignar el **proveedor** a un gasto de trámite sin asiento (hoy `PATCH /api/expenses/[id]` no lo
+   recibe) y clasificar sus líneas desde Finanzas (hoy sólo desde `/legal/gastos` con una línea);
+   (b) asignar el **banco** a un cobro sin asiento (hoy nada escribe `payments.payment_account_code`).
+   Sin esto, julio queda «con problemas» para siempre: en producción ningún gasto tiene proveedor y ningún
+   cobro tiene banco.
+3. 🐞 **Editar una compra pierde las cuentas de las líneas sin avisar**: `updateBusinessExpense` recalcula
+   totales con `lineas` pero nunca escribe `expense_lines` (`business-expenses.ts:537`). Hallazgo del 07/10.
+4. Decidir si los **ajustes a mano** también deben dejar de bloquear el posteo de documentos (hoy la 097
+   rechaza el mes con CUALQUIER asiento manual vigente; el pedido del 06/10 decía «manuales o importados»).
+5. **Oliver, en producción (sólo lectura):** `sql/verificacion/produccion-documentos-antes-del-inicio.sql` y
+   `sql/verificacion/produccion-documentos-de-un-mes.sql` (julio).
+6. **El `--reset` de staging aplica hasta la `048`** (pendiente aparte).
+7. **Apertura**: en espera.
 
 **Datos de prueba que quedaron en staging (además de los de antes):**
 - **FAC-HON-900002** (20/06, creada por SQL con los triggers de la 096 apagados en esa transacción, como las de

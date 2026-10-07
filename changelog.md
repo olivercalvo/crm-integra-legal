@@ -1,5 +1,27 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Contabilizar los documentos existentes, un mes por vez] - 2026-10-07
+
+- Nueva pantalla **Finanzas › Asientos de Diario › Documentos existentes, por mes** (admin y contador).
+  Los documentos reales desde el inicio contable (01/07/2026) hasta la ventana del Bloque 1 no tienen
+  asiento: se contabilizan **después de la ventana, un mes por vez**, cuando el contador revisa ese mes.
+- **«Descargar en seco (Excel)»** no escribe nada: por documento, fecha, cliente o proveedor, cuentas,
+  débito y crédito, totales por cuenta, lo que no entra y por qué, y lo que falta completar. Pensado para
+  alguien que no conoce el CRM.
+- **«Contabilizar el mes»** registra el mes **entero o nada** (una sola transacción), cada documento con su
+  fecha y en orden, con el mismo asiento que el sistema arma al emitir o registrar. Repetirlo no duplica:
+  sólo toma documentos sin asiento. Dos personas a la vez: una contabiliza y la otra recibe un error sin
+  escribir nada (probado).
+- No entran: documentos de prueba, FAC-HON-000496 y FAC-HON-000508 (emitidas sin CUFE ni autorización de la
+  DGI, listadas aparte) y lo que cuelga de ellas, las NC de una anulación y los cobros del caso de Legal.
+  FAC-HON-000463, FAC-HON-000489 y FAC-HON-000503 sí entran. Una factura anulada entra con su anulación.
+- **Un mes se carga por un solo método:** no se contabilizan los documentos de un mes con asientos manuales
+  o importados, y no se importan asientos en un mes ya contabilizado desde los documentos («Este mes ya se
+  contabilizó desde los documentos del CRM el DD/MM/AAAA…»). Los ajustes cargados a mano (depreciación,
+  provisiones) no se bloquean en la importación.
+- Migraciones: `097` aplicada en staging (verificación 7/7); `098` escrita, sin aplicar (probada en la base
+  local del ensayo, 9/9). Julio y agosto contabilizados en staging; repetidos, no duplican.
+
 ## [Inicio contable: lo anterior está «contabilizado fuera»] - 2026-10-06
 
 - Nuevo parámetro del bufete: **inicio contable**, 01/07/2026 (Finanzas › Configuración › Parámetros

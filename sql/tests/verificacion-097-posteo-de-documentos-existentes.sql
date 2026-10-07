@@ -20,6 +20,11 @@
 --   [5] un rango que empieza antes del inicio contable: se niega
 --   [6] un asiento con fecha fuera del rango: se niega
 --   [7] authenticated no puede ejecutar la función
+--   [8] (098) la IMPORTACIÓN MASIVA en un mes ya contabilizado desde los
+--       documentos: rechazada con la fecha, sin asientos
+--   [9] (098) un asiento de AJUSTE cargado a mano en ese mismo mes: entra
+--   La concurrencia (dos corridas del mismo mes a la vez) necesita dos
+--   sesiones: sql/tests/concurrencia-posteo-retroactivo.mjs
 -- ============================================================================
 BEGIN;
 
@@ -83,7 +88,7 @@ BEGIN
      WHERE table_schema = 'public' AND table_name = 'expenses' AND is_generated = 'NEVER';
     EXECUTE format('INSERT INTO expenses (%s) SELECT %s FROM jsonb_populate_record(NULL::expenses, $1) RETURNING id', v_cols, v_cols)
       USING v_gasto || jsonb_build_object('id', gen_random_uuid(), 'date', v_ini + 3, 'accounting_date', v_ini + 3,
-        'posted_entry_id', NULL, 'purchase_number', 'VERIF-097-G', 'amount_paid', 0, 'status', 'pendiente_pago',
+        'posted_entry_id', NULL, 'purchase_number', 'FAC-CO-999097', 'amount_paid', 0, 'status', 'pendiente_pago',
         'supplier_id', v_prv) INTO v_g;
   END IF;
 
@@ -108,8 +113,8 @@ BEGIN
         jsonb_build_object('account_code', '400001', 'debit', 10, 'credit', 0, 'description', 'Reversión'))));
   IF v_g IS NOT NULL THEN
     v_items := v_items || jsonb_build_array(
-      jsonb_build_object('transaction_date', v_ini + 3, 'description', 'Gasto VERIF-097-G', 'source_type', 'gasto_tramite',
-        'source_id', v_g, 'reference', 'VERIF-097-G', 'lines', jsonb_build_array(
+      jsonb_build_object('transaction_date', v_ini + 3, 'description', 'Gasto FAC-CO-999097', 'source_type', 'gasto_tramite',
+        'source_id', v_g, 'reference', 'FAC-CO-999097', 'lines', jsonb_build_array(
           jsonb_build_object('account_code', '130003', 'debit', 5, 'credit', 0, 'description', 'Verificación 097'),
           jsonb_build_object('account_code', '200001', 'debit', 0, 'credit', 5, 'description', 'Verificación 097', 'supplier_id', v_prv))));
   END IF;
@@ -209,6 +214,35 @@ BEGIN
     IF v_err LIKE '%fuera del período%' THEN v_ok := v_ok + 1; RAISE NOTICE '✅ [6] %', v_err;
     ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [6] otro motivo: %', v_err; END IF;
   END;
+
+  -- [8] y [9] (098): sólo si el trigger ya está aplicado.
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_importacion_no_pisa_documentos') THEN
+    RAISE NOTICE '⏭  [8] y [9]: la 098 no está aplicada en esta base.';
+  ELSIF NOT EXISTS (SELECT 1 FROM posteos_retroactivos WHERE tenant_id = T AND v_ini BETWEEN desde AND hasta) THEN
+    RAISE NOTICE '⏭  [8] y [9]: no hay posteo del mes (el caso [1] no corrió).';
+  ELSE
+    SELECT count(*) INTO v_n FROM journal_entries WHERE tenant_id = T;
+    BEGIN
+      PERFORM post_journal_entries_batch(T, 'verificacion-097.xlsx', md5(random()::text), 2,
+        jsonb_build_array(jsonb_build_object('group_label', '1', 'first_row', 2, 'transaction_date', v_ini + 7,
+          'description', 'Importado en la verificación 097', 'reference', NULL, 'lines', v_fac)), NULL);
+      v_fail := v_fail + 1; RAISE NOTICE '❌ [8] la importación entró en un mes contabilizado desde los documentos';
+    EXCEPTION WHEN check_violation THEN
+      GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+      IF v_err LIKE 'Este mes ya se contabilizó desde los documentos del CRM el __/__/____. No se importan asientos de documentos para ese período.'
+         AND (SELECT count(*) FROM journal_entries WHERE tenant_id = T) = v_n THEN
+        v_ok := v_ok + 1; RAISE NOTICE '✅ [8] %', v_err;
+      ELSE v_fail := v_fail + 1; RAISE NOTICE '❌ [8] otro motivo: %', v_err; END IF;
+    END;
+    BEGIN
+      PERFORM post_journal_entry(T, v_ini + 8, 'Depreciación de la verificación 097', 'manual',
+        v_fac, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'VERIF-097-AJUSTE');
+      v_ok := v_ok + 1; RAISE NOTICE '✅ [9] el asiento de ajuste a mano entra en el mismo mes';
+    EXCEPTION WHEN OTHERS THEN
+      GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
+      v_fail := v_fail + 1; RAISE NOTICE '❌ [9] el ajuste a mano fue rechazado: %', v_err;
+    END;
+  END IF;
 
   -- [7] Permisos.
   IF has_function_privilege('authenticated', 'public.post_documentos_existentes(uuid, date, date, jsonb, uuid)', 'EXECUTE') THEN

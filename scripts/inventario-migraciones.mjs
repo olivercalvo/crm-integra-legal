@@ -374,6 +374,11 @@ const MARCADORES = {
     tipo: "columna", tabla: "finanzas_parametros", columna: "fecha_inicio_contable",
     nota: "06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes.",
   },
+  "098_un_mes_un_metodo_en_los_dos_sentidos.sql": {
+    que: "La importacion masiva no entra en un mes contabilizado desde los documentos (trigger en journal_import_entries); post_documentos_existentes toma el candado del correlativo antes de mirar el mes y verifica el FAC-CO- del gasto",
+    tipo: "funcion", nombre: "finanzas_importacion_no_pisa_documentos",
+    nota: "07/10. Va junto con la 097, despues de la ventana. Los ajustes a mano no se bloquean.",
+  },
   "097_posteo_de_documentos_existentes.sql": {
     que: "Posteo de documentos existentes por mes: post_documentos_existentes (un lote, una transaccion; se niega si el rango tiene asientos manuales o empieza antes del inicio) y su registro (posteos_retroactivos)",
     tipo: "funcion", nombre: "post_documentos_existentes",

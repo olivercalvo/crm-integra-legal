@@ -232,3 +232,24 @@ test("🔴 K-5: un asiento con fecha posterior a hoy es error de la fila (Josuar
   // El mismo día de hoy, sin error.
   assert.deepEqual(validarImportacion(filas, ctx({ hoy: "2026-09-28" })).errores, []);
 });
+
+test("🔴 098: un mes contabilizado desde los documentos del CRM no se importa, y lo dice con la fecha", () => {
+  const filas = [H, fila("1", "25/09/2026", "Depreciación", "600001", 150, ""), fila("1", "25/09/2026", "", "100001", "", 150)];
+  const r = validarImportacion(filas, ctx({ mesesDesdeDocumentos: new Map([["2026-09", "07/10/2026"]]) }));
+  assert.deepEqual(
+    r.errores.map((e) => [e.fila, e.columna, e.mensaje]),
+    [[2, "Fecha", "Este mes ya se contabilizó desde los documentos del CRM el 07/10/2026. No se importan asientos de documentos para ese período."]]
+  );
+  // Otro mes, el mismo archivo: entra.
+  assert.deepEqual(validarImportacion(filas, ctx({ mesesDesdeDocumentos: new Map([["2026-07", "07/10/2026"]]) })).errores, []);
+});
+
+test("098: el bloqueo es SÓLO de la importación masiva; el asiento de ajuste a mano no lo mira", () => {
+  const raiz = process.cwd();
+  const importacion = readFileSync(path.join(raiz, "src/lib/finanzas/api/importacion-asientos.ts"), "utf8");
+  assert.match(importacion, /from\("posteos_retroactivos"\)/);
+  for (const manual of ["src/lib/finanzas/api/asientos.ts", "src/app/api/finanzas/asientos/route.ts"]) {
+    const fuente = readFileSync(path.join(raiz, manual), "utf8");
+    assert.doesNotMatch(fuente, /posteos_retroactivos|mesesDesdeDocumentos/, `${manual} no debe bloquear los ajustes a mano`);
+  }
+});

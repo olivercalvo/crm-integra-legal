@@ -29,19 +29,35 @@ export function hashDelArchivo(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+/** «2026-07-01», «2026-08-31» → ["2026-07", "2026-08"]. */
+export function mesesDelRango(desde: string, hasta: string): string[] {
+  const out: string[] = [];
+  let [a, m] = desde.slice(0, 7).split("-").map(Number);
+  const [ah, mh] = hasta.slice(0, 7).split("-").map(Number);
+  while (a < ah || (a === ah && m <= mh)) {
+    out.push(`${a}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m === 13) { m = 1; a += 1; }
+  }
+  return out;
+}
+
 export async function cargarContextoDeImportacion(
   db: DB,
   tenantId: string,
   hoy = new Date(),
   formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<ContextoDeImportacion> {
-  const [cuentas, periodos, clientes, proveedores] = await Promise.all([
+  const [cuentas, periodos, clientes, proveedores, posteos] = await Promise.all([
     db.from("chart_of_accounts").select("code, active, cuenta_control").eq("tenant_id", tenantId),
     db.from("accounting_periods").select("year, month, status").eq("tenant_id", tenantId),
     // 071: los códigos que puede traer la columna Tercero.
     db.from("clients").select("id, client_number").eq("tenant_id", tenantId),
     db.from("suppliers").select("id, supplier_number").eq("tenant_id", tenantId),
+    // 098: los meses ya contabilizados desde los documentos del CRM.
+    db.from("posteos_retroactivos").select("desde, hasta, created_at").eq("tenant_id", tenantId).order("created_at"),
   ]);
+  if (posteos.error) throw new MutationError(pgErrorToMessage(posteos.error), 500, posteos.error);
   if (cuentas.error) throw new MutationError(pgErrorToMessage(cuentas.error), 500, cuentas.error);
   if (clientes.error) throw new MutationError(pgErrorToMessage(clientes.error), 500, clientes.error);
   if (proveedores.error) throw new MutationError(pgErrorToMessage(proveedores.error), 500, proveedores.error);
@@ -68,6 +84,13 @@ export async function cargarContextoDeImportacion(
     conPeriodo.add(mes);
     if (p.status !== "abierto") cerrados.add(mes);
   }
+  const desdeDocumentos = new Map<string, string>();
+  for (const p of (posteos.data ?? []) as { desde: string; hasta: string; created_at: string }[]) {
+    const d = hoyEnPanama(new Date(p.created_at)).split("-").reverse().join("/"); // DD/MM/AAAA
+    for (const mes of mesesDelRango(String(p.desde).slice(0, 10), String(p.hasta).slice(0, 10))) {
+      if (!desdeDocumentos.has(mes)) desdeDocumentos.set(mes, d);
+    }
+  }
   // El motor (054) crea solo el período del año en curso y del siguiente.
   const anio = hoy.getUTCFullYear();
   return {
@@ -75,6 +98,7 @@ export async function cargarContextoDeImportacion(
     cuentasActivas: activas,
     mesesCerrados: cerrados,
     mesesConPeriodo: conPeriodo,
+    mesesDesdeDocumentos: desdeDocumentos,
     aniosConPeriodoAutomatico: new Set([anio, anio + 1]),
     cuentasControl,
     clientesPorCodigo,

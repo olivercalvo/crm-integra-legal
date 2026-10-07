@@ -100,6 +100,12 @@ export interface ContextoDeImportacion {
   aniosConPeriodoAutomatico: Set<number>;
   /** `YYYY-MM` de los meses que ya tienen período (abierto o cerrado). */
   mesesConPeriodo: Set<string>;
+  /**
+   * 098: `YYYY-MM` de los meses ya contabilizados desde los documentos del CRM
+   * (posteos_retroactivos) → la fecha del posteo, DD/MM/AAAA. Un mes se carga
+   * por un solo método: ahí no se importa. La base lo vuelve a exigir.
+   */
+  mesesDesdeDocumentos?: Map<string, string>;
   /** 071: código de cuenta → `cuenta_control`. Sin el mapa no se exige tercero. */
   cuentasControl?: Map<string, CuentaControlImportada>;
   /** 071: `client_number` (CLI-0001) → id. */
@@ -189,6 +195,11 @@ export function parsearFecha(v: unknown, formato: FormatoDeFecha = "DD/MM"): str
  * Lee la matriz (fila 0 = encabezados) y valida TODO. Nunca lanza: los
  * problemas vuelven como errores con fila y columna.
  */
+/** El mismo texto que la base (098). */
+export function mensajeMesDesdeDocumentos(fecha: string): string {
+  return `Este mes ya se contabilizó desde los documentos del CRM el ${fecha}. No se importan asientos de documentos para ese período.`;
+}
+
 export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportacion): ResultadoDeImportacion {
   const errores: ErrorDeFila[] = [];
   const vacio: ResultadoDeImportacion = { errores, asientos: [], filasLeidas: 0, totalDebitos: 0 };
@@ -404,6 +415,8 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
         });
       } else if (ctx.mesesCerrados.has(mes)) {
         errores.push({ fila: primera.n, columna: "Fecha", mensaje: `El mes ${m}/${a} está cerrado.` });
+      } else if (ctx.mesesDesdeDocumentos?.has(mes)) {
+        errores.push({ fila: primera.n, columna: "Fecha", mensaje: mensajeMesDesdeDocumentos(ctx.mesesDesdeDocumentos.get(mes)!) });
       } else if (!ctx.mesesConPeriodo.has(mes) && !ctx.aniosConPeriodoAutomatico.has(Number(a))) {
         errores.push({ fila: primera.n, columna: "Fecha", mensaje: `No hay período contable abierto para ${m}/${a}.` });
       }

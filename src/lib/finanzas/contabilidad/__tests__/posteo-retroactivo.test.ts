@@ -119,9 +119,16 @@ test("las listas del plan se leen por páginas (PostgREST corta en 1000)", () =>
     const antes = fuente.slice(Math.max(0, m.index! - 80), m.index!);
     const sentencia = fuente.slice(m.index!, fuente.indexOf(";", m.index!));
     if (/paginado\(\(a, b\) =>\s*(db)?\s*$/.test(antes)) continue;
-    if (/maybeSingle|\.update\(|\.in\("(id|code)"/.test(sentencia)) continue;
+    if (/maybeSingle|\.single\(|\.update\(|\.in\("(id|code)"/.test(sentencia)) continue;
     if (m[1] === "accounting_periods") continue; // doce filas por año
     sinPaginar.push(`${m[1]}: ${sentencia.slice(0, 80)}`);
   }
   assert.deepEqual(sinPaginar, []);
+});
+
+test("098: el número del gasto se relee después de numerar (dos corridas a la vez no lo cambian)", () => {
+  const i = fuente.indexOf("allocatePurchaseNumber(db");
+  const tramo = fuente.slice(i, i + 1500);
+  assert.match(tramo, /\.is\("purchase_number", null\)/);
+  assert.match(tramo, /select\("purchase_number"\)/);
 });

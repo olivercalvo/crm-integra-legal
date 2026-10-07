@@ -43,6 +43,7 @@ import { cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asie
 import { getLineasDeGastoTramite } from "@/lib/finanzas/queries/expense-tramite";
 import { SELECT_GASTO_PARA_ASIENTO, datosDeGastoParaAsiento } from "@/lib/finanzas/api/expense-tramite";
 import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
+import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 
 type DB = SupabaseClient;
 
@@ -314,35 +315,26 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     const ncFecha = (nc as { accounting_date?: string | null; issue_date?: string | null } | null);
     const fecha = String(ncFecha?.accounting_date ?? ncFecha?.issue_date ?? f.cancelled_at ?? f.accounting_date ?? f.issue_date).slice(0, 10);
     if (fecha > hasta) continue;
-    // El original: el que se va a postear en este plan, o el que ya está en el libro.
+    // El original: el que se va a postear en este plan, o el que ya está en el
+    // libro, leído con el MISMO cargador que usa cancelInvoice.
     const enPlan = todos.find((t) => t.documentoId === f.id && t.tipo !== "reversion");
-    let lineas = enPlan?.asiento.lines;
-    let fechaOriginal = enPlan?.fecha;
-    let descripcionOriginal = enPlan?.asiento.description ?? "";
-    if (!enPlan) {
-      const { data: je } = await db
-        .from("journal_entries")
-        .select("id, transaction_date, description, journal_entry_lines(debit, credit, description, client_id, supplier_id, chart_of_accounts(code))")
-        .eq("tenant_id", tenantId)
-        .eq("source_type", "factura")
-        .eq("source_id", f.id)
-        .maybeSingle();
-      if (!je) continue; // sin original: su factura todavía no se postea (otro mes, o tiene un problema)
-      const j = je as unknown as {
-        transaction_date: string; description: string;
-        journal_entry_lines: { debit: number; credit: number; description: string | null; client_id: string | null; supplier_id: string | null; chart_of_accounts: { code: string } | null }[];
-      };
-      lineas = j.journal_entry_lines.map((l) => ({
-        account_code: l.chart_of_accounts?.code ?? "", debit: Number(l.debit), credit: Number(l.credit),
-        description: l.description, client_id: l.client_id, supplier_id: l.supplier_id,
-      }));
-      fechaOriginal = String(j.transaction_date).slice(0, 10);
-      descripcionOriginal = j.description;
+    const original = enPlan
+      ? {
+          id: "pendiente", entry_number: 0, transaction_date: enPlan.fecha, description: enPlan.asiento.description,
+          reference: f.invoice_number,
+          lines: enPlan.asiento.lines.map((l) => ({ ...l, description: l.description ?? null })),
+        }
+      : (await cargarAsientosPorOrigen(db, tenantId, "factura", [f.id])).get(f.id);
+    if (!original) {
+      // El libro dice que la factura tiene asiento y no se pudo leer: nunca en silencio.
+      if (tiene("factura", f.id)) {
+        problema({ tipo: "reversion", numero: f.invoice_number, fecha, motivo: "No se pudo leer el asiento de la factura para armar su anulación." });
+      }
+      continue; // sin original: su factura todavía no se postea (otro mes, o tiene un problema)
     }
-    const armado = construirAsientoDeReversion(
-      { id: "pendiente", entry_number: 0, transaction_date: fechaOriginal!, description: descripcionOriginal, reference: f.invoice_number, lines: lineas!.map((l) => ({ ...l, description: l.description ?? null })) },
-      { fecha, motivo: f.cancellation_reason?.trim() || `Anulación de la factura ${f.invoice_number}`, source_id: f.id }
-    );
+    const armado = construirAsientoDeReversion(original as Parameters<typeof construirAsientoDeReversion>[0], {
+      fecha, motivo: f.cancellation_reason?.trim() || `Anulación de la factura ${f.invoice_number}`, source_id: f.id,
+    });
     if (!armado.ok) {
       problema({ tipo: "reversion", numero: f.invoice_number, fecha, motivo: armado.mensaje });
       continue;
@@ -380,7 +372,7 @@ export async function planearPosteo(db: DB, tenantId: string, desdePedido: strin
     if (n.de_prueba) { excluir({ ...base, motivo: "Documento de prueba: no entra al libro." }); continue; }
     if (n.invoice_id && excluidas.has(n.invoice_id)) { excluir({ ...base, motivo: "Es de una factura que no se contabiliza (sin DGI)." }); continue; }
     if (n.invoices?.status === "anulada") {
-      excluir({ ...base, motivo: "Es la nota de crédito de una anulación: su efecto es la reversión de la factura (fila «Anulación de factura»)." });
+      excluir({ ...base, motivo: "Es la nota de crédito de una anulación: no tiene asiento propio; su efecto es la anulación de la factura (el asiento que revierte la factura)." });
       continue;
     }
     if (n.status !== "emitida") { problema({ ...base, motivo: `Nota de crédito en estado «${n.status}» sin asiento: revisar.` }); continue; }
@@ -640,8 +632,19 @@ export async function contabilizarPlan(db: DB, ledgerDb: DB, plan: Plan, userId:
       .eq("id", it.documentoId)
       .is("purchase_number", null);
     if (error) throw new MutationError(`No se pudo numerar el gasto ${it.numero}: ${pgErrorToMessage(error)}`, 500, error);
-    it.asiento = { ...it.asiento, reference: numero };
-    it.numero = numero;
+    // El número que QUEDÓ en el gasto: si otra corrida lo numeró antes, el
+    // UPDATE de arriba no tocó nada y el nuestro es un hueco (SOP-031). La base
+    // lo vuelve a verificar (098).
+    const { data: guardado, error: errLeer } = await db
+      .from("expenses")
+      .select("purchase_number")
+      .eq("tenant_id", plan.tenantId)
+      .eq("id", it.documentoId)
+      .single();
+    if (errLeer) throw new MutationError(`No se pudo leer el número del gasto: ${pgErrorToMessage(errLeer)}`, 500, errLeer);
+    const final = String((guardado as { purchase_number: string | null }).purchase_number ?? numero);
+    it.asiento = { ...it.asiento, reference: final };
+    it.numero = final;
     it.numeroPendiente = false;
   }
 

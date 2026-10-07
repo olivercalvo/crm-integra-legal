@@ -23,11 +23,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { destinoPermitido } from "./destino-sql.mjs";
 
 // La raíz del repo es el padre de scripts/, no hace falta pasarla.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SQL_REL = process.argv[2];
-const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
 
 if (!SQL_REL) {
   console.error("uso: node scripts/run-sql.mjs <ruta-al-.sql>");
@@ -56,12 +56,13 @@ if (!CONN) {
   process.exit(1);
 }
 
-// ---- CANDADO: nunca contra producción ----
-for (const ref of PROD_PROJECT_REFS) {
-  if (CONN.includes(ref)) {
-    console.error(`\n🛑 ABORTADO: la connection string apunta a PRODUCCIÓN (${ref}).\n`);
-    process.exit(1);
-  }
+// ---- CANDADO: sólo staging o una base local, ANTES de conectar ----
+// Lista blanca (07/10/2026): antes sólo se rechazaba el ref de producción.
+try {
+  destinoPermitido(CONN);
+} catch (e) {
+  console.error(`\n🛑 ${e.message}\n`);
+  process.exit(1);
 }
 
 const sqlPath = resolve(ROOT, SQL_REL);

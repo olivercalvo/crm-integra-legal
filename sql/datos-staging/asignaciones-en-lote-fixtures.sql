@@ -15,7 +15,10 @@
 -- líneas así, el CHECK se quita y se vuelve a poner IDÉNTICO (NOT VALID)
 -- dentro de esta misma transacción: el esquema termina como estaba.
 -- Idempotente (por concepto y por número); correrlo otra vez los deja como al
--- principio, salvo los que ya tengan asiento. 🛑 Sólo staging.
+-- principio, salvo los que ya tengan asiento.
+-- 🛑 Sólo staging o la base local: lo corre scripts/run-sql.mjs (lista blanca,
+-- aborta antes de conectar) y además se niega adentro si la base no tiene los
+-- usuarios sembrados de staging.
 -- ============================================================================
 BEGIN;
 
@@ -25,8 +28,12 @@ DECLARE
   v_modelo uuid; v_cols text; v_id uuid; v_cli uuid; v_n int := 0;
   r record;
 BEGIN
-  IF current_database() IS NULL OR EXISTS (SELECT 1 FROM pg_settings WHERE name = 'cluster_name' AND setting ILIKE '%uqmmkklbhzxqybljiecs%') THEN
-    RAISE EXCEPTION 'sólo staging';
+  -- 🛑 Guarda propia, por si alguien lo pega en el SQL Editor: staging y la base
+  -- local del ensayo tienen los usuarios sembrados @staging.test; producción no.
+  -- (La primera guarda es la de scripts/run-sql.mjs, que no conecta si la base
+  -- no es staging ni local.) Va ANTES de tocar el CHECK de la 037.
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE email LIKE '%@staging.test') THEN
+    RAISE EXCEPTION 'ABORTADO: esta base no es staging ni la local del ensayo (no tiene los usuarios @staging.test). No se tocó nada.';
   END IF;
 
   SELECT x.id INTO v_modelo FROM expenses x

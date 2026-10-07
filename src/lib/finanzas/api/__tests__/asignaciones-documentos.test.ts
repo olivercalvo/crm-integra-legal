@@ -76,5 +76,5 @@ test("se escribe DESPUÉS de verificar el lote; el proveedor sólo en gastos sin
     assert.ok(verif > 0, `${fn} no verifica el lote`);
     assert.ok(cuerpo.indexOf(escritura) > verif, `${fn} escribe antes de verificar`);
   }
-  assert.match(f, /\.from\("expenses"\)\.update\(\{ supplier_id[^;]*\.is\("posted_entry_id", null\)/s);
+  assert.match(f, /\.from\("expenses"\)\.update\(\{ supplier_id[^;]*\.is\("posted_entry_id", null\)/);
 });

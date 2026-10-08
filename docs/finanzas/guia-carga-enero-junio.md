@@ -42,6 +42,9 @@ meses no se cargan a mano.
 4. Súbelo y aprieta **«Revisar en seco»**. No se registra nada: ves los errores fila por fila y los totales por
    cuenta. Corrige en el Excel y vuelve a subir hasta que diga «Sin errores».
 5. Aprieta **«Contabilizar la apertura»**. Queda un asiento con número AD-.
+   Compárala con QuickBooks en Finanzas › Reportes › Antigüedad de Saldos, con **«Al» 31/12/2025**: por cobrar y por
+   pagar tienen que dar lo mismo que el reporte de QuickBooks a esa fecha. El campo «Al» sirve igual para revisar el
+   cierre de cada mes: toma sólo lo registrado hasta ese día y cuenta los días de atraso contra esa fecha.
 6. Si después encuentras un error, puedes **reversar la apertura** (con un motivo) y cargarla de nuevo, siempre que el
    mes de diciembre de 2025 siga abierto. Por eso, **no cierres diciembre de 2025** hasta que la apertura esté bien.
 
@@ -63,11 +66,27 @@ Sirve para probar los reportes de enero (Estado de Resultados, Balance, Mayor) a
 1. Finanzas › Asientos de Diario › **Importar desde Excel** › «Descargar plantilla».
 2. Llena **un archivo por mes** (febrero, marzo, abril, mayo y junio). Cada archivo admite hasta 200 asientos y 3.000
    líneas.
-3. Súbelo, elige cómo vienen las fechas (DD/MM o MM/DD) y revisa la **vista previa**: muestra cada error con su fila y
-   su columna. **Si hay un solo error no se registra nada**: corrige el Excel y vuelve a subirlo. Debajo de los errores
+3. Súbelo, elige en **«Formato de fecha del archivo»** cómo vienen las fechas (ver «Las fechas», abajo) y revisa la
+   **vista previa**: muestra cada error con su fila y su columna, y la **fecha leída** de cada asiento. **Si hay un solo error no se registra nada**: corrige el Excel y vuelve a subirlo. Debajo de los errores
    pueden salir **advertencias** en amarillo (por ejemplo, un gasto sin proveedor): no bloquean, pero revísalas.
 4. Con la vista previa sin errores, aprieta **«Contabilizar»**. Entra el archivo completo, o no entra nada.
 5. Revisa los reportes del mes antes de subir el siguiente.
+
+### Las fechas
+
+La misma fecha escrita como texto se lee distinto según el formato: **03/04/2026 es el 3 de abril en DD/MM/AAAA y el 4 de
+marzo en MM/DD/AAAA**. Por eso la pantalla pregunta el formato:
+
+- **Por defecto es DD/MM/AAAA** (día primero), como se escribe en Panamá. Si tu archivo viene con el mes primero (como
+  los que exporta QuickBooks en inglés), elige **MM/DD/AAAA** antes de subirlo o después: la vista previa se vuelve a
+  leer sola.
+- Una celda con **formato de fecha de Excel** se lee igual en los dos formatos, y si trae hora no cambia el día.
+- **AAAA-MM-DD** (2026-04-03) también vale y no depende del formato.
+- Una fecha que no existe en el formato elegido (por ejemplo 25/09/2026 leída como MM/DD) es error en esa fila.
+- En un **CSV** la fecha se lee siempre como texto, con el formato que elegiste. Guárdalo como «CSV UTF-8».
+
+**Revisa la columna «Fecha leída» de la vista previa**: dice la fecha en palabras («3 de abril de 2026») y, al lado, cómo
+venía en el archivo. Si dice otro mes, cambia el formato antes de contabilizar.
 
 ### El formato del archivo
 
@@ -76,7 +95,7 @@ Una fila por línea del asiento. Las filas de un mismo asiento van **juntas** y 
 | Columna | Qué va | Obligatoria |
 |---|---|---|
 | Asiento | Un identificador del asiento dentro del archivo (1, 2, 3… o FEB-01). Las filas con el mismo valor forman un asiento | Sí |
-| Fecha | La fecha del movimiento, la misma en todas las líneas del asiento | Sí |
+| Fecha | La fecha del movimiento, la misma en todas las líneas del asiento (DD/MM/AAAA por defecto; ver «Las fechas») | Sí |
 | Descripción del asiento | Qué operación es (al menos 3 letras). En la primera línea del asiento | Sí |
 | Referencia | El documento que lo respalda (número de factura, cheque) | No |
 | Cuenta | El código de la cuenta (por ejemplo 610008) | Sí |

@@ -99,7 +99,9 @@ export function generarPlantillaDeApertura(p: {
 export function leerHojaDeApertura(buffer: ArrayBuffer | Buffer): unknown[][] {
   let wb: XLSX.WorkBook;
   try {
-    wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+    // `raw`: en un CSV la librería convertía «03/04/2026» en fecha por su cuenta
+    // (mes primero, sin mirar el formato elegido). Así queda texto y lo lee `parsearFecha`.
+    wb = XLSX.read(buffer, { type: "buffer", cellDates: true, raw: true });
   } catch {
     throw new WorkbookDeAperturaError("No se pudo leer el archivo. Tiene que ser un .xlsx válido (la plantilla de apertura).");
   }

@@ -44,9 +44,13 @@ export const ENCABEZADOS = [
  * no dependen de esto.
  */
 export type FormatoDeFecha = "DD/MM" | "MM/DD";
-export const FORMATOS_DE_FECHA: readonly FormatoDeFecha[] = ["MM/DD", "DD/MM"];
-/** El de la pantalla: Josuarth trabaja con MM/DD/AAAA (decisión (c)). */
-export const FORMATO_DE_FECHA_POR_DEFECTO: FormatoDeFecha = "MM/DD";
+export const FORMATOS_DE_FECHA: readonly FormatoDeFecha[] = ["DD/MM", "MM/DD"];
+/**
+ * El de la pantalla: DD/MM/AAAA, como se escribe en Panamá (Oliver, 08/10/2026).
+ * Hasta ese día era MM/DD por la decisión (c) del 30/09; la persona lo cambia en
+ * la pantalla y la vista previa muestra la fecha ya leída, en palabras.
+ */
+export const FORMATO_DE_FECHA_POR_DEFECTO: FormatoDeFecha = "DD/MM";
 
 export function esFormatoDeFecha(v: unknown): v is FormatoDeFecha {
   return v === "DD/MM" || v === "MM/DD";
@@ -83,6 +87,11 @@ export interface AsientoImportado {
   first_row: number;
   last_row: number;
   transaction_date: string;
+  /**
+   * Cómo venía la fecha en el archivo (el texto, o «celda de fecha de Excel»),
+   * para que la vista previa la muestre junto a la fecha ya leída. No viaja al libro.
+   */
+  fecha_en_archivo?: string;
   description: string;
   reference: string | null;
   lines: LineaImportada[];
@@ -185,8 +194,9 @@ export function parsearFecha(v: unknown, formato: FormatoDeFecha = "DD/MM"): str
     return valida(v.getUTCFullYear(), v.getUTCMonth() + 1, v.getUTCDate());
   }
   if (typeof v === "number" && Number.isFinite(v)) {
-    // Serial de Excel (sistema 1900): días desde el 30/12/1899.
-    const f = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000);
+    // Serial de Excel (sistema 1900): días desde el 30/12/1899. La parte decimal
+    // es la HORA: se trunca (con `round`, una celda «05/03/2026 18:00» caía el 06/03).
+    const f = new Date(Date.UTC(1899, 11, 30) + Math.floor(v + 1e-9) * 86400000);
     return valida(f.getUTCFullYear(), f.getUTCMonth() + 1, f.getUTCDate());
   }
   const s = String(v).trim();
@@ -199,6 +209,24 @@ export function parsearFecha(v: unknown, formato: FormatoDeFecha = "DD/MM"): str
       : valida(Number(m[3]), Number(m[2]), Number(m[1]));
   }
   return null;
+}
+
+/** Cómo venía la celda de la fecha, para mostrarla al lado de la ya leída. */
+export function fechaComoVino(v: unknown): string {
+  if (v instanceof Date || typeof v === "number") return "celda de fecha de Excel";
+  return v === null || v === undefined ? "" : String(v).trim();
+}
+
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/**
+ * `2026-04-03` → «3 de abril de 2026». En palabras, para que en la vista previa
+ * se vea sin ambigüedad cómo se leyó una fecha `03/04/2026`.
+ */
+export function fechaEnPalabras(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return "";
+  return `${Number(m[3])} de ${MESES[Number(m[2]) - 1]} de ${m[1]}`;
 }
 
 /**
@@ -253,6 +281,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
     n: number;
     grupo: string;
     fecha: string | null;
+    fechaEnArchivo: string;
     descripcion: string;
     referencia: string;
     cuenta: string;
@@ -340,6 +369,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
       n,
       grupo,
       fecha,
+      fechaEnArchivo: fechaComoVino(celda(r, C.fecha)),
       descripcion: texto(celda(r, C.descripcion)),
       referencia: texto(celda(r, C.referencia)),
       cuenta,
@@ -443,6 +473,7 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
       first_row: primera.n,
       last_row: g.filas[g.filas.length - 1].n,
       transaction_date: fecha ?? "",
+      fecha_en_archivo: primera.fechaEnArchivo,
       description: descripcion,
       reference: referencia || null,
       lines: g.filas.map((f) => ({

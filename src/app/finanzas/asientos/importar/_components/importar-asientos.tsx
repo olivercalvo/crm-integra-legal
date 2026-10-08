@@ -7,6 +7,7 @@ import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
 import {
   FORMATO_DE_FECHA_POR_DEFECTO,
+  fechaEnPalabras,
   type AsientoImportado,
   type ErrorDeFila,
   type FormatoDeFecha,
@@ -118,8 +119,8 @@ export function ImportarAsientos() {
             }}
             className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
           >
-            <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
             <option value="DD/MM">DD/MM/AAAA (día primero)</option>
+            <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
           </select>
         </label>
         {archivo && <span className="text-sm text-gray-600">{archivo.name}</span>}
@@ -202,7 +203,7 @@ export function ImportarAsientos() {
                   <tr>
                     <th className="pb-2 pr-2">Asiento</th>
                     <th className="pb-2 pr-2">Filas</th>
-                    <th className="pb-2 pr-2">Fecha</th>
+                    <th className="pb-2 pr-2">Fecha leída</th>
                     <th className="pb-2 pr-2">Descripción</th>
                     <th className="pb-2 pr-2 text-right">Líneas</th>
                     <th className="pb-2 text-right">Total</th>
@@ -215,7 +216,21 @@ export function ImportarAsientos() {
                       <td className="py-1.5 pr-2 text-gray-500">
                         {a.first_row} a {a.last_row}
                       </td>
-                      <td className="py-1.5 pr-2">{a.transaction_date ? formatDate(a.transaction_date) : ""}</td>
+                      {/* La fecha YA INTERPRETADA, en palabras, y cómo venía en el
+                          archivo: si 03/04/2026 se leyó como 4 de marzo, se ve acá. */}
+                      <td className="py-1.5 pr-2">
+                        {a.transaction_date ? (
+                          <>
+                            <span className="font-medium">{fechaEnPalabras(a.transaction_date)}</span>
+                            <span className="block text-xs text-gray-500">
+                              {formatDate(a.transaction_date)}
+                              {a.fecha_en_archivo ? ` · en el archivo: ${a.fecha_en_archivo}` : ""}
+                            </span>
+                          </>
+                        ) : (
+                          ""
+                        )}
+                      </td>
                       <td className="py-1.5 pr-2">{a.description}</td>
                       <td className="py-1.5 pr-2 text-right">{a.lines.length}</td>
                       <td className="py-1.5 text-right font-mono">{fmtImporte(a.total)}</td>

@@ -11,12 +11,17 @@ import path from "node:path";
 import {
   ADVERTENCIA_GASTO_SIN_PROVEEDOR,
   ENCABEZADOS,
+  FORMATO_DE_FECHA_POR_DEFECTO,
+  FORMATOS_DE_FECHA,
+  fechaEnPalabras,
   parsearFecha,
   parsearMonto,
   validarImportacion,
   type ContextoDeImportacion,
 } from "../asientos-import";
 import { generarPlantillaDeAsientos, leerHojaDeAsientos } from "../asientos-workbook";
+import { leerHojaDeApertura } from "../apertura-workbook";
+import * as XLSX from "xlsx";
 
 const ctx = (over: Partial<ContextoDeImportacion> = {}): ContextoDeImportacion => ({
   cuentasExistentes: new Set(["600001", "100001", "4101"]),
@@ -202,8 +207,8 @@ test("encabezados que faltan: un solo error que dice cuáles", () => {
 test("la plantilla se vuelve a leer: el ejemplo trae la cuenta vacía y lo dice", () => {
   const buf = Buffer.from(generarPlantillaDeAsientos([{ code: "600001", name: "Gasto", account_type: "expense" }]));
   const matriz = leerHojaDeAsientos(buf);
-  // El ejemplo de la plantilla viene en MM/DD, el formato por defecto (E3).
-  const r = validarImportacion(matriz, ctx({ formatoDeFecha: "MM/DD" }));
+  // El ejemplo de la plantilla viene en DD/MM, el formato por defecto (08/10/2026).
+  const r = validarImportacion(matriz, ctx({ formatoDeFecha: FORMATO_DE_FECHA_POR_DEFECTO }));
   assert.equal(r.asientos.length, 2, "dos asientos de ejemplo");
   assert.ok(r.errores.every((e) => e.columna === "Cuenta" && /Falta la cuenta/.test(e.mensaje)));
 });
@@ -306,4 +311,68 @@ test("las advertencias se ven en la vista previa y el contexto real carga las cu
   const api = leer("src/lib/finanzas/api/importacion-asientos.ts");
   assert.match(api, /c\.account_type === "expense" \|\| c\.account_type === "cost"/);
   assert.match(api, /cuentasDeGasto,/);
+});
+
+// ---------------------------------------------------------------------------
+// 08/10/2026: FORMATO DE FECHA. DD/MM por defecto, CSV sin conversión de la
+// librería, celdas de fecha de Excel (con hora) y la fecha leída en la vista previa.
+// ---------------------------------------------------------------------------
+
+test("el formato por defecto es DD/MM/AAAA y va primero en el selector", () => {
+  assert.equal(FORMATO_DE_FECHA_POR_DEFECTO, "DD/MM");
+  assert.equal(FORMATOS_DE_FECHA[0], "DD/MM");
+  const ui = readFileSync(path.join(process.cwd(), "src/app/finanzas/asientos/importar/_components/importar-asientos.tsx"), "utf8");
+  assert.ok(ui.indexOf('value="DD/MM"') < ui.indexOf('value="MM/DD"'), "DD/MM es la primera opción");
+});
+
+test("03/04/2026 en texto: 3 de abril en DD/MM y 4 de marzo en MM/DD", () => {
+  const filas = (f: string) => [H, fila("1", f, "Prueba", "600001", 10, ""), fila("1", f, "", "100001", "", 10)];
+  const dd = validarImportacion(filas("03/04/2026"), ctx({ formatoDeFecha: "DD/MM", mesesConPeriodo: new Set(["2026-03", "2026-04"]) }));
+  const mm = validarImportacion(filas("03/04/2026"), ctx({ formatoDeFecha: "MM/DD", mesesConPeriodo: new Set(["2026-03", "2026-04"]) }));
+  assert.equal(dd.asientos[0].transaction_date, "2026-04-03");
+  assert.equal(mm.asientos[0].transaction_date, "2026-03-04");
+  // La vista previa muestra la fecha leída en palabras y cómo venía en el archivo.
+  assert.equal(fechaEnPalabras(dd.asientos[0].transaction_date), "3 de abril de 2026");
+  assert.equal(fechaEnPalabras(mm.asientos[0].transaction_date), "4 de marzo de 2026");
+  assert.equal(dd.asientos[0].fecha_en_archivo, "03/04/2026");
+});
+
+test("celda de fecha de Excel: no depende del formato, y la hora no corre el día", () => {
+  // 46085 = 04/03/2026; con 18:00 (0,75) antes se redondeaba al 05/03.
+  for (const f of ["DD/MM", "MM/DD"] as const) {
+    assert.equal(parsearFecha(46085, f), "2026-03-04");
+    assert.equal(parsearFecha(46085.75, f), "2026-03-04");
+    assert.equal(parsearFecha(46085.25, f), "2026-03-04");
+  }
+  const r = validarImportacion([H, fila("1", 46085.75, "Prueba", "600001", 10, ""), fila("1", 46085.75, "", "100001", "", 10)],
+    ctx({ mesesConPeriodo: new Set(["2026-03"]) }));
+  assert.equal(r.asientos[0].fecha_en_archivo, "celda de fecha de Excel");
+});
+
+test("un .xlsx real: celda de fecha y texto se leen distinto, y el texto respeta el formato", () => {
+  const ws = XLSX.utils.aoa_to_sheet([H, ["1", "03/04/2026", "Texto", "", "600001", "", "", 10, ""]]);
+  ws["B3"] = { t: "n", v: 46085, z: "dd/mm/yyyy" }; // celda con formato de fecha
+  ws["!ref"] = "A1:I3";
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Asientos");
+  const m = leerHojaDeAsientos(XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
+  assert.equal(m[1][1], "03/04/2026");
+  assert.equal(m[2][1], 46085);
+  assert.equal(parsearFecha(m[1][1], "DD/MM"), "2026-04-03");
+  assert.equal(parsearFecha(m[2][1], "DD/MM"), "2026-03-04");
+});
+
+const NL = String.fromCharCode(10);
+
+test("un CSV: «03/04/2026» llega como TEXTO (antes la librería lo volvía 4 de marzo sin mirar el formato)", () => {
+  // Con BOM, como lo guarda Excel en «CSV UTF-8».
+  const csv = Buffer.from(String.fromCharCode(0xfeff) + [H.join(","), "1,03/04/2026,Prueba,,600001,,,10,", "1,03/04/2026,,,100001,,,,10"].join(NL));
+  const m = leerHojaDeAsientos(csv);
+  assert.equal(m[1][1], "03/04/2026");
+  const r = validarImportacion(m, ctx({ formatoDeFecha: "DD/MM", mesesConPeriodo: new Set(["2026-04"]) }));
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.asientos[0].transaction_date, "2026-04-03");
+  assert.equal(r.asientos[0].total, 10);
+  // La apertura lee igual.
+  assert.equal(leerHojaDeApertura(Buffer.from(["Cuenta,Fecha del documento", "100004,03/04/2026"].join(NL)))[1][1], "03/04/2026");
 });

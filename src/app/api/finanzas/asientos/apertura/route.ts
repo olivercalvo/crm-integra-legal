@@ -8,11 +8,12 @@ import { MutationError } from "@/lib/finanzas/api/errors";
 import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 import { contabilizarApertura, previsualizarApertura } from "@/lib/finanzas/api/apertura";
 import { WorkbookDeAperturaError } from "@/lib/finanzas/import/apertura-workbook";
+import { FORMATO_DE_FECHA_POR_DEFECTO, esFormatoDeFecha } from "@/lib/finanzas/import/asientos-import";
 
 export const runtime = "nodejs";
 
 /**
- * POST /api/finanzas/asientos/apertura (multipart: file, mode = preview | commit, hash)
+ * POST /api/finanzas/asientos/apertura (multipart: file, mode = preview | commit, hash, date_format = MM/DD | DD/MM)
  *
  * preview: valida la plantilla EN SECO (no escribe nada) y devuelve errores por
  * fila, totales por cuenta, el cuadre al corte y lo que impide contabilizar.
@@ -34,6 +35,13 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
     return NextResponse.json({ error: "Se esperaba un archivo" }, { status: 400 });
   }
   const mode = String(form.get("mode") ?? "preview");
+  // Como en la importación de asientos: MM/DD (por defecto) o DD/MM para una
+  // fecha escrita como texto. Otro valor se rechaza: adivinar fecharía mal.
+  const formatoRaw = form.get("date_format");
+  const formato = formatoRaw === null ? FORMATO_DE_FECHA_POR_DEFECTO : String(formatoRaw);
+  if (!esFormatoDeFecha(formato)) {
+    return NextResponse.json({ error: "Elige el formato de fecha del archivo: MM/DD o DD/MM." }, { status: 400 });
+  }
   const file = form.get("file");
   if (!file || typeof file === "string") return NextResponse.json({ error: "Falta el archivo" }, { status: 400 });
   if (file.size === 0) return NextResponse.json({ error: "El archivo está vacío" }, { status: 400 });
@@ -41,7 +49,7 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
   const buffer = Buffer.from(await file.arrayBuffer());
   try {
     if (mode === "preview") {
-      const v = await previsualizarApertura(ctx.db, ctx.tenantId, buffer);
+      const v = await previsualizarApertura(ctx.db, ctx.tenantId, buffer, formato);
       return NextResponse.json({
         hash: v.hash,
         fecha: v.fecha,
@@ -59,7 +67,7 @@ export const POST = conManejoDeAuditoria(async function POST(request: NextReques
       const apagado = rechazoSiPosteoHistoricoApagado();
       if (apagado) return apagado;
       const r = await contabilizarApertura(ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, buffer, file.name,
-        String(form.get("hash") ?? ""));
+        String(form.get("hash") ?? ""), formato);
       return NextResponse.json(r, { status: 201 });
     }
     return NextResponse.json({ error: "Modo inválido (preview | commit)" }, { status: 400 });

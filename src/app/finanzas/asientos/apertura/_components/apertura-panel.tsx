@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import type { CuadreAlCorte } from "@/lib/finanzas/contabilidad/apertura";
 import { MENSAJE_POSTEO_HISTORICO_APAGADO } from "@/lib/finanzas/posteo-historico-mensaje";
+import { FORMATO_DE_FECHA_POR_DEFECTO, type FormatoDeFecha } from "@/lib/finanzas/import/asientos-import";
 
 const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`;
@@ -35,6 +36,9 @@ export function AperturaPanel({ fecha, mesAbierto, habilitado }: { fecha: string
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [confirmar, setConfirmar] = useState(false);
+  // Como en la importación de asientos: cómo leer una fecha escrita como texto.
+  // Contabilizar manda el MISMO formato que se revisó en seco.
+  const [formato, setFormato] = useState<FormatoDeFecha>(FORMATO_DE_FECHA_POR_DEFECTO);
   const [isPending, startTransition] = useTransition();
 
   function enviar(mode: "preview" | "commit") {
@@ -44,6 +48,7 @@ export function AperturaPanel({ fecha, mesAbierto, habilitado }: { fecha: string
       const fd = new FormData();
       fd.append("file", archivo);
       fd.append("mode", mode);
+      fd.append("date_format", formato);
       if (mode === "commit" && vista) fd.append("hash", vista.hash);
       try {
         const res = await fetch("/api/finanzas/asientos/apertura", { method: "POST", body: fd });
@@ -102,11 +107,25 @@ export function AperturaPanel({ fecha, mesAbierto, habilitado }: { fecha: string
             className="min-h-[44px] text-sm"
             aria-label="Archivo de la apertura"
           />
+          <label className="inline-flex min-h-[48px] items-center gap-2 text-sm text-gray-700">
+            Formato de fecha del archivo
+            <select
+              value={formato}
+              onChange={(e) => { setFormato(e.target.value as FormatoDeFecha); setVista(null); setOk(null); }}
+              className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
+            >
+              <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
+              <option value="DD/MM">DD/MM/AAAA (día primero)</option>
+            </select>
+          </label>
           <Button type="button" variant="outline" className="min-h-[48px] gap-2" disabled={!archivo || isPending} onClick={() => enviar("preview")}>
             {isPending ? <Loader2 size={16} className="animate-spin" /> : <FileSearch size={16} />} Revisar en seco
           </Button>
         </div>
-        <p className="text-xs text-gray-500">Revisar no registra nada.</p>
+        <p className="text-xs text-gray-500">
+          Revisar no registra nada. El formato sólo cuenta para las fechas escritas como texto; una celda con formato de
+          fecha de Excel (como las de la plantilla) se lee igual con los dos.
+        </p>
       </div>
 
       {error && <p className="text-red-700" role="alert">{error}</p>}

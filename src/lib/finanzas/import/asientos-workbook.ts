@@ -16,12 +16,12 @@ export function generarPlantillaDeAsientos(
   const wb = XLSX.utils.book_new();
   const ejemplo = [
     [...ENCABEZADOS],
-    // 25/09/2026: la fecha del ejemplo va en DD/MM, el formato por defecto de
-    // la pantalla. Si el archivo va en MM/DD, se elige eso al subirlo.
-    ["1", "25/09/2026", "Depreciación de mobiliario, septiembre", "DEP-09", "", "", "Depreciación del mes", 150, ""],
-    ["1", "25/09/2026", "", "", "", "", "Depreciación acumulada", "", 150],
-    ["2", "25/09/2026", "Provisión de servicios públicos", "", "", "", "", 80.5, ""],
-    ["2", "25/09/2026", "", "", "", "", "", "", 80.5],
+    // 09/25/2026: la fecha del ejemplo va en MM/DD, el formato por defecto de
+    // la pantalla. Si el archivo va en DD/MM, se elige eso al subirlo.
+    ["1", "09/25/2026", "Depreciación de mobiliario, septiembre", "DEP-09", "", "", "Depreciación del mes", 150, ""],
+    ["1", "09/25/2026", "", "", "", "", "Depreciación acumulada", "", 150],
+    ["2", "09/25/2026", "Provisión de servicios públicos", "", "", "", "", 80.5, ""],
+    ["2", "09/25/2026", "", "", "", "", "", "", 80.5],
   ];
   const hoja = XLSX.utils.aoa_to_sheet(ejemplo);
   hoja["!cols"] = [{ wch: 9 }, { wch: 12 }, { wch: 40 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 12 }, { wch: 12 }];
@@ -32,7 +32,7 @@ export function generarPlantillaDeAsientos(
     [],
     ["Columna", "Obligatoria", "Detalle"],
     ["Asiento", "Sí", "Un identificador (1, 2, DEP-SEP…). Las filas con el mismo valor forman UN asiento y tienen que estar juntas."],
-    ["Fecha", "Sí", "DD/MM/AAAA o MM/DD/AAAA según elijas al subir el archivo (por defecto DD/MM/AAAA), o AAAA-MM-DD. Una celda con formato de fecha también vale. La misma en todas las líneas del asiento. El mes tiene que estar abierto."],
+    ["Fecha", "Sí", "MM/DD/AAAA o DD/MM/AAAA según elijas al subir el archivo (por defecto MM/DD/AAAA), o AAAA-MM-DD. Una celda con formato de fecha también vale. La misma en todas las líneas del asiento. El mes tiene que estar abierto."],
     ["Descripción del asiento", "Sí", "Qué operación es (al menos 3 caracteres). Va en la primera línea del asiento."],
     ["Referencia", "No", "El documento que respalda el asiento (cheque, memo). El número AD- lo pone el sistema."],
     ["Cuenta", "Sí", "El código del plan de cuentas (ver la hoja Cuentas). Tiene que existir y estar activa."],

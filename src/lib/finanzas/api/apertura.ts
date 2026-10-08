@@ -29,6 +29,7 @@ import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversi
 import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
 import { leerHojaDeApertura, type FilaPrecargada } from "@/lib/finanzas/import/apertura-workbook";
 import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
+import { FORMATO_DE_FECHA_POR_DEFECTO, type FormatoDeFecha } from "@/lib/finanzas/import/asientos-import";
 
 type DB = SupabaseClient;
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -297,9 +298,15 @@ async function bloqueosParaContabilizar(db: DB, tenantId: string, fecha: string)
   return b;
 }
 
-export async function previsualizarApertura(db: DB, tenantId: string, buffer: Buffer): Promise<VistaPreviaDeApertura> {
+export async function previsualizarApertura(
+  db: DB,
+  tenantId: string,
+  buffer: Buffer,
+  /** Cómo leer `nn/nn/AAAA` escrito como texto (08/10/2026). */
+  formatoDeFecha: FormatoDeFecha = FORMATO_DE_FECHA_POR_DEFECTO
+): Promise<VistaPreviaDeApertura> {
   const { fecha } = await cargarFechaDeApertura(db, tenantId);
-  const ctx = await cargarContextoDeApertura(db, tenantId, fecha);
+  const ctx = { ...(await cargarContextoDeApertura(db, tenantId, fecha)), formatoDeFecha };
   const resultado = validarApertura(leerHojaDeApertura(buffer), ctx);
   const crm = await saldosCrmAlCorte(db, tenantId, fecha);
   return {
@@ -318,12 +325,14 @@ export async function contabilizarApertura(
   userId: string,
   buffer: Buffer,
   fileName: string,
-  hashDeLaVistaPrevia: string
+  hashDeLaVistaPrevia: string,
+  /** El MISMO formato de la vista previa: otro leería otras fechas del mismo archivo. */
+  formatoDeFecha: FormatoDeFecha = FORMATO_DE_FECHA_POR_DEFECTO
 ): Promise<{ apertura_id: string; entry_number: number; reference: string; fecha: string; total_debitos: number }> {
   if (hashDelArchivo(buffer) !== hashDeLaVistaPrevia) {
     throw new MutationError("El archivo no es el mismo que se revisó en la vista previa. Vuelve a subirlo y revísalo.", 409);
   }
-  const v = await previsualizarApertura(db, tenantId, buffer);
+  const v = await previsualizarApertura(db, tenantId, buffer, formatoDeFecha);
   if (v.resultado.errores.length > 0) {
     throw new MutationError(`El archivo tiene ${v.resultado.errores.length} error(es). No se registró nada.`, 422);
   }

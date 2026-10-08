@@ -44,13 +44,14 @@ export const ENCABEZADOS = [
  * no dependen de esto.
  */
 export type FormatoDeFecha = "DD/MM" | "MM/DD";
-export const FORMATOS_DE_FECHA: readonly FormatoDeFecha[] = ["DD/MM", "MM/DD"];
+export const FORMATOS_DE_FECHA: readonly FormatoDeFecha[] = ["MM/DD", "DD/MM"];
 /**
- * El de la pantalla: DD/MM/AAAA, como se escribe en Panamá (Oliver, 08/10/2026).
- * Hasta ese día era MM/DD por la decisión (c) del 30/09; la persona lo cambia en
- * la pantalla y la vista previa muestra la fecha ya leída, en palabras.
+ * El de la pantalla, en la importación de asientos Y en la apertura: MM/DD/AAAA,
+ * lo que decidió Josuarth (decisión (c) del 30/09; confirmado por Oliver el
+ * 08/10/2026). La persona lo cambia en la pantalla, y la vista previa de la
+ * importación muestra la fecha ya leída, en palabras.
  */
-export const FORMATO_DE_FECHA_POR_DEFECTO: FormatoDeFecha = "DD/MM";
+export const FORMATO_DE_FECHA_POR_DEFECTO: FormatoDeFecha = "MM/DD";
 
 export function esFormatoDeFecha(v: unknown): v is FormatoDeFecha {
   return v === "DD/MM" || v === "MM/DD";

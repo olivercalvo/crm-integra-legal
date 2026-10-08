@@ -27,7 +27,10 @@ import { generarPlantillaDeApertura, leerHojaDeApertura } from "@/lib/finanzas/i
 import { partidasDeApertura, partidasDeDiario } from "@/lib/finanzas/reports/partidas-de-diario";
 import { saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 
+// Los ejemplos de este archivo escriben las fechas como texto DD/MM/AAAA: se lo
+// dice el contexto, como lo elige la persona en la pantalla.
 const ctx = (fecha = "2026-06-30"): ContextoDeApertura => ({
+  formatoDeFecha: "DD/MM",
   fechaApertura: fecha,
   cuentas: new Map([
     ["100001", { code: "100001", name: "Banco", account_type: "asset", active: true, cuenta_control: null }],
@@ -179,4 +182,22 @@ test("🔴 la reversión de la apertura lleva SIEMPRE la fecha de la apertura", 
   assert.doesNotMatch(cuerpo, /resolverFechaDeRegistro|hoyEnPanama/);
   const m = readFileSync(path.join(process.cwd(), "sql/pending/101_reversar_apertura.sql"), "utf8");
   assert.match(m, /p_transaction_date <> v_orig_date/);
+});
+
+test("08/10/2026: la fecha escrita como texto se lee con el formato elegido; por defecto MM/DD (decisión (c))", () => {
+  const archivo = [
+    [...ENCABEZADOS_APERTURA],
+    ["100004", "CLI-012", "FAC-1", "05/03/2026", "", 100, ""],
+    ["300002", "", "", "", "", "", 100],
+  ];
+  const sinFormato = { ...ctx(), formatoDeFecha: undefined };
+  assert.equal(validarApertura(archivo, sinFormato).lineas[0].fecha_documento, "2026-05-03", "por defecto MM/DD: 3 de mayo");
+  assert.equal(validarApertura(archivo, ctx()).lineas[0].fecha_documento, "2026-03-05", "DD/MM: 5 de marzo");
+  const imposible = [...archivo.slice(0, 1), ["100004", "CLI-012", "FAC-1", "25/03/2026", "", 100, ""], archivo[2]];
+  const r = validarApertura(imposible, sinFormato);
+  assert.ok(r.errores.some((e) => e.columna === "Fecha del documento" && /MM\/DD\/AAAA/.test(e.mensaje)));
+  // La pantalla ofrece el selector y manda el formato en la revisión y al contabilizar.
+  const panel = readFileSync(path.join(process.cwd(), "src/app/finanzas/asientos/apertura/_components/apertura-panel.tsx"), "utf8");
+  assert.match(panel, /fd\.append\("date_format", formato\)/);
+  assert.ok(panel.indexOf('value="MM/DD"') < panel.indexOf('value="DD/MM"'));
 });

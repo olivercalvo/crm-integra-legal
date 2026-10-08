@@ -207,7 +207,7 @@ test("encabezados que faltan: un solo error que dice cuáles", () => {
 test("la plantilla se vuelve a leer: el ejemplo trae la cuenta vacía y lo dice", () => {
   const buf = Buffer.from(generarPlantillaDeAsientos([{ code: "600001", name: "Gasto", account_type: "expense" }]));
   const matriz = leerHojaDeAsientos(buf);
-  // El ejemplo de la plantilla viene en DD/MM, el formato por defecto (08/10/2026).
+  // El ejemplo de la plantilla viene en MM/DD, el formato por defecto (decisión (c)).
   const r = validarImportacion(matriz, ctx({ formatoDeFecha: FORMATO_DE_FECHA_POR_DEFECTO }));
   assert.equal(r.asientos.length, 2, "dos asientos de ejemplo");
   assert.ok(r.errores.every((e) => e.columna === "Cuenta" && /Falta la cuenta/.test(e.mensaje)));
@@ -318,11 +318,11 @@ test("las advertencias se ven en la vista previa y el contexto real carga las cu
 // librería, celdas de fecha de Excel (con hora) y la fecha leída en la vista previa.
 // ---------------------------------------------------------------------------
 
-test("el formato por defecto es DD/MM/AAAA y va primero en el selector", () => {
-  assert.equal(FORMATO_DE_FECHA_POR_DEFECTO, "DD/MM");
-  assert.equal(FORMATOS_DE_FECHA[0], "DD/MM");
+test("el formato por defecto es MM/DD/AAAA (decisión (c) de Josuarth) y va primero en el selector", () => {
+  assert.equal(FORMATO_DE_FECHA_POR_DEFECTO, "MM/DD");
+  assert.equal(FORMATOS_DE_FECHA[0], "MM/DD");
   const ui = readFileSync(path.join(process.cwd(), "src/app/finanzas/asientos/importar/_components/importar-asientos.tsx"), "utf8");
-  assert.ok(ui.indexOf('value="DD/MM"') < ui.indexOf('value="MM/DD"'), "DD/MM es la primera opción");
+  assert.ok(ui.indexOf('value="MM/DD"') < ui.indexOf('value="DD/MM"'), "MM/DD es la primera opción");
 });
 
 test("03/04/2026 en texto: 3 de abril en DD/MM y 4 de marzo en MM/DD", () => {

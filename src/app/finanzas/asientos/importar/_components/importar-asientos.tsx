@@ -119,8 +119,8 @@ export function ImportarAsientos() {
             }}
             className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
           >
-            <option value="DD/MM">DD/MM/AAAA (día primero)</option>
             <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
+            <option value="DD/MM">DD/MM/AAAA (día primero)</option>
           </select>
         </label>
         {archivo && <span className="text-sm text-gray-600">{archivo.name}</span>}

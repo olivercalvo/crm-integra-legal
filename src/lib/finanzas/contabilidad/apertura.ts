@@ -16,7 +16,12 @@
  *   · no se repite el par tercero + documento.
  */
 
-import { parsearFecha, parsearMonto } from "@/lib/finanzas/import/asientos-import";
+import {
+  FORMATO_DE_FECHA_POR_DEFECTO,
+  parsearFecha,
+  parsearMonto,
+  type FormatoDeFecha,
+} from "@/lib/finanzas/import/asientos-import";
 
 export const ENCABEZADOS_APERTURA = [
   "Cuenta",
@@ -52,6 +57,12 @@ export interface ContextoDeApertura {
   clientes: Map<string, { id: string; nombre: string; dePrueba: boolean }>;
   /** `supplier_number` en mayúsculas → { id, nombre }. */
   proveedores: Map<string, { id: string; nombre: string }>;
+  /**
+   * Cómo leer una fecha escrita como TEXTO `nn/nn/AAAA` (08/10/2026). Sin dato,
+   * el de la pantalla: MM/DD (decisión (c)). Una celda de fecha de Excel, como la
+   * de la plantilla, no depende de esto.
+   */
+  formatoDeFecha?: FormatoDeFecha;
 }
 
 export interface ErrorDeApertura {
@@ -96,6 +107,8 @@ export function validarApertura(matriz: unknown[][], ctx: ContextoDeApertura): R
   const errores: ErrorDeApertura[] = [];
   const lineas: LineaDeApertura[] = [];
   const err = (fila: number, columna: string, mensaje: string) => errores.push({ fila, columna, mensaje });
+  const formato = ctx.formatoDeFecha ?? FORMATO_DE_FECHA_POR_DEFECTO;
+  const ejemploDeFecha = formato === "MM/DD" ? "MM/DD/AAAA" : "DD/MM/AAAA";
 
   const cab = (matriz[0] ?? []).map((c) => String(c ?? "").trim().toLowerCase());
   const col = new Map<string, number>();
@@ -147,11 +160,11 @@ export function validarApertura(matriz: unknown[][], ctx: ContextoDeApertura): R
     const codTercero = texto(celda(f, "Tercero")).toUpperCase();
     const documento = texto(celda(f, "Documento externo")) || null;
     const crudoFecha = celda(f, "Fecha del documento");
-    const fechaDoc = parsearFecha(crudoFecha, "DD/MM");
+    const fechaDoc = parsearFecha(crudoFecha, formato);
     const crudoVence = celda(f, "Vencimiento");
-    const vence = parsearFecha(crudoVence, "DD/MM");
-    if (texto(crudoFecha) !== "" && !fechaDoc) err(n, "Fecha del documento", `«${texto(crudoFecha)}» no es una fecha (DD/MM/AAAA).`);
-    if (texto(crudoVence) !== "" && !vence) err(n, "Vencimiento", `«${texto(crudoVence)}» no es una fecha (DD/MM/AAAA).`);
+    const vence = parsearFecha(crudoVence, formato);
+    if (texto(crudoFecha) !== "" && !fechaDoc) err(n, "Fecha del documento", `«${texto(crudoFecha)}» no es una fecha (${ejemploDeFecha}).`);
+    if (texto(crudoVence) !== "" && !vence) err(n, "Vencimiento", `«${texto(crudoVence)}» no es una fecha (${ejemploDeFecha}).`);
     if (fechaDoc && fechaDoc > ctx.fechaApertura) {
       err(n, "Fecha del documento", `La fecha del documento (${fechaCorta(fechaDoc)}) es posterior a la apertura (${fechaCorta(ctx.fechaApertura)}).`);
     }

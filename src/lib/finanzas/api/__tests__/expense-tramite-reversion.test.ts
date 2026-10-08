@@ -14,6 +14,7 @@
  */
 
 import { test } from "node:test";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -122,7 +123,7 @@ test("el RPC recibe el espejo exacto de construirAsientoDeReversion, con la fech
   const a = f.reg.rpc.args;
   assert.equal(a.p_tenant_id, TENANT);
   assert.equal(a.p_expense_id, GASTO);
-  assert.equal(a.p_transaction_date, new Date().toISOString().slice(0, 10));
+  assert.equal(a.p_transaction_date, hoyEnPanama());
   assert.equal(a.p_reason, "Gasto cargado al caso equivocado");
   const lines = a.p_lines as { account_code: string; debit: number; credit: number }[];
   assert.deepEqual(

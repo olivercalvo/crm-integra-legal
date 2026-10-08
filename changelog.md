@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Fechas en MM/DD por defecto e interruptor en la ventana] - 2026-10-08
+
+Sin migraciones.
+- **Formato de fecha por defecto: MM/DD/AAAA**, en la importación de asientos y en la apertura (decisión (c) de
+  Josuarth del 30/09). El selector y la «Fecha leída» se quedan. La **apertura** gana el mismo selector
+  (`date_format` en `POST /api/finanzas/asientos/apertura`; contabilizar usa el mismo que la revisión en seco).
+  Plantillas, guía (ejemplo de febrero en MM/DD) y tests.
+- **Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`:** se prende en Production el mismo día de la ventana, como
+  último paso después del deploy, con su verificación (runbook `ventana-bloque-1.md` §2, §7 y §8).
+- Guía de carga: sin el paso «Pídele a Oliver que habilite la apertura».
+
 ## [Antigüedad con fecha de corte y formato de fecha de la importación] - 2026-10-08
 
 Sin migraciones.

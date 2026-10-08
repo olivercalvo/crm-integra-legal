@@ -235,7 +235,8 @@ nace real y la acredita (saldo 0.00).
 ### Merge y deploy (D·6, D·7)
 
 `NOTIFY pgrst, 'reload schema';` → merge `develop` → `main` con aprobación de Oliver → verificación
-post-deploy (§6 y §10.3 del runbook viejo) → descongelar → **Accesos (§6 de este documento)**.
+post-deploy (§6 y §10.3 del runbook viejo) → descongelar → **Accesos (§6 de este documento)** → **último paso:
+prender el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO` en Production y verificarlo (§7)**.
 
 El merge lleva, además de lo de cada migración, dos arreglos de código sin migración: usuarios
 desactivados (§4, punto 7) y los mensajes de anulación sin CUFE (§4, punto 8).
@@ -457,15 +458,33 @@ sólo de staging y tiene candado).
   Las pantallas se ven y dejan bajar la plantilla, el Excel en seco y el cuadre al corte; los botones que
   escriben quedan deshabilitados con «Disponible cuando el contador dé el visto bueno», y las rutas responden
   **403** aunque alguien las llame directo (lo exige `posteo-historico.test.ts`).
-- **Producción: queda APAGADO en la ventana.** 🔴 Se prende **sólo con el visto bueno de Josuarth**, y lo prende
-  Oliver: Vercel › proyecto del cliente › Settings › Environment Variables › `FINANZAS_POSTEO_HISTORICO_HABILITADO`
-  = `true`, sólo en **Production**, y **Redeploy** (la variable se lee al arrancar). Es un cambio de env vars en
-  producción: pausa obligatoria (CLAUDE.md). Para volver a apagarlo, se borra la variable y se vuelve a desplegar.
+- **Producción: se prende EL MISMO DÍA DE LA VENTANA, como ÚLTIMO PASO, después del deploy** (Oliver, 08/10/2026).
+  La ventana sólo se hace con el visto bueno de Josuarth a su revisión del Bloque 1, así que ese visto bueno ya
+  cubre el interruptor: no hay una segunda espera. Lo prende Oliver, no un agente: es un cambio de env vars en
+  producción (pausa obligatoria, CLAUDE.md).
+
+  **Paso final de la ventana (después de Accesos, §6):**
+  1. Vercel › proyecto del cliente › Settings › Environment Variables › agregar
+     `FINANZAS_POSTEO_HISTORICO_HABILITADO` = `true`, **sólo en Production** (no en Preview ni Development).
+  2. **Redeploy** del último deployment de Production (la variable se lee al arrancar; sin redeploy sigue
+     apagado).
+  3. **Verificación, sin escribir nada** (una persona, con un usuario **admin** y otro **contador**):
+     - *Asientos de Diario › Apertura (saldos iniciales)*: ya no aparece «Disponible cuando el contador dé el
+       visto bueno.»; subir la plantilla y «Revisar en seco» deja **habilitado** «3. Contabilizar la apertura».
+       **No se aprieta**: la apertura la carga Josuarth (§8).
+     - *Asientos de Diario › Documentos existentes, por mes*: elegir julio y «Ver el mes»; «Contabilizar el mes»
+       queda **habilitado** (sin el aviso del interruptor) si el mes no tiene nada en «Antes de contabilizar».
+       **No se aprieta**: cada mes lo contabiliza una persona cuando Josuarth lo revisa.
+     - Con la **abogada**: Asientos de Diario no está en el menú y `/finanzas/asientos/apertura` rebota (los dos
+       botones siguen siendo de admin y contador).
+  4. Si algo de la verificación falla: borrar la variable y Redeploy (vuelve a apagado), y anotarlo.
+
+  Para volver a apagarlo después, se borra la variable y se vuelve a desplegar.
 - Staging: prendido en `.env.local` (localhost). En los deploys de Preview no está cargada (apagado) hasta que
   se agregue en Vercel para Preview.
 
-**Una vez, antes del primer mes:** las `097`, `098` y `099` ya están aplicadas desde la ventana (sin usar).
-Lo único que falta es prender el interruptor, con el visto bueno de Josuarth.
+**Una vez, antes del primer mes:** las `097`, `098` y `099` ya están aplicadas desde la ventana (sin usar), y el
+interruptor quedó prendido en Production como último paso de la ventana (arriba). No falta nada más.
 
 **Antes, si la ventana no las incluyera (pausa obligatoria: cambio de esquema en producción):**
 1. Respaldo de producción (la tarea programada «Respaldo Base Integra»).
@@ -525,8 +544,9 @@ Concurrencia en la base local del ensayo: `sql/tests/concurrencia-posteo-retroac
 
 **No es parte de la ventana** y no se carga antes de que Josuarth confirme la fecha y los saldos. 🔴 Lo carga
 una persona desde la pantalla, nunca un agente ni un script. Las `100` y `101` ya están aplicadas desde la
-ventana; **«Contabilizar» y «Reversar» quedan apagados** por el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`
-(§7) hasta el visto bueno de Josuarth. Apagado, se puede bajar la plantilla, revisar en seco y ver el cuadre.
+ventana, y **«Contabilizar» y «Reversar» quedan habilitados** para admin y contador desde el último paso de la
+ventana, cuando se prende el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO` en Production (§7, con su
+verificación). Si por algo quedara apagado, igual se puede bajar la plantilla, revisar en seco y ver el cuadre.
 
 1. **La fecha** (Finanzas › Configuración › Parámetros contables › Fecha de la apertura): 30/06/2026 (el día
    anterior al inicio contable, el valor por defecto) o 31/12/2025 (con enero a junio importado por Asientos ›

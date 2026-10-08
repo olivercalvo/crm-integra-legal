@@ -18,8 +18,6 @@ meses no se cargan a mano.
    vas a poner en los archivos.
 3. **Revisa que cada cliente** al que le quede una cuenta por cobrar tenga su ficha con código **CLI-…** (Gestión
    legal › Clientes).
-4. **Pídele a Oliver que habilite la apertura.** El botón «Contabilizar» de la apertura está apagado hasta que tú des
-   el visto bueno; Oliver lo prende.
 
 > ⚠️ **Por qué importa el proveedor en cada línea de gasto:** el anexo de compras de la declaración de renta sale
 > del Libro Mayor de cada cuenta de gasto, con el RUC, el DV y el monto **por proveedor**. Si una línea de gasto entra
@@ -77,9 +75,10 @@ Sirve para probar los reportes de enero (Estado de Resultados, Balance, Mayor) a
 La misma fecha escrita como texto se lee distinto según el formato: **03/04/2026 es el 3 de abril en DD/MM/AAAA y el 4 de
 marzo en MM/DD/AAAA**. Por eso la pantalla pregunta el formato:
 
-- **Por defecto es DD/MM/AAAA** (día primero), como se escribe en Panamá. Si tu archivo viene con el mes primero (como
-  los que exporta QuickBooks en inglés), elige **MM/DD/AAAA** antes de subirlo o después: la vista previa se vuelve a
-  leer sola.
+- **Por defecto es MM/DD/AAAA** (mes primero), como lo decidiste el 30/09. Si un archivo viene con el día primero,
+  elige **DD/MM/AAAA** antes de subirlo o después: la vista previa se vuelve a leer sola.
+- La **apertura** tiene el mismo selector, también con MM/DD/AAAA por defecto. La plantilla de la apertura trae las
+  fechas como celdas de fecha de Excel, que se leen igual con los dos formatos.
 - Una celda con **formato de fecha de Excel** se lee igual en los dos formatos, y si trae hora no cambia el día.
 - **AAAA-MM-DD** (2026-04-03) también vale y no depende del formato.
 - Una fecha que no existe en el formato elegido (por ejemplo 25/09/2026 leída como MM/DD) es error en esa fila.
@@ -95,7 +94,7 @@ Una fila por línea del asiento. Las filas de un mismo asiento van **juntas** y 
 | Columna | Qué va | Obligatoria |
 |---|---|---|
 | Asiento | Un identificador del asiento dentro del archivo (1, 2, 3… o FEB-01). Las filas con el mismo valor forman un asiento | Sí |
-| Fecha | La fecha del movimiento, la misma en todas las líneas del asiento (DD/MM/AAAA por defecto; ver «Las fechas») | Sí |
+| Fecha | La fecha del movimiento, la misma en todas las líneas del asiento (MM/DD/AAAA por defecto; ver «Las fechas») | Sí |
 | Descripción del asiento | Qué operación es (al menos 3 letras). En la primera línea del asiento | Sí |
 | Referencia | El documento que lo respalda (número de factura, cheque) | No |
 | Cuenta | El código de la cuenta (por ejemplo 610008) | Sí |
@@ -106,15 +105,17 @@ Una fila por línea del asiento. Las filas de un mismo asiento van **juntas** y 
 
 ### Ejemplo: dos compras y un cobro de febrero
 
+Las fechas van en MM/DD/AAAA, el formato por defecto (02/05/2026 es el 5 de febrero).
+
 | Asiento | Fecha | Descripción del asiento | Referencia | Cuenta | Tercero | Descripción de la línea | Débito | Crédito |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 05/02/2026 | Compra de útiles | F-4521 | 610008 | PRV-003 | Útiles de oficina | 100.00 | |
-| 1 | 05/02/2026 | | | 200003 | | ITBMS | 7.00 | |
-| 1 | 05/02/2026 | | | 200001 | PRV-003 | | | 107.00 |
-| 2 | 12/02/2026 | Mensajería del mes | F-889 | 500003 | PRV-007 | Mensajería | 45.00 | |
-| 2 | 12/02/2026 | | | 100001 | | Pagado con banco | | 45.00 |
-| 3 | 20/02/2026 | Cobro de la factura FAC-HON-000210 | TR-5530 | 100001 | | Transferencia | 535.00 | |
-| 3 | 20/02/2026 | | | 100004 | CLI-012 | | | 535.00 |
+| 1 | 02/05/2026 | Compra de útiles | F-4521 | 610008 | PRV-003 | Útiles de oficina | 100.00 | |
+| 1 | 02/05/2026 | | | 200003 | | ITBMS | 7.00 | |
+| 1 | 02/05/2026 | | | 200001 | PRV-003 | | | 107.00 |
+| 2 | 02/12/2026 | Mensajería del mes | F-889 | 500003 | PRV-007 | Mensajería | 45.00 | |
+| 2 | 02/12/2026 | | | 100001 | | Pagado con banco | | 45.00 |
+| 3 | 02/20/2026 | Cobro de la factura FAC-HON-000210 | TR-5530 | 100001 | | Transferencia | 535.00 | |
+| 3 | 02/20/2026 | | | 100004 | CLI-012 | | | 535.00 |
 
 Cada asiento cuadra: el 1 suma 107.00 de cada lado, el 2 suma 45.00 y el 3 suma 535.00. En el 2, la cuenta de gasto
 (500003) lleva el proveedor aunque se haya pagado al contado: así entra en el anexo.
@@ -148,7 +149,7 @@ vuelves a subirlo. Las advertencias (en amarillo) no impiden registrar.
 ## El orden, resumido
 
 1. Plan de cuentas revisado; fichas de proveedores y clientes creadas.
-2. Fecha de la apertura: 31/12/2025. Oliver habilita la apertura.
+2. Fecha de la apertura: 31/12/2025.
 3. Apertura al 31/12/2025 (sólo balance) → revisar en seco → contabilizar.
 4. Enero a mano → revisar los reportes de enero.
 5. Febrero, marzo, abril, mayo y junio: un archivo por mes, revisando los reportes de cada mes antes del siguiente.

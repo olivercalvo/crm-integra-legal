@@ -14,8 +14,9 @@ export { MENSAJE_POSTEO_HISTORICO_APAGADO };
  *     FINANZAS_POSTEO_HISTORICO_HABILITADO=true
  *
  * 🔴 Apagado por defecto: sin la variable (o con cualquier otro valor) está
- *    apagado. En producción se prende en Vercel sólo con el visto bueno de
- *    Josuarth (runbook §7 y §8).
+ *    apagado. En producción se prende en Vercel el MISMO DÍA de la ventana,
+ *    como último paso después del deploy (la ventana sólo se hace con el visto
+ *    bueno de Josuarth a su revisión). Runbook §7 y §8, con su verificación.
  *
  * Apagado, las pantallas se ven y dejan bajar la plantilla, el Excel en seco y
  * el cuadre al corte; los botones que escriben quedan deshabilitados con

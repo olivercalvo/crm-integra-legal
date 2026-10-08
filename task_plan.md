@@ -3,9 +3,10 @@
 ## ▶ PARA RETOMAR (08/10/2026: antigüedad al corte y fechas de la importación)
 
 **08/10:** requerimiento 41 hecho (antigüedad con campo «Al», saldo reconstruido al corte, Excel con la fecha). La
-importación de asientos lee DD/MM/AAAA por defecto y muestra la fecha leída en palabras. 🟡 **Josuarth:** en la
-decisión (c) del 30/09 dijo MM/DD/AAAA (K-1 no tiene otra respuesta escrita); si sus archivos vienen así, elige
-MM/DD en la pantalla. Confirmarlo en la revisión del Bloque 1. Sin push: la rama espera la autorización de Oliver.
+importación de asientos y la apertura leen **MM/DD/AAAA por defecto** (decisión (c) de Josuarth del 30/09, que
+responde K-1; Oliver lo confirmó el 08/10), con el selector y la «Fecha leída» en la vista previa de la importación.
+La apertura también tiene el selector. 🔌 **Interruptor:** `FINANZAS_POSTEO_HISTORICO_HABILITADO` se prende en
+Production el mismo día de la ventana, como último paso después del deploy, con su verificación (runbook §7 y §8).
 
 ## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura y cambios chicos)
 
@@ -29,7 +30,7 @@ Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/
 - Aplicadas también **`100`** y **`101`** (07/10 noche, verificación 12/12). Escrito y SIN APLICAR: **`088`**.
 - Apertura ficticia al 30/06/2026 en staging: AD-000002 reversada (asiento 152) y **AD-000003 vigente** (asiento
   153). Desde ahí los reportes de staging ya no suman el `saldo_inicial` del plan de cuentas.
-- Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` en `.env.local` (no en Vercel Preview).
+- Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` en `.env.local` (no en Vercel Preview). En Production se prende el día de la ventana, como último paso (runbook §7).
 - Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
 - Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
   CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las

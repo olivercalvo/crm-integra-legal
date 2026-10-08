@@ -1,5 +1,12 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PARA RETOMAR (08/10/2026: antigüedad al corte y fechas de la importación)
+
+**08/10:** requerimiento 41 hecho (antigüedad con campo «Al», saldo reconstruido al corte, Excel con la fecha). La
+importación de asientos lee DD/MM/AAAA por defecto y muestra la fecha leída en palabras. 🟡 **Josuarth:** en la
+decisión (c) del 30/09 dijo MM/DD/AAAA (K-1 no tiene otra respuesta escrita); si sus archivos vienen así, elige
+MM/DD en la pantalla. Confirmarlo en la revisión del Bloque 1. Sin push: la rama espera la autorización de Oliver.
+
 ## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura y cambios chicos)
 
 **Último cierre (07/10, noche): cambios chicos antes de la ventana, sin migraciones.** Enero a junio va por el

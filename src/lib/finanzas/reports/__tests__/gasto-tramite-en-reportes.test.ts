@@ -29,7 +29,7 @@ function fakeDb(datos: Record<string, unknown[]>) {
   const tabla = (nombre: string) => {
     const q: Record<string, unknown> = {};
     const self = () => q;
-    for (const op of ["select", "eq", "neq", "in", "not", "order", "is", "or", "lt"]) q[op] = self;
+    for (const op of ["select", "eq", "neq", "in", "not", "order", "is", "or", "lt", "lte", "limit"]) q[op] = self;
     q.maybeSingle = async () => ({ data: (datos[nombre] ?? [])[0] ?? null, error: null });
     q.then = (r: (v: unknown) => unknown) => r({ data: datos[nombre] ?? [], error: null });
     return q;
@@ -63,29 +63,34 @@ test("🔒 Antigüedad por pagar: entran las compras y los gastos de trámite EN
     journal_entry_lines: [],
     journal_entries: [],
     business_expenses: [
-      { id: "c1", supplier_id: "prov-1", supplier_name: null, description: "Alquiler", expense_date: "2026-02-01", due_date: "2026-03-01", total: 1000, amount_paid: 400, balance_due: 600 },
+      { id: "c1", supplier_id: "prov-1", supplier_name: null, description: "Alquiler", expense_date: "2026-02-01", due_date: "2026-03-01", total: 1000 },
     ],
     // El loader filtra por posted_entry_id/status en la base; el fake devuelve
     // todo y acá se comprueba que el saldo y el tercero salen bien.
     expenses: [
-      { id: "t1", supplier_id: "prov-1", concept: "Timbres fiscales", date: "2026-09-01", due_date: null, amount: 300, amount_paid: 100, status: "parcialmente_pagado", posted_entry_id: "je-1" },
+      { id: "t1", supplier_id: "prov-1", concept: "Timbres fiscales", date: "2026-09-01", due_date: null, amount: 300, status: "parcialmente_pagado", posted_entry_id: "je-1" },
       { id: "t2", supplier_id: null, concept: "Mensajería", date: "2026-09-10", due_date: "2026-10-10", amount: 50, amount_paid: 0, status: "pendiente_pago", posted_entry_id: "je-2" },
     ],
     suppliers: [{ id: "prov-1", legal_name: "REGISTRO PÚBLICO", trade_name: null }],
-    supplier_payments: [],
+    // Desde el corte (08/10/2026) el saldo se reconstruye con los pagos, no con
+    // `balance_due`: 400 pagados de la compra y 100 del trámite.
+    supplier_payments: [
+      { id: "sp1", business_expense_id: "c1", expense_id: null, kind: "payment", amount: 400, payment_date: "2026-02-15", status: "registrado", updated_at: null },
+      { id: "sp2", business_expense_id: null, expense_id: "t1", kind: "payment", amount: 100, payment_date: "2026-09-05", status: "registrado", updated_at: null },
+    ],
   });
-  const { documentos } = await loadAntiguedad(db as never, TENANT, "pagar");
+  const { documentos } = await loadAntiguedad(db as never, TENANT, "pagar", "2026-10-08");
   const porId = new Map(documentos.map((d) => [d.id, d]));
 
-  assert.equal(porId.get("c1")?.saldo, 600, "la compra: balance_due (total − pagado − acreditado por NC, 066)");
-  assert.equal(porId.get("t1")?.saldo, 200, "el trámite: amount − amount_paid");
+  assert.equal(porId.get("c1")?.saldo, 600, "la compra: total − pagado − acreditado por NC (066)");
+  assert.equal(porId.get("t1")?.saldo, 200, "el trámite: amount − pagado");
   assert.equal(porId.get("t1")?.sourceType, "gasto_tramite");
   assert.equal(porId.get("t1")?.tercero, "REGISTRO PÚBLICO", "agrupa por la ficha del proveedor");
   assert.equal(porId.get("t2")?.tercero, "(sin proveedor)", "sin ficha se nombra, no se esconde (D2)");
   assert.equal(porId.get("t2")?.fechaReferencia, "2026-10-10", "la antigüedad cuenta desde el vencimiento");
 });
 
-test("🔒 Antigüedad por pagar: la consulta de trámite exige asiento y excluye pagados y anulados", () => {
+test("🔒 Antigüedad por pagar: la consulta de trámite exige asiento; pagados y anulados salen por su historia", () => {
   // Es el filtro que cierra FND-010 sin inventar deudas: se lee del código
   // porque el fake no filtra.
   const src = readFileSync(`${process.cwd()}/src/lib/finanzas/reports/antiguedad-source.ts`, "utf8");
@@ -96,5 +101,8 @@ test("🔒 Antigüedad por pagar: la consulta de trámite exige asiento y excluy
     /\.or\(`posted_entry_id\.not\.is\.null,date\.lt\.\$\{inicio\}`\)/,
     "solo los que están en el libro o los contabilizados fuera"
   );
-  assert.match(fn, /\.in\("status", \["pendiente_pago", "parcialmente_pagado"\]\)/, "ni pagados ni anulados");
+  // Al corte (requerimiento 41) se leen también pagados y anulados: pudieron
+  // estar pendientes ese día. Su saldo sale de la historia (antiguedad-al-corte.test.ts).
+  assert.match(fn, /\.in\("status", \["pendiente_pago", "parcialmente_pagado", "pagado", "anulado"\]\)/);
+  assert.match(fn, /g\.status === "anulado" \? .*reversiones\.get\(g\.posted_entry_id\)/, "un anulado deja de existir desde su reversión");
 });

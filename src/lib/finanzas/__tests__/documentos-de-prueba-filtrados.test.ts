@@ -99,7 +99,8 @@ test("las que filtran importan la constante (no un texto suelto que el test no v
 test("los reportes del pedido filtran: antigüedad, estado de cuenta, ITBMS, Pendientes DGI, avisos", () => {
   const filtradas = (archivo: string, tabla: string) =>
     TODAS.filter((c) => c.archivo.replace(/\\/g, "/") === archivo && c.tabla === tabla && c.texto.includes(".eq(DE_PRUEBA, false)")).length;
-  assert.ok(filtradas("src/lib/finanzas/reports/antiguedad-source.ts", "invoices") >= 2, "antigüedad: facturas y cuadre");
+  // Desde el corte (08/10/2026) facturas y cuadre salen de UNA lectura filtrada.
+  assert.ok(filtradas("src/lib/finanzas/reports/antiguedad-source.ts", "invoices") >= 1, "antigüedad: facturas y cuadre");
   assert.ok(filtradas("src/lib/finanzas/reports/antiguedad-source.ts", "payments") >= 1, "antigüedad: saldos a favor");
   assert.ok(filtradas("src/lib/finanzas/reports/antiguedad-source.ts", "credit_notes") >= 1, "antigüedad: NC sin factura");
   assert.ok(filtradas("src/lib/finanzas/reports/estado-cuenta-source.ts", "invoices") >= 2, "estado de cuenta");

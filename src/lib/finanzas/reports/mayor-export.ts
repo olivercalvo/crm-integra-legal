@@ -39,6 +39,8 @@ export interface ContextoExport {
   /** Rango aplicado, si lo hay. */
   desde?: string | null;
   hasta?: string | null;
+  /** Antigüedad: la fecha de corte (`YYYY-MM-DD`, requerimiento 41). */
+  alCorte?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +186,8 @@ export function hojaDeAntiguedad(
   const encabezado: string[][] = [
     [ctx.bufete],
     [tipo === "cobrar" ? "Antigüedad de Cuentas por Cobrar" : "Antigüedad de Cuentas por Pagar"],
+    // La MISMA fecha de corte de la pantalla: saldos y días de atraso son a ese día.
+    ...(ctx.alCorte ? [["Al", ctx.alCorte.split("-").reverse().join("/")]] : []),
     ["Generado", ctx.generadoEl],
     ["Total del auxiliar", antiguedad.control.totalAuxiliar.toFixed(2)],
     [

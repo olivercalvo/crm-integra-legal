@@ -1,7 +1,7 @@
 import { cargarInicioContable, fechaCorta } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, CalendarDays, Info } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { loadAntiguedad, type TipoAntiguedad } from "@/lib/finanzas/reports/antiguedad-source";
@@ -11,6 +11,9 @@ import { StatementHeader, OpeningBalancesNotice } from "../_components/financial
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "../_components/report-meta";
 import { AntiguedadTable } from "./_components/antiguedad-table";
 import { BotonExportar } from "../_components/boton-exportar";
+import { fechaDeCorte } from "@/lib/finanzas/reports/antiguedad-al-corte";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { formatDate } from "@/lib/utils/format-date";
 
 const FINANZAS_ROLES = ["admin", "abogada", "contador"];
 
@@ -25,7 +28,7 @@ function money(n: number): string {
 export default async function AntiguedadPage({
   searchParams,
 }: {
-  searchParams: { tipo?: string };
+  searchParams: { tipo?: string; al?: string };
 }) {
   const ctx = await getAuthenticatedContext();
   if (!FINANZAS_ROLES.includes(ctx.userRole)) {
@@ -35,7 +38,12 @@ export default async function AntiguedadPage({
   const tipo: TipoAntiguedad = searchParams.tipo === "pagar" ? "pagar" : "cobrar";
   const esCobrar = tipo === "cobrar";
 
-  const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo);
+  // Requerimiento 41: la FECHA DE CORTE («Al»). Por defecto hoy en Panamá; una
+  // fecha inválida en la URL cae en hoy.
+  const hoy = hoyEnPanama();
+  const corte = fechaDeCorte(searchParams.al) ?? hoy;
+  const conCorte = corte === hoy ? "" : `&al=${corte}`;
+  const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo, corte);
   const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
   const reporte = buildAntiguedad(documentos, control);
 
@@ -141,14 +149,14 @@ export default async function AntiguedadPage({
       <StatementHeader
         firmName={REPORT_FIRM_NAME}
         title={esCobrar ? "Antigüedad de Cuentas por Cobrar" : "Antigüedad de Cuentas por Pagar"}
-        subtitle="Detallada por documento · clic en un tercero para abrir sus documentos"
+        subtitle={`Al ${formatDate(corte)} · detallada por documento · clic en un tercero para abrir sus documentos`}
         generatedAt={formatGeneratedAt()}
       />
 
       {/* Selector de auxiliar */}
       <div className="inline-flex overflow-hidden rounded-lg border border-integra-navy/20 bg-white">
         <Link
-          href="/finanzas/reportes/aging?tipo=cobrar"
+          href={`/finanzas/reportes/aging?tipo=cobrar${conCorte}`}
           className={
             "min-h-[44px] px-4 py-2.5 text-sm font-medium transition-colors " +
             (esCobrar ? "bg-integra-navy text-white" : "text-gray-700 hover:bg-gray-50")
@@ -157,7 +165,7 @@ export default async function AntiguedadPage({
           Por cobrar
         </Link>
         <Link
-          href="/finanzas/reportes/aging?tipo=pagar"
+          href={`/finanzas/reportes/aging?tipo=pagar${conCorte}`}
           className={
             "min-h-[44px] px-4 py-2.5 text-sm font-medium transition-colors " +
             (!esCobrar ? "bg-integra-navy text-white" : "text-gray-700 hover:bg-gray-50")
@@ -167,7 +175,32 @@ export default async function AntiguedadPage({
         </Link>
       </div>
 
-      <OpeningBalancesNotice />
+      {/* La fecha de corte. Un formulario GET: la fecha queda en la URL y el
+          Excel la toma de ahí, así pantalla y archivo dicen lo mismo. */}
+      <form method="get" className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="tipo" value={tipo} />
+        <label className="flex flex-col text-xs font-medium text-gray-700">
+          Al
+          <input
+            type="date"
+            name="al"
+            defaultValue={corte}
+            className="mt-1 min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
+          />
+        </label>
+        <button
+          type="submit"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-md bg-integra-navy px-4 text-sm font-medium text-white hover:bg-integra-navy/90"
+        >
+          <CalendarDays size={16} /> Ver a esa fecha
+        </button>
+        <p className="w-full text-xs text-gray-500 sm:w-auto sm:pb-3">
+          Toma sólo documentos, cobros, pagos, notas de crédito y partidas con fecha de registro hasta ese día, y cuenta
+          los días de atraso contra esa fecha.
+        </p>
+      </form>
+
+      <OpeningBalancesNotice conFechaDeCorte />
 
       {/* ─────────────────────────────────────────────────────────────────
           LAS TRES CIFRAS DE CONTROL. La guía marca como no negociable que el
@@ -352,7 +385,7 @@ export default async function AntiguedadPage({
           en columnas separadas.
         </p>
         <BotonExportar
-          href={`/api/finanzas/reportes/aging/export?tipo=${tipo}`}
+          href={`/api/finanzas/reportes/aging/export?tipo=${tipo}&al=${corte}`}
           nombreSugerido={`Antiguedad_${esCobrar ? "CxC" : "CxP"}.xlsx`}
         />
       </div>

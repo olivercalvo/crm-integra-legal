@@ -8,9 +8,14 @@ import { hojaDeAntiguedad } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
 import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
+import { fechaDeCorte } from "@/lib/finanzas/reports/antiguedad-al-corte";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 
 /**
- * GET /api/finanzas/reportes/aging/export?tipo=cobrar|pagar
+ * GET /api/finanzas/reportes/aging/export?tipo=cobrar|pagar&al=AAAA-MM-DD
+ *
+ * `al` es la fecha de corte de la pantalla (requerimiento 41); sin ella, hoy en
+ * Panamá. El Excel la lleva en el encabezado y en el nombre del archivo.
  *
  * La antigüedad en Excel, con el mismo motor que el mayor. Salió gratis: el
  * reporte ya estaba detallado por documento, que es la forma en que una planilla
@@ -32,9 +37,10 @@ export const GET = conManejoDeAuditoria(async function GET(request: NextRequest)
 
   const sp = new URL(request.url).searchParams;
   const tipo: TipoAntiguedad = sp.get("tipo") === "pagar" ? "pagar" : "cobrar";
+  const corte = fechaDeCorte(sp.get("al")) ?? hoyEnPanama();
 
   try {
-    const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo);
+    const { documentos, control } = await loadAntiguedad(ctx.db, ctx.tenantId, tipo, corte);
     const reporte = buildAntiguedad(documentos, control);
 
     // E9: una partida de diario no es un documento (su id es "asiento:tercero",
@@ -64,13 +70,14 @@ export const GET = conManejoDeAuditoria(async function GET(request: NextRequest)
       hojaDeAntiguedad(reporte, tipo, terceros, {
         bufete: REPORT_FIRM_NAME,
         generadoEl: formatGeneratedAt(),
+        alCorte: corte,
       }),
     ]);
 
     const filename = `${nombreDeArchivo([
       "Antiguedad",
       tipo === "cobrar" ? "Cuentas_por_Cobrar" : "Cuentas_por_Pagar",
-      new Date().toISOString().slice(0, 10),
+      `al_${corte}`,
     ])}.xlsx`;
 
     return new NextResponse(new Uint8Array(buffer), {

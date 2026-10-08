@@ -28,6 +28,14 @@ import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/conta
 import { aperturaRegistrada, saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import {
+  diasAlCorte,
+  fechaDeAplicacion,
+  saldoAlCorte,
+  vigenteAlCorte,
+  type Baja,
+} from "@/lib/finanzas/reports/antiguedad-al-corte";
 import type {
   ControlMedido,
   DocumentoPendiente,
@@ -57,24 +65,18 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-/** Días entre una fecha y hoy. Positivo = ya pasó. */
-function diasDesde(fecha: string): number {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const d = new Date(`${fecha}T00:00:00`);
-  return Math.round((hoy.getTime() - d.getTime()) / 86_400_000);
-}
-
 /**
  * Saldo de la cuenta control: apertura + movimientos del ledger.
  *
  * Se calcula igual que en `accounting-source.ts` a propósito — es el número que
  * muestra el Balance General, y compararse contra otra cosa no probaría nada.
+ * Al corte: sólo los asientos con fecha de registro hasta ese día.
  */
 async function saldoDeCuentaControl(
   db: DB,
   tenantId: string,
-  code: string
+  code: string,
+  corte: string
 ): Promise<Omit<ControlMedido, "sinAsiento">> {
   const { data: cuenta } = await db
     .from("chart_of_accounts")
@@ -95,9 +97,10 @@ async function saldoDeCuentaControl(
   const c = cuenta as { id: string; code: string; name: string; saldo_inicial: number | string };
   const { data: lineas } = await db
     .from("journal_entry_lines")
-    .select("debit, credit")
+    .select("debit, credit, journal_entries!inner(transaction_date)")
     .eq("tenant_id", tenantId)
-    .eq("account_id", c.id);
+    .eq("account_id", c.id)
+    .lte("journal_entries.transaction_date", corte);
 
   let neto = 0;
   for (const l of (lineas ?? []) as { debit: number | string; credit: number | string }[]) {
@@ -121,14 +124,15 @@ async function saldoDeCuentaControl(
  * tercero del auxiliar son partidas de la tabla; las que no lo tienen (lo
  * anterior a la 071) siguen en la explicación de la diferencia (D5). Una
  * `reversion` no se lee: se usa para descartar los asientos que ya se
- * reversaron, que con su espejo suman cero en el mayor.
+ * reversaron, que con su espejo suman cero en el mayor. Vuelve la FECHA de cada
+ * reversión: al corte anterior, el asiento todavía contaba.
  */
 async function lineasDeDiarioContraControl(
   db: DB,
   tenantId: string,
   code: string
-): Promise<{ lineas: LineaDeControl[]; reversados: Set<string> }> {
-  const vacio = { lineas: [] as LineaDeControl[], reversados: new Set<string>() };
+): Promise<{ lineas: LineaDeControl[]; reversiones: Map<string, string> }> {
+  const vacio = { lineas: [] as LineaDeControl[], reversiones: new Map<string, string>() };
   const { data: cuenta } = await db
     .from("chart_of_accounts")
     .select("id")
@@ -199,518 +203,513 @@ async function lineasDeDiarioContraControl(
   }
   const { data: espejos } = await db
     .from("journal_entries")
-    .select("reverses_entry_id")
+    .select("reverses_entry_id, transaction_date")
     .eq("tenant_id", tenantId)
     .in("reverses_entry_id", ids);
-  const reversados = new Set(
-    ((espejos ?? []) as { reverses_entry_id: string | null }[])
-      .map((e) => e.reverses_entry_id)
-      .filter((v): v is string => !!v)
-  );
-  return { lineas, reversados };
+  const reversiones = new Map<string, string>();
+  for (const e of (espejos ?? []) as { reverses_entry_id: string | null; transaction_date: string }[]) {
+    if (e.reverses_entry_id) reversiones.set(e.reverses_entry_id, String(e.transaction_date).slice(0, 10));
+  }
+  return { lineas, reversiones };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AL CORTE (requerimiento 41, 08/10/2026). Cada saldo se RECONSTRUYE a la
+// fecha de corte con su historia (`antiguedad-al-corte.ts`): el documento desde
+// su fecha de registro, cada cobro, pago, NC o aplicación desde la suya, y lo
+// reversado o anulado hasta la fecha de registro de la reversión. Con el corte
+// en hoy da lo mismo que `balance_due`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const d10 = (v: unknown) => String(v).slice(0, 10);
+const diaEnPanama = (ts: string | null | undefined) => (ts ? hoyEnPanama(new Date(ts)) : null);
+const mayor = (a: string, b: string | null) => (b && b > a ? b : a);
+
+/** source_id → id de SU asiento, para un tipo de documento. */
+async function asientosDe(db: DB, tenantId: string, sourceType: string): Promise<Map<string, string>> {
+  const { data } = await db
+    .from("journal_entries")
+    .select("id, source_id")
+    .eq("tenant_id", tenantId)
+    .eq("source_type", sourceType);
+  const m = new Map<string, string>();
+  for (const e of (data ?? []) as { id: string; source_id: string | null }[]) if (e.source_id) m.set(e.source_id, e.id);
+  return m;
+}
+
+/** Asiento reversado → fecha de registro de su reversión. */
+async function fechasDeReversion(db: DB, tenantId: string): Promise<Map<string, string>> {
+  const { data } = await db
+    .from("journal_entries")
+    .select("reverses_entry_id, transaction_date")
+    .eq("tenant_id", tenantId)
+    .not("reverses_entry_id", "is", null);
+  const m = new Map<string, string>();
+  for (const e of (data ?? []) as { reverses_entry_id: string | null; transaction_date: string }[]) {
+    if (e.reverses_entry_id) m.set(e.reverses_entry_id, d10(e.transaction_date));
+  }
+  return m;
+}
+
+function nombreDeProveedor(p: { legal_name?: string; trade_name?: string | null } | null | undefined): string {
+  return p ? p.trade_name?.trim() || p.legal_name || "" : "";
+}
+
+function uno<T>(v: T | T[] | null | undefined): T | null {
+  return (Array.isArray(v) ? v[0] : v) ?? null;
+}
+
+interface Auxiliar {
+  documentos: DocumentoPendiente[];
+  sinAsiento: SinAsiento;
 }
 
 /**
- * Facturas pendientes de cobro.
+ * POR COBRAR: facturas (y ND) con su saldo al corte, los SALDOS A FAVOR de los
+ * cobros (074) y de las NC sin factura (E8) en negativo, y lo que no llega al
+ * mayor (causa 2 de la diferencia).
  *
- * ⚠️ El filtro va por STATUS, no por `balance_due > 0`. Una factura anulada, en
- * borrador o cancelada antes de emitirse tiene `balance_due` mayor que cero
- * —porque esa columna es `grand_total − amount_paid` y no mira el estado— pero
- * NO es una cuenta por cobrar. Sumarlas infla el auxiliar con documentos que no
- * son deuda de nadie.
+ * ⚠️ Se leen también las facturas PAGADAS y ANULADAS: al corte pudieron estar
+ * pendientes. El saldo sale de la historia, no del `status` de hoy. Una factura
+ * acreditada al 100% por NC (D3, Bloque 5) da saldo 0 y no se lista.
  */
-async function facturasPendientes(db: DB, tenantId: string, inicio: string): Promise<DocumentoPendiente[]> {
-  const { data, error } = await db
-    .from("invoices")
-    .select("id, invoice_number, issue_date, due_date, balance_due, client_id, clients!inner(id, name)")
-    .eq("tenant_id", tenantId)
-    .eq(DE_PRUEBA, false)
-    .in("status", ["emitida", "parcialmente_pagada"])
-    .order("due_date");
-
-  if (error) {
-    console.error("[finanzas/antiguedad] facturasPendientes failed", error);
+async function auxiliarCobrar(db: DB, tenantId: string, inicio: string, corte: string): Promise<Auxiliar> {
+  const [facturas, aplicaciones, reversadas, cobros, notas, aplicacionesDeNotas, asFactura, asCobro, asNota, reversiones] =
+    await Promise.all([
+      db
+        .from("invoices")
+        .select("id, invoice_number, issue_date, accounting_date, due_date, grand_total, status, cancelled_at, client_id, clients!inner(id, name)")
+        .eq("tenant_id", tenantId)
+        .eq(DE_PRUEBA, false)
+        .in("status", ["emitida", "parcialmente_pagada", "pagada", "anulada"])
+        .order("due_date"),
+      db
+        .from("payment_applications")
+        .select("payment_id, invoice_id, amount_applied, applied_at, created_at, payments(payment_date, created_at)")
+        .eq("tenant_id", tenantId),
+      // Lo que se borró al reversar un cobro (046): al corte anterior, restaba.
+      db
+        .from("payment_reversals")
+        .select("payment_id, invoice_id, amount_applied, reversed_at, payments(payment_date)")
+        .eq("tenant_id", tenantId),
+      db
+        .from("payments")
+        .select("id, payment_number, payment_date, amount, status, created_at, updated_at, client_id, clients!inner(id, name)")
+        .eq("tenant_id", tenantId)
+        .eq(DE_PRUEBA, false),
+      db
+        .from("credit_notes")
+        .select("id, credit_note_number, invoice_id, accounting_date, issue_date, grand_total, status, cancelled_at, client_id, clients(name)")
+        .eq("tenant_id", tenantId)
+        .eq(DE_PRUEBA, false)
+        .in("status", ["emitida", "anulada"]),
+      db.from("credit_note_applications").select("credit_note_id, invoice_id, amount_applied, created_at").eq("tenant_id", tenantId),
+      asientosDe(db, tenantId, "factura"),
+      asientosDe(db, tenantId, "pago"),
+      asientosDe(db, tenantId, "nota_credito"),
+      fechasDeReversion(db, tenantId),
+    ]);
+  if (facturas.error) {
+    console.error("[finanzas/antiguedad] facturas failed", facturas.error);
     throw new Error("No se pudieron leer las facturas pendientes");
   }
 
-  type Fila = {
-    id: string;
-    invoice_number: string;
-    issue_date: string;
-    due_date: string;
-    balance_due: number | string;
-    client_id: string;
-    clients: { id: string; name: string };
+  // Hasta cuándo restó un cobro: la fecha de registro de su reversión.
+  const cobroReversadoEl = (id: string, status?: string, actualizado?: string | null) => {
+    const asiento = asCobro.get(id);
+    const f = asiento ? reversiones.get(asiento) : undefined;
+    return f ?? (status === "anulado" ? diaEnPanama(actualizado) : null);
   };
+  type Cobro = {
+    id: string; payment_number: string | null; payment_date: string; amount: number | string; status: string;
+    created_at: string; updated_at: string | null; client_id: string; clients: { id: string; name: string };
+  };
+  const listaDeCobros = (cobros.data ?? []) as unknown as Cobro[];
+  const estadoDeCobro = new Map(listaDeCobros.map((c) => [c.id, c]));
 
-  // Por SALDO, no solo por status (D3, Bloque 5): una factura acreditada al
-  // 100% por nota de crédito sigue `emitida` con `balance_due = 0` — desde la
-  // 051 `balance_due` ya resta `credited_total`— y no es una cuenta por cobrar.
-  return ((data ?? []) as unknown as Fila[])
-    .filter((f) => Number(f.balance_due) > 0.005)
-    .map((f) => ({
+  // Las bajas de cada factura y lo aplicado de cada cobro / NC, con su fecha.
+  const bajas = new Map<string, Baja[]>();
+  const aplicadoDe = new Map<string, Baja[]>();
+  const sumar = (m: Map<string, Baja[]>, id: string, b: Baja) => m.set(id, [...(m.get(id) ?? []), b]);
+
+  type App = {
+    payment_id: string; invoice_id: string; amount_applied: number | string; applied_at: string | null;
+    created_at: string | null; payments: { payment_date: string; created_at: string | null } | null;
+  };
+  const apps = (aplicaciones.data ?? []) as unknown as App[];
+  for (const a of apps) {
+    const p = uno(a.payments);
+    const c = estadoDeCobro.get(a.payment_id);
+    const fecha = p
+      ? fechaDeAplicacion(d10(p.payment_date), p.created_at, a.applied_at ?? a.created_at, hoyEnPanama)
+      : diaEnPanama(a.applied_at ?? a.created_at) ?? "0000-01-01";
+    const b = { fecha, monto: Number(a.amount_applied), hasta: cobroReversadoEl(a.payment_id, c?.status, c?.updated_at) };
+    sumar(bajas, a.invoice_id, b);
+    sumar(aplicadoDe, a.payment_id, b);
+  }
+  type Rev = { payment_id: string; invoice_id: string; amount_applied: number | string; reversed_at: string | null; payments: { payment_date: string } | null };
+  for (const r of (reversadas.data ?? []) as unknown as Rev[]) {
+    const p = uno(r.payments);
+    const b = {
+      fecha: p ? d10(p.payment_date) : "0000-01-01",
+      monto: Number(r.amount_applied),
+      hasta: cobroReversadoEl(r.payment_id) ?? diaEnPanama(r.reversed_at),
+    };
+    sumar(bajas, r.invoice_id, b);
+    sumar(aplicadoDe, r.payment_id, b);
+  }
+
+  type Nota = {
+    id: string; credit_note_number: string; invoice_id: string | null; accounting_date: string | null; issue_date: string;
+    grand_total: number | string; status: string; cancelled_at: string | null; client_id: string; clients: { name: string } | null;
+  };
+  const listaDeNotas = (notas.data ?? []) as unknown as Nota[];
+  const notaReversadaEl = (n: Nota) => {
+    if (n.status !== "anulada") return null;
+    const asiento = asNota.get(n.id);
+    return (asiento ? reversiones.get(asiento) : undefined) ?? diaEnPanama(n.cancelled_at);
+  };
+  const fechaDeNota = (n: Nota) => d10(n.accounting_date ?? n.issue_date);
+  const notaPorId = new Map(listaDeNotas.map((n) => [n.id, n]));
+  for (const n of listaDeNotas) {
+    // La NC nacida sobre la factura la acredita entera desde su fecha de registro.
+    if (n.invoice_id) sumar(bajas, n.invoice_id, { fecha: fechaDeNota(n), monto: Number(n.grand_total), hasta: notaReversadaEl(n) });
+  }
+  for (const a of (aplicacionesDeNotas.data ?? []) as { credit_note_id: string; invoice_id: string; amount_applied: number | string; created_at: string | null }[]) {
+    const n = notaPorId.get(a.credit_note_id);
+    const fecha = mayor(n ? fechaDeNota(n) : "0000-01-01", diaEnPanama(a.created_at));
+    const b = { fecha, monto: Number(a.amount_applied), hasta: n ? notaReversadaEl(n) : null };
+    sumar(bajas, a.invoice_id, b);
+    sumar(aplicadoDe, a.credit_note_id, b);
+  }
+
+  // ── Facturas ───────────────────────────────────────────────────────────────
+  type Factura = {
+    id: string; invoice_number: string; issue_date: string; accounting_date: string | null; due_date: string;
+    grand_total: number | string; status: string; cancelled_at: string | null; client_id: string; clients: { id: string; name: string };
+  };
+  const documentos: DocumentoPendiente[] = [];
+  const sinAsientoDocs = { cantidad: 0, monto: 0 };
+  const fueraDocs = { cantidad: 0, monto: 0 };
+  for (const f of (facturas.data ?? []) as unknown as Factura[]) {
+    const desde = d10(f.accounting_date ?? f.issue_date);
+    const asiento = asFactura.get(f.id);
+    const finEn =
+      f.status === "anulada" ? (asiento ? reversiones.get(asiento) : undefined) ?? diaEnPanama(f.cancelled_at) ?? desde : null;
+    const saldo = saldoAlCorte({ desde, total: Number(f.grand_total), bajas: bajas.get(f.id) ?? [], finEn }, corte);
+    if (saldo === null || saldo <= 0.005) continue;
+    const vence = d10(f.due_date);
+    // 096: anterior al inicio contable. Sigue en la antigüedad; su saldo está
+    // en el saldo inicial de 100004, no en un asiento del CRM.
+    const fuera = esContabilizadoFuera(f.issue_date, inicio);
+    documentos.push({
       id: f.id,
       numero: f.invoice_number,
       tercero: f.clients.name,
       terceroId: f.client_id,
-      fechaReferencia: String(f.due_date).slice(0, 10),
-      diasVencido: diasDesde(String(f.due_date).slice(0, 10)),
-      saldo: round2(Number(f.balance_due)),
+      fechaReferencia: vence,
+      diasVencido: diasAlCorte(vence, corte),
+      saldo,
       sourceType: "factura",
-      // 096: anterior al inicio contable. Sigue en la antigüedad; su saldo está
-      // en el saldo inicial de 100004, no en un asiento del CRM.
-      contabilizadoFuera: esContabilizadoFuera(f.issue_date, inicio),
-    }));
-}
-
-/**
- * 074: SALDOS A FAVOR de clientes (lo que un cobro dejó sin aplicar), en
- * NEGATIVO. El asiento del cobro acreditó 100004 por el TOTAL, así que el
- * excedente ya está en el mayor; si el auxiliar no lo restara, la antigüedad no
- * cuadraría contra 100004. Sólo cobros CONTABILIZADOS: uno sin asiento no movió
- * el mayor. Va en el tramo corriente (un saldo a favor no vence; P-5a de
- * Josuarth puede pedir una columna aparte).
- */
-async function saldosAFavor(db: DB, tenantId: string): Promise<DocumentoPendiente[]> {
-  const { data, error } = await db
-    .from("payments")
-    .select("id, payment_number, payment_date, amount_unapplied, client_id, clients!inner(id, name)")
-    .eq("tenant_id", tenantId)
-    .eq(DE_PRUEBA, false)
-    .neq("status", "anulado")
-    .gt("amount_unapplied", 0.005);
-  if (error) {
-    console.error("[finanzas/antiguedad] saldosAFavor failed", error);
-    throw new Error("No se pudieron leer los saldos a favor");
-  }
-  type Fila = {
-    id: string;
-    payment_number: string | null;
-    payment_date: string;
-    amount_unapplied: number | string;
-    client_id: string;
-    clients: { id: string; name: string };
-  };
-  const filas = (data ?? []) as unknown as Fila[];
-  if (filas.length === 0) return [];
-  const { data: asientos } = await db
-    .from("journal_entries")
-    .select("source_id")
-    .eq("tenant_id", tenantId)
-    .eq("source_type", "pago")
-    .in("source_id", filas.map((f) => f.id));
-  const enElLibro = new Set(((asientos ?? []) as { source_id: string }[]).map((a) => a.source_id));
-  return filas
-    .filter((f) => enElLibro.has(f.id))
-    .map((f) => ({
-      id: f.id,
-      numero: `${f.payment_number ?? "Cobro"} (saldo a favor)`,
-      tercero: f.clients.name,
-      terceroId: f.client_id,
-      fechaReferencia: String(f.payment_date).slice(0, 10),
-      diasVencido: 0,
-      saldo: -round2(Number(f.amount_unapplied)),
-      sourceType: "pago",
-    }));
-}
-
-/**
- * E8 (`076`): las NOTAS DE CRÉDITO SIN DOCUMENTO son saldo a favor del tercero,
- * en NEGATIVO, igual que el excedente de un cobro. Su asiento ya acreditó
- * 100004 (venta) o debitó 200001 (compra) con el cliente o el proveedor, así
- * que sin restarlas acá la antigüedad no cuadraría contra el mayor. Lo que ya
- * se aplicó a una factura o compra ya bajó el saldo de ese documento y no se
- * vuelve a restar. Sólo las que están en el libro.
- */
-async function saldosAFavorDeNotas(db: DB, tenantId: string, tipo: TipoAntiguedad): Promise<DocumentoPendiente[]> {
-  const venta = tipo === "cobrar";
-  const { data, error } = venta
-    ? await db
-        .from("credit_notes")
-        .select("id, credit_note_number, accounting_date, grand_total, client_id, clients!inner(name)")
-        .eq("tenant_id", tenantId)
-        .eq(DE_PRUEBA, false)
-        .eq("status", "emitida")
-        .is("invoice_id", null)
-    : await db
-        .from("supplier_credit_notes")
-        .select("id, credit_note_number, issue_date, grand_total, supplier_id, suppliers!inner(legal_name, trade_name)")
-        .eq("tenant_id", tenantId)
-        .eq("status", "emitida")
-        .is("business_expense_id", null);
-  if (error) {
-    console.error("[finanzas/antiguedad] saldosAFavorDeNotas failed", error);
-    throw new Error("No se pudieron leer las notas de crédito con saldo a favor");
-  }
-  const filas = (data ?? []) as unknown as Record<string, unknown>[];
-  if (filas.length === 0) return [];
-  const ids = filas.map((f) => String(f.id));
-
-  const [{ data: apps }, { data: asientos }] = await Promise.all([
-    db
-      .from(venta ? "credit_note_applications" : "supplier_credit_note_applications")
-      .select("credit_note_id, amount_applied")
-      .eq("tenant_id", tenantId)
-      .in("credit_note_id", ids),
-    db
-      .from("journal_entries")
-      .select("source_id")
-      .eq("tenant_id", tenantId)
-      .eq("source_type", venta ? "nota_credito" : "nota_credito_proveedor")
-      .in("source_id", ids),
-  ]);
-  const aplicado = new Map<string, number>();
-  for (const a of (apps ?? []) as { credit_note_id: string; amount_applied: number | string }[]) {
-    aplicado.set(a.credit_note_id, (aplicado.get(a.credit_note_id) ?? 0) + Number(a.amount_applied));
-  }
-  const enElLibro = new Set(((asientos ?? []) as { source_id: string }[]).map((x) => x.source_id));
-
-  const partidas: DocumentoPendiente[] = [];
-  for (const f of filas) {
-    const id = String(f.id);
-    if (!enElLibro.has(id)) continue;
-    const saldo = round2(Number(f.grand_total) - (aplicado.get(id) ?? 0));
-    if (saldo <= 0.005) continue;
-    const crudo = (venta ? f.clients : f.suppliers) as unknown;
-    const t = (Array.isArray(crudo) ? crudo[0] : crudo) as
-      | { name?: string; legal_name?: string; trade_name?: string | null }
-      | null
-      | undefined;
-    partidas.push({
-      id,
-      numero: `${f.credit_note_number} (saldo a favor)`,
-      tercero: venta ? t?.name ?? "" : t?.trade_name?.trim() || t?.legal_name || "",
-      terceroId: String(venta ? f.client_id : f.supplier_id),
-      fechaReferencia: String(venta ? f.accounting_date : f.issue_date).slice(0, 10),
-      diasVencido: 0,
-      saldo: -saldo,
-      sourceType: venta ? "nota_credito" : "nota_credito_proveedor",
+      contabilizadoFuera: fuera,
     });
-  }
-  return partidas;
-}
-
-/**
- * Gastos del bufete pendientes de pago.
- *
- * Agrupa por `supplier_id` —la ficha del proveedor— y cuenta la antigüedad desde
- * `due_date`. Los dos campos llegaron con la migración 033; ver el encabezado.
- */
-async function gastosPendientes(db: DB, tenantId: string, inicio: string): Promise<DocumentoPendiente[]> {
-  // Desde la 048 una compra puede estar PARCIALMENTE pagada: el saldo es
-  // `total − amount_paid`, no el total, y entran las dos que no están `pagado`.
-  const { data, error } = await db
-    .from("business_expenses")
-    .select("id, supplier_id, supplier_name, description, expense_date, due_date, total, amount_paid, balance_due")
-    .eq("tenant_id", tenantId)
-    .neq("status", "pagado")
-    .order("due_date");
-
-  if (error) {
-    console.error("[finanzas/antiguedad] gastosPendientes failed", error);
-    throw new Error("No se pudieron leer los gastos pendientes");
-  }
-
-  type Fila = {
-    id: string;
-    supplier_id: string | null;
-    supplier_name: string | null;
-    description: string | null;
-    expense_date: string;
-    due_date: string | null;
-    total: number | string;
-    amount_paid: number | string;
-    balance_due: number | string;
-  };
-
-  // `balance_due` (066): total − pagado − acreditado por NC del proveedor.
-  const saldoDe = (g: Fila) => round2(Number(g.balance_due));
-  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => saldoDe(g) > 0.005);
-
-  // El nombre sale de la ficha, en una query aparte. Así dos gastos del mismo
-  // proveedor muestran el MISMO nombre aunque se hayan tipeado distinto.
-  const ids = Array.from(
-    new Set(filas.map((g) => g.supplier_id).filter((v): v is string => !!v))
-  );
-  const nombres = new Map<string, string>();
-  if (ids.length > 0) {
-    const { data: provs } = await db
-      .from("suppliers")
-      .select("id, legal_name, trade_name")
-      .eq("tenant_id", tenantId)
-      .in("id", ids);
-    for (const p of (provs ?? []) as {
-      id: string;
-      legal_name: string;
-      trade_name: string | null;
-    }[]) {
-      nombres.set(p.id, p.trade_name?.trim() || p.legal_name);
+    if (!asiento) {
+      sinAsientoDocs.cantidad += 1;
+      sinAsientoDocs.monto += saldo;
+      if (fuera) {
+        fueraDocs.cantidad += 1;
+        fueraDocs.monto += saldo;
+      }
     }
   }
 
-  return filas.map((g) => {
-    // Sin vencimiento cargado se cae en la fecha del gasto, que equivale a
-    // tratarlo como contado. Es el comportamiento viejo, no un caso de error.
-    const referencia = String(g.due_date ?? g.expense_date).slice(0, 10);
-    const nombreFicha = g.supplier_id ? nombres.get(g.supplier_id) : undefined;
+  // ── 074: SALDOS A FAVOR de los cobros, en NEGATIVO ─────────────────────────
+  // El asiento del cobro acreditó 100004 por el TOTAL, así que el excedente ya
+  // está en el mayor. Sólo cobros CONTABILIZADOS. Tramo corriente (no vence).
+  for (const c of listaDeCobros) {
+    if (!asCobro.has(c.id)) continue;
+    const fecha = d10(c.payment_date);
+    if (!vigenteAlCorte(fecha, cobroReversadoEl(c.id, c.status, c.updated_at), corte)) continue;
+    const saldo = saldoAlCorte({ desde: fecha, total: Number(c.amount), bajas: aplicadoDe.get(c.id) ?? [] }, corte) ?? 0;
+    if (saldo <= 0.005) continue;
+    documentos.push({
+      id: c.id,
+      numero: `${c.payment_number ?? "Cobro"} (saldo a favor)`,
+      tercero: c.clients.name,
+      terceroId: c.client_id,
+      fechaReferencia: fecha,
+      diasVencido: 0,
+      saldo: -saldo,
+      sourceType: "pago",
+    });
+  }
 
-    return {
-      id: g.id,
-      numero: g.description?.trim() || "(sin descripción)",
-      tercero: nombreFicha ?? g.supplier_name?.trim() ?? "(sin proveedor)",
-      // Ya hay id al que agrupar y enlazar. Un gasto sin ficha sigue cayendo en
-      // null y se agrupa por su texto, como antes.
-      terceroId: g.supplier_id,
-      fechaReferencia: referencia,
-      diasVencido: diasDesde(referencia),
-      saldo: saldoDe(g),
-      sourceType: "gasto",
-      contabilizadoFuera: esContabilizadoFuera(g.expense_date, inicio),
-    };
-  });
+  // ── E8: NC SIN FACTURA, saldo a favor en NEGATIVO ──────────────────────────
+  for (const n of listaDeNotas) {
+    if (n.invoice_id || !asNota.has(n.id)) continue;
+    const fecha = fechaDeNota(n);
+    if (!vigenteAlCorte(fecha, notaReversadaEl(n), corte)) continue;
+    const saldo = saldoAlCorte({ desde: fecha, total: Number(n.grand_total), bajas: aplicadoDe.get(n.id) ?? [] }, corte) ?? 0;
+    if (saldo <= 0.005) continue;
+    documentos.push({
+      id: n.id,
+      numero: `${n.credit_note_number} (saldo a favor)`,
+      tercero: uno(n.clients)?.name ?? "",
+      terceroId: n.client_id,
+      fechaReferencia: fecha,
+      diasVencido: 0,
+      saldo: -saldo,
+      sourceType: "nota_credito",
+    });
+  }
+
+  // ── Cobros SIN ASIENTO: descontados del auxiliar y no del mayor ────────────
+  const pagosContados = new Set<string>();
+  const sinAsientoCobros = { cantidad: 0, monto: 0 };
+  const fueraCobros = { cantidad: 0, monto: 0 };
+  for (const a of apps) {
+    if (asCobro.has(a.payment_id)) continue;
+    const fechaDelCobro = uno(a.payments)?.payment_date ?? null;
+    if (fechaDelCobro && d10(fechaDelCobro) > corte) continue;
+    const fuera = esContabilizadoFuera(fechaDelCobro, inicio);
+    sinAsientoCobros.monto += Number(a.amount_applied);
+    if (fuera) fueraCobros.monto += Number(a.amount_applied);
+    // Un pago puede aplicarse a varias facturas: se cuenta el pago una vez.
+    if (!pagosContados.has(a.payment_id)) {
+      pagosContados.add(a.payment_id);
+      sinAsientoCobros.cantidad += 1;
+      if (fuera) fueraCobros.cantidad += 1;
+    }
+  }
+
+  return {
+    documentos,
+    sinAsiento: {
+      documentos: { cantidad: sinAsientoDocs.cantidad, monto: round2(sinAsientoDocs.monto) },
+      cobros: { cantidad: sinAsientoCobros.cantidad, monto: round2(sinAsientoCobros.monto) },
+      contabilizadosFuera: {
+        documentos: { cantidad: fueraDocs.cantidad, monto: round2(fueraDocs.monto) },
+        cobros: { cantidad: fueraCobros.cantidad, monto: round2(fueraCobros.monto) },
+      },
+    },
+  };
 }
 
 /**
- * Gastos de TRÁMITE pendientes de pago (Bloque 4, FND-010).
- *
- * Un gasto de trámite acredita 200001 al registrarse (DEBE 130003 / HABER
- * cuentas por pagar, decisión de RM del 25/08) igual que una compra, así que
- * es una cuenta por pagar y entra al auxiliar. Hasta el 21/09 no entraba, y por
- * eso la antigüedad no cuadraba contra el mayor (FND-010).
+ * Gastos de TRÁMITE (Bloque 4, FND-010): acreditan 200001 al registrarse, así
+ * que entran al auxiliar.
  *
  * 🔴 SOLO los que están EN EL LIBRO (`posted_entry_id`) o CONTABILIZADOS FUERA
  * (096, anteriores al inicio contable: su cuenta por pagar está en el saldo
- * inicial de 200001). Los demás sin asiento no están en 200001 y no entran:
- * aparecen cuando se registran en el libro (botón de reintento en
- * /finanzas/gastos-tramite/{id}). Contarlos sería inventar una deuda que el
- * mayor no tiene.
- *
- * El saldo es `amount − amount_paid` (049); `pagado` y `anulado` no entran.
+ * inicial de 200001). Los demás sin asiento no están en 200001 y no entran.
+ * Se leen también los pagados y los anulados: al corte pudieron estar
+ * pendientes (el saldo sale de la historia; uno anulado deja de existir desde la
+ * fecha de su reversión).
  */
-async function gastosTramitePendientes(db: DB, tenantId: string, inicio: string): Promise<DocumentoPendiente[]> {
-  const { data, error } = await db
+async function gastosTramitePendientes(db: DB, tenantId: string, inicio: string) {
+  return db
     .from("expenses")
-    .select("id, supplier_id, concept, date, due_date, amount, amount_paid, status, posted_entry_id")
+    .select("id, supplier_id, concept, date, accounting_date, due_date, amount, status, posted_entry_id")
     .eq("tenant_id", tenantId)
     .eq(DE_PRUEBA, false)
     .or(`posted_entry_id.not.is.null,date.lt.${inicio}`)
-    .in("status", ["pendiente_pago", "parcialmente_pagado"])
+    .in("status", ["pendiente_pago", "parcialmente_pagado", "pagado", "anulado"])
     .order("due_date");
+}
 
-  if (error) {
-    console.error("[finanzas/antiguedad] gastosTramitePendientes failed", error);
-    throw new Error("No se pudieron leer los gastos de trámite pendientes");
+/**
+ * POR PAGAR: compras (agrupadas por la ficha del proveedor, 033, con la
+ * antigüedad desde `due_date`), gastos de trámite en el libro, NC de proveedor
+ * sin compra en negativo (E8), y lo que no llega al mayor.
+ *
+ * El saldo de una compra se reconstruye: total − pagos (048) − NC del
+ * proveedor (066) − aplicaciones (076). Un SALDO HEREDADO (`migrated_balance`)
+ * resta como un pago y se cuenta aparte en lo «sin asiento».
+ */
+async function auxiliarPagar(db: DB, tenantId: string, inicio: string, corte: string): Promise<Auxiliar> {
+  const [compras, tramites, pagos, notas, aplicacionesDeNotas, asCompra, asPago, asNota, reversiones] = await Promise.all([
+    db
+      .from("business_expenses")
+      .select("id, supplier_id, supplier_name, description, expense_date, accounting_date, due_date, total")
+      .eq("tenant_id", tenantId)
+      .order("due_date"),
+    gastosTramitePendientes(db, tenantId, inicio),
+    db
+      .from("supplier_payments")
+      .select("id, business_expense_id, expense_id, kind, amount, payment_date, status, updated_at")
+      .eq("tenant_id", tenantId)
+      .in("status", ["registrado", "anulado"]),
+    db
+      .from("supplier_credit_notes")
+      .select("id, credit_note_number, business_expense_id, supplier_id, issue_date, grand_total, status, cancelled_at, suppliers(legal_name, trade_name)")
+      .eq("tenant_id", tenantId)
+      .in("status", ["emitida", "anulada"]),
+    db
+      .from("supplier_credit_note_applications")
+      .select("credit_note_id, business_expense_id, amount_applied, created_at")
+      .eq("tenant_id", tenantId),
+    asientosDe(db, tenantId, "gasto"),
+    asientosDe(db, tenantId, "pago_proveedor"),
+    asientosDe(db, tenantId, "nota_credito_proveedor"),
+    fechasDeReversion(db, tenantId),
+  ]);
+  if (compras.error || tramites.error) {
+    console.error("[finanzas/antiguedad] compras o trámites failed", compras.error ?? tramites.error);
+    throw new Error("No se pudieron leer los gastos pendientes");
   }
 
-  type Fila = {
-    id: string;
-    supplier_id: string | null;
-    concept: string | null;
-    date: string;
-    due_date: string | null;
-    amount: number | string;
-    amount_paid: number | string;
-  };
-  const saldoDe = (g: Fila) => round2(Number(g.amount) - Number(g.amount_paid ?? 0));
-  const filas = ((data ?? []) as unknown as Fila[]).filter((g) => saldoDe(g) > 0.005);
+  const bajasCompra = new Map<string, Baja[]>();
+  const bajasTramite = new Map<string, Baja[]>();
+  const aplicadoDe = new Map<string, Baja[]>();
+  const sumar = (m: Map<string, Baja[]>, id: string, b: Baja) => m.set(id, [...(m.get(id) ?? []), b]);
 
-  const ids = Array.from(new Set(filas.map((g) => g.supplier_id).filter((v): v is string => !!v)));
+  type Pago = { id: string; business_expense_id: string | null; expense_id: string | null; kind: string; amount: number | string; payment_date: string | null; status: string; updated_at: string | null };
+  const listaDePagos = (pagos.data ?? []) as Pago[];
+  const pagoReversadoEl = (p: Pago) => {
+    if (p.status !== "anulado") return null;
+    const asiento = asPago.get(p.id);
+    return (asiento ? reversiones.get(asiento) : undefined) ?? diaEnPanama(p.updated_at);
+  };
+  // Un saldo heredado puede no tener fecha: ya estaba pagado antes de todo.
+  const fechaDePago = (p: Pago) => (p.payment_date ? d10(p.payment_date) : "0000-01-01");
+  for (const p of listaDePagos) {
+    const b = { fecha: fechaDePago(p), monto: Number(p.amount), hasta: pagoReversadoEl(p) };
+    if (p.business_expense_id) sumar(bajasCompra, p.business_expense_id, b);
+    if (p.expense_id) sumar(bajasTramite, p.expense_id, b);
+  }
+
+  type NotaProv = {
+    id: string; credit_note_number: string; business_expense_id: string | null; supplier_id: string | null; issue_date: string;
+    grand_total: number | string; status: string; cancelled_at: string | null;
+    suppliers: { legal_name: string; trade_name: string | null } | null;
+  };
+  const listaDeNotas = (notas.data ?? []) as unknown as NotaProv[];
+  const notaReversadaEl = (n: NotaProv) => {
+    if (n.status !== "anulada") return null;
+    const asiento = asNota.get(n.id);
+    return (asiento ? reversiones.get(asiento) : undefined) ?? diaEnPanama(n.cancelled_at);
+  };
+  const notaPorId = new Map(listaDeNotas.map((n) => [n.id, n]));
+  for (const n of listaDeNotas) {
+    if (n.business_expense_id) {
+      sumar(bajasCompra, n.business_expense_id, { fecha: d10(n.issue_date), monto: Number(n.grand_total), hasta: notaReversadaEl(n) });
+    }
+  }
+  for (const a of (aplicacionesDeNotas.data ?? []) as { credit_note_id: string; business_expense_id: string; amount_applied: number | string; created_at: string | null }[]) {
+    const n = notaPorId.get(a.credit_note_id);
+    const b = { fecha: mayor(n ? d10(n.issue_date) : "0000-01-01", diaEnPanama(a.created_at)), monto: Number(a.amount_applied), hasta: n ? notaReversadaEl(n) : null };
+    sumar(bajasCompra, a.business_expense_id, b);
+    sumar(aplicadoDe, a.credit_note_id, b);
+  }
+
+  // El nombre sale de la ficha, en una query aparte. Así dos gastos del mismo
+  // proveedor muestran el MISMO nombre aunque se hayan tipeado distinto.
+  type Compra = { id: string; supplier_id: string | null; supplier_name: string | null; description: string | null; expense_date: string; accounting_date: string | null; due_date: string | null; total: number | string };
+  type Tramite = { id: string; supplier_id: string | null; concept: string | null; date: string; accounting_date: string | null; due_date: string | null; amount: number | string; status: string; posted_entry_id: string | null };
+  const listaDeCompras = (compras.data ?? []) as Compra[];
+  const listaDeTramites = (tramites.data ?? []) as Tramite[];
+  const ids = Array.from(
+    new Set([...listaDeCompras, ...listaDeTramites].map((g) => g.supplier_id).filter((v): v is string => !!v))
+  );
   const nombres = new Map<string, string>();
   if (ids.length > 0) {
-    const { data: provs } = await db
-      .from("suppliers")
-      .select("id, legal_name, trade_name")
-      .eq("tenant_id", tenantId)
-      .in("id", ids);
-    for (const p of (provs ?? []) as { id: string; legal_name: string; trade_name: string | null }[]) {
-      nombres.set(p.id, p.trade_name?.trim() || p.legal_name);
+    const { data: provs } = await db.from("suppliers").select("id, legal_name, trade_name").eq("tenant_id", tenantId).in("id", ids);
+    for (const p of (provs ?? []) as { id: string; legal_name: string; trade_name: string | null }[]) nombres.set(p.id, nombreDeProveedor(p));
+  }
+
+  const documentos: DocumentoPendiente[] = [];
+  const sinAsientoDocs = { cantidad: 0, monto: 0 };
+  const fueraDocs = { cantidad: 0, monto: 0 };
+
+  for (const g of listaDeCompras) {
+    const saldo = saldoAlCorte(
+      { desde: d10(g.accounting_date ?? g.expense_date), total: Number(g.total), bajas: bajasCompra.get(g.id) ?? [] },
+      corte
+    );
+    if (saldo === null || saldo <= 0.005) continue;
+    // Sin vencimiento cargado se cae en la fecha del gasto, que equivale a
+    // tratarlo como contado. Es el comportamiento viejo, no un caso de error.
+    const referencia = d10(g.due_date ?? g.expense_date);
+    const fuera = esContabilizadoFuera(g.expense_date, inicio);
+    documentos.push({
+      id: g.id,
+      numero: g.description?.trim() || "(sin descripción)",
+      tercero: (g.supplier_id ? nombres.get(g.supplier_id) : undefined) ?? g.supplier_name?.trim() ?? "(sin proveedor)",
+      // Un gasto sin ficha cae en null y se agrupa por su texto, como antes.
+      terceroId: g.supplier_id,
+      fechaReferencia: referencia,
+      diasVencido: diasAlCorte(referencia, corte),
+      saldo,
+      sourceType: "gasto",
+      contabilizadoFuera: fuera,
+    });
+    if (!asCompra.has(g.id)) {
+      sinAsientoDocs.cantidad += 1;
+      sinAsientoDocs.monto += saldo;
+      if (fuera) {
+        fueraDocs.cantidad += 1;
+        fueraDocs.monto += saldo;
+      }
     }
   }
 
-  return filas.map((g) => {
-    const referencia = String(g.due_date ?? g.date).slice(0, 10);
-    return {
+  for (const g of listaDeTramites) {
+    const desde = d10(g.accounting_date ?? g.date);
+    const finEn = g.status === "anulado" ? (g.posted_entry_id ? reversiones.get(g.posted_entry_id) : undefined) ?? desde : null;
+    const saldo = saldoAlCorte({ desde, total: Number(g.amount), bajas: bajasTramite.get(g.id) ?? [], finEn }, corte);
+    if (saldo === null || saldo <= 0.005) continue;
+    const referencia = d10(g.due_date ?? g.date);
+    documentos.push({
       id: g.id,
       numero: g.concept?.trim() || "(sin concepto)",
       // Sin ficha no hay texto libre en `expenses` (D2): va "(sin proveedor)".
       tercero: (g.supplier_id ? nombres.get(g.supplier_id) : undefined) ?? "(sin proveedor)",
       terceroId: g.supplier_id,
       fechaReferencia: referencia,
-      diasVencido: diasDesde(referencia),
-      saldo: saldoDe(g),
+      diasVencido: diasAlCorte(referencia, corte),
+      saldo,
       sourceType: "gasto_tramite",
       contabilizadoFuera: esContabilizadoFuera(g.date, inicio),
-    };
-  });
-}
-
-/**
- * LOS DOCUMENTOS QUE TODAVÍA NO LLEGAN AL MAYOR.
- *
- * Es la segunda causa de que el auxiliar no cuadre, y no tiene nada que ver con
- * la primera: la apertura es un dato histórico que falta, esto es cableado que
- * falta construir. Un asiento se reconoce por `source_type` + `source_id`.
- *
- * Se mide en la base y no se deduce del residuo: si algún día hubiera una tercera
- * causa, el reporte lo va a notar (`porCablearExplicado`) en vez de atribuirle
- * todo a estas dos.
- */
-async function idsConAsiento(
-  db: DB,
-  tenantId: string,
-  sourceType: string
-): Promise<Set<string>> {
-  const { data } = await db
-    .from("journal_entries")
-    .select("source_id")
-    .eq("tenant_id", tenantId)
-    .eq("source_type", sourceType);
-
-  const ids = new Set<string>();
-  for (const e of (data ?? []) as { source_id: string | null }[]) {
-    if (e.source_id) ids.add(e.source_id);
-  }
-  return ids;
-}
-
-/** CxC: facturas del auxiliar sin asiento, y cobros sin asiento. */
-async function sinAsientoCobrar(db: DB, tenantId: string, inicio: string): Promise<SinAsiento> {
-  const [conAsientoFactura, conAsientoPago] = await Promise.all([
-    idsConAsiento(db, tenantId, "factura"),
-    idsConAsiento(db, tenantId, "pago"),
-  ]);
-
-  const { data: facturas } = await db
-    .from("invoices")
-    .select("id, balance_due, issue_date")
-    .eq("tenant_id", tenantId)
-    .eq(DE_PRUEBA, false)
-    .in("status", ["emitida", "parcialmente_pagada"]);
-
-  const documentos = { cantidad: 0, monto: 0 };
-  const fueraDocs = { cantidad: 0, monto: 0 };
-  for (const f of (facturas ?? []) as { id: string; balance_due: number | string; issue_date: string }[]) {
-    const saldo = Number(f.balance_due);
-    if (saldo > 0.005 && !conAsientoFactura.has(f.id)) {
-      documentos.cantidad += 1;
-      documentos.monto += saldo;
-      if (esContabilizadoFuera(f.issue_date, inicio)) {
-        fueraDocs.cantidad += 1;
-        fueraDocs.monto += saldo;
-      }
-    }
-  }
-
-  const { data: aplicaciones } = await db
-    .from("payment_applications")
-    .select("amount_applied, payment_id, payments(payment_date)")
-    .eq("tenant_id", tenantId);
-
-  const pagosContados = new Set<string>();
-  const cobros = { cantidad: 0, monto: 0 };
-  const fueraCobros = { cantidad: 0, monto: 0 };
-  for (const a of (aplicaciones ?? []) as unknown as {
-    amount_applied: number | string;
-    payment_id: string;
-    payments: { payment_date: string } | null;
-  }[]) {
-    if (conAsientoPago.has(a.payment_id)) continue;
-    const fuera = esContabilizadoFuera(a.payments?.payment_date ?? null, inicio);
-    cobros.monto += Number(a.amount_applied);
-    if (fuera) fueraCobros.monto += Number(a.amount_applied);
-    // Un pago puede aplicarse a varias facturas: se cuenta el pago una vez.
-    if (!pagosContados.has(a.payment_id)) {
-      pagosContados.add(a.payment_id);
-      cobros.cantidad += 1;
-      if (fuera) fueraCobros.cantidad += 1;
-    }
-  }
-
-  return {
-    documentos: { cantidad: documentos.cantidad, monto: round2(documentos.monto) },
-    cobros: { cantidad: cobros.cantidad, monto: round2(cobros.monto) },
-    contabilizadosFuera: {
-      documentos: { cantidad: fueraDocs.cantidad, monto: round2(fueraDocs.monto) },
-      cobros: { cantidad: fueraCobros.cantidad, monto: round2(fueraCobros.monto) },
-    },
-  };
-}
-
-/**
- * CxP: gastos del auxiliar sin asiento, y PAGOS sin asiento.
- *
- * Desde la 048 el pago a proveedor es una entidad (`supplier_payments`), así
- * que esto es simétrico con `sinAsientoCobrar`: un pago `registrado` sin
- * asiento `pago_proveedor` ya se descontó del auxiliar y no del mayor. Más
- * simple que el lado cobrar porque no hay N:M: un pago es de UNA compra.
- *
- * Los SALDOS HEREDADOS (`kind = 'migrated_balance'`) son, por definición,
- * pagos sin asiento: la compra estaba `pagado` antes de que existieran los
- * pagos, y en el mayor nunca hubo asiento de pago. Entran en el mismo término
- * (bajan el auxiliar, no el mayor) pero se cuentan aparte para que la pantalla
- * los nombre como lo que son y no como "pagos que faltan cablear".
- */
-async function sinAsientoPagar(db: DB, tenantId: string, inicio: string): Promise<SinAsiento> {
-  const [conAsientoGasto, conAsientoPago] = await Promise.all([
-    idsConAsiento(db, tenantId, "gasto"),
-    idsConAsiento(db, tenantId, "pago_proveedor"),
-  ]);
-
-  const { data } = await db
-    .from("business_expenses")
-    .select("id, balance_due, expense_date")
-    .eq("tenant_id", tenantId)
-    .neq("status", "pagado");
-
-  const documentos = { cantidad: 0, monto: 0 };
-  const fueraDocs = { cantidad: 0, monto: 0 };
-  for (const g of (data ?? []) as { id: string; balance_due: number | string; expense_date: string }[]) {
-    const saldo = Number(g.balance_due);
-    if (saldo > 0.005 && !conAsientoGasto.has(g.id)) {
-      documentos.cantidad += 1;
-      documentos.monto += saldo;
-      if (esContabilizadoFuera(g.expense_date, inicio)) {
-        fueraDocs.cantidad += 1;
-        fueraDocs.monto += saldo;
-      }
-    }
-  }
-
-  // 096: los gastos de trámite CONTABILIZADOS FUERA entran al auxiliar sin
-  // asiento (`gastosTramitePendientes`), así que también son documentos sin
-  // asiento. Los demás sin asiento no están en el auxiliar: no se cuentan.
-  const { data: tramites } = await db
-    .from("expenses")
-    .select("id, amount, amount_paid, date, posted_entry_id")
-    .eq("tenant_id", tenantId)
-    .eq(DE_PRUEBA, false)
-    .is("posted_entry_id", null)
-    .lt("date", inicio)
-    .in("status", ["pendiente_pago", "parcialmente_pagado"]);
-  for (const g of (tramites ?? []) as { amount: number | string; amount_paid: number | string | null }[]) {
-    const saldo = round2(Number(g.amount) - Number(g.amount_paid ?? 0));
-    if (saldo > 0.005) {
-      documentos.cantidad += 1;
-      documentos.monto += saldo;
+    });
+    // 096: los CONTABILIZADOS FUERA entran sin asiento: también son documentos
+    // sin asiento. Los demás sin asiento ni siquiera se leen.
+    if (!g.posted_entry_id) {
+      sinAsientoDocs.cantidad += 1;
+      sinAsientoDocs.monto += saldo;
       fueraDocs.cantidad += 1;
       fueraDocs.monto += saldo;
     }
   }
 
-  const { data: pagos } = await db
-    .from("supplier_payments")
-    .select("id, amount, kind, payment_date")
-    .eq("tenant_id", tenantId)
-    .eq("status", "registrado");
+  // ── E8: NC de proveedor SIN COMPRA, saldo a favor en NEGATIVO ──────────────
+  for (const n of listaDeNotas) {
+    if (n.business_expense_id || !asNota.has(n.id)) continue;
+    const fecha = d10(n.issue_date);
+    if (!vigenteAlCorte(fecha, notaReversadaEl(n), corte)) continue;
+    const saldo = saldoAlCorte({ desde: fecha, total: Number(n.grand_total), bajas: aplicadoDe.get(n.id) ?? [] }, corte) ?? 0;
+    if (saldo <= 0.005) continue;
+    documentos.push({
+      id: n.id,
+      numero: `${n.credit_note_number} (saldo a favor)`,
+      tercero: nombreDeProveedor(uno(n.suppliers)),
+      terceroId: String(n.supplier_id),
+      fechaReferencia: fecha,
+      diasVencido: 0,
+      saldo: -saldo,
+      sourceType: "nota_credito_proveedor",
+    });
+  }
 
-  const cobros = { cantidad: 0, monto: 0 };
+  // ── PAGOS SIN ASIENTO (los saldos heredados de la 048 se nombran aparte) ───
+  const sinAsientoPagos = { cantidad: 0, monto: 0 };
   const heredados = { cantidad: 0, monto: 0 };
   const fueraPagos = { cantidad: 0, monto: 0 };
-  for (const p of (pagos ?? []) as { id: string; amount: number | string; kind: string; payment_date: string | null }[]) {
-    if (conAsientoPago.has(p.id)) continue;
+  for (const p of listaDePagos) {
+    if (asPago.has(p.id)) continue;
+    if (!vigenteAlCorte(fechaDePago(p), pagoReversadoEl(p), corte)) continue;
     const monto = Number(p.amount);
-    cobros.cantidad += 1;
-    cobros.monto += monto;
+    sinAsientoPagos.cantidad += 1;
+    sinAsientoPagos.monto += monto;
     if (p.kind === "migrated_balance") {
       heredados.cantidad += 1;
       heredados.monto += monto;
@@ -721,15 +720,26 @@ async function sinAsientoPagar(db: DB, tenantId: string, inicio: string): Promis
   }
 
   return {
-    documentos: { cantidad: documentos.cantidad, monto: round2(documentos.monto) },
-    cobros: { cantidad: cobros.cantidad, monto: round2(cobros.monto) },
-    heredados: { cantidad: heredados.cantidad, monto: round2(heredados.monto) },
-    contabilizadosFuera: {
-      documentos: { cantidad: fueraDocs.cantidad, monto: round2(fueraDocs.monto) },
-      cobros: { cantidad: fueraPagos.cantidad, monto: round2(fueraPagos.monto) },
+    documentos,
+    sinAsiento: {
+      documentos: { cantidad: sinAsientoDocs.cantidad, monto: round2(sinAsientoDocs.monto) },
+      cobros: { cantidad: sinAsientoPagos.cantidad, monto: round2(sinAsientoPagos.monto) },
+      heredados: { cantidad: heredados.cantidad, monto: round2(heredados.monto) },
+      contabilizadosFuera: {
+        documentos: { cantidad: fueraDocs.cantidad, monto: round2(fueraDocs.monto) },
+        cobros: { cantidad: fueraPagos.cantidad, monto: round2(fueraPagos.monto) },
+      },
     },
   };
 }
+
+/*
+ * LOS DOCUMENTOS QUE TODAVÍA NO LLEGAN AL MAYOR son la segunda causa de que el
+ * auxiliar no cuadre (la primera es la apertura sin detalle). Se miden en la
+ * base, en `auxiliarCobrar` y `auxiliarPagar`, y no se deducen del residuo: si
+ * algún día hubiera una tercera causa, el reporte lo nota
+ * (`porCablearExplicado`) en vez de atribuirle todo a estas dos.
+ */
 
 /**
  * 100: las partidas de los asientos de apertura que aparecen en las líneas de
@@ -738,13 +748,15 @@ async function sinAsientoPagar(db: DB, tenantId: string, inicio: string): Promis
 async function partidasDeAperturaDelLibro(
   db: DB,
   tenantId: string,
-  lineas: LineaDeControl[]
+  lineas: LineaDeControl[],
+  corte: string
 ): Promise<{ partidas: PartidaDeApertura[]; conDetalle: Set<string>; vigente: boolean }> {
   let vigente = false;
   try {
-    const { data: vig, error: errV } = await db.from("aperturas").select("id").eq("tenant_id", tenantId).eq("estado", "vigente").limit(1);
-    // Antes de la 100 la tabla no existe: no hay apertura.
-    vigente = !errV && (vig ?? []).length > 0;
+    const { data: vig, error: errV } = await db.from("aperturas").select("id, fecha").eq("tenant_id", tenantId).eq("estado", "vigente").limit(1);
+    // Antes de la 100 la tabla no existe: no hay apertura. Al corte anterior a
+    // la fecha de la apertura, todavía no estaba.
+    vigente = !errV && ((vig ?? []) as { fecha: string }[]).some((a) => String(a.fecha).slice(0, 10) <= corte);
   } catch {
     vigente = false;
   }
@@ -792,48 +804,59 @@ async function partidasDeAperturaDelLibro(
   return { partidas, conDetalle: new Set(partidas.map((p) => p.entryId)), vigente };
 }
 
+/**
+ * La antigüedad AL CORTE (`YYYY-MM-DD`, por defecto hoy en Panamá): documentos,
+ * cobros, pagos, NC y partidas de diario y de apertura con fecha de registro
+ * hasta ese día, días de atraso contados contra el corte, y la cuenta control
+ * con los asientos hasta el corte.
+ */
 export async function loadAntiguedad(
   db: DB,
   tenantId: string,
-  tipo: TipoAntiguedad
+  tipo: TipoAntiguedad,
+  corte: string = hoyEnPanama()
 ): Promise<{
   documentos: DocumentoPendiente[];
   control: ControlMedido;
 }> {
   // 096: el inicio contable, para lo «contabilizado fuera».
   const inicio = await cargarInicioContable(db, tenantId);
-  const [documentosDeModulo, controlCrudo, base, diario] = await Promise.all([
-    tipo === "cobrar"
-      ? // 074: las facturas pendientes MÁS los saldos a favor, en negativo.
-        //     E8: y las NC sin factura, también en negativo.
-        Promise.all([facturasPendientes(db, tenantId, inicio), saldosAFavor(db, tenantId), saldosAFavorDeNotas(db, tenantId, "cobrar")]).then(
-          ([a, b, c]) => [...a, ...b, ...c]
-        )
-      : // Compras del bufete + gastos de trámite EN EL LIBRO (FND-010), y las
-        // NC de proveedor sin compra en negativo (E8).
-        Promise.all([gastosPendientes(db, tenantId, inicio), gastosTramitePendientes(db, tenantId, inicio), saldosAFavorDeNotas(db, tenantId, "pagar")]).then(
-          ([a, b, c]) => [...a, ...b, ...c]
-        ),
-    saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo]),
-    tipo === "cobrar" ? sinAsientoCobrar(db, tenantId, inicio) : sinAsientoPagar(db, tenantId, inicio),
+  const [auxiliar, controlCrudo, diario] = await Promise.all([
+    // Cobrar: facturas + saldos a favor de cobros (074) y de NC sin factura (E8).
+    // Pagar: compras + gastos de trámite EN EL LIBRO (FND-010) + NC de proveedor sin compra.
+    tipo === "cobrar" ? auxiliarCobrar(db, tenantId, inicio, corte) : auxiliarPagar(db, tenantId, inicio, corte),
+    saldoDeCuentaControl(db, tenantId, CUENTA_CONTROL[tipo], corte),
     lineasDeDiarioContraControl(db, tenantId, CUENTA_CONTROL[tipo]),
   ]);
+
+  // Al corte: las líneas hasta ese día, y reversado sólo lo que se reversó
+  // hasta ese día.
+  const lineas = diario.lineas.filter((l) => l.fecha <= corte);
+  const reversados = new Set(
+    Array.from(diario.reversiones.entries())
+      .filter(([, fecha]) => fecha <= corte)
+      .map(([id]) => id)
+  );
+  // `partidasDeDiario` cuenta los días entre dos medianoches locales: con el
+  // corte también a medianoche local, da los días calendario.
+  const alCorte = new Date(`${corte}T00:00:00`);
 
   // 100: con una APERTURA VIGENTE, lo anterior al inicio contable ya está en el
   // libro (en la apertura, por documento): esos documentos salen del auxiliar y
   // de lo «sin asiento», y en su lugar cuentan las partidas de la apertura. Así
   // la factura anterior al inicio aparece una sola vez. Sin apertura, como antes.
-  const apertura = await partidasDeAperturaDelLibro(db, tenantId, diario.lineas);
+  const apertura = await partidasDeAperturaDelLibro(db, tenantId, lineas, corte);
   const conVigente = apertura.vigente;
-  const modulo = conVigente ? documentosDeModulo.filter((d) => !d.contabilizadoFuera) : documentosDeModulo;
+  const modulo = conVigente ? auxiliar.documentos.filter((d) => !d.contabilizadoFuera) : auxiliar.documentos;
 
   // E9: las partidas de diario y de apertura CON tercero son saldo de ese
   // tercero; las que no lo tienen siguen explicando la diferencia (D5).
   const documentos = [
     ...modulo,
-    ...partidasDeDiario(diario.lineas, tipo, diario.reversados, new Date(), apertura.conDetalle),
-    ...partidasDeApertura(apertura.partidas, tipo, diario.reversados),
+    ...partidasDeDiario(lineas, tipo, reversados, alCorte, apertura.conDetalle),
+    ...partidasDeApertura(apertura.partidas, tipo, reversados, alCorte),
   ];
+  const base = auxiliar.sinAsiento;
   const fuera = base.contabilizadosFuera;
   const sinAsiento: SinAsiento = {
     ...(conVigente && fuera
@@ -850,7 +873,7 @@ export async function loadAntiguedad(
           contabilizadosFuera: { documentos: { cantidad: 0, monto: 0 }, cobros: { cantidad: 0, monto: 0 } },
         }
       : base),
-    manuales: manualesSinTercero(diario.lineas, tipo, diario.reversados),
+    manuales: manualesSinTercero(lineas, tipo, reversados),
   };
 
   // El auxiliar de pagar se compara en VALOR ABSOLUTO: la cuenta por pagar tiene

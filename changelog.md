@@ -1,5 +1,25 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Antigüedad con fecha de corte y formato de fecha de la importación] - 2026-10-08
+
+Sin migraciones.
+- **Antigüedad «Al» (requerimiento 41):** `/finanzas/reportes/aging` tiene el campo **«Al»** (por defecto hoy en
+  Panamá), por cobrar y por pagar. El saldo de cada documento se **reconstruye** a esa fecha
+  (`reports/antiguedad-al-corte.ts`, puro): el documento desde su fecha de registro, cada cobro, pago, NC o aplicación
+  desde la suya, lo reversado hasta la fecha de su reversión y lo anulado deja de existir ese día. Los días de atraso
+  se cuentan contra el corte. La cuenta control se corta por `transaction_date`, y las partidas de diario y de
+  apertura también. El Excel lleva la fila «Al» y el corte en el nombre. Con el corte en hoy da lo mismo que antes
+  (verificado contra staging documento por documento).
+- **Importación de asientos, fechas:** el formato por defecto pasa a **DD/MM/AAAA** (antes MM/DD, decisión (c) del
+  30/09). La vista previa muestra la **fecha leída en palabras** y cómo venía en el archivo. Dos fallas corregidas: en
+  un **CSV** la librería convertía «03/04/2026» en fecha por su cuenta (mes primero, sin mirar el selector, y con el
+  redondeo quedaba el 05/03); ahora se lee como texto (`raw: true`, también en la apertura). Una **celda de fecha con
+  hora** de la tarde se redondeaba al día siguiente; ahora se trunca.
+- **Build:** `/api/admin/audit`, `/api/search` y `/api/users` son `force-dynamic` (el log del build ya no muestra
+  `DYNAMIC_SERVER_USAGE`; también estaba en el de producción, sin efecto).
+- Tests: `antiguedad-al-corte.test.ts` y 5 nuevos en `asientos-import.test.ts`. Capturas:
+  `docs/finanzas/capturas-cambios-ventana/corte-y-fechas/`.
+
 ## [Importación de asientos: advertencia de gasto sin proveedor] - 2026-10-07
 
 - La revisión de la importación de asientos **advierte** (no bloquea) cada línea en una cuenta de gasto o costo

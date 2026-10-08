@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getActiveTab, getSidebarItems, getVisibleTabs, isItemActive } from "@/lib/nav-config";
+import { getActiveItemHref, getActiveTab, getSidebarGroups, getSidebarItems, getVisibleTabs } from "@/lib/nav-config";
 
 interface MobileDrawerProps {
   userRole: string;
@@ -22,6 +22,8 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
   const activeTab = getActiveTab(pathname);
   const tabs = getVisibleTabs(userRole);
   const items = getSidebarItems(activeTab, userRole);
+  const groups = getSidebarGroups(activeTab, userRole);
+  const activeHref = getActiveItemHref(items, pathname);
 
   return (
     <>
@@ -94,9 +96,16 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
               Selecciona un módulo arriba para ver las opciones.
             </p>
           ) : (
-            items.map((item) => {
+            groups.map(({ group, items: delGrupo }, gi) => (
+              <div key={group ?? "items"} className="space-y-1">
+                {group && (
+                  <p className={cn("px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-integra-gold/80", gi > 0 ? "pt-3" : "pt-1")}>
+                    {group}
+                  </p>
+                )}
+            {delGrupo.map((item) => {
               const Icon = item.icon;
-              const active = isItemActive(item.href, pathname);
+              const active = item.href === activeHref;
               return (
                 <Link
                   key={item.href}
@@ -110,10 +119,12 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
                   )}
                 >
                   <Icon size={20} />
-                  <span className="truncate">{item.label}</span>
+                  <span className="line-clamp-2 leading-tight">{item.label}</span>
                 </Link>
               );
-            })
+            })}
+              </div>
+            ))
           )}
         </nav>
       </aside>

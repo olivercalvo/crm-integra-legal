@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getActiveTab, getSidebarItems, isItemActive } from "@/lib/nav-config";
+import { getActiveItemHref, getActiveTab, getSidebarGroups, getSidebarItems } from "@/lib/nav-config";
 
 const STORAGE_KEY = "nav-sidebar-mode";
 type Mode = "pinned" | "auto";
@@ -61,6 +61,8 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
 
   const activeTab = getActiveTab(pathname);
   const items = getSidebarItems(activeTab, userRole);
+  const groups = getSidebarGroups(activeTab, userRole);
+  const activeHref = getActiveItemHref(items, pathname);
 
   // No mostrar sidebar si no hay items para este tab/rol (ej: estás en `/`
   // sin tab activo). El layout sigue funcionando sin él.
@@ -85,9 +87,21 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
       )}
     >
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 space-y-1">
-        {items.map((item) => {
+        {groups.map(({ group, items: delGrupo }, gi) => (
+          <div key={group ?? "items"} className="space-y-1">
+            {/* Requerimiento 44: el menú de Finanzas va por proceso. Expandido,
+                el título del grupo; colapsado, una línea entre grupos. */}
+            {group &&
+              (expanded ? (
+                <p className={cn("px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-integra-gold/80", gi > 0 ? "pt-3" : "pt-1")}>
+                  {group}
+                </p>
+              ) : (
+                gi > 0 && <div className="mx-3 my-2 border-t border-white/15" aria-hidden />
+              ))}
+        {delGrupo.map((item) => {
           const Icon = item.icon;
-          const active = isItemActive(item.href, pathname);
+          const active = item.href === activeHref;
           return (
             <div key={item.href} className="group relative flex items-center">
               <Link
@@ -107,7 +121,8 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
                 </span>
                 <span
                   className={cn(
-                    "truncate transition-opacity duration-150",
+                    // Las etiquetas largas (req 44) pasan a dos líneas en vez de cortarse.
+                    "line-clamp-2 leading-tight transition-opacity duration-150",
                     expanded ? "opacity-100" : "opacity-0 w-0 hidden"
                   )}
                 >
@@ -132,6 +147,8 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
             </div>
           );
         })}
+          </div>
+        ))}
       </nav>
 
       <div className="border-t border-white/10 p-2">

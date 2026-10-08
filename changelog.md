@@ -1,5 +1,19 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Menú de Finanzas por proceso (requerimiento 44)] - 2026-10-08
+
+Sólo el menú lateral (`nav-config.ts`, sidebar y menú móvil). Sin migraciones, sin cambios de permisos ni de rutas.
+- Cinco grupos, en orden: **Ventas, Compras, Asientos, Reportes, Configuración**, con su título en el menú
+  (colapsado, una línea entre grupos). Cada opción conserva su ruta, sus roles y el ícono de abrir en pestaña nueva.
+- Opciones nuevas en el menú, todas con ruta de antes: Clientes (`/legal/clientes`, admin y abogada) en Ventas;
+  Importación de asientos y Contabilizar documentos por mes en Asientos; cada reporte en Reportes (con «Todos los
+  reportes» para el hub); **Saldos iniciales** (`/finanzas/asientos/apertura`) en Configuración.
+- Las que no estaban en la lista de Josuarth van al grupo más cercano: Cotizaciones y Pendientes DGI en Ventas,
+  Períodos contables en Asientos, Bitácora contable en Reportes, Plantilla T&C en Configuración.
+- Se pinta sólo la opción más específica (`getActiveItemHref`): en la apertura, «Saldos iniciales» y no «Asientos de
+  diario». Las etiquetas largas pasan a dos líneas.
+- Test: `menu-finanzas-por-proceso.test.ts`. Capturas: `docs/finanzas/capturas-cambios-ventana/menu-por-proceso/`.
+
 ## [Fechas en MM/DD por defecto e interruptor en la ventana] - 2026-10-08
 
 Sin migraciones.

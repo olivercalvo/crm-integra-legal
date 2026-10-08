@@ -14,7 +14,7 @@ import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asie
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Nuevo gasto · Finanzas",
+  title: "Nueva compra · Finanzas",
 };
 const MUTATING_ROLES = ["admin", "abogada", "contador"];
 
@@ -38,7 +38,7 @@ export default async function NuevoGastoBufetePage() {
       <div className="flex items-center gap-3">
         <BackButton fallbackHref="/finanzas/gastos-bufete" label="Volver a gastos" showLabel />
         <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Nuevo gasto del bufete</h1>
+          <h1 className="text-2xl font-bold text-integra-navy">Nueva compra</h1>
           <p className="text-sm text-gray-500">
             Para registrar una compra del bufete: alquiler, oficina, servicios o suministros.
             El ITBMS pagado es recuperable contra DGI.

@@ -291,6 +291,18 @@ function kindDelOtroLado(k: InvoiceKind): InvoiceKind {
  * tenant. Así la MISMA regla corre en los dos lados sin duplicar lógica de
  * negocio — lo único que cada lado repite es armar el Map.
  */
+/**
+ * La CATEGORÍA de los servicios de cada tipo, para los mensajes de la regla
+ * (honorarios o reembolso). No es el nombre del documento en pantalla
+ * (`INVOICE_KIND_LABEL`, «Factura» desde el 07/10/2026): un servicio sí es de
+ * honorarios; la factura no se llama así.
+ */
+const CATEGORIA_DE_SERVICIOS: Record<InvoiceKind, string> = {
+  HONORARIOS: "Honorarios",
+  REEMBOLSO: "Reembolso",
+  NOTA_DEBITO: "Nota de débito",
+};
+
 export function validarConsistenciaDeKind(
   lineas: readonly Pick<InvoiceLineInput, "service_id">[],
   serviciosPorId: ReadonlyMap<string, ServicioParaConsistenciaDeKind>,
@@ -298,7 +310,7 @@ export function validarConsistenciaDeKind(
 ): ValidationErrors {
   const errors: ValidationErrors = {};
   const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
-  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
+  const kindLabel = CATEGORIA_DE_SERVICIOS[invoiceKind];
 
   lineas.forEach((ln, i) => {
     if (!ln.service_id) return; // Personalizada: sin service_type, no se juzga.
@@ -307,7 +319,7 @@ export function validarConsistenciaDeKind(
 
     const otroKind = kindDelOtroLado(invoiceKind);
     errors[`lines.${i}.service`] =
-      `Este servicio es de ${INVOICE_KIND_LABEL[otroKind]}; una factura de ${kindLabel} no puede llevarlo.`;
+      `Este servicio es de ${CATEGORIA_DE_SERVICIOS[otroKind]}; una factura de ${kindLabel} no puede llevarlo.`;
   });
 
   return errors;
@@ -325,7 +337,7 @@ export function motivoDeInconsistenciaDeKind(
   invoiceKind: InvoiceKind
 ): string | null {
   const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
-  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
+  const kindLabel = CATEGORIA_DE_SERVICIOS[invoiceKind];
   const otroKind = kindDelOtroLado(invoiceKind);
 
   for (let i = 0; i < lineas.length; i++) {
@@ -336,7 +348,7 @@ export function motivoDeInconsistenciaDeKind(
 
     return (
       `No se puede guardar: la línea ${i + 1} (${svc.code} · ${svc.name}) es un servicio de ` +
-      `${INVOICE_KIND_LABEL[otroKind]}, y esta factura es de ${kindLabel}: una factura de ` +
+      `${CATEGORIA_DE_SERVICIOS[otroKind]}, y esta factura es de ${kindLabel}: una factura de ` +
       `${kindLabel.toLowerCase()} solo puede llevar líneas de ${kindLabel.toLowerCase()}. ` +
       `Cambie el servicio de esa línea, o cambie el Tipo de documento a ${INVOICE_KIND_LABEL[otroKind]}.`
     );

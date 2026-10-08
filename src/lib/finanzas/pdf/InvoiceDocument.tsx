@@ -517,7 +517,8 @@ export function InvoiceDocument(props: InvoiceDocumentProps) {
           <View style={styles.docHeader}>
             <Text style={styles.docHeaderTitle}>{tituloDoc.toUpperCase()}</Text>
             <Text style={styles.docHeaderNumber}>{display_number}</Text>
-            <Text style={styles.docHeaderKind}>{kind_label.toUpperCase()}</Text>
+            {/* El tipo sólo si dice algo más que el título (07/10: «Factura» ya no se repite). */}
+            {kind_label !== tituloDoc && <Text style={styles.docHeaderKind}>{kind_label.toUpperCase()}</Text>}
             <Text
               style={[
                 styles.statusBadge,

@@ -21,6 +21,7 @@ import {
 } from "@/lib/finanzas/validators/invoice";
 import {
   INVOICE_KIND_LABEL,
+  TITULO_DEL_FORMULARIO,
   type ClientOption,
   type CaseOption,
   type ServiceOption,
@@ -32,6 +33,8 @@ import {
 interface BaseProps {
   /** 077: las facturas que una nota de débito puede ajustar (de todos los clientes). */
   facturasAjustables?: { id: string; invoice_number: string; client_id: string }[];
+  /** El texto bajo el título (el título sale del tipo elegido). */
+  subtitulo?: string;
   clients: ClientOption[];
   /** Todas los casos del tenant (filtramos por client_id en el form). */
   casesByClient: Record<string, CaseOption[]>;
@@ -42,6 +45,8 @@ interface BaseProps {
 interface CreateProps extends BaseProps {
   mode: "create";
   initial?: undefined;
+  /** Precarga desde «Facturar este caso» (requerimiento 13): cliente y caso. */
+  inicial?: { clientId: string | null; caseId: string | null };
 }
 
 interface EditProps extends BaseProps {
@@ -95,10 +100,10 @@ export function InvoiceForm(props: Props) {
     props.mode === "edit" ? props.initial.invoice_kind : "HONORARIOS"
   );
   const [clientId, setClientId] = useState<string | null>(
-    props.mode === "edit" ? props.initial.client_id : null
+    props.mode === "edit" ? props.initial.client_id : props.inicial?.clientId ?? null
   );
   const [caseId, setCaseId] = useState<string | null>(
-    props.mode === "edit" ? props.initial.case_id : null
+    props.mode === "edit" ? props.initial.case_id : props.inicial?.caseId ?? null
   );
   const [issueDate, setIssueDate] = useState<string>(
     props.mode === "edit" ? props.initial.issue_date : todayIso()
@@ -272,6 +277,11 @@ export function InvoiceForm(props: Props) {
   }
 
   return (
+    <>
+    <div>
+      <h1 className="text-2xl font-bold text-integra-navy">{TITULO_DEL_FORMULARIO[props.mode][kind]}</h1>
+      {props.subtitulo && <p className="text-sm text-gray-500">{props.subtitulo}</p>}
+    </div>
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
       <form
         className="space-y-5"
@@ -527,5 +537,6 @@ export function InvoiceForm(props: Props) {
         </div>
       </aside>
     </div>
+    </>
   );
 }

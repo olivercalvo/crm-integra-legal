@@ -21,7 +21,7 @@ import type { BusinessExpenseStatus } from "@/lib/finanzas/types/business-expens
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Gastos del Bufete · Finanzas",
+  title: "Compras · Finanzas",
 };
 interface PageProps {
   searchParams: {
@@ -87,7 +87,7 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
             <ShoppingBag size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-integra-navy">Gastos del Bufete</h1>
+            <h1 className="text-2xl font-bold text-integra-navy">Compras</h1>
             <p className="text-sm text-gray-500">
               {result.total === 0
                 ? "Sin gastos registrados"
@@ -99,7 +99,7 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
           <Link href="/finanzas/gastos-bufete/nuevo">
             <Button className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px]">
               <Plus size={18} className="mr-1" />
-              Nuevo gasto
+              Nueva compra
             </Button>
           </Link>
         )}
@@ -128,8 +128,8 @@ export default async function GastosBufeteListPage({ searchParams }: PageProps) 
             hasFilters
               ? "No hay gastos que coincidan con los filtros aplicados."
               : canMutate
-                ? "Aún no hay gastos del bufete. El primero se registra con el botón de arriba."
-                : "Aún no hay gastos del bufete cargados."
+                ? "Aún no hay compras. La primera se registra con el botón de arriba."
+                : "Aún no hay compras cargadas."
           }
         />
       ) : (

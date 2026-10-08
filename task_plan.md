@@ -1,6 +1,16 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura)
+## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura y cambios chicos)
+
+**Último cierre (07/10, noche): cambios chicos antes de la ventana, sin migraciones.** Enero a junio va por el
+**camino A** (no se construye nada del B): guía en `docs/finanzas/guia-carga-enero-junio.md`. Hechos 19
+(«Compras»), 5 («Ver asiento»), 13 («Facturar este caso»), 48 (instalable), 46 (pestaña nueva en el menú), 3
+(instrucciones del plan), 11 («Factura») y la referencia externa del asiento importado en la antigüedad.
+Capturas en `docs/finanzas/capturas-cambios-ventana/`. En staging quedó un asiento importado de prueba
+(07/10, AD-000004, 100004 CLI-001 contra 400010, 50,00, referencia `QB-PRUEBA-0710`) para la captura de la
+antigüedad; se deshace desde Ver importaciones si molesta. Ensayo completo de la ventana: sin errores, 41 tablas
+131/131, concurrencia 180 rondas (1620, cero deadlocks) y `--control` trabado en 27/27.
+
 
 **Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
 Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.

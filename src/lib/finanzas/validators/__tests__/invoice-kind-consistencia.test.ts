@@ -125,7 +125,8 @@ test("el motivo nombra el código, el nombre del servicio y las dos salidas posi
   assert.match(motivo ?? "", /HON-COR/);
   assert.match(motivo ?? "", /Honorarios corporativos/);
   assert.match(motivo ?? "", /Cambie el servicio/);
-  assert.match(motivo ?? "", /Tipo de documento a Honorarios/);
+  // 07/10/2026 (requerimiento 11): la opción del selector se llama «Factura».
+  assert.match(motivo ?? "", /Tipo de documento a Factura\./);
 });
 
 test("sin inconsistencias, el motivo es null", () => {

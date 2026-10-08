@@ -278,10 +278,21 @@ export interface InvoiceListItem extends InvoiceRow {
 
 // ---------- UI labels ------------------------------------------------------
 
+/**
+ * El nombre del tipo de documento en pantalla y en el PDF (requerimiento 11,
+ * 07/10/2026: no llamar «Honorario» a la factura). El valor interno sigue
+ * siendo HONORARIOS: es el que decide la serie (FAC-HON) y el tipo ante la DGI.
+ */
 export const INVOICE_KIND_LABEL: Record<InvoiceKind, string> = {
-  HONORARIOS: "Honorarios",
-  REEMBOLSO: "Reembolso",
+  HONORARIOS: "Factura",
+  REEMBOLSO: "Factura de reembolso",
   NOTA_DEBITO: "Nota de débito",
+};
+
+/** El título del formulario según el tipo elegido (requerimiento 11). */
+export const TITULO_DEL_FORMULARIO: Record<"create" | "edit", Record<InvoiceKind, string>> = {
+  create: { HONORARIOS: "Nueva factura", REEMBOLSO: "Nueva factura de reembolso", NOTA_DEBITO: "Nueva nota de débito" },
+  edit: { HONORARIOS: "Editar factura", REEMBOLSO: "Editar factura de reembolso", NOTA_DEBITO: "Editar nota de débito" },
 };
 
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {

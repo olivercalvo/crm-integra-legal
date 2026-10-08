@@ -37,8 +37,7 @@ import {
   Clock,
   Upload,
 
-  UserCheck,
-} from "lucide-react";
+  UserCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -299,6 +298,19 @@ export default async function ExpedienteDetailPage({
               24/08/2026 — su alcance en un caso es adjuntar documentos y
               comentar. El PATCH con action="change-status" también le responde
               403, así que el botón sería una promesa falsa. */}
+          {/* Requerimiento 13 (07/10/2026): «Facturar este caso» abre la factura
+              nueva con el caso y su cliente precargados.
+              nav-guard-ok: sólo admin y abogada, los que crean facturas
+              (/finanzas/facturas/nueva en route-access.ts). */}
+          {(userRole === "admin" || userRole === "abogada") && (
+            <Link
+              href={`/finanzas/facturas/nueva?case_id=${params.id}`}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-integra-gold/60 bg-white px-3 text-sm font-semibold text-integra-navy hover:border-integra-navy"
+            >
+              <Receipt size={16} />
+              Facturar este caso
+            </Link>
+          )}
           {(userRole === "admin" || userRole === "abogada") && (
             <CaseStatusChanger
               caseId={params.id}

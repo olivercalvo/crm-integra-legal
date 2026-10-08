@@ -1,5 +1,30 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cambios chicos antes de la ventana y guía de carga enero a junio] - 2026-10-07
+
+Sin migraciones. Decisiones de Oliver sobre la cobertura de requerimientos (`docs/finanzas/cobertura-requerimientos-2026-10-07.md`).
+- **19:** «Gastos del Bufete» pasa a **«Compras»** en el menú, el listado, el detalle, alta, edición, Proveedores y
+  el Resumen de ITBMS (pantalla y PDF: «Detalle de compras»). La ruta `/finanzas/gastos-bufete` no cambia.
+- **5:** **«Ver asiento N.º X»** en el detalle de factura, compra y gasto de trámite. Admin y contador lo abren
+  (`/finanzas/asientos/{id}`); la abogada ve el número sin enlace, porque los asientos son admin y contador.
+- **13:** botón **«Facturar este caso»** en el detalle del caso (admin y abogada): abre la factura nueva con el
+  caso y su cliente precargados. Antes el `?case_id=` de la factura nueva no hacía nada.
+- **48:** el CRM se puede **instalar en el escritorio** desde el navegador (manifest `standalone`, íconos 192 y
+  512, color del tema). `/manifest.webmanifest` es público en el middleware.
+- **46:** cada opción del menú lateral tiene un ícono **«Abrir en una pestaña nueva»** al pasar el mouse (sin
+  pestañas internas).
+- **3:** la hoja «Instrucciones» de la plantilla del plan de cuentas dice que la **subcategoría es obligatoria**
+  (vacía toma la del tipo), lista las válidas por tipo y aclara que el saldo inicial sólo cuenta sin apertura.
+- **11:** el título del formulario sigue al tipo de documento (**«Nueva factura»**, «Nueva factura de
+  reembolso», «Nueva nota de débito», y «Editar …») y el tipo HONORARIOS se muestra como **«Factura»**, nunca
+  «Honorarios». Los mensajes de líneas mixtas (SOP-029) siguen nombrando la categoría de servicios.
+- **Antigüedad:** la partida que viene de un **asiento importado** se nombra por su referencia externa
+  (`QB-1001 (AD-000005)`), para encontrar el documento de QuickBooks.
+- **Guía para Josuarth:** `docs/finanzas/guia-carga-enero-junio.md` (camino A: apertura al 31/12/2025, enero a
+  mano, febrero a junio por importación con el proveedor como tercero).
+- Test: `cambios-antes-de-la-ventana.test.ts` (8). Capturas: `docs/finanzas/capturas-cambios-ventana/`.
+  Ensayo completo de la ventana sin errores, concurrencia 180 rondas (1620, cero deadlocks).
+
 ## [Interruptor del posteo histórico] - 2026-10-07
 
 - «Contabilizar el mes» (documentos existentes) y «Contabilizar» y «Reversar» (apertura) quedan **apagados** hasta

@@ -15,6 +15,7 @@ import {
 } from "@/lib/finanzas/import/chart-of-accounts-mapping";
 import {
   SUBCATEGORIA_LABEL_ES,
+  SUBCATEGORIAS_POR_TIPO,
   type Subcategoria,
 } from "@/lib/finanzas/types/chart-of-account";
 
@@ -66,30 +67,43 @@ export function generateChartAccountsTemplate(): ArrayBuffer {
   sheet["!cols"] = [{ wch: 12 }, { wch: 40 }, { wch: 14 }, { wch: 26 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, sheet, "Cuentas");
 
-  const subcategorias = (Object.keys(SUBCATEGORIA_LABEL_ES) as Subcategoria[]).map((k) => [
-    SUBCATEGORIA_LABEL_ES[k],
-    k,
-  ]);
+  // Requerimiento 3 (07/10/2026): la hoja decía que la subcategoría era
+  // opcional. Desde la 079 es OBLIGATORIA en los seis tipos (CHECK
+  // coa_subcategoria_por_tipo): si la celda viene vacía se asigna la de por
+  // defecto del tipo (`subcategoriaPorDefecto`, la misma regla de la base) y se
+  // corrige después en el Plan de Cuentas. Las válidas van por tipo.
+  const TIPO_ES: Record<string, string> = {
+    asset: "Activo", liability: "Pasivo", equity: "Patrimonio", income: "Ingreso", cost: "Costo", expense: "Gasto",
+  };
+  const porTipo = (Object.keys(SUBCATEGORIAS_POR_TIPO) as (keyof typeof SUBCATEGORIAS_POR_TIPO)[]).flatMap((t) =>
+    SUBCATEGORIAS_POR_TIPO[t].map((k: Subcategoria) => [TIPO_ES[t] ?? t, SUBCATEGORIA_LABEL_ES[k], k])
+  );
   const help = XLSX.utils.aoa_to_sheet([
     ["Cómo llenar esta plantilla"],
     [],
     ["Columna", "Obligatoria", "Detalle"],
-    ["Código", "Sí", "Único. Letras, dígitos, guion o punto. No se puede cambiar después."],
+    ["Código", "Sí", "Único. Letras, dígitos, guion o punto (el plan del bufete usa 6 dígitos). No se puede cambiar después."],
     ["Nombre", "Sí", "Entre 2 y 120 caracteres."],
     ["Tipo", "Sí", "Activo, Pasivo, Patrimonio, Ingreso, Costo o Gasto."],
     [
       "Subcategoría",
-      "No",
-      "Si se deja vacía: Costo asume 'Costo' y Gasto asume 'Gasto operativo'. El resto queda sin clasificar.",
+      "Sí",
+      "Toda cuenta lleva una, de las válidas para su tipo (tabla de abajo). Si la celda queda vacía, el sistema pone la de " +
+        "por defecto del tipo (por ejemplo, Gasto → Gastos operativos; Activo → Activo corriente) y se corrige después en el Plan de Cuentas.",
     ],
-    ["Saldo inicial", "No", "Vacío = 0. Admite negativos y separadores de miles."],
+    [
+      "Saldo inicial",
+      "No",
+      "Vacío = 0. Admite negativos y separadores de miles. Se usa sólo mientras el bufete no tenga asiento de apertura: " +
+        "con la apertura cargada (Asientos de Diario › Apertura) el saldo inicial ya no cuenta ni se puede cambiar.",
+    ],
     [],
     ["Si un código ya existe, la fila ACTUALIZA esa cuenta (nombre, tipo, subcategoría y saldo)."],
     [],
-    ["Subcategorías válidas", "Valor interno"],
-    ...subcategorias,
+    ["Tipo", "Subcategoría válida", "Valor interno"],
+    ...porTipo,
   ]);
-  help["!cols"] = [{ wch: 32 }, { wch: 14 }, { wch: 80 }];
+  help["!cols"] = [{ wch: 22 }, { wch: 32 }, { wch: 100 }];
   XLSX.utils.book_append_sheet(wb, help, "Instrucciones");
 
   return XLSX.write(wb, { bookType: "xlsx", type: "array" });

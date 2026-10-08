@@ -85,16 +85,10 @@ export default async function EditarFacturaPage({ params }: PageProps) {
           label="Volver al detalle"
           showLabel
         />
-        <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Editar factura</h1>
-          <p className="text-sm text-gray-500">
-            Modifica los datos del borrador. Al guardar, los totales se
-            recalculan automáticamente.
-          </p>
-        </div>
       </div>
 
       <InvoiceForm
+        subtitulo="Modifica los datos del borrador. Al guardar, los totales se recalculan automáticamente."
         mode="edit"
         clients={clients}
         casesByClient={casesByClient}

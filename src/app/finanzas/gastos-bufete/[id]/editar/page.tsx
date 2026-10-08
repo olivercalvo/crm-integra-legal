@@ -15,7 +15,7 @@ import { BusinessExpenseForm } from "../../_components/business-expense-form";
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Editar gasto · Finanzas",
+  title: "Editar compra · Finanzas",
 };
 import type {
   BusinessExpensePaymentMethod,
@@ -70,7 +70,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           showLabel
         />
         <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Editar gasto</h1>
+          <h1 className="text-2xl font-bold text-integra-navy">Editar compra</h1>
           <p className="text-sm text-gray-500 truncate max-w-[600px]">
             {expense.description}
           </p>

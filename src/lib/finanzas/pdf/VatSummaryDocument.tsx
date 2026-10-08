@@ -384,7 +384,7 @@ export function VatSummaryDocument({ result }: VatSummaryDocumentProps) {
         )}
 
         {/* Detalle gastos */}
-        <Text style={s.sectionHeader}>Detalle de gastos del bufete</Text>
+        <Text style={s.sectionHeader}>Detalle de compras</Text>
         {hasExpenses ? (
           <View style={s.detailTable}>
             <View style={[s.detailRow, s.detailRowHead]} fixed>
@@ -417,7 +417,7 @@ export function VatSummaryDocument({ result }: VatSummaryDocumentProps) {
             ))}
           </View>
         ) : (
-          <Text style={s.emptyState}>Sin gastos del bufete en el período.</Text>
+          <Text style={s.emptyState}>Sin compras en el período.</Text>
         )}
 
         {/* Detalle pagos al DGI */}

@@ -1,4 +1,6 @@
 import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
 import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { DePruebaBadge, DePruebaBanda } from "@/components/finanzas/de-prueba-badge";
@@ -82,6 +84,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // Las rutas de API le responden 403 igual, pero un botón que falla al
   // apretarlo es exactamente el problema que este cambio vino a resolver.
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
+  // Requerimiento 5: el asiento que generó (factura o ND, source_type 'factura').
+  const asiento = await cargarAsientoDelDocumento(db, tenantId, "factura", invoice.id);
   // 094: una factura de prueba no se emite, no se cobra, no se acredita, no se
   // anula ni va a la DGI (el servidor responde 409; acá no se ofrece).
   const esDePrueba = invoice.de_prueba === true;
@@ -310,6 +314,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               Salvo la emitida fuera (092): su comprobante es el del sistema que
               la emitió, y un PDF del CRM con otro número se podría entregar
               como si fuera el fiscal. */}
+          <VerAsiento asiento={asiento} puedeAbrir={userRole === "admin" || userRole === "contador"} />
           {!emitidaFuera && (
             <DownloadInvoicePdfButton
               invoiceId={invoice.id}

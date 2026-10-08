@@ -108,6 +108,11 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // El manifest de la app instalable (requerimiento 48): público, sin datos.
+  if (pathname === "/manifest.webmanifest") {
+    return response;
+  }
+
   // Rutas públicas — sin requerir auth.
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     if (user) {

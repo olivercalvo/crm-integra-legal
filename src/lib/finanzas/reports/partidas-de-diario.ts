@@ -36,6 +36,12 @@ export interface LineaDeControl {
   supplierId: string | null;
   /** Nombre del tercero de la línea, ya resuelto (cliente o proveedor). */
   terceroNombre: string | null;
+  /**
+   * 07/10/2026: la referencia externa del asiento (`referencia_externa`, la del
+   * archivo: el número de la factura en QuickBooks), sólo si el asiento vino de
+   * la IMPORTACIÓN. Así la partida se reconoce por el documento y no sólo por AD-.
+   */
+  referenciaExterna?: string | null;
 }
 
 function round2(n: number): number {
@@ -91,7 +97,9 @@ export function partidasDeDiario(
     const s = round2(saldo);
     if (Math.abs(s) < 0.005) continue;
     const esApertura = linea.sourceType === "apertura";
-    const numero = linea.referencia?.trim() || `Asiento N.º ${linea.entryNumber}`;
+    const propio = linea.referencia?.trim() || `Asiento N.º ${linea.entryNumber}`;
+    const externa = linea.referenciaExterna?.trim();
+    const numero = externa ? `${externa} (${propio})` : propio;
     partidas.push({
       id: clave,
       numero: esApertura ? `${numero} (apertura)` : numero,

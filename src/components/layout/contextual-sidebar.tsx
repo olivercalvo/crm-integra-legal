@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Pin, PinOff } from "lucide-react";
+import { ExternalLink, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getActiveTab, getSidebarItems, isItemActive } from "@/lib/nav-config";
 
@@ -89,31 +89,47 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
           const Icon = item.icon;
           const active = isItemActive(item.href, pathname);
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={!expanded ? item.label : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-lg min-h-[44px] text-sm font-medium transition-colors",
-                expanded ? "px-3" : "justify-center px-0",
-                active
-                  ? "bg-white/15 text-white border-l-[3px] border-integra-gold"
-                  : "text-white/70 hover:bg-white/10 hover:text-white",
-                active && expanded && "pl-[9px]"
-              )}
-            >
-              <span className="shrink-0">
-                <Icon size={20} />
-              </span>
-              <span
+            <div key={item.href} className="group relative flex items-center">
+              <Link
+                href={item.href}
+                title={!expanded ? item.label : undefined}
                 className={cn(
-                  "truncate transition-opacity duration-150",
-                  expanded ? "opacity-100" : "opacity-0 w-0 hidden"
+                  "flex flex-1 items-center gap-3 rounded-lg min-h-[44px] text-sm font-medium transition-colors",
+                  expanded ? "px-3 pr-10" : "justify-center px-0",
+                  active
+                    ? "bg-white/15 text-white border-l-[3px] border-integra-gold"
+                    : "text-white/70 hover:bg-white/10 hover:text-white",
+                  active && expanded && "pl-[9px]"
                 )}
               >
-                {item.label}
-              </span>
-            </Link>
+                <span className="shrink-0">
+                  <Icon size={20} />
+                </span>
+                <span
+                  className={cn(
+                    "truncate transition-opacity duration-150",
+                    expanded ? "opacity-100" : "opacity-0 w-0 hidden"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+              {/* Requerimiento 46 (07/10/2026): abrir la opción en una pestaña
+                  nueva sin cerrar la actual. Es la misma ruta del ítem (mismo
+                  permiso); el clic con la rueda también lo hace. */}
+              {expanded && (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={`Abrir ${item.label} en una pestaña nueva`}
+                  title="Abrir en una pestaña nueva"
+                  className="absolute right-1 flex h-9 w-9 items-center justify-center rounded-md text-white/40 opacity-0 transition-opacity hover:bg-white/10 hover:text-white focus:opacity-100 group-hover:opacity-100"
+                >
+                  <ExternalLink size={15} />
+                </a>
+              )}
+            </div>
           );
         })}
       </nav>

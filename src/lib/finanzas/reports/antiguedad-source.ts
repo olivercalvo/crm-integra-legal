@@ -141,7 +141,7 @@ async function lineasDeDiarioContraControl(
     .from("journal_entry_lines")
     .select(
       "entry_id, debit, credit, client_id, supplier_id, clients(name), suppliers(legal_name, trade_name), " +
-        "journal_entries!inner(entry_number, source_type, transaction_date, reference)"
+        "journal_entries!inner(entry_number, source_type, transaction_date, reference, referencia_externa)"
     )
     .eq("tenant_id", tenantId)
     .eq("account_id", (cuenta as { id: string }).id)
@@ -165,6 +165,7 @@ async function lineasDeDiarioContraControl(
       source_type: string;
       transaction_date: string;
       reference: string | null;
+      referencia_externa: string | null;
     };
   };
   const lineas: LineaDeControl[] = ((data ?? []) as unknown as Fila[]).map((f) => ({
@@ -183,6 +184,19 @@ async function lineasDeDiarioContraControl(
   if (lineas.length === 0) return vacio;
 
   const ids = Array.from(new Set(lineas.map((l) => l.entryId)));
+  // 07/10/2026: de los asientos IMPORTADOS se muestra la referencia externa (el
+  // número del documento en el archivo), además del AD-.
+  const importados = new Set<string>();
+  try {
+    const { data: imp } = await db.from("journal_import_entries").select("entry_id").eq("tenant_id", tenantId).in("entry_id", ids);
+    for (const r of (imp ?? []) as { entry_id: string }[]) importados.add(r.entry_id);
+  } catch {
+    // sin la 067 no hay importaciones
+  }
+  const externas = new Map(((data ?? []) as unknown as Fila[]).map((f) => [f.entry_id, f.journal_entries.referencia_externa]));
+  for (const l of lineas) {
+    if (importados.has(l.entryId)) l.referenciaExterna = externas.get(l.entryId) ?? null;
+  }
   const { data: espejos } = await db
     .from("journal_entries")
     .select("reverses_entry_id")

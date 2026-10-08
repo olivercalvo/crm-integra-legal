@@ -1,4 +1,6 @@
 import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
 import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { redirect, notFound } from "next/navigation";
 import {
@@ -145,6 +147,8 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
 
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
+  // Requerimiento 5: el asiento del gasto (source_type 'gasto_tramite').
+  const asiento = await cargarAsientoDelDocumento(ctx.db, ctx.tenantId, "gasto_tramite", params.id);
   const anulado = gasto.status === "anulado";
   // 096: anterior al inicio contable → contabilizado fuera. No se registra en el
   // libro (la ruta responde 409) y se paga igual: la cuenta por pagar está en
@@ -212,6 +216,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
                 Sin registrar en el libro
               </span>
             )}
+            <VerAsiento asiento={asiento} puedeAbrir={ctx.userRole === "admin" || ctx.userRole === "contador"} />
             <span className="text-xs text-gray-400">
               {gasto.expense_type === "administrativo" ? "Administrativo" : "Trámite"}
             </span>

@@ -1,4 +1,6 @@
 import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
 import { cargarInicioContable, esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
@@ -28,7 +30,7 @@ import { cargarCompraParaNc, listSupplierCreditNotesForExpense } from "@/lib/fin
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Gasto del bufete · Finanzas",
+  title: "Compra · Finanzas",
 };
 interface PageProps {
   params: { id: string };
@@ -66,6 +68,8 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   ]);
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
+  // Requerimiento 5: el asiento de la compra (source_type 'gasto').
+  const asiento = await cargarAsientoDelDocumento(ctx.db, ctx.tenantId, "gasto", params.id);
   const proveedor = proveedorDelDetalle(expense);
 
   // El comprobante YA NO se firma acá.
@@ -113,7 +117,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/finanzas/gastos-bufete"
-            aria-label="Volver a Gastos del Bufete"
+            aria-label="Volver a Compras"
             className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-md text-integra-navy hover:bg-gray-100"
           >
             <ArrowLeft size={20} />
@@ -134,6 +138,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <VerAsiento asiento={asiento} puedeAbrir={ctx.userRole === "admin" || ctx.userRole === "contador"} />
           {canMutate && (
             <Link href="/finanzas/gastos-bufete/nuevo">
               <Button
@@ -141,7 +146,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                 className="min-h-[44px] border-integra-navy/30 text-integra-navy hover:bg-integra-navy/5"
               >
                 <Plus size={16} className="mr-1.5" />
-                Nuevo gasto
+                Nueva compra
               </Button>
             </Link>
           )}

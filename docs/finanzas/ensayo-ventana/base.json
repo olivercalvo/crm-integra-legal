@@ -3,7 +3,7 @@
     {
       "archivo": "supabase-shim.sql",
       "bloque": "shim",
-      "ms": 385,
+      "ms": 279,
       "error": null,
       "avisos": [
         {
@@ -35,7 +35,7 @@
     {
       "archivo": "20260402000001_initial_schema.sql",
       "bloque": "base 024",
-      "ms": 403,
+      "ms": 410,
       "error": null,
       "avisos": [
         {
@@ -47,7 +47,7 @@
     {
       "archivo": "20260402000002_seed_data.sql",
       "bloque": "base 024",
-      "ms": 61,
+      "ms": 74,
       "error": null,
       "avisos": []
     },
@@ -61,7 +61,7 @@
     {
       "archivo": "20260403000002_add_case_fields.sql",
       "bloque": "base 024",
-      "ms": 59,
+      "ms": 43,
       "error": null,
       "avisos": [
         {
@@ -73,28 +73,28 @@
     {
       "archivo": "20260403000003_add_assistant_id.sql",
       "bloque": "base 024",
-      "ms": 21,
+      "ms": 18,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260403000004_add_client_fields.sql",
       "bloque": "base 024",
-      "ms": 7,
+      "ms": 9,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260403000005_responsible_id_to_users.sql",
       "bloque": "base 024",
-      "ms": 28,
+      "ms": 19,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260403000012_todos_and_prospects.sql",
       "bloque": "base 024",
-      "ms": 258,
+      "ms": 177,
       "error": null,
       "avisos": []
     },
@@ -108,35 +108,35 @@
     {
       "archivo": "20260404000001_v1_1_feedback_changes_fixed.sql",
       "bloque": "base 024",
-      "ms": 89,
+      "ms": 70,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260404000002_payment_type.sql",
       "bloque": "base 024",
-      "ms": 28,
+      "ms": 26,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260405000001_client_responsible_lawyer.sql",
       "bloque": "base 024",
-      "ms": 22,
+      "ms": 26,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260504000001_add_contador_role.sql",
       "bloque": "base 024",
-      "ms": 28,
+      "ms": 22,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260505000001_finanzas_extend_clients.sql",
       "bloque": "base 024",
-      "ms": 71,
+      "ms": 64,
       "error": null,
       "avisos": [
         {
@@ -164,7 +164,7 @@
     {
       "archivo": "20260505000002_finanzas_catalogos.sql",
       "bloque": "base 024",
-      "ms": 351,
+      "ms": 258,
       "error": null,
       "avisos": [
         {
@@ -204,7 +204,7 @@
     {
       "archivo": "20260505000003_finanzas_b3a_quotes.sql",
       "bloque": "base 024",
-      "ms": 181,
+      "ms": 161,
       "error": null,
       "avisos": [
         {
@@ -236,7 +236,7 @@
     {
       "archivo": "20260505000004_finanzas_b3b_invoices.sql",
       "bloque": "base 024",
-      "ms": 201,
+      "ms": 157,
       "error": null,
       "avisos": [
         {
@@ -268,7 +268,7 @@
     {
       "archivo": "20260505000005_finanzas_b3c_credit_notes.sql",
       "bloque": "base 024",
-      "ms": 154,
+      "ms": 120,
       "error": null,
       "avisos": [
         {
@@ -300,7 +300,7 @@
     {
       "archivo": "20260505000006_finanzas_b3d_payments.sql",
       "bloque": "base 024",
-      "ms": 157,
+      "ms": 115,
       "error": null,
       "avisos": [
         {
@@ -336,7 +336,7 @@
     {
       "archivo": "20260505000007_finanzas_b3e_triggers.sql",
       "bloque": "base 024",
-      "ms": 131,
+      "ms": 102,
       "error": null,
       "avisos": [
         {
@@ -420,21 +420,21 @@
     {
       "archivo": "20260506000001_finanzas_b4_schema_prep_dgi.sql",
       "bloque": "base 024",
-      "ms": 57,
+      "ms": 43,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260507000001_finanzas_b4_anular_factura.sql",
       "bloque": "base 024",
-      "ms": 47,
+      "ms": 39,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "20260508000001_clients_add_status_and_type.sql",
       "bloque": "base 024",
-      "ms": 138,
+      "ms": 104,
       "error": null,
       "avisos": [
         {
@@ -450,7 +450,7 @@
     {
       "archivo": "20260508000002_quotes_extension_and_terms_template.sql",
       "bloque": "base 024",
-      "ms": 117,
+      "ms": 143,
       "error": null,
       "avisos": [
         {
@@ -474,7 +474,7 @@
     {
       "archivo": "20260508000003_clients_drop_active_legacy.sql",
       "bloque": "base 024",
-      "ms": 43,
+      "ms": 47,
       "error": null,
       "avisos": [
         {
@@ -486,49 +486,49 @@
     {
       "archivo": "002_enable_unaccent_and_search_rpcs.sql",
       "bloque": "base 024",
-      "ms": 109,
+      "ms": 81,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "005_add_familia_classification.sql",
       "bloque": "base 024",
-      "ms": 50,
+      "ms": 46,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "add_extrajudicial_classification.sql",
       "bloque": "base 024",
-      "ms": 31,
+      "ms": 34,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "update-classification-colors.sql",
       "bloque": "base 024",
-      "ms": 15,
+      "ms": 16,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "add_payment_description_receipt.sql",
       "bloque": "base 024",
-      "ms": 5,
+      "ms": 9,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "add-receipt-to-expenses.sql",
       "bloque": "base 024",
-      "ms": 8,
+      "ms": 9,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "006_extend_documents_for_auto_pdfs.sql",
       "bloque": "base 024",
-      "ms": 132,
+      "ms": 88,
       "error": null,
       "avisos": [
         {
@@ -568,7 +568,7 @@
     {
       "archivo": "007_quotes_add_title.sql",
       "bloque": "base 024",
-      "ms": 85,
+      "ms": 61,
       "error": null,
       "avisos": [
         {
@@ -580,7 +580,7 @@
     {
       "archivo": "008_extend_chart_of_accounts.sql",
       "bloque": "base 024",
-      "ms": 231,
+      "ms": 132,
       "error": null,
       "avisos": [
         {
@@ -624,7 +624,7 @@
     {
       "archivo": "009_create_tax_payments.sql",
       "bloque": "base 024",
-      "ms": 185,
+      "ms": 131,
       "error": null,
       "avisos": [
         {
@@ -688,7 +688,7 @@
     {
       "archivo": "010_create_business_expenses.sql",
       "bloque": "base 024",
-      "ms": 217,
+      "ms": 158,
       "error": null,
       "avisos": [
         {
@@ -808,7 +808,7 @@
     {
       "archivo": "012_extend_services_quotes_observations.sql",
       "bloque": "base 024",
-      "ms": 189,
+      "ms": 121,
       "error": null,
       "avisos": [
         {
@@ -868,7 +868,7 @@
     {
       "archivo": "013_create_observation_templates.sql",
       "bloque": "base 024",
-      "ms": 168,
+      "ms": 96,
       "error": null,
       "avisos": [
         {
@@ -908,14 +908,14 @@
     {
       "archivo": "014_quotes_estado_emitida.sql",
       "bloque": "base 024",
-      "ms": 20,
+      "ms": 18,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "015_quote_acceptances_rejections.sql",
       "bloque": "base 024",
-      "ms": 136,
+      "ms": 96,
       "error": null,
       "avisos": [
         {
@@ -931,14 +931,14 @@
     {
       "archivo": "016_quotes_source_quote_id.sql",
       "bloque": "base 024",
-      "ms": 50,
+      "ms": 37,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "019_efactura_fase_1a_modelo_datos.sql",
       "bloque": "base 024",
-      "ms": 260,
+      "ms": 185,
       "error": null,
       "avisos": [
         {
@@ -986,21 +986,21 @@
     {
       "archivo": "020_efactura_allocator.sql",
       "bloque": "base 024",
-      "ms": 13,
+      "ms": 14,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "021_client_numbering_sequence.sql",
       "bloque": "base 024",
-      "ms": 41,
+      "ms": 42,
       "error": null,
       "avisos": []
     },
     {
       "archivo": "023_contabilidad_fase1_ledger.sql",
       "bloque": "base 024",
-      "ms": 350,
+      "ms": 261,
       "error": null,
       "avisos": [
         {
@@ -1072,7 +1072,7 @@
     {
       "archivo": "storage_rls_tenant_scoped.sql",
       "bloque": "base 024",
-      "ms": 142,
+      "ms": 42,
       "error": null,
       "avisos": [
         {
@@ -1108,7 +1108,7 @@
     {
       "archivo": "084_audit_log_solo_agregar.sql",
       "bloque": "hotfix 084",
-      "ms": 37,
+      "ms": 40,
       "error": null,
       "avisos": [
         {
@@ -1152,8 +1152,8 @@
       },
       {
         "tabla": "audit_log",
-        "staging": 44,
-        "cargadas": 44
+        "staging": 48,
+        "cargadas": 48
       },
       {
         "tabla": "business_expenses",
@@ -1209,13 +1209,13 @@
       },
       {
         "tabla": "credit_note_lines",
-        "staging": 22,
-        "cargadas": 22
+        "staging": 24,
+        "cargadas": 24
       },
       {
         "tabla": "credit_notes",
-        "staging": 22,
-        "cargadas": 18,
+        "staging": 24,
+        "cargadas": 20,
         "rechazadas": 4,
         "motivos": [
           "new row for relation \"credit_notes\" violates check constraint \"credit_notes_status_check\"",
@@ -1233,8 +1233,8 @@
       },
       {
         "tabla": "expenses",
-        "staging": 32,
-        "cargadas": 32
+        "staging": 37,
+        "cargadas": 37
       },
       {
         "tabla": "fe_emisiones",
@@ -1252,14 +1252,14 @@
       },
       {
         "tabla": "invoice_lines",
-        "staging": 55,
-        "cargadas": 52,
+        "staging": 59,
+        "cargadas": 56,
         "creadas_despues": 3
       },
       {
         "tabla": "invoices",
-        "staging": 52,
-        "cargadas": 45,
+        "staging": 56,
+        "cargadas": 49,
         "creadas_despues": 3,
         "rechazadas": 4,
         "motivos": [
@@ -1295,13 +1295,13 @@
       },
       {
         "tabla": "payment_applications",
-        "staging": 11,
-        "cargadas": 11
+        "staging": 14,
+        "cargadas": 14
       },
       {
         "tabla": "payments",
-        "staging": 14,
-        "cargadas": 14
+        "staging": 20,
+        "cargadas": 20
       },
       {
         "tabla": "personal_todos",

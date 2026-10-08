@@ -3,7 +3,7 @@
     {
       "archivo": "datos-primer-uso.sql",
       "bloque": "primer uso",
-      "ms": 108,
+      "ms": 263,
       "error": null,
       "avisos": [
         {
@@ -12,14 +12,14 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "primer uso: proveedor c5146a5f-6d05-437c-87cc-3f0a718791fc, compra 9598bb98-8f60-4551-a334-75642174853e, 4 asientos en el libro, 1 cobro(s) con banco"
+          "texto": "primer uso: proveedor c4ae199d-868d-45cd-815f-6f2d97dbb8f9, compra f0724e07-34be-4ff5-9bbe-29a62e7202e0, 4 asientos en el libro, 1 cobro(s) con banco"
         }
       ]
     },
     {
       "archivo": "verificacion-038-inmutabilidad.sql",
       "bloque": "verificación",
-      "ms": 32,
+      "ms": 100,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -29,7 +29,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "=== Gasto de prueba: 62c6e34d-2b19-4067-a37e-731c626be5e8 (línea 5b8e584a-bc77-4068-8655-96453facf12b) ==="
+          "texto": "=== Gasto de prueba: 62c6e34d-2b19-4067-a37e-731c626be5e8 (línea b04e413e-a76d-49cf-8d17-3b696425cce4) ==="
         },
         {
           "nivel": "NOTICE",
@@ -44,7 +44,7 @@
     {
       "archivo": "verificacion-039-manual.sql",
       "bloque": "verificación",
-      "ms": 18,
+      "ms": 40,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -61,7 +61,7 @@
     {
       "archivo": "verificacion-045-tax-code-id.sql",
       "bloque": "verificación",
-      "ms": 41,
+      "ms": 87,
       "error": null,
       "avisos": [
         {
@@ -89,7 +89,7 @@
     {
       "archivo": "verificacion-046-reversion-cobro.sql",
       "bloque": "verificación",
-      "ms": 10,
+      "ms": 17,
       "error": null,
       "avisos": [
         {
@@ -101,12 +101,12 @@
     {
       "archivo": "verificacion-047-recibo-de-caja.sql",
       "bloque": "verificación",
-      "ms": 45,
+      "ms": 90,
       "error": null,
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Tenant a0000000-0000-0000-0000-000000000001 · 14 cobros"
+          "texto": "Tenant a0000000-0000-0000-0000-000000000001 · 20 cobros"
         },
         {
           "nivel": "NOTICE",
@@ -114,7 +114,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "[2] todos numerados, formato REC-###### ...... ❌ 0 sin número, 4 con otro formato"
+          "texto": "[2] todos numerados, formato REC-###### ...... ❌ 0 sin número, 10 con otro formato"
         },
         {
           "nivel": "NOTICE",
@@ -122,7 +122,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "[4] orden por payment_date, created_at, id ... ❌ 40 pares invertidos"
+          "texto": "[4] orden por payment_date, created_at, id ... ❌ 82 pares invertidos"
         },
         {
           "nivel": "NOTICE",
@@ -161,7 +161,7 @@
     {
       "archivo": "verificacion-048-pagos-a-proveedores.sql",
       "bloque": "verificación",
-      "ms": 67,
+      "ms": 114,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -171,7 +171,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Compra 9598bb98-8f60-4551-a334-75642174853e · total 321.00"
+          "texto": "Compra f0724e07-34be-4ff5-9bbe-29a62e7202e0 · total 321.00"
         },
         {
           "nivel": "NOTICE",
@@ -222,7 +222,7 @@
     {
       "archivo": "verificacion-093-compra-nace-pendiente.sql",
       "bloque": "verificación",
-      "ms": 13,
+      "ms": 28,
       "error": null,
       "avisos": [
         {
@@ -242,7 +242,7 @@
     {
       "archivo": "verificacion-049-pago-de-gasto-de-tramite.sql",
       "bloque": "verificación",
-      "ms": 101,
+      "ms": 165,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 1 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -252,7 +252,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00 · compra 9598bb98-8f60-4551-a334-75642174853e · gasto asentado <NULL>"
+          "texto": "Gasto de trámite a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00 · compra f0724e07-34be-4ff5-9bbe-29a62e7202e0 · gasto asentado <NULL>"
         },
         {
           "nivel": "NOTICE",
@@ -303,7 +303,7 @@
     {
       "archivo": "verificacion-050-reversion-de-gasto-de-tramite.sql",
       "bloque": "verificación",
-      "ms": 41,
+      "ms": 88,
       "error": {
         "mensaje": "La cuenta de proveedores necesita el proveedor en cada línea: falta en línea 2 (200001). Elige el proveedor para que el movimiento entre en su antigüedad.",
         "detalle": null,
@@ -313,7 +313,7 @@
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "Gasto a2f64c28-bb20-4302-9e87-44131f05a51a · monto 3.00"
+          "texto": "Gasto 85817027-575a-4a8a-a3af-43c81d6b2986 · monto 25.00"
         },
         {
           "nivel": "NOTICE",
@@ -328,7 +328,7 @@
     {
       "archivo": "verificacion-051-nota-de-credito.sql",
       "bloque": "verificación",
-      "ms": 48,
+      "ms": 108,
       "error": {
         "mensaje": "El cobro necesita una referencia: número de transferencia, cheque o recibo.",
         "detalle": null,
@@ -361,7 +361,7 @@
     {
       "archivo": "verificacion-052-anulacion-con-reversion.sql",
       "bloque": "verificación",
-      "ms": 14,
+      "ms": 23,
       "error": null,
       "avisos": [
         {
@@ -373,7 +373,7 @@
     {
       "archivo": "verificacion-053-anulacion-con-nc-parcial.sql",
       "bloque": "verificación",
-      "ms": 15,
+      "ms": 32,
       "error": null,
       "avisos": [
         {
@@ -385,7 +385,7 @@
     {
       "archivo": "verificacion-054-tercero-por-linea.sql",
       "bloque": "verificación",
-      "ms": 131,
+      "ms": 286,
       "error": null,
       "avisos": [
         {
@@ -441,7 +441,7 @@
     {
       "archivo": "verificacion-055-reversion-de-asiento.sql",
       "bloque": "verificación",
-      "ms": 9,
+      "ms": 28,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -453,7 +453,7 @@
     {
       "archivo": "verificacion-057-proveedor-campos.sql",
       "bloque": "verificación",
-      "ms": 42,
+      "ms": 89,
       "error": null,
       "avisos": [
         {
@@ -525,7 +525,7 @@
     {
       "archivo": "verificacion-058-motivo-anulacion.sql",
       "bloque": "verificación",
-      "ms": 26,
+      "ms": 58,
       "error": null,
       "avisos": [
         {
@@ -569,7 +569,7 @@
     {
       "archivo": "verificacion-059-registro-anulaciones.sql",
       "bloque": "verificación",
-      "ms": 19,
+      "ms": 34,
       "error": null,
       "avisos": [
         {
@@ -625,7 +625,7 @@
     {
       "archivo": "verificacion-060-reversion-nota-de-credito.sql",
       "bloque": "verificación",
-      "ms": 210,
+      "ms": 356,
       "error": null,
       "avisos": [
         {
@@ -697,7 +697,7 @@
     {
       "archivo": "verificacion-063-anular-con-nc-reversada.sql",
       "bloque": "verificación",
-      "ms": 219,
+      "ms": 443,
       "error": null,
       "avisos": [
         {
@@ -729,7 +729,7 @@
     {
       "archivo": "verificacion-066-nc-de-compra.sql",
       "bloque": "verificación",
-      "ms": 14,
+      "ms": 23,
       "error": {
         "mensaje": "function public.create_supplier_credit_note(uuid, uuid, unknown, date, unknown, unknown, date, jsonb, jsonb, unknown) does not exist",
         "detalle": null,
@@ -741,7 +741,7 @@
     {
       "archivo": "verificacion-067-importacion-de-asientos.sql",
       "bloque": "verificación",
-      "ms": 151,
+      "ms": 385,
       "error": null,
       "avisos": [
         {
@@ -750,7 +750,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "1 ✅ lote 42856167-b8bb-4b18-9a23-b1d7e30fd6d5 · asientos [5, 6] · total débitos 125.50"
+          "texto": "1 ✅ lote 5efc44bb-16ca-411b-b8a5-d7ba510e3a38 · asientos [5, 6] · total débitos 125.50"
         },
         {
           "nivel": "NOTICE",
@@ -774,7 +774,7 @@
         },
         {
           "nivel": "NOTICE",
-          "texto": "6 ✅ reimportado tras deshacer: lote 09f92781-5cee-4545-a5d2-59800a63c89c"
+          "texto": "6 ✅ reimportado tras deshacer: lote 8f766f83-1cee-4bb1-a083-83cd810adfcd"
         },
         {
           "nivel": "NOTICE",
@@ -785,7 +785,7 @@
     {
       "archivo": "verificacion-068-069-fecha-de-registro.sql",
       "bloque": "verificación",
-      "ms": 26,
+      "ms": 54,
       "error": {
         "mensaje": "El número del asiento de diario (AD-) lo asigna el sistema. La referencia libre va en la referencia externa.",
         "detalle": null,
@@ -806,7 +806,7 @@
     {
       "archivo": "verificacion-071-motor-v4.sql",
       "bloque": "verificación",
-      "ms": 188,
+      "ms": 369,
       "error": {
         "mensaje": "function \"public.create_supplier_credit_note(uuid,uuid,text,date,text,text,date,jsonb,jsonb,uuid)\" does not exist",
         "detalle": null,
@@ -879,7 +879,7 @@
     {
       "archivo": "verificacion-072-hash-v5-verificador.sql",
       "bloque": "verificación",
-      "ms": 69,
+      "ms": 169,
       "error": null,
       "avisos": [
         {
@@ -931,7 +931,7 @@
     {
       "archivo": "verificacion-073-074.sql",
       "bloque": "verificación",
-      "ms": 100,
+      "ms": 217,
       "error": null,
       "avisos": [
         {
@@ -995,7 +995,7 @@
     {
       "archivo": "verificacion-075-ancla.sql",
       "bloque": "verificación",
-      "ms": 24,
+      "ms": 57,
       "error": null,
       "avisos": [
         {
@@ -1043,7 +1043,7 @@
     {
       "archivo": "verificacion-076-nc-modulo.sql",
       "bloque": "verificación",
-      "ms": 129,
+      "ms": 289,
       "error": null,
       "avisos": [
         {
@@ -1099,7 +1099,7 @@
     {
       "archivo": "verificacion-077-nota-de-debito.sql",
       "bloque": "verificación",
-      "ms": 30,
+      "ms": 62,
       "error": null,
       "avisos": [
         {
@@ -1135,7 +1135,7 @@
     {
       "archivo": "verificacion-078-parametros-isr.sql",
       "bloque": "verificación",
-      "ms": 12,
+      "ms": 25,
       "error": null,
       "avisos": [
         {
@@ -1167,7 +1167,7 @@
     {
       "archivo": "verificacion-079-plan-de-cuentas.sql",
       "bloque": "verificación",
-      "ms": 35,
+      "ms": 72,
       "error": null,
       "avisos": [
         {
@@ -1211,7 +1211,7 @@
     {
       "archivo": "verificacion-080-cierre-anual.sql",
       "bloque": "verificación",
-      "ms": 156,
+      "ms": 376,
       "error": null,
       "avisos": [
         {
@@ -1259,7 +1259,7 @@
     {
       "archivo": "verificacion-082-otros-servicios-y-bancos.sql",
       "bloque": "verificación",
-      "ms": 81,
+      "ms": 219,
       "error": null,
       "avisos": [
         {
@@ -1291,7 +1291,7 @@
     {
       "archivo": "verificacion-083-fe-estado-interna.sql",
       "bloque": "verificación",
-      "ms": 16,
+      "ms": 35,
       "error": null,
       "avisos": [
         {
@@ -1323,7 +1323,7 @@
     {
       "archivo": "verificacion-094-documentos-de-prueba.sql",
       "bloque": "verificación",
-      "ms": 105,
+      "ms": 239,
       "error": null,
       "avisos": [
         {
@@ -1375,7 +1375,7 @@
     {
       "archivo": "verificacion-095-documentos-de-prueba-fuera-del-libro.sql",
       "bloque": "verificación",
-      "ms": 139,
+      "ms": 374,
       "error": null,
       "avisos": [
         {
@@ -1419,7 +1419,7 @@
     {
       "archivo": "verificacion-096-inicio-contable.sql",
       "bloque": "verificación",
-      "ms": 247,
+      "ms": 556,
       "error": null,
       "avisos": [
         {
@@ -1523,7 +1523,7 @@
     {
       "archivo": "verificacion-097-posteo-de-documentos-existentes.sql",
       "bloque": "verificación",
-      "ms": 257,
+      "ms": 648,
       "error": null,
       "avisos": [
         {
@@ -1595,7 +1595,7 @@
     {
       "archivo": "verificacion-100-101-apertura.sql",
       "bloque": "verificación",
-      "ms": 147,
+      "ms": 369,
       "error": null,
       "avisos": [
         {
@@ -1667,12 +1667,12 @@
     {
       "archivo": "verificacion-084-audit-log-solo-agregar.sql",
       "bloque": "verificación",
-      "ms": 40,
+      "ms": 98,
       "error": null,
       "avisos": [
         {
           "nivel": "NOTICE",
-          "texto": "[1] autenticado lee su bufete (45 filas).......................... ✅"
+          "texto": "[1] autenticado lee su bufete (49 filas).......................... ✅"
         },
         {
           "nivel": "NOTICE",

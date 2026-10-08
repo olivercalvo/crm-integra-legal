@@ -4,7 +4,9 @@
 
 **08/10:** requerimiento 44 hecho: el menú de Finanzas va por Ventas, Compras, Asientos, Reportes y Configuración,
 con las mismas rutas y permisos. La guía de carga (md y Word) y los textos de la app ya usan las rutas nuevas; el
-Excel de revisión Revision-bloque-1-2026-10.xlsx ya no se usa (Oliver, 08/10). Menú por rol para la
+Excel de revisión Revision-bloque-1-2026-10.xlsx ya no se usa (Oliver, 08/10). El contador sigue sin ver Clientes
+(Bloque 2, punto 6 de `docs/finanzas/cobertura-requerimientos-2026-10-07.md`); la guía le pide confirmar los
+clientes en la hoja Clientes de la plantilla de la apertura. Menú por rol para la
 abogada: decisión pendiente. Inicio (dashboard) y Pagos a proveedores: pantallas que todavía no existen.
 
 ## ▶ PARA RETOMAR (08/10/2026: antigüedad al corte y fechas de la importación)

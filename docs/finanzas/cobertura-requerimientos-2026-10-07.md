@@ -152,6 +152,9 @@ Rutas relativas a la raíz del repositorio. Tamaño: **chico** (horas a 1 día),
 4. 23 pagar varias compras de un proveedor, 9 catálogo de servicios, 14 precio con ITBMS incluido, 17 factura
    interna, 15 número manual, 2 subcategorías desde pantalla, 1 código de 6 dígitos, 12 venta de bienes.
 5. 29 reporte de reembolsables, 34 tarjeta, 32 módulo Banco con conciliación, 27 y 55 aprobaciones.
+6. Contador ve Clientes (lista y ficha comercial, sin casos ni documentos legales). Decisión de Oliver del 08/10:
+   hasta entonces el contador no ve Clientes. Es un cambio de permisos: se mueven juntos la tabla de roles de
+   CLAUDE.md, `route-access.ts`, los guards de la API y `nav-config.ts`.
 
 **Bloque 3 o más adelante:** 33 conexión con Banco General y 42 paquete mensual en PDF por correo.
 

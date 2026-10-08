@@ -16,8 +16,8 @@ meses no se cargan a mano.
 2. **Crea la ficha de cada proveedor** al que le compraste de enero a junio (Finanzas › Compras › Proveedores › Nuevo
    proveedor), con su RUC y su DV en campos separados. Cada ficha recibe un código **PRV-…**: ese código es el que
    vas a poner en los archivos.
-3. **Revisa que cada cliente** al que le quede una cuenta por cobrar tenga su ficha con código **CLI-…** (Finanzas ›
-   Ventas › Clientes).
+3. Revisa que cada cliente al que le quede una cuenta por cobrar tenga su código CLI-…. La lista está en la hoja de
+   clientes de la plantilla de la apertura. Si falta alguno, pide a las licenciadas que creen su ficha antes de cargar.
 
 > ⚠️ **Por qué importa el proveedor en cada línea de gasto:** el anexo de compras de la declaración de renta sale
 > del Libro Mayor de cada cuenta de gasto, con el RUC, el DV y el monto **por proveedor**. Si una línea de gasto entra
@@ -148,7 +148,7 @@ vuelves a subirlo. Las advertencias (en amarillo) no impiden registrar.
 
 ## El orden, resumido
 
-1. Plan de cuentas revisado; fichas de proveedores y clientes creadas.
+1. Plan de cuentas revisado; fichas de proveedores creadas y clientes confirmados en la plantilla.
 2. Fecha de la apertura: 31/12/2025.
 3. Apertura al 31/12/2025 (sólo balance) → revisar en seco → contabilizar.
 4. Enero a mano → revisar los reportes de enero.

@@ -22,11 +22,16 @@ De julio en adelante no cargas nada a mano: las facturas, cobros y compras ya es
 
 ## Las fechas
 
-Van con el mes primero: **MM/DD/AAAA**. Por ejemplo, 02/05/2026 es el 5 de febrero.
+Hay dos reglas, según dónde estés:
 
-- Si un archivo viene con el día primero, cambia «Formato de fecha del archivo» a DD/MM/AAAA.
+- **En las pantallas del sistema** las fechas se ven y se escriben con el **día primero**, como siempre: 31/12/2025 es el 31 de diciembre. Las fechas del texto de esta guía están escritas así.
+- **En los archivos de Excel que subes** (saldos iniciales e importación de asientos), el sistema lee las fechas con el **mes primero (MM/DD/AAAA)**, como lo decidiste el 30/09. En un archivo, 02/05/2026 es el 5 de febrero.
+
+Para no equivocarte con los archivos:
+
+- Si tu archivo trae las fechas con el día primero, cambia «Formato de fecha del archivo» a DD/MM/AAAA antes de revisar.
 - Las celdas con formato de fecha de Excel y las fechas escritas como 2026-02-05 se leen bien con cualquiera de los dos formatos.
-- Antes de contabilizar, mira la columna **«Fecha leída»**. Si sale otro mes, cambia el formato.
+- Antes de contabilizar, mira la columna **«Fecha leída»**: dice la fecha en palabras. Si sale otro mes, cambia el formato.
 
 ## Paso 1. Saldos al 31/12/2025
 
@@ -79,6 +84,8 @@ Una fila por cada línea del asiento. Las líneas de un mismo asiento van juntas
 | Débito / Crédito | Monto positivo, con hasta dos decimales. Uno de los dos por línea |
 
 ### Ejemplo: dos compras y un cobro de febrero
+
+Como es un archivo, las fechas van con el mes primero: 02/05/2026 es el 5 de febrero, 02/12/2026 el 12 de febrero y 02/20/2026 el 20 de febrero.
 
 | Asiento | Fecha | Descripción del asiento | Referencia | Cuenta | Tercero | Descripción de la línea | Débito | Crédito |
 |---|---|---|---|---|---|---|---|---|

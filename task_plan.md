@@ -6,9 +6,9 @@
 **camino A** (no se construye nada del B): guía en `docs/finanzas/guia-carga-enero-junio.md`. Hechos 19
 («Compras»), 5 («Ver asiento»), 13 («Facturar este caso»), 48 (instalable), 46 (pestaña nueva en el menú), 3
 (instrucciones del plan), 11 («Factura») y la referencia externa del asiento importado en la antigüedad.
-Capturas en `docs/finanzas/capturas-cambios-ventana/`. En staging quedó un asiento importado de prueba
-(07/10, AD-000004, 100004 CLI-001 contra 400010, 50,00, referencia `QB-PRUEBA-0710`) para la captura de la
-antigüedad; se deshace desde Ver importaciones si molesta. Ensayo completo de la ventana: sin errores, 41 tablas
+Capturas en `docs/finanzas/capturas-cambios-ventana/`. El asiento importado de prueba de la captura de la
+antigüedad (AD-000004, `QB-PRUEBA-0710`) ya se deshizo (reversión, asiento 155). La importación ahora ADVIERTE
+un gasto o costo sin proveedor (no bloquea). Ensayo completo de la ventana: sin errores, 41 tablas
 131/131, concurrencia 180 rondas (1620, cero deadlocks) y `--control` trabado en 27/27.
 
 

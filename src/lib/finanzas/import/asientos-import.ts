@@ -108,6 +108,11 @@ export interface ContextoDeImportacion {
   mesesDesdeDocumentos?: Map<string, string>;
   /** 071: código de cuenta → `cuenta_control`. Sin el mapa no se exige tercero. */
   cuentasControl?: Map<string, CuentaControlImportada>;
+  /**
+   * Cuentas de gasto o costo (`account_type` expense | cost). Una línea ahí sin
+   * proveedor se ADVIERTE (no bloquea): el anexo de compras sale del proveedor.
+   */
+  cuentasDeGasto?: Set<string>;
   /** 071: `client_number` (CLI-0001) → id. */
   clientesPorCodigo?: Map<string, string>;
   /** 071: `supplier_number` (PRV-0001) → id. */
@@ -120,6 +125,8 @@ export interface ContextoDeImportacion {
 
 export interface ResultadoDeImportacion {
   errores: ErrorDeFila[];
+  /** Avisos que NO bloquean la importación (07/10/2026: gasto sin proveedor). */
+  advertencias: ErrorDeFila[];
   asientos: AsientoImportado[];
   filasLeidas: number;
   totalDebitos: number;
@@ -136,6 +143,9 @@ function normalizar(s: unknown): string {
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+export const ADVERTENCIA_GASTO_SIN_PROVEEDOR =
+  "Esta línea no tiene proveedor: no saldrá en el anexo de compras.";
 
 /** Monto estricto: número ≥ 0 con hasta dos decimales. Vacío = 0. Nunca "0 por error". */
 export function parsearMonto(v: unknown): { ok: true; valor: number } | { ok: false; mensaje: string } {
@@ -202,7 +212,8 @@ export function mensajeMesDesdeDocumentos(fecha: string): string {
 
 export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportacion): ResultadoDeImportacion {
   const errores: ErrorDeFila[] = [];
-  const vacio: ResultadoDeImportacion = { errores, asientos: [], filasLeidas: 0, totalDebitos: 0 };
+  const advertencias: ErrorDeFila[] = [];
+  const vacio: ResultadoDeImportacion = { errores, advertencias: [], asientos: [], filasLeidas: 0, totalDebitos: 0 };
 
   if (!matriz || matriz.length === 0) {
     errores.push({ fila: 0, columna: null, mensaje: "La hoja está vacía." });
@@ -294,6 +305,11 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
           mensaje: `No hay ningún cliente ni proveedor con el código ${codigoTercero}.`,
         });
       }
+    }
+    // Gasto o costo sin proveedor: se registra igual, pero no entra al anexo.
+    //    Un código que no existe ya es error: no se avisa dos veces.
+    if (cuenta && ctx.cuentasDeGasto?.has(cuenta) && !supplier_id && (!codigoTercero || client_id)) {
+      advertencias.push({ fila: n, columna: "Tercero", mensaje: ADVERTENCIA_GASTO_SIN_PROVEEDOR });
     }
     const control = cuenta ? ctx.cuentasControl?.get(cuenta) : undefined;
     if (control === "clientes" && !client_id && (!codigoTercero || supplier_id)) {
@@ -442,5 +458,6 @@ export function validarImportacion(matriz: unknown[][], ctx: ContextoDeImportaci
   }
 
   errores.sort((a, b) => a.fila - b.fila);
-  return { errores, asientos, filasLeidas: filas.length, totalDebitos: round2(totalDebitos) };
+  advertencias.sort((a, b) => a.fila - b.fila);
+  return { errores, advertencias, asientos, filasLeidas: filas.length, totalDebitos: round2(totalDebitos) };
 }

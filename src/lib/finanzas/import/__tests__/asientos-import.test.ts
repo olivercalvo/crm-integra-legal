@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
+  ADVERTENCIA_GASTO_SIN_PROVEEDOR,
   ENCABEZADOS,
   parsearFecha,
   parsearMonto,
@@ -252,4 +253,57 @@ test("098: el bloqueo es SÓLO de la importación masiva; el asiento de ajuste a
     const fuente = readFileSync(path.join(raiz, manual), "utf8");
     assert.doesNotMatch(fuente, /posteos_retroactivos|mesesDesdeDocumentos/, `${manual} no debe bloquear los ajustes a mano`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// 07/10/2026: GASTO O COSTO SIN PROVEEDOR = ADVERTENCIA, NO ERROR
+// ---------------------------------------------------------------------------
+
+test("🔴 una línea de gasto o costo sin proveedor se ADVIERTE con su fila, y la importación no se bloquea", () => {
+  const r = validarImportacion(
+    [
+      H,
+      fila("1", "25/09/2026", "Útiles", "600001", 10, "", "", "PRV-0001"), // 2: con proveedor
+      fila("1", "25/09/2026", "", "100001", "", 10), // 3: banco, no es gasto
+      fila("2", "25/09/2026", "Mensajería", "600001", 5, ""), // 4: sin tercero
+      fila("2", "25/09/2026", "", "100001", "", 5),
+      fila("3", "25/09/2026", "Costo", "500001", 7, "", "", "CLI-0001"), // 6: un CLIENTE no es proveedor
+      fila("3", "25/09/2026", "", "100001", "", 7),
+    ],
+    ctxTerceros({
+      cuentasExistentes: new Set(["600001", "500001", "100001", "100004", "200001"]),
+      cuentasActivas: new Set(["600001", "500001", "100001", "100004", "200001"]),
+      cuentasDeGasto: new Set(["600001", "500001"]),
+    })
+  );
+  assert.deepEqual(r.errores, [], "no bloquea");
+  assert.equal(r.asientos.length, 3);
+  assert.deepEqual(
+    r.advertencias.map((a) => [a.fila, a.columna, a.mensaje]),
+    [
+      [4, "Tercero", ADVERTENCIA_GASTO_SIN_PROVEEDOR],
+      [6, "Tercero", ADVERTENCIA_GASTO_SIN_PROVEEDOR],
+    ]
+  );
+  assert.equal(ADVERTENCIA_GASTO_SIN_PROVEEDOR, "Esta línea no tiene proveedor: no saldrá en el anexo de compras.");
+});
+
+test("un código de tercero inexistente en un gasto es ERROR, no también advertencia", () => {
+  const r = validarImportacion(
+    [H, fila("1", "25/09/2026", "Útiles", "600001", 10, "", "", "PRV-9999"), fila("1", "25/09/2026", "", "100001", "", 10)],
+    ctxTerceros({ cuentasDeGasto: new Set(["600001"]) })
+  );
+  assert.equal(r.errores.length, 1);
+  assert.deepEqual(r.advertencias, []);
+});
+
+test("las advertencias se ven en la vista previa y el contexto real carga las cuentas de gasto y costo", () => {
+  const leer = (p: string) => readFileSync(path.join(process.cwd(), p), "utf8");
+  const ui = leer("src/app/finanzas/asientos/importar/_components/importar-asientos.tsx");
+  assert.match(ui, /vista\?\.resultado\.advertencias/);
+  assert.match(ui, /advertencias\.map\(\(a, i\) => \(/);
+  assert.match(ui, /\{a\.fila\}/);
+  const api = leer("src/lib/finanzas/api/importacion-asientos.ts");
+  assert.match(api, /c\.account_type === "expense" \|\| c\.account_type === "cost"/);
+  assert.match(api, /cuentasDeGasto,/);
 });

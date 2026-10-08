@@ -1,5 +1,16 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Importación de asientos: advertencia de gasto sin proveedor] - 2026-10-07
+
+- La revisión de la importación de asientos **advierte** (no bloquea) cada línea en una cuenta de gasto o costo
+  que no trae proveedor como tercero (o trae un cliente): «Esta línea no tiene proveedor: no saldrá en el anexo de
+  compras», con la fila y la columna. Se ve en la vista previa, en amarillo, debajo de los errores, y el resumen
+  cuenta las advertencias. Un código de tercero inexistente sigue siendo error y no se avisa dos veces.
+- La guía `docs/finanzas/guia-carga-enero-junio.md` lo explica. Tests en `asientos-import.test.ts`.
+- Staging: se deshizo la importación de prueba `QB-PRUEBA-0710` (AD-000004, reversión asiento 155 del 07/10). La
+  antigüedad de CLI-001 vuelve a 15 documentos y B/. 1,604.76; octubre no tiene asientos importados vigentes.
+  Capturas en `docs/finanzas/capturas-cambios-ventana/deshacer-prueba/` y `advertencia/`.
+
 ## [Cambios chicos antes de la ventana y guía de carga enero a junio] - 2026-10-07
 
 Sin migraciones. Decisiones de Oliver sobre la cobertura de requerimientos (`docs/finanzas/cobertura-requerimientos-2026-10-07.md`).

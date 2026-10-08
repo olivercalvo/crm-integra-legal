@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Download, Upload } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Upload } from "lucide-react";
 import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
 import {
@@ -15,7 +15,7 @@ import {
 interface VistaPrevia {
   hash: string;
   yaImportado: string | null;
-  resultado: { errores: ErrorDeFila[]; asientos: AsientoImportado[]; filasLeidas: number; totalDebitos: number };
+  resultado: { errores: ErrorDeFila[]; advertencias?: ErrorDeFila[]; asientos: AsientoImportado[]; filasLeidas: number; totalDebitos: number };
 }
 
 /**
@@ -73,6 +73,7 @@ export function ImportarAsientos() {
 
   const errores = vista?.resultado.errores ?? [];
   const asientos = vista?.resultado.asientos ?? [];
+  const advertencias = vista?.resultado.advertencias ?? [];
   const bloqueo = !vista
     ? null
     : errores.length > 0
@@ -138,6 +139,9 @@ export function ImportarAsientos() {
           <p className="text-sm text-gray-600">
             {vista.resultado.filasLeidas} fila{vista.resultado.filasLeidas === 1 ? "" : "s"} · {asientos.length} asiento
             {asientos.length === 1 ? "" : "s"} · débitos B/. {fmtImporte(vista.resultado.totalDebitos)}
+            {advertencias.length > 0 && (
+              <> · {advertencias.length} advertencia{advertencias.length === 1 ? "" : "s"}</>
+            )}
           </p>
 
           {errores.length > 0 && (
@@ -156,6 +160,34 @@ export function ImportarAsientos() {
                       <td className="px-3 py-1.5 font-mono">{e.fila || "Archivo"}</td>
                       <td className="px-3 py-1.5">{e.columna ?? ""}</td>
                       <td className="px-3 py-1.5 text-red-800">{e.mensaje}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Avisos que NO bloquean: la importación se puede contabilizar igual. */}
+          {advertencias.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-amber-200">
+              <p className="flex items-center gap-2 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <AlertTriangle size={16} className="shrink-0" />
+                Advertencias: no impiden contabilizar, pero conviene revisarlas.
+              </p>
+              <table className="w-full text-sm">
+                <thead className="bg-amber-50 text-left text-xs uppercase tracking-wider text-amber-800">
+                  <tr>
+                    <th className="px-3 py-2">Fila</th>
+                    <th className="px-3 py-2">Columna</th>
+                    <th className="px-3 py-2">Advertencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100">
+                  {advertencias.map((a, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-1.5 font-mono">{a.fila}</td>
+                      <td className="px-3 py-1.5">{a.columna ?? ""}</td>
+                      <td className="px-3 py-1.5 text-amber-900">{a.mensaje}</td>
                     </tr>
                   ))}
                 </tbody>

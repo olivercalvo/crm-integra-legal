@@ -49,7 +49,7 @@ export async function cargarContextoDeImportacion(
   formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<ContextoDeImportacion> {
   const [cuentas, periodos, clientes, proveedores, posteos] = await Promise.all([
-    db.from("chart_of_accounts").select("code, active, cuenta_control").eq("tenant_id", tenantId),
+    db.from("chart_of_accounts").select("code, active, cuenta_control, account_type").eq("tenant_id", tenantId),
     db.from("accounting_periods").select("year, month, status").eq("tenant_id", tenantId),
     // 071: los códigos que puede traer la columna Tercero.
     db.from("clients").select("id, client_number").eq("tenant_id", tenantId),
@@ -64,7 +64,9 @@ export async function cargarContextoDeImportacion(
   const existentes = new Set<string>();
   const activas = new Set<string>();
   const cuentasControl = new Map<string, CuentaControlImportada>();
-  for (const c of (cuentas.data ?? []) as { code: string; active: boolean; cuenta_control: CuentaControlImportada | null }[]) {
+  const cuentasDeGasto = new Set<string>();
+  for (const c of (cuentas.data ?? []) as { code: string; active: boolean; cuenta_control: CuentaControlImportada | null; account_type: string | null }[]) {
+    if (c.account_type === "expense" || c.account_type === "cost") cuentasDeGasto.add(c.code);
     existentes.add(c.code);
     if (c.active) activas.add(c.code);
     if (c.cuenta_control) cuentasControl.set(c.code, c.cuenta_control);
@@ -101,6 +103,7 @@ export async function cargarContextoDeImportacion(
     mesesDesdeDocumentos: desdeDocumentos,
     aniosConPeriodoAutomatico: new Set([anio, anio + 1]),
     cuentasControl,
+    cuentasDeGasto,
     clientesPorCodigo,
     proveedoresPorCodigo,
     formatoDeFecha,

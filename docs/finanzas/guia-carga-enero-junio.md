@@ -24,7 +24,8 @@ meses no se cargan a mano.
 > ⚠️ **Por qué importa el proveedor en cada línea de gasto:** el anexo de compras de la declaración de renta sale
 > del Libro Mayor de cada cuenta de gasto, con el RUC, el DV y el monto **por proveedor**. Si una línea de gasto entra
 > sin proveedor, el sistema la acepta (en una cuenta de gasto el proveedor no es obligatorio), pero **esa compra no
-> aparece en el anexo**. Pon el código PRV- del proveedor en cada línea de gasto.
+> aparece en el anexo**. Pon el código PRV- del proveedor en cada línea de gasto. Al importar un archivo, la
+> revisión te lo avisa en amarillo con el número de fila (ver «Qué hace el sistema si algo no está bien»).
 
 ## Paso 1. Los saldos al 31/12/2025 (asiento de apertura)
 
@@ -63,7 +64,8 @@ Sirve para probar los reportes de enero (Estado de Resultados, Balance, Mayor) a
 2. Llena **un archivo por mes** (febrero, marzo, abril, mayo y junio). Cada archivo admite hasta 200 asientos y 3.000
    líneas.
 3. Súbelo, elige cómo vienen las fechas (DD/MM o MM/DD) y revisa la **vista previa**: muestra cada error con su fila y
-   su columna. **Si hay un solo error no se registra nada**: corrige el Excel y vuelve a subirlo.
+   su columna. **Si hay un solo error no se registra nada**: corrige el Excel y vuelve a subirlo. Debajo de los errores
+   pueden salir **advertencias** en amarillo (por ejemplo, un gasto sin proveedor): no bloquean, pero revísalas.
 4. Con la vista previa sin errores, aprieta **«Contabilizar»**. Entra el archivo completo, o no entra nada.
 5. Revisa los reportes del mes antes de subir el siguiente.
 
@@ -107,13 +109,14 @@ Cada asiento cuadra: el 1 suma 107.00 de cada lado, el 2 suma 45.00 y el 3 suma 
 | el código del tercero no existe | «No hay ningún cliente ni proveedor con el código PRV-099». Crea la ficha primero |
 | falta el tercero en 100004 o 200001 | «La cuenta 100004 es de clientes: pon en Tercero el código del cliente (CLI-…)» |
 | pones un cliente en 200001 (o un proveedor en 100004) | lo marca en la columna Tercero |
-| falta el proveedor en una cuenta de gasto | **no avisa** (no es obligatorio), pero esa compra **no sale en el anexo** |
+| falta el proveedor en una cuenta de gasto o costo (o pusiste un cliente) | muestra una **advertencia** en amarillo con la fila: «Esta línea no tiene proveedor: no saldrá en el anexo de compras». **No bloquea**: puedes contabilizar igual, pero esa compra no sale en el anexo. Lo mejor es corregir el Excel |
 | un asiento no cuadra | «El asiento "2" no cuadra: … faltan B/. 5.00 en el crédito» |
 | una línea tiene débito y crédito, o ninguno | lo marca en la fila |
 | el mes está cerrado | «El mes 02/2026 está cerrado». Se reabre en Períodos contables |
 | la fecha es posterior a hoy o no se entiende | lo marca en la columna Fecha |
 
-En todos los casos, **si hay un solo error no se registra ninguna fila del archivo**. Corriges y vuelves a subirlo.
+En todos los casos de error (en rojo), **si hay un solo error no se registra ninguna fila del archivo**. Corriges y
+vuelves a subirlo. Las advertencias (en amarillo) no impiden registrar.
 
 ## Si algo quedó mal después de registrar
 

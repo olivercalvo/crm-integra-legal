@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
+// Lee la sesión (cookies): siempre dinámica. Sin esto `next build` intenta
+// prerenderizarla, el try/catch atrapa el aviso de Next y lo deja en el log
+// del build como un error que no es (DYNAMIC_SERVER_USAGE).
+export const dynamic = "force-dynamic";
+
 export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();

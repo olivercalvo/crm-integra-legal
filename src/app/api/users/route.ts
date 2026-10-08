@@ -6,6 +6,11 @@ import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente", "contador"];
 
+// Lee la sesión (cookies): siempre dinámica. Sin esto `next build` intenta
+// prerenderizarla, el try/catch atrapa el aviso de Next y lo deja en el log
+// del build como un error que no es (DYNAMIC_SERVER_USAGE).
+export const dynamic = "force-dynamic";
+
 export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();

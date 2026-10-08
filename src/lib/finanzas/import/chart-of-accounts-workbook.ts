@@ -95,7 +95,7 @@ export function generateChartAccountsTemplate(): ArrayBuffer {
       "Saldo inicial",
       "No",
       "Vacío = 0. Admite negativos y separadores de miles. Se usa sólo mientras el bufete no tenga asiento de apertura: " +
-        "con la apertura cargada (Asientos de Diario › Apertura) el saldo inicial ya no cuenta ni se puede cambiar.",
+        "con la apertura cargada (Finanzas › Configuración › Saldos iniciales) el saldo inicial ya no cuenta ni se puede cambiar.",
     ],
     [],
     ["Si un código ya existe, la fila ACTUALIZA esa cuenta (nombre, tipo, subcategoría y saldo)."],

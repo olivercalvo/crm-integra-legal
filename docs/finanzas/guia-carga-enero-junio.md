@@ -11,13 +11,13 @@ meses no se cargan a mano.
 
 ## Antes de empezar (una sola vez)
 
-1. **Revisa el plan de cuentas** (Finanzas › Configuración › Plan de Cuentas). Toda cuenta que vayas a usar tiene que
+1. **Revisa el plan de cuentas** (Finanzas › Configuración › Plan de cuentas). Toda cuenta que vayas a usar tiene que
    existir y estar **activa**. Si falta una, créala ahí antes de subir nada.
-2. **Crea la ficha de cada proveedor** al que le compraste de enero a junio (Finanzas › Proveedores › Nuevo
+2. **Crea la ficha de cada proveedor** al que le compraste de enero a junio (Finanzas › Compras › Proveedores › Nuevo
    proveedor), con su RUC y su DV en campos separados. Cada ficha recibe un código **PRV-…**: ese código es el que
    vas a poner en los archivos.
-3. **Revisa que cada cliente** al que le quede una cuenta por cobrar tenga su ficha con código **CLI-…** (Gestión
-   legal › Clientes).
+3. **Revisa que cada cliente** al que le quede una cuenta por cobrar tenga su ficha con código **CLI-…** (Finanzas ›
+   Ventas › Clientes).
 
 > ⚠️ **Por qué importa el proveedor en cada línea de gasto:** el anexo de compras de la declaración de renta sale
 > del Libro Mayor de cada cuenta de gasto, con el RUC, el DV y el monto **por proveedor**. Si una línea de gasto entra
@@ -28,7 +28,7 @@ meses no se cargan a mano.
 ## Paso 1. Los saldos al 31/12/2025 (asiento de apertura)
 
 1. Finanzas › Configuración › Parámetros contables › **Fecha de la apertura**: escribe **31/12/2025** y guarda.
-2. Finanzas › Asientos de Diario › **Apertura (saldos iniciales)** › «Plantilla vacía». Se baja un Excel con una hoja «Apertura» y, como
+2. Finanzas › Configuración › **Saldos iniciales** › «Plantilla vacía». Se baja un Excel con una hoja «Apertura» y, como
    ayuda, la lista de cuentas, clientes y proveedores.
 3. Llena una fila por saldo, con los números de tu declaración de renta:
    - Como la apertura es al **cierre del año**, lleva **sólo cuentas de balance** (activo, pasivo y patrimonio). El
@@ -40,7 +40,7 @@ meses no se cargan a mano.
 4. Súbelo y aprieta **«Revisar en seco»**. No se registra nada: ves los errores fila por fila y los totales por
    cuenta. Corrige en el Excel y vuelve a subir hasta que diga «Sin errores».
 5. Aprieta **«Contabilizar la apertura»**. Queda un asiento con número AD-.
-   Compárala con QuickBooks en Finanzas › Reportes › Antigüedad de Saldos, con **«Al» 31/12/2025**: por cobrar y por
+   Compárala con QuickBooks en Finanzas › Reportes › Antigüedad de saldos, con **«Al» 31/12/2025**: por cobrar y por
    pagar tienen que dar lo mismo que el reporte de QuickBooks a esa fecha. El campo «Al» sirve igual para revisar el
    cierre de cada mes: toma sólo lo registrado hasta ese día y cuenta los días de atraso contra esa fecha.
 6. Si después encuentras un error, puedes **reversar la apertura** (con un motivo) y cargarla de nuevo, siempre que el
@@ -48,7 +48,7 @@ meses no se cargan a mano.
 
 ## Paso 2. Enero de 2026, a mano
 
-Finanzas › Asientos de Diario: el formulario está en la misma pantalla. Un asiento por operación (o uno por grupo, como prefieras), con:
+Finanzas › Asientos › Asientos de diario: el formulario está en la misma pantalla. Un asiento por operación (o uno por grupo, como prefieras), con:
 
 - la **fecha** del movimiento (dentro de enero);
 - una **descripción**;
@@ -61,7 +61,7 @@ Sirve para probar los reportes de enero (Estado de Resultados, Balance, Mayor) a
 
 ## Paso 3. Febrero a junio, un archivo por mes
 
-1. Finanzas › Asientos de Diario › **Importar desde Excel** › «Descargar plantilla».
+1. Finanzas › Asientos › **Importación de asientos** › «Descargar plantilla».
 2. Llena **un archivo por mes** (febrero, marzo, abril, mayo y junio). Cada archivo admite hasta 200 asientos y 3.000
    líneas.
 3. Súbelo, elige en **«Formato de fecha del archivo»** cómo vienen las fechas (ver «Las fechas», abajo) y revisa la
@@ -142,7 +142,7 @@ vuelves a subirlo. Las advertencias (en amarillo) no impiden registrar.
 
 - **Un asiento:** en su detalle, «Reversar» (con un motivo). Queda el espejo y se carga el correcto. Nada se borra:
   el libro es inmutable.
-- **Un archivo completo:** Asientos de Diario › Ver importaciones › la importación › «Deshacer» (reversa todos sus
+- **Un archivo completo:** Finanzas › Asientos › Asientos de diario › Ver importaciones › la importación › «Deshacer» (reversa todos sus
   asientos de una vez).
 - **Un mes ya cerrado:** se corrige con un asiento de ajuste en un mes abierto.
 
@@ -154,4 +154,4 @@ vuelves a subirlo. Las advertencias (en amarillo) no impiden registrar.
 4. Enero a mano → revisar los reportes de enero.
 5. Febrero, marzo, abril, mayo y junio: un archivo por mes, revisando los reportes de cada mes antes del siguiente.
 6. Cuando un mes esté bien, ciérralo en Períodos contables.
-7. Julio en adelante: los documentos ya están en el CRM. Se pasan al libro mes por mes desde Asientos de Diario › Documentos existentes, por mes («Contabilizar el mes»). No se cargan a mano.
+7. Julio en adelante: los documentos ya están en el CRM. Se pasan al libro mes por mes desde Finanzas › Asientos › Contabilizar documentos por mes («Contabilizar el mes»). No se cargan a mano.

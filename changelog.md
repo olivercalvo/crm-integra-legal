@@ -13,6 +13,8 @@ Sólo el menú lateral (`nav-config.ts`, sidebar y menú móvil). Sin migracione
 - Se pinta sólo la opción más específica (`getActiveItemHref`): en la apertura, «Saldos iniciales» y no «Asientos de
   diario». Las etiquetas largas pasan a dos líneas.
 - Test: `menu-finanzas-por-proceso.test.ts`. Capturas: `docs/finanzas/capturas-cambios-ventana/menu-por-proceso/`.
+- Rutas de menú nuevas en `docs/finanzas/guia-carga-enero-junio.md` (y su Word para Josuarth) y en los tres textos
+  de la app que decían «Asientos de Diario › Apertura» (Plan de cuentas, su plantilla y Parámetros contables).
 
 ## [Fechas en MM/DD por defecto e interruptor en la ventana] - 2026-10-08
 

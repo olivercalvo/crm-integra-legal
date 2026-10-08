@@ -61,7 +61,7 @@ export function FechaAperturaCard({
         <div>
           <h2 className="text-base font-semibold text-integra-navy">Fecha de la apertura</h2>
           <p className="text-xs text-gray-500">
-            El día de los saldos iniciales que vienen de los libros del contador (Asientos de Diario › Apertura). Tiene que
+            El día de los saldos iniciales que vienen de los libros del contador (Finanzas › Configuración › Saldos iniciales). Tiene que
             ser anterior al inicio contable ({fechaCorta(inicio)}). Al 31/12 la apertura lleva sólo cuentas de balance; a mitad
             de año, también lo acumulado de las cuentas de resultado.{" "}
             {esParametro ? "" : "Mientras no se elija, es el día anterior al inicio contable."}

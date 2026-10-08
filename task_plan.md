@@ -3,8 +3,8 @@
 ## ▶ PARA RETOMAR (08/10/2026: menú de Finanzas por proceso)
 
 **08/10:** requerimiento 44 hecho: el menú de Finanzas va por Ventas, Compras, Asientos, Reportes y Configuración,
-con las mismas rutas y permisos. Pendiente: actualizar las rutas de menú del Excel de revisión de Josuarth y de
-`docs/finanzas/guia-carga-enero-junio.md` (siguen diciendo «Asientos de Diario › Apertura»). Menú por rol para la
+con las mismas rutas y permisos. La guía de carga (md y Word) y los textos de la app ya usan las rutas nuevas; el
+Excel de revisión Revision-bloque-1-2026-10.xlsx ya no se usa (Oliver, 08/10). Menú por rol para la
 abogada: decisión pendiente. Inicio (dashboard) y Pagos a proveedores: pantallas que todavía no existen.
 
 ## ▶ PARA RETOMAR (08/10/2026: antigüedad al corte y fechas de la importación)

@@ -603,7 +603,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate, conApertura
               />
               <p className="mt-1 text-xs text-gray-500">
                 {conApertura
-                  ? "Ya no se usa: el bufete tiene un asiento de apertura (Asientos de Diario › Apertura) y los saldos al corte están en el libro."
+                  ? "Ya no se usa: el bufete tiene un asiento de apertura (Finanzas › Configuración › Saldos iniciales) y los saldos al corte están en el libro."
                   : "Monto de apertura. Admite negativos."}
               </p>
               {fieldErrors.saldo_inicial && (

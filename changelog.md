@@ -1,5 +1,15 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cierre del día: guía simplificada y revisión de Josuarth] - 2026-10-08
+
+- Guía de carga enero a junio reescrita por Oliver, más simple, con la sección «Las fechas» que separa pantallas
+  (día primero) de archivos de Excel (mes primero). El Word para Josuarth se regeneró.
+- Josuarth empieza la revisión con el guion de pruebas y el Preview de `feat/bloque1-contable`, con el interruptor
+  `FINANZAS_POSTEO_HISTORICO_HABILITADO` encendido sólo en ese Preview. La rama queda congelada (sin push) mientras
+  revisa. `develop` y `main` sin cambios.
+- Al Bloque 2: el contador ve Clientes; notas de débito en Notas de crédito si Josuarth lo pide; la plantilla de la
+  apertura marca qué clientes tienen saldo.
+
 ## [Menú de Finanzas por proceso (requerimiento 44)] - 2026-10-08
 
 Sólo el menú lateral (`nav-config.ts`, sidebar y menú móvil). Sin migraciones, sin cambios de permisos ni de rutas.

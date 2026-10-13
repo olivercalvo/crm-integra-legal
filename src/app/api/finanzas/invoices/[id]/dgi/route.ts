@@ -5,6 +5,7 @@ import {
   validateDgiInput,
   InvoiceMutationError,
 } from "@/lib/finanzas/api/invoices";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -31,7 +32,7 @@ interface RouteParams {
  * updateInvoiceDgiData() server-side, que devuelve 400 si está en borrador
  * o cancelada_pre_emision.
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -69,4 +70,4 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] updateInvoiceDgiData unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -1,5 +1,11 @@
 /**
- * Numeración del RECIBO DE CAJA: `payments.payment_number` = REC-000001.
+ * Numeración del RECIBO DE CAJA: `payments.payment_number` = CO-000001.
+ *
+ * 🔁 Desde E3 (Bloque 1, 01/10/2026) el prefijo es `CO-` (módulo Cobros, P-2c
+ * de Josuarth). La secuencia `payment` NO se reinicia: los `REC-` ya emitidos
+ * (staging, y los 8 de producción que numera la 047) se quedan como están —no
+ * se renumera un documento entregado— y el siguiente sale `CO-` con el número
+ * que sigue. Así `REC-000007` y `CO-000007` no conviven nunca.
  *
  * Un cobro es un recibo de caja desde el Bloque 2 (21/09/2026). No es
  * documento fiscal en Panamá —no pasa por la DGI ni lleva CUFE—, así que el
@@ -32,11 +38,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type DB = SupabaseClient;
 
 export const RECEIPT_SEQUENCE_TYPE = "payment" as const;
-export const RECEIPT_NUMBER_PREFIX = "REC" as const;
+export const RECEIPT_NUMBER_PREFIX = "CO" as const;
 /** Seis dígitos, como `FAC-HON-000001`. Es el mismo formato que usa el backfill de la 047. */
 export const RECEIPT_NUMBER_PAD = 6;
 
-/** REC-000012. Rechaza lo que no sea un entero positivo: un recibo 0 o negativo no existe. */
+/** CO-000012. Rechaza lo que no sea un entero positivo: un recibo 0 o negativo no existe. */
 export function formatReceiptNumber(n: number): string {
   if (!Number.isInteger(n) || n < 1) {
     throw new Error(`formatReceiptNumber: número de recibo inválido (${String(n)})`);

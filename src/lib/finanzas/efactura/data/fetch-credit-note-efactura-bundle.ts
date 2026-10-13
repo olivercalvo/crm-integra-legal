@@ -57,7 +57,7 @@ const HEADER_SELECT = `
 
 const LINES_SELECT = `
   line_order, description, quantity, unit_price, tax_code, tax_rate,
-  subtotal, tax_amount, line_total
+  subtotal, tax_amount, line_total, service_id
 `;
 
 function toNumber(v: unknown): number {
@@ -80,7 +80,10 @@ function unaFila(v: unknown): Record<string, unknown> | null {
 export interface CreditNoteEfacturaBundle {
   /** Con la NC ocupando el lugar de la factura: el mapper es el mismo. */
   bundle: InvoiceEfacturaBundle;
-  /** La factura que se corrige, para el bloque de referencia y los gates. */
+  /**
+   * La factura que se corrige, para el bloque de referencia y los gates.
+   * `null` ⇒ NC SIN factura (P-4a): se manda como 06 genérica, sin referencia.
+   */
   factura: {
     id: string;
     invoice_number: string;
@@ -88,7 +91,7 @@ export interface CreditNoteEfacturaBundle {
     /** `null` ⇒ caso B o C: hay que cargar el CUFE antes de emitir. */
     dgi_cufe: string | null;
     dgi_cufe_origen: string | null;
-  };
+  } | null;
   credit_note_number: string;
 }
 
@@ -121,9 +124,9 @@ export async function fetchCreditNoteEfacturaBundle(
       500
     );
   }
-  if (!invoiceRow) {
+  if (!invoiceRow && h.invoice_id) {
     throw new MutationError(
-      "La nota de crédito no tiene factura asociada. Esto es inesperado: comuníquese con soporte.",
+      "No se encontró la factura de la nota de crédito. Esto es inesperado: comuníquese con soporte.",
       500
     );
   }
@@ -154,8 +157,12 @@ export async function fetchCreditNoteEfacturaBundle(
     // sí aparece en logs y en el payload guardado: que diga NC-xxxx y no el de
     // una factura es lo que hace legible un `fe_emisiones` de meses después.
     invoice_number: String(h.credit_note_number),
-    // 🔴 Heredado. Ver el encabezado: de acá sale el CPBS.
-    invoice_kind: invoiceRow.invoice_kind as InvoiceKind,
+    // 🔴 Heredado. Ver el encabezado: de acá sale el CPBS. Sin factura, sale de
+    //    los servicios de las líneas: todos de reembolso → REEMBOLSO; si no,
+    //    HONORARIOS (como el CPBS de una FAC-HON).
+    invoice_kind: invoiceRow
+      ? (invoiceRow.invoice_kind as InvoiceKind)
+      : await kindDeLasLineas(db, tenantId, linesRaw as Array<Record<string, unknown>>),
     status: "emitida" as InvoiceStatus,
     issue_date: String(h.issue_date),
     // Una NC no vence. Se repite la fecha de emisión porque el contrato pide
@@ -203,13 +210,28 @@ export async function fetchCreditNoteEfacturaBundle(
 
   return {
     bundle: { invoice, client, lines },
-    factura: {
-      id: String(invoiceRow.id),
-      invoice_number: String(invoiceRow.invoice_number),
-      issue_date: String(invoiceRow.issue_date),
-      dgi_cufe: toStringOrNull(invoiceRow.dgi_cufe),
-      dgi_cufe_origen: toStringOrNull(invoiceRow.dgi_cufe_origen),
-    },
+    factura: invoiceRow
+      ? {
+          id: String(invoiceRow.id),
+          invoice_number: String(invoiceRow.invoice_number),
+          issue_date: String(invoiceRow.issue_date),
+          dgi_cufe: toStringOrNull(invoiceRow.dgi_cufe),
+          dgi_cufe_origen: toStringOrNull(invoiceRow.dgi_cufe_origen),
+        }
+      : null,
     credit_note_number: String(h.credit_note_number),
   };
+}
+
+/** El `invoice_kind` de una NC SIN factura, por los servicios de sus líneas. */
+async function kindDeLasLineas(
+  db: DB,
+  tenantId: string,
+  lineas: Array<Record<string, unknown>>
+): Promise<InvoiceKind> {
+  const ids = Array.from(new Set(lineas.map((l) => l.service_id).filter((v): v is string => typeof v === "string")));
+  if (ids.length === 0) return "HONORARIOS";
+  const { data } = await db.from("services_catalog").select("id, service_type").eq("tenant_id", tenantId).in("id", ids);
+  const tipos = ((data ?? []) as { service_type: string | null }[]).map((r) => r.service_type);
+  return tipos.length === ids.length && tipos.every((t) => t === "reembolso") ? "REEMBOLSO" : "HONORARIOS";
 }

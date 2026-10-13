@@ -12,8 +12,14 @@
 
 // ---------- Status / kind --------------------------------------------------
 
-/** Valores válidos de invoices.invoice_kind (UPPERCASE en BD). */
-export type InvoiceKind = "HONORARIOS" | "REEMBOLSO";
+/**
+ * Valores válidos de invoices.invoice_kind (UPPERCASE en BD).
+ *
+ * `NOTA_DEBITO` (077, decisión 14): mismo efecto que una factura de venta, con
+ * su propia serie `ND-` y, opcional, la factura que ajusta
+ * (`referenced_invoice_id`). Su asiento es el de la factura.
+ */
+export type InvoiceKind = "HONORARIOS" | "REEMBOLSO" | "NOTA_DEBITO";
 
 /** Valores válidos de invoices.status. */
 export type InvoiceStatus =
@@ -34,24 +40,29 @@ export type InvoiceStatus =
  *   - authorized → DGI autorizó. Hay CUFE + protocolo + fecha.
  *   - canceled   → anulada en DGI (post-autorización).
  *   - error      → último intento rechazado. Se puede reintentar.
+ *   - interna    → se emitió a propósito SIN enviarla a la DGI (083). Terminal:
+ *                  ni se envía ni se reintenta. Hoy sólo NC y ND.
  */
 export type FeEstado =
   | "no_emitida"
   | "pending"
   | "authorized"
   | "canceled"
-  | "error";
+  | "error"
+  | "interna";
 
 /** Mapping invoice_kind → sequence_type para get_next_sequence_number(). */
-export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim"> = {
+export const SEQUENCE_TYPE_BY_KIND: Record<InvoiceKind, "invoice_hon" | "invoice_reim" | "debit_note"> = {
   HONORARIOS: "invoice_hon",
   REEMBOLSO: "invoice_reim",
+  NOTA_DEBITO: "debit_note",
 };
 
 /** Prefijo del invoice_number formateado. */
-export const PREFIX_BY_KIND: Record<InvoiceKind, "FAC-HON" | "FAC-REI"> = {
+export const PREFIX_BY_KIND: Record<InvoiceKind, "FAC-HON" | "FAC-REI" | "ND"> = {
   HONORARIOS: "FAC-HON",
   REEMBOLSO: "FAC-REI",
+  NOTA_DEBITO: "ND",
 };
 
 // ---------- Catalog rows --------------------------------------------------
@@ -123,9 +134,17 @@ export interface CreateInvoiceInput {
   invoice_kind: InvoiceKind;
   client_id: string;
   case_id: string | null;
-  issue_date: string; // YYYY-MM-DD
+  issue_date: string; // YYYY-MM-DD — fecha del DOCUMENTO (la que va a la DGI)
+  /**
+   * Fecha de REGISTRO (YYYY-MM-DD): la del asiento, define el período. Si no
+   * viene, es igual a `issue_date` (lo resuelve el validador y, por si acaso,
+   * el trigger de la `068`).
+   */
+  accounting_date?: string;
   due_date: string;   // YYYY-MM-DD
   notes: string | null;
+  /** Sólo en una NOTA_DEBITO (077): la factura que ajusta. Opcional. */
+  referenced_invoice_id?: string | null;
   lines: Array<Omit<InvoiceLineInput, "_key" | "id">>;
 }
 
@@ -135,8 +154,12 @@ export interface UpdateInvoiceInput {
   client_id: string;
   case_id: string | null;
   issue_date: string;
+  /** Fecha de REGISTRO. Ver `CreateInvoiceInput.accounting_date`. */
+  accounting_date?: string;
   due_date: string;
   notes: string | null;
+  /** Sólo en una NOTA_DEBITO (077). */
+  referenced_invoice_id?: string | null;
   lines: InvoiceLineInput[]; // con id si ya existían
 }
 
@@ -151,6 +174,8 @@ export interface InvoiceRow {
   case_id: string | null;
   quote_id: string | null;
   issue_date: string;
+  /** Fecha de REGISTRO (`068`). Puede faltar en una base anterior a la migración. */
+  accounting_date?: string | null;
   due_date: string;
   status: InvoiceStatus;
   currency: string;
@@ -171,6 +196,15 @@ export interface InvoiceRow {
   // Schema: migration 20260506000001_finanzas_b4_schema_prep_dgi.sql
   dgi_numero_documento: string | null;
   dgi_cufe: string | null;
+  /**
+   * De dónde salió el CUFE (061/064/092): `crm` lo devolvió el PAC, `portal_050`
+   * se cargó a mano, `externo` es una factura emitida fuera del CRM y registrada
+   * con «Registrar factura emitida fuera».
+   */
+  dgi_cufe_origen?: "crm" | "portal_050" | "externo" | null;
+  /** 094: documento de prueba. No cuenta en ningún reporte (`documentos-de-prueba.ts`). */
+  de_prueba?: boolean;
+  de_prueba_motivo?: string | null;
   dgi_fecha_autorizacion: string | null;
   dgi_cafe_url: string | null;
   // ----- eFactura PAC (orquestación T0-T4). Migration:
@@ -182,6 +216,9 @@ export interface InvoiceRow {
   punto_facturacion: string | null;
   numero_documento: number | null;
   ef_invoice_uuid: string | null;
+  /** 085 (03/10/2026): por qué no se emitió o no llegó a la DGI. NULL = nada pendiente. */
+  fe_motivo_pendiente?: string | null;
+  fe_motivo_pendiente_en?: string | null;
   // ----- Anulación. Se llenan en el mismo UPDATE que cambia status a 'anulada'.
   // Schema: migration 20260507000001_finanzas_b4_anular_factura.sql
   cancellation_reason: string | null;
@@ -241,9 +278,21 @@ export interface InvoiceListItem extends InvoiceRow {
 
 // ---------- UI labels ------------------------------------------------------
 
+/**
+ * El nombre del tipo de documento en pantalla y en el PDF (requerimiento 11,
+ * 07/10/2026: no llamar «Honorario» a la factura). El valor interno sigue
+ * siendo HONORARIOS: es el que decide la serie (FAC-HON) y el tipo ante la DGI.
+ */
 export const INVOICE_KIND_LABEL: Record<InvoiceKind, string> = {
-  HONORARIOS: "Honorarios",
-  REEMBOLSO: "Reembolso",
+  HONORARIOS: "Factura",
+  REEMBOLSO: "Factura de reembolso",
+  NOTA_DEBITO: "Nota de débito",
+};
+
+/** El título del formulario según el tipo elegido (requerimiento 11). */
+export const TITULO_DEL_FORMULARIO: Record<"create" | "edit", Record<InvoiceKind, string>> = {
+  create: { HONORARIOS: "Nueva factura", REEMBOLSO: "Nueva factura de reembolso", NOTA_DEBITO: "Nueva nota de débito" },
+  edit: { HONORARIOS: "Editar factura", REEMBOLSO: "Editar factura de reembolso", NOTA_DEBITO: "Editar nota de débito" },
 };
 
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -263,7 +312,33 @@ export const FE_ESTADO_LABEL: Record<FeEstado, string> = {
   authorized: "Autorizada DGI",
   canceled: "Anulada en DGI",
   error: "Error",
+  interna: "Interna (no se envía)",
 };
+
+/**
+ * Lo que dice el estado fiscal cuando la factura YA existe ante la DGI pero no
+ * la envió el CRM. En las dos `fe_estado` queda en `no_emitida` a propósito
+ * (para que nada la mande al PAC), y «Sin enviar» mentía:
+ *   · `externo`    (092): emitida fuera del CRM y registrada con su CUFE.
+ *   · `portal_050` (061, caso B): emitida a mano en el portal de ideati y su
+ *                  CUFE cargado después en la factura del CRM.
+ */
+export const ETIQUETA_FISCAL_POR_ORIGEN: Record<string, string> = {
+  externo: "Emitida fuera del CRM",
+  portal_050: "Autorizada en el portal",
+};
+
+/**
+ * El texto del estado fiscal de una factura. Sólo `no_emitida` se reemplaza
+ * por el origen del CUFE: `error`, `canceled` o `authorized` dicen algo que
+ * pasó de verdad y se muestran como siempre. Una sola regla para el listado y
+ * la tarjeta.
+ */
+export function etiquetaDeEstadoFiscal(estado: FeEstado, origen?: string | null): { texto: string; porOrigen: boolean } {
+  const delOrigen = estado === "no_emitida" && origen ? ETIQUETA_FISCAL_POR_ORIGEN[origen] : undefined;
+  if (delOrigen) return { texto: delOrigen, porOrigen: true };
+  return { texto: FE_ESTADO_LABEL[estado] ?? estado, porOrigen: false };
+}
 
 /**
  * Si una factura puede dispararse al PAC eFactura. Replica el gate

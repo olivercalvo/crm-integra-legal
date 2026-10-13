@@ -71,20 +71,28 @@ export const SOURCE_TYPE_GASTO_TRAMITE = "gasto_tramite" as const;
 /** Lo que hace falta del encabezado para armar el asiento. */
 export interface GastoParaAsiento {
   id: string;
-  /** Fecha de la OPERACIÓN (Art. 5.1). Define el período contable. */
+  /** Fecha del DOCUMENTO (Art. 5.1). Informativa desde la `068`. */
   date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   concept: string;
   /** Código del caso, para que la naturaleza del asiento sea identificable. */
   case_code: string | null;
   /** Razón social del proveedor, si tiene. */
   supplier_legal_name: string | null;
+  /** El proveedor (E2): va en la línea de 200001. Sin proveedor, `null`. */
+  supplier_id: string | null;
+  /** `FAC-CO-000001` (071, misma serie que las compras, P-2b): la `reference`. */
+  purchase_number?: string | null;
+  /** N.º de la factura del proveedor (070): la `referencia_externa` (071). */
+  supplier_invoice_number?: string | null;
 }
 
 export type ResultadoAsiento =
   | { ok: true; asiento: AsientoInput }
   | {
       ok: false;
-      motivo: "sin_lineas" | "sin_clasificar" | "monto_cero" | "descuadre";
+      motivo: "sin_lineas" | "sin_clasificar" | "monto_cero" | "descuadre" | "sin_proveedor";
       mensaje: string;
       /** `line_order` de las líneas sin cuenta. Solo en `sin_clasificar`. */
       lineasSinCuenta?: number[];
@@ -118,6 +126,19 @@ export function construirAsientoDeGastoTramite(
   lineas: readonly ExpenseLineRow[],
   cuentaPorPagar: string = CUENTA_POR_PAGAR
 ): ResultadoAsiento {
+  // 🔴 E3 (01/10/2026, Oliver): ninguna línea en 200001 sin proveedor. El gasto
+  // de trámite acredita 200001, así que sin ficha no entra al libro. Reemplaza
+  // el "sin proveedor no se bloquea" de SOP-033. El motor (071) lo vuelve a
+  // exigir. Va ANTES de tomar el número FAC-CO-: no consume correlativo.
+  if (!gasto.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        "Este gasto se registra en Cuentas por pagar (200001), y cada movimiento ahí tiene que " +
+        "decir de qué proveedor es. Asigna el proveedor al gasto; si todavía no tiene ficha, créala en Proveedores.",
+    };
+  }
   if (lineas.length === 0) {
     return {
       ok: false,
@@ -169,6 +190,9 @@ export function construirAsientoDeGastoTramite(
     debit: 0,
     credit: total,
     description: gasto.supplier_legal_name ?? "Cuentas por pagar",
+    // E2: el proveedor en la cuenta control. Un gasto sin proveedor (SOP-033)
+    // queda sin tercero, como hasta hoy.
+    supplier_id: gasto.supplier_id,
   };
 
   const lineasAsiento = [...debitos, credito];
@@ -191,11 +215,14 @@ export function construirAsientoDeGastoTramite(
   return {
     ok: true,
     asiento: {
-      transaction_date: gasto.date,
+      transaction_date: gasto.accounting_date,
       description: descripcionDelAsiento(gasto),
       source_type: SOURCE_TYPE_GASTO_TRAMITE,
       source_id: gasto.id,
       lines: lineasAsiento,
+      // E3 (071): el número propio y el del proveedor, cada uno en su columna.
+      reference: gasto.purchase_number ?? null,
+      referencia_externa: gasto.supplier_invoice_number?.trim() || null,
     },
   };
 }

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reverseSupplierCreditNote } from "@/lib/finanzas/api/supplier-credit-notes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ interface RouteParams {
  */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -34,15 +35,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
   const reason = String((body as { reason?: unknown } | null)?.reason ?? "");
   try {
-    const r = await reverseSupplierCreditNote(ctx.db, createAdminClient(), ctx.tenantId, ctx.userId, params.id, reason);
+    const r = await reverseSupplierCreditNote(
+      ctx.db, createAdminClient(ctx.userId), ctx.tenantId, ctx.userId, params.id, reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
+    );
     return NextResponse.json(r, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       const cuerpo: Record<string, unknown> = { error: err.message };
       if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      if (err.fieldErrors) cuerpo.fieldErrors = err.fieldErrors;
       return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[finanzas] reverseSupplierCreditNote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

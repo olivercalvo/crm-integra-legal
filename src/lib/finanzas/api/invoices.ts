@@ -13,6 +13,8 @@
  * anticipaba esta RPC.
  */
 
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateInvoiceInput,
@@ -21,14 +23,18 @@ import type {
   InvoiceKind,
 } from "@/lib/finanzas/types/invoice";
 import { SEQUENCE_TYPE_BY_KIND, PREFIX_BY_KIND } from "@/lib/finanzas/types/invoice";
+import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
+import { cargarFacturaParaValidar, guardarMotivoPendiente } from "@/lib/finanzas/efactura/data/datos-para-validar";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { createCreditNoteFromInvoice, compensarNotaDeCredito } from "@/lib/finanzas/api/credit-notes";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeFactura } from "@/lib/finanzas/contabilidad/asiento-factura";
 import { cargarFacturaParaAsiento } from "@/lib/finanzas/queries/factura-para-asiento";
 import { validarCufe } from "@/lib/finanzas/validators/cufe";
+import { facturaConElCufe, mensajeDeCufeRepetido } from "@/lib/finanzas/api/cufe-unico";
 import {
   validarConsistenciaDeKind,
   motivoDeInconsistenciaDeKind,
@@ -95,7 +101,7 @@ async function resolverServiciosPorId(
  * advertencia dismissible es el mismo mecanismo por el que ya pasó tres veces
  * en producción (tres facturas FAC-REI-* con líneas HON-COR, jul-ago/2026).
  */
-async function validarLineasContraKind(
+export async function validarLineasContraKind(
   db: DB,
   tenantId: string,
   invoiceKind: InvoiceKind,
@@ -187,6 +193,17 @@ export async function createInvoice(
   //    DELETE compensatorio para un documento que nunca llegó a existir.
   await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
 
+  // 096 (regla 3.3.5): ningún documento nuevo con fecha anterior al inicio
+  // contable. Lo anterior ya está en los libros del contador. La base lo
+  // vuelve a exigir (trigger de la 096).
+  await asegurarFechaDesdeElInicio(
+    db,
+    tenantId,
+    input.invoice_kind === "NOTA_DEBITO" ? "nota_debito" : "factura",
+    input.issue_date,
+    "issue_date"
+  );
+
   // Slug único temporal para borradores. Al emitir se reemplaza por el
   // número real ("FAC-HON-000454"). Esto sortea el UNIQUE (tenant, number).
   const draftSlug = `DRAFT-${cryptoRandom()}`;
@@ -200,10 +217,13 @@ export async function createInvoice(
       client_id: input.client_id,
       case_id: input.case_id,
       issue_date: input.issue_date,
+      accounting_date: input.accounting_date ?? input.issue_date,
       due_date: input.due_date,
       status: "borrador",
       currency: "USD",
       notes: input.notes,
+      // 077: la columna sólo se manda en una nota de débito.
+      ...(input.invoice_kind === "NOTA_DEBITO" ? { referenced_invoice_id: input.referenced_invoice_id ?? null } : {}),
       created_by: userId,
       // totales se quedan en 0 — T8b los recalcula al insertar líneas
     })
@@ -270,6 +290,29 @@ export async function updateInvoice(
   //    "Tipo de documento" con líneas ya cargadas, sin que nada las revise.
   await validarLineasContraKind(db, tenantId, input.invoice_kind, input.lines);
 
+  // 0.a 096: un borrador no se guarda con fecha anterior al inicio contable.
+  await asegurarFechaDesdeElInicio(
+    db,
+    tenantId,
+    input.invoice_kind === "NOTA_DEBITO" ? "nota_debito" : "factura",
+    input.issue_date,
+    "issue_date"
+  );
+
+  // 0.b 077: la referencia a la factura que se ajusta es sólo de una nota de
+  //     débito. Si el borrador deja de serlo, se limpia (el CHECK la rechaza en
+  //     otro tipo). Se lee con `*` para no nombrar una columna que antes de la
+  //     077 no existe.
+  let referencia: { referenced_invoice_id?: string | null } = {};
+  if (input.invoice_kind === "NOTA_DEBITO") {
+    referencia = { referenced_invoice_id: input.referenced_invoice_id ?? null };
+  } else {
+    const { data: actual } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", invoiceId).maybeSingle();
+    if ((actual as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id) {
+      referencia = { referenced_invoice_id: null };
+    }
+  }
+
   // 1. UPDATE header. Si la factura no está en borrador, T4 rechaza con
   //    mensaje claro.
   const { error: errHeader } = await db
@@ -279,8 +322,10 @@ export async function updateInvoice(
       client_id: input.client_id,
       case_id: input.case_id,
       issue_date: input.issue_date,
+      accounting_date: input.accounting_date ?? input.issue_date,
       due_date: input.due_date,
       notes: input.notes,
+      ...referencia,
     })
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId);
@@ -528,12 +573,19 @@ export async function emitInvoice(
   tenantId: string,
   invoiceId: string,
   ledgerDb: DB,
-  userId: string | null
+  userId: string | null,
+  /**
+   * `validarParaDgi`: correr las validaciones previas a la DGI antes del número
+   * (03/10/2026). Lo decide quien llama: la ruta de emisión lo pide SIEMPRE para
+   * la factura (siempre va a la DGI) y para la ND sólo si eligió «Enviar a la
+   * DGI». Sin opción, no valida (los tests del núcleo de la emisión).
+   */
+  opciones?: { validarParaDgi?: boolean }
 ) {
   // 1. Cargar la factura para conocer su kind (necesario para sequence_type).
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, invoice_kind, status")
+    .select("id, invoice_kind, status, de_prueba, issue_date")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -550,6 +602,20 @@ export async function emitInvoice(
       400
     );
   }
+  // Una factura de prueba (094: la de un cliente de prueba nace así) no se
+  // emite: su asiento lo rechaza la base (095). Antes del número.
+  if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+    throw new InvoiceMutationError(mensajeDeDocumentoDePrueba(null), 409);
+  }
+  // 096: un borrador con fecha anterior al inicio contable no se emite (sería un
+  // documento nuevo de antes del inicio). Antes del número.
+  await asegurarFechaDesdeElInicio(
+    db,
+    tenantId,
+    inv.invoice_kind === "NOTA_DEBITO" ? "nota_debito" : "factura",
+    (inv as { issue_date?: string | null }).issue_date ?? null,
+    "issue_date"
+  );
 
   // 2. Validación de líneas: el trigger T8b mantiene los totales pero NO
   //    obliga a que existan líneas al emitir. Acá la app lo hace cumplir
@@ -594,6 +660,28 @@ export async function emitInvoice(
     lineas
   );
 
+  // 2c. 🔴 LO QUE LA DGI RECHAZARÍA, ANTES DEL NÚMERO (03/10/2026).
+  //     Las 4 facturas de producción que quedaron emitidas sin llegar a la DGI:
+  //     un dato que la DGI rechaza se descubría recién al enviar, con el número
+  //     y el asiento ya puestos. Ahora no se emite, y el motivo queda guardado
+  //     en la factura (085) para verlo al reabrirla, no sólo una vez en pantalla.
+  if (opciones?.validarParaDgi) {
+    const problemas = validarParaLaDgi(await cargarFacturaParaValidar(db, tenantId, invoiceId));
+    if (problemas.length > 0) {
+      const resumen = resumirProblemas(problemas);
+      await guardarMotivoPendiente(db, tenantId, "invoices", invoiceId, `No se pudo emitir.
+${resumen}`);
+      throw new InvoiceMutationError(
+        `No se puede emitir: la DGI la rechazaría. Corrija esto y vuelva a emitir:
+${resumen}`,
+        422,
+        undefined,
+        erroresPorCampo(problemas)
+      );
+    }
+    await guardarMotivoPendiente(db, tenantId, "invoices", invoiceId, null);
+  }
+
   // 3. EL NÚMERO. Antes de pedirle uno nuevo a la secuencia, mirar si esta
   //    factura YA tiene asiento: sería el reintento de una emisión que posteó y
   //    no llegó al UPDATE, y su número es el que está en el libro (FND-011).
@@ -615,6 +703,15 @@ export async function emitInvoice(
     if (!prueba.ok) {
       throw new InvoiceMutationError(prueba.mensaje, 422);
     }
+
+    // 3·0.b LA FECHA DE REGISTRO, TAMBIÉN ANTES DEL NÚMERO (Bloque 1, E1).
+    //       Es la del asiento y define el período. Si el mes está cerrado, el
+    //       RPC lo rechazaría DESPUÉS de consumir el correlativo. Mismo
+    //       criterio que las cuentas: el 422 va primero y no quema número.
+    await resolverFechaDeRegistro(db, tenantId, previa.accounting_date, {
+      que: "la factura",
+      campo: "accounting_date",
+    });
   }
 
   let formatted: string;
@@ -915,6 +1012,20 @@ export async function updateInvoiceDgiData(
       400
     );
   }
+  // 092: los datos fiscales de una factura emitida fuera no se tocan (la base
+  // también lo rechaza), y un CUFE no puede quedar en dos facturas.
+  if (inv.dgi_cufe_origen === "externo") {
+    throw new InvoiceMutationError(
+      `La factura ${inv.invoice_number} se emitió fuera del CRM: sus datos ante la DGI no se modifican.`,
+      409
+    );
+  }
+  if (input.dgi_cufe) {
+    const otra = await facturaConElCufe(db, tenantId, input.dgi_cufe, invoiceId);
+    if (otra) {
+      throw new InvoiceMutationError(mensajeDeCufeRepetido(otra), 409);
+    }
+  }
 
   const { error: errUpd } = await db
     .from("invoices")
@@ -957,12 +1068,17 @@ export async function updateInvoiceDgiData(
  * ANULAR una factura emitida (Bloque 5, 22/09/2026 — D4, D5).
  *
  *   1. Gates de status y de pagos (como antes: sin pagos, no anulada, emitida).
- *   2. 🔴 El MES DE LA FACTURA cerrado → 409: "no se anula, se emite una nota
- *      de crédito con fecha de hoy" (Josuarth). La pantalla cambia el botón.
+ *   2. 🔴 El MES DE LA FACTURA cerrado → 409: "no se anula, se corrige con una
+ *      nota de crédito" (Josuarth). Desde la `068` es el mes de su fecha de
+ *      REGISTRO (`accounting_date`), el período de su asiento. La pantalla
+ *      cambia el botón.
+ *   2.b La fecha de registro de la anulación: la elige el contador (revisión
+ *      del 28/09 y reunión del 30/09), en un período abierto y nunca antes del
+ *      asiento de la factura. Se valida ANTES de crear la NC.
  *   3. La NC TOTAL automática (`createCreditNoteFromInvoice`: la misma función
- *      que la NC manual, con todas las líneas). Fecha de hoy.
+ *      que la NC manual, con todas las líneas), con esa fecha de registro.
  *   4. RPC `cancel_invoice_with_reversal` (052), UNA transacción: si la factura
- *      está en el libro, postea la REVERSIÓN de su asiento con la fecha de hoy
+ *      está en el libro, postea la REVERSIÓN de su asiento con esa fecha
  *      (el espejo lo arma `construirAsientoDeReversion`, la misma función que
  *      dibuja la vista previa; el RPC lo verifica), y marca `anulada`. La NC NO
  *      se postea aparte: el libro cierra con el espejo (D5).
@@ -981,12 +1097,14 @@ export async function cancelInvoice(
   userId: string,
   invoiceId: string,
   reason: string,
-  observations: string | null = null
+  observations: string | null = null,
+  /** Fecha de registro de la anulación. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ) {
   // 1. Status y pagos
   const { data: inv, error: errFetch } = await db
     .from("invoices")
-    .select("id, status, invoice_number, amount_paid, credited_total, issue_date")
+    .select("id, status, invoice_number, invoice_kind, amount_paid, credited_total, issue_date, accounting_date, de_prueba")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -999,6 +1117,19 @@ export async function cancelInvoice(
   }
   if (inv.status === "anulada") {
     throw new InvoiceMutationError("La factura ya está anulada.", 400);
+  }
+  // 096: contabilizada fuera (anterior al inicio contable) → no se anula: se
+  // corrige con una NC posterior. El orquestador ya lo cortó antes del PAC
+  // (matriz); esto es para cualquier otro llamador. La base también lo rechaza.
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    (inv as { invoice_kind?: string }).invoice_kind === "NOTA_DEBITO" ? "nota_debito" : "factura",
+    inv.invoice_number,
+    inv.issue_date
+  );
+  if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+    throw new InvoiceMutationError(mensajeDeDocumentoDePrueba(inv.invoice_number), 409);
   }
   if (inv.status === "borrador" || inv.status === "cancelada_pre_emision") {
     throw new InvoiceMutationError(
@@ -1024,20 +1155,24 @@ export async function cancelInvoice(
 
   // 2. 🔴 El mes de la factura (D4). Se mira acá, con el mensaje para la
   //    persona, y el RPC lo vuelve a verificar (es el permiso).
-  if (await periodoDeLaFacturaCerrado(db, tenantId, String(inv.issue_date))) {
-    throw new InvoiceMutationError(MENSAJE_MES_CERRADO(String(inv.issue_date)), 409);
+  const registroDeLaFactura = String(inv.accounting_date ?? inv.issue_date);
+  if (await periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)) {
+    throw new InvoiceMutationError(MENSAJE_MES_CERRADO(registroDeLaFactura), 409);
   }
 
+  // 2.b La fecha de registro de la anulación, ANTES de crear la NC: un 422 acá
+  //     no deja una NC que después haya que compensar.
+  const fecha = await resolverFechaDeAnulacion(db, ledgerDb, tenantId, invoiceId, fechaDeRegistro);
+
   // 3. La NC total, con la MISMA función que la NC manual.
-  const cn = await createCreditNoteFromInvoice(db, tenantId, userId, invoiceId, reason, observations);
+  const cn = await createCreditNoteFromInvoice(db, tenantId, userId, invoiceId, reason, observations, fecha);
 
   // 4. El espejo del asiento de la factura, si lo hay, y la anulación en el RPC.
   const original = await getAsientoDeFactura(ledgerDb, tenantId, invoiceId);
   let lines: { account_code: string; debit: number; credit: number; description: string | null }[] | null = null;
   let description = `Anulación de la factura ${inv.invoice_number}`;
-  const hoy = new Date().toISOString().slice(0, 10);
   if (original) {
-    const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: invoiceId });
+    const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: invoiceId });
     if (!armado.ok) {
       await compensarNotaDeCredito(ledgerDb, tenantId, cn.id, new MutationError(armado.mensaje, 422));
       throw new MutationError(armado.mensaje, 422); // inalcanzable: compensar lanza
@@ -1049,6 +1184,9 @@ export async function cancelInvoice(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     }));
     description = armado.asiento.description;
   }
@@ -1058,7 +1196,7 @@ export async function cancelInvoice(
     p_invoice_id: invoiceId,
     p_reason: reason,
     p_observations: observations,
-    p_transaction_date: hoy,
+    p_transaction_date: fecha,
     p_description: description,
     p_lines: lines,
     p_created_by: userId,
@@ -1091,14 +1229,52 @@ export function MENSAJE_YA_ACREDITADA(creditedTotal: number): string {
   );
 }
 
-export function MENSAJE_MES_CERRADO(issueDate: string): string {
+export function MENSAJE_MES_CERRADO(fechaDeRegistro: string): string {
   return (
-    `El mes de esta factura (${issueDate.slice(0, 7)}) está cerrado: no se anula, ` +
-    `se emite una nota de crédito con fecha de hoy.`
+    `El mes de esta factura (${fechaDeRegistro.slice(0, 7)}) está cerrado: no se anula, ` +
+    `se corrige con una nota de crédito.`
   );
 }
 
-/** ¿El período contable del mes de `issueDate` está cerrado? */
+/**
+ * La fecha de registro de la ANULACIÓN de una factura, validada: período
+ * abierto y nunca antes del asiento de la factura (o, si la factura no está en
+ * el libro, de su fecha de registro). Sin fecha pedida, hoy en Panamá.
+ *
+ * Exportada porque la anulación ante la DGI la valida ANTES de hablar con el
+ * PAC (`anular-factura-ante-dgi.ts`): validarla recién en el libro dejaría una
+ * factura anulada ante la DGI por un error que se veía de entrada.
+ */
+export async function resolverFechaDeAnulacion(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  invoiceId: string,
+  pedida: unknown
+): Promise<string> {
+  const original = await getAsientoDeFactura(ledgerDb, tenantId, invoiceId);
+  let noAntesDe: { fecha: string; etiqueta: string } | null = original
+    ? { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number} de la factura` }
+    : null;
+  if (!noAntesDe) {
+    const { data } = await db
+      .from("invoices")
+      .select("issue_date, accounting_date")
+      .eq("tenant_id", tenantId)
+      .eq("id", invoiceId)
+      .maybeSingle();
+    const f = (data as { accounting_date?: string | null; issue_date?: string | null } | null) ?? null;
+    const registro = f?.accounting_date ?? f?.issue_date ?? null;
+    noAntesDe = registro ? { fecha: String(registro), etiqueta: "la factura" } : null;
+  }
+  return resolverFechaDeRegistro(db, tenantId, pedida, {
+    noAntesDe,
+    que: "la anulación",
+    campo: "fecha_registro",
+  });
+}
+
+/** ¿El período contable del mes de esa fecha (la de REGISTRO de la factura) está cerrado? */
 export async function periodoDeLaFacturaCerrado(db: DB, tenantId: string, issueDate: string): Promise<boolean> {
   const year = Number(issueDate.slice(0, 4));
   const month = Number(issueDate.slice(5, 7));
@@ -1222,6 +1398,11 @@ export async function registrarCufeDelPortal(
         "cargarle un CUFE a mano.",
       409
     );
+  }
+  // 092: un CUFE, una factura (también contra las del 051 y las externas).
+  const otra = await facturaConElCufe(db, tenantId, revisado.valor, invoiceId);
+  if (otra) {
+    throw new MutationError(mensajeDeCufeRepetido(otra), 409);
   }
 
   const { error: errUpd } = await db

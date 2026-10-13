@@ -4,6 +4,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reverseSupplierPayment } from "@/lib/finanzas/api/supplier-payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -15,11 +16,11 @@ interface RouteParams {
  * POST /api/finanzas/supplier-payments/[id]/reverse — reversa un pago a
  * proveedor contabilizado (RPC `reverse_supplier_payment`, 048): espejo con la
  * fecha de hoy + pago anulado, una transacción; el trigger devuelve la compra.
- * Body: { reason }. Permisos: los de mutar compras (admin, abogada, contador).
+ * Body: { reason, fecha_registro? }. Permisos: los de mutar compras (admin, abogada, contador).
  */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -49,19 +50,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const result = await reverseSupplierPayment(
       ctx.db,
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] reverseSupplierPayment failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] reverseSupplierPayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

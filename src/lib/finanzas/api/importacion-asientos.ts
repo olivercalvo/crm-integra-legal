@@ -14,10 +14,14 @@ import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import {
   validarImportacion,
   type ContextoDeImportacion,
+  type CuentaControlImportada,
+  type FormatoDeFecha,
   type ResultadoDeImportacion,
 } from "@/lib/finanzas/import/asientos-import";
 import { leerHojaDeAsientos } from "@/lib/finanzas/import/asientos-workbook";
 import { construirAsientoDeReversion, type AsientoAReversar } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 
 type DB = SupabaseClient;
 
@@ -25,17 +29,55 @@ export function hashDelArchivo(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-export async function cargarContextoDeImportacion(db: DB, tenantId: string, hoy = new Date()): Promise<ContextoDeImportacion> {
-  const [cuentas, periodos] = await Promise.all([
-    db.from("chart_of_accounts").select("code, active").eq("tenant_id", tenantId),
+/** «2026-07-01», «2026-08-31» → ["2026-07", "2026-08"]. */
+export function mesesDelRango(desde: string, hasta: string): string[] {
+  const out: string[] = [];
+  let [a, m] = desde.slice(0, 7).split("-").map(Number);
+  const [ah, mh] = hasta.slice(0, 7).split("-").map(Number);
+  while (a < ah || (a === ah && m <= mh)) {
+    out.push(`${a}-${String(m).padStart(2, "0")}`);
+    m += 1;
+    if (m === 13) { m = 1; a += 1; }
+  }
+  return out;
+}
+
+export async function cargarContextoDeImportacion(
+  db: DB,
+  tenantId: string,
+  hoy = new Date(),
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
+): Promise<ContextoDeImportacion> {
+  const [cuentas, periodos, clientes, proveedores, posteos] = await Promise.all([
+    db.from("chart_of_accounts").select("code, active, cuenta_control, account_type").eq("tenant_id", tenantId),
     db.from("accounting_periods").select("year, month, status").eq("tenant_id", tenantId),
+    // 071: los códigos que puede traer la columna Tercero.
+    db.from("clients").select("id, client_number").eq("tenant_id", tenantId),
+    db.from("suppliers").select("id, supplier_number").eq("tenant_id", tenantId),
+    // 098: los meses ya contabilizados desde los documentos del CRM.
+    db.from("posteos_retroactivos").select("desde, hasta, created_at").eq("tenant_id", tenantId).order("created_at"),
   ]);
+  if (posteos.error) throw new MutationError(pgErrorToMessage(posteos.error), 500, posteos.error);
   if (cuentas.error) throw new MutationError(pgErrorToMessage(cuentas.error), 500, cuentas.error);
+  if (clientes.error) throw new MutationError(pgErrorToMessage(clientes.error), 500, clientes.error);
+  if (proveedores.error) throw new MutationError(pgErrorToMessage(proveedores.error), 500, proveedores.error);
   const existentes = new Set<string>();
   const activas = new Set<string>();
-  for (const c of (cuentas.data ?? []) as { code: string; active: boolean }[]) {
+  const cuentasControl = new Map<string, CuentaControlImportada>();
+  const cuentasDeGasto = new Set<string>();
+  for (const c of (cuentas.data ?? []) as { code: string; active: boolean; cuenta_control: CuentaControlImportada | null; account_type: string | null }[]) {
+    if (c.account_type === "expense" || c.account_type === "cost") cuentasDeGasto.add(c.code);
     existentes.add(c.code);
     if (c.active) activas.add(c.code);
+    if (c.cuenta_control) cuentasControl.set(c.code, c.cuenta_control);
+  }
+  const clientesPorCodigo = new Map<string, string>();
+  for (const c of (clientes.data ?? []) as { id: string; client_number: string | null }[]) {
+    if (c.client_number) clientesPorCodigo.set(c.client_number.trim().toUpperCase(), c.id);
+  }
+  const proveedoresPorCodigo = new Map<string, string>();
+  for (const p of (proveedores.data ?? []) as { id: string; supplier_number: string | null }[]) {
+    if (p.supplier_number) proveedoresPorCodigo.set(p.supplier_number.trim().toUpperCase(), p.id);
   }
   const cerrados = new Set<string>();
   const conPeriodo = new Set<string>();
@@ -44,6 +86,13 @@ export async function cargarContextoDeImportacion(db: DB, tenantId: string, hoy 
     conPeriodo.add(mes);
     if (p.status !== "abierto") cerrados.add(mes);
   }
+  const desdeDocumentos = new Map<string, string>();
+  for (const p of (posteos.data ?? []) as { desde: string; hasta: string; created_at: string }[]) {
+    const d = hoyEnPanama(new Date(p.created_at)).split("-").reverse().join("/"); // DD/MM/AAAA
+    for (const mes of mesesDelRango(String(p.desde).slice(0, 10), String(p.hasta).slice(0, 10))) {
+      if (!desdeDocumentos.has(mes)) desdeDocumentos.set(mes, d);
+    }
+  }
   // El motor (054) crea solo el período del año en curso y del siguiente.
   const anio = hoy.getUTCFullYear();
   return {
@@ -51,17 +100,25 @@ export async function cargarContextoDeImportacion(db: DB, tenantId: string, hoy 
     cuentasActivas: activas,
     mesesCerrados: cerrados,
     mesesConPeriodo: conPeriodo,
+    mesesDesdeDocumentos: desdeDocumentos,
     aniosConPeriodoAutomatico: new Set([anio, anio + 1]),
+    cuentasControl,
+    cuentasDeGasto,
+    clientesPorCodigo,
+    proveedoresPorCodigo,
+    formatoDeFecha,
+    hoy: hoyEnPanama(hoy),
   };
 }
 
 export async function previsualizarImportacion(
   db: DB,
   tenantId: string,
-  buffer: Buffer
+  buffer: Buffer,
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<{ hash: string; resultado: ResultadoDeImportacion; yaImportado: string | null }> {
   const matriz = leerHojaDeAsientos(buffer);
-  const ctx = await cargarContextoDeImportacion(db, tenantId);
+  const ctx = await cargarContextoDeImportacion(db, tenantId, new Date(), formatoDeFecha);
   const resultado = validarImportacion(matriz, ctx);
   const hash = hashDelArchivo(buffer);
   const { data: previo } = await db
@@ -81,14 +138,16 @@ export async function contabilizarImportacion(
   userId: string,
   buffer: Buffer,
   fileName: string,
-  hashDeLaVistaPrevia: string
+  hashDeLaVistaPrevia: string,
+  /** El MISMO formato de la vista previa: otro leería otras fechas del mismo archivo. */
+  formatoDeFecha: FormatoDeFecha = "DD/MM"
 ): Promise<{ import_id: string; entries: number; total_debits: number; entry_numbers: number[] }> {
   const hash = hashDelArchivo(buffer);
   if (hash !== hashDeLaVistaPrevia) {
     throw new MutationError("El archivo no es el mismo que se revisó en la vista previa. Vuelve a subirlo y revísalo.", 409);
   }
   const matriz = leerHojaDeAsientos(buffer);
-  const ctx = await cargarContextoDeImportacion(db, tenantId);
+  const ctx = await cargarContextoDeImportacion(db, tenantId, new Date(), formatoDeFecha);
   const r = validarImportacion(matriz, ctx);
   if (r.errores.length > 0) {
     throw new MutationError(
@@ -106,6 +165,7 @@ export async function contabilizarImportacion(
       first_row: a.first_row,
       transaction_date: a.transaction_date,
       description: a.description,
+      // 071: el lote la manda a `referencia_externa`; el AD- lo pone el motor.
       reference: a.reference,
       lines: a.lines,
     })),
@@ -135,7 +195,7 @@ export async function cargarAsientosDeImportacion(db: DB, tenantId: string, impo
     db.from("journal_entries").select("id, entry_number, transaction_date, description, reference").eq("tenant_id", tenantId).in("id", ids),
     db
       .from("journal_entry_lines")
-      .select("entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)")
+      .select("entry_id, line_order, debit, credit, line_description, client_id, supplier_id, chart_of_accounts!inner(code, name)")
       .eq("tenant_id", tenantId)
       .in("entry_id", ids)
       .order("line_order"),
@@ -143,9 +203,10 @@ export async function cargarAsientosDeImportacion(db: DB, tenantId: string, impo
   ]);
   const cabeceras = new Map(((cab.data ?? []) as { id: string; entry_number: number; transaction_date: string; description: string; reference: string | null }[]).map((c) => [c.id, c]));
   const lineas = new Map<string, AsientoAReversar["lines"]>();
-  for (const l of (lin.data ?? []) as unknown as { entry_id: string; debit: number | string; credit: number | string; line_description: string | null; chart_of_accounts: { code: string; name: string } }[]) {
+  for (const l of (lin.data ?? []) as unknown as { entry_id: string; debit: number | string; credit: number | string; line_description: string | null; client_id: string | null; supplier_id: string | null; chart_of_accounts: { code: string; name: string } }[]) {
     const lista = lineas.get(l.entry_id) ?? [];
-    lista.push({ account_code: l.chart_of_accounts.code, account_name: l.chart_of_accounts.name, debit: Number(l.debit), credit: Number(l.credit), description: l.line_description });
+    // E2/E3: el tercero viaja al espejo (la reversión lo conserva, SOP-046).
+    lista.push({ account_code: l.chart_of_accounts.code, account_name: l.chart_of_accounts.name, debit: Number(l.debit), credit: Number(l.credit), description: l.line_description, client_id: l.client_id ?? null, supplier_id: l.supplier_id ?? null });
     lineas.set(l.entry_id, lista);
   }
   const reversadoPor = new Map(((rev.data ?? []) as { entry_number: number; reverses_entry_id: string }[]).map((r) => [r.reverses_entry_id, Number(r.entry_number)]));
@@ -171,7 +232,9 @@ export async function deshacerImportacion(
   tenantId: string,
   userId: string,
   importId: string,
-  motivo: string
+  motivo: string,
+  /** Fecha de registro elegida para todas las reversiones. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<{ reversados: number; ya_reversados: number }> {
   const m = motivo.trim();
   if (m.length < 3 || m.length > 1000) {
@@ -188,18 +251,40 @@ export async function deshacerImportacion(
     throw new MutationError("Esta importación ya se deshizo.", 409);
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
   const asientos = await cargarAsientosDeImportacion(db, tenantId, importId);
+  // Una sola fecha para todas las reversiones: la elegida, en un período
+  // abierto y nunca antes del ÚLTIMO asiento vigente de la importación (cada
+  // reversión tiene que caer en o después de su original; el RPC lo exige uno
+  // por uno a través de `reverse_journal_entry`).
+  const vigentes = asientos.filter((a) => a.reversado_por === null);
+  const ultimo = vigentes.reduce<(typeof vigentes)[number] | null>(
+    (max, a) => (!max || a.asiento.transaction_date > max.asiento.transaction_date ? a : max),
+    null
+  );
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: ultimo
+      ? { fecha: ultimo.asiento.transaction_date, etiqueta: `el asiento ${ultimo.asiento.entry_number}, el último de la importación` }
+      : null,
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const espejos = [];
   for (const a of asientos) {
     if (a.reversado_por !== null) continue;
     // La MISMA función que arma todas las reversiones del libro.
-    const armado = construirAsientoDeReversion(a.asiento, { hoy, motivo: m, source_id: null });
+    const armado = construirAsientoDeReversion(a.asiento, { fecha, motivo: m, source_id: null });
     if (!armado.ok) throw new MutationError(armado.mensaje, 422);
     espejos.push({
       entry_id: a.asiento.id,
       description: armado.asiento.description,
-      lines: armado.asiento.lines.map((l) => ({ account_code: l.account_code, debit: l.debit, credit: l.credit, description: l.description ?? null })),
+      lines: armado.asiento.lines.map((l) => ({
+        account_code: l.account_code,
+        debit: l.debit,
+        credit: l.credit,
+        description: l.description ?? null,
+        client_id: l.client_id ?? null,
+        supplier_id: l.supplier_id ?? null,
+      })),
     });
   }
 
@@ -207,7 +292,7 @@ export async function deshacerImportacion(
     p_tenant_id: tenantId,
     p_import_id: importId,
     p_reason: m,
-    p_transaction_date: hoy,
+    p_transaction_date: fecha,
     p_mirrors: espejos,
     p_created_by: userId,
   });

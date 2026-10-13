@@ -3,6 +3,7 @@ import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-quer
 import { validateUpdateChartAccount } from "@/lib/finanzas/validators/chart-of-account";
 import { updateChartAccount } from "@/lib/finanzas/api/chart-of-accounts";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const FINANZAS_ROLES = ["admin", "abogada", "contador"] as const;
 
@@ -11,7 +12,7 @@ const FINANZAS_ROLES = ["admin", "abogada", "contador"] as const;
  * Edita una cuenta (nombre, tipo, descripción, activa; código solo si NO es
  * is_system). Desactivar una cuenta is_system está bloqueado (409).
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, FINANZAS_ROLES);
   if (denied) return denied;
@@ -53,4 +54,4 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     console.error("[finanzas] updateChartAccount unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

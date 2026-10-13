@@ -116,6 +116,57 @@ export function parseTercero(valor: string | null | undefined): {
   return { client_id: null, supplier_id: null };
 }
 
+// ---------------------------------------------------------------------------
+// 071 (E3): EL TERCERO EN LAS CUENTAS CONTROL
+// ---------------------------------------------------------------------------
+
+/** `chart_of_accounts.cuenta_control`: 100004 = clientes, 200001 = proveedores. */
+export type CuentaControl = "clientes" | "proveedores";
+
+/** Una línea de cuenta control a la que le falta su tercero (o tiene el equivocado). */
+export interface TerceroFaltante {
+  /** Número de la línea como la ve la persona (1 = la primera de la pantalla). */
+  numero: number;
+  account_code: string;
+  control: CuentaControl;
+}
+
+/**
+ * Las líneas contra una cuenta control sin el tercero que esa cuenta exige.
+ *
+ * ⚠️ NO es una segunda regla: es la MISMA que hace cumplir `post_journal_entry`
+ * desde la 071 (bloque 4c), dicha antes de apretar. El formulario la usa para
+ * explicar el botón apagado y la ruta para contestar con el número de línea de
+ * la pantalla, que no es el del RPC (las líneas vacías no viajan).
+ *
+ * Un proveedor en 100004 cuenta como faltante, igual que un cliente en 200001.
+ */
+export function tercerosFaltantes(
+  borradores: readonly LineaManualDraft[],
+  controles: ReadonlyMap<string, CuentaControl>
+): TerceroFaltante[] {
+  const faltan: TerceroFaltante[] = [];
+  borradores.forEach((l, i) => {
+    if (lineaManualVaciaODescartable(l)) return;
+    const code = l.account_code.trim();
+    const control = controles.get(code);
+    if (!control) return;
+    const { client_id, supplier_id } = parseTercero(l.tercero);
+    const bien = control === "clientes" ? client_id !== null : supplier_id !== null;
+    if (!bien) faltan.push({ numero: i + 1, account_code: code, control });
+  });
+  return faltan;
+}
+
+/** La frase para quien carga. Nombra la primera línea: es el próximo paso. */
+export function mensajeDeTerceroFaltante(faltan: readonly TerceroFaltante[]): string | null {
+  const f = faltan[0];
+  if (!f) return null;
+  const quien = f.control === "clientes" ? "el cliente" : "el proveedor";
+  const cuenta = f.control === "clientes" ? "de clientes" : "de proveedores";
+  return `Elige ${quien} de la línea ${f.numero}: la cuenta ${f.account_code} es ${cuenta} y cada movimiento tiene que decir de quién es.`;
+}
+
 export interface TotalesManuales {
   debitos: number;
   creditos: number;
@@ -271,7 +322,9 @@ export interface EstadoDelRegistro {
 export function estadoDelRegistro(
   lineas: readonly LineaManualDraft[],
   descripcion: string,
-  enviando = false
+  enviando = false,
+  /** 071: las cuentas control del plan. Sin el mapa no se mira el tercero. */
+  controles: ReadonlyMap<string, CuentaControl> = new Map()
 ): EstadoDelRegistro {
   if (enviando) {
     return { puede: false, motivo: "Registrando el asiento…" };
@@ -302,6 +355,11 @@ export function estadoDelRegistro(
           ? `Elegí la cuenta contable de la línea ${ns[0]}.`
           : `Elegí la cuenta contable de las líneas ${ns.join(", ")}.`,
     };
+  }
+
+  const terceroFaltante = mensajeDeTerceroFaltante(tercerosFaltantes(lineas, controles));
+  if (terceroFaltante) {
+    return { puede: false, motivo: terceroFaltante };
   }
 
   if (!totales.cuadra) {
@@ -338,7 +396,9 @@ export type ArmadoManual =
  * contables, que viven todas en `post_journal_entry`.
  */
 export function armarAsientoManual(
-  borradores: readonly LineaManualDraft[]
+  borradores: readonly LineaManualDraft[],
+  /** 071: las cuentas control del plan. La ruta lo pasa; sin él, decide el RPC. */
+  controles: ReadonlyMap<string, CuentaControl> = new Map()
 ): ArmadoManual {
   const utiles = borradores.filter((l) => !lineaManualVaciaODescartable(l));
 
@@ -364,6 +424,11 @@ export function armarAsientoManual(
           ? "Hay una línea sin cuenta contable. Elegila o borrá la línea."
           : `Hay ${n} líneas sin cuenta contable. Elegilas o borrá las líneas.`,
     };
+  }
+
+  const terceroFaltante = mensajeDeTerceroFaltante(tercerosFaltantes(borradores, controles));
+  if (terceroFaltante) {
+    return { ok: false, mensaje: terceroFaltante };
   }
 
   const lineas: LineaManual[] = utiles.map((l) => {

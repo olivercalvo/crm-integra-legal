@@ -23,23 +23,31 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { destinoPermitido } from "./destino-sql.mjs";
 
 // La raíz del repo es el padre de scripts/, no hace falta pasarla.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SQL_REL = process.argv[2];
-const PROD_PROJECT_REFS = ["uqmmkklbhzxqybljiecs"];
 
 if (!SQL_REL) {
   console.error("uso: node scripts/run-sql.mjs <ruta-al-.sql>");
   process.exit(1);
 }
 
+// ENSAYO DE LA VENTANA (05/10/2026): ENSAYO_DATABASE_URL apunta a una base
+// LOCAL (scripts/ensayo-ventana/). Sólo se acepta si el host es esta máquina;
+// en ese caso no se leen las credenciales de staging.
+const ENSAYO = process.env.ENSAYO_DATABASE_URL?.trim();
+if (ENSAYO && !["localhost", "127.0.0.1", "[::1]"].includes(new URL(ENSAYO).hostname)) {
+  console.error("🛑 ENSAYO_DATABASE_URL sólo puede apuntar a una base local (localhost).");
+  process.exit(1);
+}
 const envPath = resolve(ROOT, ".env.staging-db.local");
-if (!existsSync(envPath)) {
+if (!ENSAYO && !existsSync(envPath)) {
   console.error(`❌ Falta ${envPath}`);
   process.exit(1);
 }
-const CONN = (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]
+const CONN = ENSAYO || (readFileSync(envPath, "utf8").match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]
   ?.trim()
   .replace(/^["']|["']$/g, "");
 
@@ -48,22 +56,38 @@ if (!CONN) {
   process.exit(1);
 }
 
-// ---- CANDADO: nunca contra producción ----
-for (const ref of PROD_PROJECT_REFS) {
-  if (CONN.includes(ref)) {
-    console.error(`\n🛑 ABORTADO: la connection string apunta a PRODUCCIÓN (${ref}).\n`);
-    process.exit(1);
-  }
+// ---- CANDADO: sólo staging o una base local, ANTES de conectar ----
+// Lista blanca (07/10/2026): antes sólo se rechazaba el ref de producción.
+try {
+  destinoPermitido(CONN);
+} catch (e) {
+  console.error(`\n🛑 ${e.message}\n`);
+  process.exit(1);
 }
 
 const sqlPath = resolve(ROOT, SQL_REL);
 const sql = readFileSync(sqlPath, "utf8");
-console.log(`▶ Aplicando ${SQL_REL} contra staging…\n`);
+console.log(`▶ Aplicando ${SQL_REL} contra ${ENSAYO ? "la base LOCAL de ensayo" : "staging"}…\n`);
 
 const client = new pg.Client({ connectionString: CONN });
 await client.connect();
 
 client.on("notice", (n) => console.log(`   [NOTICE] ${n.message}`));
+
+// LLAVE DE SESIÓN (06/10/2026): RUN_SQL_SET="finanzas.inicio_contable_existentes=aceptar"
+// la fija antes del archivo, para toda la sesión. Así una llave que sólo vale en
+// staging se ve en el comando y no vive escrita en la migración.
+const SET = process.env.RUN_SQL_SET?.trim();
+if (SET) {
+  const m = SET.match(/^([a-z_]+\.[a-z_]+)=([A-Za-z0-9_-]+)$/);
+  if (!m) {
+    console.error("❌ RUN_SQL_SET tiene que ser «esquema.llave=valor».");
+    process.exit(1);
+  }
+  await client.query("SELECT set_config($1, $2, false)", [m[1], m[2]]);
+  console.log(`   [SET] ${m[1]} = ${m[2]} (sólo esta sesión)
+`);
+}
 
 try {
   const res = await client.query(sql);

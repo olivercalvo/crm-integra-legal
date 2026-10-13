@@ -341,3 +341,45 @@ test("el desplazamiento en días es EXACTAMENTE el plazo del proveedor", () => {
 test("sin vencimiento cargado, contar desde la fecha del gasto es tratarlo como contado", () => {
   assert.equal(vencimientoPorPlazo("2026-05-10", 0), "2026-05-10");
 });
+
+// ---------------------------------------------------------------------------
+// 096: CONTABILIZADO FUERA
+// ---------------------------------------------------------------------------
+
+test("096: un documento contabilizado fuera sigue en la antigüedad, con su marca", () => {
+  const r = buildAntiguedad(
+    [
+      doc({ id: "junio", numero: "FAC-HON-000489", saldo: 300, contabilizadoFuera: true }),
+      doc({ id: "julio", numero: "FAC-HON-000503", saldo: 200 }),
+    ],
+    CONTROL_VACIO
+  );
+  assert.equal(r.total, 500, "los dos suman al auxiliar");
+  const docs = r.filas[0].documentos;
+  assert.equal(docs.find((d) => d.id === "junio")?.contabilizadoFuera, true);
+  assert.equal(docs.find((d) => d.id === "julio")?.contabilizadoFuera, undefined);
+});
+
+test("096: lo contabilizado fuera se NOMBRA en el cuadre sin cambiar la aritmética", () => {
+  // Mayor 200 (sólo el asiento de julio; el saldo de junio todavía no se cargó
+  // como saldo inicial). Auxiliar 500. Diferencia −300 = la factura de junio,
+  // que está en el auxiliar y no en el mayor.
+  const sinAsiento = {
+    documentos: { cantidad: 1, monto: 300 },
+    cobros: { cantidad: 0, monto: 0 },
+    contabilizadosFuera: {
+      documentos: { cantidad: 1, monto: 300 },
+      cobros: { cantidad: 0, monto: 0 },
+    },
+  };
+  const r = buildAntiguedad(
+    [
+      doc({ id: "junio", saldo: 300, contabilizadoFuera: true }),
+      doc({ id: "julio", saldo: 200 }),
+    ],
+    { ...CONTROL_VACIO, saldoCuentaControl: 200, sinAsiento }
+  );
+  assert.ok(Math.abs(r.control.diferencia - -300) < EPSILON);
+  assert.equal(r.control.porCablearExplicado, true, "los 300 están medidos: es la factura de junio");
+  assert.deepEqual(r.control.sinAsiento.contabilizadosFuera, sinAsiento.contabilizadosFuera);
+});

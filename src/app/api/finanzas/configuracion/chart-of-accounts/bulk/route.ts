@@ -16,6 +16,7 @@ import {
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { inicioPeriodoFiscal } from "@/lib/finanzas/contabilidad/periodo-fiscal";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * POST /api/finanzas/configuracion/chart-of-accounts/bulk
@@ -49,7 +50,7 @@ interface RowOutcome {
   message?: string;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, FINANZAS_ROLES);
   if (denied) return denied;
@@ -238,6 +239,6 @@ export async function POST(request: NextRequest) {
     },
     { status: 200 }
   );
-}
+});
 
 export type { ClassifiedRow };

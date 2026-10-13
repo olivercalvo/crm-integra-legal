@@ -75,6 +75,9 @@ export function emptyPaymentFormValues(): PaymentFormValues {
  */
 export function validatePaymentForm(
   v: PaymentFormValues,
+  // 074: el saldo ya no limita el monto (el excedente queda a favor del
+  // cliente). Se sigue recibiendo para no tocar a los cinco llamadores.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   balanceDue: number
 ): { ok: boolean; errors: PaymentFormErrors; amountNum: number } {
   const errors: PaymentFormErrors = {};
@@ -87,10 +90,19 @@ export function validatePaymentForm(
   }
   if (!isFinite(amountNum) || amountNum <= 0) {
     errors.amount = "El monto debe ser mayor a 0";
-  } else if (amountNum > balanceDue + 0.001) {
-    errors.amount = `El monto no puede superar el saldo pendiente (B/. ${fmtImporte(balanceDue)})`;
+  }
+  // 074: superar el saldo ya NO es error. El excedente queda a favor del
+  // cliente; la advertencia la muestra la pantalla (`excedenteDelCobro`).
+  if (!v.reference.trim()) {
+    errors.reference = "La referencia es obligatoria: número de transferencia, cheque o recibo.";
   }
   return { ok: Object.keys(errors).length === 0, errors, amountNum };
+}
+
+/** 074: lo que un cobro de una sola factura deja a favor del cliente. */
+export function excedenteDelCobro(amountNum: number, balanceDue: number): number {
+  if (!isFinite(amountNum) || amountNum <= balanceDue + 0.005) return 0;
+  return Math.round((amountNum - balanceDue) * 100) / 100;
 }
 
 /**
@@ -199,7 +211,8 @@ export function PaymentFormFields({
         {!errors.amount &&
           (amountHint ?? (
             <p className="mt-1 text-xs text-gray-500">
-              Máximo permitido: B/. {fmtImporte(balanceDue)}
+              Saldo de la factura: B/. {fmtImporte(balanceDue)}. Si el cobro es mayor, el resto
+              queda a favor del cliente.
             </p>
           ))}
       </div>
@@ -267,7 +280,10 @@ export function PaymentFormFields({
       {/* Referencia */}
       <div>
         <Label htmlFor="reference" className="text-sm">
-          Referencia (opcional)
+          Referencia{" "}
+          <span className="text-red-600" aria-hidden="true">
+            *
+          </span>
         </Label>
         <Input
           id="reference"

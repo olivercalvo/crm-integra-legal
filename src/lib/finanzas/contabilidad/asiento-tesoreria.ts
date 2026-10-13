@@ -94,17 +94,35 @@ export function esCuentaDeBancoValida(c: CuentaDeBanco | null | undefined): bool
   return !!c && c.active && c.account_type === "asset";
 }
 
+/**
+ * Qué cuenta ES un banco o una caja: un activo cuyo nombre lo dice.
+ *
+ * 🔒 Es la MISMA regla que `finanzas_es_cuenta_de_banco` en la base (`082`), que
+ * la usa para rechazar un banco en una línea de NC de compra. Las dos se fijan
+ * una contra la otra en `cuenta-de-banco-una-sola-regla.test.ts`: si cambia el
+ * patrón de un lado, el test falla.
+ */
+export const PATRON_CUENTA_DE_BANCO = /banco|caja|efectivo/i;
+
+export function esCuentaDeBancoPorNombre(c: { account_type?: string | null; name: string }): boolean {
+  return c.account_type === "asset" && PATRON_CUENTA_DE_BANCO.test(c.name);
+}
+
 // ---------------------------------------------------------------------------
 // COBRO DE UNA FACTURA
 // ---------------------------------------------------------------------------
 
 export interface CobroParaAsiento {
   id: string;
-  /** `REC-000012`. Es la referencia del asiento (Parte B, 21/09/2026). */
+  /** `CO-000012` (`REC-` los anteriores a E3). Es la referencia del asiento. */
   payment_number: string | null;
+  /** Cheque o transferencia (`payments.reference`): la `referencia_externa` (071). */
+  referencia_pago?: string | null;
   payment_date: string;
   amount: number;
   client_name: string | null;
+  /** El cliente del cobro (E2): va en la línea de 100004. */
+  client_id: string | null;
   /** Los números de las facturas a las que se aplicó. Para la descripción. */
   facturas: string[];
   /** `payments.payment_account_code`. `null` en los cobros anteriores a la `041`. */
@@ -184,7 +202,14 @@ export function construirAsientoDeCobro(
       credit: 0,
       description: `Cobro ${facturas}`,
     },
-    { account_code: CUENTA_POR_COBRAR, debit: 0, credit: monto, description: c.client_name },
+    // E2: el cliente en la cuenta control, como dato y no como texto.
+    {
+      account_code: CUENTA_POR_COBRAR,
+      debit: 0,
+      credit: monto,
+      description: c.client_name,
+      client_id: c.client_id,
+    },
   ];
 
   return {
@@ -201,6 +226,7 @@ export function construirAsientoDeCobro(
       // número de factura (task_plan.md, Parte B, precisión 2). Los cobros de
       // antes de la 047 (sin número) caen a la factura, como siempre.
       reference: c.payment_number ?? c.facturas[0] ?? null,
+      referencia_externa: c.referencia_pago?.trim() || null,
       idempotency_key: claveIdempotenteDeCobro(c.id),
     },
   };
@@ -213,8 +239,10 @@ export function construirAsientoDeCobro(
 export interface PagoProveedorParaAsiento {
   /** El id del PAGO (`supplier_payments`, 048). Es el `source_id` del asiento. */
   pago_id: string;
-  /** `CE-000012`. Es la referencia del asiento. */
+  /** `PA-000012` (`CE-` los anteriores a E3). Es la referencia del asiento. */
   payment_number: string | null;
+  /** Cheque o transferencia (`supplier_payments.reference`): la `referencia_externa` (071). */
+  referencia_pago?: string | null;
   /**
    * El documento que se paga, para la descripción (049): una COMPRA
    * (`business_expenses`) o un GASTO DE TRÁMITE (`expenses`). El asiento es el
@@ -225,6 +253,8 @@ export interface PagoProveedorParaAsiento {
   documento_id: string;
   documento_description: string;
   supplier_name: string | null;
+  /** El proveedor del documento que se paga (E2): va en la línea de 200001. */
+  supplier_id: string | null;
   supplier_invoice_number: string | null;
   payment_date: string;
   /** Lo pagado EN ESTE pago, no el total de la compra (pago parcial, Josuarth 21/09). */
@@ -259,6 +289,17 @@ export interface PagoProveedorParaAsiento {
 export function construirAsientoDePagoProveedor(
   p: PagoProveedorParaAsiento
 ): ResultadoAsientoTesoreria {
+  // 🔴 E3: el pago debita 200001, y ahí no hay líneas sin proveedor. Un documento
+  // viejo sin ficha se paga después de asignarle el proveedor.
+  if (!p.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        "El pago se registra contra Cuentas por pagar (200001) y el documento no tiene proveedor. " +
+        "Asígnale el proveedor y vuelve a registrar el pago.",
+    };
+  }
   if (!p.payment_account_code) {
     return {
       ok: false,
@@ -296,6 +337,7 @@ export function construirAsientoDePagoProveedor(
       debit: monto,
       credit: 0,
       description: p.supplier_name,
+      supplier_id: p.supplier_id,
     },
     {
       account_code: p.payment_account_code,
@@ -316,6 +358,7 @@ export function construirAsientoDePagoProveedor(
       lines,
       source_id: p.pago_id,
       reference: p.payment_number ?? null,
+      referencia_externa: p.referencia_pago?.trim() || null,
       idempotency_key: claveIdempotenteDePagoProveedor(p.pago_id),
     },
   };

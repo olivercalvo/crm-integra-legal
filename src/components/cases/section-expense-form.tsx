@@ -2,7 +2,9 @@
 
 import { useMemo, useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Save, X, Loader2, Paperclip } from "lucide-react";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
+import { AlertTriangle, Plus, Save, X, Loader2, Paperclip } from "lucide-react";
 import { directUpload } from "@/lib/storage/direct-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,12 @@ interface SectionExpenseFormProps {
    * se dispara en el mismo acto, después del alta, con su propio asiento.
    */
   bancos?: { code: string; name: string }[];
+  /**
+   * E3 (01/10/2026, decisión del bufete): un caso CERRADO admite gastos, pero
+   * antes de guardar se pregunta. No es un bloqueo: un trámite puede llegar
+   * facturado después del cierre.
+   */
+  casoCerrado?: boolean;
 }
 
 /**
@@ -75,6 +83,7 @@ export function SectionExpenseForm({
   proveedores = [],
   taxCodes = [],
   bancos = [],
+  casoCerrado = false,
 }: SectionExpenseFormProps) {
   // El default de impuesto resuelto contra el catálogo (id + tasa). Si el
   // código no existe la línea arranca sin impuesto, que el servidor tolera en
@@ -91,10 +100,16 @@ export function SectionExpenseForm({
 
   // Expense fields
   const [expConcept, setExpConcept] = useState("");
-  const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expDate, setExpDate] = useState(hoyEnPanama());
+  // Fecha de REGISTRO (la del asiento, define el período). Sigue a la del
+  // documento hasta que alguien la elige a mano (Bloque 1, E1).
+  const [expRegistro, setExpRegistro] = useState(hoyEnPanama());
+  const [registroElegido, setRegistroElegido] = useState(false);
   const [expFile, setExpFile] = useState<File | null>(null);
   const expFileRef = useRef<HTMLInputElement>(null);
   const [expSupplier, setExpSupplier] = useState("");
+  // 070 (E2): número de la factura del proveedor. Opcional, como en las compras.
+  const [expFacturaProv, setExpFacturaProv] = useState("");
   const [expDueDate, setExpDueDate] = useState("");
   const [expLineas, setExpLineas] = useState<ExpenseLineDraft[]>(() => [
     lineaVacia("l0", CUENTA_TRAMITE_DEFAULT, impuestoInicial),
@@ -104,10 +119,12 @@ export function SectionExpenseForm({
   const [yaPagado, setYaPagado] = useState(false);
   const [pagoBanco, setPagoBanco] = useState("");
   const [pagoMetodo, setPagoMetodo] = useState<PaymentMethod>("transferencia");
-  const [pagoFecha, setPagoFecha] = useState(new Date().toISOString().split("T")[0]);
+  const [pagoFecha, setPagoFecha] = useState(hoyEnPanama());
   const [pagoReferencia, setPagoReferencia] = useState("");
   // Aviso que sobrevive al reset del formulario: el gasto quedó, el pago no.
   const [avisoPago, setAvisoPago] = useState<string | null>(null);
+  // E3: la pregunta del caso cerrado, en pantalla (nunca un diálogo del navegador).
+  const [preguntarCerrado, setPreguntarCerrado] = useState(false);
 
   // El monto del encabezado ES la suma de las líneas. No hay campo de monto: si
   // lo hubiera, habría dos verdades y el asiento se arma con una sola.
@@ -136,21 +153,25 @@ export function SectionExpenseForm({
 
   // Payment fields
   const [payAmount, setPayAmount] = useState("");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(hoyEnPanama());
   const [payDescription, setPayDescription] = useState("");
 
   const isTramite = sectionType === "tramite";
 
   const resetExpense = () => {
     setExpConcept("");
-    setExpDate(new Date().toISOString().split("T")[0]);
+    setExpDate(hoyEnPanama());
+    setExpRegistro(hoyEnPanama());
+    setRegistroElegido(false);
     setExpFile(null);
     if (expFileRef.current) expFileRef.current.value = "";
     setExpSupplier("");
+    setExpFacturaProv("");
     setExpDueDate("");
     setExpLineas([lineaVacia(`l${Date.now()}`, CUENTA_TRAMITE_DEFAULT, impuestoInicial)]);
     setFieldErrors({});
     resetPago();
+    setPreguntarCerrado(false);
     setShowExpenseForm(false);
     setError(null);
   };
@@ -159,22 +180,26 @@ export function SectionExpenseForm({
     setYaPagado(false);
     setPagoBanco("");
     setPagoMetodo("transferencia");
-    setPagoFecha(new Date().toISOString().split("T")[0]);
+    setPagoFecha(hoyEnPanama());
     setPagoReferencia("");
   };
 
   const resetPayment = () => {
     setPayAmount("");
-    setPayDate(new Date().toISOString().split("T")[0]);
+    setPayDate(hoyEnPanama());
     setPayDescription("");
     setShowPaymentForm(false);
     setError(null);
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = (confirmadoCasoCerrado = false) => {
     setFieldErrors({});
     if (!expConcept.trim() || !expDate) {
       setError("Complete el concepto y la fecha del gasto");
+      return;
+    }
+    if (!expSupplier) {
+      setError("Elige el proveedor: el gasto va a Cuentas por pagar y ahí cada movimiento dice de quién es.");
       return;
     }
     if (yaPagado && !pagoBanco) {
@@ -196,6 +221,14 @@ export function SectionExpenseForm({
         return;
       }
     }
+    // E3: con el caso cerrado se pregunta ANTES de guardar. Va después de las
+    // validaciones para no preguntar por un formulario que igual no se guarda.
+    if (casoCerrado && !confirmadoCasoCerrado) {
+      setError(null);
+      setPreguntarCerrado(true);
+      return;
+    }
+    setPreguntarCerrado(false);
     startTransition(async () => {
       try {
         const response = await fetch("/api/expenses", {
@@ -205,6 +238,8 @@ export function SectionExpenseForm({
             case_id: caseId,
             concept: expConcept.trim(),
             date: expDate,
+            accounting_date: expRegistro,
+            supplier_invoice_number: expFacturaProv.trim() || null,
             expense_type: sectionType,
             supplier_id: expSupplier || null,
             due_date: expDueDate || null,
@@ -385,12 +420,13 @@ export function SectionExpenseForm({
               <Input value={expConcept} onChange={(e) => setExpConcept(e.target.value)} placeholder="Ej: Trámite Registro Público" className="min-h-[48px]" />
             </div>
             <div className="space-y-1.5">
-              <Label>Fecha del gasto</Label>
+              <Label>Fecha del documento</Label>
               <Input
                 type="date"
                 value={expDate}
                 onChange={(e) => {
                   setExpDate(e.target.value);
+                  if (!registroElegido) setExpRegistro(e.target.value);
                   // Si ya hay proveedor, el vencimiento se recalcula: el plazo
                   // corre desde la fecha del gasto, no desde la de hoy.
                   const p = proveedores.find((x) => x.id === expSupplier);
@@ -399,17 +435,31 @@ export function SectionExpenseForm({
                 className="min-h-[48px]"
               />
             </div>
+            <div className="sm:col-span-2">
+              <CampoFechaDeRegistro
+                id="gasto_fecha_registro"
+                value={expRegistro}
+                onChange={(v) => {
+                  setExpRegistro(v);
+                  setRegistroElegido(true);
+                }}
+                error={fieldErrors.accounting_date}
+                disabled={isPending}
+                ayuda="Es la fecha contable del gasto: define el mes en que entra al libro. El vencimiento se cuenta desde la fecha del documento."
+              />
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Proveedor (opcional)</Label>
+              {/* E3: obligatorio. El gasto va a 200001 y ahí no hay líneas sin proveedor. */}
+              <Label>Proveedor *</Label>
               <select
                 value={expSupplier}
                 onChange={(e) => elegirProveedor(e.target.value)}
                 className="block w-full rounded-md border border-gray-300 bg-white px-2 min-h-[48px] text-sm focus:border-integra-navy focus:outline-none"
               >
-                <option value="">Sin proveedor</option>
+                <option value="">Elegir proveedor</option>
                 {proveedores.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.legal_name}
@@ -435,6 +485,21 @@ export function SectionExpenseForm({
                 Se precarga con el plazo del proveedor y se puede cambiar. De acá salen
                 los tramos de la antigüedad.
               </p>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              {/* 070 (E2): el número de la factura del proveedor, como en las compras. */}
+              <Label htmlFor="gasto_factura_proveedor">N.º de factura del proveedor (opcional)</Label>
+              <Input
+                id="gasto_factura_proveedor"
+                value={expFacturaProv}
+                onChange={(e) => setExpFacturaProv(e.target.value)}
+                maxLength={50}
+                placeholder="Ej: F-001-0004521"
+                className="min-h-[48px]"
+              />
+              {fieldErrors.supplier_invoice_number && (
+                <p className="text-xs text-red-600">{fieldErrors.supplier_invoice_number}</p>
+              )}
             </div>
           </div>
 
@@ -533,11 +598,42 @@ export function SectionExpenseForm({
             </div>
             <p className="text-xs text-gray-400">JPG, PNG o PDF. Máximo 10MB.</p>
           </div>
+          {preguntarCerrado && (
+            <div
+              role="alertdialog"
+              aria-labelledby="pregunta-caso-cerrado"
+              className="space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-3"
+            >
+              <p id="pregunta-caso-cerrado" className="flex items-start gap-2 text-sm font-medium text-amber-900">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                Este caso está cerrado. ¿Deseas registrar el gasto igual?
+              </p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setPreguntarCerrado(false)}
+                  disabled={isPending}
+                  className="min-h-[44px]"
+                >
+                  <X size={16} className="mr-1" /> No, volver
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleAddExpense(true)}
+                  disabled={isPending}
+                  className="min-h-[44px] bg-amber-600 hover:bg-amber-700"
+                >
+                  <Save size={16} className="mr-1" /> Sí, registrar el gasto
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 justify-end">
             <Button onClick={resetExpense} variant="ghost" disabled={isPending} className="min-h-[44px]">
               <X size={16} className="mr-1" /> Cancelar
             </Button>
-            <Button onClick={handleAddExpense} disabled={isPending} className="min-h-[44px] bg-red-600 hover:bg-red-700">
+            <Button onClick={() => handleAddExpense()} disabled={isPending} className="min-h-[44px] bg-red-600 hover:bg-red-700">
               {isPending ? <Loader2 size={16} className="mr-1 animate-spin" /> : <Save size={16} className="mr-1" />}
               Guardar Gasto{totalLineas > 0 ? ` · B/. ${totalLineas.toFixed(2)}` : ""}
             </Button>

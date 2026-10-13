@@ -340,7 +340,7 @@ export function ImportAccountsPanel({ onImported, onClose }: Props) {
           </div>
           {writableCount === 0 && (
             <p className="text-xs text-red-600">
-              Ninguna fila se puede importar. Corregí el archivo y volvé a subirlo.
+              Ninguna fila se puede importar. Corrige el archivo y vuelve a subirlo.
             </p>
           )}
         </div>

@@ -90,6 +90,10 @@ function makeAdmin() {
           state.capturado.borroElGasto = true;
           return { data: null, error: null };
         }
+        if (s.op === "update" && s.payload && "purchase_number" in (s.payload as object)) {
+          // 071 (E3): el número FAC-CO-, ANTES del posteo. No es el cache.
+          return { data: null, error: null };
+        }
         if (s.op === "update") {
           state.capturado.cacheEscrito = s.payload as Record<string, unknown>;
           return { data: null, error: null };
@@ -103,6 +107,7 @@ function makeAdmin() {
             date: ins.date,
             concept: ins.concept,
             posted_entry_id: null,
+            supplier_id: ins.supplier_id,
             cases: { case_code: "CIV-014" },
             suppliers: null,
           },
@@ -170,6 +175,8 @@ function makeAdmin() {
   return {
     from: (t: string) => builder(t),
     rpc: async (_fn: string, args: Record<string, unknown>) => {
+      // 071 (E3): el número FAC-CO- del gasto, antes del asiento.
+      if (_fn === "get_next_sequence_number") return { data: 5, error: null };
       state.capturado.rpcArgs = args;
       if (state.rpcError) return { data: null, error: state.rpcError };
       return { data: "entry-uuid-1", error: null };
@@ -213,7 +220,8 @@ function linea(over: Record<string, string> = {}) {
   };
 }
 
-const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-03-15" };
+// E3 (01/10/2026): el proveedor es obligatorio (200001 nunca sin tercero).
+const BASE = { case_id: "c1", concept: "Trámite Registro Público", date: "2026-08-15", supplier_id: "prov-1" };
 
 // ===========================================================================
 // 1. LAS LÍNEAS SON OBLIGATORIAS
@@ -323,17 +331,24 @@ test("las líneas se guardan con su orden y su cuenta", { skip: skipNoMocks }, a
 test("el proveedor y el vencimiento se guardan en el ENCABEZADO", { skip: skipNoMocks }, async () => {
   reset();
   await POST(
-    req({ ...BASE, supplier_id: "prov-1", due_date: "2026-04-14", lines: [linea()] })
+    req({ ...BASE, supplier_id: "prov-1", due_date: "2026-09-14", lines: [linea()] })
   );
   assert.equal(state.capturado.expenseInsert?.supplier_id, "prov-1");
-  assert.equal(state.capturado.expenseInsert?.due_date, "2026-04-14");
+  assert.equal(state.capturado.expenseInsert?.due_date, "2026-09-14");
 });
 
-test("sin proveedor ni vencimiento se guardan como NULL, no vacíos", { skip: skipNoMocks }, async () => {
+test("sin vencimiento se guarda como NULL, no vacío", { skip: skipNoMocks }, async () => {
   reset();
-  await POST(req({ ...BASE, supplier_id: "", due_date: "", lines: [linea()] }));
-  assert.equal(state.capturado.expenseInsert?.supplier_id, null);
+  await POST(req({ ...BASE, due_date: "", lines: [linea()] }));
   assert.equal(state.capturado.expenseInsert?.due_date, null);
+});
+
+test("🔴 E3: sin proveedor → 400 ANTES de insertar (200001 nunca sin tercero)", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, supplier_id: "", lines: [linea()] }));
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /Elige el proveedor/);
+  assert.equal(state.capturado.expenseInsert, null, "no se insertó nada");
 });
 
 test("el tenant sale del perfil aunque el body mande otro", { skip: skipNoMocks }, async () => {
@@ -504,12 +519,23 @@ test("🔴 el gasto se postea al crearse: DEBE la cuenta de cada línea / HABER 
 });
 
 test("🔴 si el posteo falla (período cerrado), el gasto se DESHACE y el error llega con su motivo", { skip: skipNoMocks }, async () => {
-  reset({ rpcError: { message: "El período 2026-03 está cerrado: no se admiten asientos con esa fecha." } });
+  reset({ rpcError: { message: "El período 2026-08 está cerrado: no se admiten asientos con esa fecha." } });
   const res = await POST(req({ ...BASE, lines: [linea()] }));
   assert.equal(res.status, 422);
   const body = await res.json();
   assert.match(body.error, /El gasto no se registró: /);
-  assert.match(body.error, /período 2026-03 está cerrado/);
+  assert.match(body.error, /período 2026-08 está cerrado/);
   assert.equal(state.capturado.borroElGasto, true, "DELETE compensatorio del gasto (las líneas caen por CASCADE)");
   assert.equal(state.capturado.cacheEscrito, null, "no se escribió posted_entry_id");
+});
+
+test("096: un gasto con fecha anterior al inicio contable NO se registra (regla 3.3.5)", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req({ ...BASE, date: "2026-03-15", lines: [linea()] }));
+  assert.equal(res.status, 422);
+  const body = await res.json();
+  assert.match(body.error, /La fecha del gasto de trámite \(15\/03\/2026\) es anterior al inicio contable/);
+  assert.match(body.fieldErrors?.date ?? "", /anterior al inicio contable/, "el error va al campo de la fecha");
+  assert.equal(state.capturado.expenseInsert ?? null, null, "no se insertó nada");
+  assert.equal(state.capturado.rpcArgs ?? null, null, "ni se llamó al RPC");
 });

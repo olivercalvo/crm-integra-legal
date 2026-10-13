@@ -187,7 +187,7 @@ test("grupos vacíos no se renderizan", () => {
 });
 
 test("el Patrimonio suma las cuentas de patrimonio MÁS la utilidad del ejercicio", () => {
-  const bg = buildBalanceGeneral([acc("300001", "equity", "patrimonio", -5000)], {
+  const bg = buildBalanceGeneral([acc("300001", "equity", "capital_social", -5000)], {
     utilidadDelEjercicio: -1000,
   });
   assertMoney(bg.patrimonio.total, -6000, "Total de Patrimonio");

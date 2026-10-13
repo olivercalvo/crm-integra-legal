@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listObservationTemplatesActive } from "@/lib/finanzas/queries/observation-templates";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const READ_ROLES = ["admin", "abogada", "contador"] as const;
 
@@ -18,7 +19,7 @@ const READ_ROLES = ["admin", "abogada", "contador"] as const;
  * NOTA: el CRUD (POST/PUT/DELETE) queda para el Sprint ADMIN-CATALOGS
  * futuro. En este sprint solo exponemos lectura.
  */
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   const ctx = await getAuthenticatedContext();
   if (!READ_ROLES.includes(ctx.userRole as (typeof READ_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -26,4 +27,4 @@ export async function GET() {
 
   const templates = await listObservationTemplatesActive(ctx.db, ctx.tenantId);
   return NextResponse.json({ templates }, { status: 200 });
-}
+});

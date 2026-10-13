@@ -6,6 +6,7 @@ import {
   validarPedidoDeNcDeCompra,
 } from "@/lib/finanzas/api/supplier-credit-notes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,7 @@ export const runtime = "nodejs";
  */
 const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     const r = await createSupplierCreditNote(
       ctx.db,
       // 🔑 SOP-014: el RPC va con el cliente de SERVICIO; el tenant, del perfil.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       v.data
@@ -50,9 +51,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(r, { status: 201 });
   } catch (err) {
     if (err instanceof MutationError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] createSupplierCreditNote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

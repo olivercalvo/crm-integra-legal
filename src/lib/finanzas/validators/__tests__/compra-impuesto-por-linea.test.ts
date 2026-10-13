@@ -35,7 +35,7 @@ function compra(lineas: Record<string, unknown>[]) {
   return {
     expense_date: "2026-09-16",
     due_date: null,
-    supplier_id: null,
+    supplier_id: "d2222222-2222-2222-2222-222222222222",
     supplier_name: "Cable & Wireless",
     supplier_ruc: null,
     supplier_invoice_number: null,

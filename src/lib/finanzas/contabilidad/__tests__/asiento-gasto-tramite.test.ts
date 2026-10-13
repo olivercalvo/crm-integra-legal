@@ -29,9 +29,11 @@ import type { ExpenseLineRow } from "@/lib/finanzas/types/expense-line";
 const GASTO: GastoParaAsiento = {
   id: "e1",
   date: "2026-03-15",
+  accounting_date: "2026-03-15",
   concept: "Trámites Registro Público",
   case_code: "CIV-014",
   supplier_legal_name: "MICROSISTEMAS S.A.",
+  supplier_id: "d2222222-2222-2222-2222-222222222222",
 };
 
 function linea(over: Partial<ExpenseLineRow> = {}): ExpenseLineRow {
@@ -288,4 +290,18 @@ test("los centavos se redondean una vez, al armar cada línea", () => {
   const d = r.asiento.lines.reduce((s, l) => s + l.debit, 0);
   const c = r.asiento.lines.reduce((s, l) => s + l.credit, 0);
   assert.equal(Math.round(d * 100), Math.round(c * 100), "tiene que cuadrar igual");
+});
+
+test("E2: el gasto de trámite lleva al proveedor en la línea de 200001", () => {
+  const r = construirAsientoDeGastoTramite(GASTO, [linea()]);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  assert.equal(r.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id, "d2222222-2222-2222-2222-222222222222");
+});
+
+test("🔴 E3: sin proveedor el gasto NO entra al libro (reemplaza el 'no se bloquea' de SOP-033)", () => {
+  const r = construirAsientoDeGastoTramite({ ...GASTO, supplier_id: null, supplier_legal_name: null }, [linea()]);
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.equal(r.motivo, "sin_proveedor");
 });

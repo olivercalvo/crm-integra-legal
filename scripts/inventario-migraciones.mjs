@@ -298,6 +298,188 @@ const MARCADORES = {
     nota: "7.5, 25/09. Todo o nada: post_journal_entries_batch postea cada asiento por post_journal_entry en una transaccion. reverse_journal_import reversa cada asiento con reverse_journal_entry (055), fecha de hoy, sin borrar nada. Los asientos importados son source_type manual.",
   },
 
+  "078_parametros_del_bufete_isr.sql": {
+    que: "Parametros contables por bufete: la tasa de ISR del Estado de Resultado (fraccion, 0 por defecto)",
+    tipo: "tabla", tabla: "finanzas_parametros",
+    nota: "Bloque 1, E10, 01/10. Decision (b) de Josuarth del 30/09: linea de ISR siempre visible con tasa configurable, 0 % para Integra. No toca el libro: es un calculo del reporte.",
+  },
+  "079_subcategorias_y_cuentas_nuevas.sql": {
+    que: "Subcategoria obligatoria en los seis tipos (CHECK coa_subcategoria_por_tipo), patrimonio en tres, sin depreciacion_acumulada; 400009 Familia, 440001 Otros ingresos, HON-FAM y OTR-ING",
+    tipo: "constraint", nombre: "coa_subcategoria_por_tipo",
+    nota: "Bloque 1, E6, 01/10. El mapa cuenta por cuenta de Josuarth (P-8a) no llego: la migracion asigna un valor por defecto (el de subcategoriaPorDefecto) y lo informa con un NOTICE por cuenta; se corrige en el Plan de Cuentas. Reemplaza el CHECK de la 025 y el script sql/datos-staging de HON-FAM.",
+  },
+  "081_correcciones_076_y_079.sql": {
+    que: "Correcciones: create_supplier_credit_note sin record de la compra (NC sin compra fallaba) y CHECK de subcategoria sin el hueco del NULL",
+    tipo: "check_contiene", nombre: "coa_subcategoria_por_tipo", contiene: "IS NOT NULL",
+    nota: "Bloque 1, 01/10. Encontradas por la verificacion de la 076 y la 079 al aplicarlas en staging. Va inmediatamente despues de la 080.",
+  },
+  "086_bitacoras_nucleo.sql": {
+    que: "Esquema auditoria: bitacora_contable y bitacora_legal (solo agregar, cadena de hash por bufete), anclas diarias y al cerrar periodo, lectura y verificacion por RPC solo service_role",
+    tipo: "funcion", nombre: "bitacora_leer",
+    nota: "03/10. Propuesta aprobada de bitacoras. Contable: admin y contador; legal: admin. Lo exige la base, no solo la app. No toca filas ni el libro.",
+  },
+  "087_bitacoras_captura.sql": {
+    que: "Trigger trg_auditoria en 41 tablas: cada cambio a su bitacora, y lo fiscal de clientes, gastos de tramite y usuarios tambien a la contable",
+    tipo: "dato",
+    sql: `SELECT count(*) = 41 FROM pg_trigger WHERE tgname = 'trg_auditoria' AND NOT tgisinternal`,
+    nota: "03/10. Requiere la 086. Falla cerrado: si la bitacora no se puede escribir, la operacion se deshace. El usuario sale de auth.uid() o del header x-actor-id (createAdminClient(usuario)).",
+  },
+  "088_bitacoras_legado.sql": {
+    que: "Copia una vez las filas de audit_log a las bitacoras como origen legado (usuario y fecha originales), con verificacion de conteos",
+    tipo: "dato",
+    // Solo catálogo: nombrar las tablas de auditoria rompería la consulta única
+    // en una base sin la 086. La función nace en la MISMA transacción que la copia.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'escribir_legado')`,
+    nota: "03/10. ESCRITA Y SIN APLICAR a proposito: va cuando las bitacoras nuevas esten escribiendo y verificadas. Requiere 086 y 087.",
+  },
+  "089_bitacoras_documento_de_casos.sql": {
+    que: "Correccion de auditoria.documento_de: tareas, comentarios y cobros del caso fallaban (COALESCE de texto y entero) y, por fallar cerrado, no se podian guardar",
+    tipo: "dato",
+    // Solo catálogo, por la misma razón que la 088.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'documento_de' AND p.prosrc LIKE '%case_number::text%')`,
+    nota: "03/10. Encontrada en el recorrido del punto 7 con la 087 recien aplicada en staging. Va inmediatamente despues de la 087.",
+  },
+  "090_bitacoras_orden_de_candados.sql": {
+    que: "La bitacora toma el candado del correlativo del libro antes que el suyo: un solo orden con post_journal_entry (la importacion de asientos y la NC de compra se trababan con un posteo suelto)",
+    tipo: "dato",
+    // Solo catálogo, por la misma razón que la 088.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'tomar_candados')`,
+    nota: "03/10. Encontrada en la prueba 2 (deadlock 40P01 reproducido con dos sesiones). Va despues de la 089.",
+  },
+  "091_bitacoras_error_claro.sql": {
+    que: "Si falla el registro de auditoria, error AU001 con un mensaje claro para la persona y el original en el detalle (la app lo deja en el log del servidor)",
+    tipo: "dato",
+    // Solo catálogo, por la misma razón que la 088.
+    sql: `SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'auditoria' AND p.proname = 'registrar' AND p.prosrc LIKE '%AU001%')`,
+    nota: "03/10. Prueba 3. Va despues de la 090, junto con el codigo de conManejoDeAuditoria y fetchConAuditoria (sin la 091 el codigo no cambia nada).",
+  },
+  "092_factura_emitida_fuera.sql": {
+    que: "Registrar factura emitida fuera: origen 'externo', indice unico de CUFE por bufete, serie FAC-EXT- (invoice_ext), guard que congela el estado fiscal y RPC register_external_invoice (numero, factura, asiento y CUFE en una transaccion)",
+    tipo: "funcion", nombre: "register_external_invoice",
+    nota: "05/10. Pre-flight: aborta si hay un CUFE repetido entre facturas. Va junto con el codigo de facturas-externas (sin la 092 la pantalla nueva falla al guardar; lo demas no cambia).",
+  },
+  "093_compra_nace_pendiente.sql": {
+    que: "DEFAULT de business_expenses.status pasa de 'pagado' (010) a 'pendiente_pago', el unico valor que el guard de la 048 acepta al crear",
+    tipo: "dato",
+    sql: `SELECT pg_get_expr(d.adbin, d.adrelid) = '''pendiente_pago''::text' FROM pg_attrdef d JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum WHERE d.adrelid = 'public.business_expenses'::regclass AND a.attname = 'status'`,
+    nota: "05/10. Hallazgo del ensayo de la ventana. Va justo despues de la 048. No toca filas.",
+  },
+  "094_documentos_de_prueba.sql": {
+    que: "Marca de prueba por DOCUMENTO (de_prueba en invoices, credit_notes, payments, client_payments, expenses) y clients.es_de_prueba solo para lo nuevo; guards de marcar (sin asiento) y desmarcar (llave)",
+    tipo: "columna", tabla: "invoices", columna: "de_prueba",
+    nota: "05/10. Propuesta corte QuickBooks 9 ajustada: FAC-HON-000463 es real con cliente 0TEST-FE-002. Va al final del Bloque C; despues, el paso sql/ventana/marcar-datos-de-prueba.sql.",
+  },
+  "095_documentos_de_prueba_fuera_del_libro.sql": {
+    que: "El libro rechaza asientos de documentos de prueba y asientos manuales con un cliente de prueba como tercero; la NC hereda la marca de su factura; cobro y factura no se mezclan (prueba/real)",
+    tipo: "funcion", nombre: "finanzas_libro_sin_documentos_de_prueba",
+    nota: "05/10. Va despues de la 094. La factura REAL de un cliente de prueba (FAC-HON-000463) sigue entrando al libro.",
+  },
+  "096_inicio_contable.sql": {
+    que: "Inicio contable (finanzas_parametros.fecha_inicio_contable, 01/07/2026): el libro rechaza el asiento de un documento con fecha anterior (contabilizado fuera); el inicio no se mueve si cruza documentos",
+    tipo: "columna", tabla: "finanzas_parametros", columna: "fecha_inicio_contable",
+    nota: "06/10. Va al final del Bloque C, despues de la 095. Pre-flight: en produccion 0 asientos de documentos anteriores (libro vacio); staging se aplica con la llave finanzas.inicio_contable_existentes.",
+  },
+  "100_apertura.sql": {
+    que: "Asiento de apertura: finanzas_parametros.fecha_apertura, aperturas (una vigente) y apertura_partidas, post_apertura (service_role) y saldo_inicial en solo lectura con apertura",
+    tipo: "funcion", nombre: "post_apertura",
+    nota: "07/10. Ventana del Bloque 1, aplicada y sin usar. No toca datos.",
+  },
+  "101_reversar_apertura.sql": {
+    que: "reverse_journal_entry acepta la apertura: misma fecha que la apertura, mes abierto, y la marca reversada en la misma transaccion",
+    tipo: "funcion", nombre: "reverse_journal_entry",
+    nota: "07/10. Ventana del Bloque 1, despues de la 100. No toca datos.",
+  },
+  "099_solo_importados_bloquean_y_banco_del_cobro.sql": {
+    que: "post_documentos_existentes se niega solo con asientos IMPORTADOS vigentes (los manuales de ajuste se listan, no bloquean); el banco de un cobro con asiento no cambia (trigger)",
+    tipo: "funcion", nombre: "finanzas_banco_de_cobro_contabilizado",
+    nota: "07/10. Va junto con la 097 y la 098, despues de la ventana. No toca datos.",
+  },
+  "098_un_mes_un_metodo_en_los_dos_sentidos.sql": {
+    que: "La importacion masiva no entra en un mes contabilizado desde los documentos (trigger en journal_import_entries); post_documentos_existentes toma el candado del correlativo antes de mirar el mes y verifica el FAC-CO- del gasto",
+    tipo: "funcion", nombre: "finanzas_importacion_no_pisa_documentos",
+    nota: "07/10. Va junto con la 097, despues de la ventana. Los ajustes a mano no se bloquean.",
+  },
+  "097_posteo_de_documentos_existentes.sql": {
+    que: "Posteo de documentos existentes por mes: post_documentos_existentes (un lote, una transaccion; se niega si el rango tiene asientos manuales o empieza antes del inicio) y su registro (posteos_retroactivos)",
+    tipo: "funcion", nombre: "post_documentos_existentes",
+    nota: "07/10. NO va en la ventana: se aplica despues, antes de contabilizar julio. No toca datos.",
+  },
+  "085_motivo_pendiente_dgi.sql": {
+    que: "fe_motivo_pendiente y fe_motivo_pendiente_en en invoices y credit_notes: por qué un documento no llegó a la DGI",
+    tipo: "columna", tabla: "invoices", columna: "fe_motivo_pendiente",
+    nota: "03/10. Validaciones previas a la DGI y lista de pendientes. Solo usa invoices y credit_notes (existen desde antes de la 025).",
+  },
+  "084_audit_log_solo_agregar.sql": {
+    que: "audit_log: politica FOR SELECT (misma expresion de bufete), sin UPDATE/DELETE/TRUNCATE para anon/authenticated y trigger de solo agregar",
+    tipo: "funcion", nombre: "audit_log_solo_agregar",
+    nota: "Hotfix de seguridad. APLICADA EN PRODUCCION el 03/10/2026 por Oliver (sola: produccion = 024 + 084); en main desde 9b00b12. En la ventana 025 -> 083 entra igual y no cambia nada (idempotente, probado en staging). Todas las escrituras usan el cliente de servicio.",
+  },
+  "083_fe_estado_interna.sql": {
+    que: "fe_estado 'interna' en invoices y credit_notes (NC/ND emitida sin enviarse a la DGI), terminal por trigger",
+    tipo: "funcion", nombre: "finanzas_fe_estado_interna_guard",
+    nota: "03/10. La NC/ND interna postea igual en el libro y nunca llama al PAC. Solo desde no_emitida; de interna no se sale.",
+  },
+  "082_otros_servicios_y_nc_sin_bancos.sql": {
+    que: "400010 Otros servicios con HON-OTROS; create_supplier_credit_note rechaza bancos (finanzas_es_cuenta_de_banco)",
+    tipo: "funcion", nombre: "finanzas_es_cuenta_de_banco",
+    nota: "Respuestas de Josuarth del 02/10 y recorrido del 03/10. Parche verificado sobre la definicion vigente (081). Va despues de la 081.",
+  },
+  "080_cierre_anual.sql": {
+    que: "Cierre anual: close_fiscal_year (asiento cierre al 31/12 contra 300002, verificado), finanzas_saldos_de_resultado y reverse_journal_entry acepta cierre",
+    tipo: "funcion", nombre: "close_fiscal_year",
+    nota: "Bloque 1, E11, 01/10. Uno vigente por ano y en orden; EXECUTE solo service_role. El Estado de Resultado excluye los cierres en la app. Parche verificado sobre la definicion vigente de reverse_journal_entry.",
+  },
+  "068_fechas_de_registro.sql": {
+    que: "Fecha de registro (accounting_date) en facturas, compras, gastos de tramite y NC de venta; backfill desde el libro; congelada al emitir",
+    tipo: "columna", tabla: "invoices", columna: "accounting_date",
+    nota: "Bloque 1, E1, 30/09. La fecha del documento sigue siendo la que ya existia (issue_date, expense_date, date); la de registro es la del asiento y define el periodo. No toca el libro: solo lo LEE para el backfill.",
+  },
+  "069_reversion_con_fecha_elegida.sql": {
+    que: "Reversiones, anulaciones y NC de compra sin el candado de 'hoy +/-1 dia': el contador elige la fecha de registro",
+    tipo: "cuerpo_funcion", nombre: "reverse_payment", contiene: "La reversión necesita una fecha de registro",
+    nota: "Bloque 1, E1, 30/09. Parche verificado sobre la definicion vigente de nueve funciones (no copias). Depende de la 068 (cancel_invoice_with_reversal mide el mes por accounting_date). Se mira el cuerpo: el nombre de la funcion no cambia.",
+  },
+  "070_gasto_tramite_factura_proveedor.sql": {
+    que: "expenses.supplier_invoice_number: numero de factura del proveedor en el gasto de tramite",
+    tipo: "columna", tabla: "expenses", columna: "supplier_invoice_number",
+    nota: "Bloque 1, E2, 30/09. Mismas reglas que la 044 en compras: opcional, 1..50, sin UNIQUE. No se congela al postear: no entra al asiento hasta E3.",
+  },
+  "077_nota_de_debito.sql": {
+    que: "Nota de debito: invoice_kind NOTA_DEBITO, serie debit_note (ND-), referenced_invoice_id opcional (mismo cliente, emitida) y T4 que la congela",
+    tipo: "cuerpo_funcion", nombre: "finanzas_referencia_de_nota_de_debito", contiene: "nota de débito",
+    nota: "Bloque 1, decision 14, 01/10. Mismo efecto que una factura de venta (asiento source_type factura). El envio al PAC (tipo 05) queda apagado en la app hasta probarlo en el sandbox (PERMITIR_ND_A_LA_DGI).",
+  },
+  "076_nc_modulo_propio.sql": {
+    que: "Notas de credito como modulo propio: factura y compra opcionales, aplicaciones de NC (venta y compra), credited_total desde aplicaciones, create_supplier_credit_note con lineas libres, apply_credit_note y apply_supplier_credit_note",
+    tipo: "tabla", tabla: "credit_note_applications",
+    nota: "Bloque 1, E8, 01/10. La NC con factura sigue acreditandola entera por invoice_id (sin backfill); la verificacion final aborta si cambia un solo credited_total. La NC de venta sin factura queda apagada en la app (PERMITIR_NC_VENTA_SIN_FACTURA, P-4a).",
+  },
+  "075_ancla_de_la_cadena.sql": {
+    que: "Ancla externa de la cadena: accounting_chain_anchors inmutable, ancla al cerrar cada periodo (trigger), ancla inicial y verify_chain_anchors",
+    tipo: "tabla", tabla: "accounting_chain_anchors",
+    nota: "Bloque 1, R-1b, 01/10. El ancla sale de la base en el respaldo diario (la tabla se baja sola) y en la constancia PDF del cierre. No toca el libro: solo lee el ultimo asiento.",
+  },
+  "074_cobro_con_excedente.sql": {
+    que: "Cobro con excedente: referencia obligatoria al crear (trigger) y apply_payment_credit para aplicar el saldo a favor sin asiento",
+    tipo: "cuerpo_funcion", nombre: "apply_payment_credit", contiene: "saldo a favor",
+    nota: "Bloque 1, punto 5, 01/10. El excedente queda en amount_unapplied (T7b/T7c ya lo derivaban) y en 100004 con el cliente. La referencia es trigger BEFORE INSERT y no CHECK NOT VALID: el CHECK se evalua en cada UPDATE y reversar un cobro viejo sin referencia fallaria.",
+  },
+  "073_tasa_con_cuenta.sql": {
+    que: "Cada tasa de impuesto con su cuenta (tax_codes.account_code, backfill 200003), reglas de la cuenta y NC de compra verificada por cuenta de tasa",
+    tipo: "columna", tabla: "tax_codes", columna: "account_code",
+    nota: "Bloque 1, punto 6, 01/10. Josuarth P-6a: una cuenta por tasa, la misma para ventas y compras. Una vez usada la tasa su cuenta no cambia (trigger). Va con el codigo: el alta de una tasa sin cuenta falla.",
+  },
+  "072_hash_v5_y_verificador.sql": {
+    que: "Hash v5 (JSON canonico, sin separadores ambiguos), hash_version por asiento, tramos de versiones viejas y verify_accounting_chain que recalcula el contenido",
+    tipo: "columna", tabla: "journal_entries", columna: "hash_version",
+    nota: "Bloque 1, R-1, 01/10. No toca el libro: detecta la version de cada asiento viejo y la guarda por tramos en accounting_hash_versions. Aborta si un asiento no se reproduce con ninguna formula o si el verificador nuevo encuentra un solo problema. Parche verificado del motor de la 071.",
+  },
+  "071_motor_v4_referencias_y_terceros.sql": {
+    que: "Motor v4: referencia_externa (en el hash), numero AD- en el motor, tercero obligatorio en 100004/200001, FAC-CO- (purchase_number), NC-CO-",
+    tipo: "columna", tabla: "journal_entries", columna: "referencia_externa",
+    nota: "Bloque 1, E3, 01/10. DROP + CREATE de post_journal_entry (13 -> 14 parametros, permisos de la 030 otra vez). Parches verificados al lote (067), a la NC de compra y al trigger de gastos de tramite. 🔴 Va JUNTO con el codigo de E3: con el candado de tercero y de p_reference, el codigo anterior falla al postear.",
+  },
+
   // ── sql/pending — sin numerar ───────────────────────────────────────────────
   "add_extrajudicial_classification.sql": {
     que: "Clasificación EXTRAJUDICIAL (EXT)", tipo: "dato", heuristico: true,

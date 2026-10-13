@@ -4,6 +4,7 @@ import { listQuotes } from "@/lib/finanzas/queries/quotes";
 import { createQuote, validateCreateQuote } from "@/lib/finanzas/api/quotes";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import type { QuoteFilters, QuoteStatus } from "@/lib/finanzas/types/quote";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
@@ -15,7 +16,7 @@ const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
  *
  * Body: CreateQuoteInput (ver types/quote.ts)
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createQuote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /**
  * GET /api/finanzas/quotes
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
  *   ?search=<text>                   (parcial sobre quote_number)
  *   ?page=<n>&pageSize=<m>
  */
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -92,4 +93,4 @@ export async function GET(request: NextRequest) {
 
   const result = await listQuotes(ctx.db, ctx.tenantId, filters);
   return NextResponse.json(result);
-}
+});

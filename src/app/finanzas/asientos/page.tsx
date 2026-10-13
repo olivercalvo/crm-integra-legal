@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import Link from "next/link";
-import { BookOpenCheck, CalendarDays, FileSpreadsheet, History } from "lucide-react";
+import { BookOpenCheck, CalendarDays, FileSpreadsheet, History, FolderOpen } from "lucide-react";
 
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { listChartAccounts } from "@/lib/finanzas/queries/chart-of-accounts";
@@ -87,7 +88,12 @@ export default async function AsientosPage({
       plantilla = borradoresDesdeAsiento(origen.lineas);
       clonadoDe = origen.entry_number;
       descripcionClonada = origen.description;
-      referenciaClonada = origen.reference ?? "";
+      // 071: la referencia libre vive en `referencia_externa`. En un asiento
+      // anterior a la 071 vivía en `reference`; un AD- nunca se clona (es el
+      // número del original, el clon recibe el suyo).
+      referenciaClonada =
+        origen.referencia_externa ??
+        (origen.reference && !/^AD-\d+$/.test(origen.reference) ? origen.reference : "");
     }
   }
 
@@ -102,17 +108,18 @@ export default async function AsientosPage({
   // El único filtro es `active`, el mismo que hace cumplir el RPC.
   const cuentas = (await listChartAccounts(ctx.db, ctx.tenantId))
     .filter((c) => c.active)
-    .map((c) => ({ code: c.code, name: c.name }));
+    .map((c) => ({ code: c.code, name: c.name, cuenta_control: c.cuenta_control ?? null }));
 
   // Los terceros que una línea puede nombrar (054). Clientes y proveedores en
   // una sola consulta cada uno: la lista se arma una vez y la comparten las N
   // líneas del formulario.
   const terceros = await listTercerosDelLibro(ctx.db, ctx.tenantId);
 
-  // La fecha se calcula en el SERVIDOR: el reloj del navegador puede estar en otra
-  // zona horaria y un asiento cargado a las 22:00 en Panamá caería en el día
-  // siguiente — o sea, en otro período contable si es fin de mes.
-  const hoy = new Date().toISOString().slice(0, 10);
+  // La fecha se calcula en el SERVIDOR y en la zona de Panamá: el reloj del
+  // navegador puede estar en otra zona, y el día UTC (lo que se usaba hasta E1)
+  // ya es "mañana" desde las 19:00 de Panamá. Un asiento cargado a las 22:00
+  // caía en el día siguiente, o sea en otro período si es fin de mes.
+  const hoy = hoyEnPanama();
 
   return (
     <div className="space-y-5">
@@ -153,6 +160,20 @@ export default async function AsientosPage({
           >
             <History size={16} />
             Ver importaciones
+          </Link>
+          <Link
+            href="/finanzas/asientos/documentos-existentes"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+          >
+            <History size={16} />
+            Documentos existentes, por mes
+          </Link>
+          <Link
+            href="/finanzas/asientos/apertura"
+            className="inline-flex min-h-[48px] items-center gap-2 rounded-md border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-600 hover:border-integra-navy hover:text-integra-navy"
+          >
+            <FolderOpen size={16} />
+            Apertura (saldos iniciales)
           </Link>
         </div>
       </div>

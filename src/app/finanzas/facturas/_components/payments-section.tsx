@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { CircleDollarSign, Banknote, FileText, Undo2 } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils/format-date";
 import { DownloadReceiptPdfButton } from "@/components/finanzas/cobros/download-receipt-pdf-button";
@@ -9,6 +11,8 @@ import { RegisterPaymentDialog } from "./register-payment-dialog";
 import { DeletePaymentButton } from "./delete-payment-button";
 import { ReversePaymentDialog } from "./reverse-payment-dialog";
 import { fmtImporte } from "@/lib/utils/importe";
+import { ApplyCreditButton } from "./apply-credit-button";
+import type { SaldoAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 
 interface Props {
   invoiceId: string;
@@ -28,13 +32,22 @@ interface Props {
    * amplía la otra.
    */
   canReverse: boolean;
+  /** 074: cobros del mismo cliente con saldo sin aplicar (más viejos primero). */
+  saldosAFavor?: SaldoAFavor[];
+  /**
+   * 074: admin, abogada y CONTADOR (Oliver, 01/10/2026). Bandera aparte de
+   * `canMutate`: el contador aplica un saldo a favor pero no registra cobros.
+   */
+  canApplyCredit?: boolean;
+  /** Inicio contable (096): un cobro anterior lleva «Contabilizado fuera». */
+  inicio?: string;
 }
 
 /**
  * Sección "Pagos registrados" del detalle de factura.
  * Visible cuando status ∈ emitida/parc/pagada. Muestra:
  *   - Resumen Total / Pagado / Saldo
- *   - Botón "Registrar pago" (visible solo si balance_due > 0 y canMutate)
+ *   - Botón "Registrar cobro" (visible solo si balance_due > 0 y canMutate). Un pago es dinero que sale; esto es un cobro.
  *   - Tabla con fila por pago (fecha, monto, método, referencia, registrado por)
  *   - Acción por fila, según el cobro:
  *       · sin asiento en el libro → Eliminar (canMutate)
@@ -51,6 +64,9 @@ export function PaymentsSection({
   balanceDue,
   canMutate,
   canReverse,
+  saldosAFavor = [],
+  canApplyCredit = false,
+  inicio,
 }: Props) {
   const vigentes = payments.filter((p) => !p.reversion);
   const reversados = payments.length - vigentes.length;
@@ -91,6 +107,31 @@ export function PaymentsSection({
         )}
       </div>
 
+      {/* 074: el saldo a favor del cliente, aplicable a esta factura. */}
+      {canApplyCredit && balanceDue > 0.005 && saldosAFavor.length > 0 && (
+        <div className="mb-4 space-y-2 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-sm font-medium text-emerald-900">
+            El cliente tiene saldo a favor: B/.{" "}
+            {fmtImporte(saldosAFavor.reduce((s, x) => s + x.disponible, 0))}. Se aplica sin asiento:
+            el dinero ya está en Cuentas por Cobrar.
+          </p>
+          {saldosAFavor.map((s) => (
+            <div key={s.payment_id} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs text-emerald-800">
+                <span className="font-mono">{s.payment_number ?? "Cobro"}</span> del {formatDate(s.payment_date)}:
+                B/. {fmtImporte(s.disponible)} disponibles
+              </span>
+              <ApplyCreditButton
+                paymentId={s.payment_id}
+                paymentNumber={s.payment_number}
+                invoiceId={invoiceId}
+                monto={Math.min(s.disponible, Math.round(balanceDue * 100) / 100)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Resumen Total / Pagado / Saldo */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="rounded-md border bg-gray-50 p-3">
@@ -98,7 +139,7 @@ export function PaymentsSection({
             Total
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-integra-navy">
-            ${fmtImporte(grandTotal)}
+            B/. {fmtImporte(grandTotal)}
           </div>
         </div>
         <div className="rounded-md border bg-emerald-50 p-3">
@@ -106,7 +147,7 @@ export function PaymentsSection({
             Pagado
           </div>
           <div className="mt-1 font-mono text-base font-semibold text-emerald-700">
-            ${fmtImporte(amountPaid)}
+            B/. {fmtImporte(amountPaid)}
           </div>
         </div>
         <div
@@ -128,7 +169,7 @@ export function PaymentsSection({
               balanceDue > 0.001 ? "text-amber-700" : "text-gray-700"
             }`}
           >
-            ${fmtImporte(balanceDue)}
+            B/. {fmtImporte(balanceDue)}
           </div>
         </div>
       </div>
@@ -154,8 +195,11 @@ export function PaymentsSection({
                 const label = `B/. ${fmtImporte(amount)} del ${formatDate(p.payment_date)}`;
                 const reversado = !!p.reversion;
                 // Sin asiento se ELIMINA; con asiento se REVERSA. Nunca las dos.
+                // 096: un cobro contabilizado fuera (anterior al inicio) no se
+                // elimina. La ruta responde 409 y la base lo rechaza igual.
+                const fuera = !!inicio && esContabilizadoFuera(p.payment_date, inicio);
                 const canDelete =
-                  !reversado && canMutate && p.status === "registrado" && !p.asiento;
+                  !reversado && canMutate && p.status === "registrado" && !p.asiento && !fuera;
                 const canReverseThis =
                   !reversado && canReverse && p.status === "registrado" && !!p.asiento;
                 return (
@@ -172,13 +216,16 @@ export function PaymentsSection({
                     </td>
                     <td className={`py-2 pr-3 ${reversado ? "line-through" : "text-gray-900"}`}>
                       {formatDate(p.payment_date)}
+                      {inicio && esContabilizadoFuera(p.payment_date, inicio) && (
+                        <div className="mt-1"><ContabilizadoFueraBadge inicio={inicio} /></div>
+                      )}
                     </td>
                     <td
                       className={`py-2 pr-3 text-right font-mono font-medium ${
                         reversado ? "line-through" : "text-emerald-700"
                       }`}
                     >
-                      ${fmtImporte(amount)}
+                      B/. {fmtImporte(amount)}
                       {/* Un recibo aplicado a varias facturas (Parte B): acá se ve
                           lo aplicado a ESTA, y abajo el total del recibo. */}
                       {Number(p.amount) > amount + 0.001 && (
@@ -186,7 +233,7 @@ export function PaymentsSection({
                           className="block text-xs font-normal text-gray-400 whitespace-nowrap"
                           title="El recibo se aplicó a varias facturas"
                         >
-                          de {fmtImporte(Number(p.amount))} del recibo
+                          de B/. {fmtImporte(Number(p.amount))} del recibo
                         </span>
                       )}
                     </td>
@@ -242,7 +289,14 @@ export function PaymentsSection({
                           />
                         ) : canDelete ? (
                           <DeletePaymentButton paymentId={p.id} paymentLabel={label} />
-                        ) : reversado ? null : (
+                        ) : reversado ? null : fuera && !p.asiento && canMutate ? (
+                          <span
+                            className="text-xs text-slate-600"
+                            title={mensajeContabilizadoFueraNoSeAnula("cobro", p.payment_number ?? null, p.payment_date, inicio!)}
+                          >
+                            No se elimina
+                          </span>
+                        ) : (
                           <span
                             className="text-xs text-gray-400"
                             title={
@@ -266,7 +320,7 @@ export function PaymentsSection({
       ) : (
         <div className="rounded-md border border-dashed bg-gray-50/40 p-6 text-center text-sm text-gray-500">
           {showRegisterButton
-            ? "Use el botón \"Registrar pago\" para asentar el primer cobro."
+            ? "Use el botón \"Registrar cobro\" para asentar el primer cobro."
             : "Esta factura aún no tiene pagos."}
         </div>
       )}

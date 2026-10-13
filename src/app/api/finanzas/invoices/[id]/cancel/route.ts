@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { anularFacturaAnteDgi } from "@/lib/finanzas/efactura/orchestration/anular-factura-ante-dgi";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -32,6 +33,12 @@ interface RouteParams {
  *   422 `rechazada_por_la_dgi`           — la DGI dijo que no. NADA cambió.
  *   502 `no_sabemos`                     — no se pudo confirmar si llegó. NADA
  *       cambió. Es un problema del intermediario, de ahí el 502.
+ *   4xx/5xx `no_se_anulo_en_el_libro`   — sin DGI de por medio (sin CUFE,
+ *       interna, emitida fuera) y el libro falló. NADA cambió; el código es el
+ *       del error del libro. El mensaje no nombra a la DGI (06/10/2026).
+ *
+ * En `anulada`, `alcance` dice si la DGI anuló (`dgi_y_libro`) o si fue sólo
+ * en el CRM (`solo_crm`): el aviso de la pantalla sale de ahí.
  *
  * El cuerpo SIEMPRE trae `estado`, para que la pantalla no tenga que deducirlo
  * del código, y `error` cuando corresponde, porque es lo que el resto del
@@ -39,12 +46,13 @@ interface RouteParams {
  *
  * Permisos: admin + abogada (Sprint 2C, D4 + D5). El contador NO anula.
  *
- * Body: `{ reason: string, observations?: string | null }`.
+ * Body: `{ reason: string, observations?: string | null, fecha_registro?: string }`.
+ * Sin `fecha_registro`, la anulación se registra con la fecha de hoy en Panamá.
  * El motivo exige **15 caracteres** desde el Bloque 9B (D5): es el mínimo que
  * pide la DGI para `cancellationReason`. Lo valida el orquestador con el mismo
  * módulo que usa el diálogo, y el CHECK de la `058` lo sostiene en la base.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -78,13 +86,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const r = await anularFacturaAnteDgi(
       ctx.db,
       // 🔑 SOP-014: la reversión del libro va con el cliente de SERVICIO.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,
       b.reason,
       observaciones,
-      new Date()
+      new Date(),
+      b.fecha_registro
     );
 
     switch (r.estado) {
@@ -105,6 +114,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       case "no_sabemos":
         console.error("[finanzas] anulación sin confirmar:", params.id, `intento #${r.intento}`);
         return NextResponse.json({ id: params.id, error: r.mensaje, ...r }, { status: 502 });
+
+      case "no_se_anulo_en_el_libro":
+        console.error("[finanzas] anulación sin DGI, el libro falló:", params.id, r.detalle);
+        return NextResponse.json({ id: params.id, error: r.mensaje, ...r }, { status: r.status });
     }
   } catch (err) {
     // `InvoiceMutationError` es un alias de `MutationError` (api/invoices.ts:129),
@@ -114,9 +127,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const cuerpo: Record<string, unknown> = { error: err.message };
       // El 400 del motivo se devuelve con la forma que el diálogo ya lee.
       if (err.status === 400) cuerpo.fieldErrors = { reason: err.message };
+      // El 422 de la fecha de registro, a su campo.
+      if (err.fieldErrors) cuerpo.fieldErrors = err.fieldErrors;
       return NextResponse.json(cuerpo, { status: err.status });
     }
     console.error("[finanzas] cancelInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -14,7 +15,7 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     const { data: profile } = await admin
       .from("users")
@@ -113,4 +114,4 @@ export async function POST(
     console.error("Unexpected error deleting case:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

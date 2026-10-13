@@ -1,4 +1,5 @@
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { cargarInicioContable, esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { AddCommentForm } from "@/components/cases/add-comment-form";
@@ -36,14 +37,13 @@ import {
   Clock,
   Upload,
 
-  UserCheck,
-} from "lucide-react";
+  UserCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
-import { getStatusStyle, formatCurrency } from "@/lib/utils/status-styles";
+import { esEstadoCerrado, getStatusStyle, formatCurrency } from "@/lib/utils/status-styles";
 
 interface PageProps {
   params: { id: string };
@@ -63,6 +63,8 @@ export default async function ExpedienteDetailPage({
   // Solo cuentas ACTIVAS: los reportes filtran por `active`, así que ofrecer una
   // inactiva sería ofrecer una clasificación que después no se ve en ningún lado.
   // La ruta de API lo vuelve a validar — el dropdown no es un permiso.
+  // 096: un gasto anterior al inicio contable no se elimina (contabilizado fuera).
+  const inicio = await cargarInicioContable(db, tenantId);
   const [cuentasPlan, proveedores, taxCodes, bancos] = await Promise.all([
     listChartAccounts(db, tenantId),
     listSupplierOptions(db, tenantId),
@@ -296,6 +298,19 @@ export default async function ExpedienteDetailPage({
               24/08/2026 — su alcance en un caso es adjuntar documentos y
               comentar. El PATCH con action="change-status" también le responde
               403, así que el botón sería una promesa falsa. */}
+          {/* Requerimiento 13 (07/10/2026): «Facturar este caso» abre la factura
+              nueva con el caso y su cliente precargados.
+              nav-guard-ok: sólo admin y abogada, los que crean facturas
+              (/finanzas/facturas/nueva en route-access.ts). */}
+          {(userRole === "admin" || userRole === "abogada") && (
+            <Link
+              href={`/finanzas/facturas/nueva?case_id=${params.id}`}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-integra-gold/60 bg-white px-3 text-sm font-semibold text-integra-navy hover:border-integra-navy"
+            >
+              <Receipt size={16} />
+              Facturar este caso
+            </Link>
+          )}
           {(userRole === "admin" || userRole === "abogada") && (
             <CaseStatusChanger
               caseId={params.id}
@@ -663,6 +678,7 @@ export default async function ExpedienteDetailPage({
                   proveedores={proveedoresParaGastos}
                   taxCodes={taxCodes}
                   bancos={bancos}
+                  casoCerrado={esEstadoCerrado(status?.name)}
                 />
               )}
 
@@ -685,6 +701,11 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEliminar={
+                            esContabilizadoFuera(e.date, inicio)
+                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                              : null
+                          }
                           colorClass="text-red-600"
                         />
                       ))}
@@ -762,6 +783,7 @@ export default async function ExpedienteDetailPage({
                   proveedores={proveedoresParaGastos}
                   taxCodes={taxCodes}
                   bancos={bancos}
+                  casoCerrado={esEstadoCerrado(status?.name)}
                 />
               )}
 
@@ -784,6 +806,11 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEliminar={
+                            esContabilizadoFuera(e.date, inicio)
+                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                              : null
+                          }
                           colorClass="text-red-600"
                         />
                       ))}

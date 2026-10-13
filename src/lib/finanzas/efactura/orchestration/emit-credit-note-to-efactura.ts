@@ -60,6 +60,7 @@ import { mapInvoiceToEfacturaRequest } from "@/lib/finanzas/efactura/mapper/map-
 import { allocateFeNumero } from "@/lib/finanzas/efactura/secuencias/allocate-fe-numero";
 import { post } from "@/lib/finanzas/efactura/transport/efactura-client";
 import { fetchCreditNoteEfacturaBundle } from "@/lib/finanzas/efactura/data/fetch-credit-note-efactura-bundle";
+import { tipoDocumentoDeNota } from "@/lib/finanzas/efactura/mapper/tipo-de-documento";
 import {
   parsePacResponse,
   MENSAJE_INCIERTO,
@@ -99,12 +100,14 @@ interface MetaNc {
   fe_estado: string;
   punto_facturacion: string | null;
   numero_documento: number | null;
+  /** E8: una NC sin factura no se manda a la DGI (P-4a). */
+  invoice_id: string | null;
 }
 
 async function loadMetaNc(db: DB, tenantId: string, id: string): Promise<MetaNc> {
   const { data, error } = await db
     .from("credit_notes")
-    .select("id, credit_note_number, status, fe_estado, punto_facturacion, numero_documento")
+    .select("id, credit_note_number, status, fe_estado, punto_facturacion, numero_documento, invoice_id")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .maybeSingle();
@@ -118,6 +121,7 @@ async function loadMetaNc(db: DB, tenantId: string, id: string): Promise<MetaNc>
     fe_estado: String(r.fe_estado ?? "no_emitida"),
     punto_facturacion: r.punto_facturacion === null ? null : String(r.punto_facturacion),
     numero_documento: r.numero_documento === null ? null : Number(r.numero_documento),
+    invoice_id: (r.invoice_id as string | null) ?? null,
   };
 }
 
@@ -151,6 +155,15 @@ export async function emitCreditNoteToEfactura(
       409
     );
   }
+  // 🟢 03/10/2026: una NC SIN factura ya se manda, como 06 GENÉRICA y sin
+  //    referencia (`tipoDocumentoDeNota`). Con factura sigue siendo 04 + CUFE.
+  // 083: emitido a propósito como interno. Nunca se manda (la base lo impide igual).
+  if (nc.fe_estado === "interna") {
+    throw new MutationError(
+      "Este documento se emitió como interno: no se envía a la DGI. Si hace falta uno fiscal, se emite otro documento.",
+      409
+    );
+  }
   if (nc.fe_estado !== "no_emitida" && nc.fe_estado !== "error") {
     throw new MutationError(
       nc.fe_estado === "authorized"
@@ -164,8 +177,8 @@ export async function emitCreditNoteToEfactura(
 
   const { bundle, factura } = await fetchCreditNoteEfacturaBundle(db, tenantId, creditNoteId);
 
-  // 🔴 EL GATE DEL CUFE. Antes de tocar el correlativo.
-  if (!factura.dgi_cufe) {
+  // 🔴 EL GATE DEL CUFE (sólo con factura). Antes de tocar el correlativo.
+  if (factura && !factura.dgi_cufe) {
     throw new MutationError(
       `La factura ${factura.invoice_number} no tiene CUFE, así que esta nota de crédito no se ` +
         "puede enviar a la DGI: el documento electrónico tiene que decir qué factura corrige. " +
@@ -237,8 +250,11 @@ export async function emitCreditNoteToEfactura(
       sequence: { puntoFacturacion, numeroDocumento },
       options: {
         iAmb: emisor.iAmb,
-        tipoDocumento: TIPO_DOCUMENTO_NOTA_CREDITO,
-        referencia: { cufe: factura.dgi_cufe, fechaEmision: factura.issue_date },
+        // 04 + CUFE con factura; 06 sin referencia sin ella (1705 / 1706).
+        tipoDocumento: tipoDocumentoDeNota("credito", factura !== null),
+        ...(factura && factura.dgi_cufe
+          ? { referencia: { cufe: factura.dgi_cufe, fechaEmision: factura.issue_date } }
+          : {}),
       },
     });
   } catch (err) {

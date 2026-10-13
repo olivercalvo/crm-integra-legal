@@ -26,6 +26,11 @@
  * contra information_schema el 21/09/2026.
  */
 
+import {
+  asegurarFechaDesdeElInicio,
+  asegurarQueNoEsContabilizadoFuera,
+  documentoContabilizadoFuera,
+} from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { destinoDePago, type CreateSupplierPaymentInput } from "@/lib/finanzas/types/supplier-payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -36,6 +41,7 @@ import {
 } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
 import { cargarPagoProveedorParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { allocateSupplierPaymentNumber } from "@/lib/finanzas/numbering/supplier-payment-numbering";
 import { getAsientoDePagoProveedor, getSupplierPayment } from "@/lib/finanzas/queries/supplier-payments";
 
@@ -67,6 +73,9 @@ export async function createSupplierPayment(
     );
   }
 
+  // 096 (regla 3.3.5): un pago nuevo no lleva fecha anterior al inicio contable.
+  await asegurarFechaDesdeElInicio(db, tenantId, "pago_proveedor", input.payment_date, "payment_date");
+
   // 1. El documento y su saldo (049: una compra O un gasto de trámite)
   const destino = destinoDePago(input);
   // Para los mensajes: "Esta compra … pagada" / "Este gasto de trámite … pagado".
@@ -97,7 +106,7 @@ export async function createSupplierPayment(
   } else {
     const { data: gasto, error: errGasto } = await db
       .from("expenses")
-      .select("id, concept, status, amount, amount_paid, posted_entry_id")
+      .select("id, concept, status, amount, amount_paid, posted_entry_id, date")
       .eq("tenant_id", tenantId)
       .eq("id", destino.id)
       .maybeSingle();
@@ -113,7 +122,12 @@ export async function createSupplierPayment(
     // 🔴 Sin el asiento del gasto no hay cuenta por pagar en el libro: pagar
     //    ahora debitaría 200001 por una deuda que el mayor no tiene. Los gastos
     //    anteriores al posteo automático primero se registran en el libro.
-    if (!gasto.posted_entry_id) {
+    //    096: salvo que esté contabilizado FUERA (anterior al inicio contable):
+    //    su cuenta por pagar está en el saldo inicial y el pago la cancela.
+    if (
+      !gasto.posted_entry_id &&
+      !(await documentoContabilizadoFuera(db, tenantId, (gasto as { date?: string | null }).date ?? null))
+    ) {
       throw new MutationError(
         "Este gasto todavía no está registrado en el libro contable: regístrelo primero " +
           '(botón "Registrar en el libro contable") y después registre su pago.',
@@ -192,7 +206,8 @@ export async function createSupplierPayment(
     throw causa;
   }
 
-  // 3. El asiento
+  // 3. El asiento. Un pago posterior a una compra o un gasto anteriores al
+  //    inicio contable SÍ postea (DEBE 200001 del proveedor, del saldo inicial).
   const datos = await cargarPagoProveedorParaAsiento(ledgerDb, tenantId, pagoId);
   if (!datos) {
     await deshacerPago(
@@ -231,6 +246,15 @@ export async function deleteSupplierPayment(
   if (!pago) {
     throw new MutationError("Pago no encontrado", 404);
   }
+  // 096: un pago contabilizado fuera (anterior al inicio) no se elimina. Los
+  // saldos heredados de la 048 tampoco, si su fecha es anterior.
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    "pago_proveedor",
+    (pago as { payment_number?: string | null }).payment_number ?? null,
+    (pago as { payment_date?: string | null }).payment_date ?? null
+  );
 
   const { data: asiento } = await db
     .from("journal_entries")
@@ -283,7 +307,9 @@ export async function reverseSupplierPayment(
   tenantId: string,
   userId: string,
   pagoId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseSupplierPaymentResult> {
   const pago = await getSupplierPayment(db, tenantId, pagoId);
   if (!pago) {
@@ -309,8 +335,14 @@ export async function reverseSupplierPayment(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: pagoId });
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
+  const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: pagoId });
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);
   }
@@ -326,6 +358,9 @@ export async function reverseSupplierPayment(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

@@ -65,7 +65,7 @@ function planClasificado(): ReportAccount[] {
   return [
     cuenta("100001", "Banco General Operativa", "asset", "activo_corriente", 10000),
     cuenta("200001", "Cuentas por pagar", "liability", "pasivo_corriente", -1200),
-    cuenta("300001", "Capital", "equity", "patrimonio", -4000),
+    cuenta("300001", "Capital", "equity", "capital_social", -4000),
     cuenta("400001", "Derecho Corporativo", "income", "ingresos_operativos", -8000),
     cuenta("500001", "Costos de trámites", "cost", "costos_operativos", 1200),
     cuenta("610001", "Alquiler", "expense", "gastos_operativos", 2000),
@@ -129,7 +129,7 @@ test("con una pérdida, los tres siguen coincidiendo", () => {
 test("sin cuentas de resultado, los tres dan cero", () => {
   const r = losTres([
     cuenta("100001", "Banco", "asset", "activo_corriente", 5000),
-    cuenta("300001", "Capital", "equity", "patrimonio", -5000),
+    cuenta("300001", "Capital", "equity", "capital_social", -5000),
   ]);
   assert.equal(r.balance, 0);
   assert.equal(r.clasico, 0);

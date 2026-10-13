@@ -16,7 +16,7 @@ import {
 
 /**
  * Toast de éxito para acciones del módulo Facturas. Lee `?saved`, `?emitted`,
- * `?dgi=saved`, `?cancelled=1`, `?converted=<N>` o `?fe=sent|pending|error`
+ * `?dgi=saved`, `?cancelled=dgi_y_libro|solo_crm`, `?converted=<N>` o `?fe=sent|pending|error`
  * del URL — análogo a DeleteSuccessToast pero específico para Facturas.
  *
  * `?converted=N` viene del flujo de Cotizaciones cuando ConvertToInvoicesDialog
@@ -41,6 +41,8 @@ export function InvoiceSuccessToast() {
   const fe = searchParams.get("fe");
   // `?recibo=REC-000012`: lo pone RegisterPaymentDialog al registrar un cobro.
   const recibo = searchParams.get("recibo");
+  // 03/10: la ND eligió «Enviar a la DGI» y el envío no terminó bien.
+  const envio = searchParams.get("envio");
   const [visible, setVisible] = useState(false);
 
   const anyParam = !!(saved || emitted || dgi || cancelled || converted || fe || recibo);
@@ -58,6 +60,7 @@ export function InvoiceSuccessToast() {
       url.searchParams.delete("converted");
       url.searchParams.delete("fe");
       url.searchParams.delete("recibo");
+      url.searchParams.delete("envio");
       router.replace(url.pathname + url.search, { scroll: false });
     }, 4000);
     return () => clearTimeout(timer);
@@ -94,12 +97,23 @@ export function InvoiceSuccessToast() {
         ? `Cotización convertida. ${count} facturas creadas.`
         : "Cotización convertida. 1 factura creada.";
     palette = "info";
+  } else if (emitted && envio === "fallo") {
+    icon = <AlertCircle size={18} className="text-amber-600 shrink-0" />;
+    message = `${emitted} emitida y en el libro, pero el envío a la DGI no se completó. Revisa su estado fiscal.`;
+    palette = "warning";
   } else if (emitted) {
     icon = <Send size={18} className="text-green-600 shrink-0" />;
-    message = `Factura emitida con número ${emitted}`;
+    message = `${emitted.startsWith("ND-") ? "Nota de débito emitida" : "Factura emitida"} con número ${emitted}`;
   } else if (cancelled) {
     icon = <XCircle size={18} className="text-red-600 shrink-0" />;
-    message = "Factura anulada correctamente";
+    // `?cancelled=dgi_y_libro|solo_crm` lo pone el diálogo según lo que hizo la
+    // ruta. Nunca se dice «ante la DGI» si no se le habló al PAC.
+    message =
+      cancelled === "dgi_y_libro"
+        ? "Anulada ante la DGI y en el libro contable"
+        : cancelled === "solo_crm"
+          ? "Anulada en el CRM. No se envió nada a la DGI"
+          : "Anulación registrada";
     palette = "danger";
   } else if (dgi === "saved") {
     icon = <FileBadge size={18} className="text-green-600 shrink-0" />;

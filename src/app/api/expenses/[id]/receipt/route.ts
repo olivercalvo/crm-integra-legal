@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -11,7 +12,7 @@ const ALLOWED_TYPES = [
 ];
 
 // POST /api/expenses/[id]/receipt — Upload receipt for an expense
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -22,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -123,10 +124,10 @@ export async function POST(
     console.error("Unexpected error uploading receipt:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/expenses/[id]/receipt — Remove receipt from an expense
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -137,7 +138,7 @@ export async function DELETE(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -196,4 +197,4 @@ export async function DELETE(
     console.error("Unexpected error deleting receipt:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

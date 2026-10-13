@@ -74,6 +74,7 @@
 
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 import { CUENTA_TRAMITE_DEFAULT } from "@/lib/finanzas/types/expense-line";
+import { esCuentaDeBancoPorNombre } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
 
 // ---------------------------------------------------------------------------
 // EL GUARD — lo que el servidor rechaza
@@ -252,4 +253,24 @@ export function cuentasClasificables<T extends CuentaClasificable>(
   return cuentas
     .filter((c) => c.active !== false && esTipoValidoParaGasto(c.account_type))
     .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+/**
+ * Las cuentas que se ofrecen para una LÍNEA de compra o de NC de proveedor.
+ *
+ * Sobre la lista de `listExpenseAccountOptions` (activas de activo, costo y
+ * gasto), saca dos cosas que esa lista dejaba pasar (recorrido del 03/10/2026):
+ *   · las cuentas CONTROL (100004, 200001): la NC de compra las rechaza en la
+ *     base, y una compra contra 100004 no tiene sentido;
+ *   · los BANCOS y cajas (`esCuentaDeBancoPorNombre`, la regla de la `082`).
+ * `incluirCodigos` son las cuentas que la compra que se edita ya tiene: se
+ * ofrecen igual, para no reclasificarla en silencio al guardar.
+ */
+export function cuentasParaLineaDeCompra<
+  T extends { code: string; name: string; account_type?: string | null; cuenta_control?: string | null },
+>(cuentas: readonly T[], incluirCodigos: readonly (string | null | undefined)[] = []): T[] {
+  const incluir = new Set(incluirCodigos.filter((c): c is string => !!c));
+  return cuentas.filter(
+    (c) => incluir.has(c.code) || (!c.cuenta_control && !esCuentaDeBancoPorNombre(c))
+  );
 }

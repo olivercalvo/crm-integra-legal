@@ -25,7 +25,7 @@ export type ValidationResult<T> =
   | { ok: true; data: T; errors: null }
   | { ok: false; data: null; errors: ValidationErrors };
 
-const VALID_KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO"];
+const VALID_KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO", "NOTA_DEBITO"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -89,6 +89,12 @@ export function validateCreateInvoice(
     errors.issue_date = "Fecha de emisión inválida";
   }
 
+  // La fecha de REGISTRO es opcional: si no viene, es la del documento. Que su
+  // período esté abierto lo decide el servidor contra la base (al emitir).
+  if (raw.accounting_date && !DATE_RE.test(String(raw.accounting_date))) {
+    errors.accounting_date = "Fecha de registro inválida";
+  }
+
   if (!raw.due_date || !DATE_RE.test(String(raw.due_date))) {
     errors.due_date = "Fecha de vencimiento inválida";
   }
@@ -99,6 +105,15 @@ export function validateCreateInvoice(
 
   if (raw.case_id && !UUID_RE.test(String(raw.case_id))) {
     errors.case_id = "Caso inválido";
+  }
+
+  // 077: la factura que ajusta, sólo en una nota de débito (y opcional).
+  if (raw.referenced_invoice_id) {
+    if (raw.invoice_kind !== "NOTA_DEBITO") {
+      errors.referenced_invoice_id = "Sólo una nota de débito indica la factura que ajusta.";
+    } else if (!UUID_RE.test(String(raw.referenced_invoice_id))) {
+      errors.referenced_invoice_id = "Factura inválida";
+    }
   }
 
   const lines = Array.isArray(raw.lines) ? raw.lines : [];
@@ -125,8 +140,12 @@ export function validateCreateInvoice(
       client_id: raw.client_id as string,
       case_id: raw.case_id ?? null,
       issue_date: raw.issue_date as string,
+      accounting_date: (raw.accounting_date || raw.issue_date) as string,
       due_date: raw.due_date as string,
       notes: raw.notes ?? null,
+      ...(raw.invoice_kind === "NOTA_DEBITO"
+        ? { referenced_invoice_id: raw.referenced_invoice_id ? String(raw.referenced_invoice_id) : null }
+        : {}),
       lines: lines.map((ln) => ({
         service_id: ln.service_id ?? null,
         description: String(ln.description).trim(),
@@ -219,7 +238,16 @@ export interface ServicioParaConsistenciaDeKind {
 const SERVICE_TYPE_ESPERADO: Record<InvoiceKind, string> = {
   HONORARIOS: "honorarios",
   REEMBOLSO: "reembolso",
+  // 077 (decisión 14): una nota de débito cobra algo MÁS al cliente (un
+  // recargo, un ajuste de honorarios): lleva servicios de honorarios, gravados
+  // o exentos según su tasa. Un reembolso no se ajusta con nota de débito.
+  NOTA_DEBITO: "honorarios",
 };
+
+/** El tipo de documento "del otro lado", para el mensaje de la inconsistencia. */
+function kindDelOtroLado(k: InvoiceKind): InvoiceKind {
+  return k === "REEMBOLSO" ? "HONORARIOS" : "REEMBOLSO";
+}
 
 /**
  * Josuarth Torres, por correo el 17/09/2026: *"Las facturas de reembolso solo
@@ -263,6 +291,18 @@ const SERVICE_TYPE_ESPERADO: Record<InvoiceKind, string> = {
  * tenant. Así la MISMA regla corre en los dos lados sin duplicar lógica de
  * negocio — lo único que cada lado repite es armar el Map.
  */
+/**
+ * La CATEGORÍA de los servicios de cada tipo, para los mensajes de la regla
+ * (honorarios o reembolso). No es el nombre del documento en pantalla
+ * (`INVOICE_KIND_LABEL`, «Factura» desde el 07/10/2026): un servicio sí es de
+ * honorarios; la factura no se llama así.
+ */
+const CATEGORIA_DE_SERVICIOS: Record<InvoiceKind, string> = {
+  HONORARIOS: "Honorarios",
+  REEMBOLSO: "Reembolso",
+  NOTA_DEBITO: "Nota de débito",
+};
+
 export function validarConsistenciaDeKind(
   lineas: readonly Pick<InvoiceLineInput, "service_id">[],
   serviciosPorId: ReadonlyMap<string, ServicioParaConsistenciaDeKind>,
@@ -270,16 +310,16 @@ export function validarConsistenciaDeKind(
 ): ValidationErrors {
   const errors: ValidationErrors = {};
   const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
-  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
+  const kindLabel = CATEGORIA_DE_SERVICIOS[invoiceKind];
 
   lineas.forEach((ln, i) => {
     if (!ln.service_id) return; // Personalizada: sin service_type, no se juzga.
     const svc = serviciosPorId.get(ln.service_id);
     if (!svc || svc.service_type === esperado) return;
 
-    const otroKind: InvoiceKind = invoiceKind === "HONORARIOS" ? "REEMBOLSO" : "HONORARIOS";
+    const otroKind = kindDelOtroLado(invoiceKind);
     errors[`lines.${i}.service`] =
-      `Este servicio es de ${INVOICE_KIND_LABEL[otroKind]}; una factura de ${kindLabel} no puede llevarlo.`;
+      `Este servicio es de ${CATEGORIA_DE_SERVICIOS[otroKind]}; una factura de ${kindLabel} no puede llevarlo.`;
   });
 
   return errors;
@@ -297,8 +337,8 @@ export function motivoDeInconsistenciaDeKind(
   invoiceKind: InvoiceKind
 ): string | null {
   const esperado = SERVICE_TYPE_ESPERADO[invoiceKind];
-  const kindLabel = INVOICE_KIND_LABEL[invoiceKind];
-  const otroKind: InvoiceKind = invoiceKind === "HONORARIOS" ? "REEMBOLSO" : "HONORARIOS";
+  const kindLabel = CATEGORIA_DE_SERVICIOS[invoiceKind];
+  const otroKind = kindDelOtroLado(invoiceKind);
 
   for (let i = 0; i < lineas.length; i++) {
     const ln = lineas[i];
@@ -308,7 +348,7 @@ export function motivoDeInconsistenciaDeKind(
 
     return (
       `No se puede guardar: la línea ${i + 1} (${svc.code} · ${svc.name}) es un servicio de ` +
-      `${INVOICE_KIND_LABEL[otroKind]}, y esta factura es de ${kindLabel}: una factura de ` +
+      `${CATEGORIA_DE_SERVICIOS[otroKind]}, y esta factura es de ${kindLabel}: una factura de ` +
       `${kindLabel.toLowerCase()} solo puede llevar líneas de ${kindLabel.toLowerCase()}. ` +
       `Cambie el servicio de esa línea, o cambie el Tipo de documento a ${INVOICE_KIND_LABEL[otroKind]}.`
     );

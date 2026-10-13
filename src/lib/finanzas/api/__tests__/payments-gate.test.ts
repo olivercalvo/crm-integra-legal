@@ -252,7 +252,7 @@ test("caso feliz: se registra, se aplica, se postea, y no se deshace nada", asyn
   const { db, reg } = fake({ postea: "ok" });
   const r = await createPayment(db as never, TENANT, USER, INPUT, db as never);
   assert.equal(r.id, PAGO);
-  assert.equal(r.payment_number, "REC-000012");
+  assert.equal(r.payment_number, "CO-000012");
   assert.equal(reg.posteos, 1);
   assert.deepEqual(reg.borrados, []);
 });
@@ -265,7 +265,7 @@ test("el correlativo sale de la secuencia 'payment' y va DENTRO del INSERT del c
   const { db, reg } = fake({ postea: "ok" });
   await createPayment(db as never, TENANT, USER, INPUT, db as never);
   assert.deepEqual(reg.correlativos, ["payment"], "una sola vez, de la secuencia correcta");
-  assert.equal(reg.payloadPago?.payment_number, "REC-000012");
+  assert.equal(reg.payloadPago?.payment_number, "CO-000012");
   // No hay un UPDATE posterior que lo escriba: si el INSERT falla, el número no
   // queda colgado de ninguna fila.
   assert.equal(reg.insertados.indexOf("payments"), 0);
@@ -310,7 +310,7 @@ const DOS = {
 test("dos facturas del mismo cliente: UN cobro, DOS aplicaciones en un solo insert, UN asiento", async () => {
   const { db, reg } = fake({ postea: "ok", facturas: [FACTURA_1, FACTURA_2] });
   const r = await createPayment(db as never, TENANT, USER, DOS, db as never);
-  assert.equal(r.payment_number, "REC-000012");
+  assert.equal(r.payment_number, "CO-000012");
   assert.equal(reg.payloadPago?.amount, 1500);
   assert.equal(reg.payloadPago?.client_id, CLIENTE);
   assert.deepEqual(

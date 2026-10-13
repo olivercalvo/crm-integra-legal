@@ -1,3 +1,7 @@
+import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
+import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { redirect, notFound } from "next/navigation";
 import {
   AlertTriangle,
@@ -143,7 +147,14 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
 
   const sinClasificar = haySinClasificar(gasto.lineas);
   const posteado = gasto.entry_number !== null;
+  // Requerimiento 5: el asiento del gasto (source_type 'gasto_tramite').
+  const asiento = await cargarAsientoDelDocumento(ctx.db, ctx.tenantId, "gasto_tramite", params.id);
   const anulado = gasto.status === "anulado";
+  // 096: anterior al inicio contable → contabilizado fuera. No se registra en el
+  // libro (la ruta responde 409) y se paga igual: la cuenta por pagar está en
+  // el saldo inicial.
+  const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
+  const contabilizadoFuera = !posteado && esContabilizadoFuera(gasto.date, inicio);
 
   // Reversar: con asiento, no anulado, sin pagos registrados (primero los
   // pagos, 050) y con rol. El botón se oculta cuando no se puede apretar; el
@@ -161,6 +172,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
   const puedePostear =
     POSTING_ROLES.includes(ctx.userRole) &&
     !posteado &&
+    !contabilizadoFuera &&
     !sinClasificar &&
     gasto.lineas.length > 0;
 
@@ -197,11 +209,14 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
                 <BookOpenCheck size={14} />
                 Asiento {gasto.entry_number}
               </span>
+            ) : contabilizadoFuera ? (
+              <ContabilizadoFueraBadge inicio={inicio} />
             ) : (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-600">
                 Sin registrar en el libro
               </span>
             )}
+            <VerAsiento asiento={asiento} puedeAbrir={ctx.userRole === "admin" || ctx.userRole === "contador"} />
             <span className="text-xs text-gray-400">
               {gasto.expense_type === "administrativo" ? "Administrativo" : "Trámite"}
             </span>
@@ -212,9 +227,17 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
         <dl className="mt-5 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
-              <Calendar size={13} /> Fecha del gasto
+              <Calendar size={13} /> Fecha del documento
             </dt>
             <dd className="mt-1 text-sm text-gray-900">{formatDate(gasto.date)}</dd>
+          </div>
+
+          <div>
+            {/* La de REGISTRO (068): la del asiento, define el mes. */}
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              <Calendar size={13} /> Fecha de registro
+            </dt>
+            <dd className="mt-1 text-sm text-gray-900">{formatDate(gasto.accounting_date)}</dd>
           </div>
 
           <div>
@@ -250,6 +273,28 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
               )}
             </dd>
           </div>
+
+          {gasto.purchase_number && (
+            <div>
+              {/* E3 (071): el número propio, en la serie de las compras (P-2b). */}
+              <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                <Hash size={13} /> N.º de compra
+              </dt>
+              <dd className="mt-1 font-mono text-sm text-gray-900">{gasto.purchase_number}</dd>
+            </div>
+          )}
+
+          <div>
+            {/* 070 (E2): el número de la factura del proveedor, como en las compras. */}
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+              <Hash size={13} /> Factura del proveedor
+            </dt>
+            <dd className="mt-1 font-mono text-sm text-gray-900">
+              {gasto.supplier_invoice_number ?? (
+                <span className="font-sans text-gray-400">Sin número</span>
+              )}
+            </dd>
+          </div>
         </dl>
 
         {/* 🔴 RUC y DV en DOS columnas. Nunca se concatenan: así los pide el
@@ -272,10 +317,12 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
         )}
       </div>
 
+      {contabilizadoFuera && <ContabilizadoFueraBanda inicio={inicio} />}
+
       <SupplierPaymentSuccessToast />
 
       {/* ── Pagos (049): la segunda transacción ─────────────────────── */}
-      {posteado && !anulado && (
+      {(posteado || contabilizadoFuera) && !anulado && (
         <SupplierPaymentsSection
           expenseId={gasto.id}
           destino="tramite"
@@ -285,6 +332,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           payments={pagos}
           bancos={bancos}
           canMutate={PAYING_ROLES.includes(ctx.userRole)}
+          inicio={inicio}
         />
       )}
 
@@ -310,7 +358,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           <p className="text-sm text-amber-900">
             Este gasto está en el libro (asiento {gasto.entry_number}) y no se puede editar ni
             borrar. Si está mal, se <strong>reversa</strong>: el asiento queda y se postea su
-            espejo con la fecha de hoy.
+            espejo con la fecha de registro que elijas, en un mes abierto.
           </p>
           <ReversePaymentDialog
             variante="gasto"
@@ -335,7 +383,7 @@ export default async function GastoTramiteContablePage({ params }: PageProps) {
           se rompió nada. Es TRABAJO PENDIENTE que hasta hoy era invisible: el
           gasto se cargó cuando el sistema no pedía la cuenta. El ícono es un
           reloj y no un triángulo por el mismo motivo. */}
-      {sinClasificar && (
+      {sinClasificar && !contabilizadoFuera && (
         <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <History size={18} className="mt-0.5 shrink-0 text-amber-600" />
           <div className="text-sm text-amber-800">

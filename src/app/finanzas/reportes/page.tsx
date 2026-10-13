@@ -11,6 +11,8 @@ import {
   User,
 } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { contarPendientesDgi } from "@/lib/finanzas/queries/pendientes-dgi";
+import { AvisoPendientesDgi } from "@/components/finanzas/aviso-pendientes-dgi";
 import { ReportCard } from "./_components/report-card";
 
 
@@ -116,7 +118,10 @@ const REPORTS: ReportItem[] = [
 ];
 
 export default async function ReportesHubPage() {
-  const { userRole, userName } = await getAuthenticatedContext();
+  const { userRole, userName, db, tenantId } = await getAuthenticatedContext();
+  // 03/10/2026: el contador entra acá (es su home). Sin la autorización de la
+  // DGI la factura no vale ante el fisco y está en su ITBMS.
+  const pendientesDgi = await contarPendientesDgi(db, tenantId);
 
   const intro =
     userRole === "contador"
@@ -125,6 +130,8 @@ export default async function ReportesHubPage() {
 
   return (
     <div className="space-y-5">
+      <AvisoPendientesDgi cantidad={pendientesDgi} />
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="rounded-lg bg-integra-navy/5 p-2 text-integra-gold ring-1 ring-integra-gold/30">

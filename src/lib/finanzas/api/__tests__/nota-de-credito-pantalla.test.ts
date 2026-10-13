@@ -29,7 +29,7 @@ import { totalDeLineaDeNc } from "@/lib/finanzas/validators/credit-note";
 const ROOT = process.cwd();
 const leer = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
-const DIALOGO = "src/app/finanzas/facturas/_components/credit-note-dialog.tsx";
+const FORMULARIO = "src/app/finanzas/notas-credito/_components/nota-de-credito-form.tsx";
 const FACTURA = "src/app/finanzas/facturas/[id]/page.tsx";
 const NC_PAGE = "src/app/finanzas/notas-credito/[id]/page.tsx";
 const PDF_ROUTE = "src/app/api/finanzas/credit-notes/[id]/pdf/route.ts";
@@ -42,14 +42,21 @@ test("totalDeLineaDeNc redondea el subtotal y el impuesto por separado, como T8c
   assert.equal(totalDeLineaDeNc(0.5, 200, 0.07), 107);
 });
 
-test("🔒 el diálogo calcula el total con totalDeLineaDeNc y no por su cuenta", () => {
-  const src = leer(DIALOGO);
-  assert.match(src, /import \{[^}]*totalDeLineaDeNc[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
-  assert.match(src, /totalDeLineaDeNc\(x\.qty, x\.linea\.unit_price, x\.linea\.tax_rate\)/);
+test("🔒 la pantalla de NC (E8) valida y calcula con las MISMAS funciones del servidor", () => {
+  const src = leer(FORMULARIO);
+  assert.match(src, /import \{[\s\S]*?validarLineasDeNotaDeCredito[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
+  assert.match(src, /import \{[\s\S]*?totalDeLineaDeNc[^}]*\} from "@\/lib\/finanzas\/validators\/credit-note"/);
+  assert.match(src, /validarLineasDeNotaDeCredito\(\{/, "el tope en vivo es el del servidor");
   assert.doesNotMatch(src, /\*\s*\(1\s*\+\s*[\w.]*tax_rate/, "no aplica la tasa por su cuenta");
   assert.doesNotMatch(src, /unit_price\s*\*\s*\(1/, "no aplica la tasa por su cuenta");
   assert.match(src, /fetch\("\/api\/finanzas\/credit-notes"/);
   assert.match(src, /router\.push\(`\/finanzas\/notas-credito\/\$\{data\.id\}/, "al emitir va al detalle de la NC");
+  // Mismo editor de líneas que la factura: "mismo formulario que la factura".
+  assert.match(src, /<InvoiceLineItems/);
+  // El botón de la factura abre ESTA pantalla con la factura precargada.
+  const factura = leer(FACTURA);
+  assert.match(factura, /href=\{`\/finanzas\/notas-credito\/nueva\?factura=\$\{invoice\.id\}`\}/);
+  assert.doesNotMatch(factura, /CreditNoteDialog/, "el diálogo viejo se retiró: un solo formulario");
 });
 
 test("el detalle de la factura: Anular solo sin NC parcial y con el mes abierto; el disponible sale de la misma consulta que valida", () => {
@@ -78,7 +85,9 @@ test("el detalle de la factura: Anular solo sin NC parcial y con el mes abierto;
     "si vuelve a armarse con condiciones sueltas, se desincroniza del servidor"
   );
   assert.match(src, /\{showCancel && \(\s*<CancelInvoiceDialog/);
-  assert.match(src, /periodoDeLaFacturaCerrado\(db, tenantId, String\(invoice\.issue_date\)\)/, "el MES de la factura (D4)");
+  // "El mes de la factura" es el de su fecha de REGISTRO desde la `068` (E1).
+  assert.match(src, /const registroDeLaFactura = String\(invoice\.accounting_date \?\? invoice\.issue_date\);/);
+  assert.match(src, /periodoDeLaFacturaCerrado\(db, tenantId, registroDeLaFactura\)/, "el MES de la factura (D4)");
   assert.match(src, /acreditadoPorLineaDeFactura\(db, tenantId, invoice\.id\)/);
   assert.match(src, /const acreditadaTotal = !isAnulada && grandTotal > 0 && creditedTotal >= grandTotal - 0\.005;/, "D3: derivado, no un status");
   assert.match(src, /\{acreditadaTotal && <AcreditadaTotalBadge \/>\}/);
@@ -94,7 +103,10 @@ test("cancelInvoice rechaza una factura con NC parcial (053) antes de crear la N
   const gate = fn.indexOf("MENSAJE_YA_ACREDITADA(creditedTotal)");
   const nc = fn.indexOf("createCreditNoteFromInvoice(");
   assert.ok(gate > 0 && nc > 0 && gate < nc, "el gate va antes de crear la NC total");
-  assert.match(fn, /select\("id, status, invoice_number, amount_paid, credited_total, issue_date"\)/);
+  assert.match(fn, /select\("id, status, invoice_number, invoice_kind, amount_paid, credited_total, issue_date, accounting_date, de_prueba"\)/);
+  // E1: la fecha de registro de la anulación se valida ANTES de crear la NC total.
+  const fecha = fn.indexOf("resolverFechaDeAnulacion(");
+  assert.ok(fecha > 0 && fecha < nc, "la fecha se valida antes de crear la NC total");
   const sql = leer("sql/pending/053_anulacion_rechaza_nc_parcial.sql");
   assert.match(sql, /je\.source_type = 'nota_credito' AND je\.source_id = cn\.id/, "el RPC mira el ASIENTO, no credited_total");
 });
@@ -148,7 +160,7 @@ test("el detalle de la NC: admin, abogada y contador; el contador abre el detall
 
 test("🔒 D1: el PDF marca DOCUMENTO INTERNO cuando fe_estado es no_emitida, y la ruta se lo pasa", () => {
   const doc = leer(PDF_DOC);
-  assert.match(doc, /const noEmitida = fe_estado === "no_emitida";/);
+  assert.match(doc, /const noEmitida = fe_estado === "no_emitida" \|\| fe_estado === "interna";/, "083: la interna lleva la misma banda");
   assert.match(doc, /\{noEmitida && \(\s*<View style=\{styles\.internalBand\} fixed>/);
   assert.match(doc, /DOCUMENTO INTERNO: SIN AUTORIZACIÓN DE LA DGI/);
   assert.match(doc, /fe_estado: string;/);

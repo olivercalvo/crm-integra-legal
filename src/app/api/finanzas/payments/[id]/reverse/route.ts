@@ -6,6 +6,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reversePayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -28,9 +29,9 @@ interface RouteParams {
  * una no amplía la otra. Si se cambia esta lista, se mueven juntos la tabla de
  * CLAUDE.md, este guard y `canReverse` en `facturas/[id]/page.tsx`.
  *
- * Body esperado: { reason }
+ * Body esperado: { reason, fecha_registro? } — sin fecha, hoy en Panamá.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -62,19 +63,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       ctx.db,
       // 🔑 SOP-014: el RPC va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas] reversePayment failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas] reversePayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

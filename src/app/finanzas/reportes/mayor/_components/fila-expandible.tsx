@@ -80,7 +80,7 @@ function CeldaImporte({ value, abierta }: { value: number; abierta: boolean }) {
   );
 }
 
-const COLUMNAS_DEL_MAYOR = 10;
+const COLUMNAS_DEL_MAYOR = 13;
 
 export function FilaExpandible({
   fila,
@@ -116,9 +116,13 @@ export function FilaExpandible({
         <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-600">
           {fila.fecha}
         </td>
+        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-700">{fila.modulo}</td>
         <td className="px-3 py-2 text-sm text-gray-700">{fila.tipoTransaccion}</td>
+        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-700">{fila.numeroDocumento}</td>
         <td className="px-3 py-2 font-mono text-xs text-gray-500">{fila.numero}</td>
-        <td className="px-3 py-2 text-sm text-gray-700">{fila.nombre || "—"}</td>
+        <td className="px-3 py-2 font-mono text-xs text-gray-600">{fila.referenciaExterna}</td>
+        {/* E3: sin tercero la celda queda VACÍA (Josuarth, 01/10/2026). */}
+        <td className="px-3 py-2 text-sm text-gray-700">{fila.nombre}</td>
         <td className="px-3 py-2 text-sm text-gray-600">{fila.descripcion}</td>
         <td className="px-3 py-2 text-sm text-gray-600">
           {fila.contrapartida}

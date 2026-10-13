@@ -6,17 +6,21 @@ import {
   loadCuentasControl,
   loadMovimientosDeCuenta,
 } from "@/lib/finanzas/reports/libro-mayor-source";
-import { buildMayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
+import { buildMayorDeCuenta, filtrarMayorPorModulos } from "@/lib/finanzas/reports/libro-mayor";
+import { modulosDesdeParametro } from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 import {
   resolverTercerosFiscales,
   resolverTercerosDeLineas,
+  nombresPorAsiento,
+  origenesDeMovimientos,
 } from "@/lib/finanzas/reports/tercero-fiscal";
 import { hojaDelMayor } from "@/lib/finanzas/reports/mayor-export";
 import { generarXlsx, nombreDeArchivo } from "@/lib/finanzas/reports/exportar-xlsx";
 import { REPORT_FIRM_NAME, formatGeneratedAt } from "@/app/finanzas/reportes/_components/report-meta";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
- * GET /api/finanzas/reportes/mayor/export?cuenta=CODE&desde=&hasta=
+ * GET /api/finanzas/reportes/mayor/export?cuenta=CODE&desde=&hasta=&modulo=CO,AD
  *
  * Descarga el Libro Mayor de una cuenta en Excel, con el RUC y el DV del tercero
  * en columnas separadas.
@@ -44,7 +48,7 @@ const ROLES = ["admin", "abogada", "contador"] as const;
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!ROLES.includes(ctx.userRole as (typeof ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -61,6 +65,8 @@ export async function GET(request: NextRequest) {
   // Un rango mal formado se ignora en vez de reventar, igual que en la pantalla.
   const desde = FECHA_RE.test(desdeRaw) ? desdeRaw : "";
   const hasta = FECHA_RE.test(hastaRaw) ? hastaRaw : "";
+  // E9: el mismo filtro por módulo que la pantalla, con la misma función.
+  const modulos = modulosDesdeParametro(sp.get("modulo"));
 
   try {
     // `loadCuentaDelMayor` filtra por tenant: una cuenta de otro bufete da null,
@@ -75,16 +81,19 @@ export async function GET(request: NextRequest) {
       loadCuentasControl(ctx.db, ctx.tenantId),
     ]);
 
-    const mayor = buildMayorDeCuenta(cuenta, movimientos, { controlPorCodigo: control });
-
     const terceros = await resolverTercerosFiscales(
       ctx.db,
       ctx.tenantId,
-      movimientos.map((m) => ({
-        entry_id: m.entry_id,
-        source_type: m.source_type,
-        source_id: m.source_id,
-      }))
+      origenesDeMovimientos(movimientos)
+    );
+
+    // E2: el mismo segundo escalón que la pantalla, para que digan lo mismo.
+    const mayor = filtrarMayorPorModulos(
+      buildMayorDeCuenta(cuenta, movimientos, {
+        controlPorCodigo: control,
+        nombrePorAsiento: nombresPorAsiento(terceros),
+      }),
+      modulos
     );
 
     // 054: el tercero puesto EN LA LÍNEA. Se resuelve aparte porque no sale del
@@ -116,6 +125,7 @@ export async function GET(request: NextRequest) {
       cuenta.name,
       desde || null,
       hasta || null,
+      modulos.length > 0 ? modulos.join("-") : null,
     ])}.xlsx`;
 
     return new NextResponse(new Uint8Array(buffer), {
@@ -131,4 +141,4 @@ export async function GET(request: NextRequest) {
     console.error("[finanzas] export del mayor falló:", err);
     return NextResponse.json({ error: "Error al generar el archivo" }, { status: 500 });
   }
-}
+});

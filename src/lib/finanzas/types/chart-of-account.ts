@@ -33,8 +33,11 @@
  *      existen. `costo` en particular DEBÍA desaparecer: pasó a ser un tipo y no
  *      pueden coexistir dos cosas distintas con el mismo nombre.
  *
- * Las subcategorías de BALANCE (activo/pasivo/patrimonio) no las toca NIIF 18 y
- * quedan como estaban.
+ * Las subcategorías de BALANCE (activo/pasivo/patrimonio) no las toca NIIF 18.
+ * E6 (Bloque 1, 01/10/2026, migración `079`) las cambió por pedido de Josuarth:
+ * son OBLIGATORIAS también en balance, sale `depreciacion_acumulada` (la
+ * depreciación va dentro de PPE, restando) y el patrimonio se abre en capital
+ * social, resultados acumulados y otras reservas (sale `patrimonio`).
  */
 
 // ---------------------------------------------------------------------------
@@ -158,14 +161,15 @@ export function esTipoResultado(t: AccountType): boolean {
  * financiamiento).
  */
 export type Subcategoria =
-  // — Balance (no las toca NIIF 18) —
+  // — Balance (no las toca NIIF 18; E6 las rehízo) —
   | "activo_corriente"
   | "activo_no_corriente"
   | "propiedad_planta_equipo"
-  | "depreciacion_acumulada"
   | "pasivo_corriente"
   | "pasivo_no_corriente"
-  | "patrimonio"
+  | "capital_social"
+  | "resultados_acumulados"
+  | "otras_reservas"
   | "otro"
   // — Resultado (NIIF 18) —
   | "ingresos_operativos"
@@ -187,10 +191,11 @@ export const SUBCATEGORIAS: Subcategoria[] = [
   "activo_corriente",
   "activo_no_corriente",
   "propiedad_planta_equipo",
-  "depreciacion_acumulada",
   "pasivo_corriente",
   "pasivo_no_corriente",
-  "patrimonio",
+  "capital_social",
+  "resultados_acumulados",
+  "otras_reservas",
   "otro",
   "ingresos_operativos",
   "ingresos_inversion",
@@ -215,10 +220,11 @@ export const SUBCATEGORIA_LABEL_ES: Record<Subcategoria, string> = {
   activo_corriente: "Activo corriente",
   activo_no_corriente: "Activo no corriente",
   propiedad_planta_equipo: "Propiedad, planta y equipo",
-  depreciacion_acumulada: "Depreciación acumulada",
   pasivo_corriente: "Pasivo corriente",
   pasivo_no_corriente: "Pasivo no corriente",
-  patrimonio: "Patrimonio",
+  capital_social: "Capital social",
+  resultados_acumulados: "Resultados acumulados",
+  otras_reservas: "Otras reservas",
   otro: "Otro",
   ingresos_operativos: "Ingresos Operativos",
   ingresos_inversion: "Ingresos de Inversión",
@@ -242,18 +248,13 @@ export const SUBCATEGORIA_LABEL_ES: Record<Subcategoria, string> = {
  * esconder opciones en el dropdown no es un permiso.
  */
 export const SUBCATEGORIAS_POR_TIPO: Record<AccountType, Subcategoria[]> = {
-  asset: [
-    "activo_corriente",
-    "activo_no_corriente",
-    "propiedad_planta_equipo",
-    // Contracuenta de PPE: saldo ACREEDOR dentro del activo. Rose la señaló
-    // como faltante el 25/08/2026. No es NIIF 18 — es un agrupador de balance,
-    // y por eso vive acá y no en la categoría de actividad.
-    "depreciacion_acumulada",
-    "otro",
-  ],
+  // E6: la depreciación acumulada ya NO es subcategoría: es una cuenta de PPE
+  // con saldo acreedor, que en el Balance resta dentro de PPE.
+  asset: ["activo_corriente", "activo_no_corriente", "propiedad_planta_equipo", "otro"],
   liability: ["pasivo_corriente", "pasivo_no_corriente", "otro"],
-  equity: ["patrimonio", "otro"],
+  // E6: el patrimonio se abre en tres (Josuarth). Sin "otro": todo lo que no es
+  // capital ni resultado es una reserva.
+  equity: ["capital_social", "resultados_acumulados", "otras_reservas"],
   income: ["ingresos_operativos", "ingresos_inversion", "ingresos_financiamiento"],
   cost: ["costos_operativos", "costos_inversion", "costos_financiamiento"],
   expense: ["gastos_operativos", "gastos_inversion", "gastos_financiamiento"],
@@ -267,13 +268,56 @@ export function subcategoriasParaTipo(t: AccountType): Subcategoria[] {
 /**
  * true si la subcategoría es OBLIGATORIA para ese tipo.
  *
- * Solo en cuentas de resultado: sin subcategoría, el Estado de Resultado no
- * puede ubicar la cuenta en su bloque de actividad. En balance sigue siendo
- * opcional (las 34 cuentas viejas de QuickBooks la tienen en NULL y están
- * desactivadas — por eso el CHECK de BD solo aplica a `active = true`).
+ * E6 (Bloque 1, 01/10/2026): en los SEIS tipos. En resultado la necesita el
+ * Estado de Resultado (bloque de actividad); en balance la necesita el Balance
+ * General (grupo). Las cuentas INACTIVAS siguen libres: las viejas de
+ * QuickBooks la tienen en NULL, y por eso el CHECK de la `079` solo aplica a
+ * `active = true`. Se conserva la firma por tipo para no tocar a quien llama.
  */
-export function requiereSubcategoria(t: AccountType): boolean {
-  return esTipoResultado(t);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- la firma por tipo se conserva a propósito
+export function requiereSubcategoria(_t: AccountType): boolean {
+  return true;
+}
+
+/**
+ * La subcategoría POR DEFECTO de una cuenta, cuando nadie la eligió: la usa la
+ * importación de cuentas y la MISMA regla está en SQL en la migración `079`
+ * (el backfill de las cuentas activas sin subcategoría válida).
+ *
+ * ⚠️ Es un valor por defecto, no una clasificación: el mapa cuenta por cuenta
+ * lo da Josuarth (P-8a) y se corrige en Configuración, Plan de Cuentas.
+ *
+ *   · resultado: la actividad de operación (como siempre).
+ *   · activo: corriente, salvo una depreciación («depr.», «depreci…») o una
+ *     amortización → PPE.
+ *   · pasivo: corriente.
+ *   · patrimonio: 300001 o «capital» → capital social; 300002, 300003 o
+ *     «utilidad / pérdida / resultado / retenid» → resultados acumulados; el
+ *     resto → otras reservas.
+ */
+export function subcategoriaPorDefecto(t: AccountType, code: string, name: string): Subcategoria {
+  const n = name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  switch (t) {
+    case "income":
+      return "ingresos_operativos";
+    case "cost":
+      return "costos_operativos";
+    case "expense":
+      return "gastos_operativos";
+    case "asset":
+      return /depr\.|depreci|amortiz/.test(n) ? "propiedad_planta_equipo" : "activo_corriente";
+    case "liability":
+      return "pasivo_corriente";
+    case "equity":
+      if (code === "300001" || /capital/.test(n)) return "capital_social";
+      if (code === "300002" || code === "300003" || /utilidad|perdida|resultado|retenid/.test(n)) {
+        return "resultados_acumulados";
+      }
+      return "otras_reservas";
+  }
 }
 
 /** Comprueba si un valor arbitrario es una subcategoria válida. */
@@ -329,10 +373,11 @@ const ACTIVIDAD_POR_SUBCATEGORIA: Record<Subcategoria, Actividad | null> = {
   activo_corriente: null,
   activo_no_corriente: null,
   propiedad_planta_equipo: null,
-  depreciacion_acumulada: null,
   pasivo_corriente: null,
   pasivo_no_corriente: null,
-  patrimonio: null,
+  capital_social: null,
+  resultados_acumulados: null,
+  otras_reservas: null,
   otro: null,
   ingresos_operativos: "operacion",
   costos_operativos: "operacion",

@@ -50,17 +50,16 @@ test("menos que la suma: llena la más vieja, la siguiente queda parcial, la úl
   assert.deepEqual(aplicacionesParaEnviar(r).map((a) => a.invoice_id), ["mayo", "julio"]);
 });
 
-test("🔴 más que la suma: el resto NO se reparte y la validación lo rechaza con la salida", () => {
+test("🟢 074: más que la suma: el resto NO se reparte, PASA y avisa el saldo a favor", () => {
   const r = repartirPorAntiguedad(2500, [MAYO, JULIO]);
   assert.equal(sumaAplicada(r), 2105);
   const v = validarReparto(2500, r, [MAYO, JULIO]);
-  assert.equal(v.ok, false);
-  assert.equal(v.diferencia, 395);
-  assert.match(v.mensaje ?? "", /2,500\.00/);
-  assert.match(v.mensaje ?? "", /2,105\.00/);
-  assert.match(v.mensaje ?? "", /395\.00/);
-  assert.match(v.mensaje ?? "", /otra factura pendiente del mismo cliente/);
-  assert.match(v.mensaje ?? "", /ajuste el monto/);
+  assert.equal(v.ok, true, "el excedente no bloquea");
+  assert.equal(v.mensaje, null);
+  assert.equal(v.excedente, 395);
+  assert.match(v.advertencia ?? "", /supera lo aplicado en B\/\. 395\.00/);
+  assert.match(v.advertencia ?? "", /saldo a favor/);
+  assert.match(v.advertencia ?? "", /100004/);
 });
 
 test("corregido a mano: mover plata de mayo a julio cierra igual", () => {

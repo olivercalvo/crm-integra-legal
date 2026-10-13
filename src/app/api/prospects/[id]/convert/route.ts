@@ -4,9 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { allocateClientNumber } from "@/lib/clients/numbering";
 import { validateClientType } from "@/lib/clients/fiscal-fields";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // POST — convert prospect to client
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -28,7 +29,7 @@ export async function POST(
       );
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin.from("users").select("tenant_id, role").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
@@ -90,4 +91,4 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

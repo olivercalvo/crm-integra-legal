@@ -1,0 +1,576 @@
+PRUEBA DE LAS BITÁCORAS DE AUDITORÍA EN STAGING
+03/10/2026 · rama feat/bloque1-contable · staging xtyenhakplrkyifbcaow
+Producción no se tocó. La 088 (legado) NO se aplicó.
+
+ESTADO (cierre del 03/10): 086, 087, 089, 090 y 091 aplicadas en staging.
+        Punto 7 y pruebas 1 a 4 completas y bien. La 088 sigue sin aplicar a
+        propósito. Ver la sección 14.
+
+======================================================================
+1. APLICACIÓN
+======================================================================
+086_bitacoras_nucleo.sql   aplicada 03/10, 362 ms
+  NOTICE: 086 ✅ bitácoras contable y legal: solo agregar, cadena, anclas, lectura por rol
+087_bitacoras_captura.sql  aplicada 03/10, 305 ms
+  NOTICE: 087 ✅ 41 tablas con captura en su bitácora
+
+======================================================================
+2. IMPORTACIÓN GRANDE: CON Y SIN LA 087 (prueba 1)
+======================================================================
+Medido directo en la base de staging, 5 rondas, cada una en BEGIN … ROLLBACK
+(no quedó nada escrito). Script: post_journal_entries_batch con 50 asientos de
+4 líneas (200 líneas) y 50 altas de clientes una por una (como /api/import).
+
+                                   sin 087 (antes)   con 087 (después)
+Importación 200 líneas, mediana        434 ms            511 ms     (+77 ms, ~1,5 ms por asiento)
+  rondas                       900 434 455 426 425   637 512 511 478 471
+50 clientes uno por uno, mediana      5104 ms           4754 ms     (sin diferencia medible)
+  rondas                   5100 5082 5136 5882 5104  4756 4741 5014 4744 4754
+
+Filas de bitácora por ronda: contable 101 (50 asientos, el lote y los datos
+fiscales de 50 clientes), legal 50 (los clientes completos). Las líneas del
+libro no se auditan (ya están en el libro).
+
+Lectura: la importación no queda lenta. En los clientes manda la ida y vuelta
+por la red (~95 ms por alta desde esta máquina); el trigger no se distingue
+del ruido.
+
+Candado por bufete: PENDIENTE de medir con dos sesiones a la vez (prueba 2).
+
+======================================================================
+3. RECORRIDO DEL PUNTO 7 (rutas reales, localhost:3000 → staging)
+======================================================================
+Cada paso con la sesión de su rol (usuarios de los fixtures del seed).
+
+Contable
+  ✅ abogada crea una factura borrador          HTTP 201
+  ✅ abogada edita la factura (notas y precio)  HTTP 200
+  ✅ abogada emite la factura (FAC-HON-000029)  HTTP 200
+  ✅ admin registra un cobro (CO-000013)        HTTP 201
+  ✅ contador reversa el cobro                  HTTP 200
+  ✅ abogada anula la factura (NC-000024)       HTTP 200
+Legal
+  ✅ abogada crea un caso (EXP-001)             HTTP 201
+  ✅ abogada edita el caso                      HTTP 200
+  ❌ abogada comenta en el caso                 HTTP 500 {"error":"Error al agregar el comentario"}
+     Log del servidor: COALESCE types text and integer cannot be matched (42804)
+  ⏸  sin correr: cambio de DV del cliente (mixto), gasto de trámite y su
+     reversión (mixto), tareas.
+
+Qué registró cada bitácora hasta ahí (resumen; filas completas en la base)
+
+BITÁCORA CONTABLE (27 filas)
+  usuario                   rol       origen   acción         tabla                 documento
+  Ileana Barrios (STAGING)  abogada   usuario  crear          invoices              DRAFT-…  notes: [null, borrador]
+  Ileana Barrios (STAGING)  abogada   usuario  crear          invoice_lines         DRAFT-…  subtotal: [null, 100.00]
+  Ileana Barrios (STAGING)  abogada   sistema  editar         invoices              DRAFT-…  grand_total: [0.00, 107.00]
+  Ileana Barrios (STAGING)  abogada   usuario  editar         invoices              DRAFT-…  notes: [borrador, editada para la prueba]
+  Ileana Barrios (STAGING)  abogada   usuario  eliminar/crear invoice_lines         DRAFT-…  subtotal 100.00 → 120.00
+  Ileana Barrios (STAGING)  abogada   usuario  contabilizar   journal_entries       FAC-HON-000029
+  Ileana Barrios (STAGING)  abogada   usuario  emitir         invoices              FAC-HON-000029  status: [borrador, emitida]
+  Rodrigo Sanjur (STAGING)  admin     usuario  crear          payments              CO-000013  amount: [null, 128.40]
+  Rodrigo Sanjur (STAGING)  admin     usuario  aplicar        payment_applications  CO-000013
+  Rodrigo Sanjur (STAGING)  admin     sistema  editar         invoices              FAC-HON-000029  status: [emitida, pagada]
+  Rodrigo Sanjur (STAGING)  admin     usuario  contabilizar   journal_entries       CO-000013
+  Elías Pimentel (STAGING)  contador  usuario  reversar       journal_entries       CO-000013
+  Elías Pimentel (STAGING)  contador  usuario  reversar       payment_reversals     CO-000013  reason: [null, Prueba de bitácora: cobro duplicado]
+  Elías Pimentel (STAGING)  contador  sistema  editar         invoices              FAC-HON-000029  status: [pagada, emitida]
+  Elías Pimentel (STAGING)  contador  usuario  reversar       payments              CO-000013  status: [registrado, anulado]
+  Ileana Barrios (STAGING)  abogada   usuario  crear          credit_notes          NC-000024
+  Ileana Barrios (STAGING)  abogada   usuario  reversar       journal_entries       FAC-HON-000029
+  Ileana Barrios (STAGING)  abogada   usuario  anular         invoices              FAC-HON-000029  status: [emitida, anulada]
+  («sistema» = lo recalculó otro trigger: T7a, credited_total, totales.)
+
+BITÁCORA LEGAL (2 filas)
+  Ileana Barrios (STAGING)  abogada   usuario  crear          cases                 EXP-001
+  Ileana Barrios (STAGING)  abogada   usuario  editar         cases                 EXP-001  observations: [null, observación de prueba de bitácora]
+
+Cadena (bitacora_verificar, la misma función del botón «Verificar integridad»)
+  contable: filas 27, integra true, filas_alteradas [], anclas_que_no_coinciden []
+  legal:    filas 2,  integra true, filas_alteradas [], anclas_que_no_coinciden []
+  (Los id empiezan en 506 y 251: las rondas de medición con ROLLBACK consumen
+  la identidad. La cadena se enlaza por hash, no por id; los huecos no la rompen.)
+
+======================================================================
+4. PRIMER FALLO: TAREAS Y COMENTARIOS (089, APLICADA EL 03/10)
+======================================================================
+Causa: auditoria.documento_de, rama de tasks / comments / client_payments:
+  coalesce(case_code, case_number)  con case_number entero.
+PL/pgSQL prepara cada consulta recién al ejecutarla; la simulación de la 087
+tocó clientes y casos, nunca esa rama.
+
+Efecto en staging HOY (087 aplicada, 089 no): como la captura falla cerrado,
+NO se pueden crear ni editar tareas, comentarios ni cobros del caso. Nada se
+guarda a medias: la operación se deshace entera.
+
+Sondeo de las 41 tablas (documento_de, accion_de y diferencias sobre una fila
+real de cada una, en BEGIN … ROLLBACK): sólo fallan tasks y comments;
+client_payments no tiene filas en staging pero usa la misma rama.
+tax_payments y credit_note_applications tampoco tienen filas; sus ramas son
+lecturas de jsonb o la misma búsqueda que ya pasó en otras tablas.
+
+089 simulada en BEGIN … ROLLBACK:
+  sin la 089: COALESCE types text and integer cannot be matched
+  NOTICE: 089 ✅ documento_de: tareas, comentarios y cobros del caso devuelven el número del caso (CORP-001)
+  con la 089: el comentario entra y la bitácora legal lo registra.
+
+======================================================================
+5. 089 APLICADA
+======================================================================
+089_bitacoras_documento_de_casos.sql  aplicada 03/10, 169 ms
+  NOTICE: 089 ✅ documento_de: tareas, comentarios y cobros del caso devuelven el número del caso (CORP-001)
+
+======================================================================
+6. PRUEBA PERMANENTE DE LAS 41 TABLAS
+======================================================================
+sql/tests/verificacion-087-captura-41-tablas.sql (BEGIN … ROLLBACK).
+Obligatoria antes de cualquier ventana de producción: runbook
+docs/runbooks/despliegue-025-055.md, paso −1, y CLAUDE.md.
+INSERT, UPDATE y DELETE sobre filas que crea la propia prueba (también en
+cobros del caso, pagos de impuesto y aplicaciones de NC, que no tienen filas
+en staging). Cada operación tiene que quedar en su bitácora, con el usuario de
+la sesión, origen «usuario» y la acción o la columna esperadas, y NO en la otra.
+Falla si una operación falla, si una tabla queda sin captura o si la cadena
+no está íntegra.
+
+Control de que detecta el fallo: con la documento_de vieja (sin la 089)
+reinstalada dentro de la transacción, da 9 fallas («ROMPIÓ LA BITÁCORA:
+COALESCE types text and integer cannot be matched») y tasks, comments y
+client_payments sin captura.
+
+Resultado con la 089 aplicada (node scripts/run-sql.mjs …):
+  ok    cases                              · INSERT                             · en legal
+  ok    cases                              · UPDATE                             · en legal
+  ok    tasks                              · INSERT                             · en legal
+  ok    tasks                              · UPDATE                             · en legal
+  ok    tasks                              · DELETE                             · en legal
+  ok    comments                           · INSERT                             · en legal
+  ok    comments                           · UPDATE                             · en legal
+  ok    comments                           · DELETE                             · en legal
+  ok    client_payments                    · INSERT                             · en legal
+  ok    client_payments                    · UPDATE                             · en legal
+  ok    client_payments                    · DELETE                             · en legal
+  ok    documents                          · INSERT                             · en legal
+  ok    documents                          · UPDATE                             · en legal
+  ok    documents                          · DELETE                             · en legal
+  ok    cat_classifications                · INSERT                             · en legal
+  ok    cat_classifications                · UPDATE                             · en legal
+  ok    cat_classifications                · DELETE                             · en legal
+  ok    cat_institutions                   · INSERT                             · en legal
+  ok    cat_institutions                   · UPDATE                             · en legal
+  ok    cat_institutions                   · DELETE                             · en legal
+  ok    cat_statuses                       · INSERT                             · en legal
+  ok    cat_statuses                       · UPDATE                             · en legal
+  ok    cat_statuses                       · DELETE                             · en legal
+  ok    cat_team                           · INSERT                             · en legal
+  ok    cat_team                           · UPDATE                             · en legal
+  ok    cat_team                           · DELETE                             · en legal
+  ok    clients                            · INSERT                             · en contable y legal
+  ok    clients                            · UPDATE fiscal (DV)                 · en contable y legal
+  ok    clients                            · UPDATE no fiscal                   · en legal
+  ok    clients                            · DELETE                             · en contable y legal
+  ok    expenses                           · INSERT                             · en contable y legal
+  ok    expenses                           · UPDATE no fiscal (concepto)        · en legal
+  ok    expenses                           · UPDATE fiscal (monto)              · en contable y legal
+  ok    expense_lines                      · INSERT (gasto de trámite)          · en contable y legal
+  ok    expense_lines                      · UPDATE (gasto de trámite)          · en contable y legal
+  ok    expense_lines                      · DELETE (gasto de trámite)          · en contable y legal
+  ok    expenses                           · DELETE                             · en contable y legal
+  ok    users                              · INSERT                             · en contable y legal
+  ok    users                              · UPDATE rol                         · en contable y legal
+  ok    users                              · UPDATE nombre de asistente         · en legal
+  ok    users                              · DELETE                             · en contable y legal
+  ok    suppliers                          · INSERT                             · en contable
+  ok    suppliers                          · UPDATE                             · en contable
+  ok    suppliers                          · DELETE                             · en contable
+  ok    chart_of_accounts                  · INSERT                             · en contable
+  ok    chart_of_accounts                  · UPDATE                             · en contable
+  ok    chart_of_accounts                  · DELETE                             · en contable
+  ok    tax_codes                          · INSERT                             · en contable
+  ok    tax_codes                          · UPDATE                             · en contable
+  ok    tax_codes                          · DELETE                             · en contable
+  ok    services_catalog                   · INSERT                             · en contable
+  ok    services_catalog                   · UPDATE                             · en contable
+  ok    services_catalog                   · DELETE                             · en contable
+  ok    numbering_sequences                · UPDATE (salto)                     · en contable
+  ok    numbering_sequences                · DELETE                             · en contable
+  ok    numbering_sequences                · INSERT                             · en contable
+  ok    finanzas_parametros                · UPDATE                             · en contable
+  ok    finanzas_parametros                · DELETE                             · en contable
+  ok    finanzas_parametros                · INSERT                             · en contable
+  ok    quote_terms_template               · UPDATE                             · en contable
+  ok    quote_terms_template               · DELETE                             · en contable
+  ok    quote_terms_template               · INSERT                             · en contable
+  ok    accounting_periods                 · INSERT                             · en contable
+  ok    accounting_periods                 · UPDATE (cerrar)                    · en contable
+  ok    accounting_periods                 · ancla al cerrar                    · anclas cierre_periodo 2099-01: 1
+  ok    accounting_periods                 · INSERT                             · en contable
+  ok    accounting_periods                 · DELETE                             · en contable
+  ok    tax_payments                       · INSERT                             · en contable
+  ok    tax_payments                       · UPDATE                             · en contable
+  ok    tax_payments                       · DELETE                             · en contable
+  ok    invoices                           · INSERT                             · en contable
+  ok    invoices                           · UPDATE                             · en contable
+  ok    invoice_lines                      · INSERT                             · en contable
+  ok    invoice_lines                      · UPDATE                             · en contable
+  ok    invoice_lines                      · DELETE                             · en contable
+  ok    fe_emisiones                       · INSERT                             · en contable
+  ok    fe_emisiones                       · UPDATE                             · en contable
+  ok    fe_emisiones                       · DELETE                             · en contable
+  ok    fe_anulaciones                     · INSERT                             · en contable
+  ok    fe_anulaciones                     · UPDATE                             · en contable
+  ok    fe_anulaciones                     · DELETE                             · en contable
+  ok    invoices                           · DELETE (borrador)                  · en contable
+  ok    credit_notes                       · INSERT                             · en contable
+  ok    credit_note_lines                  · INSERT                             · en contable
+  ok    credit_note_lines                  · UPDATE                             · rechazada por regla de negocio: no se puede modificar líneas de nota de crédito NC-AUD-230928483536, está en estado emitida
+  ok    credit_notes                       · UPDATE                             · en contable
+  ok    credit_note_applications           · INSERT                             · en contable
+  ok    credit_note_applications           · UPDATE                             · rechazada por regla de negocio: Una aplicación de nota de crédito no se modifica ni se borra: si fue un error, se reversa la nota de crédito.
+  ok    credit_note_applications           · DELETE                             · rechazada por regla de negocio: Una aplicación de nota de crédito no se modifica ni se borra: si fue un error, se reversa la nota de crédito.
+  ok    credit_note_lines                  · DELETE                             · rechazada por regla de negocio: no se puede modificar líneas de nota de crédito NC-AUD-230928483536, está en estado emitida
+  ok    credit_notes                       · DELETE                             · rechazada por regla de negocio: Nota de crédito NC-AUD-230928483536 no puede eliminarse (es irreversible)
+  ok    payments                           · INSERT                             · en contable
+  ok    payments                           · UPDATE                             · en contable
+  ok    payment_applications               · INSERT                             · en contable
+  ok    payment_applications               · UPDATE                             · en contable
+  ok    payment_applications               · DELETE                             · en contable
+  ok    payment_reversals                  · INSERT                             · en contable
+  ok    payment_reversals                  · UPDATE                             · en contable
+  ok    payment_reversals                  · DELETE                             · en contable
+  ok    payments                           · DELETE                             · en contable
+  ok    quotes                             · INSERT                             · en contable
+  ok    quotes                             · UPDATE                             · en contable
+  ok    quote_lines                        · INSERT                             · en contable
+  ok    quote_lines                        · UPDATE                             · en contable
+  ok    quote_lines                        · DELETE                             · en contable
+  ok    quotes                             · DELETE (borrador)                  · en contable
+  ok    business_expenses                  · INSERT                             · en contable
+  ok    business_expenses                  · UPDATE                             · en contable
+  ok    expense_lines                      · INSERT (compra)                    · en contable
+  ok    expense_lines                      · UPDATE (compra)                    · en contable
+  ok    expense_lines                      · DELETE (compra)                    · en contable
+  ok    supplier_payments                  · INSERT                             · en contable
+  ok    supplier_payments                  · UPDATE                             · en contable
+  ok    supplier_payments                  · DELETE                             · en contable
+  ok    supplier_credit_notes              · INSERT                             · en contable
+  ok    supplier_credit_note_lines         · INSERT                             · en contable
+  ok    supplier_credit_note_lines         · UPDATE                             · rechazada por regla de negocio: Las líneas de una nota de crédito de proveedor no se modifican ni se borran.
+  ok    supplier_credit_note_lines         · DELETE                             · rechazada por regla de negocio: Las líneas de una nota de crédito de proveedor no se modifican ni se borran.
+  ok    supplier_credit_note_applications  · INSERT                             · en contable
+  ok    supplier_credit_note_applications  · UPDATE                             · rechazada por regla de negocio: Una aplicación de nota de crédito no se modifica ni se borra: si fue un error, se reversa la nota de crédito.
+  ok    supplier_credit_note_applications  · DELETE                             · rechazada por regla de negocio: Una aplicación de nota de crédito no se modifica ni se borra: si fue un error, se reversa la nota de crédito.
+  ok    supplier_credit_notes              · UPDATE                             · rechazada por regla de negocio: La nota de crédito de proveedor NC-CO-AUD-230928483536 es inmutable: sólo se puede anular.
+  ok    supplier_credit_notes              · DELETE                             · rechazada por regla de negocio: La nota de crédito de proveedor NC-CO-AUD-230928483536 no se borra: se reversa.
+  ok    business_expenses                  · DELETE                             · rechazada por regla de negocio: update or delete on table "business_expenses" violates foreign key constraint "supplier_credit_note_applications_business_expense_id_fkey" on table "supplier_credit_note_applications"
+  ok    journal_entries                    · INSERT (post_journal_entries_batch · en contable: 1
+  ok    journal_imports                    · INSERT (post_journal_entries_batch · en contable: 1
+  ok    journal_entries                    · UPDATE                             · rechazada por regla de negocio: Registro contable inmutable (DE 34/1998 Art. 6a/22): no se permite UPDATE sobre journal_entries. La corrección se hace por asiento de reversión.
+  ok    journal_entries                    · DELETE                             · rechazada por regla de negocio: Registro contable inmutable (DE 34/1998 Art. 6a/22): no se permite DELETE sobre journal_entries. La corrección se hace por asiento de reversión.
+  ok    journal_imports                    · UPDATE                             · rechazada por regla de negocio: Una importación de asientos sólo puede pasar de contabilizada a reversada.
+  ok    journal_imports                    · DELETE                             · rechazada por regla de negocio: Una importación de asientos no se borra: se reversa.
+  ok    numbering_sequences                · UPDATE +1 (ruido, no se registra)  · filas nuevas: 0
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+  verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+======================================================================
+7. PUNTO 7, SEGUNDA PARTE (rutas reales, localhost:3000 → staging)
+======================================================================
+Punto 7, segunda parte · 2026-10-03T23:11:36.610Z · caso EXP-001
+✅ abogada comenta en el caso → HTTP 201 (2451 ms)
+✅ abogada crea una tarea asignada a sí misma → HTTP 201 (1264 ms)
+✅ abogada marca la tarea cumplida → HTTP 200 (2306 ms)
+✅ abogada registra un cobro del caso → HTTP 201 (1243 ms)
+✅ abogada cambia el DV del cliente (08 → 07) → HTTP 200 (2618 ms)
+✅ abogada devuelve el DV (07 → 08) → HTTP 200 (1229 ms)
+✅ abogada registra un gasto de trámite (se postea al crearse) → HTTP 201 (3918 ms)
+✅ contador reversa el gasto de trámite → HTTP 200 (2719 ms)
+
+Filas nuevas en cada bitácora:
+  CONTABLE (9 filas)
+    a555a1f4 · Ileana Barrios (STAGING) (abogada) · usuario · editar · clients · CLI-001 · {"digito_verificador": ["08", "07"]}
+    15b8e91a · Ileana Barrios (STAGING) (abogada) · usuario · editar · clients · CLI-001 · {"digito_verificador": ["07", "08"]}
+    f142b449 · Ileana Barrios (STAGING) (abogada) · usuario · crear · expenses ·  · {"date": [null, "2026-10-03"], "amount": [null, 15.00], "status": [null, "pendiente_pago"], "amount_paid": [null, 0.00], "supplier_id": [nul
+    73ed52b5 · Ileana Barrios (STAGING) (abogada) · usuario · crear · expense_lines ·  · {"amount": [null, 15.00], "tax_rate": [null, 0.0000], "created_by": [null, "40628550-61c3-40f4-85eb-92b5f07aae92"], "expense_id": [null, "40
+    3cab91aa · Ileana Barrios (STAGING) (abogada) · usuario · editar · expenses · FAC-CO-000004 · {"purchase_number": [null, "FAC-CO-000004"]}
+    76f8223b · Ileana Barrios (STAGING) (abogada) · usuario · contabilizar · journal_entries · FAC-CO-000004 · {"period_id": [null, "6112c839-b2df-43dd-8e9e-010d13b5b09e"], "reference": [null, "FAC-CO-000004"], "source_id": [null, "40abd926-c2ee-4588-
+    3c999c4a · Ileana Barrios (STAGING) (abogada) · usuario · registrar_en_libro · expenses · FAC-CO-000004 · {"posted_entry_id": [null, "2ce7fcb9-39a3-4e5f-9395-025384bb93ef"]}
+    e2a2e175 · Elías Pimentel (STAGING) (contador) · usuario · reversar · journal_entries · FAC-CO-000004 · {"period_id": [null, "6112c839-b2df-43dd-8e9e-010d13b5b09e"], "reference": [null, "FAC-CO-000004"], "source_id": [null, "40abd926-c2ee-4588-
+    308fc513 · Elías Pimentel (STAGING) (contador) · usuario · reversar · expenses · FAC-CO-000004 · {"status": ["pendiente_pago", "anulado"]}
+  LEGAL (12 filas)
+    2855a854 · Ileana Barrios (STAGING) (abogada) · usuario · crear · comments · EXP-001 · {"text": [null, "Comentario de prueba de bitácora"], "case_id": [null, "067ffc7f-f4f3-4c21-b1b2-a15a7d90efc4"], "user_id": [null, "40628550-
+    1d4fe737 · Ileana Barrios (STAGING) (abogada) · sistema · editar · cases · EXP-001 · {"last_followup_at": [null, "2026-10-03T23:11:38.751611+00:00"]}
+    7f99b46d · Ileana Barrios (STAGING) (abogada) · usuario · crear · tasks · EXP-001 · {"status": [null, "pendiente"], "case_id": [null, "067ffc7f-f4f3-4c21-b1b2-a15a7d90efc4"], "deadline": [null, "2026-10-03"], "created_by": [
+    c7aa738e · Ileana Barrios (STAGING) (abogada) · usuario · cumplir · tasks · EXP-001 · {"status": ["pendiente", "cumplida"], "completed_at": [null, "2026-10-03T23:11:42.417+00:00"]}
+    4b46af5d · Ileana Barrios (STAGING) (abogada) · usuario · crear · client_payments · EXP-001 · {"amount": [null, 25.00], "case_id": [null, "067ffc7f-f4f3-4c21-b1b2-a15a7d90efc4"], "description": [null, "Cobro de prueba de bitácora"], "
+    a555a1f4 · Ileana Barrios (STAGING) (abogada) · usuario · editar · clients · CLI-001 · {"digito_verificador": ["08", "07"]}
+    15b8e91a · Ileana Barrios (STAGING) (abogada) · usuario · editar · clients · CLI-001 · {"digito_verificador": ["07", "08"]}
+    f142b449 · Ileana Barrios (STAGING) (abogada) · usuario · crear · expenses ·  · {"date": [null, "2026-10-03"], "amount": [null, 15.00], "status": [null, "pendiente_pago"], "case_id": [null, "067ffc7f-f4f3-4c21-b1b2-a15a7
+    73ed52b5 · Ileana Barrios (STAGING) (abogada) · usuario · crear · expense_lines ·  · {"amount": [null, 15.00], "tax_rate": [null, 0.0000], "created_by": [null, "40628550-61c3-40f4-85eb-92b5f07aae92"], "expense_id": [null, "40
+    3cab91aa · Ileana Barrios (STAGING) (abogada) · usuario · editar · expenses · FAC-CO-000004 · {"purchase_number": [null, "FAC-CO-000004"]}
+    3c999c4a · Ileana Barrios (STAGING) (abogada) · usuario · registrar_en_libro · expenses · FAC-CO-000004 · {"posted_entry_id": [null, "2ce7fcb9-39a3-4e5f-9395-025384bb93ef"]}
+    308fc513 · Elías Pimentel (STAGING) (contador) · usuario · reversar · expenses · FAC-CO-000004 · {"status": ["pendiente_pago", "anulado"]}
+  DV del cliente en las DOS bitácoras con el mismo evento_id: 2 eventos
+    a555a1f4 · contable {"digito_verificador": ["08", "07"]} · legal {"digito_verificador": ["08", "07"]}
+    15b8e91a · contable {"digito_verificador": ["07", "08"]} · legal {"digito_verificador": ["07", "08"]}
+
+Intentos de editar y borrar una fila de cada bitácora:
+  ✅ rechazado (postgres, el rol más alto de la app): update auditoria.bitacora_contable set accion = 'borrado' → La bitácora bitacora_contable es solo de agregar: no se permite UPDATE (rol postgres).
+  ✅ rechazado (postgres, el rol más alto de la app): delete from auditoria.bitacora_contable → La bitácora bitacora_contable es solo de agregar: no se permite DELETE (rol postgres).
+  ✅ rechazado (postgres, el rol más alto de la app): truncate auditoria.bitacora_contable → La bitácora bitacora_contable es solo de agregar: no se permite TRUNCATE (rol postgres).
+  ✅ rechazado (clave de servicio, API): update bitacora_contable → Invalid schema: auditoria
+  ✅ rechazado (clave de servicio, API): delete bitacora_contable → Invalid schema: auditoria
+  ✅ rechazado (postgres, el rol más alto de la app): update auditoria.bitacora_legal set accion = 'borrado' → La bitácora bitacora_legal es solo de agregar: no se permite UPDATE (rol postgres).
+  ✅ rechazado (postgres, el rol más alto de la app): delete from auditoria.bitacora_legal → La bitácora bitacora_legal es solo de agregar: no se permite DELETE (rol postgres).
+  ✅ rechazado (postgres, el rol más alto de la app): truncate auditoria.bitacora_legal → La bitácora bitacora_legal es solo de agregar: no se permite TRUNCATE (rol postgres).
+  ✅ rechazado (clave de servicio, API): update bitacora_legal → Invalid schema: auditoria
+  ✅ rechazado (clave de servicio, API): delete bitacora_legal → Invalid schema: auditoria
+
+Cadena después de todo: contable {"filas": 36, "anclas": 0, "modulo": "contable", "integra": true, "ultimo_hash": "5274e44ecedde63dfc5cfaf7f9f845ae5bad41644a71b7378952dba408b65203", "filas_alteradas": [], "anclas_que_no_coinciden": []}
+                        legal    {"filas": 14, "anclas": 0, "modulo": "legal", "integra": true, "ultimo_hash": "4210c89865776dd5ec3aac934d3aa5f3039fc19ae510db450f3846dcc3f6e53d", "filas_alteradas": [], "anclas_que_no_coinciden": []}
+
+======================================================================
+8. PRUEBA 2: DOS USUARIOS A LA VEZ
+======================================================================
+(a) Por la API real: la abogada EMITE una factura y la abogada 2 REGISTRA un gasto de trámite, disparados a la vez.
+  ronda 1: ✅ emitir FAC-HON-000030 → 200 (7257 ms) · gasto → 201 (4965 ms) · total 7488 ms
+  ronda 2: ✅ emitir FAC-HON-000031 → 200 (4023 ms) · gasto → 201 (2579 ms) · total 4234 ms
+  ronda 3: ✅ emitir FAC-HON-000032 → 200 (4326 ms) · gasto → 201 (2602 ms) · total 4551 ms
+
+(b1) El candado por bufete, medido: una importación de 200 líneas abierta y, a los 100 ms, otra sesión da de alta un cliente.
+  importación: 718 ms (sin terminar la transacción) · alta de cliente: seguía esperando 300 ms después de terminar la importación; terminó 1016 ms después de empezar, al cerrarse la transacción de la importación
+
+(b2) Orden de candados: una sesión escribe algo auditado y DESPUÉS postea (lo que hacen la importación de asientos y la NC de compra);
+     la otra postea un asiento suelto (lo que hace emitir una factura). Intercalado a propósito.
+  X: alta en journal_imports (toma el candado de la bitácora)
+  Y: post_journal_entry (toma el correlativo del libro y espera la bitácora)
+  X: post_journal_entry → ok (1215 ms)
+  Y: → ERROR 40P01: deadlock detected
+
+Lectura
+- (a) Lo pedido pasa: 3 de 3 rondas sin error ni bloqueo. Las dos se
+  serializan un instante en la base y nadie lo nota.
+- (b1) Sí se nota el candado por bufete durante una importación grande: una
+  escritura auditada que llega mientras se importan 200 líneas espera a que la
+  importación termine (~0,5 a 1 s). No es un error, es una espera.
+- (b2) 🔴 FALLA: deadlock. La importación de asientos (y la NC de compra)
+  escribe en la bitácora ANTES de postear; un posteo suelto toma el correlativo
+  del libro ANTES de escribir en la bitácora. Intercalados, Postgres cancela uno
+  al segundo con «deadlock detected» (40P01). La ventana es corta (entre la
+  primera fila auditada del RPC y su primer posteo), pero existe en cada
+  importación y cada NC de compra que coincida con otro posteo.
+
+======================================================================
+9. SEGUNDO FALLO: ORDEN DE CANDADOS (090, APLICADA EL 03/10)
+======================================================================
+sql/pending/090_bitacoras_orden_de_candados.sql
+auditoria.escribir (y el ancla al cerrar un período) toman primero la fila
+'journal_entry' de accounting_sequences y después el candado de la bitácora:
+el mismo orden que post_journal_entry. No agrega esperas: quien postea ya
+tomaba el candado de la bitácora enseguida del del libro.
+
+Simulada en BEGIN … ROLLBACK junto con la prueba de las 41 tablas:
+  NOTICE: 090 ✅ bitácora y libro: un solo orden de candados (correlativo del libro, después bitácora)
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+El cruce entre dos sesiones (b2) sólo se puede probar con la 090 aplicada.
+
+======================================================================
+10. 090 APLICADA Y PRUEBA DE CONCURRENCIA PERMANENTE
+======================================================================
+090_bitacoras_orden_de_candados.sql  aplicada 03/10, 204 ms
+  NOTICE: 090 ✅ bitácora y libro: un solo orden de candados (correlativo del libro, después bitácora)
+
+sql/tests/concurrencia-bitacora-libro.mjs (dos sesiones, todo en ROLLBACK).
+Obligatoria antes de cualquier ventana de producción (runbook paso −1, junto con
+la de las 41 tablas; CLAUDE.md). Cada ronda fuerza el PEOR orden: X (importación
+de asientos o NC de compra, con el RPC real) ya pasó su primera escritura
+auditada; Y (emisión, cobro o gasto de trámite: escrituras y posteo en una
+transacción) arranca; X corre el RPC. Y tiene que ESPERAR y terminar.
+
+Control (orden de antes de la 090: el candado de la bitácora sin el del libro):
+  ▶ Concurrencia bitácora ↔ libro contra staging · 3 rondas por combinación · MODO CONTROL (orden viejo)
+  
+    importación de asientos × emisión de factura     rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1138 ms
+    importación de asientos × cobro                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1101 ms
+    importación de asientos × gasto de trámite       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1097 ms
+    NC de compra × emisión de factura                rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1099 ms
+    NC de compra × cobro                             rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1094 ms
+    NC de compra × gasto de trámite                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1093 ms
+  
+  Total: 18 rondas · deadlocks 18 · otros errores 0
+  ✅ control: con el orden viejo el deadlock aparece en todas las rondas (la prueba lo detecta)
+
+Con la 090, 20 rondas por combinación:
+  ▶ Concurrencia bitácora ↔ libro contra staging · 20 rondas por combinación
+  
+    importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 790 ms
+    importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 590 ms
+    importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 705 ms
+    NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 688 ms
+    NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 588 ms
+    NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 678 ms
+  
+  Total: 120 rondas · deadlocks 0 · otros errores 0
+  ✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+La espera máxima de Y (~0,6 a 0,8 s) es la transacción de X más la pausa
+forzada de 150 ms: una espera, no un error.
+
+======================================================================
+11. PRUEBA DE LAS 41 TABLAS CON LA 090
+======================================================================
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+  verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+======================================================================
+12. PRUEBA 3: SI FALLA LA BITÁCORA (091, APLICADA EL 03/10; PANTALLA EN LA SECCIÓN 14)
+======================================================================
+Base: sql/pending/091_bitacoras_error_claro.sql
+  auditoria.registrar y el ancla al cerrar un período relanzan cualquier falla con
+  SQLSTATE AU001, MESSAGE «No se pudo guardar porque falló el registro de
+  auditoría. Intenta de nuevo y, si se repite, avisa al administrador.», el error
+  original en DETAIL y la tabla y la operación en HINT. Sigue fallando cerrado.
+App:
+  - src/lib/auditoria/error-de-auditoria.ts
+    · fetchConAuditoria: va en los dos clientes de Supabase del servidor
+      (createAdminClient y el de sesión). Ante AU001 escribe en el log del servidor
+      «[auditoria] falló el registro de auditoría; la operación se deshizo:» con el
+      error original, la tabla, la operación y la llamada (método y ruta, sin
+      parámetros).
+    · conManejoDeAuditoria: envuelve todos los handlers de los 120 archivos de
+      rutas de src/app/api. Si en esa petición la base contestó AU001, la
+      respuesta de error de la ruta (su texto propio o una excepción) se reemplaza
+      por {"error": <el mensaje>, "codigo": "AU001"}, 500. Una respuesta exitosa
+      no se toca.
+  - El navegador no escribe en tablas (sólo sesión y Storage): toda escritura pasa
+    por esas rutas.
+  - 🔒 error-de-auditoria.test.ts (9 tests): mensaje y log, otro error intacto,
+    éxito intacto, excepción, el cuerpo sigue legible para supabase-js, dos
+    peticiones a la vez sin contaminarse, todo handler envuelto, los dos clientes
+    conectados, el mismo texto en la 091 y en la app y sin «—».
+
+Simulada en BEGIN … ROLLBACK:
+  NOTICE: 091 ✅ falla de la bitácora → AU001, mensaje claro, original en el detalle: [P0001] falla forzada por la verificación 091
+  Prueba de las 41 tablas encima de la 091: 131 operaciones, 0 fallas, cadena íntegra.
+  Costo (una subtransacción por fila auditada), importación de 200 líneas, 10 rondas:
+    sin 091 mediana 528 ms · con 091 mediana 575 ms (+47 ms).
+
+Suite 1632/1632 · tsc limpio · lint 0 nuevos (20 de la lista base) · npm run build
+OK (los 3 «Dynamic server usage» de siempre; las tres rutas salen dinámicas).
+
+Pendiente con el «aplica»: aplicar la 091 y verlo en pantalla. Para que la
+bitácora falle a pedido hace falta una trampa temporal en staging (por ejemplo,
+documento_de que falle sólo para un comentario con un texto marcado), que se
+muestra antes, se aplica, se prueba y se quita.
+
+======================================================================
+13. PRUEBA 4: ROLES Y «VERIFICAR INTEGRIDAD» DESDE LA PANTALLA
+======================================================================
+Por las rutas reales, con la sesión de cada rol:
+  Prueba 4 · roles · 2026-10-03T23:47:01.501Z
+    ✅ admin     contable pantalla  GET /finanzas/auditoria → 200
+    ✅ admin     contable Excel     GET /api/finanzas/auditoria/export → 200 · archivo recibido
+    ✅ admin     contable verificar POST /api/finanzas/auditoria/verificar → 200 · integra true · filas 66
+    ✅ admin     legal    pantalla  GET /legal/admin/auditoria → 200
+    ✅ admin     legal    Excel     GET /api/admin/auditoria/export → 200 · archivo recibido
+    ✅ admin     legal    verificar POST /api/admin/auditoria/verificar → 200 · integra true · filas 26
+    ✅ abogada   contable pantalla  GET /finanzas/auditoria → 307 → /
+    ✅ abogada   contable Excel     GET /api/finanzas/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ abogada   contable verificar POST /api/finanzas/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ abogada   legal    pantalla  GET /legal/admin/auditoria → 307 → /legal
+    ✅ abogada   legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ abogada   legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ contador  contable pantalla  GET /finanzas/auditoria → 200
+    ✅ contador  contable Excel     GET /api/finanzas/auditoria/export → 200 · archivo recibido
+    ✅ contador  contable verificar POST /api/finanzas/auditoria/verificar → 200 · integra true · filas 66
+    ✅ contador  legal    pantalla  GET /legal/admin/auditoria → 307 → /finanzas/reportes
+    ✅ contador  legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ contador  legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ asistente contable pantalla  GET /finanzas/auditoria → 307 → /legal
+    ✅ asistente contable Excel     GET /api/finanzas/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ asistente contable verificar POST /api/finanzas/auditoria/verificar → 403 · {"error":"Sin permiso"}
+    ✅ asistente legal    pantalla  GET /legal/admin/auditoria → 307 → /legal
+    ✅ asistente legal    Excel     GET /api/admin/auditoria/export → 403 · {"error":"Sin permiso"}
+    ✅ asistente legal    verificar POST /api/admin/auditoria/verificar → 403 · {"error":"Sin permiso"}
+  ✅ todos como se esperaba: admin las dos, contador sólo la contable, abogada y asistente ninguna
+
+En el navegador (localhost:3000):
+  - Abogada (abogada 2): /finanzas/auditoria y /legal/admin/auditoria la devuelven
+    al inicio; el menú no ofrece ninguna bitácora.
+  - Admin, «Bitácora contable» → «Verificar integridad»:
+      «Íntegra: 66 registros encadenados y 0 anclas que coinciden.»
+  - Admin, «Bitácora legal» → «Verificar integridad»:
+      «Íntegra: 26 registros encadenados y 0 anclas que coinciden.»
+  (0 anclas: todas las filas son de hoy; la primera ancla diaria se graba con el
+  primer cambio de mañana.)
+
+======================================================================
+14. 091 APLICADA Y PRUEBA 3 EN PANTALLA (CON TRAMPA TEMPORAL)
+======================================================================
+091_bitacoras_error_claro.sql  aplicada 03/10, 331 ms
+  NOTICE: 091 ✅ falla de la bitácora → AU001, mensaje claro, original en el detalle: [P0001] falla forzada por la verificación 091
+
+Trampa temporal, autorizada por Oliver, SÓLO en staging: auditoria.documento_de
+copiada tal cual de la 089 más cuatro líneas que fallan únicamente si la tabla es
+comments y el texto contiene «PRUEBA-AU001». No quedó en el repo.
+  puesta  19:49:25 (hora de Panamá) · catálogo: trampa_puesta = true
+  quitada 19:49:43 (18 s después): documento_de restituida exactamente como la 089.
+
+En el navegador, como abogada (Ileana Barrios), caso EXP-001 → Seguimiento →
+Nuevo comentario «PRUEBA-AU001 comentario marcado para la prueba 3» → Comentar:
+  En pantalla, debajo del comentario, en rojo:
+    «No se pudo guardar porque falló el registro de auditoría. Intenta de nuevo y,
+    si se repite, avisa al administrador.»
+  (captura: screenshot-1791074974839-4.jpg)
+  El comentario NO se guardó: comentarios con PRUEBA-AU001 en la base = 0.
+  Log del servidor:
+    [auditoria] falló el registro de auditoría; la operación se deshizo: {"original":"[P0001] trampa temporal de la prueba 3: comentario marcado PRUEBA-AU001","donde":"auditoria.registrar · INSERT comments","peticion":"POST /rest/v1/comments"}
+    Error creating comment: { code: 'AU001', details: '[P0001] trampa temporal …', hint: 'auditoria.registrar · INSERT comments', message: 'No se pudo guardar porque …' }
+    POST /api/cases/067ffc7f-…/comments 500
+
+Sin la trampa:
+  Catálogo (auditoria y public): funciones con «PRUEBA-AU001» = 0;
+  documento_de con case_number::text (la de la 089) = 1.
+  El MISMO comentario, «Comentar» otra vez: se guardó (captura:
+  screenshot-1791074993785-5.jpg) y la bitácora legal lo registra: crear ·
+  comments · EXP-001 · Ileana Barrios (STAGING) · abogada · usuario.
+
+Prueba de las 41 tablas, sin la trampa:
+  Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+  verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+Concurrencia, sin la trampa, 20 rondas por combinación:
+  ▶ Concurrencia bitácora ↔ libro contra staging · 20 rondas por combinación
+  
+    importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 742 ms
+    importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 619 ms
+    importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 776 ms
+    NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 1082 ms
+    NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 921 ms
+    NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 1059 ms
+  
+  Total: 120 rondas · deadlocks 0 · otros errores 0
+  ✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+======================================================================
+15. CIERRE DEL 03/10
+======================================================================
+Aplicado en staging (inventario regenerado desde el esquema,
+docs/staging/inventario-migraciones.md): 94 migraciones, todas hasta la 091.
+Escrito y SIN aplicar: 088_bitacoras_legado.sql (a propósito). Los otros tres
+«NO» del inventario son scripts de datos que sólo tienen sentido en producción.
+
+Datos de prueba que quedaron en staging (todos ficticios):
+  - FAC-HON-000029 anulada, con NC-000024 (la de la anulación) y el cobro
+    CO-000013 reversado.
+  - FAC-HON-000030, 031 y 032 emitidas, B/. 10.70 cada una, sin cobrar
+    (prueba 2 por la API).
+  - FAC-CO-000004 gasto de trámite reversado; FAC-CO-000005, 006 y 007 gastos
+    de trámite de B/. 3.00 asentados y pendientes de pago (prueba 2).
+  - Caso EXP-001 de FERRETERÍA VALLARINO (CLI-001): 2 comentarios (uno con
+    «PRUEBA-AU001»), 1 tarea cumplida, 1 cobro del caso de B/. 25.00.
+  - CLI-001: el DV se cambió y se devolvió (queda 08, como estaba).
+  - Bitácoras: contable 66 filas, legal 28, 0 anclas (la primera diaria se graba
+    con el primer cambio de mañana).
+  - Todo lo demás (mediciones, 41 tablas, concurrencia) corrió en ROLLBACK: no
+    dejó filas, sólo huecos en los id de las bitácoras y de algunas secuencias.

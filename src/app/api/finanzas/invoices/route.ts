@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreateInvoice } from "@/lib/finanzas/validators/invoice";
 import { createInvoice, InvoiceMutationError } from "@/lib/finanzas/api/invoices";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * POST /api/finanzas/invoices
@@ -10,7 +11,7 @@ import { createInvoice, InvoiceMutationError } from "@/lib/finanzas/api/invoices
  * Auth: admin + abogada (asistentes ya quedan fuera de /finanzas por
  * middleware; igual rechazamos acá por defensa en profundidad).
  */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -45,4 +46,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

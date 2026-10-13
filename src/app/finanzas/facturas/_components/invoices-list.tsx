@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { DePruebaBadge } from "@/components/finanzas/de-prueba-badge";
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { FileText } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
 import { InvoiceStatusBadge } from "@/components/finanzas/invoice-status-badge";
@@ -13,15 +16,27 @@ function acreditadaTotal(inv: InvoiceListItem): boolean {
   return inv.status !== "anulada" && grand > 0 && Number(inv.credited_total ?? 0) >= grand - 0.005;
 }
 
+/** 096: emitida con fecha anterior al inicio contable. La de prueba lleva su badge. */
+function contabilizadaFuera(inv: InvoiceListItem, inicio: string): boolean {
+  return (
+    !inv.de_prueba &&
+    inv.status !== "borrador" &&
+    inv.status !== "cancelada_pre_emision" &&
+    esContabilizadoFuera(inv.issue_date, inicio)
+  );
+}
+
 interface Props {
   invoices: InvoiceListItem[];
+  /** Inicio contable del bufete (096), para la etiqueta «Contabilizado fuera». */
+  inicio: string;
 }
 
 /**
  * Tabla responsive de facturas. En desktop se muestra como tabla; en mobile
  * cada factura se presenta como card touch-friendly (mín 48px tap target).
  */
-export function InvoicesList({ invoices }: Props) {
+export function InvoicesList({ invoices, inicio }: Props) {
   return (
     <>
       {/* Desktop: tabla */}
@@ -53,6 +68,10 @@ export function InvoicesList({ invoices }: Props) {
                       <span className="italic text-gray-400">Sin número</span>
                     )}
                   </Link>
+                  {inv.de_prueba && <span className="ml-2"><DePruebaBadge /></span>}
+                  {contabilizadaFuera(inv, inicio) && (
+                    <span className="ml-2"><ContabilizadoFueraBadge inicio={inicio} /></span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-700">
                   {INVOICE_KIND_LABEL[inv.invoice_kind]}
@@ -81,7 +100,7 @@ export function InvoicesList({ invoices }: Props) {
                   {formatDate(inv.due_date)}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                  ${fmtImporte(Number(inv.grand_total))}
+                  B/. {fmtImporte(Number(inv.grand_total))}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <span
@@ -91,7 +110,7 @@ export function InvoicesList({ invoices }: Props) {
                         : "text-gray-400"
                     }
                   >
-                    ${fmtImporte(Number(inv.balance_due))}
+                    B/. {fmtImporte(Number(inv.balance_due))}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -101,7 +120,7 @@ export function InvoicesList({ invoices }: Props) {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <FeEstadoBadge estado={inv.fe_estado} />
+                  <FeEstadoBadge estado={inv.fe_estado} origen={inv.dgi_cufe_origen} />
                 </td>
               </tr>
             ))}
@@ -124,6 +143,8 @@ export function InvoicesList({ invoices }: Props) {
                   <span className="font-mono text-sm font-medium text-integra-navy">
                     {inv.invoice_number || "Sin número"}
                   </span>
+                  {inv.de_prueba && <DePruebaBadge />}
+                  {contabilizadaFuera(inv, inicio) && <ContabilizadoFueraBadge inicio={inicio} />}
                 </div>
                 <p className="mt-2 text-sm font-medium text-gray-900 truncate">
                   {inv.client?.name ?? "—"}
@@ -141,18 +162,18 @@ export function InvoicesList({ invoices }: Props) {
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <InvoiceStatusBadge status={inv.status} />
                 {acreditadaTotal(inv) && <AcreditadaTotalBadge />}
-                <FeEstadoBadge estado={inv.fe_estado} />
+                <FeEstadoBadge estado={inv.fe_estado} origen={inv.dgi_cufe_origen} />
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">
               <span className="text-gray-500">Vence {formatDate(inv.due_date)}</span>
               <div className="text-right">
                 <p className="font-semibold text-gray-900">
-                  ${fmtImporte(Number(inv.grand_total))}
+                  B/. {fmtImporte(Number(inv.grand_total))}
                 </p>
                 {Number(inv.balance_due) > 0 && (
                   <p className="text-xs text-amber-700">
-                    Saldo ${fmtImporte(Number(inv.balance_due))}
+                    Saldo B/. {fmtImporte(Number(inv.balance_due))}
                   </p>
                 )}
               </div>

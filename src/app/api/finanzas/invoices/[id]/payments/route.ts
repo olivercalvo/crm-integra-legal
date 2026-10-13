@@ -6,6 +6,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateCreatePayment } from "@/lib/finanzas/validators/payment";
 import { createPayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -27,7 +28,7 @@ interface RouteParams {
  * MISMA `createPayment` que `POST /api/finanzas/payments`. Es lo que usa el
  * diálogo "Registrar pago" del detalle de la factura, que no cambió.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -40,11 +41,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  // La factura del path + el monto del body = la única aplicación.
+  // La factura del path = la única aplicación. 074: lo APLICADO es el menor
+  // entre el monto y el saldo de la factura; el resto queda como saldo a favor
+  // del cliente (amount_unapplied). El saldo se lee acá, con la sesión (RLS).
   const b = (body ?? {}) as Record<string, unknown>;
+  const { data: fac } = await ctx.db
+    .from("invoices")
+    .select("balance_due")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", params.id)
+    .maybeSingle();
+  const monto = Number(b.amount);
+  const saldo = fac ? Number((fac as { balance_due: number | string }).balance_due) : NaN;
+  const aplicado =
+    isFinite(monto) && isFinite(saldo) && saldo > 0 ? Math.min(monto, Math.round(saldo * 100) / 100) : monto;
   const payload = {
     ...b,
-    applications: [{ invoice_id: params.id, amount: Number(b.amount) }],
+    applications: [{ invoice_id: params.id, amount: aplicado }],
   };
 
   const validation = validateCreatePayment(payload);
@@ -63,7 +76,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       validation.data,
       // 🔑 SOP-014: el posteo va con el cliente de SERVICIO; el tenant sale del
       //    contexto autenticado, nunca del body.
-      createAdminClient()
+      createAdminClient(ctx.userId)
     );
     // El número de recibo viaja en la respuesta para el toast ("Recibo REC-000012
     // registrado") y para el enlace al PDF.
@@ -79,4 +92,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] createPayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

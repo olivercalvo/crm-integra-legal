@@ -3,6 +3,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { getQuoteById } from "@/lib/finanzas/queries/quotes";
 import { updateQuote, deleteQuote, validateUpdateQuote } from "@/lib/finanzas/api/quotes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -11,7 +12,7 @@ interface RouteParams {
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
 /** GET /api/finanzas/quotes/[id] — detalle con líneas + cliente + caso. */
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -22,10 +23,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Cotización no encontrada" }, { status: 404 });
   }
   return NextResponse.json(quote);
-}
+});
 
 /** PATCH /api/finanzas/quotes/[id] — actualiza header + líneas (solo borradores). */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -65,10 +66,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] updateQuote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /** DELETE /api/finanzas/quotes/[id] — solo borradores o canceladas pre-envío. */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -85,4 +86,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] deleteQuote unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

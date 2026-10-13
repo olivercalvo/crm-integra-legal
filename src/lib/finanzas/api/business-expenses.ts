@@ -8,18 +8,22 @@
  * action='create|update|delete').
  */
 
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateBusinessExpenseInput,
   UpdateBusinessExpenseInput,
+  LineaDeCompraInput,
 } from "@/lib/finanzas/types/business-expense";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { formatTaxRate } from "@/lib/finanzas/types/tax-code";
 import { validarCuentaDeGasto } from "@/lib/finanzas/queries/business-expenses";
 import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 import type { AsientoInput } from "@/lib/finanzas/contabilidad/posting";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
 import {
   construirAsientoDeCompra,
   SOURCE_TYPE_COMPRA,
@@ -243,10 +247,31 @@ export async function createBusinessExpense(
     }
   }
 
-  if (input.supplier_id !== null && !(await proveedorValido(db, tenantId, input.supplier_id))) {
+  // 🔴 E3 (01/10/2026): sin proveedor no hay compra. Acredita 200001 y ahí no
+  // hay líneas sin proveedor. Se corta acá, ANTES de consumir el número FAC-CO-.
+  if (!input.supplier_id) {
+    throw new MutationError(
+      "Elige el proveedor: la compra va a Cuentas por pagar y ahí cada movimiento dice de quién es. " +
+        "Si todavía no tiene ficha, créala en Proveedores.",
+      400
+    );
+  }
+  if (!(await proveedorValido(db, tenantId, input.supplier_id))) {
     throw new MutationError("El proveedor seleccionado no existe.", 400);
   }
   const dueDate = await resolverVencimiento(db, tenantId, input);
+
+  // 096 (regla 3.3.5): una compra nueva no lleva fecha anterior al inicio contable.
+  await asegurarFechaDesdeElInicio(db, tenantId, "compra", input.expense_date, "expense_date");
+
+  // La fecha de REGISTRO (la del asiento): período abierto. Se valida antes de
+  // insertar para que un mes cerrado no llegue a un DELETE compensatorio.
+  const fechaDeRegistro = await resolverFechaDeRegistro(
+    db,
+    tenantId,
+    input.accounting_date ?? input.expense_date,
+    { que: "la compra", campo: "accounting_date" }
+  );
 
   // 🔴 LA TASA DE CADA LÍNEA SALE DEL CATÁLOGO, NO DEL BODY (migración `045`).
   //    El body trae `tax_code_id` (qué eligió la persona) y `tax_rate` (lo que
@@ -255,40 +280,30 @@ export async function createBusinessExpense(
   //    se guarda es el del catálogo. Si el body trajera 7% con un id de EXENTO,
   //    la línea se guarda exenta, y el ITBMS tecleado se rechaza abajo por no
   //    calzar con la tasa real.
-  const codigos = await resolverCodigosDeImpuesto(
-    db,
-    tenantId,
-    input.lineas.map((l) => l.tax_code_id)
-  );
-  const lineas = input.lineas.map((l, i) => {
-    const codigo = codigos.get(l.tax_code_id);
-    if (!codigo) {
-      // `resolverCodigosDeImpuesto` ya rechazó los que faltan; esto es el tipo.
-      throw new MutationError(`Línea ${i + 1}: el impuesto elegido no está en el catálogo.`, 400);
-    }
-    const esperado = round2(l.amount * codigo.rate);
-    if (Math.abs(l.tax_amount - esperado) > TOLERANCIA_ITBMS + 1e-9) {
-      throw new MutationError(
-        `Línea ${i + 1} ("${l.description}"): el impuesto elegido es ${codigo.code} ` +
-          `(${formatTaxRate(codigo.rate)}), así que el ITBMS ` +
-          `sería ${esperado.toFixed(2)} y no ${l.tax_amount.toFixed(2)}. Corrija el ` +
-          `importe o cambie el impuesto.`,
-        400
-      );
-    }
-    return { ...l, tax_rate: codigo.rate };
-  });
+  const lineas = await resolverLineasDeCompra(db, tenantId, input.lineas);
 
   // Los totales del encabezado los calcula el SERVIDOR sumando las líneas, no
   // llegan del cliente: si llegaran, un cliente podría mandar un total que no
   // es la suma y el asiento no cuadraría contra su propio documento.
   const { subtotal, taxAmount, taxRate } = importesDelEncabezado(lineas);
 
+  // El número FAC-CO- (071, E3), DESPUÉS de todas las validaciones y ANTES del
+  // INSERT, con el criterio del recibo (SOP-031): si el alta falla más abajo,
+  // el DELETE compensatorio deja un HUECO. Va a `reference` del asiento.
+  let purchaseNumber: string;
+  try {
+    purchaseNumber = await allocatePurchaseNumber(db, tenantId);
+  } catch (err) {
+    throw new MutationError("No se pudo asignar el número FAC-CO- de la compra. No se registró nada.", 500, err);
+  }
+
   const { data, error } = await db
     .from("business_expenses")
     .insert({
       tenant_id: tenantId,
+      purchase_number: purchaseNumber,
       expense_date: input.expense_date,
+      accounting_date: fechaDeRegistro,
       due_date: dueDate,
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
@@ -455,6 +470,90 @@ export async function createBusinessExpense(
 // UPDATE
 // ---------------------------------------------------------------------------
 
+/**
+ * Las líneas con la tasa DEL CATÁLOGO (migración `045`): el alta y la edición
+ * usan esta misma función. Rechaza un ITBMS que no calza con la tasa real.
+ */
+async function resolverLineasDeCompra(db: DB, tenantId: string, lineasIn: LineaDeCompraInput[]) {
+  const codigos = await resolverCodigosDeImpuesto(
+    db,
+    tenantId,
+    lineasIn.map((l) => l.tax_code_id)
+  );
+  return lineasIn.map((l, i) => {
+    const codigo = codigos.get(l.tax_code_id);
+    if (!codigo) {
+      // `resolverCodigosDeImpuesto` ya rechazó los que faltan; esto es el tipo.
+      throw new MutationError(`Línea ${i + 1}: el impuesto elegido no está en el catálogo.`, 400);
+    }
+    const esperado = round2(l.amount * codigo.rate);
+    if (Math.abs(l.tax_amount - esperado) > TOLERANCIA_ITBMS + 1e-9) {
+      throw new MutationError(
+        `Línea ${i + 1} ("${l.description}"): el impuesto elegido es ${codigo.code} ` +
+          `(${formatTaxRate(codigo.rate)}), así que el ITBMS ` +
+          `sería ${esperado.toFixed(2)} y no ${l.tax_amount.toFixed(2)}. Corrija el ` +
+          `importe o cambie el impuesto.`,
+        400
+      );
+    }
+    return { ...l, tax_rate: codigo.rate };
+  });
+}
+
+/**
+ * Escribe las líneas editadas de una compra SIN asiento (el llamador ya pasó el
+ * gate contable). Por posición (`line_order`): actualiza las que siguen, agrega
+ * las nuevas y borra las que sobran. Así la línea conserva su id y la
+ * bitácora muestra qué cambió. Hasta el 07/10/2026 la edición recalculaba los
+ * totales con las líneas pero NUNCA las escribía: una cuenta cambiada en la
+ * pantalla se perdía sin aviso.
+ */
+async function sincronizarLineasDeCompra(
+  db: DB,
+  tenantId: string,
+  compraId: string,
+  lineas: (LineaDeCompraInput & { tax_rate: number })[]
+) {
+  const { data: actuales, error } = await db
+    .from("expense_lines")
+    .select("id, line_order")
+    .eq("tenant_id", tenantId)
+    .eq("business_expense_id", compraId)
+    .order("line_order");
+  if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
+  const existentes = (actuales ?? []) as { id: string; line_order: number }[];
+  const fila = (l: LineaDeCompraInput & { tax_rate: number }, i: number) => ({
+    line_order: i + 1,
+    description: l.description,
+    chart_account_code: l.chart_account_code,
+    amount: l.amount,
+    tax_code_id: l.tax_code_id,
+    tax_rate: l.tax_rate,
+    tax_amount: l.tax_amount,
+  });
+  // Las que sobran primero: libera los line_order antes de reasignarlos.
+  const sobran = existentes.slice(lineas.length).map((x) => x.id);
+  if (sobran.length > 0) {
+    const { error: e } = await db.from("expense_lines").delete().eq("tenant_id", tenantId).in("id", sobran);
+    if (e) throw new MutationError(`No se pudieron quitar las líneas: ${pgErrorToMessage(e)}`, 500, e);
+  }
+  for (let i = 0; i < lineas.length; i++) {
+    if (i < existentes.length) {
+      const { error: e } = await db
+        .from("expense_lines")
+        .update(fila(lineas[i], i))
+        .eq("tenant_id", tenantId)
+        .eq("id", existentes[i].id);
+      if (e) throw new MutationError(`Línea ${i + 1}: ${pgErrorToMessage(e)}`, 500, e);
+    } else {
+      const { error: e } = await db
+        .from("expense_lines")
+        .insert({ tenant_id: tenantId, business_expense_id: compraId, ...fila(lineas[i], i) });
+      if (e) throw new MutationError(`Línea ${i + 1}: ${pgErrorToMessage(e)}`, 500, e);
+    }
+  }
+}
+
 export async function updateBusinessExpense(
   db: DB,
   tenantId: string,
@@ -466,7 +565,7 @@ export async function updateBusinessExpense(
   const { data: existing, error: errExisting } = await db
     .from("business_expenses")
     .select(
-      `id, expense_date, due_date, supplier_id, supplier_name, supplier_ruc,
+      `id, expense_date, accounting_date, due_date, supplier_id, supplier_name, supplier_ruc,
        supplier_invoice_number,
        chart_account_code, description, subtotal, tax_rate, tax_amount,
        status, payment_date, payment_method, notes`
@@ -483,6 +582,10 @@ export async function updateBusinessExpense(
   }
 
   await gateContable(db, tenantId, id, "editar");
+  // 096: la fecha no se mueve a antes del inicio contable (la base lo exige igual).
+  if (input.expense_date !== String(existing.expense_date)) {
+    await asegurarFechaDesdeElInicio(db, tenantId, "compra", input.expense_date, "expense_date");
+  }
 
   // La cuenta ya NO vive acá: desde la migración `040` está en
   // `expense_lines.chart_account_code`, una por línea, y un CHECK fuerza esta
@@ -494,12 +597,15 @@ export async function updateBusinessExpense(
     throw new MutationError("El proveedor seleccionado no existe.", 400);
   }
   const dueDateUpdate = await resolverVencimiento(db, tenantId, input);
-  const importesEditados = importesDelEncabezado(input.lineas);
+  // Las líneas con la tasa del catálogo, como en el alta; los totales salen de ellas.
+  const lineasEditadas = await resolverLineasDeCompra(db, tenantId, input.lineas);
+  const importesEditados = importesDelEncabezado(lineasEditadas);
 
   const { error: errUpdate } = await db
     .from("business_expenses")
     .update({
       expense_date: input.expense_date,
+      accounting_date: input.accounting_date ?? input.expense_date,
       due_date: dueDateUpdate,
       supplier_id: input.supplier_id,
       supplier_name: input.supplier_name,
@@ -525,9 +631,12 @@ export async function updateBusinessExpense(
     throw new MutationError(pgErrorToMessage(errUpdate), 500, errUpdate);
   }
 
+  // 🔴 Las líneas: descripción, cuenta, monto e impuesto de cada una.
+  await sincronizarLineasDeCompra(db, tenantId, id, lineasEditadas);
+
   // Audit log: diff de campos modificados
   const fields = [
-    "expense_date", "supplier_name", "supplier_ruc", "supplier_invoice_number",
+    "expense_date", "accounting_date", "supplier_name", "supplier_ruc", "supplier_invoice_number",
     "chart_account_code",
     "description", "subtotal", "tax_rate", "tax_amount",
     "status", "payment_date", "payment_method", "notes",
@@ -591,6 +700,14 @@ export async function deleteBusinessExpense(
   // ANTES de tocar el storage: si el borrado no va a poder completarse, no hay
   // que haber borrado ya el comprobante.
   await gateContable(db, tenantId, id, "borrar");
+  // 096: una compra contabilizada fuera no se elimina (se corrige con una NC del proveedor).
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    "compra",
+    (existing as { description?: string | null }).description ?? null,
+    String(existing.expense_date)
+  );
 
   // Y una compra CON PAGOS no se borra (la FK es NO ACTION y fallaría igual,
   // pero con un mensaje opaco): primero se eliminan (sin asiento) o se

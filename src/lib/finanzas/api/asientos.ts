@@ -22,7 +22,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
+import { SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO } from "@/lib/finanzas/contabilidad/cierre-anual";
 
 type DB = SupabaseClient;
 
@@ -39,13 +41,16 @@ export async function reverseJournalEntry(
   tenantId: string,
   userId: string,
   entryId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseJournalEntryResult> {
   const original = await getAsientoDelLibro(db, tenantId, entryId);
   if (!original) {
     throw new MutationError("Asiento no encontrado", 404);
   }
-  if (original.source_type !== "manual") {
+  // 080: el cierre anual también se reversa desde acá (no tiene documento).
+  if (!SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO.includes(original.source_type)) {
     throw new MutationError(
       `El asiento ${original.entry_number} salió de un documento, no de una carga manual: ` +
         "desde acá no se reversa. Se corrige por su documento (anulando la factura, reversando " +
@@ -61,7 +66,13 @@ export async function reverseJournalEntry(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(
     {
       id: original.id,
@@ -75,11 +86,14 @@ export async function reverseJournalEntry(
         debit: l.debit,
         credit: l.credit,
         description: l.descripcion,
+        // E2: el espejo conserva el tercero de cada línea.
+        client_id: l.client_id,
+        supplier_id: l.supplier_id,
       })),
     },
     // `source_id` null: el vínculo con el original es `reverses_entry_id`, y
     // poner ahí el id del asiento haría que el Mayor lo tratara como documento.
-    { hoy, motivo: reason, source_id: null }
+    { fecha, motivo: reason, source_id: null }
   );
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);
@@ -96,6 +110,9 @@ export async function reverseJournalEntry(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

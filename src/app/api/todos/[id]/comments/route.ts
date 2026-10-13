@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // GET — list comments for a todo
-export async function GET(
+export const GET = conManejoDeAuditoria(async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -14,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
@@ -33,10 +34,10 @@ export async function GET(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 // POST — add comment to a todo
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -47,7 +48,7 @@ export async function POST(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin.from("users").select("tenant_id").eq("id", user.id).single();
     if (!profile) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 403 });
 
@@ -75,4 +76,4 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

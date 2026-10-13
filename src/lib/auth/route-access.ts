@@ -122,6 +122,10 @@ export const CONTADOR_FINANZAS_ALLOWED_PREFIXES = [
   // donde sale el plazo con el que la antigüedad calcula los vencimientos.
   // Quien llena el formulario de la DGI tiene que poder corregir esos campos.
   "/finanzas/proveedores",
+  // NC de COMPRA como módulo propio (E8, 01/10/2026): listado, alta y detalle.
+  // Antes era un patrón de detalle suelto; el contador tiene CRUD de compras y
+  // la NC del proveedor es parte de ese trabajo.
+  "/finanzas/notas-credito-proveedor",
 ];
 
 /**
@@ -200,13 +204,16 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   // audita, así que entra al DETALLE —solo lectura: la NC es inmutable— con el
   // mismo criterio que el detalle de factura y el de gasto de trámite.
   //   ✅ /finanzas/notas-credito/{id}
-  //   ❌ /finanzas/notas-credito        (no hay listado; si lo hubiera: no)
-  // Emitir una NC es de admin y abogada (`POST /api/finanzas/credit-notes`),
-  // y se hace desde el detalle de la factura, no desde una ruta propia.
-  /^\/finanzas\/notas-credito\/[^/]+$/,
-  // NC de COMPRA (3.5, 25/09/2026): el contador tiene CRUD de compras, así que
-  // registra y reversa la NC del proveedor, y entra a su detalle. Sin listado.
-  /^\/finanzas\/notas-credito-proveedor\/[^/]+$/,
+  //   ❌ /finanzas/notas-credito        (el listado es de admin y abogada, E8)
+  //   ❌ /finanzas/notas-credito/nueva  (emitir es de admin y abogada)
+  // El `(?!nueva$)` no es adorno: sin él, "nueva" entra como si fuera un id.
+  /^\/finanzas\/notas-credito\/(?!nueva$)[^/]+$/,
+  // ───────────────────────────────────────────────────────────────────────────
+  // PENDIENTES DE ENVIAR A LA DGI (03/10/2026). El contador los ve: sin la
+  // autorización de la DGI la factura no vale ante el fisco y él la tiene en el
+  // ITBMS. Reintentar es de admin y abogada (la página no le muestra el botón y
+  // las rutas de envío le responden 403). Patrón EXACTO.
+  /^\/finanzas\/pendientes-dgi$/,
 ];
 
 /**
@@ -239,6 +246,15 @@ export const ADMIN_CONTADOR_ONLY_PREFIXES = [
   // admite movimientos es una atribución de cierre contable, y cerrar un mes
   // le cambia el resultado a TODO el sistema — no solo a quien lo cierra.
   "/finanzas/periodos",
+  // Bitácora contable (03/10/2026). La ven el contador y el admin, los dos en
+  // solo lectura (decisión de Oliver). La abogada no: es la auditoría del
+  // trabajo contable, y Josuarth la pidió para el contador.
+  "/finanzas/auditoria",
+  // Facturas emitidas fuera del CRM (05/10/2026, migración 092). Registrar en el
+  // libro una venta que la DGI ya autorizó desde otro punto (QuickBooks, portal)
+  // es trabajo de cierre contable: admin y contador, la abogada no (Oliver).
+  // El listado y el alta; el detalle de cada una es /finanzas/facturas/{id}.
+  "/finanzas/facturas-externas",
 ];
 
 /**

@@ -1,7 +1,7 @@
 /**
- * El número de recibo: `REC-` + seis dígitos, el MISMO formato que escribe el
- * backfill de la 047 (`'REC-' || lpad(n, 6, '0')`). Si uno de los dos cambia,
- * el índice único deja de proteger nada y el listado ordena mal.
+ * El número de recibo: `CO-` + seis dígitos desde E3 (01/10/2026, P-2c). El
+ * backfill de la 047 sigue escribiendo `REC-` para los cobros viejos de
+ * producción, que se quedan así: el formato de seis dígitos es el mismo.
  */
 
 import { test } from "node:test";
@@ -14,19 +14,19 @@ import {
   RECEIPT_SEQUENCE_TYPE,
 } from "@/lib/finanzas/numbering/receipt-numbering";
 
-test("REC- + seis dígitos, como las facturas", () => {
-  assert.equal(formatReceiptNumber(1), "REC-000001");
-  assert.equal(formatReceiptNumber(12), "REC-000012");
-  assert.equal(formatReceiptNumber(1268), "REC-001268");
-  assert.equal(formatReceiptNumber(999999), "REC-999999");
+test("CO- + seis dígitos, como las facturas", () => {
+  assert.equal(formatReceiptNumber(1), "CO-000001");
+  assert.equal(formatReceiptNumber(12), "CO-000012");
+  assert.equal(formatReceiptNumber(1268), "CO-001268");
+  assert.equal(formatReceiptNumber(999999), "CO-999999");
 });
 
 test("más de seis dígitos no se trunca", () => {
-  assert.equal(formatReceiptNumber(1000000), "REC-1000000");
+  assert.equal(formatReceiptNumber(1000000), "CO-1000000");
 });
 
-test("el mismo formato que el backfill de la 047 (regex del índice y de la verificación)", () => {
-  assert.match(formatReceiptNumber(3), /^REC-\d{6}$/);
+test("seis dígitos, como el backfill de la 047 (que sigue con REC- para lo viejo)", () => {
+  assert.match(formatReceiptNumber(3), /^CO-\d{6}$/);
 });
 
 test("un recibo 0, negativo o no entero no existe", () => {
@@ -45,7 +45,7 @@ test("allocate consume la secuencia 'payment' del tenant y formatea", async () =
     },
   };
   const n = await allocateReceiptNumber(db as never, "tenant-1");
-  assert.equal(n, "REC-000007");
+  assert.equal(n, "CO-000007");
   assert.deepEqual(llamadas, [
     ["get_next_sequence_number", { p_tenant_id: "tenant-1", p_sequence_type: RECEIPT_SEQUENCE_TYPE }],
   ]);
@@ -74,6 +74,6 @@ test("preview devuelve last_number + 1 sin tocar la secuencia", async () => {
       }),
     }),
   };
-  assert.equal(await previewNextReceiptNumber(db as never, "t"), "REC-000004");
+  assert.equal(await previewNextReceiptNumber(db as never, "t"), "CO-000004");
   assert.equal(rpcs, 0);
 });

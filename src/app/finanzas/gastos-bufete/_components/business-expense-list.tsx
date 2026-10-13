@@ -1,3 +1,5 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { FileText, Paperclip } from "lucide-react";
 import { formatDate } from "@/lib/utils/format-date";
@@ -9,6 +11,8 @@ import {
 
 interface Props {
   expenses: BusinessExpenseListItem[];
+  /** Inicio contable (096): una compra anterior lleva «Contabilizado fuera». */
+  inicio: string;
 }
 
 function fmtMoney(n: number | string): string {
@@ -41,7 +45,7 @@ function fmtMoney(n: number | string): string {
  * O cualquier descendiente. Por eso `hover:bg-gray-50` en el <tr> pinta
  * toda la fila cuando el cursor entra a cualquier celda.
  */
-export function BusinessExpenseList({ expenses }: Props) {
+export function BusinessExpenseList({ expenses, inicio }: Props) {
   return (
     <>
       {/* Desktop: tabla */}
@@ -153,8 +157,9 @@ export function BusinessExpenseList({ expenses }: Props) {
                     </Link>
                   </td>
                   <td className="p-0">
-                    <Link href={href} className={cell}>
+                    <Link href={href} className={`${cell} flex flex-col items-start gap-1`}>
                       <BusinessExpenseStatusBadge status={e.status} />
+                      {esContabilizadoFuera(e.expense_date, inicio) && <ContabilizadoFueraBadge inicio={inicio} />}
                     </Link>
                   </td>
                 </tr>
@@ -196,7 +201,10 @@ export function BusinessExpenseList({ expenses }: Props) {
                   </p>
                 )}
               </div>
-              <BusinessExpenseStatusBadge status={e.status} />
+              <div className="flex flex-col items-end gap-1">
+                <BusinessExpenseStatusBadge status={e.status} />
+                {esContabilizadoFuera(e.expense_date, inicio) && <ContabilizadoFueraBadge inicio={inicio} />}
+              </div>
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">
               <span className="text-xs text-gray-500">

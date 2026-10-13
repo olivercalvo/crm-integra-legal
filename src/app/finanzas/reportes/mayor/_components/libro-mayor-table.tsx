@@ -71,7 +71,7 @@ export function LibroMayorTable({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px]">
+          <table className="w-full min-w-[1400px]">
             <thead>
               {/* Orden y nombres EXACTOS del modelo que mandó Josuarth el
                   26/08/2026 (`Temas Contables/image001.png`). No reordenar sin
@@ -79,8 +79,15 @@ export function LibroMayorTable({
               <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
                 <th className="px-3 py-2 font-semibold">Cuenta de distribución</th>
                 <th className="px-3 py-2 font-semibold">Fecha de la transacción</th>
+                {/* E3 (01/10/2026), punto 2 de Josuarth: el esquema de su
+                    Mayor de QuickBooks, Transaction Type · Num · Trans #. El
+                    módulo es el que filtra; el N.º de documento es el propio
+                    (FAC-HON-, CO-, AD-); el de transacción, el correlativo. */}
+                <th className="px-3 py-2 font-semibold">Módulo</th>
                 <th className="px-3 py-2 font-semibold">Tipo de transacción</th>
-                <th className="px-3 py-2 font-semibold">Número</th>
+                <th className="px-3 py-2 font-semibold">N.º documento</th>
+                <th className="px-3 py-2 font-semibold">N.º transacción</th>
+                <th className="px-3 py-2 font-semibold">Ref. externa</th>
                 <th className="px-3 py-2 font-semibold">Nombre</th>
                 <th className="px-3 py-2 font-semibold">Descripción</th>
                 <th className="px-3 py-2 font-semibold">Cuenta de contrapartida</th>
@@ -114,7 +121,7 @@ export function LibroMayorTable({
                 columna Saldo, que es donde él lo lee.
               */}
               <tr className="border-t-2 border-integra-navy/20 bg-gray-50/60">
-                <td colSpan={7} className="px-3 py-2 text-right text-sm text-gray-600">
+                <td colSpan={10} className="px-3 py-2 text-right text-sm text-gray-600">
                   Neto del período
                 </td>
                 {/* Con las columnas separadas, los totales de débito y de

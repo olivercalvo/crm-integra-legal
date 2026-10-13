@@ -447,7 +447,8 @@ export function CreditNoteDocument(props: CreditNoteDocumentProps) {
     es_anulacion,
     fe_estado,
   } = props;
-  const noEmitida = fe_estado === "no_emitida";
+  // 083: la interna lleva la misma banda: tampoco vale ante la DGI.
+  const noEmitida = fe_estado === "no_emitida" || fe_estado === "interna";
 
   const invoiceKindLabel =
     invoice.invoice_kind === "HONORARIOS" ? "Honorarios" : "Reembolso";

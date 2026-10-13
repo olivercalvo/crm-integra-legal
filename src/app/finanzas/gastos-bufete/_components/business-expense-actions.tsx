@@ -11,6 +11,11 @@ interface Props {
   id: string;
   /** Si el usuario puede mutar (admin/abogada/contador). Solo el asistente queda sin acceso al módulo. */
   canMutate: boolean;
+  /**
+   * 096: si la compra está contabilizada fuera, el motivo. «Eliminar» queda
+   * deshabilitado y el texto se muestra debajo; la ruta responde 409 igual.
+   */
+  bloqueoEliminar?: string | null;
 }
 
 /**
@@ -24,7 +29,7 @@ interface Props {
  *
  * Sin permisos de mutación se renderiza solo un texto explicativo.
  */
-export function BusinessExpenseActions({ id, canMutate }: Props) {
+export function BusinessExpenseActions({ id, canMutate, bloqueoEliminar = null }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showDelete, setShowDelete] = useState(false);
@@ -64,13 +69,15 @@ export function BusinessExpenseActions({ id, canMutate }: Props) {
         <Button
           variant="outline"
           onClick={() => setShowDelete(true)}
-          disabled={isPending}
+          disabled={isPending || !!bloqueoEliminar}
+          title={bloqueoEliminar ?? undefined}
           className="min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
         >
           <Trash2 size={16} className="mr-1.5" />
           Eliminar
         </Button>
       </div>
+      {bloqueoEliminar && <p className="mt-2 max-w-md text-xs text-slate-600">{bloqueoEliminar}</p>}
 
       <ConfirmationModal
         open={showDelete}

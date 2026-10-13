@@ -1,0 +1,29 @@
+Inventario de facturación electrónica · prueba de tipos 06, 05 y 07 en el SANDBOX de ideati
+Fecha: 2026-10-03T17:19Z · EFACTURA_I_AMB=2 · APP_ENV=local (staging xtyenhakplrkyifbcaow)
+Script temporal fuera del repo (mismo método que prueba9c-s5-s8.ts): payload de mapInvoiceToEfacturaRequest
+con tipoDocumento forzado, número de allocateFeNumero, POST /api/v1/Invoices?qr=true&xml=false.
+Base: FAC-HON-000021 (autorizada por el CRM, CUFE FE0120000025046169-3-2021-4000002026092500000000450010125821681822),
+reducida a UNA línea de B/. 1.00 + ITBMS 7 % = 1.07 para no tocar el tope de lo acreditado.
+Cliente apuntado al RUC/DV del emisor (el sandbox rechaza RUC ficticios) y restaurado al final: «cliente restaurado».
+Referencia = construirReferenciaFiscal() (CUFE, informacionReferencia anidado).
+
+→ A · tipoDocumento=06 · referencia=ninguna · nº 48
+   ✅ AUTORIZÓ · [0260] Autorizado el uso de la FE · CUFE FE0620000025046169-3-2021-4000002026100300000000480010129832195470
+→ B · tipoDocumento=06 · referencia=CUFE de FAC-HON-000021 · nº 49
+   ❌ no autorizó · [1706] Nota de débito o de crédito que no referencia ninguna FE (1)
+→ C · tipoDocumento=05 · referencia=CUFE de FAC-HON-000021 · nº 50
+   ✅ AUTORIZÓ · [0260] Autorizado el uso de la FE · CUFE FE0520000025046169-3-2021-4000002026100300000000500010121309198661
+→ D · tipoDocumento=05 · referencia=ninguna · nº 51
+   ❌ no autorizó · [1705] Nota de débito o de crédito que no referencia ninguna FE
+→ E · tipoDocumento=07 · referencia=ninguna · nº 52
+   ✅ AUTORIZÓ · [0260] Autorizado el uso de la FE · CUFE FE0720000025046169-3-2021-4000002026100300000000520010129270002446
+→ F · tipoDocumento=07 · referencia=CUFE de FAC-HON-000021 · nº 53
+   ❌ no autorizó · [1706] Nota de débito o de crédito que no referencia ninguna FE (1)
+
+Lectura (coincide con la ficha técnica para PAC V1.00, mayo 2021):
+- 04/05 EXIGEN gDFRef con CUFE (B606): sin él, 1705.
+- 06/07 son GENÉRICAS: con un CUFE, 1706 (el texto del PAC dice «no referencia ninguna FE (1)» pero la
+  regla 1706 de la ficha es «B06 = 06 o 07 y fue informado B606»). Sin referencia, autorizan. La ficha
+  les deja gDFRef opcional para papel (B616) o impresora fiscal (B621).
+- Los números 48 a 53 del punto de facturación quedaron consumidos en staging (fe_secuencias); 48, 50 y 52
+  existen como documentos autorizados en el sandbox, contra el RUC del propio emisor.

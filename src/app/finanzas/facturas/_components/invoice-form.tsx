@@ -1,5 +1,7 @@
 "use client";
 
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Loader2, AlertCircle } from "lucide-react";
@@ -19,6 +21,7 @@ import {
 } from "@/lib/finanzas/validators/invoice";
 import {
   INVOICE_KIND_LABEL,
+  TITULO_DEL_FORMULARIO,
   type ClientOption,
   type CaseOption,
   type ServiceOption,
@@ -28,6 +31,10 @@ import {
 } from "@/lib/finanzas/types/invoice";
 
 interface BaseProps {
+  /** 077: las facturas que una nota de débito puede ajustar (de todos los clientes). */
+  facturasAjustables?: { id: string; invoice_number: string; client_id: string }[];
+  /** El texto bajo el título (el título sale del tipo elegido). */
+  subtitulo?: string;
   clients: ClientOption[];
   /** Todas los casos del tenant (filtramos por client_id en el form). */
   casesByClient: Record<string, CaseOption[]>;
@@ -38,6 +45,8 @@ interface BaseProps {
 interface CreateProps extends BaseProps {
   mode: "create";
   initial?: undefined;
+  /** Precarga desde «Facturar este caso» (requerimiento 13): cliente y caso. */
+  inicial?: { clientId: string | null; caseId: string | null };
 }
 
 interface EditProps extends BaseProps {
@@ -48,22 +57,23 @@ interface EditProps extends BaseProps {
     client_id: string;
     case_id: string | null;
     issue_date: string;
+    /** Fecha de REGISTRO del borrador (`068`). */
+    accounting_date: string;
     due_date: string;
     notes: string | null;
+    /** Sólo en una nota de débito (077). */
+    referenced_invoice_id?: string | null;
     lines: InvoiceLineInput[];
   };
 }
 
 type Props = CreateProps | EditProps;
 
-const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO"];
+const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO", "NOTA_DEBITO"];
 
+/** Hoy en Panamá: la misma fecha que usa el servidor (ver `hoy-en-panama.ts`). */
 function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return hoyEnPanama();
 }
 
 function addDays(iso: string, days: number): string {
@@ -90,19 +100,32 @@ export function InvoiceForm(props: Props) {
     props.mode === "edit" ? props.initial.invoice_kind : "HONORARIOS"
   );
   const [clientId, setClientId] = useState<string | null>(
-    props.mode === "edit" ? props.initial.client_id : null
+    props.mode === "edit" ? props.initial.client_id : props.inicial?.clientId ?? null
   );
   const [caseId, setCaseId] = useState<string | null>(
-    props.mode === "edit" ? props.initial.case_id : null
+    props.mode === "edit" ? props.initial.case_id : props.inicial?.caseId ?? null
   );
   const [issueDate, setIssueDate] = useState<string>(
     props.mode === "edit" ? props.initial.issue_date : todayIso()
+  );
+  // Fecha de REGISTRO (la del asiento, define el período). Arranca igual a la
+  // del documento y la SIGUE mientras nadie la toque; una vez elegida a mano,
+  // queda como la dejaron. El período lo valida el servidor al emitir.
+  const [accountingDate, setAccountingDate] = useState<string>(
+    props.mode === "edit" ? props.initial.accounting_date : todayIso()
+  );
+  const [registroElegido, setRegistroElegido] = useState<boolean>(
+    props.mode === "edit" && props.initial.accounting_date !== props.initial.issue_date
   );
   const [dueDate, setDueDate] = useState<string>(
     props.mode === "edit" ? props.initial.due_date : addDays(todayIso(), 30)
   );
   const [notes, setNotes] = useState<string>(
     props.mode === "edit" ? props.initial.notes ?? "" : ""
+  );
+  // 077: la factura que ajusta una nota de débito (opcional).
+  const [referencia, setReferencia] = useState<string | null>(
+    props.mode === "edit" ? props.initial.referenced_invoice_id ?? null : null
   );
 
   // ---- Líneas -------------------------------------------------------------
@@ -124,6 +147,14 @@ export function InvoiceForm(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, issueDate]);
 
+  // Si cambia el cliente, la factura que ajusta (de otro cliente) se limpia.
+  useEffect(() => {
+    if (referencia && !(props.facturasAjustables ?? []).some((f) => f.id === referencia && f.client_id === clientId)) {
+      setReferencia(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
   // Si cambia el cliente, limpiar el caso seleccionado (puede no aplicar).
   useEffect(() => {
     if (caseId && clientId) {
@@ -138,6 +169,9 @@ export function InvoiceForm(props: Props) {
   }, [clientId]);
 
   const availableCases = clientId ? props.casesByClient[clientId] ?? [] : [];
+  const ajustables = clientId
+    ? (props.facturasAjustables ?? []).filter((f) => f.client_id === clientId)
+    : [];
 
   // ---- Submit -------------------------------------------------------------
   async function handleSubmit() {
@@ -147,8 +181,10 @@ export function InvoiceForm(props: Props) {
       client_id: clientId ?? "",
       case_id: caseId,
       issue_date: issueDate,
+      accounting_date: accountingDate,
       due_date: dueDate,
       notes: notes.trim() || null,
+      ...(kind === "NOTA_DEBITO" ? { referenced_invoice_id: referencia } : {}),
       lines: lines.map((ln) => ({
         service_id: ln.service_id,
         description: ln.description.trim(),
@@ -241,6 +277,11 @@ export function InvoiceForm(props: Props) {
   }
 
   return (
+    <>
+    <div>
+      <h1 className="text-2xl font-bold text-integra-navy">{TITULO_DEL_FORMULARIO[props.mode][kind]}</h1>
+      {props.subtitulo && <p className="text-sm text-gray-500">{props.subtitulo}</p>}
+    </div>
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
       <form
         className="space-y-5"
@@ -307,6 +348,42 @@ export function InvoiceForm(props: Props) {
               />
             </div>
 
+            {/* 077: la nota de débito puede decir qué factura ajusta (opcional). */}
+            {kind === "NOTA_DEBITO" && (
+              <div className="sm:col-span-2" data-error={!!errors.referenced_invoice_id}>
+                <Label htmlFor="referenced_invoice_id" className="mb-1 block">
+                  Factura que ajusta (opcional)
+                </Label>
+                <select
+                  id="referenced_invoice_id"
+                  value={referencia ?? ""}
+                  onChange={(e) => setReferencia(e.target.value || null)}
+                  disabled={isPending || !clientId}
+                  className={
+                    "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white " +
+                    "hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+                    (errors.referenced_invoice_id ? "border-red-300" : "border-gray-300")
+                  }
+                >
+                  <option value="">
+                    {!clientId ? "Elige primero el cliente" : "Sin factura asociada"}
+                  </option>
+                  {ajustables.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.invoice_number}
+                    </option>
+                  ))}
+                </select>
+                {errors.referenced_invoice_id && (
+                  <p className="mt-1 text-xs text-red-600">{errors.referenced_invoice_id}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  La nota de débito cobra algo más al cliente: se registra igual que una factura y se
+                  numera <span className="font-mono">ND-</span>.
+                </p>
+              </div>
+            )}
+
             {/* Caso (opcional) — oculto si el cliente no tiene casos */}
             {clientId && availableCases.length > 0 && (
               <div className="sm:col-span-2" data-error={!!errors.case_id}>
@@ -321,19 +398,36 @@ export function InvoiceForm(props: Props) {
               </div>
             )}
 
-            {/* Fechas */}
+            {/* Fechas: la del DOCUMENTO (va a la DGI) y la de REGISTRO (el libro) */}
             <div data-error={!!errors.issue_date}>
-              <Label className="mb-1 block">Fecha de emisión *</Label>
+              <Label className="mb-1 block">Fecha del documento (emisión) *</Label>
               <Input
                 type="date"
                 value={issueDate}
-                onChange={(e) => setIssueDate(e.target.value)}
+                onChange={(e) => {
+                  setIssueDate(e.target.value);
+                  if (!registroElegido) setAccountingDate(e.target.value);
+                }}
                 disabled={isPending}
                 className={errors.issue_date ? "border-red-300" : ""}
               />
               {errors.issue_date && (
                 <p className="mt-1 text-xs text-red-600">{errors.issue_date}</p>
               )}
+            </div>
+
+            <div data-error={!!errors.accounting_date}>
+              <CampoFechaDeRegistro
+                id="invoice_accounting_date"
+                value={accountingDate}
+                onChange={(v) => {
+                  setAccountingDate(v);
+                  setRegistroElegido(true);
+                }}
+                error={errors.accounting_date}
+                disabled={isPending}
+                ayuda="Es la fecha contable de la factura: define el mes en que entra al libro y al resumen de ITBMS. Se valida al emitir: el mes tiene que estar abierto."
+              />
             </div>
 
             <div data-error={!!errors.due_date}>
@@ -425,15 +519,24 @@ export function InvoiceForm(props: Props) {
         <InvoiceTotalsCard lines={lines} />
         <div className="rounded-lg border bg-white p-4 text-xs text-gray-500">
           <p className="font-semibold text-gray-700 mb-1">Sobre la numeración</p>
-          <p>
-            Las facturas se guardan inicialmente como{" "}
-            <span className="font-mono">borrador</span>. El número definitivo
-            (<span className="font-mono">FAC-HON-…</span> o{" "}
-            <span className="font-mono">FAC-REI-…</span>) se asigna recién al
-            emitir.
-          </p>
+          {kind === "NOTA_DEBITO" ? (
+            <p>
+              La nota de débito se guarda como{" "}
+              <span className="font-mono">borrador</span>. El número definitivo
+              (<span className="font-mono">ND-…</span>) se asigna recién al emitir.
+            </p>
+          ) : (
+            <p>
+              Las facturas se guardan inicialmente como{" "}
+              <span className="font-mono">borrador</span>. El número definitivo
+              (<span className="font-mono">FAC-HON-…</span> o{" "}
+              <span className="font-mono">FAC-REI-…</span>) se asigna recién al
+              emitir.
+            </p>
+          )}
         </div>
       </aside>
     </div>
+    </>
   );
 }

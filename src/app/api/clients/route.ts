@@ -10,9 +10,10 @@ import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-f
 import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
 import { rucFieldWrites } from "@/lib/clients/ruc-sync";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // GET — suggest next client_number (lee numbering_sequences sin consumir)
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -20,7 +21,7 @@ export async function GET() {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id")
@@ -40,9 +41,9 @@ export async function GET() {
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     // Get tenant_id from user profile
     const { data: profile, error: profileError } = await admin
@@ -184,4 +185,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/clients:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

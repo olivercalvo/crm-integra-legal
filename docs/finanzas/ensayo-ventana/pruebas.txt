@@ -1,0 +1,34 @@
+ENSAYO DE LA VENTANA · pruebas sobre la base local (ventana + primer uso + bitácoras) · 05/10/2026
+
+== sql/tests/verificacion-087-captura-41-tablas.sql
+   [NOTICE] ok    numbering_sequences                · UPDATE +1 (ruido, no se registra)  · filas nuevas: 0
+   [NOTICE] Operaciones: 131, fallas: 0, tablas sin captura: ninguna, cadena: {"legal": true, "contable": true}
+   [NOTICE] verificación 087 ✅ las 41 tablas capturan en su bitácora
+
+== node sql/tests/concurrencia-bitacora-libro.mjs
+▶ Concurrencia bitácora ↔ libro contra la base LOCAL de ensayo · 20 rondas por combinación
+  importación de asientos × emisión de factura     rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 284 ms
+  importación de asientos × cobro                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 268 ms
+  importación de asientos × gasto de trámite       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 252 ms
+  NC de compra × emisión de factura                rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 250 ms
+  NC de compra × cobro                             rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 233 ms
+  NC de compra × gasto de trámite                  rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 304 ms
+  factura emitida fuera × emisión de factura       rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 242 ms
+  factura emitida fuera × cobro                    rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 225 ms
+  factura emitida fuera × gasto de trámite         rondas 20 · bien 20 · deadlocks 0 · otros errores 0 · espera máx. de Y 226 ms
+Total: 180 rondas · deadlocks 0 · otros errores 0
+✅ cero deadlocks: bitácora y libro toman los candados en el mismo orden
+
+== node sql/tests/concurrencia-bitacora-libro.mjs 3 --control
+▶ Concurrencia bitácora ↔ libro contra la base LOCAL de ensayo · 3 rondas por combinación · MODO CONTROL (orden viejo)
+  importación de asientos × emisión de factura     rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1017 ms
+  importación de asientos × cobro                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1007 ms
+  importación de asientos × gasto de trámite       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1022 ms
+  NC de compra × emisión de factura                rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1006 ms
+  NC de compra × cobro                             rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1006 ms
+  NC de compra × gasto de trámite                  rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1008 ms
+  factura emitida fuera × emisión de factura       rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1005 ms
+  factura emitida fuera × cobro                    rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1004 ms
+  factura emitida fuera × gasto de trámite         rondas 3 · bien 0 · deadlocks 3 · otros errores 0 · espera máx. de Y 1007 ms
+Total: 27 rondas · deadlocks 27 · otros errores 0
+✅ control: con el orden viejo el deadlock aparece en todas las rondas (la prueba lo detecta)

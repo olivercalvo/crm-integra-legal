@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { MovimientoTercero } from "@/lib/finanzas/reports/estado-cuenta";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -30,6 +31,7 @@ export async function loadClientesConMovimiento(
     .from("invoices")
     .select("client_id, clients!inner(id, name)")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada", "pagada"]);
 
   const mapa = new Map<string, string>();
@@ -112,6 +114,7 @@ export async function loadMovimientosDeCliente(
     .from("invoices")
     .select("id, invoice_number, issue_date, grand_total, status")
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .eq("client_id", clientId)
     .in("status", ["emitida", "parcialmente_pagada", "pagada"])
     .order("issue_date");

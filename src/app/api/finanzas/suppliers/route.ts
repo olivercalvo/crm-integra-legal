@@ -6,6 +6,7 @@ import { createSupplier } from "@/lib/finanzas/api/suppliers";
 import { listSuppliers } from "@/lib/finanzas/queries/suppliers";
 import { previewNextSupplierNumber } from "@/lib/finanzas/numbering/supplier-numbering";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * Proveedores. Mismos roles que gastos del bufete: admin, abogada y contador.
@@ -19,7 +20,7 @@ function sinPermiso(rol: string): boolean {
 }
 
 /** GET /api/finanzas/suppliers */
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (sinPermiso(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -38,10 +39,10 @@ export async function GET(request: NextRequest) {
     { rows, nextNumber: await previewNextSupplierNumber(ctx.db, ctx.tenantId) },
     { status: 200 }
   );
-}
+});
 
 /** POST /api/finanzas/suppliers */
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (sinPermiso(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -75,4 +76,4 @@ export async function POST(request: NextRequest) {
     console.error("[finanzas] createSupplier unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

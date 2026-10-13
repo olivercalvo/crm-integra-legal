@@ -14,6 +14,7 @@
  */
 
 import { test } from "node:test";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import assert from "node:assert/strict";
 
 import { reversePayment } from "@/lib/finanzas/api/payments";
@@ -108,7 +109,7 @@ async function falla(p: Promise<unknown>): Promise<MutationError> {
 
 test("manda al RPC el espejo exacto, con la fecha de hoy, el motivo trimeado y el tenant del argumento", async () => {
   const { db, ledger, reg } = fake({});
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = hoyEnPanama();
 
   const r = await reversePayment(db, ledger, TENANT, USER, PAGO, "  Cheque devuelto por el banco  ");
 
@@ -120,7 +121,7 @@ test("manda al RPC el espejo exacto, con la fecha de hoy, el motivo trimeado y e
   assert.equal(a.p_created_by, USER);
   assert.equal(a.p_reason, "Cheque devuelto por el banco");
   assert.equal(a.p_transaction_date, hoy);
-  assert.match(String(a.p_description), /^Reversión del asiento 10 — /);
+  assert.match(String(a.p_description), /^Reversión del asiento 10: /);
   assert.deepEqual(
     (a.p_lines as { account_code: string; debit: number; credit: number }[]).map((l) => [l.account_code, l.debit, l.credit]),
     [

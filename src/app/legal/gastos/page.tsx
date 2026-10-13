@@ -1,3 +1,4 @@
+import { cargarInicioContable } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,6 +56,8 @@ export default async function GastosPage({ searchParams }: PageProps) {
   );
 
   // El resto solo si se está mirando esa vista.
+  // 096: para la etiqueta «Contabilizado fuera» de los gastos anteriores.
+  const inicio = await cargarInicioContable(db, tenantId);
   const gastosIndividuales = vistaGastos
     ? await listarGastosDeTramite(db, tenantId, { soloSinClasificar })
     : [];
@@ -154,6 +157,7 @@ export default async function GastosPage({ searchParams }: PageProps) {
           sinClasificar={sinClasificar}
           totalLineas={totalLineas}
           filtroActivo={soloSinClasificar}
+          inicio={inicio}
         />
       ) : (
       <>

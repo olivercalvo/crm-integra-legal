@@ -54,7 +54,7 @@ function compra(lineasSinCodigo: {
   return {
     expense_date: "2026-09-09",
     due_date: null,
-    supplier_id: null,
+    supplier_id: "d2222222-2222-2222-2222-222222222222",
     supplier_name: "Proveedor de prueba",
     supplier_ruc: null,
     supplier_invoice_number: null,

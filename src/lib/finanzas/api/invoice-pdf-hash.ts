@@ -64,7 +64,7 @@ export interface InvoicePdfCancellationPayload {
 
 export interface InvoicePdfPayload {
   invoice_number: string;
-  invoice_kind: "HONORARIOS" | "REEMBOLSO";
+  invoice_kind: "HONORARIOS" | "REEMBOLSO" | "NOTA_DEBITO";
   status: string;
   client: InvoicePdfClientPayload;
   case: InvoicePdfCasePayload | null;

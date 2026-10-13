@@ -72,13 +72,12 @@ test("si la propia no lo tiene, sirve el de la línea de cuenta control del mism
   assert.equal(nombreDelTercero(hermanas, CONTROL, propia), "INVERSIONES TOCUMEN REAL, S.A.");
 });
 
-test("sin ningún tercero cargado sigue el heurístico viejo: el texto de la línea de control", () => {
-  // Es lo que sostiene la columna para TODO lo anterior a la 054, que es la
-  // mayor parte del libro. Sacarlo dejaría ese reporte en blanco.
+test("E3: sin ningún tercero cargado la celda queda vacía, aunque la línea de control tenga texto", () => {
+  // Hasta E3 se copiaba el texto de la línea de control. Lo anterior a la 054
+  // ya no depende de eso: lo nombra su DOCUMENTO de origen (2º escalón, E2).
   const propia = hermana();
   const hermanas = [propia, hermana({ code: "100004", line_order: 2, descripcion: "ESTACIÓN DELTA" })];
-  assert.equal(nombreDelTercero(hermanas, CONTROL, propia), "ESTACIÓN DELTA");
-  // Y sin nada de nada, vacío: nunca un invento.
+  assert.equal(nombreDelTercero(hermanas, CONTROL, propia), "");
   assert.equal(nombreDelTercero([propia], CONTROL, propia), "");
 });
 
@@ -94,6 +93,9 @@ function fila(over: Partial<FilaMayor> = {}): FilaMayor {
     tipoTransaccion: "Asiento de diario",
     numero: "50",
     nombre: "El que muestra la pantalla",
+    modulo: "AD",
+    numeroDocumento: "",
+    referenciaExterna: "",
     terceroClave: null,
     descripcion: "Ajuste",
     contrapartida: "200001",

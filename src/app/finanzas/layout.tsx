@@ -25,7 +25,7 @@ export default async function FinanzasLayout({
     redirect("/login");
   }
 
-  const admin = createAdminClient();
+  const admin = createAdminClient(user.id);
   const { data: profile } = await admin
     .from("users")
     .select("full_name, role")

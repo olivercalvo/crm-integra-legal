@@ -46,7 +46,7 @@ export default async function HomePage() {
   }
 
   // Bypass RLS para el lookup del perfil (mismo patrón que los módulos).
-  const admin = createAdminClient();
+  const admin = createAdminClient(user.id);
   const { data: profile } = await admin
     .from("users")
     .select("full_name, role")

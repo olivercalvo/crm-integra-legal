@@ -1,0 +1,79 @@
+Prueba en STAGING: anular una factura SIN CUFE (06/10/2026)
+=============================================================
+
+Caso de producción: FAC-HON-000489 y FAC-HON-000503 (emitidas, sin CUFE). Antes, si fallaba el
+libro, el mensaje decía «El documento quedó ANULADO ante la DGI…» sin haberle hablado al PAC.
+
+Factura de staging usada: FAC-HON-000030 (emitida, fe_estado no_emitida, sin CUFE, sin cobros,
+asiento 124, mes 2026-10 abierto).
+
+Comando: npx tsx scripts/verificar-anulacion-sin-cufe.mts FAC-HON-000030   (npm run dev arriba)
+
+La falla del libro se fuerza sin DDL: el orquestador REAL corre contra staging y la llamada a
+cancel_invoice_with_reversal sale con la primera línea descuadrada en B/. 1.00. La base la rechaza
+de verdad y la NC total se compensa de verdad.
+
+Salida
+------
+
+▶ FAC-HON-000030 antes: {
+  status: 'emitida', fe_estado: 'no_emitida', dgi_cufe: null, credited_total: '0.00',
+  amount_paid: '0.00', ncs: 0, asientos_de_anulacion: 0, intentos_dgi: 0, ultima_nc: 24
+}
+
+A. Anulación con falla forzada del libro (líneas descuadradas en B/. 1.00)
+[finanzas/api] cancel_invoice_with_reversal failed {
+  code: 'P0001',
+  message: 'Las líneas recibidas no son el espejo exacto del asiento 124: se rechaza la anulación para no descuadrar el libro.'
+}
+   resultado: {
+     "estado": "no_se_anulo_en_el_libro",
+     "status": 422,
+     "mensaje": "La anulación de la factura FAC-HON-000030 no se completó en el libro contable. La factura sigue emitida, sin cambios. Detalle: Las líneas recibidas no son el espejo exacto del asiento 124: se rechaza la anulación para no descuadrar el libro.",
+     "detalle": "Las líneas recibidas no son el espejo exacto del asiento 124: se rechaza la anulación para no descuadrar el libro."
+   }
+   ✅ el RPC del libro se llamó una vez, descuadrado
+   ✅ estado no_se_anulo_en_el_libro
+   ✅ el mensaje dice que no se completó en el libro
+   ✅ el mensaje dice que la factura quedó igual
+   ✅ el mensaje NO nombra a la DGI
+   después de A: {
+  status: 'emitida', fe_estado: 'no_emitida', dgi_cufe: null, credited_total: '0.00',
+  amount_paid: '0.00', ncs: 0, asientos_de_anulacion: 0, intentos_dgi: 0, ultima_nc: 25
+}
+   ✅ status igual (emitida)
+   ✅ fe_estado igual (no_emitida)
+   ✅ credited_total igual (0.00)
+   ✅ amount_paid igual (0.00)
+   ✅ ncs igual (0)
+   ✅ asientos_de_anulacion igual (0)
+   ✅ intentos_dgi igual (0)
+   ℹ️ serie NC-: 24 → 25 (hueco aceptado, SOP-031)
+
+B. Anulación normal por POST /api/finanzas/invoices/[id]/cancel (abogada)
+   HTTP 200: {
+     "estado": "anulada",
+     "alcance": "solo_crm",
+     "mensaje": "La factura FAC-HON-000030 quedó anulada en el CRM: se reversó su asiento y se generó la nota de crédito NC-000026. No se envió nada a la DGI: sin CUFE, no había nada que anular ante la DGI.",
+     "credit_note_number": "NC-000026",
+     "reversal_entry_number": 133
+   }
+   ✅ HTTP 200
+   ✅ estado anulada
+   ✅ alcance solo_crm (la pantalla dice «Anulada en el CRM. No se envió nada a la DGI»)
+   ✅ mensaje: anulada en el CRM
+   ✅ mensaje: no se envió nada a la DGI
+   ✅ mensaje: no dice «anulada ante la DGI»
+   después de B: {
+  status: 'anulada', fe_estado: 'no_emitida', dgi_cufe: null, credited_total: '10.70',
+  amount_paid: '0.00', ncs: 1, asientos_de_anulacion: 1, intentos_dgi: 0, ultima_nc: 26
+}
+   ✅ status anulada
+   ✅ fe_estado sin tocar (no_emitida)
+   ✅ ningún intento ante el PAC
+   ✅ una NC total
+   ✅ con su asiento de reversión
+
+✅ TODO OK
+
+Queda en staging: FAC-HON-000030 anulada (NC-000026, asiento 133) y el hueco NC-000025.

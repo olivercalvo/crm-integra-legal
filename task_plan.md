@@ -1,6 +1,670 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## >>> 🔒 DEVELOP CONGELADO — REVISIÓN CON JOSUARTH EN CURSO <<<
+## ▶ PARA RETOMAR (cierre del 08/10/2026: revisión de Josuarth en curso, rama congelada)
+
+- **Rama:** `feat/bloque1-contable`, último commit el de estas notas de cierre (la guía simplificada es `5e1d5b9`).
+  `develop` (`b000141`) y `main` (`9b00b12`) sin cambios: sin merge ni PR.
+- **Revisión de Josuarth en curso:** hoy recibe el guion de pruebas y el enlace del Preview de la rama, y la guía
+  de carga (`docs/finanzas/guia-carga-enero-junio.md` y su Word en «Adjuntos para Josuarth»).
+- 🔒 **Rama congelada mientras Josuarth revisa:** no se hace push a `feat/bloque1-contable` (cada push cambia el
+  Preview que él usa). Todo cambio nuevo va en otra rama local hasta que Oliver lo diga.
+- **Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`:** encendido en Preview, sólo para la rama
+  `feat/bloque1-contable` (lo encendió Oliver). En Production se agrega durante la ventana, como último paso del
+  runbook (`docs/finanzas/runbooks/ventana-bloque-1.md` §7).
+- **Pendientes del Bloque 2 que salieron hoy:**
+  - el contador ve Clientes (lista y ficha comercial, sin casos ni documentos legales);
+  - las notas de débito visibles en Notas de crédito, si Josuarth lo pide (hoy salen en Facturación);
+  - la plantilla de la apertura marca qué clientes tienen saldo (hoy lista todos los clientes con código).
+
+## ▶ PARA RETOMAR (08/10/2026: menú de Finanzas por proceso)
+
+**08/10:** requerimiento 44 hecho: el menú de Finanzas va por Ventas, Compras, Asientos, Reportes y Configuración,
+con las mismas rutas y permisos. La guía de carga (md y Word) y los textos de la app ya usan las rutas nuevas; el
+Excel de revisión Revision-bloque-1-2026-10.xlsx ya no se usa (Oliver, 08/10). El contador sigue sin ver Clientes
+(Bloque 2, punto 6 de `docs/finanzas/cobertura-requerimientos-2026-10-07.md`); la guía le pide confirmar los
+clientes en la hoja Clientes de la plantilla de la apertura. Menú por rol para la
+abogada: decisión pendiente. Inicio (dashboard) y Pagos a proveedores: pantallas que todavía no existen.
+
+## ▶ PARA RETOMAR (08/10/2026: antigüedad al corte y fechas de la importación)
+
+**08/10:** requerimiento 41 hecho (antigüedad con campo «Al», saldo reconstruido al corte, Excel con la fecha). La
+importación de asientos y la apertura leen **MM/DD/AAAA por defecto** (decisión (c) de Josuarth del 30/09, que
+responde K-1; Oliver lo confirmó el 08/10), con el selector y la «Fecha leída» en la vista previa de la importación.
+La apertura también tiene el selector. 🔌 **Interruptor:** `FINANZAS_POSTEO_HISTORICO_HABILITADO` se prende en
+Production el mismo día de la ventana, como último paso después del deploy, con su verificación (runbook §7 y §8).
+
+## ▶ PARA RETOMAR (cierre del 07/10/2026, noche: apertura y cambios chicos)
+
+**Último cierre (07/10, noche): cambios chicos antes de la ventana, sin migraciones.** Enero a junio va por el
+**camino A** (no se construye nada del B): guía en `docs/finanzas/guia-carga-enero-junio.md`. Hechos 19
+(«Compras»), 5 («Ver asiento»), 13 («Facturar este caso»), 48 (instalable), 46 (pestaña nueva en el menú), 3
+(instrucciones del plan), 11 («Factura») y la referencia externa del asiento importado en la antigüedad.
+Capturas en `docs/finanzas/capturas-cambios-ventana/`. El asiento importado de prueba de la captura de la
+antigüedad (AD-000004, `QB-PRUEBA-0710`) ya se deshizo (reversión, asiento 155). La importación ahora ADVIERTE
+un gasto o costo sin proveedor (no bloquea). Ensayo completo de la ventana: sin errores, 41 tablas
+131/131, concurrencia 180 rondas (1620, cero deadlocks) y `--control` trabado en 27/27.
+
+
+**Rama:** `feat/bloque1-contable`, todo en commits locales, **sin push** (la rama no tiene remoto).
+Quedan fuera a propósito: los tres xlsx de `docs/revision-josuarth/`, `scripts/_q.mjs` y `Claude outputs/`.
+**Últimos hashes:** `7212a03` (097), `643caa3` (098), `0f1ec80` (docs), más los de este cierre.
+
+**Staging (`xtyenhakplrkyifbcaow`):**
+- Aplicado: todo `sql/pending` hasta la **`099`** inclusive (la 099 el 07/10 noche con el «aplica»;
+  verificación 097 completa 11/11, con el caso 10: el banco de un cobro contabilizado no cambia).
+- Aplicadas también **`100`** y **`101`** (07/10 noche, verificación 12/12). Escrito y SIN APLICAR: **`088`**.
+- Apertura ficticia al 30/06/2026 en staging: AD-000002 reversada (asiento 152) y **AD-000003 vigente** (asiento
+  153). Desde ahí los reportes de staging ya no suman el `saldo_inicial` del plan de cuentas.
+- Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` en `.env.local` (no en Vercel Preview). En Production se prende el día de la ventana, como último paso (runbook §7).
+- Julio y agosto contabilizados con la herramienta (asientos 137 a 150).
+- Datos de prueba nuevos: `sql/datos-staging/asignaciones-en-lote-fixtures.sql` (PRUEBA-LOTE-G1 a G4 y
+  CO-920001 a CO-920003, septiembre). Quedaron con proveedor CABLE ONDA, cuenta 130003 y banco 100001 (las
+  capturas). Correr el script otra vez los vuelve a dejar sin datos.
+
+**Hecho el 07/10 (tarde):**
+- Asignación en lote: proveedor y cuenta por línea a gastos de trámite sin asiento, banco a cobros sin asiento
+  (admin y contador, bitácora contable). Botón «Corregir» en cada problema. Capturas en
+  `docs/finanzas/capturas-asignaciones-en-lote/`.
+- Un solo método: bloquean sólo los asientos IMPORTADOS; los manuales se listan («Asientos manuales del mes»).
+  En la app ya; en la base, con la 099.
+- FND-013: editar una compra no guardaba sus líneas. Corregido, con test.
+- Consultas de solo lectura para producción: `produccion-borradores-a-revisar.sql` (los 5 borradores) y
+  `produccion-documentos-de-un-mes.sql`.
+- Suite 1745/1745.
+
+**Apertura (07/10, noche):** construida (pantalla, plantilla, reversión con la misma fecha, reportes sin
+`saldo_inicial`, antigüedad por documento, cuadre al corte con Excel, fecha como parámetro). `100` y `101`
+probadas en una copia local (12/12) y en el ensayo completo de la ventana con la `097` a la `101` (11/11; 41
+tablas 131/131; 0 deadlocks). Probado en staging con capturas
+(`docs/finanzas/capturas-apertura/`), con el interruptor apagado y prendido. Para Josuarth: la fecha, la cuenta 300002 (P-11a) y si carga el
+vencimiento de cada partida.
+
+**Pendiente:**
+1. ✅ FAC-HON-000463: 0TEST-FE-002 sale de la lista de clientes a marcar (Oliver, 07/10). Ensayado: el paso
+   pasa (22 filas, 0 REVISAR), y la 463 se cobra y se acredita después.
+2. ✅ Los 5 borradores: los 4 de CLI-036 se marcan de prueba por número; DRAFT-cb03c1386ba0 (CLI-093) es real
+   y, después de la ventana, se le cambia la fecha a una posterior al inicio y se emite (probado en el ensayo).
+3. `run-sql.mjs` con lista blanca (staging o local) y el script de datos con guarda propia (07/10).
+4. **El `--reset` de staging aplica hasta la `048`** (pendiente aparte).
+5. **Apertura**: en espera.
+
+**Datos de prueba que quedaron en staging (además de los de antes):**
+- **FAC-HON-900002** (20/06, creada por SQL con los triggers de la 096 apagados en esa transacción, como las de
+  producción), **NC-000027**, **CO-000014**, **FAC-HON-000033** (01/07, con asiento) y dos borradores de hoy
+  «Prueba 096: edición de fecha» de CLI-016.
+- **FAC-HON-000030** anulada (NC-000026) y el hueco **NC-000025** (prueba del 06/10, mañana).
+- **FAC-HON-900001** (de prueba), usuarios `contador.ensayo*.0510@staging.test` desactivados,
+  **FAC-CO-000008**, **FAC-EXT-000001 a 000003** (CLI-016 a CLI-018).
+
+## >>> 05/10/2026 (6) — 093 Y 094 EN STAGING, LAS MARCAS DE PRUEBA FILTRAN EN TODO <<<
+
+- ✅ **`093` y `094` aplicadas en staging** con el «aplica» de Oliver. Verificaciones: 093 2/2, 094 9/9.
+- ✅ **Los documentos marcados de prueba ya no salen en ningún reporte**: antigüedad por cobrar (y su
+  cuadre contra 100004), estado de cuenta, ITBMS (detalle y líneas), Pendientes DGI y sus tres contadores
+  (listado de facturas, hub de reportes, dashboard de la abogada), el aviso de errores DGI, los selectores de
+  cobro, NC y ND, y las exportaciones de antigüedad e ITBMS. Una constante (`DE_PRUEBA`) y un test que recorre
+  las fuentes (`documentos-de-prueba-filtrados.test.ts`, también `.from(variable)`).
+- ✅ **Una factura de prueba no se emite, cobra, acredita, anula ni va a la DGI** (409 antes del número; la
+  pantalla no ofrece los botones y muestra banda y badge «Prueba»). Un cobro o una NC nuevos de un cliente de
+  prueba, igual. **`095`** (escrita, SIN APLICAR en staging, 6/6 en local): el libro rechaza asientos de
+  documentos de prueba; la NC hereda la marca de su factura; cobro y factura no mezclan prueba y real.
+- ✅ **Probado en staging** (`docs/finanzas/prueba-documentos-de-prueba.txt`, 37/37): FAC-HON-900001 (creada
+  sin asiento, como las de producción) sale de todo al marcarla, el libro no cambia, ningún correlativo se
+  mueve y nada llega al PAC. **Caso 463**: CLI-013 marcado de prueba y su FAC-HON-000023 (real, con asiento)
+  sigue igual en todos los reportes; un cobro nuevo de CLI-013 → 409 sin número. CLI-013 se desmarcó.
+- ✅ Ensayo local con la 095: 64 migraciones sin errores, paso de datos correcto, bitácoras 5/5, 41 tablas
+  131/131, concurrencia 0 deadlocks, `--control` 27/27.
+- ✅ Runbook: la 095 y los filtros (código, merge de D·6) en el Bloque C; el arreglo de usuarios desactivados
+  va en la ventana del Bloque 1, y «Accesos» re-desactiva los dos usuarios inactivos de producción para que
+  queden bloqueados. Día ~5 h 45 min, congelado ~3 h 10 min.
+- ⚠️ Encontrado de paso, sin tocar: en `anular-factura-ante-dgi.ts`, en el camino SIN CUFE, si el libro falla
+  el mensaje dice «quedó ANULADO ante la DGI» aunque no se habló con el PAC (`cerrarEnElLibro` se usa en los
+  dos caminos). Engaña a quien lo lee; corregirlo es otro cambio.
+- ⏳ Oliver: «aplica» para la 095 en staging.
+- 🧹 Staging: queda FAC-HON-900001 (factura de prueba, marcada) para ver el badge y la banda.
+
+## >>> 05/10/2026 (5) — COMPRAS PENDIENTES, DATOS DE PRUEBA EN LA VENTANA Y ACCESOS <<<
+
+- ✅ **Una compra nueva nace «Pendiente de pago».** La pantalla arrancaba en «Pagado» (y eso registra
+  un pago con banco al guardar). Ahora arranca pendiente, la API toma un alta sin `status` como
+  pendiente y la `093` (escrita, SIN APLICAR en staging) cambia el `DEFAULT 'pagado'` de la 010.
+  Rutas que crean compras: una sola (`createBusinessExpense`, pantalla y `POST
+  /api/finanzas/business-expenses`); no hay importación de compras. Tests: `compra-nace-pendiente.test.ts`.
+  Probado en staging por la pantalla: FAC-CO-000008 quedó `pendiente_pago`, sin pago.
+  Runbook: la `048` y este código van en el mismo despliegue (B congelado + merge de D·6).
+- ✅ **Datos de prueba en la ventana, sin DELETE.** Propuesta §9 ajustada: la marca es del DOCUMENTO
+  y la del cliente sólo vale para lo nuevo; así FAC-HON-000463 (real ante la DGI, cliente
+  0TEST-FE-002) sigue contando. `094_documentos_de_prueba.sql` (escrita, SIN APLICAR en staging),
+  `sql/verificacion/produccion-datos-de-prueba-a-marcar.sql` (antes y después, corre hoy con la
+  024) y el paso `sql/ventana/marcar-datos-de-prueba.sql` (aborta si hay algo sin decidir).
+  Ensayado en una copia de `prod_024` con los mismos números: aborta con un cobro sin decidir;
+  marca 8 facturas y 5 clientes; 463, CLI-026 y ADM-001 quedan reales; re-ejecutable.
+- ✅ Ventana re-ensayada con la 093 y la 094: 63 migraciones, 0 errores; bitácoras 5/5; 41 tablas
+  131/131; concurrencia 180 rondas sin deadlocks, `--control` 27/27. Producción es Postgres 17.6.
+- 🔴 **Desactivar un usuario no le quitaba el acceso** (hallado ensayando «Accesos» en staging):
+  un contador desactivado volvía a entrar. Corregido: desactivar lo bloquea en Supabase Auth,
+  reactivar lo desbloquea (`acceso-de-usuario.ts`, test `desactivar-quita-el-acceso.test.ts`).
+  Re-probado en staging: `user_banned`.
+- ✅ Runbook §6 «Accesos»: usuario de Josuarth (contador) con contraseña descartable, su contraseña
+  por «¿Olvidaste tu contraseña?» (no hay invitación por correo), desactivar contador.test,
+  `sql/verificacion/produccion-accesos-contador.sql`. Día ~5 h 35 min, congelado ~3 h 05 min.
+- ⏳ Oliver: «aplica» para la 093 y la 094 en staging (ninguna está aplicada); confirmar el correo de
+  Josuarth; correr `produccion-datos-de-prueba-a-marcar.sql` en producción antes del día (sólo lectura).
+- ⏳ Pendiente de la propuesta §9: el filtro `de_prueba` en ventas, ITBMS, antigüedad, pendientes DGI y
+  listados, y el rechazo en `post_journal_entry`. Hasta entonces la marca no cambia ningún número.
+- 🧹 Staging: quedan dos usuarios de ensayo (`contador.ensayo.0510@` y `contador.ensayo2.0510@staging.test`),
+  desactivados y bloqueados, y la compra FAC-CO-000008 de la prueba.
+
+## >>> 05/10/2026 (4) — ENSAYO DE LA VENTANA DEL BLOQUE 1 Y DATOS DE PRUEBA EN PRODUCCIÓN <<<
+
+- ✅ **Ensayo contra una base LOCAL igual a producción** (Postgres 17.9 por npm, sin Docker;
+  `postgres` sin superusuario y helpers de RLS en `auth`, como en producción; esquema de `main`
+  24b227a + la 084; seed de staging recortado a la 024, 97 cuentas como producción). Herramienta:
+  `scripts/ensayo-ventana/` (`orden.mjs` es la fuente única del orden). Staging sólo se leyó.
+- ✅ **Bloque 1: 61 migraciones (A 29 → B 13 → C 19), cero errores**, 2,3 s de SQL. Bitácoras
+  (086 → 087 → 089 → 090 → 091) aparte: 5/5. Después: 41 tablas 131/131, concurrencia 180 rondas
+  sin deadlocks, `--control` 27/27. Cadena íntegra; nada llama a `tenant_id()` sin esquema.
+- 📐 **Runbook nuevo con el orden final y el tiempo:** `docs/finanzas/runbooks/ventana-bloque-1.md`.
+  Día ~4 h 50 min, congelado ~2 h 40 min, bitácoras ~30 min. El viejo apunta a éste.
+- 🔴 Hallazgos: (1) la verificación de la `067` va después de la `025`; (2) siete verificaciones no
+  prueban nada en producción (libro vacío, sin compras ni proveedores) y la `066` y la `076` fallan
+  por eso: «sin datos», no motivo de parar; (3) las verificaciones son de su momento: corridas al
+  final, diez fallan; (4) el paso −1 «en staging con el mismo esquema» no es posible (staging ya
+  tiene todo) y en producción las dos pruebas no corren: el paso −1 pasa a ser el ensayo local;
+  (5) la `025` no aborta si su POST-CHECK no coincide (confirmado): P-1(e) sigue siendo la defensa;
+  (6) el paso «Reasignar» de P-15 ya no va (079/082); (7) menor: `business_expenses.status`
+  DEFAULT 'pagado' contra el guard de la 048.
+- ⏳ Oliver: `SELECT version()` en producción (el ensayo es 17.9); decidir si la 048–050 y 066
+  pasan al Bloque A para acortar el congelado (~15 min; producción tiene cero compras).
+- ✅ `sql/verificacion/produccion-datos-de-prueba.sql` (sólo SELECT, columnas hasta la 024, probada
+  contra el esquema exacto de producción en `prod_024`). ⏳ La corre Oliver.
+
+## >>> 05/10/2026 (3) — DE DÓNDE SALIÓ LA 092 «YA APLICADA» Y CUFE DEL PORTAL EN EL LISTADO <<<
+
+- ✅ **La 092 se aplicó con tu «aplica», en la sesión anterior.** Registro de la sesión `e91c0405`: a las
+  15:19:26 UTC llegó tu mensaje «aplica la 092 en staging…» (el mismo que después se volvió a pegar en
+  esta sesión); a las 15:19:31 corrió `node scripts/run-sql.mjs sql/pending/092_factura_emitida_fuera.sql`
+  y a las 15:19:34 terminó («092 OK»). La sesión se cerró a las 10:20 de Panamá, antes de dejarlo escrito.
+  Lo confirma la base: la fila `invoice_ext` de `numbering_sequences` tiene `created_at` 15:19:33.807 UTC
+  y la bitácora contable la registra como `crear`, sin usuario (conexión directa). La 2.ª corrida de esta
+  sesión no la creó (la migración inserta sólo si no existe).
+- ✅ **No hay ningún paso automático.** `run-sql.mjs` y `apply-staging-sql.mjs` sólo corren a mano; el seed
+  y los tests nombran `sql/pending` en comentarios o lo leen como texto. Nada que quitar.
+- ✅ El estado fiscal de una factura con CUFE cargado del portal (`portal_050`) decía «Sin enviar»: ahora
+  «Autorizada en el portal». Regla única `etiquetaDeEstadoFiscal` (`types/invoice.ts`): sólo `no_emitida`
+  se reemplaza por el origen; `error`, `canceled`, `authorized` se muestran igual. Test
+  `etiqueta-estado-fiscal.test.ts`. Visto en pantalla: FAC-HON-000002 en el listado y en la tarjeta.
+- 🧹 El `TaskStop` del dev server dejaba vivo el proceso de Next (puerto 3000 ocupado y el siguiente en 3001
+  con los estáticos en 404). Se mató el proceso por PID después de verificar que era el de este repo.
+
+## >>> 05/10/2026 (2) — FACTURAS EMITIDAS FUERA: 092 EN STAGING Y PRUEBAS <<<
+
+- ✅ `092` en staging. Ya estaba aplicada, idéntica al archivo función por función: la aplicó la sesión
+  anterior con el mismo «aplica» (ver la entrada (3)). Se volvió a correr completa (idempotente, pre-flight y
+  verificación OK).
+- ✅ El RPC no compara ningún RUC con el cliente: el único RUC del CUFE es el del EMISOR. Clientes ficticios
+  «CLIENTE EXT PRUEBA 1/2/3» (CLI-016 a 018) con los CUFE, fechas, puntos, números y montos reales del punto 100.
+- ✅ `scripts/verificar-factura-externa.mts`: 1.ª corrida 48/51 (los 3 fallos eran del script), 2.ª en modo
+  revisión 44/44. FAC-EXT-000001 (contador) y 000002 (admin) del 14/07; Mi Condado con registro 01/08 → 422 sin
+  dejar nada ni hueco, con registro 05/10 → FAC-EXT-000003. Abogada 403. CUFE repetido 409 (app, RPC, carga
+  manual del caso B e índice en minúsculas). Fecha, número y monto que no coinciden: 400 en la app y rechazo en
+  el RPC. Guard, sin PDF, `fe_secuencias` igual, cadena íntegra.
+- ✅ En ventas (ER y Mayor 400001), ITBMS (julio +21.00, octubre +24.50), CxC (Mayor 100004), antigüedad y
+  libro. Fuera de Pendientes DGI y de los cuatro avisos (29 antes y después). «Ventas Mensuales» sigue siendo
+  pantalla de relleno.
+- 🐛 Encontrado y corregido: listado y tarjeta fiscal decían «Sin enviar» de una FAC-EXT → «Emitida fuera del
+  CRM». «Enviar a la DGI» la cortaba por «mes anterior» y, en el mes en curso, le habría guardado un
+  `fe_motivo_pendiente`: ahora `motivoParaNoEnviar` va primero. Dos tests nuevos.
+- ✅ Navegador (Chromium de Playwright; la extensión no conectaba): listado, alta (escritorio y 390 px),
+  detalle, listado de facturas y Pendientes DGI. Sin errores de consola salvo `/favicon.ico` (ya existía).
+- ✅ 41 tablas 131/131. Concurrencia con «factura emitida fuera» como X: 180 rondas, 0 deadlocks.
+  🐛 `--control` fallaba desde la 091 (el deadlock llega como AU001 con `[40P01]` en el DETAIL): corregido,
+  27/27.
+- ✅ `sql/verificacion/produccion-cufe-repetidos.sql` (sólo SELECT), probado en staging: vacío hoy, y con un
+  duplicado forzado en ROLLBACK lo lista.
+- ⏳ Oliver corre `produccion-cufe-repetidos.sql` en producción antes de la ventana. Si devuelve filas con
+  «sí», la 092 aborta: decidir antes qué factura conserva el CUFE.
+- ⏳ Siguen abiertas: Josuarth (¿julio y agosto abiertos en producción? ¿los 7 de QuickBooks por importación
+  o por el CRM?). `sop.md` sin SOP propio todavía para esta pantalla.
+- ✅ ~~Observado: una factura con CUFE del portal (`portal_050`) también dice «Sin enviar».~~ Corregido en (3).
+
+## >>> 05/10/2026 — CRUCE DEL FACTURADOR, PRUEBA DEL 1519, FACTURAS EMITIDAS FUERA <<<
+
+- ✅ Prueba del `1519` en sandbox (`docs/efactura/prueba-fecha-antigua-1519.txt`): factura con fecha de documento
+  de 45 días atrás (21/08) y de 15 días atrás (20/09) → **las dos autorizadas, `[0260]` como único código, sin
+  1519**. El CUFE lleva la fecha del documento. Límite: es el sandbox. Destraba J-4 (mandar `issue_date`
+  al reintentar), que sigue siendo decisión de Josuarth. Consumidos los n.º 58 y 59 del punto 001 en staging.
+- ✅ Cruce del facturador (`docs/finanzas/cruce-facturador-2026-10-05.md`): 238 documentos; 230 facturas
+  autorizadas (112,099.03 + ITBMS 4,706.28), 2 NC, 6 anuladas (todas del 050). Huecos verificados, iguales a
+  los informados. 3 del punto 100 y 7 de QuickBooks (01–03/07) verificados. Hallados además: NC 100-1 (04/03,
+  Serfasa) y NC genérica 050-461 (19/02, Condado Plaza), territorio de QuickBooks.
+- ⚪ 489/503 → 52/75 y 496/508 nunca emitidas: el archivo es consistente (huecos 51 y 74 justo antes de 52 y
+  75), pero la mitad CRM sólo se confirma con `produccion-facturas-no-enviadas-detalle.sql` (Oliver).
+- 📐 Propuesta sin construir: `docs/finanzas/propuesta-facturas-emitidas-fuera.md`. «Registrar factura
+  emitida fuera»: factura + CUFE + asiento en una transacción, serie `FAC-EXT-`, origen `externo`, punto y
+  número fiscal guardados, CUFE leído y verificado, índice único de CUFE. Sin migración escrita.
+- ⏳ Preguntas: Josuarth (¿julio y agosto abiertos en producción?, ¿los 7 de QuickBooks por importación o por
+  CRM?), Oliver (¿serie `FAC-EXT-`?, ¿el contador registra?).
+
+## >>> 03/10/2026 (cierre 7) — CRUCE DE PREGUNTAS Y BITÁCORAS DE AUDITORÍA <<<
+
+- ✅ Parte 1: `docs/finanzas/cruce-preguntas-pendientes.md`. De 15 preguntas, 4 ya respondidas, 3 se
+  resuelven (del todo o en parte) con consultas de solo lectura y 10 hay que preguntarlas. Se suman 2
+  (L-4 facturas en papel, J-10 CPBS). FAC-HON-000459/460/461 fueron del sandbox; sólo la 463 es real.
+  Recomendación: no mandar nada a ideati el lunes.
+- ⏳ Oliver corre en producción las consultas de solo lectura del cruce (I-3, L-1, L-2, L-3, J-6) antes
+  de los mensajes. Prueba del `1519` en sandbox antes de J-4.
+- ✅ Parte 2, código: `086` (núcleo), `087` (captura en 41 tablas), `088` (legado, SIN APLICAR a
+  propósito). Probadas en staging dentro de una transacción con ROLLBACK: captura con usuario por header,
+  copia fiscal a la contable, «sistema» sin usuario, cadena íntegra, UPDATE/DELETE/TRUNCATE rechazados,
+  lectura por rol (contador no lee la legal, abogada no lee la contable), 088 con conteos iguales.
+- ✅ `createAdminClient(usuario)` en las 97 llamadas (más un comentario); pantallas, Excel y «Verificar integridad».
+- ✅ `086` y `087` **aplicadas en staging** (03/10, con el «aplica» de Oliver). Medición de la importación
+  grande en `docs/finanzas/prueba-bitacoras.txt`: 200 líneas pasan de 434 a 511 ms; 50 clientes, sin
+  diferencia medible.
+- ✅ `089` aplicada en staging (03/10): `documento_de` rompía tareas, comentarios y cobros del caso
+  (`coalesce` de texto y entero; por fallar cerrado, no se guardaban).
+- ✅ `sql/tests/verificacion-087-captura-41-tablas.sql`: INSERT, UPDATE y DELETE en las 41 tablas, en
+  ROLLBACK, cada uno en su bitácora. **131/131.** Detecta el fallo de la 089 si se reintroduce.
+  **Obligatoria antes de cualquier ventana de producción** (runbook, paso −1; CLAUDE.md).
+- ✅ Punto 7 completo: comentario, tarea, cobro del caso, DV del cliente en las dos bitácoras con el
+  mismo `evento_id`, gasto de trámite y su reversión. Editar, borrar y vaciar una bitácora: rechazado
+  con `postgres` y con la clave de servicio. Cadenas íntegras.
+- ✅ `090` aplicada en staging (03/10): la bitácora toma primero el correlativo del libro. Prueba permanente
+  `sql/tests/concurrencia-bitacora-libro.mjs`: 120 rondas (importación de asientos y NC de compra contra
+  emisión, cobro y gasto de trámite, peor orden forzado), **cero deadlocks**; `--control` (orden viejo) se
+  traba en 18 de 18. Obligatoria en el paso −1 del runbook junto con la de las 41 tablas (131/131 con la 090).
+- ✅ Prueba 4: admin ve las dos, contador sólo la contable, abogada y asistente ninguna (24 de 24 por las
+  rutas, más el navegador). «Verificar integridad» desde la pantalla: contable 66 y legal 26, íntegras.
+- ✅ `091` aplicada en staging: si falla la bitácora, AU001. Probado en pantalla como abogada con una trampa
+  temporal autorizada (18 s, sólo comentarios con «PRUEBA-AU001»): mensaje claro en pantalla, error real en el log
+  con tabla, operación y llamada; trampa retirada y verificada en el catálogo; el mismo comentario después se guarda.
+  Sin la trampa: 131/131 y cero deadlocks en 120 rondas.
+- 📌 **Cierre del 03/10**: staging tiene aplicado todo hasta la `091` (inventario regenerado). Sin aplicar: `088`
+  (a propósito). En producción, en la ventana: 086, 087, 089, 090, 091 (y la 088 cuando se decida), con las dos
+  pruebas obligatorias del paso −1 antes. Datos de prueba que quedaron: `docs/finanzas/prueba-bitacoras.txt` §15.
+- 🟡 Pendiente: el respaldo (`backup-supabase.mjs`, que no toca ningún agente) tiene que llevarse las
+  tablas de `auditoria` y las anclas; hoy lee `public`. Lo decide Oliver.
+- 🟡 Fuera de las bitácoras por ahora (no estaban en la propuesta): prospectos, pendientes personales y
+  plantillas de observaciones. Dudas abiertas: lecturas sensibles y retención (J-9).
+
+## >>> 03/10/2026 (cierre 6) — RUC NT, CLI-036, CLIENTES DE PRUEBA <<<
+
+- ✅ Resultado de producción: 22 RUC jurídicos autorizados. La regla rechazaba 3 (propiedad horizontal,
+  `8-NT-2-735096`). Ahora acepta NT (jurídica y natural) y PE con tres grupos; los 22 están en un test.
+  La ficha técnica sólo nombra `8-NT-000-00` y `PE-4-000-000`; no publica otra tabla de formatos.
+- ✅ CLI-036 (persona natural sin tipo de receptor ni DV): el tipo se deduce en UN lugar
+  (`tipoReceptorEfectivo`) que usan el mapper, el gate fiscal y las validaciones: viaja como `02`
+  consumidor final y no se bloquea. Sin migración.
+- ✅ Consulta de producción actualizada con los mismos patrones y el tipo que viaja (probada en staging).
+- ✅ Fecha B = 01/07/2026 confirmada. Propuesta de clientes de prueba (§9 de
+  `docs/finanzas/propuesta-corte-quickbooks.md`), sin construir: FAC-HON-000459/460/461/463.
+- ⏳ Oliver revisa y manda el borrador a ideati (pregunta 3: ¿en qué ambiente se autorizaron las pruebas?).
+- ⏳ Opcional, solo lectura en producción: ver en `fe_emisiones.request_payload` con qué tipo de receptor
+  viajó la factura autorizada de CLI-036.
+
+## >>> 03/10/2026 (cierre 5) — VALIDACIONES PREVIAS A LA DGI Y PENDIENTES <<<
+
+- ✅ `085` aplicada en staging. Pruebas en staging y sandbox (`docs/efactura/prueba-validaciones-previas.txt`):
+  RUC mal formado → 422 sin consumir número; descripción vacía → 422 y línea marcada; rechazo del
+  PAC (FAC-HON-000028, `1601`/`1602`) → motivo guardado y en la lista; reintento del mes → autorizada
+  y fuera de la lista; un pendiente de septiembre → 409 «Consultar con el contador».
+- Reglas contra los 15 clientes de staging: 3 fallarían, sólo por no estar activos; ningún RUC ni DV.
+  Datos ficticios: poca evidencia.
+- ⏳ Oliver corre `sql/verificacion/produccion-ruc-clientes-autorizados.sql` y pasa el resultado: si
+  una regla marca un RUC ya autorizado por la DGI, la regla está mal.
+- 🟡 Decisiones abiertas: el algoritmo del DV (no está en la ficha); la fecha ante la DGI de un
+  reenvío tardío (Josuarth); `PENDIENTES_DGI_DESDE = 2026-06-01`.
+- Quedaron en staging dos borradores de prueba con motivo (pruebas 1 y 2) y FAC-HON-000028 autorizada
+  en el sandbox (correlativo FE 57).
+
+## >>> 03/10/2026 (cierre 4) — HOTFIX 084 EN PRODUCCIÓN <<<
+
+- ✅ **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** por Oliver: `audit_log` solo de agregar (730 filas
+  antes y después, política FOR SELECT con `get_tenant_id()`, `anon` sin permisos, triggers activos, prueba en
+  la app OK). **Producción = 024 + 084.**
+- ✅ `main` `9b00b12` (deploy de Producción OK), `develop` `36e80e2` + `b000141` (marcador del inventario),
+  merge a `feat/bloque1-contable` con el documento de `main`.
+- La ventana grande sigue siendo 025 → 083 (+ la 084, que entra y no cambia nada).
+
+## >>> 03/10/2026 (cierre 3) — 084 APLICADA EN STAGING Y HOTFIX DE PRODUCCIÓN LISTO <<<
+
+- ✅ `084` aplicada en staging. `verificacion-084`: **11 ok, 0 fallas**. Corrida dos veces: la segunda no cambia
+  nada (política, triggers, permisos y filas iguales).
+- 🗑️ `scripts/run_all_pending.sql` retirado: nada lo usaba y vaciaba la base entera (clientes, casos,
+  `audit_log`…). Sigue en el historial (`9ff68bf`).
+- ⏳ **Hotfix de producción listo, sin aplicar ni pushear**: rama `hotfix/audit-log-solo-agregar` desde `main`
+  (24b227a). Procedimiento para Oliver: `docs/finanzas/hotfix-084-produccion.md`. Consulta antes/después:
+  `sql/verificacion/produccion-audit-log-permisos.sql`. Deshacer (probado en staging en transacción):
+  `sql/hotfix/084_deshacer.sql`. Recomendación: merge a `main` después de aplicarla y luego `main` → `develop`.
+- ✅ Bitácoras: aprobada la copia a la contable de lo que afecta cifras o permisos; el admin ve la contable en
+  solo lectura.
+
+## >>> 03/10/2026 (cierre 2) — 084 Y DOS BITÁCORAS <<<
+
+- ⏳ **`084` escrita, SIN APLICAR** (espera «aplica»): `audit_log` solo de agregar. Confirmado en producción
+  el mismo agujero (consulta de Oliver). Las 32 escrituras y las 2 lecturas usan el cliente de servicio, así
+  que no hace falta política de INSERT. Verificación: antes 3/11 en staging (el agujero), simulada después
+  11/11 en una transacción deshecha. **Hotfix independiente**: aplica limpio en `main` (24b227a), sin
+  depender de nada posterior a la 024. ⚠️ En Supabase `postgres` no es superusuario: después de la 084 nadie
+  borra filas de `audit_log` sin quitar el trigger (y borrar un bufete entero queda bloqueado por la
+  cascada). `scripts/run_all_pending.sql` (viejo, vaciaba la base) se retiró el 03/10.
+- 📐 Propuesta de bitácora separada en contable (la ve el contador) y legal (la ve el admin), con el
+  ruteo de clientes, usuarios y gastos de trámite (opción 1: dueño + copia contable de lo fiscal) y el
+  reparto del legado.
+
+## >>> 03/10/2026 (cierre) — 083, PROPUESTAS DE CORTE, ALERTAS Y AUDITORÍA <<<
+
+- ✅ `083` aplicada en staging (4/4) y NC/ND internas probadas (`docs/efactura/prueba-notas-internas.txt`).
+- 📐 `docs/finanzas/propuesta-corte-quickbooks.md`: dos fechas (apertura 31/12/2025; posteo automático
+  desde B, propuesta 01/07/2026). Dudas abiertas: confirmar B, qué hacer con las facturas de prueba de
+  mayo en producción, si la importación trae ventas por factura.
+- 📐 `docs/efactura/propuesta-alerta-no-enviadas.md`: 4 facturas de producción (FAC-HON-000489, 000496,
+  000503, 000508) emitidas sin DGI. **No se tocan.** ⏳ Oliver corre
+  `sql/verificacion/produccion-facturas-no-enviadas-detalle.sql`. Antes de reintentarlas: probar en
+  sandbox la fecha de emisión vieja (`1519`) y decidir con Josuarth.
+- 📐 `docs/finanzas/propuesta-bitacora-auditoria.md`.
+- 🔴 **Hallazgo de seguridad (sin tocar):** `audit_log` tiene RLS FOR ALL y grants de UPDATE, DELETE y
+  TRUNCATE a `authenticated`: cualquier usuario logueado puede editar o borrar la bitácora de su bufete.
+  Propuesta de corrección inmediata en el punto 4 de la propuesta de auditoría. Probablemente igual en
+  producción (es del MVP): verificar.
+
+## >>> 03/10/2026 (noche) — FACTURACIÓN ELECTRÓNICA QUE FALTABA <<<
+
+- ✅ `082` aplicada en staging (verificación 3/3).
+- ✅ ND 05 (con CUFE) y 07 (sin factura), NC 06 (sin factura): construidas y autorizadas de punta a
+  punta en el sandbox (`docs/efactura/prueba-notas-de-punta-a-punta.txt`). La 07 dio un `fetch
+  failed` de red en el primer intento y autorizó al reintentar con el mismo correlativo (55).
+- ✅ Opción al emitir NC/ND: «Enviar a la DGI» o «Interna». ⏳ **`083` escrita, SIN APLICAR**
+  (`fe_estado = 'interna'`, terminal): hasta el «aplica», elegir «Interna» deja el documento emitido
+  y «Sin enviar» con un aviso de fallo. Falta probar la interna en staging después del «aplica».
+- 📝 Borrador para ideati (NO enviado): `docs/efactura/borrador-mensaje-ideati-2026-10-03.md`.
+- ⏳ Para Oliver: correr `sql/verificacion/produccion-facturas-dgi-por-mes.sql` (y la de documentos
+  por mes) en el SQL Editor de producción.
+- 📐 Propuesta sin construir: `docs/finanzas/propuesta-corte-quickbooks.md`. 🔴 Choca con P-9a
+  (corte 31/12/2025): hay que elegir la fecha antes de construir.
+- ⚠️ Prueba en sandbox: el cliente FERRETERÍA VALLARINO se apuntó al RUC del emisor y se restauró.
+  En staging quedaron ND-000002, ND-000003 y NC-000022 (autorizadas en sandbox) y los
+  correlativos FE 48 a 56 consumidos.
+
+## >>> 03/10/2026 (tarde) — RESPUESTAS DE JOSUARTH DEL 02/10 <<<
+
+- Anotadas en `docs/finanzas/plan-bloque1.md` §7 (P-9a, P-8c, J-7, J-9, K-5/P-1c, P-4a, apertura y
+  fase siguiente).
+- ✅ Hecho en código: K-5 (sin fechas futuras, también asiento manual e importación), P-4a (NC de
+  venta sin factura, interna), y los detalles pendientes del recorrido (B/. y # en la NC de venta,
+  textos de la ND, la factura muestra su ND, compra sin cuentas control ni bancos).
+- ⏳ **`082` escrita, SIN APLICAR** (espera «aplica»): 400010 Otros servicios + HON-OTROS, y la base
+  rechaza bancos en una línea de NC de compra.
+- 🟡 Para Josuarth: subcategoría NIIF 18 de la 440001 («no operativo»: ¿inversión o financiamiento?);
+  apertura recomendada = facturas internas de saldo inicial para CxC (y CxP), con su cuenta puente.
+- Siguiente: inventario de facturación electrónica (sandbox) y consultas de producción en lectura.
+
+## >>> 03/10/2026 — 076 A 081 APLICADAS EN STAGING <<<
+
+- ✅ `076` a `080` aplicadas en staging el 01/10 (ref `xtyenhakplrkyifbcaow`). Al aplicarlas, la
+  verificación de la 076 abortó en su paso 1 y la de la 079 dio 5/7: dos fallas reales, no del test.
+- ✅ `081` aplicada en staging el 03/10, con «aplica» de Oliver. Corrige:
+  1. `create_supplier_credit_note` (076): la NC de proveedor **sin compra** fallaba con «record
+     "v_compra" is not assigned yet». La compra pasa a escalares. Antes de aplicar se comparó con la
+     definición vigente: sólo cambia eso.
+  2. CHECK `coa_subcategoria_por_tipo` (079): dejaba pasar una cuenta activa con subcategoría NULL
+     (`NULL IN (…)` es NULL). Se agrega `subcategoria IS NOT NULL`. Ninguna cuenta real estaba así
+     (0 de 101 activas).
+- ✅ Verificaciones después de la 081: **076 8/8, 077 5/5, 078 4/4, 079 7/7, 080 7/7** (31/31,
+  todas con ROLLBACK).
+- ✅ Corregido el posible error anotado el 01/10: el Estado de Resultado con «desde» ya no arrastra
+  los movimientos anteriores al corte (`9c567f7`, test en `periodo-estados-financieros.test.ts`).
+- En producción la `081` va inmediatamente después de la `080`, en la misma ventana.
+- ✅ **Recorrido de los cinco puntos (03/10, contador + abogada2):**
+  1. NC de proveedor **sin compra** NC-CO-000004 (CABLE ONDA, 21.40), asiento 107 con el proveedor en
+     200001. Aplicados 10.70 a FAC-CO-000003 (saldo 0, sin asiento). Reversada (asiento 108, el espejo
+     conserva el proveedor) y la compra volvió a 10.70.
+  2. Estado de Resultado: estructura sin Distribución a Socias; septiembre y octubre cuadran cuenta por
+     cuenta con el libro. ISR 25 % → 56.25 sobre 225.00; vuelto a 0. Balance cuadra (264,529.08) con la
+     misma utilidad neta (247,908.56).
+  3. Plan de cuentas: 67 activas con subcategoría, patrimonio en tres, 400009 y 440001.
+  4. Cierre anual 2026: **sólo vista previa** (247,908.56 a 300002, 298,795.31 por lado). 0 asientos de
+     cierre en la base.
+  5. Nota de débito **ND-000001** (CLI-009, ajusta FAC-HON-000022, 107.00), asiento 109 igual al de una
+     factura; sin botón de DGI. NC de venta **NC-000021** parcial (214.00) sobre FAC-HON-000022 desde
+     su botón: el tope P-4b bloquea un precio mayor; asiento 110; saldo de la factura 1,070 → 856.
+- ✅ Corregidos (`27102d8`): los siete detalles anotados en el recorrido y la confirmación del cierre
+  anual escribiendo el año. ⏳ El cierre anual nuevo falta verlo en el navegador con el contador.
+- 📋 Vistos en el recorrido, sin corregir todavía:
+  - Detalle de NC de venta: líneas y resumen con «$» en vez de «B/.», y el # de línea sale 2 en una NC
+    de una sola línea.
+  - Nota de débito: el diálogo de emisión dice «envíala a la DGI con el botón Enviar a la DGI», que en
+    una ND no existe; la tarjeta de Facturación Electrónica habla de «enviarla»; el panel lateral de la
+    factura nueva dice «FAC-HON-… o FAC-REI-…» también para una ND.
+  - FAC-HON-000022 no muestra la ND que la ajusta.
+  - La NC de venta ofrece «Sin factura» en el selector aunque está apagada (no se probó a dónde lleva).
+  - La compra nueva usa la misma lista de cuentas que tenía la NC de proveedor (con 100004 y bancos).
+- Siguiente: Bloque 2.
+
+## >>> 01/10/2026 (cierre) — 073 Y 074 APLICADAS Y RECORRIDAS; ESTADO DEL BLOQUE 1 <<<
+
+- ✅ `073` y `074` aplicadas en staging. `verificacion-073-074.sql`: **11 ok, 0 fallas**.
+- ✅ Recorrido (contador + abogada2):
+  1. Cuenta **200005 ISC por pagar (prueba)** y tasa **ISC_5_PRUEBA** con esa cuenta; FAC-HON-000027
+     (asiento 105) postea el impuesto 10.00 en **200005**, nada en 200003.
+  2. **ITBMS_7** (usada) no deja cambiar su cuenta: mensaje en pantalla, sigue en 200003.
+  3. Cobro **CO-000012** de 250 sobre 210: aviso antes de guardar; asiento 106 por 250 con el
+     cliente en 100004 (`TRF-074-001` como referencia externa); −40.00 en la antigüedad.
+  4. Con el **contador**: «Aplicar B/. 40.00 de CO-000012» en FAC-HON-000007 → saldo 107.00 →
+     67.00, CO-000012 sin saldo a favor, **sin asiento nuevo** (el último sigue siendo el 106, el
+     movimiento de 100004 no cambia). Antigüedad: total 5,445.20 igual, el −40 desaparece y la
+     factura baja 40; la diferencia contra 100004 (193,765.55, apertura + documentos viejos) no se
+     movió. Cadena: 0 problemas.
+  5. Cobro sin referencia: no guarda en pantalla y la API responde 400.
+- 📋 Texto pendiente (no pedido, visto en el recorrido): el panel «Resumen» y las líneas del
+  detalle de la factura siguen mostrando «$» en vez de «B/.».
+
+### Qué queda del Bloque 1 (plan §4)
+| Entrega | Estado |
+|---|---|
+| E1 fechas, E2 tercero, E3 referencias y tercero obligatorio | ✅ en staging |
+| R-1 hash v5 y verificador (072) | ✅ en staging |
+| E4 tasa con cuenta (073), E5 excedente (074) | ✅ en staging |
+| E6 plan de cuentas (subcategorías, Familia, otros ingresos) | ✅ parte técnica (079 + 081 en staging); el mapa espera **P-8a** |
+| E8 NC como módulo propio | ✅ en staging (076 + 081); venta sin factura apagada hasta **P-4a** |
+| E7 saldos iniciales como asiento de apertura | depende de E6 y de P-9a/P-9b |
+| E9 antigüedad nueva + filtros por módulo del Mayor y el Diario | ✅ hecho (01/10, sin migración); la parte de NC espera E8 |
+| E10 Estado de Resultado y Balance (línea de ISR al 0 %) | ✅ en staging (078) |
+| E11 cierre anual | ✅ en staging (080); no cerrar 2026 en staging sin decidirlo |
+| R-1b ancla externa de la cadena | ✅ `075` aplicada en staging (verificación 8/8); producción en la ventana |
+| Ventana de producción 025 → 081 + merge | cuando Oliver lo decida; runbook al día |
+
+## >>> 01/10/2026 (noche) — E10, E6 Y E11 <<<
+
+- ⏳ `078`, `079` y `080` escritas, SIN APLICAR. Orden en la ventana: la 080 necesita la 071
+  (CHECK con `cierre`) y la 055.
+- Abiertas: P-8a (mapa de subcategorías), P-8b (400009), P-8c (440001 y HON-OTROS), P-11a
+  (300002 y su nombre «Perdida Retenidas»), P-7a.
+- ⚠️ Cerrar 2026 en staging hoy movería unos 244,476.91 de saldos de apertura de resultado
+  (QuickBooks). No cerrar sin decidirlo.
+- 🔎 Posible error que ya existía: el Estado de Resultado con `desde` suma al saldo inicial de las
+  cuentas de resultado los movimientos anteriores al corte (un período de mitad de año sale
+  acumulado desde enero). Sin tocar.
+- Dato de staging: agosto 2026 está cerrado en `accounting_periods`.
+
+## >>> 01/10/2026 (noche) — NOTA DE DÉBITO (d14) <<<
+
+- ⏳ **`077` escrita, SIN APLICAR**. Hasta aplicarla, elegir «Nota de débito» falla al guardar
+  (CHECK de `invoice_kind`).
+- Valores por defecto: servicios de honorarios; factura que ajusta opcional; sin envío a la DGI
+  hasta autorizar una ND (tipo 05) en el sandbox. Pregunta para Josuarth: ¿la ND siempre ajusta
+  una factura, o puede ir sola?
+
+## >>> 01/10/2026 (noche) — E8: NC COMO MÓDULO PROPIO <<<
+
+- ⏳ **`076` escrita, SIN APLICAR** (espera «aplica»). Hasta aplicarla, la NC de venta con factura
+  funciona (no necesita esquema nuevo) y la de proveedor NO (el RPC cambió de firma).
+- Valores por defecto: P-4b → el precio no sube sobre el de la factura; tope con documento = su
+  saldo (D7 / J-3); P-4a → venta sin factura apagada.
+- Recorrido pendiente después del «aplica»: NC de venta desde la factura y desde el listado; NC de
+  proveedor con compra y sin compra; aplicar su saldo a una compra; reversarla.
+
+## >>> 01/10/2026 (tarde) — 075 APLICADA EN STAGING <<<
+
+- ✅ `075` aplicada en staging con el ref confirmado. El primer intento falló en el bloque de
+  verificación final (la variable `t` chocaba con el alias `t`) y la transacción se deshizo
+  completa; corregido el nombre y reaplicada. `verificacion-075`: **8 ok, 0 fallas**. Triggers
+  del libro encendidos, 1 ancla inicial (asiento 106), cadena sin problemas.
+- 🔎 Los B/. 1,793 sin explicar de la antigüedad de staging: 2 NC emitidas SIN asiento
+  (NC-000012 2,140 y NC-000010 10), cobro REC-000002 sin asiento (150), FAC-HON-000007 sin
+  asiento (−67) y dos cobros CON asiento aplicados a facturas SIN asiento (REC-000008 −400,
+  CO-000012 −40). El reporte no mide ni la primera ni la última causa.
+
+## >>> 01/10/2026 (tarde) — R-1b, E9 Y MONTOS EN B/. <<<
+
+- ✅ Detalle de la factura, lista y diálogos: todos los montos en B/. (test `montos-en-balboas`).
+- ⏳ **`075` escrita, SIN APLICAR** (ancla externa, R-1b): `accounting_chain_anchors`, ancla al
+  cerrar un período (trigger), ancla inicial, `verify_chain_anchors`. Constancia PDF y
+  verificación contra el archivo del respaldo en /finanzas/periodos. Verificación:
+  `sql/tests/verificacion-075-ancla.sql` (8 comprobaciones, ROLLBACK). ⚠️ En el plan la 075
+  figuraba como apertura: la apertura pasa a la siguiente libre.
+- ✅ **E9 sin migración**: la antigüedad lista las partidas de diario y apertura CON tercero en
+  100004/200001 (por fecha de registro, enlace al asiento para admin/contador); lo manual sin
+  tercero sigue en la explicación; los asientos reversados no cuentan en ninguno de los dos
+  lados. Filtro «Módulo» (multi-selección) en el Mayor (también el Excel) y el Diario; el saldo
+  corrido del Mayor sigue siendo el de la cuenta completa.
+- Pendiente E9: la parte de NC (E8) y `sql/verificacion/antiguedad_estado_cuenta.sql`.
+
+## >>> 01/10/2026 (noche) — 072 APLICADA; 073 Y 074 ESCRITAS <<<
+
+- ✅ **`072` aplicada en staging**: 4 tramos (v1 1–11, v2 12–49, v3 50–98, v4 99–104).
+  `verificacion-072`: **8 ok, 0 fallas**. Triggers de la 023 intactos después del test.
+- 📋 **R-1b (ancla externa)** anotado en el plan §8 como requisito antes de producción. Sin construir.
+- ⏳ **`073` escrita, sin aplicar**: cada tasa con su cuenta (punto 6).
+- ⏳ **`074` escrita, sin aplicar**: cobro con excedente, saldo a favor y referencia obligatoria (punto 5).
+- ⏳ Hasta aplicar la 073, la pantalla de Impuestos y los asientos de la rama fallan contra staging
+  (leen `tax_codes.account_code`); hasta la 074, «Aplicar saldo a favor» responde con error.
+- 🛑 Esperan a Josuarth: plan de cuentas (P-8a) y NC como módulo (P-4a). No empezados.
+- ⚠️ El servidor de desarrollo se detuvo por límite de tiempo; se levanta de nuevo para el
+  recorrido de la 073/074.
+
+## >>> 01/10/2026 (tarde) — RECORRIDO E3 CERRADO; 072 ESCRITA <<<
+
+- ✅ Con **abogada2**: gasto de trámite en CORP-001 (cerrado). Sin proveedor → «Elige el
+  proveedor…»; con CABLE ONDA → pregunta «Este caso está cerrado. ¿Deseas registrar el gasto
+  igual?» → **FAC-CO-000002** (asiento 102), `F-E3-T01` como referencia externa, CABLE ONDA en
+  200001.
+- ✅ Cobro de FAC-HON-000026 → **CO-000011** (asiento 103), `TRF-E3-001` como referencia
+  externa, Aurelio Barría en 100004; la factura queda pagada.
+- ✅ **Factura del proveedor en la compra: NO era un error del formulario.** Repetida con un
+  valor verificado en el campo antes de guardar: **FAC-CO-000003** con `F-E3-002` guardado y
+  visible. En la primera prueba el texto no llegó al campo por cómo escribe la herramienta del
+  navegador (pasó lo mismo con el monto del cobro). No se cambió código.
+- ⏳ **Migración `072` escrita, sin aplicar** (hash v5 + verificador que recalcula, R-1).
+- ❌ **P-2f descartada:** siempre se exige la ficha del proveedor.
+- 📋 Paso previo a abrir el libro en producción: `sql/verificacion/gastos-tramite-sin-proveedor.sql`
+  (runbook, nota de la 071). En staging lista 20 gastos (B/. 7,600.00).
+- ⚠️ El servidor de desarrollo se reinició limpio (caché de webpack dañada).
+
+## >>> 01/10/2026 — 071 APLICADA EN STAGING; DEVELOP QUEDA INCOMPATIBLE CON STAGING <<<
+
+- ✅ **`071` aplicada en staging** (ref `xtyenhakplrkyifbcaow`). Antes de aplicarla se le quitó la
+  excepción de proveedor (pedido de Oliver: ninguna línea en 200001 sin proveedor).
+  `verificacion-071-motor-v4.sql`: **15 ok, 0 fallas**. `verify_accounting_chain`: 0 roturas.
+- ✅ Recorrido con contador: asiento manual sin cliente en 100004 → botón apagado con el motivo
+  y 400 por API; con cliente → **AD-000001** (asiento 99, `MEMO-E3-01` como referencia externa,
+  FERRETERÍA VALLARINO en 100004). Compra sin proveedor → rechazada en el formulario; con
+  CABLE ONDA → **FAC-CO-000001** (asiento 100) y su pago **PA-000008** (asiento 101), proveedor en
+  las dos líneas de 200001. Mayor con Módulo, N.º documento, N.º transacción y Ref. externa.
+- ⏳ Falta la parte con **abogada**: gasto de trámite en CORP-001 (pregunta del caso cerrado,
+  proveedor obligatorio, `FAC-CO-000002`, factura del proveedor como referencia externa) y un
+  cobro (`CO-000011`).
+- 🔴 **`develop` queda INCOMPATIBLE con staging hasta que se mezcle `feat/bloque1-contable`.**
+  Su código no manda el tercero (E2) ni deja vacío `p_reference` en el asiento manual, así que
+  contra staging **falla al emitir facturas y NC de venta, registrar cobros, compras, gastos de
+  trámite y pagos a proveedor, cargar asientos manuales e importar asientos contra 100004/200001**.
+  Siguen funcionando las reversiones (el motor las exime) y la NC de compra (la arma el SQL de la
+  066 con el proveedor). Afecta a los **deploys de Preview de `develop`**, que apuntan a staging.
+  No se arregla tocando staging: se arregla mezclando la rama.
+- 📋 **R-1 (requisito antes de producción):** verificador que recalcule el `content_hash` por
+  versión. Propuesta en el plan §8; diagnóstico en `sql/verificacion/recalculo-content-hash.sql`
+  (98 de 98 asientos reproducidos). Sin construir.
+- 📋 **P-2f:** compra de contado sin ficha de proveedor (propuesta en el plan §7). Hoy no existe:
+  sin proveedor no se registra ninguna compra ni gasto de trámite.
+- ⚠️ **Producción:** los ~128 gastos de trámite sin asiento que se registran con el botón de
+  reintento van a pedir el proveedor antes de entrar al libro (el mensaje lo dice).
+
+## >>> 01/10/2026 — BLOQUE 1, E3 (REFERENCIAS Y TERCERO) EN LA RAMA <<<
+
+- ✅ Código y tests de E3 (plan §1 puntos 2 y 10, respuestas en §7). Commit local, sin push.
+- ⏳ **Migración `071` sin aplicar.** Hasta que se aplique, el Mayor, el Diario y el detalle del
+  asiento fallan en la rama (leen `referencia_externa`), y el alta de compras y gastos de
+  trámite también (secuencia `purchase` y columna `purchase_number`).
+- ⏳ Después de la `071`: `sql/tests/verificacion-071-motor-v4.sql` y recorrido (asiento manual
+  contra 100004 sin cliente → aviso y rechazo; con cliente → `AD-000001`; importación con
+  tercero; cobro `CO-000011`; pago `PA-000008`; compra y gasto de trámite `FAC-CO-`; Mayor con
+  las columnas nuevas; gasto en CORP-001 con la pregunta del caso cerrado).
+- 📋 Para E9: filtro por módulo en el Mayor y el Diario.
+- 📋 Abierta (no bloquea): la NC de compra no lleva todavía `referencia_externa` (el N.º del
+  documento del proveedor); la arma el SQL de la 066.
+- ✅ Resuelto el pendiente del 30/09 sobre CORP-001: el caso cerrado admite gastos con aviso.
+- ✅ Resuelto: los nombres genéricos del Mayor (asientos 33, 34, 36–39 y 51) quedan vacíos.
+
+## >>> 30/09/2026 — BLOQUE 1, E2 (TERCERO Y DESCRIPCIÓN) EN LA RAMA <<<
+
+- ✅ Código y tests de E2 (plan §3). Commits locales, sin push.
+- ⏳ **Migración `070` sin aplicar** (`expenses.supplier_invoice_number`). Hasta que se aplique,
+  el alta de gasto de trámite y el detalle del gasto fallan en la rama (leen la columna).
+- ✅ Recorrido parcial (admin): pantallas con las dos fechas; FAC-HON-000026 con dos líneas de
+  400001 y su descripción, cliente en 100004 (asiento 95); REC-000010 con cliente en 100004
+  (asiento 96); el Mayor de 400001 nombra el asiento viejo 80 desde su documento.
+- ✅ `070` aplicada en staging (01/10/2026). Verificación: columna opcional, CHECK 1..50, índice;
+  libro intacto (último asiento 96 al aplicar, cadena sin problemas).
+- ✅ Con el **contador** (01/10): Mayor de 100001 nombra a los 8 cobros (los 7 viejos sin
+  tercero en el libro, desde su documento); reversó REC-000010 → espejo 97 con Aurelio Barría
+  en 100004, grabado con rol contador; Mayor de 200001 y detalle del gasto y del asiento 98 sin
+  errores de acceso.
+- ✅ Con **abogada2**: gasto de trámite en CORP-001 con factura F-E2-0001 y dos líneas →
+  asiento 98, CABLE ONDA S.A en 200001, cada línea con su descripción.
+- 📋 **Por decidir (Josuarth / el bufete): el caso CORP-001 está CERRADO y la abogada pudo
+  cargarle un gasto de trámite.** No hay ningún control hoy. Opciones: se permite (un trámite
+  puede facturarse después del cierre), se bloquea, o se avisa en pantalla. No se cambió código.
+- 📋 Para E3: en el Mayor, el último escalón del nombre (el texto de la línea de control) pone
+  «Cuentas por pagar», «Reversión» o «Reversión: Cuentas por pagar» en gastos viejos SIN
+  proveedor y en algunas reversiones (asientos 33, 34, 36–39 y 51 de staging). Es texto
+  genérico, no un nombre: conviene que ese escalón ignore esos textos y deje la celda vacía.
+- 🐞 Corregido en el recorrido: el aviso del detalle del gasto de trámite decía «se postea su
+  espejo con la fecha de hoy» (quedó de antes de E1).
+- 🛠️ El servidor de desarrollo cortado por memoria el 30/09 dejó la caché `.next` rota (todas
+  las páginas fallaban con «Jest worker encountered 2 child process exceptions»). Se resolvió
+  borrando `.next`. No era código.
+
+## >>> 30/09/2026 — BLOQUE 1, E1 (FECHAS) EN LA RAMA `feat/bloque1-contable` <<<
+
+- ✅ Código y tests de E1 (plan §1). Commits locales, sin push.
+- ✅ **Migraciones `068` y `069` aplicadas en staging** el 30/09/2026, con la ventana de SOP-019
+  cerrada. Verificación `068-069`: 6/6; las de la 046, 050, 055 y 060 en verde. En producción
+  van en la ventana del despliegue, después de la `067`.
+- ✅ Recorrido en localhost:3002 contra staging (30/09, sesión admin):
+  · Factura con documento 30/09 y registro 01/10 → FAC-HON-000025, asiento 93 en 2026-10; el
+    resumen de ITBMS de octubre la suma (100.00 / 7.00), septiembre no.
+  · NC con registro elegido 02/10 → NC-000020 (B/. 53.50), documento 30/09, asiento 94 en 2026-10.
+  · Reversión anterior al original (asiento 88, 29/09) → rechazo en pantalla y 422 en la ruta.
+  · Reversión en agosto cerrado (asiento 4, 15/08) → «El período 2026-08 está cerrado», sin
+    asiento ni correlativo. NC-000017 autorizada con fecha 31/08 → 422 sin intento ante la DGI.
+  · ✅ 19:01 de Panamá (día UTC ya 01/10): el Asiento de Diario (servidor) y el diálogo de
+    reversión (navegador) proponen 30/09.
+- 📋 Para E2 (pantalla): detalle del asiento con las fechas al revés, detalle de factura sin la
+  fecha de registro, detalle de NC sin rotular la de registro.
+- ⏳ Pregunta 5 de Josuarth (fechas futuras): hoy permitidas, `PERMITIR_FECHA_DE_REGISTRO_FUTURA`.
+- ⏳ P-1b (registro antes que el documento) y P-1e (vencimiento desde el documento) siguen
+  abiertas; el código asume: sí se permite, y sí, desde el documento.
+- 📋 Fuera de E1: ~25 cálculos de «hoy» en UTC en el módulo Legal (tareas, comentarios, casos,
+  prospectos, dashboard). No fechan asientos; FND-012.
+
+## >>> ✅ VENTANA DE REVISIÓN CERRADA (30/09/2026) <<<
+
+- La revisión de Josuarth terminó el 28/09 y la reunión fue el 30/09. Oliver cerró la ventana
+  de SOP-019 el 30/09. Staging NO se reseteó. Con la ventana cerrada se aplicaron la `068` y la
+  `069` en staging (E1 del Bloque 1).
+
+## >>> (histórico) DEVELOP CONGELADO — REVISIÓN CON JOSUARTH <<<
 
 - 26/09/2026: **Josuarth Torres pasa al equipo** (alianza con Integra; ya no es de RM). Rose
   Molina sale del proyecto. Contraseña del contador de staging rotada; el Excel de la decisión

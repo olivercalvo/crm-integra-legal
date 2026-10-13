@@ -77,6 +77,14 @@ export const TIPO_DOCUMENTO = {
   NOTA_CREDITO: "04",
   NOTA_DEBITO: "05",
   /**
+   * 06 y 07: notas GENÉRICAS (ficha técnica para PAC V1.00, B06). No pueden
+   * llevar el CUFE de una FE (`1706`); la referencia es opcional y sólo a papel
+   * (B616) o impresora fiscal (B621). Probadas en sandbox el 03/10/2026: sin
+   * referencia, las dos autorizaron `0260` (docs/efactura/prueba-tipos-05-06-07.txt).
+   */
+  NOTA_CREDITO_GENERICA: "06",
+  NOTA_DEBITO_GENERICA: "07",
+  /**
    * Factura de Reembolso. Confirmado por ideati (Eduardo Méndez, PM) por correo
    * el 17/09/2026: habilitado en todas las cuentas y ambientes, incluido el de
    * pruebas; admite los mismos datos que una operación interna, sin validación

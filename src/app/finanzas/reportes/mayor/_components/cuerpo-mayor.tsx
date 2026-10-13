@@ -43,7 +43,7 @@ export function CuerpoMayor({
                 {f.cuentaDistribucion}
               </td>
               <td className="px-3 py-2 font-mono text-xs text-gray-500">{f.fecha ?? "—"}</td>
-              <td className="px-3 py-2 text-sm" colSpan={5}>
+              <td className="px-3 py-2 text-sm" colSpan={8}>
                 <span className="font-semibold text-integra-navy">{rotuloArranque}</span>
               </td>
               {/* El saldo inicial no es un movimiento: no tiene débito ni

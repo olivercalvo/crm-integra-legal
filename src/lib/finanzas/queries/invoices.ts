@@ -11,6 +11,7 @@ import type {
   InvoiceKind,
   InvoiceStatus,
 } from "@/lib/finanzas/types/invoice";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -57,18 +58,19 @@ export async function listInvoices(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // de-prueba-ok: listado de facturas: las de prueba se ven con el badge «Prueba»
   let q = db
     .from("invoices")
     .select(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
-        issue_date, due_date, status, currency,
+        issue_date, accounting_date, due_date, status, currency,
         subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
-        dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
+        dgi_numero_documento, dgi_cufe, dgi_cufe_origen, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,
         punto_facturacion, numero_documento, ef_invoice_uuid,
-        cancellation_reason, cancelled_at,
+        cancellation_reason, cancelled_at, de_prueba, de_prueba_motivo,
         client:clients!invoices_client_id_fkey(id, name, client_number),
         case:cases!invoices_case_id_fkey(id, case_code)
       `,
@@ -112,18 +114,20 @@ export async function getInvoiceById(
   tenantId: string,
   id: string
 ): Promise<InvoiceWithRelations | null> {
+  // de-prueba-ok: detalle de un documento (lleva la banda de prueba)
   const { data: header, error: errHeader } = await db
     .from("invoices")
     .select(
       `
         id, invoice_number, invoice_kind, client_id, case_id, quote_id,
-        issue_date, due_date, status, currency,
+        issue_date, accounting_date, due_date, status, currency,
         subtotal_total, tax_total, grand_total, amount_paid, credited_total, balance_due,
         notes, created_at, updated_at,
-        dgi_numero_documento, dgi_cufe, dgi_fecha_autorizacion, dgi_cafe_url,
+        dgi_numero_documento, dgi_cufe, dgi_cufe_origen, dgi_fecha_autorizacion, dgi_cafe_url,
         fe_estado, dgi_protocolo_autorizacion, qr_content,
         punto_facturacion, numero_documento, ef_invoice_uuid,
-        cancellation_reason, cancelled_at,
+        cancellation_reason, cancelled_at, de_prueba, de_prueba_motivo,
+        fe_motivo_pendiente, fe_motivo_pendiente_en,
         client:clients!invoices_client_id_fkey(id, name, client_number, ruc),
         case:cases!invoices_case_id_fkey(id, case_code, description)
       `
@@ -156,4 +160,89 @@ export async function getInvoiceById(
     ...(header as unknown as InvoiceWithRelations),
     lines: (lines ?? []) as InvoiceWithRelations["lines"],
   };
+}
+
+// ---------------------------------------------------------------------------
+// NOTA DE DÉBITO (077)
+// ---------------------------------------------------------------------------
+
+/** Una factura que una nota de débito puede ajustar. */
+export interface FacturaAjustable {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+}
+
+/**
+ * Las facturas que una nota de débito puede ajustar: emitidas (con o sin
+ * cobros), que no sean otra nota de débito. Del mismo cliente lo filtra la
+ * pantalla; la base lo vuelve a exigir (trigger de la 077).
+ */
+export async function facturasAjustables(db: DB, tenantId: string): Promise<FacturaAjustable[]> {
+  const { data, error } = await db
+    .from("invoices")
+    .select("id, invoice_number, client_id, invoice_kind")
+    .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
+    .in("status", ["emitida", "parcialmente_pagada", "pagada"])
+    .order("issue_date", { ascending: false });
+  if (error) {
+    console.error("[finanzas/queries] facturasAjustables failed", error);
+    return [];
+  }
+  return ((data ?? []) as { id: string; invoice_number: string; client_id: string; invoice_kind: string }[])
+    .filter((f) => f.invoice_kind !== "NOTA_DEBITO")
+    .map((f) => ({ id: f.id, invoice_number: f.invoice_number, client_id: f.client_id }));
+}
+
+/**
+ * La factura que ajusta una nota de débito, o null. Se lee con `*` y sólo se
+ * llama para una NOTA_DEBITO: así ninguna pantalla nombra la columna antes de
+ * que exista la 077.
+ */
+export async function referenciaDeNotaDeDebito(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<{ id: string; invoice_number: string } | null> {
+  // de-prueba-ok: detalle de un documento
+  const { data } = await db.from("invoices").select("*").eq("tenant_id", tenantId).eq("id", invoiceId).maybeSingle();
+  const refId = (data as { referenced_invoice_id?: string | null } | null)?.referenced_invoice_id ?? null;
+  if (!refId) return null;
+  // de-prueba-ok: detalle de un documento
+  const { data: ref } = await db
+    .from("invoices")
+    .select("id, invoice_number")
+    .eq("tenant_id", tenantId)
+    .eq("id", refId)
+    .maybeSingle();
+  return ref ? { id: String(ref.id), invoice_number: String(ref.invoice_number) } : null;
+}
+
+/**
+ * Las notas de débito que ajustan una factura (el lado inverso de
+ * `referenciaDeNotaDeDebito`), sin borradores. Recorrido del 03/10: la factura
+ * no mostraba la ND que la ajusta.
+ *
+ * Nombra la columna en el FILTRO: antes de la 077 esa consulta falla, y por eso
+ * un error devuelve la lista vacía en vez de romper el detalle de la factura.
+ */
+export async function notasDeDebitoDeLaFactura(
+  db: DB,
+  tenantId: string,
+  invoiceId: string
+): Promise<{ id: string; invoice_number: string | null; status: string; grand_total: number }[]> {
+  // de-prueba-ok: las ND de una factura, en su detalle
+  const { data, error } = await db
+    .from("invoices")
+    .select("id, invoice_number, status, grand_total, invoice_kind")
+    .eq("tenant_id", tenantId)
+    .eq("referenced_invoice_id", invoiceId)
+    .eq("invoice_kind", "NOTA_DEBITO")
+    .neq("status", "borrador")
+    .order("issue_date", { ascending: true });
+  if (error) return [];
+  return ((data ?? []) as { id: string; invoice_number: string | null; status: string; grand_total: number | string }[]).map(
+    (n) => ({ id: n.id, invoice_number: n.invoice_number, status: n.status, grand_total: Number(n.grand_total) })
+  );
 }

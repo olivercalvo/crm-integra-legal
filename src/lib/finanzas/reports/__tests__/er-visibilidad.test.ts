@@ -85,14 +85,16 @@ test("la estructura sobrevive al filtro: bloques, resultados e impuesto se conse
   }
 });
 
-test("la distribución a socias NO se esconde aunque diera cero", () => {
-  // Es `estructural`: sin ese renglón la sección queda con encabezado y nada
-  // debajo, que es peor que un cero.
+test("E10: la línea del impuesto y la Utilidad neta NO se esconden aunque den cero", () => {
+  // Son estructura del estado (decisión b de Josuarth, 30/09): el filtro
+  // "solo cuentas con saldo" esconde cuentas, no renglones de resultado.
   const sinUtilidad = JOSUAR_ACCOUNTS.map((a) => ({ ...a, saldo: 0 }));
-  const filas = buildEstadoResultadoNiif18(sinUtilidad).filas;
-  const visibles = filterFilasER(filas, "with-balance");
-  const dist = visibles.find((f) => f.kind === "cuenta" && f.estructural);
-  assert.ok(dist, "la distribución a socias tiene que seguir visible");
+  const visibles = filterFilasER(buildEstadoResultadoNiif18(sinUtilidad).filas, "with-balance");
+  assert.ok(visibles.some((f) => f.kind === "impuesto"), "el impuesto sigue visible en 0.00");
+  assert.ok(
+    visibles.some((f) => f.kind === "resultado" && f.label === "► Utilidad neta"),
+    "la Utilidad neta sigue visible"
+  );
 });
 
 test("un grupo sin ninguna cuenta con saldo desaparece entero, con su subtotal", () => {
@@ -115,9 +117,9 @@ test("un grupo sin ninguna cuenta con saldo desaparece entero, con su subtotal",
     "su subtotal se va con él"
   );
 
-  // Pero la Utilidad Bruta operativa SIGUE, porque es estructura del estado.
+  // Pero la Utilidad bruta SIGUE, porque es estructura del estado.
   const resultados = visibles
     .filter((f) => f.kind === "resultado")
     .map((f) => (f as { label: string }).label);
-  assert.ok(resultados.some((l) => l.includes("Utilidad Bruta operativa")));
+  assert.ok(resultados.some((l) => l.includes("Utilidad bruta")));
 });

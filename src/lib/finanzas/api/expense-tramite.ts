@@ -21,10 +21,14 @@
  * El `tenant_id` llega de la ruta, que lo saca del perfil autenticado (SOP-014).
  */
 
+import { cargarInicioContable, esContabilizadoFuera, explicacionContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
+import { allocatePurchaseNumber } from "@/lib/finanzas/numbering/purchase-numbering";
+import { mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import {
   construirAsientoDeGastoTramite,
   SOURCE_TYPE_GASTO_TRAMITE,
@@ -66,6 +70,33 @@ export interface PosteoDeGastoTramite {
  * `db` es el cliente de SERVICIO (postea) y `tenantId` viene del perfil del
  * usuario autenticado, nunca del request (SOP-014).
  */
+/**
+ * Las columnas del gasto que necesita su asiento, y cómo se pasan al
+ * constructor. UNA definición para el alta (`postearGastoTramite`) y el posteo
+ * de documentos existentes (`contabilidad/posteo-retroactivo.ts`).
+ */
+export const SELECT_GASTO_PARA_ASIENTO = `id, date, accounting_date, concept, posted_entry_id, supplier_id, de_prueba,
+       purchase_number, supplier_invoice_number, status,
+       cases(case_code),
+       suppliers(legal_name)`;
+
+export function datosDeGastoParaAsiento(gasto: Record<string, unknown>): Parameters<typeof construirAsientoDeGastoTramite>[0] {
+  const caso = (gasto as unknown as { cases: { case_code: string } | null }).cases;
+  const prov = (gasto as unknown as { suppliers: { legal_name: string } | null }).suppliers;
+  return {
+    id: String(gasto.id),
+    date: String(gasto.date),
+    accounting_date: String((gasto as { accounting_date?: string | null }).accounting_date ?? gasto.date),
+    concept: String(gasto.concept ?? ""),
+    case_code: caso?.case_code ?? null,
+    supplier_legal_name: prov?.legal_name ?? null,
+    supplier_id: (gasto as { supplier_id?: string | null }).supplier_id ?? null,
+    purchase_number: (gasto as { purchase_number?: string | null }).purchase_number ?? null,
+    supplier_invoice_number:
+      (gasto as { supplier_invoice_number?: string | null }).supplier_invoice_number ?? null,
+  };
+}
+
 export async function postearGastoTramite(
   db: DB,
   tenantId: string,
@@ -74,11 +105,7 @@ export async function postearGastoTramite(
 ): Promise<PosteoDeGastoTramite> {
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
-    .select(
-      `id, date, concept, posted_entry_id,
-       cases(case_code),
-       suppliers(legal_name)`
-    )
+    .select(SELECT_GASTO_PARA_ASIENTO)
     .eq("id", expenseId)
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -89,6 +116,18 @@ export async function postearGastoTramite(
   }
   if (!gasto) {
     throw new MutationError("Gasto no encontrado", 404);
+  }
+  // Gasto de un caso de un cliente de prueba (nace de prueba, 094): no entra al
+  // libro (095). Se corta antes del número FAC-CO-.
+  if ((gasto as { de_prueba?: boolean }).de_prueba === true) {
+    throw new MutationError(mensajeDeDocumentoDePrueba(null), 409);
+  }
+  // 096: un gasto anterior al inicio contable está contabilizado FUERA. El
+  // botón «Registrar en el libro contable» no aparece, y si alguien llama a la
+  // ruta igual: 409. Postearlo duplicaría lo que ya está en QuickBooks.
+  const inicio = await cargarInicioContable(db, tenantId);
+  if (esContabilizadoFuera(String(gasto.date), inicio)) {
+    throw new MutationError(`Este gasto está contabilizado fuera. ${explicacionContabilizadoFuera(inicio)}`, 409);
   }
 
   // ── CAPA 1: el cache ──────────────────────────────────────────────────────
@@ -126,19 +165,7 @@ export async function postearGastoTramite(
 
   // ── Las líneas y el armado ────────────────────────────────────────────────
   const lineas = await getLineasDeGastoTramite(db, tenantId, expenseId);
-  const caso = (gasto as unknown as { cases: { case_code: string } | null }).cases;
-  const prov = (gasto as unknown as { suppliers: { legal_name: string } | null }).suppliers;
-
-  const armado = construirAsientoDeGastoTramite(
-    {
-      id: String(gasto.id),
-      date: String(gasto.date),
-      concept: String(gasto.concept ?? ""),
-      case_code: caso?.case_code ?? null,
-      supplier_legal_name: prov?.legal_name ?? null,
-    },
-    lineas
-  );
+  const armado = construirAsientoDeGastoTramite(datosDeGastoParaAsiento(gasto), lineas);
   if (!armado.ok) {
     // Líneas sin clasificar, con su mensaje ya redactado y los números de
     // línea adentro. 422 y no 400: el request está bien formado, lo que falta
@@ -146,10 +173,34 @@ export async function postearGastoTramite(
     throw new MutationError(armado.mensaje, 422, { motivo: armado.motivo, lineas: armado.lineasSinCuenta });
   }
 
+  // ── EL NÚMERO FAC-CO- (071, E3) ───────────────────────────────────────────
+  // Se toma DESPUÉS de armar (un gasto sin clasificar no consume número) y se
+  // escribe en el gasto ANTES de postear: el trigger de la 038 lo deja pasar
+  // porque todavía no hay asiento, y un reintento después de un posteo fallido
+  // REUSA el número que ya tiene en vez de quemar otro.
+  let numero = (gasto as { purchase_number?: string | null }).purchase_number ?? null;
+  if (!numero) {
+    try {
+      numero = await allocatePurchaseNumber(db, tenantId);
+    } catch (err) {
+      throw new MutationError("No se pudo asignar el número FAC-CO- del gasto. No se registró nada.", 500, err);
+    }
+    const { error: errNumero } = await db
+      .from("expenses")
+      .update({ purchase_number: numero })
+      .eq("id", expenseId)
+      .eq("tenant_id", tenantId);
+    if (errNumero) {
+      console.error("[expenses/postear] no se pudo guardar el número", errNumero);
+      throw new MutationError("No se pudo guardar el número del gasto. No se registró nada.", 500, errNumero);
+    }
+  }
+  const asiento = { ...armado.asiento, reference: numero };
+
   // ── EL POSTEO ─────────────────────────────────────────────────────────────
   let entryId: string;
   try {
-    entryId = await postJournalEntry(db, tenantId, armado.asiento, userId);
+    entryId = await postJournalEntry(db, tenantId, asiento, userId);
   } catch (err) {
     // ── CAPA 3: el UNIQUE de la 034 ─────────────────────────────────────────
     // ⚠️ El código de Postgres viaja en `MutationError.detail`, NO en `cause`
@@ -218,7 +269,9 @@ export async function reverseExpenseTramite(
   tenantId: string,
   userId: string,
   expenseId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseExpenseTramiteResult> {
   const { data: gasto, error: errGasto } = await db
     .from("expenses")
@@ -252,8 +305,14 @@ export async function reverseExpenseTramite(
     );
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
-  const armado = construirAsientoDeReversion(original, { hoy, motivo: reason, source_id: expenseId });
+  // Fecha de registro elegida (revisión del 28/09 y reunión del 30/09): período
+  // abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
+  const armado = construirAsientoDeReversion(original, { fecha, motivo: reason, source_id: expenseId });
   if (!armado.ok) {
     throw new MutationError(armado.mensaje, 422);
   }
@@ -269,6 +328,9 @@ export async function reverseExpenseTramite(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

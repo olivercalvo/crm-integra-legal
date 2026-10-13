@@ -9,6 +9,7 @@ import {
 import { getInvoiceById } from "@/lib/finanzas/queries/invoices";
 import { isEditable, type CaseOption, type InvoiceLineInput } from "@/lib/finanzas/types/invoice";
 import { InvoiceForm } from "../../_components/invoice-form";
+import { facturasAjustables, referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
 
 
 /**
@@ -40,7 +41,7 @@ export default async function EditarFacturaPage({ params }: PageProps) {
     redirect(`/finanzas/facturas/${invoice.id}`);
   }
 
-  const [clients, services, taxCodes, casesRes] = await Promise.all([
+  const [clients, services, taxCodes, casesRes, ajustables, referencia] = await Promise.all([
     listClientsActive(db, tenantId),
     listServicesActive(db, tenantId),
     listTaxCodesActive(db, tenantId),
@@ -49,6 +50,8 @@ export default async function EditarFacturaPage({ params }: PageProps) {
       .select("id, case_code, description, client_id")
       .eq("tenant_id", tenantId)
       .order("case_code"),
+    facturasAjustables(db, tenantId),
+    invoice.invoice_kind === "NOTA_DEBITO" ? referenciaDeNotaDeDebito(db, tenantId, invoice.id) : Promise.resolve(null),
   ]);
 
   const allCases = (casesRes.data ?? []) as CaseOption[];
@@ -82,29 +85,26 @@ export default async function EditarFacturaPage({ params }: PageProps) {
           label="Volver al detalle"
           showLabel
         />
-        <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Editar factura</h1>
-          <p className="text-sm text-gray-500">
-            Modifica los datos del borrador. Al guardar, los totales se
-            recalculan automáticamente.
-          </p>
-        </div>
       </div>
 
       <InvoiceForm
+        subtitulo="Modifica los datos del borrador. Al guardar, los totales se recalculan automáticamente."
         mode="edit"
         clients={clients}
         casesByClient={casesByClient}
         services={services}
         taxCodes={taxCodes}
+        facturasAjustables={ajustables}
         initial={{
           id: invoice.id,
           invoice_kind: invoice.invoice_kind,
           client_id: invoice.client_id,
           case_id: invoice.case_id,
           issue_date: invoice.issue_date,
+          accounting_date: invoice.accounting_date ?? invoice.issue_date,
           due_date: invoice.due_date,
           notes: invoice.notes,
+          referenced_invoice_id: referencia?.id ?? null,
           lines: formLines,
         }}
       />

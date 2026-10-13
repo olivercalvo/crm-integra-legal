@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { deletePayment } from "@/lib/finanzas/api/payments";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -17,7 +18,7 @@ interface RouteParams {
  *
  * Permisos: admin + abogada (D4). Asistente y contador → 403.
  */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -34,4 +35,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] deletePayment unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -75,13 +75,16 @@ BEGIN
     RAISE NOTICE '[1] motivo de 2 caracteres ................... ✅ RECHAZADO: %', v_err;
   END;
 
-  -- [2] Fecha que no es hoy: rechazada (la reversión lleva la fecha en que se hace).
+  -- [2] Fecha ANTERIOR al original: rechazada. Desde la 069 (revisión del 28/09
+  --     y reunión del 30/09) la fecha la elige el contador; lo que se sigue
+  --     rechazando es reversar antes del asiento que se revierte.
   BEGIN
-    PERFORM public.reverse_payment(v_tenant, v_pago, 'Cheque devuelto', current_date - 30, 'Reversión', v_lineas, NULL);
-    RAISE NOTICE '[2] fecha de hace 30 días .................... ⚠️ PASÓ (debía fallar)';
+    PERFORM public.reverse_payment(v_tenant, v_pago, 'Cheque devuelto',
+      (SELECT transaction_date - 1 FROM public.journal_entries WHERE id = v_orig_id), 'Reversión', v_lineas, NULL);
+    RAISE NOTICE '[2] fecha anterior al original ............... ⚠️ PASÓ (debía fallar)';
   EXCEPTION WHEN others THEN
     GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    RAISE NOTICE '[2] fecha de hace 30 días .................... ✅ RECHAZADA: %', v_err;
+    RAISE NOTICE '[2] fecha anterior al original ............... ✅ RECHAZADA: %', v_err;
   END;
 
   -- [3] Líneas que NO son el espejo (mismo cuadre, otra cuenta): rechazadas.

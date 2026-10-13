@@ -1,8 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
-export async function GET(request: Request) {
+export const GET = conManejoDeAuditoria(async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/";
@@ -34,4 +35,4 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);
-}
+});

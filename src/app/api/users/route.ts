@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { UserRole } from "@/types/database";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const VALID_ROLES: UserRole[] = ["admin", "abogada", "asistente", "contador"];
 
-export async function GET(request: NextRequest) {
+// Lee la sesión (cookies): siempre dinámica. Sin esto `next build` intenta
+// prerenderizarla, el try/catch atrapa el aviso de Next y lo deja en el log
+// del build como un error que no es (DYNAMIC_SERVER_USAGE).
+export const dynamic = "force-dynamic";
+
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -15,7 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     // Get user's tenant_id
     const { data: profile, error: profileError } = await admin
@@ -55,4 +61,4 @@ export async function GET(request: NextRequest) {
     console.error("Unexpected error in GET /api/users:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

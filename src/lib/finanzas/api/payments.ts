@@ -18,6 +18,8 @@
  * 'pagada'→'emitida' / 'parc'→'emitida'; la whitelist de T2 ya lo permite).
  */
 
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CreatePaymentInput } from "@/lib/finanzas/types/payment";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
@@ -29,6 +31,7 @@ import {
 import { cargarCobroParaAsiento } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { getAsientoDeCobro } from "@/lib/finanzas/queries/payments";
 import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
 import { allocateReceiptNumber } from "@/lib/finanzas/numbering/receipt-numbering";
 
 type DB = SupabaseClient;
@@ -118,11 +121,16 @@ export async function createPayment(
     throw new MutationError("Elija al menos una factura a la que aplicar el cobro.", 400);
   }
 
+  // 096 (regla 3.3.5): un cobro nuevo no lleva fecha anterior al inicio
+  // contable. Antes del número. Uno posterior aplicado a una factura de antes
+  // del inicio sí se registra y postea (HABER 100004 del cliente).
+  await asegurarFechaDesdeElInicio(db, tenantId, "cobro", input.payment_date, "payment_date");
+
   // 1. Lookup de las facturas + estado + cap por balance_due, POR factura
   const ids = input.applications.map((a) => a.invoice_id);
   const { data: invs, error: errInv } = await db
     .from("invoices")
-    .select("id, invoice_number, client_id, status, grand_total, amount_paid, balance_due")
+    .select("id, invoice_number, client_id, status, grand_total, amount_paid, balance_due, de_prueba")
     .eq("tenant_id", tenantId)
     .in("id", ids);
 
@@ -154,6 +162,18 @@ export async function createPayment(
     );
   }
   const clientId = Array.from(clientes)[0];
+
+  // Un cliente de prueba no cobra: su cobro nacería de prueba (094) y la base
+  // no lo dejaría entrar al libro (095). Se corta antes del número.
+  const clienteMarcado = await clienteDePrueba(db, tenantId, clientId);
+  if (clienteMarcado !== null) {
+    throw new MutationError(mensajeDeClienteDePrueba(clienteMarcado), 409);
+  }
+  // Ni una factura de prueba: su cobro no tiene contra qué ir en el libro (095).
+  const facturaDePrueba = Array.from(porId.values()).find((i) => (i as { de_prueba?: boolean }).de_prueba === true);
+  if (facturaDePrueba) {
+    throw new MutationError(mensajeDeDocumentoDePrueba(facturaDePrueba.invoice_number), 409);
+  }
 
   for (const app of input.applications) {
     const inv = porId.get(app.invoice_id)!;
@@ -303,7 +323,7 @@ export async function deletePayment(
   // Lookup para distinguir "not found" de "permission". Más diagnóstico.
   const { data: pay, error: errFetch } = await db
     .from("payments")
-    .select("id, status")
+    .select("id, status, payment_number, payment_date")
     .eq("tenant_id", tenantId)
     .eq("id", paymentId)
     .maybeSingle();
@@ -314,6 +334,14 @@ export async function deletePayment(
   if (!pay) {
     throw new MutationError("Pago no encontrado", 404);
   }
+  // 096: un cobro contabilizado fuera (anterior al inicio) no se elimina.
+  await asegurarQueNoEsContabilizadoFuera(
+    db,
+    tenantId,
+    "cobro",
+    (pay as { payment_number?: string | null }).payment_number ?? null,
+    (pay as { payment_date?: string | null }).payment_date ?? null
+  );
 
   // ---- 🔴 GATE CONTABLE ---------------------------------------------------
   // Un cobro que ya está en el libro NO se borra. Mismo patrón que
@@ -411,7 +439,9 @@ export async function reversePayment(
   tenantId: string,
   userId: string,
   paymentId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReversePaymentResult> {
   // 1. El cobro existe y es de este tenant. El RPC lo vuelve a chequear con
   //    candado; acá es para contestar 404 en vez de un error opaco.
@@ -442,12 +472,16 @@ export async function reversePayment(
     );
   }
 
-  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
-  //    Misma fórmula de "hoy" que el resto del módulo (UTC), y la misma que el
-  //    RPC compara contra su `current_date`.
-  const hoy = new Date().toISOString().slice(0, 10);
+  // 3. La fecha de registro (revisión del 28/09 y reunión del 30/09): la elige
+  //    el contador, en un período abierto y nunca antes del original. Se valida
+  //    acá para contestar en palabras; el RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(original, {
-    hoy,
+    fecha,
     motivo: reason,
     source_id: paymentId,
   });
@@ -467,6 +501,9 @@ export async function reversePayment(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

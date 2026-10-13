@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
-import { emitCreditNoteToEfactura } from "@/lib/finanzas/efactura/orchestration/emit-credit-note-to-efactura";
+import { enviarNotaDeCreditoALaDgi } from "@/lib/finanzas/efactura/orchestration/enviar-a-la-dgi";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -27,14 +28,14 @@ interface RouteParams {
  *
  * Sin body.
  */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
   try {
-    const result = await emitCreditNoteToEfactura(
+    const result = await enviarNotaDeCreditoALaDgi(
       ctx.db,
       ctx.tenantId,
       ctx.userId,
@@ -54,4 +55,4 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});

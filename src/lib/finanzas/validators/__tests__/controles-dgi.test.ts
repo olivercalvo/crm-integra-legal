@@ -35,7 +35,7 @@ import {
 
 test("el tope es 500, que es el de la DGI", () => {
   assert.equal(DESCRIPCION_LINEA_MAX, 500);
-  assert.equal(DESCRIPCION_LINEA_MIN, 2);
+  assert.equal(DESCRIPCION_LINEA_MIN, 1, "el mínimo de la DGI (03/10/2026)");
 });
 
 test("🔴 el caso real: 545 caracteres REBOTAN, y el mensaje dice cuántos sobran", () => {
@@ -59,10 +59,10 @@ test("con uno solo sobrando, el mensaje va en singular", () => {
   assert.match(r.mensaje, /Sobra 1 carácter/);
 });
 
-test("una descripción vacía o de un carácter no pasa", () => {
+test("una descripción vacía no pasa; un carácter sí, como en la DGI (03/10/2026)", () => {
   assert.ok(!validarDescripcionDeLinea("").ok);
   assert.ok(!validarDescripcionDeLinea("   ").ok);
-  assert.ok(!validarDescripcionDeLinea("x").ok);
+  assert.ok(validarDescripcionDeLinea("x").ok);
   assert.ok(validarDescripcionDeLinea("ok").ok);
 });
 

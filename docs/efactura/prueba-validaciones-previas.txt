@@ -1,0 +1,37 @@
+Validaciones previas a la DGI · 2026-10-03T20:31:42.450Z · staging xtyenhakplrkyifbcaow · EFACTURA_I_AMB=2
+Cliente de prueba: CLI-001 FERRETERÍA VALLARINO (persona jurídica, receptor 01). Su ficha se restaura al final.
+
+1. RUC MAL FORMADO: no deja emitir y no consume número
+   emitir → rechazado 422
+   mensaje: No se puede emitir: la DGI la rechazaría. Corrija esto y vuelva a emitir:
+            Ficha del cliente: El RUC "ABC-1554821" no tiene la forma del RUC de una persona jurídica: tres grupos de números separados por guiones (por ejemplo 25046169-3-2021). Corríjalo en la ficha del cliente, o revise si el cliente es persona natural.
+   correlativo FAC-HON: 27 antes, 27 después ✅ sin consumir
+   en la factura: status=borrador · motivo guardado: ✅
+   No se pudo emitir.
+   Ficha del cliente: El RUC "ABC-1554821" no tiene la forma del RUC de una persona jurídica: tres grupos de números separados por guiones (por ejemplo 25046169-3-2021). Corríjalo en la ficha del cliente, o revise si el cliente es persona natural.
+
+2. DESCRIPCIÓN VACÍA (un borrador viejo, guardado antes de la validación): no deja emitir y marca la línea
+   emitir → rechazado 422
+   mensaje: No se puede emitir: la DGI la rechazaría. Corrija esto y vuelva a emitir:
+            Línea 1: Escriba una descripción para esta línea.
+   campos marcados: {"lines.0.description":"Línea 1: Escriba una descripción para esta línea."}
+   correlativo FAC-HON: 27 antes, 27 después ✅ sin consumir
+   motivo guardado: ✅
+
+3. RECHAZO DEL PAC: pasa la validación (RUC bien formado pero ficticio) y la DGI lo rechaza
+   emitir → ✅ emitida FAC-HON-000028
+   enviar a la DGI → feEstado=error · [{"dCodRes":"1601","dMsgRes":"Regla de formación del RUC invalida"},{"dCodRes":"1602","dMsgRes":"RUC inexistente en los registros de la DIRECCIÓN GENERAL DE INGRESOS"}]
+   en la factura: fe_estado=error · motivo guardado: ✅
+   La DGI no la autorizó: [1601] Regla de formación del RUC invalida · [1602] RUC inexistente en los registros de la DIRECCIÓN GENERAL DE INGRESOS
+   El RUC del cliente parece inválido o incompleto. Verifique el RUC en la ficha del cliente y reintente.
+   en «Pendientes DGI»: ✅ FAC-HON-000028 · error · creado por Ileana Barrios (STAGING)
+
+4. REINTENTO DEL MES ACTUAL: con el RUC corregido (el del emisor, el único que acepta el sandbox) autoriza
+   reintento → feEstado=authorized · intento 2 · nº 57 · [{"dCodRes":"0260","dMsgRes":"Autorizado el uso de la FE"}]
+   en la factura: fe_estado=authorized · motivo ✅ limpio
+   en «Pendientes DGI»: ✅ ya no aparece
+
+5. EXTRA, MES ANTERIOR: un pendiente de septiembre no se reenvía
+   FAC-HON-000007 (2026-09-04) → rechazado 409 · Consultar con el contador antes de reenviar: el documento es de un mes anterior. Ante la DGI quedaría con la fecha de hoy y su ITBMS ya está en el mes del documento.
+
+Ficha de CLI-001 restaurada.

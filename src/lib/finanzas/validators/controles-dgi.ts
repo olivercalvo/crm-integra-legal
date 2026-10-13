@@ -39,11 +39,11 @@
 export const DESCRIPCION_LINEA_MAX = 500;
 
 /**
- * Mínimo. Dos y no uno: una descripción de un solo carácter pasa el "requerido"
- * y no le dice nada a nadie — ni al cliente que recibe la factura ni al contador
- * que la lee seis meses después.
+ * Mínimo: 1, el de la DGI (pedido de Oliver, 03/10/2026: «entre 1 y 500»). Hasta
+ * ese día era 2, más estricto que la DGI; la validación previa a la emisión usa
+ * exactamente el rango de la DGI para no bloquear lo que la DGI acepta.
  */
-export const DESCRIPCION_LINEA_MIN = 2;
+export const DESCRIPCION_LINEA_MIN = 1;
 
 export type Verificacion = { ok: true } | { ok: false; mensaje: string };
 

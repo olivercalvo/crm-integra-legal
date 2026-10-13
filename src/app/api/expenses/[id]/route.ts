@@ -1,7 +1,10 @@
+import { asegurarFechaDesdeElInicio, asegurarQueNoEsContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
+import { MutationError } from "@/lib/finanzas/api/errors";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Mismo criterio que POST /api/expenses: gastos es admin/abogada. El asistente
 // quedó fuera del alcance de gastos el 24/08/2026, el contador tiene su propio
@@ -9,7 +12,7 @@ import { requireRole } from "@/lib/supabase/server-query";
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
 // PATCH /api/expenses/[id] — Update an expense
-export async function PATCH(
+export const PATCH = conManejoDeAuditoria(async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -20,7 +23,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -39,7 +42,7 @@ export async function PATCH(
     // Fetch existing expense
     const { data: existing } = await admin
       .from("expenses")
-      .select("id, amount, concept, date, expense_type, tenant_id, receipt_url, receipt_filename")
+      .select("id, amount, concept, date, accounting_date, supplier_invoice_number, expense_type, tenant_id, receipt_url, receipt_filename")
       .eq("id", expenseId)
       .eq("tenant_id", profile.tenant_id)
       .single();
@@ -49,7 +52,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { amount, concept, date, receipt_url, receipt_filename } = body;
+    const { amount, concept, date, accounting_date, receipt_url, receipt_filename, supplier_invoice_number } = body;
 
     const updates: Record<string, unknown> = {};
     const auditEntries: { field: string; old_value: string | null; new_value: string | null }[] = [];
@@ -71,8 +74,42 @@ export async function PATCH(
     }
 
     if (date !== undefined && date !== existing.date) {
+      // 096: la fecha no se mueve a antes del inicio contable (la base lo exige igual).
+      try {
+        await asegurarFechaDesdeElInicio(admin, profile.tenant_id, "gasto_tramite", date, "date");
+      } catch (err) {
+        if (err instanceof MutationError) {
+          return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
+        }
+        throw err;
+      }
       updates.date = date;
       auditEntries.push({ field: "date", old_value: existing.date, new_value: date });
+    }
+
+    // La fecha de REGISTRO sólo se mueve en un gasto que todavía no está en el
+    // libro: una vez posteado, el trigger de la `049` (con la `068`) la congela.
+    if (accounting_date !== undefined && accounting_date !== existing.accounting_date) {
+      updates.accounting_date = accounting_date;
+      auditEntries.push({ field: "accounting_date", old_value: existing.accounting_date, new_value: accounting_date });
+    }
+
+    // 070 (E2): el número de la factura del proveedor se puede cargar o corregir
+    // también en un gasto ya registrado: no entra al asiento (ver la 070).
+    if (supplier_invoice_number !== undefined) {
+      const n = typeof supplier_invoice_number === "string" && supplier_invoice_number.trim() !== ""
+        ? supplier_invoice_number.trim()
+        : null;
+      if (n && n.length > 50) {
+        return NextResponse.json(
+          { error: "El número de factura del proveedor no puede pasar de 50 caracteres." },
+          { status: 400 }
+        );
+      }
+      if (n !== (existing.supplier_invoice_number ?? null)) {
+        updates.supplier_invoice_number = n;
+        auditEntries.push({ field: "supplier_invoice_number", old_value: existing.supplier_invoice_number, new_value: n });
+      }
     }
 
     if (receipt_url !== undefined && receipt_url !== existing.receipt_url) {
@@ -117,10 +154,10 @@ export async function PATCH(
     console.error("Unexpected error in PATCH /api/expenses/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
 // DELETE /api/expenses/[id] — Delete an expense
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -131,7 +168,7 @@ export async function DELETE(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -157,6 +194,17 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
+    }
+
+    // 096: un gasto contabilizado fuera (anterior al inicio) no se elimina. Antes
+    // de tocar el storage.
+    try {
+      await asegurarQueNoEsContabilizadoFuera(admin, profile.tenant_id, "gasto_tramite", existing.concept ?? null, existing.date);
+    } catch (err) {
+      if (err instanceof MutationError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
     }
 
     // If expense has a receipt in storage, delete it
@@ -198,4 +246,4 @@ export async function DELETE(
     console.error("Unexpected error in DELETE /api/expenses/[id]:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

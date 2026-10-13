@@ -23,7 +23,7 @@ export async function cargarNotaDeCreditoParaAsiento(
   const { data: nc, error: errNc } = await db
     .from("credit_notes")
     .select(
-      "id, credit_note_number, issue_date, grand_total, " +
+      "id, credit_note_number, issue_date, accounting_date, grand_total, client_id, " +
         "invoice:invoices!credit_notes_invoice_id_fkey(invoice_number), " +
         "client:clients!credit_notes_client_id_fkey(name)"
     )
@@ -35,7 +35,7 @@ export async function cargarNotaDeCreditoParaAsiento(
 
   const { data: filas, error: errLin } = await db
     .from("credit_note_lines")
-    .select("line_order, description, subtotal, tax_amount, service_id")
+    .select("line_order, description, subtotal, tax_amount, service_id, tax_code_id")
     .eq("tenant_id", tenantId)
     .eq("credit_note_id", ncId)
     .order("line_order", { ascending: true });
@@ -49,7 +49,9 @@ export async function cargarNotaDeCreditoParaAsiento(
     id: string;
     credit_note_number: string;
     issue_date: string;
+    accounting_date: string | null;
     grand_total: number | string;
+    client_id: string | null;
     invoice: Uno<{ invoice_number: string }>;
     client: Uno<{ name: string }>;
   };
@@ -58,7 +60,10 @@ export async function cargarNotaDeCreditoParaAsiento(
     id: row.id,
     credit_note_number: row.credit_note_number,
     issue_date: row.issue_date,
+    // Sin `accounting_date` (base anterior a la `068`) el registro es la fecha del documento.
+    accounting_date: row.accounting_date ?? row.issue_date,
     grand_total: num(row.grand_total),
+    client_id: row.client_id ?? null,
     invoice_number: uno(row.invoice)?.invoice_number ?? "",
     client_name: uno(row.client)?.name ?? "—",
     lineas,

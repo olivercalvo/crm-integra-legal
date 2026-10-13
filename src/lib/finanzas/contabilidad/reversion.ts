@@ -20,13 +20,16 @@
  * Es un cerrojo, no una segunda implementación.
  *
  * ═════════════════════════════════════════════════════════════════════════════
- * LA FECHA ES LA DE LA REVERSIÓN, NUNCA LA DEL ORIGINAL
+ * LA FECHA LA ELIGE EL CONTADOR, NUNCA ANTERIOR A LA DEL ORIGINAL
  * ═════════════════════════════════════════════════════════════════════════════
- * Acta de la reunión con RM del 09/09/2026: "La reversión lleva SIEMPRE la
- * fecha en que se hace, nunca la del asiento que revierte." Postear con la
- * fecha original podría caer en un período cerrado y reescribiría un mes que
- * el contador ya reportó. La fecha entra por parámetro (`hoy`) para que el
- * servidor y la pantalla le pasen la misma; el RPC además la exige.
+ * Revisión de Josuarth del 28/09/2026 y reunión del 30/09/2026: la reversión
+ * deja de llevar siempre la fecha de hoy. El contador elige la fecha de
+ * registro, en un período abierto; la pantalla propone `hoyEnPanama()`.
+ * Reemplaza al acta del 09/09 ("SIEMPRE la fecha en que se hace").
+ * Lo que NO cambia: nunca es anterior al asiento que revierte, y el período lo
+ * exige la base (`post_journal_entry`). Ver `fecha-de-registro.ts`.
+ * La fecha entra por parámetro (`fecha`) para que el servidor y la pantalla le
+ * pasen la misma.
  *
  * ═════════════════════════════════════════════════════════════════════════════
  * QUÉ ES EL ESPEJO
@@ -46,6 +49,9 @@ export interface LineaOriginal {
   debit: number;
   credit: number;
   description: string | null;
+  /** El tercero de la línea (054). El espejo lo conserva (E2). */
+  client_id?: string | null;
+  supplier_id?: string | null;
 }
 
 /** El asiento que se va a reversar. */
@@ -60,8 +66,8 @@ export interface AsientoAReversar {
 }
 
 export interface DatosDeReversion {
-  /** ISO `YYYY-MM-DD`. La fecha en que se hace, no la del original. */
-  hoy: string;
+  /** ISO `YYYY-MM-DD`. La fecha de registro elegida; nunca anterior a la del original. */
+  fecha: string;
   motivo: string;
   /** `source_id` del espejo: el documento que originó el asiento (el cobro). */
   source_id: string | null;
@@ -103,19 +109,19 @@ export function construirAsientoDeReversion(
       mensaje: `El motivo de la reversión no puede superar los ${MOTIVO_MAX} caracteres.`,
     };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datos.hoy)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datos.fecha)) {
     return {
       ok: false,
       motivo: "fecha_invalida",
       mensaje: "La fecha de la reversión no tiene el formato esperado (AAAA-MM-DD).",
     };
   }
-  if (datos.hoy < original.transaction_date) {
+  if (datos.fecha < original.transaction_date) {
     return {
       ok: false,
       motivo: "fecha_anterior",
       mensaje:
-        `La reversión (${datos.hoy}) no puede ser anterior al asiento que revierte ` +
+        `La reversión (${datos.fecha}) no puede ser anterior al asiento que revierte ` +
         `(asiento ${original.entry_number}, ${original.transaction_date}).`,
     };
   }
@@ -133,13 +139,17 @@ export function construirAsientoDeReversion(
     debit: round2(l.credit),
     credit: round2(l.debit),
     description: l.description ? `Reversión: ${l.description}` : "Reversión",
+    // E2: el espejo de una línea de 100004 con cliente devuelve el saldo A ESE
+    // cliente. Sin esto el original tenía tercero y el espejo quedaba anónimo.
+    client_id: l.client_id ?? null,
+    supplier_id: l.supplier_id ?? null,
   }));
 
   return {
     ok: true,
     asiento: {
-      transaction_date: datos.hoy,
-      description: `Reversión del asiento ${original.entry_number} — ${original.description}`,
+      transaction_date: datos.fecha,
+      description: `Reversión del asiento ${original.entry_number}: ${original.description}`,
       source_type: "reversion",
       lines,
       source_id: datos.source_id,

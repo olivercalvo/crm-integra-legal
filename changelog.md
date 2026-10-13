@@ -1,5 +1,624 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Cierre del día: guía simplificada y revisión de Josuarth] - 2026-10-08
+
+- Guía de carga enero a junio reescrita por Oliver, más simple, con la sección «Las fechas» que separa pantallas
+  (día primero) de archivos de Excel (mes primero). El Word para Josuarth se regeneró.
+- Josuarth empieza la revisión con el guion de pruebas y el Preview de `feat/bloque1-contable`, con el interruptor
+  `FINANZAS_POSTEO_HISTORICO_HABILITADO` encendido sólo en ese Preview. La rama queda congelada (sin push) mientras
+  revisa. `develop` y `main` sin cambios.
+- Al Bloque 2: el contador ve Clientes; notas de débito en Notas de crédito si Josuarth lo pide; la plantilla de la
+  apertura marca qué clientes tienen saldo.
+
+## [Menú de Finanzas por proceso (requerimiento 44)] - 2026-10-08
+
+Sólo el menú lateral (`nav-config.ts`, sidebar y menú móvil). Sin migraciones, sin cambios de permisos ni de rutas.
+- Cinco grupos, en orden: **Ventas, Compras, Asientos, Reportes, Configuración**, con su título en el menú
+  (colapsado, una línea entre grupos). Cada opción conserva su ruta, sus roles y el ícono de abrir en pestaña nueva.
+- Opciones nuevas en el menú, todas con ruta de antes: Clientes (`/legal/clientes`, admin y abogada) en Ventas;
+  Importación de asientos y Contabilizar documentos por mes en Asientos; cada reporte en Reportes (con «Todos los
+  reportes» para el hub); **Saldos iniciales** (`/finanzas/asientos/apertura`) en Configuración.
+- Las que no estaban en la lista de Josuarth van al grupo más cercano: Cotizaciones y Pendientes DGI en Ventas,
+  Períodos contables en Asientos, Bitácora contable en Reportes, Plantilla T&C en Configuración.
+- Se pinta sólo la opción más específica (`getActiveItemHref`): en la apertura, «Saldos iniciales» y no «Asientos de
+  diario». Las etiquetas largas pasan a dos líneas.
+- Test: `menu-finanzas-por-proceso.test.ts`. Capturas: `docs/finanzas/capturas-cambios-ventana/menu-por-proceso/`.
+- Rutas de menú nuevas en `docs/finanzas/guia-carga-enero-junio.md` (y su Word para Josuarth) y en los tres textos
+  de la app que decían «Asientos de Diario › Apertura» (Plan de cuentas, su plantilla y Parámetros contables).
+
+## [Fechas en MM/DD por defecto e interruptor en la ventana] - 2026-10-08
+
+Sin migraciones.
+- **Formato de fecha por defecto: MM/DD/AAAA**, en la importación de asientos y en la apertura (decisión (c) de
+  Josuarth del 30/09). El selector y la «Fecha leída» se quedan. La **apertura** gana el mismo selector
+  (`date_format` en `POST /api/finanzas/asientos/apertura`; contabilizar usa el mismo que la revisión en seco).
+  Plantillas, guía (ejemplo de febrero en MM/DD) y tests.
+- **Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`:** se prende en Production el mismo día de la ventana, como
+  último paso después del deploy, con su verificación (runbook `ventana-bloque-1.md` §2, §7 y §8).
+- Guía de carga: sin el paso «Pídele a Oliver que habilite la apertura».
+
+## [Antigüedad con fecha de corte y formato de fecha de la importación] - 2026-10-08
+
+Sin migraciones.
+- **Antigüedad «Al» (requerimiento 41):** `/finanzas/reportes/aging` tiene el campo **«Al»** (por defecto hoy en
+  Panamá), por cobrar y por pagar. El saldo de cada documento se **reconstruye** a esa fecha
+  (`reports/antiguedad-al-corte.ts`, puro): el documento desde su fecha de registro, cada cobro, pago, NC o aplicación
+  desde la suya, lo reversado hasta la fecha de su reversión y lo anulado deja de existir ese día. Los días de atraso
+  se cuentan contra el corte. La cuenta control se corta por `transaction_date`, y las partidas de diario y de
+  apertura también. El Excel lleva la fila «Al» y el corte en el nombre. Con el corte en hoy da lo mismo que antes
+  (verificado contra staging documento por documento).
+- **Importación de asientos, fechas:** el formato por defecto pasa a **DD/MM/AAAA** (antes MM/DD, decisión (c) del
+  30/09). La vista previa muestra la **fecha leída en palabras** y cómo venía en el archivo. Dos fallas corregidas: en
+  un **CSV** la librería convertía «03/04/2026» en fecha por su cuenta (mes primero, sin mirar el selector, y con el
+  redondeo quedaba el 05/03); ahora se lee como texto (`raw: true`, también en la apertura). Una **celda de fecha con
+  hora** de la tarde se redondeaba al día siguiente; ahora se trunca.
+- **Build:** `/api/admin/audit`, `/api/search` y `/api/users` son `force-dynamic` (el log del build ya no muestra
+  `DYNAMIC_SERVER_USAGE`; también estaba en el de producción, sin efecto).
+- Tests: `antiguedad-al-corte.test.ts` y 5 nuevos en `asientos-import.test.ts`. Capturas:
+  `docs/finanzas/capturas-cambios-ventana/corte-y-fechas/`.
+
+## [Importación de asientos: advertencia de gasto sin proveedor] - 2026-10-07
+
+- La revisión de la importación de asientos **advierte** (no bloquea) cada línea en una cuenta de gasto o costo
+  que no trae proveedor como tercero (o trae un cliente): «Esta línea no tiene proveedor: no saldrá en el anexo de
+  compras», con la fila y la columna. Se ve en la vista previa, en amarillo, debajo de los errores, y el resumen
+  cuenta las advertencias. Un código de tercero inexistente sigue siendo error y no se avisa dos veces.
+- La guía `docs/finanzas/guia-carga-enero-junio.md` lo explica. Tests en `asientos-import.test.ts`.
+- Staging: se deshizo la importación de prueba `QB-PRUEBA-0710` (AD-000004, reversión asiento 155 del 07/10). La
+  antigüedad de CLI-001 vuelve a 15 documentos y B/. 1,604.76; octubre no tiene asientos importados vigentes.
+  Capturas en `docs/finanzas/capturas-cambios-ventana/deshacer-prueba/` y `advertencia/`.
+
+## [Cambios chicos antes de la ventana y guía de carga enero a junio] - 2026-10-07
+
+Sin migraciones. Decisiones de Oliver sobre la cobertura de requerimientos (`docs/finanzas/cobertura-requerimientos-2026-10-07.md`).
+- **19:** «Gastos del Bufete» pasa a **«Compras»** en el menú, el listado, el detalle, alta, edición, Proveedores y
+  el Resumen de ITBMS (pantalla y PDF: «Detalle de compras»). La ruta `/finanzas/gastos-bufete` no cambia.
+- **5:** **«Ver asiento N.º X»** en el detalle de factura, compra y gasto de trámite. Admin y contador lo abren
+  (`/finanzas/asientos/{id}`); la abogada ve el número sin enlace, porque los asientos son admin y contador.
+- **13:** botón **«Facturar este caso»** en el detalle del caso (admin y abogada): abre la factura nueva con el
+  caso y su cliente precargados. Antes el `?case_id=` de la factura nueva no hacía nada.
+- **48:** el CRM se puede **instalar en el escritorio** desde el navegador (manifest `standalone`, íconos 192 y
+  512, color del tema). `/manifest.webmanifest` es público en el middleware.
+- **46:** cada opción del menú lateral tiene un ícono **«Abrir en una pestaña nueva»** al pasar el mouse (sin
+  pestañas internas).
+- **3:** la hoja «Instrucciones» de la plantilla del plan de cuentas dice que la **subcategoría es obligatoria**
+  (vacía toma la del tipo), lista las válidas por tipo y aclara que el saldo inicial sólo cuenta sin apertura.
+- **11:** el título del formulario sigue al tipo de documento (**«Nueva factura»**, «Nueva factura de
+  reembolso», «Nueva nota de débito», y «Editar …») y el tipo HONORARIOS se muestra como **«Factura»**, nunca
+  «Honorarios». Los mensajes de líneas mixtas (SOP-029) siguen nombrando la categoría de servicios.
+- **Antigüedad:** la partida que viene de un **asiento importado** se nombra por su referencia externa
+  (`QB-1001 (AD-000005)`), para encontrar el documento de QuickBooks.
+- **Guía para Josuarth:** `docs/finanzas/guia-carga-enero-junio.md` (camino A: apertura al 31/12/2025, enero a
+  mano, febrero a junio por importación con el proveedor como tercero).
+- Test: `cambios-antes-de-la-ventana.test.ts` (8). Capturas: `docs/finanzas/capturas-cambios-ventana/`.
+  Ensayo completo de la ventana sin errores, concurrencia 180 rondas (1620, cero deadlocks).
+
+## [Interruptor del posteo histórico] - 2026-10-07
+
+- «Contabilizar el mes» (documentos existentes) y «Contabilizar» y «Reversar» (apertura) quedan **apagados** hasta
+  que el contador dé el visto bueno: los botones se ven deshabilitados con «Disponible cuando el contador dé el
+  visto bueno» y el servidor no acepta la operación. La plantilla, el Excel en seco y el cuadre al corte se
+  pueden bajar igual. Se prende con la variable `FINANZAS_POSTEO_HISTORICO_HABILITADO=true` (en producción, en
+  Vercel, sólo con el visto bueno de Josuarth).
+- Migraciones `100` y `101` aplicadas en staging (verificación 12/12) y probadas en la app con capturas.
+
+## [Asiento de apertura (saldos iniciales)] - 2026-10-07
+
+- Nueva pantalla **Finanzas › Asientos de Diario › Apertura** (admin y contador): los saldos de cada cuenta al día
+  del corte, en un solo asiento, una vez. Se baja la plantilla (con lo que conoce el CRM o vacía), se revisa en
+  seco (errores por fila, totales por cuenta) y se contabiliza. Los saldos salen de los libros del contador
+  (QuickBooks): lo precargado es sólo una ayuda.
+- La **fecha de la apertura** es un parámetro (Configuración › Parámetros contables): por defecto el día anterior
+  al inicio contable. Al 31/12 lleva sólo cuentas de balance.
+- **Reversar la apertura**: con motivo, con la misma fecha que la apertura y sólo con su mes abierto. Después se
+  puede cargar otra.
+- Con apertura, los reportes dejan de sumar el saldo inicial de las cuentas (que ya no se edita) y la antigüedad
+  cuenta cada documento de la apertura con su fecha y vencimiento, sin repetir los anteriores al inicio.
+- **Cuadre al corte** por cliente y por proveedor, en pantalla y en Excel.
+- Migraciones `100` y `101` escritas (sin aplicar en staging); probadas en el ensayo de la ventana, donde entran
+  con la `097` a la `099`, aplicadas y sin usar.
+
+## [La factura real FAC-HON-000463 se puede cobrar y acreditar; lista de datos de prueba] - 2026-10-07
+
+- En la ventana, el cliente **0TEST-FE-002 ya no se marca de prueba**: su factura FAC-HON-000463 es real
+  ante la DGI y, con el cliente marcado, no se le podía registrar un cobro ni una nota de crédito. Su factura
+  de sandbox (FAC-HON-000460) se sigue marcando por número.
+- Se marcan de prueba, por número, los cuatro borradores de CLI-036 del 29/05 (pruebas). CLI-036 y el
+  borrador real de CLI-093 (DRAFT-cb03c1386ba0) no se tocan.
+- Un borrador con fecha anterior al inicio contable ya no muestra «Contabilizado fuera» en su detalle: se
+  edita y, con una fecha posterior al inicio, se emite normalmente.
+- Los scripts que corren SQL en staging aceptan sólo staging o una base local, y lo verifican antes de
+  conectarse.
+- Migración `099` aplicada en staging (verificación 11/11).
+
+## [Completar proveedores, cuentas y bancos en lote] - 2026-10-07
+
+- Dos pantallas nuevas en **Documentos existentes** (admin y contador): **Proveedores y cuentas de los
+  gastos** y **Bancos de los cobros**. Muestran los gastos de trámite y los cobros del mes que todavía no
+  están en el libro contable. Se marcan varios y se les asigna el mismo proveedor, cuenta o banco de una vez;
+  la cuenta va por línea, también en gastos con varias líneas.
+- Un documento que ya está en el libro no aparece y no se toca: si uno del lote no se puede, no se cambia
+  ninguno y el mensaje dice cuál. La bitácora contable registra cada cambio con quién lo hizo.
+- En la pantalla del mes, cada documento «Con problemas» tiene un botón **Corregir** que lleva a donde se
+  arregla.
+- **Los asientos de ajuste cargados a mano ya no impiden contabilizar el mes**: sólo los importados. La
+  pantalla y el Excel en seco los listan en «Asientos manuales del mes» para revisar que ninguno repita un
+  documento.
+- **Corregido:** editar una compra perdía los cambios de sus líneas (cuenta, descripción, monto) sin avisar.
+  Ahora se guardan.
+- Migración `098` aplicada en staging (verificación 9/9); `099` escrita, sin aplicar.
+
+## [Contabilizar los documentos existentes, un mes por vez] - 2026-10-07
+
+- Nueva pantalla **Finanzas › Asientos de Diario › Documentos existentes, por mes** (admin y contador).
+  Los documentos reales desde el inicio contable (01/07/2026) hasta la ventana del Bloque 1 no tienen
+  asiento: se contabilizan **después de la ventana, un mes por vez**, cuando el contador revisa ese mes.
+- **«Descargar en seco (Excel)»** no escribe nada: por documento, fecha, cliente o proveedor, cuentas,
+  débito y crédito, totales por cuenta, lo que no entra y por qué, y lo que falta completar. Pensado para
+  alguien que no conoce el CRM.
+- **«Contabilizar el mes»** registra el mes **entero o nada** (una sola transacción), cada documento con su
+  fecha y en orden, con el mismo asiento que el sistema arma al emitir o registrar. Repetirlo no duplica:
+  sólo toma documentos sin asiento. Dos personas a la vez: una contabiliza y la otra recibe un error sin
+  escribir nada (probado).
+- No entran: documentos de prueba, FAC-HON-000496 y FAC-HON-000508 (emitidas sin CUFE ni autorización de la
+  DGI, listadas aparte) y lo que cuelga de ellas, las NC de una anulación y los cobros del caso de Legal.
+  FAC-HON-000463, FAC-HON-000489 y FAC-HON-000503 sí entran. Una factura anulada entra con su anulación.
+- **Un mes se carga por un solo método:** no se contabilizan los documentos de un mes con asientos manuales
+  o importados, y no se importan asientos en un mes ya contabilizado desde los documentos («Este mes ya se
+  contabilizó desde los documentos del CRM el DD/MM/AAAA…»). Los ajustes cargados a mano (depreciación,
+  provisiones) no se bloquean en la importación.
+- Migraciones: `097` aplicada en staging (verificación 7/7); `098` escrita, sin aplicar (probada en la base
+  local del ensayo, 9/9). Julio y agosto contabilizados en staging; repetidos, no duplican.
+
+## [Inicio contable: lo anterior está «contabilizado fuera»] - 2026-10-06
+
+- Nuevo parámetro del bufete: **inicio contable**, 01/07/2026 (Finanzas › Configuración › Parámetros
+  contables; lo cambian admin y contador, y cada cambio queda en la bitácora contable). Los documentos con
+  fecha anterior ya están en los libros del contador: el CRM no les genera asiento y los muestra con la
+  etiqueta **«Contabilizado fuera»** en los listados, el detalle y la antigüedad de saldos, donde siguen
+  contando.
+- Lo anterior al inicio **no se crea, no se mueve a una fecha anterior, no se anula ni se elimina**, en
+  ningún tipo de documento (incluidas la factura emitida fuera y la NC de compra). El botón no aparece o
+  queda deshabilitado con el motivo, y el servidor y la base lo rechazan con el mismo texto. Se corrige con
+  una nota de crédito o un asiento de diario con fecha igual o posterior al inicio, que sí se registran.
+- Un cobro o un pago posterior aplicado a un documento anterior sí se registra en el libro.
+- El inicio no se puede mover si dejaría documentos del lado equivocado; el mensaje dice cuáles.
+- Migración `096` aplicada en staging (verificación 20/20) y probada de punta a punta con la app
+  (`docs/finanzas/prueba-inicio-contable.txt`, capturas en `docs/finanzas/capturas-inicio-contable/`).
+- Regenerar staging: las semillas mueven solas el inicio mientras siembran.
+- Consulta de solo lectura para producción: `sql/verificacion/produccion-documentos-antes-del-inicio.sql`.
+
+## [Anular sin CUFE ya no dice «anulada ante la DGI»] - 2026-10-06
+
+- **Corregido:** anular una factura sin CUFE (como FAC-HON-000489 y FAC-HON-000503 de producción) decía,
+  si fallaba el libro contable, «El documento quedó ANULADO ante la DGI», aunque no se envía nada a la DGI.
+  Ahora dice que la anulación no se completó en el libro y que la factura sigue emitida, sin cambios.
+- Al anular sin CUFE, una factura interna o una emitida fuera del CRM, el mensaje dice que quedó anulada en
+  el CRM y por qué no se envió nada a la DGI. El aviso verde dice «Anulada en el CRM. No se envió nada a la
+  DGI»; con CUFE, «Anulada ante la DGI y en el libro contable». Las notas de débito se nombran como tales.
+- Reversar una nota de crédito que nunca se autorizó dice que no se envió nada a la DGI, y si falla el libro,
+  que la nota sigue vigente, sin cambios.
+- Probado en staging con FAC-HON-000030, en el estado de la 489: con falla forzada del libro y después la
+  anulación normal. Va en el merge del Bloque 1 (runbook, §4 punto 8).
+- Migración `095` aplicada en staging (verificación 6/6). Ensayo de la ventana repetido en la base local con
+  la `095`: 64 migraciones sin errores, 41 tablas 131/131, concurrencia sin deadlocks.
+
+## [Los documentos de prueba no cuentan en ningún reporte] - 2026-10-05
+
+- Una factura, nota de crédito o cobro marcado como de prueba ya no aparece en la antigüedad, el estado de
+  cuenta, el resumen de ITBMS, Pendientes DGI (ni en sus avisos), el aviso de errores ante la DGI, los
+  selectores para cobrar o acreditar ni las exportaciones. En los listados se ve con la etiqueta «Prueba» y
+  en su detalle con una banda que lo explica.
+- Un documento de prueba no se emite, no se cobra, no se acredita, no se anula y no se envía a la DGI; un
+  cliente de prueba no recibe cobros ni notas de crédito nuevos. Se rechaza antes de usar un número.
+- Una factura real de un cliente marcado como de prueba (el caso de FAC-HON-000463) sigue contando en todo.
+- Migraciones `093` y `094` aplicadas en staging. La `095` (el libro no recibe documentos de prueba) está
+  escrita y ensayada, sin aplicar.
+- Runbook: el arreglo de usuarios desactivados va en la ventana del Bloque 1, y el paso «Accesos» bloquea
+  también a los dos usuarios que ya estaban desactivados.
+
+## [Compras pendientes, datos de prueba en la ventana y desactivar usuarios] - 2026-10-05
+
+- Una compra nueva ahora arranca en «Pendiente de pago». Antes arrancaba en «Pagado», y guardarla así
+  registraba un pago. La API hace lo mismo si no recibe estado, y la migración `093` (escrita, sin
+  aplicar) cambia el valor por defecto de la base. Va en el mismo despliegue que la `048`.
+- **Corregido: desactivar un usuario en Administración › Usuarios no le impedía entrar.** Ahora lo
+  bloquea en el inicio de sesión, y reactivarlo lo desbloquea. Probado en staging.
+- Datos de prueba de producción: la marca pasa a ser por documento (la factura FAC-HON-000463 es real
+  aunque su cliente sea de prueba). Migración `094` (escrita, sin aplicar), consulta de antes y después
+  y el paso de la ventana que marca 5 clientes y 8 facturas sin borrar nada, ensayado en local.
+- Runbook de la ventana: Postgres 17.6 en producción, la `093` y la `094` en el orden, el paso de datos
+  de prueba y el paso final «Accesos» (usuario de Josuarth y desactivar contador.test), con su consulta.
+
+## [Ensayo de la ventana del Bloque 1 y consulta de datos de prueba] - 2026-10-05
+
+- Ensayo completo de la ventana de producción contra una base local igual a producción: las 61
+  migraciones de la `025` a la `092` en tres bloques, sin errores, y las bitácoras en una ventana
+  aparte, también sin errores. Después, la prueba de las 41 tablas (131/131) y la de concurrencia
+  (cero bloqueos) pasan. Nada se aplicó en staging ni en producción.
+- Runbook con el orden final y el tiempo estimado: `docs/finanzas/runbooks/ventana-bloque-1.md`
+  (día ~4 h 50 min, ~2 h 40 min con la operación congelada). El runbook anterior apunta a éste.
+- Cambios al runbook que salieron del ensayo: la verificación de la `067` va después de la `025`,
+  el paso «Reasignar» de P-15 ya no va, y el paso −1 es este ensayo.
+- Nueva consulta de solo lectura para producción: `sql/verificacion/produccion-datos-de-prueba.sql`
+  (clientes, casos, facturas, cobros, gastos, usuarios y documentos que parecen de prueba).
+- `run-sql.mjs` y la prueba de concurrencia aceptan `ENSAYO_DATABASE_URL`, sólo si apunta a localhost.
+
+## [Estado fiscal de las facturas con CUFE del portal] - 2026-10-05
+
+- Una factura emitida en el portal de facturación y con su CUFE cargado en el CRM ya no dice «Sin enviar»:
+  dice «Autorizada en el portal», en el listado de facturas y en la tarjeta de Facturación Electrónica. Las
+  emitidas fuera del CRM siguen diciendo «Emitida fuera del CRM».
+- Aclarado: la `092` la había aplicado en staging la sesión anterior, con la aprobación de Oliver; no hubo
+  ningún paso automático.
+
+## [Registrar factura emitida fuera: 092 en staging y pruebas] - 2026-10-05
+
+- Nueva pantalla **Finanzas › Facturas emitidas fuera** (admin y contador): una factura que la DGI ya
+  autorizó desde QuickBooks o el portal entra al CRM con su CUFE, número propio `FAC-EXT-` y asiento, en
+  una sola transacción. Nunca se envía a la DGI ni usa la numeración del CRM.
+- `092` aplicada en staging (ya estaba, idéntica al archivo; se volvió a correr completa). Producción: en la
+  ventana, después de correr `sql/verificacion/produccion-cufe-repetidos.sql` (nuevo, sólo lectura).
+- Probado con las 3 del punto 100 (CUFE, fechas y montos reales, clientes ficticios): FAC-EXT-000001 a 003.
+  Mi Condado con fecha de registro 01/08 (agosto cerrado) se rechaza; con la de hoy entra. Rechazos de CUFE
+  repetido, fecha, número y monto que no coinciden, y la abogada recibe 403.
+- Están en el Estado de Resultado, el ITBMS, el Libro Mayor (100004 y 400001) y la antigüedad por cobrar;
+  no están en Pendientes DGI ni en el aviso de documentos sin autorización.
+- Corregido: el listado de facturas y la tarjeta fiscal decían «Sin enviar» de una factura emitida fuera;
+  ahora dicen «Emitida fuera del CRM». «Enviar a la DGI» la corta primero, sin guardarle un motivo de
+  pendiente.
+- Prueba de concurrencia: suma la factura emitida fuera (180 rondas, cero bloqueos) y el modo `--control`
+  vuelve a reconocer el bloqueo, que desde la 091 llega como AU001. Prueba de las 41 tablas: 131/131.
+- Registro completo: `docs/finanzas/prueba-facturas-externas.txt`.
+
+## [Cruce del facturador, prueba del 1519 y propuesta de facturas emitidas fuera] - 2026-10-05
+
+- Prueba en sandbox: una factura con fecha de documento de 45 días atrás y otra de 15 días atrás se
+  autorizan sin el aviso 1519 (`docs/efactura/prueba-fecha-antigua-1519.txt`).
+- Cruce del facturador de la DGI contra el CRM, de enero al 05/10 (`docs/finanzas/cruce-facturador-2026-10-05.md`).
+- Propuesta para registrar en el CRM facturas emitidas en QuickBooks o en el portal, con su CUFE, sin enviarlas
+  a la DGI (`docs/finanzas/propuesta-facturas-emitidas-fuera.md`). Sin código.
+
+## [Bitácoras: 091 aplicada, mensaje claro probado en pantalla] - 2026-10-03
+
+- `091` aplicada en staging. Probado como abogada: si el registro de auditoría falla, el comentario no se
+  guarda y la pantalla dice «No se pudo guardar porque falló el registro de auditoría. Intenta de nuevo y, si se
+  repite, avisa al administrador.»; el error real queda en el log del servidor.
+- Staging queda con todo aplicado hasta la `091`. La `088` (copia del registro anterior) sigue sin aplicar.
+
+## [Bitácoras: 090 aplicada, prueba de concurrencia, mensaje claro si falla la auditoría] - 2026-10-03
+
+- `090` aplicada en staging: la importación de asientos y la nota de crédito de compra ya no se traban con
+  otro posteo (120 rondas, cero bloqueos).
+- Prueba permanente de concurrencia `sql/tests/concurrencia-bitacora-libro.mjs`, obligatoria antes de cada
+  ventana de producción.
+- Si falla el registro de auditoría, la pantalla dirá «No se pudo guardar porque falló el registro de
+  auditoría. Intenta de nuevo y, si se repite, avisa al administrador.» y el error real queda en el log del
+  servidor. Código listo; la migración `091` espera aprobación.
+- Probado por rol: el contador ve sólo la bitácora contable, el admin las dos y la abogada ninguna.
+
+## [Bitácoras: 089 aplicada, prueba de las 41 tablas, deadlock con el libro] - 2026-10-03
+
+- `089` aplicada en staging: los comentarios, las tareas y los cobros del caso se vuelven a guardar.
+- Prueba permanente `sql/tests/verificacion-087-captura-41-tablas.sql` (131 operaciones, todas bien),
+  obligatoria antes de cada ventana de producción.
+- Encontrado un bloqueo cruzado entre la bitácora y el libro (importación de asientos o NC de compra al
+  mismo tiempo que otro posteo). Corrección `090` escrita, sin aplicar todavía.
+
+## [Bitácoras: 086 y 087 en staging, fallo en tareas y comentarios] - 2026-10-03
+
+- `086` y `087` aplicadas en staging. La importación de 200 líneas tarda 77 ms más (434 a 511 ms).
+- Fallo encontrado en el recorrido: con la `087`, crear un comentario o una tarea daba error y no se
+  guardaba. Corrección `089` escrita, sin aplicar todavía.
+- Resultados en `docs/finanzas/prueba-bitacoras.txt`.
+
+## [Bitácoras de auditoría y cruce de preguntas] - 2026-10-03
+
+- Cruce de preguntas pendientes para ideati, licenciadas y Josuarth (`docs/finanzas/cruce-preguntas-pendientes.md`).
+- Migraciones `086` y `087` escritas (sin aplicar): bitácora contable y bitácora legal, solo de agregar, con
+  cadena de hash, anclas y verificación, llenadas por triggers en la base. `088` (copia del registro
+  anterior) escrita y sin aplicar a propósito.
+- Cada ruta que escribe le dice a la base quién es el usuario (`createAdminClient(usuario)`).
+- Pantallas «Bitácora Contable» (contador y admin) y «Bitácora Legal» (admin), con filtros, Excel y
+  verificación de integridad. El registro anterior sigue visible en «Registro anterior».
+
+## [RUC NT, tipo de receptor deducido y clientes de prueba] - 2026-10-03
+
+- Las validaciones previas aceptan el RUC de propiedad horizontal (`8-NT-2-735096`) y la cédula PE con
+  tres grupos. Probado con los 22 RUC jurídicos que la DGI ya autorizó en producción.
+- Un cliente sin «Tipo de receptor FE» ya no se bloquea si se puede deducir: persona jurídica o natural
+  con DV → contribuyente; natural sin DV → consumidor final. Mapper, gate y validaciones usan la misma
+  función.
+- `sql/verificacion/produccion-ruc-clientes-autorizados.sql` con los patrones nuevos y el tipo que viaja.
+- Propuesta (sin construir) para marcar clientes de prueba; fecha B del corte confirmada en 01/07/2026.
+- Borrador para ideati con la pregunta de las facturas de prueba (no enviado).
+
+## [Validaciones previas a la DGI y pendientes] - 2026-10-03
+
+- `085` aplicada en staging: `fe_motivo_pendiente` en facturas y NC.
+- Una factura (y la ND o NC que va a la DGI) se valida antes de tomar número: estructura del RUC,
+  DV, receptor, descripción y cifras de cada línea, cuadre de totales, topes y nota referenciada.
+  El motivo queda guardado y se ve al reabrir el documento.
+- Lista «Pendientes de enviar a la DGI», con reintento (no para documentos de un mes anterior) y
+  aviso en facturas, reportes y el dashboard Legal.
+- Probado en staging y sandbox: `docs/efactura/prueba-validaciones-previas.txt`. Consulta para
+  contrastar las reglas con clientes reales: `sql/verificacion/produccion-ruc-clientes-autorizados.sql`.
+
+## [Hotfix 084 en producción] - 2026-10-03
+
+- 🔒 **Hotfix `084` aplicado en PRODUCCIÓN el 03/10/2026** (Oliver, SQL Editor): `audit_log` solo de
+  agregar. Antes y después 730 filas; política FOR ALL → FOR SELECT con la misma expresión
+  (`get_tenant_id()`); `anon` sin permisos; `authenticated` con INSERT, REFERENCES, SELECT y TRIGGER; los dos
+  triggers activos; prueba en la app OK. Producción: **024 + 084**.
+- `hotfix/audit-log-solo-agregar` → `main` (`9b00b12`, deploy de Producción OK) → `develop` (`36e80e2`,
+  marcador del inventario en `b000141`) → `feat/bloque1-contable`.
+
+## [084 aplicada en staging y hotfix de producción preparado] - 2026-10-03
+
+- `084` aplicada en staging (11/11). Idempotente: una segunda corrida no cambia nada.
+- Retirado `scripts/run_all_pending.sql` (consolidado de abril que vaciaba la base; chocaba con la 084).
+- Hotfix de producción preparado en `hotfix/audit-log-solo-agregar` (sin aplicar): procedimiento, consulta de
+  solo lectura antes/después y script para deshacer.
+- Bitácoras: copia a la contable aprobada; el admin ve la contable en solo lectura.
+
+## [084 audit_log solo de agregar (sin aplicar) y dos bitácoras] - 2026-10-03
+
+- ⚠️ `084` **escrita, SIN APLICAR**: `audit_log` pasa a lectura por bufete para el usuario, sin UPDATE,
+  DELETE ni TRUNCATE para nadie salvo el superusuario. Hotfix independiente para producción.
+  Verificación: `sql/tests/verificacion-084-audit-log-solo-agregar.sql` (11 pruebas).
+- Propuesta de auditoría: dos bitácoras, contable y legal, con su tabla, cadena, pantalla y permisos.
+
+## [083 aplicada, NC/ND internas y tres propuestas] - 2026-10-03
+
+- `083` aplicada en staging (verificación 4/4). ND-000004 y NC-000023 emitidas como internas: con
+  asiento, `fe_estado = 'interna'`, sin llamar al PAC; enviarlas después se rechaza en la app y en
+  la base. El 409 de un documento interno dice qué pasa.
+- Propuesta del corte con QuickBooks reescrita en dos fechas (apertura 31/12/2025 y posteo automático
+  desde una fecha configurable), con el cuadre por residuo y los cobros posteriores.
+- Propuesta de alerta para facturas emitidas sin autorización de la DGI y consulta del detalle de
+  las 4 de producción (solo SELECT).
+- Diagnóstico y propuesta de bitácora de auditoría. Hallazgo: `audit_log` se puede editar y borrar
+  desde la sesión de cualquier usuario.
+
+## [ND y NC genéricas a la DGI, envío al emitir, 082 aplicada] - 2026-10-03
+
+- `082` aplicada en staging. Verificación 3/3: 400010 con HON-OTROS; banco en una línea de NC de
+  compra rechazado; cuenta de gasto aceptada.
+- Nota de débito a la DGI: 05 con el CUFE de la factura que ajusta, 07 sin factura. NC sin factura:
+  06 genérica. Autorizadas en sandbox (ND-000002, ND-000003, NC-000022).
+- Al emitir una NC o una ND se elige «Enviar a la DGI» o «Interna (no se envía)». ⚠️ La interna
+  necesita la `083` (escrita, SIN APLICAR): `fe_estado = 'interna'`, terminal.
+- Borrador de mensaje para ideati (no enviado), consulta de producción de facturas con y sin DGI
+  por mes, y propuesta de «contabilizado fuera» para el corte con QuickBooks.
+
+## [Respuestas de Josuarth del 02/10 y detalles del recorrido] - 2026-10-03
+
+- ⚠️ `082` **escrita, SIN APLICAR**: cuenta 400010 «Otros servicios» (operativa) con HON-OTROS;
+  `create_supplier_credit_note` rechaza un banco o una caja en una línea
+  (`finanzas_es_cuenta_de_banco`, la misma regla que la pantalla). Verificación:
+  `sql/tests/verificacion-082-otros-servicios-y-bancos.sql`.
+- K-5: ninguna fecha de registro posterior a hoy (`PERMITIR_FECHA_DE_REGISTRO_FUTURA = false`),
+  también en el alta de un asiento manual y en la importación de asientos.
+- P-4a: la NC de venta sin factura se permite como documento interno (no va a la DGI).
+- Compra nueva y NC de proveedor: las líneas no ofrecen cuentas control ni bancos.
+- Detalle de NC de venta: montos en B/. y número de línea por posición.
+- Nota de débito: diálogo de emisión, panel de numeración y caja de «inmutable» hablan de nota de
+  débito, y sin la tarjeta de Facturación Electrónica mientras no va a la DGI. La factura muestra
+  la nota de débito que la ajusta.
+- Plan del Bloque 1 §7: respuestas del 02/10, comparación de la apertura de cuentas por cobrar y
+  la fase siguiente.
+
+## [Correcciones del recorrido del 03/10] - 2026-10-03
+
+- NC de proveedor sin compra: el aviso dice «compra» (decía «factura»); el diálogo de reversión ya no
+  queda en «de la compra .» cuando no hay compra.
+- Una NC anulada (de venta o de proveedor) ya no muestra saldo a favor: dice que está anulada y deja
+  las aplicaciones como historia.
+- El selector de cuentas de la NC de proveedor ofrece sólo lo que la base acepta y sin bancos
+  (`cuentasParaLineaDeNcDeCompra`); antes ofrecía 100004 y los bancos.
+- Plan de Cuentas: «Editar» lleva la pantalla al formulario. Sin voseo en el Plan de Cuentas, la
+  importación de cuentas y la tabla de gastos.
+- La descripción de un asiento de reversión usa «:» en vez de «—» (vale para las reversiones nuevas;
+  las ya escritas no se tocan).
+- Cierre anual: se confirma escribiendo el año, y «Cancelar» y «Sí, cerrar» quedan en extremos opuestos.
+
+## [Bloque 1: 076 a 081 aplicadas en staging] - 2026-10-03
+
+- `076`, `077`, `078`, `079` y `080` aplicadas en staging (01/10).
+- `081` aplicada en staging (03/10): la NC de proveedor sin compra ya no falla («record v_compra
+  is not assigned yet») y el CHECK de subcategoría ya no deja pasar una cuenta activa con
+  subcategoría vacía.
+- Verificaciones: 076 8/8, 077 5/5, 078 4/4, 079 7/7, 080 7/7.
+- Producción: sin cambios. La `081` va en la ventana inmediatamente después de la `080`.
+
+## [Estado de Resultado por período: sólo el período] - 2026-10-01
+
+- Corregido: con fecha «desde», las cuentas de resultado arrastraban los movimientos anteriores
+  al corte (un período de mitad de año salía acumulado desde enero). Ahora arrancan en cero y
+  muestran sólo lo del período. El Balance no cambia. Test en
+  `periodo-estados-financieros.test.ts`.
+
+## [Bloque 1: E10, E6 y E11] - 2026-10-01
+
+- ⚠️ `078` **sin aplicar**: tasa de ISR del bufete (`finanzas_parametros`). Estado de Resultado
+  sin Distribución a Socias, con utilidad bruta, antes de ISR, ISR y neta; Balance con utilidad
+  neta. Tarjeta de la tasa en Configuración, Impuestos.
+- ⚠️ `079` **sin aplicar**: subcategoría obligatoria en los seis tipos, patrimonio en tres, sin
+  depreciación acumulada como subcategoría, 400009 Derecho de Familia, 440001 Otros ingresos y
+  el servicio OTR-ING. Valores por defecto corregibles mientras llega el mapa de Josuarth.
+- ⚠️ `080` **sin aplicar**: cierre anual contra 300002 verificado por la base, con vista previa
+  en Períodos Contables, reversable; el Estado de Resultado excluye los cierres.
+
+## [Bloque 1: nota de débito] - 2026-10-01
+
+- ⚠️ Migración `077` **escrita y SIN APLICAR**: tipo `NOTA_DEBITO`, serie `ND-`, referencia
+  opcional a la factura que ajusta (mismo cliente, emitida) y T4 que la congela. Verificación:
+  `sql/tests/verificacion-077-nota-de-debito.sql`.
+- «Nota de débito» en el Tipo de documento de la factura, con el selector de la factura que
+  ajusta. Mismo asiento que una factura. El envío a la DGI queda apagado hasta probarlo en el
+  sandbox.
+
+## [Bloque 1, E8: notas de crédito como módulo propio] - 2026-10-01
+
+- ⚠️ Migración `076` **escrita y SIN APLICAR**: factura y compra opcionales, aplicaciones de NC,
+  `credited_total` con aplicaciones, `create_supplier_credit_note` con líneas libres y
+  verificación del asiento por cuenta, `apply_credit_note` / `apply_supplier_credit_note`.
+  Verificación: `sql/tests/verificacion-076-nc-modulo.sql`.
+- Pantallas nuevas: listados y alta de NC de venta y de proveedor. El botón de la factura y el
+  de la compra llevan a la misma pantalla, con el documento precargado y las líneas editables.
+- NC de venta sin factura apagada (P-4a); NC de compra sin compra permitida, como saldo a favor.
+- Antigüedad: las NC sin documento restan como saldo a favor del tercero.
+- El precio del editor de líneas de la factura se muestra en B/.
+
+## [Bloque 1: 075 aplicada en staging] - 2026-10-01
+
+- `075` aplicada en staging (verificación 8/8), con la corrección del nombre de una variable en
+  su bloque de verificación final.
+
+## [Bloque 1: ancla de la cadena, antigüedad nueva y filtro por módulo] - 2026-10-01
+
+- Detalle de la factura (Resumen, líneas), lista y diálogos: montos en B/., no con «$».
+- ⚠️ Migración `075` **escrita y SIN APLICAR** (R-1b): cada cierre de período graba el número y
+  el hash del último asiento en `accounting_chain_anchors` (inmutable); ancla inicial;
+  `verify_chain_anchors`. Constancia de cierre en PDF y verificación contra el JSON del respaldo
+  en Períodos Contables.
+- Antigüedad (E9): las partidas de diario y de apertura con tercero en la cuenta control entran
+  a la tabla del tercero, con enlace al asiento. El Excel les pone RUC y DV de la ficha.
+- Mayor y Diario: filtro «Módulo» (FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA), con las
+  reversiones dentro del módulo de lo que revierten. El Excel del Mayor respeta el filtro.
+
+## [Bloque 1: recorrido de la 073 y la 074] - 2026-10-01
+
+- 073 y 074 aplicadas en staging (verificación 11/11) y recorridas con contador y abogada2:
+  impuesto de ISC_5_PRUEBA en 200005, tasa usada sin cambio de cuenta, cobro con excedente,
+  saldo a favor aplicado por el contador sin asiento, cobro sin referencia rechazado.
+- «Registrar cobro» en el diálogo de la factura y montos en B/. en la sección de cobros.
+
+## [Bloque 1: tasa con su cuenta y cobro con excedente] - 2026-10-01
+
+- `072` aplicada en staging (verificación 8/8).
+- ⚠️ `073` **escrita, sin aplicar**: `tax_codes.account_code` (backfill 200003), una línea de
+  impuesto por cuenta en factura, compra y sus NC, selector de cuenta en Impuestos.
+- ⚠️ `074` **escrita, sin aplicar**: cobro con excedente (advertencia en pantalla, saldo a favor en
+  100004, negativo en la antigüedad), «Aplicar saldo a favor» sin asiento y referencia
+  obligatoria.
+- Plan §8: R-1b, el ancla externa de la cadena (sólo propuesta).
+
+## [Bloque 1, R-1: hash v5 y verificador que recalcula] - 2026-10-01
+
+- ⚠️ Migración `072` **escrita y SIN APLICAR**: contenido del hash en JSON canónico (v5),
+  `hash_version` por asiento, tramos de versiones viejas y `verify_accounting_chain` que
+  recalcula el contenido con la fórmula de cada asiento (v1 a v5).
+- `sql/tests/verificacion-072-hash-v5-verificador.sql` (8 comprobaciones, con adulteraciones
+  simuladas dentro de un ROLLBACK).
+- Consulta de solo lectura para producción: `sql/verificacion/gastos-tramite-sin-proveedor.sql`.
+- Recorrido E3 cerrado con abogada: FAC-CO-000002 (gasto de trámite) y CO-000011 (cobro).
+- P-2f (compra de contado sin proveedor) descartada.
+
+## [Bloque 1, E3: 071 aplicada en staging y proveedor obligatorio] - 2026-10-01
+
+- `071` aplicada en staging, con un cambio previo: el motor ya no exime compras, gastos de
+  trámite ni pagos del proveedor en 200001. Verificación 15/15.
+- Proveedor obligatorio en compras y gastos de trámite (formulario, ruta, constructor y motor).
+- Diagnóstico de solo lectura `sql/verificacion/recalculo-content-hash.sql`: los 98 asientos de
+  staging se reproducen con su versión de fórmula (v1 a v3). Propuesta del verificador en el plan §8.
+- Recorrido con contador: AD-000001, FAC-CO-000001, PA-000008.
+- Aviso de antigüedad sin doble punto cuando el nombre termina en «.».
+
+## [Bloque 1, E3: número de documento, referencia externa y tercero obligatorio] - 2026-10-01
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1 punto 2 y
+punto 10. ⚠️ Migración `071` **escrita y SIN APLICAR** (espera el «aplica»).
+
+### Numeración
+- Cobros `CO-` (los `REC-` emitidos se quedan), pagos a proveedor `PA-`, NC de compra `NC-CO-`.
+- Número interno `FAC-CO-` para compras y gastos de trámite (una secuencia, P-2b), visible en
+  sus detalles.
+- Asiento de diario `AD-`, asignado por el motor dentro de la transacción (también en la
+  importación: sin huecos).
+
+### El libro
+- `journal_entries.referencia_externa` (hash v4): factura del proveedor en compras y gastos de
+  trámite, cheque o transferencia en cobros y pagos, referencia libre del asiento de diario.
+- El motor exige el tercero en 100004 y 200001.
+- La reversión de una importación conserva el tercero (faltaba desde E2).
+
+### Pantallas
+- Mayor (pantalla y Excel) y Diario: Módulo, N.º documento, N.º transacción y Ref. externa.
+  🐞 El Excel rotulaba «Número de documento» una columna que traía el correlativo.
+- Mayor: sin tercero, la celda Nombre queda vacía (se retiró el heurístico del texto).
+- Asiento de diario: «Referencia externa»; en 100004/200001 el selector pide Cliente o Proveedor
+  y avisa «Esta línea afecta la antigüedad de…».
+- Importación: columna Tercero (CLI-/PRV-) y selector «Formato de fecha del archivo»
+  (MM/DD por defecto).
+- Caso cerrado: el gasto pregunta antes de guardar.
+
+### Pruebas
+- `npm test` en verde. Nuevas: `referencias-y-modulo-e3.test.ts`, `purchase-numbering.test.ts`,
+  formato de fecha y tercero en la importación, rutas del asiento manual con la 071.
+- `sql/tests/verificacion-071-motor-v4.sql` (15 comprobaciones) para correr después del «aplica».
+
+## [Bloque 1, E2: tercero y descripción en el asiento] - 2026-09-30
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §3.
+⚠️ Migración `070` **escrita y SIN APLICAR**.
+
+### Pantallas (vocabulario de Josuarth)
+- Detalle del asiento: "Fecha de registro" = la contable; "Grabado el" = el sello de grabación.
+  El formulario del asiento manual, igual.
+- Detalle de factura, de NC y de gasto de trámite: "Fecha del documento" y "Fecha de registro".
+
+### El libro
+- Factura, NC de venta, cobro, compra, gasto de trámite y pago a proveedor guardan el cliente o
+  proveedor en la línea de 100004 / 200001. La reversión conserva el tercero en el espejo.
+- Factura y compra: una línea del libro por línea del documento, con su descripción (ya no se
+  agrupa por cuenta).
+- Mayor (pantalla y Excel): el nombre de los asientos viejos sale de su documento de origen;
+  `resolverTercerosFiscales` cubre ahora gasto de trámite, pago a proveedor, NC de compra y
+  reversiones. Corregido: el tercer escalón tomaba el tercero de cualquier línea.
+- Gasto de trámite: número de factura del proveedor (`070`), en el formulario del caso, las rutas
+  y el detalle.
+
+### Pruebas
+- `npm test`: 1489/1489. Nuevas: tercero en la cuenta control por constructor, una línea por
+  línea del documento, espejo con tercero, orden de escalones del Mayor, resolución por documento
+  con base simulada, vocabulario de fechas en pantalla.
+
+## [Bloque 1, E1: fecha de documento y fecha de registro] - 2026-09-30
+
+Rama `feat/bloque1-contable`, sin push. Plan: `docs/finanzas/plan-bloque1.md` §1. Respuestas de
+Josuarth del 28/09 y 30/09 (P-1a, P-1d). ⚠️ Migraciones `068` y `069` **escritas y SIN APLICAR**.
+
+### Qué cambia
+- **Dos fechas en todo documento tipo factura**: la del documento (informativa) y la de
+  REGISTRO (`accounting_date`, la del asiento, define el período). Facturas HON/REI, compras,
+  gastos de trámite y NC de venta. En la NC de compra la de registro ya era `issue_date`.
+  Formularios con el campo nuevo «Fecha de registro», que sigue a la del documento hasta que
+  alguien la cambia.
+- **Reversiones, anulaciones y notas: el contador elige la fecha de registro.** Hoy en Panamá
+  por defecto, período abierto, nunca antes del original. Ocho RPC sin el candado de «hoy ±1
+  día» (`069`). Reemplaza la segunda frase del acta del 09/09 (`CLAUDE.md`, `sop.md` SOP-045).
+- **El período se valida antes de tomar un número y antes de hablar con la DGI.** Anular una
+  factura o reversar una NC autorizada con una fecha en un mes cerrado se corta antes del PAC.
+- **Resumen de ITBMS por fecha de registro** (P-1a).
+- **«El mes de la factura»** para anular es el de su fecha de registro.
+- **Fechas futuras en mes abierto**: permitidas detrás de una sola constante hasta que Josuarth
+  conteste la pregunta 5.
+- **FND-012**: «hoy» se calculaba en UTC. `hoyEnPanama()` en un solo lugar.
+
+### Base (sin aplicar)
+- `068_fechas_de_registro.sql`: `accounting_date` en cuatro tablas, backfill desde la fecha del
+  asiento (o del documento si no hay asiento), valor por defecto por trigger, y la columna entra a
+  las listas congeladas de T4, T5 y la 049. No toca el libro.
+- `069_reversion_con_fecha_elegida.sql`: parche verificado sobre la definición vigente de nueve
+  funciones. Los 12 patrones se contaron en staging en solo lectura: una coincidencia cada uno.
+
+### Pruebas
+- `npm test`: todo en verde (tests nuevos de fecha de registro, período cerrado, reversión con
+  fecha elegida, ITBMS por registro, orden fecha→PAC en factura y NC, y `hoyEnPanama()` a las 19:00).
+- Cinco tests que fijaban la regla vieja se reescribieron en el mismo commit, y cuatro
+  verificaciones SQL (046, 050, 055, 060). Nueva: `verificacion-068-069-fecha-de-registro.sql`.
+
 ## [Agenda: lo que faltaba de las transcripciones del 25/08 y el 09/09] - 2026-09-26 (tarde)
 
 Solo documentación y el Excel; ningún cambio de código. Último push autorizado antes de mandar

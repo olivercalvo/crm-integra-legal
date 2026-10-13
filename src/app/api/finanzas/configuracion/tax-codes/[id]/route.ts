@@ -4,6 +4,7 @@ import { getAuthenticatedContext, requireRole } from "@/lib/supabase/server-quer
 import { validateUpdateTaxCode } from "@/lib/finanzas/validators/tax-code";
 import { updateTaxCode } from "@/lib/finanzas/api/tax-codes";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // ESCRIBIR: admin y CONTADOR. La abogada no.
 //
@@ -19,7 +20,7 @@ const ROLES_ESCRITURA = ["admin", "contador"] as const;
  * Cambia nombre, tasa y/o estado activo. El `code` NO se toca: es la clave con
  * la que las líneas de factura y cotización referencian el impuesto.
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   const denied = requireRole(ctx.userRole, ROLES_ESCRITURA);
   if (denied) return denied;
@@ -56,4 +57,4 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     console.error("[finanzas] updateTaxCode unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

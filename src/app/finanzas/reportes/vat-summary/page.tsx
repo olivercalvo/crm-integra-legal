@@ -114,7 +114,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
           currentMonth={currentMonth}
         />
         <p className="text-xs text-gray-500">
-          Reporte generado {formatDate(result.generated_at)} · Devengado por fecha de emisión
+          Reporte generado {formatDate(result.generated_at)} · Devengado por fecha de registro
         </p>
       </div>
 
@@ -227,7 +227,7 @@ export default async function VatSummaryPage({ searchParams }: PageProps) {
       {/* Detalle: gastos del bufete con ITBMS */}
       {result.detail.business_expenses.length > 0 && (
         <DetailSection
-          title="Detalle de gastos del bufete"
+          title="Detalle de compras"
           subtitle={`${result.detail.business_expenses.length} compra${result.detail.business_expenses.length === 1 ? "" : "s"} · ${totalExpensesWithItbms} con ITBMS recuperable`}
         >
           <div className="overflow-x-auto">

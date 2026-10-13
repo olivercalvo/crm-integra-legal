@@ -50,6 +50,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { listarPeriodos } from "@/lib/finanzas/queries/periodos";
+import { anclaDelUltimoCierre } from "@/lib/finanzas/queries/anclas";
 import {
   codigoPeriodo,
   esAccionPeriodo,
@@ -57,6 +58,7 @@ import {
   validarMotivoReapertura,
   valorAuditadoDeReapertura,
 } from "@/lib/finanzas/contabilidad/periodos";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -79,7 +81,7 @@ async function contexto() {
   } = await supabase.auth.getUser();
   if (error || !user) return { error: NextResponse.json({ error: "No autorizado" }, { status: 401 }) };
 
-  const admin = createAdminClient();
+  const admin = createAdminClient(user.id);
   const { data: profile } = await admin
     .from("users")
     .select("tenant_id, role")
@@ -97,7 +99,7 @@ async function contexto() {
   return { admin, user, tenantId: profile.tenant_id as string };
 }
 
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   try {
     const ctx = await contexto();
     if ("error" in ctx) return ctx.error;
@@ -108,9 +110,9 @@ export async function GET() {
     console.error("[finanzas/periodos GET] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest) {
   try {
     const ctx = await contexto();
     if ("error" in ctx) return ctx.error;
@@ -253,11 +255,16 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // 075 (R-1b): al cerrar, la base grabó el ancla en la MISMA transacción del
+    // UPDATE (trigger). Se devuelve para que la pantalla la muestre enseguida.
+    const ancla = accion === "cerrar" ? await anclaDelUltimoCierre(admin, tenantId, fila.id) : null;
+
     return NextResponse.json({
       year,
       month,
       periodo: codigoPeriodo(year, month),
       estado: accion === "cerrar" ? "cerrado" : "abierto",
+      ancla: ancla ? { id: ancla.id, entry_number: ancla.entry_number, hash: ancla.hash } : null,
       // Se devuelve para que la pantalla pueda decir "reabierto" sin recargar.
       fueCerradoAlgunaVez: accion === "cerrar" ? true : Boolean(fila.closed_at),
     });
@@ -265,4 +272,4 @@ export async function PATCH(request: NextRequest) {
     console.error("[finanzas/periodos PATCH] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

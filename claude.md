@@ -25,8 +25,8 @@
 | Rol | Permisos |
 |-----|----------|
 | **Administrador** | Todo + gestión de usuarios y catálogos + importación masiva |
-| **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva. 🔒 **NO puede:** asientos manuales de diario (`/finanzas/asientos`) ni cerrar o reabrir períodos contables (`/finanzas/periodos`) — las dos son admin y contador, las dos únicas rutas de `/finanzas` cerradas para ella, y salen por `ADMIN_CONTADOR_ONLY_PREFIXES` ni reclasificar la clasificación contable de una cuenta. El criterio es el mismo en los dos: la guía de RM dice que eso es del contador, y un asiento manual escribe directo en el libro **sin documento que lo respalde** — si no puede lo menos, no puede lo más |
-| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas`, y dentro de él a seis subárboles: **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo, y desde el 21/09/2026 eso incluye **registrar, eliminar y reversar pagos a proveedores** y bajar el comprobante de egreso `CE-` — `MUTATING_ROLES` de `…/business-expenses/[id]/payments` y `…/supplier-payments/[id]/*`), **Proveedores** (`/finanzas/proveedores/*`, con CRUD completo — de ahí salen el RUC y el DV de los anexos de renta, y el plazo con el que la antigüedad calcula vencimientos; ampliado el 02/09/2026) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos) y **Asientos de Diario** (`/finanzas/asientos`, agregado el 03/09/2026 — carga manual de ajustes, depreciaciones, provisiones y aportes) y **Períodos Contables** (`/finanzas/periodos`, agregado el 03/09/2026 — cerrar un mes hace que el motor rechace todo asiento con esa fecha; reabrir lleva su propia confirmación). Más **dos DETALLES de documento sueltos**, los dos de SOLO LECTURA, porque auditar el mayor es llegar al documento: **factura** (`/finanzas/facturas/{id}`) y **gasto de trámite** (`/finanzas/gastos-tramite/{id}`, agregado el 03/09/2026). En los dos, el listado, crear y editar siguen cerrados. **Desde el 21/09/2026 entra también al LISTADO de cobros** (`/finanzas/cobros`, patrón exacto en `CONTADOR_FINANZAS_ALLOWED_PATTERNS`; Josuarth: "el contador SÍ debe ver la pantalla de Cobros" — es material de conciliación), **en solo lectura**: baja el PDF del recibo (`GET /api/finanzas/payments/[id]/pdf`, mismos roles que el PDF de la factura) y reversa, pero NO registra (`/finanzas/cobros/nuevo` le rebota y `POST /api/finanzas/invoices/[id]/payments` le responde 403). **Con UNA excepción en el detalle de factura, desde el 17/09/2026: el botón "Reversar" de un cobro contabilizado** (`POST /api/finanzas/payments/[id]/reverse`, bandera `canReverse` separada de `canMutate`). Es el único botón de mutación que ve ahí, y lo tiene por el mismo criterio de RM que le da los asientos manuales: corregir el libro es su trabajo. NO registra ni elimina cobros (eso sigue siendo `canMutate`, admin y abogada). 🔒 **El de gasto de trámite es una puerta al módulo Legal, al que el contador NO entra**, así que su alcance está recortado: muestra el gasto (monto, líneas, cuentas, fecha, proveedor con RUC y DV, vencimiento, comprobante) y **del caso solo el NÚMERO** — nada de descripción, partes, documentos, notas ni historial. El recorte vive en el `select` de `queries/expense-tramite.ts`, NO en el JSX, para que el dato confidencial no salga de la base; lo fija `gastos-tramite-privacidad.test.ts`. Ampliarlo es una decisión de política del bufete, no un cambio de pantalla. **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
+| **Abogada** | CRUD clientes, expedientes, tareas, gastos, documentos, comentarios, importación masiva. 🔒 **NO puede:** asientos manuales de diario (`/finanzas/asientos`) ni cerrar o reabrir períodos contables (`/finanzas/periodos`) — las dos son admin y contador, y salen por `ADMIN_CONTADOR_ONLY_PREFIXES`, igual que la **bitácora contable** (`/finanzas/auditoria`, desde el 03/10/2026) ni reclasificar la clasificación contable de una cuenta. El criterio es el mismo en los dos: la guía de RM dice que eso es del contador, y un asiento manual escribe directo en el libro **sin documento que lo respalde** — si no puede lo menos, no puede lo más |
+| **Contador** | Rol especializado en cierre contable. Entra SOLO a `/finanzas`, y dentro de él a seis subárboles: **Reportes** (`/finanzas/reportes/*`), **Gastos del Bufete** (`/finanzas/gastos-bufete/*`, con CRUD completo, y desde el 21/09/2026 eso incluye **registrar, eliminar y reversar pagos a proveedores** y bajar el comprobante de egreso `CE-` — `MUTATING_ROLES` de `…/business-expenses/[id]/payments` y `…/supplier-payments/[id]/*`), **Proveedores** (`/finanzas/proveedores/*`, con CRUD completo — de ahí salen el RUC y el DV de los anexos de renta, y el plazo con el que la antigüedad calcula vencimientos; ampliado el 02/09/2026) y **Configuración** (`/finanzas/configuracion/*` — Plan de Cuentas e Impuestos) y **Asientos de Diario** (`/finanzas/asientos`, agregado el 03/09/2026 — carga manual de ajustes, depreciaciones, provisiones y aportes) y **Períodos Contables** (`/finanzas/periodos`, agregado el 03/09/2026 — cerrar un mes hace que el motor rechace todo asiento con esa fecha; reabrir lleva su propia confirmación) y **Bitácora Contable** (`/finanzas/auditoria`, 03/10/2026, solo lectura, también el admin). Más **dos DETALLES de documento sueltos**, los dos de SOLO LECTURA, porque auditar el mayor es llegar al documento: **factura** (`/finanzas/facturas/{id}`) y **gasto de trámite** (`/finanzas/gastos-tramite/{id}`, agregado el 03/09/2026). En los dos, el listado, crear y editar siguen cerrados. **Desde el 21/09/2026 entra también al LISTADO de cobros** (`/finanzas/cobros`, patrón exacto en `CONTADOR_FINANZAS_ALLOWED_PATTERNS`; Josuarth: "el contador SÍ debe ver la pantalla de Cobros" — es material de conciliación), **en solo lectura**: baja el PDF del recibo (`GET /api/finanzas/payments/[id]/pdf`, mismos roles que el PDF de la factura) y reversa, pero NO registra (`/finanzas/cobros/nuevo` le rebota y `POST /api/finanzas/invoices/[id]/payments` le responde 403). **Con DOS excepciones en el detalle de factura: el botón "Reversar" de un cobro contabilizado** (desde el 17/09/2026; `POST /api/finanzas/payments/[id]/reverse`, bandera `canReverse` separada de `canMutate`) **y «Aplicar saldo a favor»** (desde el 01/10/2026, `POST /api/finanzas/payments/[id]/apply-credit`, bandera `canApplyCredit`: no mete dinero nuevo, sólo dice qué factura cancela un cobro que ya está en el libro). Reversar es el botón de corrección que ve ahí, y lo tiene por el mismo criterio de RM que le da los asientos manuales: corregir el libro es su trabajo. NO registra ni elimina cobros (eso sigue siendo `canMutate`, admin y abogada). 🔒 **El de gasto de trámite es una puerta al módulo Legal, al que el contador NO entra**, así que su alcance está recortado: muestra el gasto (monto, líneas, cuentas, fecha, proveedor con RUC y DV, vencimiento, comprobante) y **del caso solo el NÚMERO** — nada de descripción, partes, documentos, notas ni historial. El recorte vive en el `select` de `queries/expense-tramite.ts`, NO en el JSX, para que el dato confidencial no salga de la base; lo fija `gastos-tramite-privacidad.test.ts`. Ampliarlo es una decisión de política del bufete, no un cambio de pantalla. **Edita** la clasificación contable de una cuenta (`account_type`, `subcategoria`) y las tasas de impuesto: es el criterio de la guía de RM, "quien modifica la clasificación contable de una cuenta debe ser el contador", y por eso la abogada NO puede. **NO puede:** facturas, cotizaciones, ni nada del módulo Legal. Su home es `/finanzas/reportes`. Acceso a `/finanzas/configuracion` ampliado el 01/09/2026 — antes el menú se lo ofrecía y el middleware lo rebotaba |
 | **Asistente** | **Alcance reducido el 24/08/2026 por decisión del cliente.** Ve SOLO tres pantallas: Dashboard (`/legal`), Casos (`/legal/casos` — todos los del bufete, SOLO LECTURA) y Mis Pendientes (`/legal/pendientes`). Dentro de un caso puede hacer exactamente dos cosas: **subir documentos y comentar**. **Sigue cumpliendo tareas** desde Mis Pendientes — pero solo las asignadas a él, y no las crea: crear/asignar tareas es admin/abogada (`POST /api/tasks` le responde 403). Si necesita dejarse un recordatorio en un caso, usa un comentario. Ve la ficha de un cliente puntual (`/legal/clientes/{id}`, solo lectura) pero NO el directorio de Clientes. **NO puede:** ver ni registrar gastos (`/legal/gastos` le rebota, el tab Gastos del caso no se le renderiza y `/api/expenses` le responde 403), cambiar el estado de un caso (el `CaseStatusChanger` no se le renderiza y `PATCH /api/cases/[id]` le responde 403 incluso con `action="change-status"`), editar/crear/borrar casos ni clientes, **crear ni asignar tareas** (ni de caso ni pendientes personales de otra persona), acceder a Finanzas |
 
 > **Los permisos se hacen cumplir en el servidor, no en el menú.** Cada restricción de
@@ -172,7 +172,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   reflejo exacto del original. Hay un test que lee el diálogo y el helper y falla si alguno
   reimplementa el cálculo (`reversion-una-sola-implementacion.test.ts`). Es la lección de
   `validarConsistenciaDeKind`: si el cliente reimplementa, algún día la vista previa miente.
-- **La fecha es la de la reversión, nunca la del original** (acta del 09/09). El RPC la exige.
+- **La fecha la elige el contador, dentro de un período abierto, y nunca es anterior a la del
+  original** (revisión de Josuarth del 28/09 y reunión del 30/09, que reemplazan al acta del
+  09/09). Detalle y estado de la implementación en «Regla de la fecha de registro», al pie.
 - ✅ **Ya existen las otras dos reversiones**, y los avisos que decían lo contrario se
   corrigieron el 22/09/2026: el **gasto de trámite** desde la `050` (Bloque 4) y el **asiento
   manual** desde la `055` (Bloque 7). Tres pantallas seguían prometiendo que "todavía no está
@@ -190,10 +192,14 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   `POST /api/finanzas/invoices/[id]/payments`, una factura) y `/finanzas/cobros/nuevo`
   (`POST /api/finanzas/payments` con `applications[]`, una o varias) usan `payment-form-fields.tsx`.
   🔒 `payment-form-una-sola-implementacion.test.ts` falla si una puerta declara sus propios campos.
-- **Un recibo puede aplicarse a VARIAS facturas del mismo cliente** (Parte B, 21/09/2026). El total
-  tiene que ser IGUAL a la suma de lo aplicado: 🔴 **el excedente se RECHAZA** (no se guarda en
-  `amount_unapplied`) hasta que Josuarth defina si va a 100004 o a anticipos — la pregunta está en
-  `task_plan.md`. El asiento sigue siendo UNO de dos líneas por el total, con `reference` =
+- **Un recibo puede aplicarse a VARIAS facturas del mismo cliente** (Parte B, 21/09/2026). 🟢 **Desde
+  la `074` (Oliver, 01/10/2026) el EXCEDENTE se permite**: la pantalla lo avisa antes de guardar
+  (`mensajeDeExcedente`, el mismo texto en las dos puertas), queda en `amount_unapplied` como
+  **saldo a favor del cliente en 100004**, sale en NEGATIVO en la antigüedad (tramo corriente) y
+  se aplica a la próxima factura con «Aplicar saldo a favor» (RPC `apply_payment_credit`, SIN
+  asiento, admin, abogada y contador). Lo aplicado nunca pasa el saldo de una factura. 🔴 **La referencia
+  del cobro es OBLIGATORIA** (validador, pantalla y trigger al crear; no un CHECK NOT VALID, que
+  rompería la reversión de un cobro viejo sin referencia). El asiento sigue siendo UNO de dos líneas por el total, con `reference` =
   `payment_number`; la reversión (046) devuelve todas las facturas. El reparto por antigüedad es de
   la pantalla (`lib/finanzas/cobros/repartir-por-antiguedad.ts`); el servidor valida, no reparte.
 - **`/finanzas/cobros` lo ven admin, abogada y contador; registran solo admin y abogada.** El
@@ -219,8 +225,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   (`supplier-payments-dos-destinos.test.ts`).
 - 🔴 **`expenses.payment_account_code` NO se escribe.** Resto de la 036, congelado por la 038 a
   propósito; el banco va en el pago. Se dropea después.
-- **Sin proveedor no se bloquea**: 200001 sin auxiliar, "(sin proveedor)" en la antigüedad;
-  `supplier_id` se asigna después (la 049 lo sacó de la lista congelada).
+- ~~**Sin proveedor no se bloquea**~~ **Desde E3 (01/10/2026) sin proveedor el gasto NO entra al
+  libro** (200001 nunca sin tercero). Lo viejo sin proveedor sigue en la antigüedad como
+  "(sin proveedor)"; `supplier_id` se puede asignar después (la 049 lo sacó de la lista congelada).
 - La antigüedad por pagar lee los gastos de trámite **en el libro** (FND-010 cerrado); los sin
   asiento no entran hasta registrarse.
 
@@ -239,31 +246,34 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   "pagada" antes de la 048: sin número, banco, método, asiento ni comprobante (el CHECK lo impide).
   Se elimina (la compra vuelve a pendiente); no se reversa (409) ni tiene PDF (409). No se le
   inventa un `CE-`.
-- **Reversión por RPC `reverse_supplier_payment`** (048), una transacción, fecha de hoy; el
+- **Reversión por RPC `reverse_supplier_payment`** (048), una transacción, fecha de registro elegida (069); el
   diálogo es el de cobros con `variante="pago"`. Un pago sin asiento se elimina; con asiento, 409.
 - **Huecos en `CE-`:** mismo criterio que SOP-031 §2. Detalle en `sop.md` SOP-032.
 - **Vocabulario del Diario/Mayor:** `pago` = "Cobro", `pago_proveedor` = "Pago a proveedor".
 - FND-010 (los gastos de trámite en la antigüedad por pagar) se cerró el mismo día con el Bloque 4.
 
 ### Nota de crédito contable (desde 2026-09-22, Bloque 5 — SOLO staging)
-- 🔴 **Una NC se emite POR LÍNEAS con cantidad, nunca por monto libre.** El precio y la tasa son
-  los de la factura (`credit_note_lines` copia `unit_price`, `tax_rate`, `tax_code_id`); el asiento
+- 🔴 **Una NC se emite POR LÍNEAS con cantidad, nunca por monto libre.** Desde E8 (01/10/2026) las
+  líneas de la factura son el valor INICIAL y se editan (precio hasta el de la factura, P-4b;
+  tasa del catálogo, nunca del body; se pueden agregar líneas con servicio); el asiento
   se arma por línea (cuenta de ingreso de cada servicio, 130003 en los REIM-*, ITBMS por tasa) y
   así una NC parcial da el ITBMS proporcional exacto. Validador puro: `validators/credit-note.ts`.
   Tope (D7): **no se acredita más que `balance_due`**; lo cobrado se reversa primero.
 - 🔴 **Dos caminos, dos asientos distintos (D5):**
   - **Anular dentro del mes** = NC total automática (`createCreditNoteFromInvoice`) + REVERSIÓN
-    del asiento de la factura con fecha de hoy + `anulada`, en UNA transacción
+    del asiento de la factura con la fecha de registro elegida + `anulada`, en UNA transacción
     (RPC `cancel_invoice_with_reversal`, 052). La NC de una anulación **NO tiene asiento propio**:
     contabilizarla aparte sería contar dos veces.
   - **NC posterior o parcial** = asiento PROPIO `source_type = 'nota_credito'` con
     **`source_id = la NC`** (no la factura), construido por `asiento-nota-credito.ts` (la factura
     al revés, con `construirAsientoDeFactura` e invirtiendo). Mayor y Diario llegan a
     `/finanzas/notas-credito/{id}`.
-- 🔴 **Cerrado el MES DE LA FACTURA no se anula: se emite NC con fecha de hoy** (Josuarth, acta
-  del 09/09). Lo verifica `cancelInvoice` (409) Y el RPC contra `accounting_periods` por
-  `issue_date`. La pantalla reemplaza "Anular" por "Nota de crédito" (D4). Es distinto del
-  control de `post_journal_entry`, que mira el mes de HOY.
+- 🔴 **Cerrado el MES DE LA FACTURA no se anula: se emite NC** (Josuarth, acta del 09/09), con
+  la fecha de registro que elija el contador en un período abierto (revisión del 28/09 y
+  reunión del 30/09; ver «Regla de la fecha de registro», al pie). Lo verifica `cancelInvoice` (409) Y el RPC contra `accounting_periods` por
+  la fecha de REGISTRO de la factura (`accounting_date`, 068/069; antes `issue_date`). La
+  pantalla reemplaza "Anular" por "Nota de crédito" (D4). Es distinto del control de
+  `post_journal_entry`, que mira el mes de la fecha de registro de la ANULACIÓN.
 - 🔴 **Una factura con una NC en el libro ya NO se anula (053).** La anulación espeja el asiento
   original COMPLETO y la NC parcial ya debitó su parte: descuadre de 1.200 sobre 1.000. Lo que
   falta se acredita con OTRA NC. `cancelInvoice` rechaza por `credited_total > 0`; el RPC por la
@@ -289,6 +299,91 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   una NC enviada semanas después de su fecha contable?; (ii) Josuarth — acreditar una factura ya
   cobrada (saldo acreedor) y el excedente del recibo.
 
+### Notas de crédito como módulo propio (desde 2026-10-01, Bloque 1 E8 — `076` + `081` aplicadas SOLO en staging)
+- **Pantallas:** `/finanzas/notas-credito` (+ `/nueva`, admin y abogada) y
+  `/finanzas/notas-credito-proveedor` (+ `/nueva`, también el contador, por prefijo). El botón de la
+  factura y el de la compra abren la MISMA pantalla con el documento precargado (`?factura=`,
+  `?compra=`): un solo formulario, con el editor de líneas de la factura / de la compra.
+- **El documento es OPCIONAL.** Sin documento, la NC es **saldo a favor** del tercero (negativo en
+  la antigüedad) y se aplica desde su detalle con «Aplicar saldo a favor» (`apply_credit_note`,
+  `apply_supplier_credit_note`, SIN asiento, admin, abogada y contador). La pantalla pregunta antes
+  de guardar sin documento.
+- 🟢 **La NC de VENTA sin factura está ENCENDIDA** (`PERMITIR_NC_VENTA_SIN_FACTURA = true`,
+  Josuarth 02/10, P-4a) y **desde el 03/10 se manda a la DGI como 06 genérica, sin referencia**
+  (autorizada en sandbox: NC-000022). Hasta que se autoriza no resta ITBMS. La de compra sin
+  compra SÍ se permite.
+- 🔴 **Una línea de NC de compra no acredita un BANCO** (`082`, aplicada SOLO en staging, `finanzas_es_cuenta_de_banco`).
+  «Banco» = activo cuyo nombre dice banco, caja o efectivo: la MISMA regla que
+  `esCuentaDeBancoPorNombre` (`asiento-tesoreria.ts`), fijada por
+  `cuenta-de-banco-una-sola-regla.test.ts`. Las líneas de compra y de NC de proveedor no ofrecen
+  cuentas control ni bancos (`cuentasParaLineaDeCompra`).
+- 🔴 **`credited_total` = Σ NC `emitida` nacidas sobre el documento + Σ aplicaciones.** La NC con
+  documento lo sigue acreditando entero por `invoice_id` / `business_expense_id` (sin backfill);
+  la 076 aborta si cambia un solo `credited_total`. CHECK nuevo `credited_total <= grand_total`.
+- **`create_supplier_credit_note` cambió de firma** (compra opcional, proveedor, líneas con cuenta,
+  monto, impuesto e ITBMS ±0,02) y verifica el asiento **cuenta por cuenta**, ya no sólo
+  200001/200003. Lleva el documento del proveedor en `referencia_externa`.
+- Una aplicación no se edita ni se borra: si fue un error, se reversa la NC.
+
+### Nota de débito (desde 2026-10-01, decisión 14 — `077` aplicada SOLO en staging)
+- **Es una factura de venta con otro tipo de documento**: `invoice_kind = 'NOTA_DEBITO'`, serie
+  `ND-` (secuencia `debit_note`), mismo formulario, misma emisión y el MISMO asiento
+  (`source_type = 'factura'`). Suma en la antigüedad, el ITBMS y el resultado como una factura.
+- Lleva servicios de **honorarios** (un recargo, un ajuste); uno de reembolso se rechaza.
+- **La factura que ajusta es opcional** (`referenced_invoice_id`): del mismo cliente, emitida y que
+  no sea otra ND (trigger de la 077); T4 la congela al emitir. La columna sólo se nombra en una ND.
+- 🟢 **Va a la DGI desde el 03/10** (`PERMITIR_ND_A_LA_DGI = true`): **05 con el CUFE** de la
+  factura que ajusta, **07 genérica** sin factura (autorizadas en sandbox: ND-000002 y ND-000003).
+  Si la factura que ajusta no tiene CUFE: 409 antes del correlativo («emítala como interna»).
+
+### Tipo de documento de una nota y «Enviar a la DGI / Interna» (desde 2026-10-03 — `083` aplicada SOLO en staging)
+- 🔴 **El tipo sale de si hay referencia, nunca de un parámetro aparte**: `tipoDocumentoDeNota()`
+  (`efactura/mapper/tipo-de-documento.ts`). NC 04 con CUFE / 06 sin; ND 05 con CUFE / 07 sin. La DGI
+  rechaza 04/05 sin CUFE (`1705`) y 06/07 con CUFE (`1706`); medido en sandbox el 03/10
+  (`docs/efactura/prueba-tipos-05-06-07.txt`, `docs/efactura/inventario-2026-10-03.md`).
+- **Al emitir una NC o una ND se elige** «Enviar a la DGI» o «Interna (no se envía)»
+  (`SelectorDeEnvio`, sin opción marcada; `envio` en el body de `POST /credit-notes` y de
+  `POST /invoices/[id]/emit`, sólo ND). Lo aplica `aplicarEnvioAlEmitir`
+  (`efactura/orchestration/envio-al-emitir.ts`) **después** de emitir: un rechazo del PAC no deshace el
+  asiento; el documento queda en `error` y se reintenta desde su tarjeta.
+- 🔴 **La interna es `fe_estado = 'interna'`** (083): postea igual en el libro, nunca llama al PAC, y la
+  base la hace TERMINAL (sólo desde `no_emitida`, y de ahí no se sale). Banda de documento interno en
+  pantalla y PDF. Una ND interna se anula sólo en el libro (`decidirAccionFiscal`, sin el aviso del
+  portal). Probada en staging el 03/10 (ND-000004, NC-000023): asiento, `interna`, 0 intentos ante el
+  PAC, enviarla después → 409 en la app y rechazo en la base (`docs/efactura/prueba-notas-internas.txt`).
+
+### Estado de Resultado, Balance y tasa de ISR (desde 2026-10-01, E10 — `078` aplicada SOLO en staging)
+- Sin «Distribución a Socias». Siempre: Utilidad bruta → Utilidad antes de impuesto sobre la
+  renta → Impuesto sobre la renta (también en 0.00) → Utilidad neta. El Balance lleva la utilidad
+  neta (acumulada mientras no haya cierre, y lo dice).
+- **La tasa de ISR es del bufete** (`finanzas_parametros.isr_rate`, FRACCIÓN 0..1, 0 por
+  defecto). La pantalla pide el porcentaje y muestra la fracción. Escriben admin y contador
+  (`PUT /api/finanzas/configuracion/parametros`); sin fila, el reporte usa 0.
+
+### Plan de cuentas: subcategorías (desde 2026-10-01, E6 — `079` + `081` aplicadas SOLO en staging)
+- **Subcategoría obligatoria en los seis tipos** (CHECK `coa_subcategoria_por_tipo`, cuentas
+  activas). Sale `depreciacion_acumulada` (la depreciación resta dentro de PPE) y `patrimonio`
+  (ahora capital_social, resultados_acumulados, otras_reservas).
+- 🟡 **El mapa de Josuarth (P-8a) no llegó**: la 079 asigna un valor por defecto con un NOTICE por
+  cuenta (`subcategoriaPorDefecto()`, la MISMA regla en SQL y en la importación) y se corrige en
+  el Plan de Cuentas.
+- **400010 Otros servicios** (operativa, `082`, Josuarth 02/10): ahí va **HON-OTROS**. La 440001
+  queda para lo no operativo (su subcategoría NIIF 18 la confirma Josuarth).
+- **400009 Derecho de Familia** (HON-FAM) y **440001 Otros ingresos** con el servicio `OTR-ING`,
+  que es `service_type = 'honorarios'` (SOP-029 no deja 'otro' en una FAC-HON). Códigos
+  propuestos: P-8b, P-8c. Reemplaza el paso «Reasignar» de P-15 y el script de
+  `sql/datos-staging/` de HON-FAM.
+
+### Cierre anual (desde 2026-10-01, E11 — `080` aplicada SOLO en staging)
+- Asiento `cierre` al 31/12 (número `AD-` del motor): cada cuenta de resultado en contra y la
+  diferencia a **300002**. Lo arma `construirAsientoDeCierre()` (la misma función que la vista
+  previa) y **la base lo VERIFICA** contra `finanzas_saldos_de_resultado` (`close_fiscal_year`,
+  sólo `service_role`).
+- Uno vigente por año, **en orden**, con diciembre abierto. Se reversa con
+  `reverse_journal_entry` (acepta `manual` y `cierre`) y el año se puede volver a cerrar.
+- El **Estado de Resultado excluye los cierres** y sus reversiones; el Balance los incluye.
+- Admin y contador, desde Períodos Contables. P-11a abierta (300002 y su nombre).
+
 ### Asientos de diario — tercero, clon y reversión (desde 2026-09-22, Bloque 7 — SOLO staging)
 - 🔴 **El tercero de una línea son DOS FK reales** (`journal_entry_lines.client_id` /
   `.supplier_id`, `CHECK num_nonnulls(...) <= 1`), **no** un discriminador tipo `documents`: una
@@ -301,8 +396,10 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   con fecha en `sop.md` SOP-014) y **viaja dentro de `p_lines`**: la firma de
   `post_journal_entry` sigue teniendo 13 parámetros y ningún llamador se tocó.
 - **Se puede poner en cualquier línea**, no solo en cuentas de control.
-- **El Mayor resuelve el nombre en tres escalones**: tercero de la línea → tercero de la línea de
-  cuenta control → el heurístico de texto viejo, que sostiene TODO lo anterior a la `054`.
+- **El Mayor resuelve el nombre en tres escalones** (E2, 30/09/2026; E3 retiró el cuarto):
+  tercero de la línea → **tercero del documento de origen** (`resolverTercerosFiscales`, la
+  MISMA función del Excel) → tercero de la línea de cuenta control, o el único del asiento.
+  Si nada resuelve, **vacío**: el texto de la línea de control ya no se usa como nombre.
 - **Los asientos manuales NO alimentan la antigüedad** (no tienen vencimiento) pero **sí la
   explican**: la línea de "de dónde sale esa diferencia" los nombra con monto y tercero. Antes
   caían en el residuo anónimo de "hay una tercera causa".
@@ -317,6 +414,79 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   📋 Pre-flight obligatorio antes de producción (está al pie de la `055`).
 - **`MAX_LINEAS_MANUALES = 100` es tope del FORMULARIO, no del libro.** El RPC no tiene tope y el
   importador de Excel no pasa por ahí. No unificarlos.
+
+### Tercero y descripción en cada asiento nuevo (desde 2026-09-30, Bloque 1 E2 — SOLO staging)
+- 🔴 **Todo asiento de documento guarda el tercero en la línea de 100004 / 200001**: factura y
+  NC de venta (cliente), cobro (cliente), compra, gasto de trámite y pago a proveedor
+  (proveedor). La NC de compra ya lo hacía. Un gasto o compra sin ficha de proveedor queda sin
+  tercero: no se inventa (SOP-033).
+- 🔴 **La reversión CONSERVA el tercero** de cada línea: el espejo de un cobro devuelve el saldo
+  a ese cliente. Hasta E2 el espejo quedaba anónimo. Los cargadores del original leen
+  `client_id` / `supplier_id` y cada reversor los manda al RPC.
+- **Factura y compra: una línea del libro por cada línea del documento**, con su descripción
+  (Josuarth, punto 3). Ya NO se agrupa por cuenta; el total por cuenta no cambia. El gasto de
+  trámite ya era así.
+- **Los asientos viejos NO se tocan**: el Mayor les pone nombre desde su documento.
+- **`expenses.supplier_invoice_number`** (`070`): mismas reglas que la `044` de compras. NO se
+  congela al postear porque no entra al asiento; cuando E3 lo lleve a `referencia_externa`,
+  E3 lo congela.
+- **Vocabulario en pantalla**: "Fecha de registro" = la contable; el sello `record_date` es
+  "Grabado el". Factura, NC, gasto de trámite y asiento muestran las dos fechas. 🔒
+  `vocabulario-de-fechas.test.ts`.
+
+### Número de documento, referencia externa y tercero obligatorio (desde 2026-10-01, Bloque 1 E3 — `071` SOLO escrita)
+- 🔴 **Tres conceptos, tres lugares.** `reference` = el número PROPIO del documento
+  (`FAC-HON-`, `CO-`, `PA-`, `FAC-CO-`, `NC-`, `NC-CO-`, `AD-`). `referencia_externa` = el papel
+  de AFUERA (factura del proveedor, cheque, transferencia, la referencia libre del diario).
+  El **módulo** (FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA) NO se guarda: lo deriva
+  `moduloDelAsiento()` del `source_type`; una reversión lleva el de su original.
+- **Prefijos nuevos, secuencias que NO se reinician:** cobros `CO-` (los `REC-` emitidos se
+  quedan, P-2c), pagos a proveedor `PA-` (los `CE-` de staging se quedan), NC de compra `NC-CO-`,
+  y `FAC-CO-` para compras **y** gastos de trámite (una sola secuencia `purchase`, P-2b).
+- 🔴 **El `AD-` lo asigna `post_journal_entry`** para `manual`/`apertura`/`cierre`, adentro de la
+  transacción: un lote de importación que falla no deja huecos. Para esos tipos el RPC
+  **rechaza** un texto en `p_reference`; la referencia libre va en `p_referencia_externa`.
+- 🔴 **Tercero obligatorio en las cuentas con `cuenta_control`** (100004 cliente, 200001
+  proveedor), en el RPC para TODO `source_type`. Única excepción: `reversion` (el original
+  viejo puede no tenerlo). El formulario y la importación lo dicen antes con el número de
+  línea de la pantalla.
+- 🔴 **Ninguna línea en 200001 sin proveedor** (Oliver, 01/10/2026). Como toda compra y todo
+  gasto de trámite acreditan 200001, **el proveedor es OBLIGATORIO** en los dos: formulario,
+  ruta, constructor (`motivo: "sin_proveedor"`, antes de tomar el número) y motor. Reemplaza el
+  «sin proveedor no se bloquea» de SOP-033. La compra de contado sin ficha (banco directo) NO
+  existe todavía: propuesta P-2f en el plan.
+- 🔬 **Hash v4:** `referencia_externa` entra al `content_hash` (SOP-014, cuarta fila). La
+  reversión la hereda sola dentro del RPC.
+- 🔬 **Hash v5 y verificador que recalcula (`072`, escrita SIN APLICAR):** contenido en JSON
+  canónico (`finanzas_contenido_v5`, la MISMA función en el motor y en el verificador),
+  `journal_entries.hash_version` en todo asiento nuevo y tramos de las versiones viejas en
+  `accounting_hash_versions`. `verify_accounting_chain` mantiene la firma y suma «contenido
+  alterado (fórmula vN)». No detecta una reescritura completa de la cadena (hace falta un
+  ancla externa).
+- **Siempre se exige la ficha del proveedor**, también de contado (P-2f descartada, 01/10).
+- **El N.º de factura del proveedor de un gasto de trámite asentado se congela** (ahora es
+  `referencia_externa`); completarlo si estaba vacío sigue permitido. `purchase_number` no
+  cambia una vez asignado (trigger). El gasto de trámite toma su número ANTES de postear y un
+  reintento REUSA el que ya tiene.
+- **Mayor:** sin tercero la celda Nombre queda VACÍA. Se retiró el cuarto escalón (el texto
+  de la línea de control), que ponía «Cuentas por pagar» o «Reversión» como nombre.
+- **Caso cerrado:** el gasto se puede cargar, pero la pantalla pregunta antes de guardar
+  («Este caso está cerrado. ¿Deseas registrar el gasto igual?»). No hay bloqueo en el servidor.
+- 🔴 **La `071` va en la ventana JUNTO con el código de E3.** El código anterior falla al
+  postear un asiento manual. Runbook `despliegue-025-055.md`, nota de la `071`.
+
+### Ancla de la cadena y antigüedad nueva (desde 2026-10-01, Bloque 1 — `075` aplicada SOLO en staging)
+- 🔴 **El ancla la graba la BASE al cerrar un período** (trigger de la `075`), nunca la app.
+  `accounting_chain_anchors` es inmutable y ni `service_role` la escribe. Sale de la base por el
+  respaldo (`tablas/accounting_chain_anchors.json`) y por la constancia PDF del cierre.
+  `verify_chain_anchors` compara contra la cadena; la ruta le pasa el `tenant_id` del perfil.
+- **Antigüedad (E9):** una línea de asiento manual o de apertura contra 100004/200001 CON el
+  tercero del auxiliar es una partida de ese tercero (por fecha de registro); SIN tercero sigue
+  explicando la diferencia. Nunca en los dos lados. Un asiento reversado no cuenta en ninguno.
+  Lógica pura en `reports/partidas-de-diario.ts`.
+- **Filtro por módulo:** en el Mayor se filtra DESPUÉS de armar (`filtrarMayorPorModulos`): el
+  saldo corrido sigue siendo el de la cuenta completa y el pie suma lo visible. La pantalla y el
+  Excel usan la misma función. Una reversión entra en el módulo de lo que revierte.
 
 ### Proveedores — RUC y DV (desde 2026-09-02)
 - 🔴 **EL RUC Y EL DV NUNCA SE CONCATENAN.** Son dos columnas en `suppliers`
@@ -370,8 +540,11 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **La pantalla pide el PORCENTAJE y guarda la FRACCIÓN**, mostrando las dos a la vez. El
   CHECK es `rate BETWEEN 0 AND 1`: "7" donde va `0.07` daría 700%.
 - 🔴 **Una tasa NO se borra: se desactiva.** Cinco FK apuntan a `tax_codes`.
-- **Una tasa nueva aparece sola** en los tres selectores y su ITBMS va a `200003`: es una
-  constante del asiento (`CUENTA_ITBMS`), no un campo por tasa. Nada que configurar.
+- 🔴 **Cada tasa tiene SU cuenta** (`tax_codes.account_code`, migración `073`, Josuarth P-6a: la
+  misma para ventas y compras). Los asientos generan **una línea de impuesto por cuenta**
+  (`lineasDeImpuesto`, UNA implementación para factura, compra y sus NC). La cuenta: activa, de
+  pasivo o activo, no de control; **una vez usada la tasa no cambia** (trigger): se desactiva y
+  se crea otra. `200003` queda sólo para una línea con impuesto y sin tasa (lo de antes de la 045).
 - ⚠️ `services_catalog.default_tax_code` la referencia con un FK compuesto `ON UPDATE CASCADE`:
   editar un código lo renombra también allá. Detalle en `sop.md` SOP-037.
 
@@ -386,7 +559,9 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 
 ### Resumen de ITBMS: las NC restan (desde 2026-09-25)
 - 🔴 **Débito = facturas emitidas no anuladas − NC de venta autorizadas por la DGI y
-  vigentes** (con su factura no anulada), en el mes **de la NC**. **Crédito = compras − NC de
+  vigentes** (con su factura no anulada), en el mes **de la NC**. 🔴 **El mes de cada documento
+  es el de su FECHA DE REGISTRO (`accounting_date`)**, no el del documento (Josuarth, P-1a,
+  30/09/2026; E1). **Crédito = compras − NC de
   compra vigentes.** Las anuladas no cuentan. La regla vive en `reports/vat-calculo.ts`
   (pura, con tests) y el reporte no suma por su cuenta.
 - "Autorizada" en una FACTURA = emitida y no anulada: las anteriores al 8/7 se autorizaron
@@ -406,7 +581,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - 🔴 **El saldo se deriva**: `business_expenses.credited_total` (trigger desde NC `emitida`,
   con guard) y `balance_due` GENERATED. El status se deriva contra el total NETO. Toda
   lectura del saldo de una compra usa `balance_due` (pago, antigüedad, PDF, sección de pagos).
-- Se anula con «Reversar» (`reverse_supplier_credit_note`, calco de la `060`): fecha de hoy,
+- Se anula con «Reversar» (`reverse_supplier_credit_note`, calco de la `060`): fecha de registro elegida,
   espejo verificado, un estado, y el trigger recalcula.
 - **Registra y reversa: admin, abogada y contador** (las compras son CRUD del contador).
 - 🟡 **Valores por defecto que decide Josuarth** (encabezado de la `066`, preguntas J-1 a
@@ -423,7 +598,8 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - Validación pura en `import/asientos-import.ts`: cuadre, cuentas existentes y activas, mes
   abierto, montos positivos con dos decimales (parser estricto: texto es error, nunca 0).
 - **Cada importación tiene identificador y se deshace completa** (`reverse_journal_import`):
-  cada asiento se reversa con fecha de hoy por `reverse_journal_entry`; nada se borra.
+  cada asiento se reversa con la fecha de registro elegida (no antes del último asiento del lote)
+  por `reverse_journal_entry`; nada se borra.
 - Los asientos importados son `source_type = 'manual'`. `MAX_LINEAS_MANUALES` no aplica.
 
 ### Qué se puede hacer ante la DGI con una factura emitida (desde 2026-09-23, Bloque 9A)
@@ -491,6 +667,90 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
   anulación» como VARIANTE del mismo diálogo, motivo precargado con el que ya viajó a la DGI, y
   cobros y NC bloqueados mientras dure — pero **reversar cobros sigue disponible**, porque es
   lo que hay que hacer para poder completarla. Detalle en `sop.md` SOP-040.
+- 🔴 **Ningún mensaje dice «ante la DGI» si no se le habló al PAC** (06/10/2026). Sin CUFE, interna o
+  emitida fuera: «quedó anulada en el CRM… No se envió nada a la DGI», y si falla el libro,
+  `no_se_anulo_en_el_libro` («no se completó en el libro contable… sin cambios», sin nombrar a la DGI).
+  El aviso de la pantalla sale de `alcance` (`dgi_y_libro` | `solo_crm`), no del texto. Antes la falla
+  sin CUFE decía «quedó ANULADO ante la DGI» (FAC-HON-000489 y 000503 de producción). SOP-040.
+
+### Validaciones previas a la DGI y pendientes (desde 2026-10-03 — `085` aplicada SOLO en staging)
+- 🔴 **Lo que la DGI rechazaría se valida ANTES del número**: `validarParaLaDgi()`
+  (`efactura/validaciones-previas.ts`, puro, con el código de la ficha en cada regla). La factura
+  siempre; la ND y la NC sólo con «Enviar a la DGI»; la interna nunca. Y otra vez antes de cada envío.
+- Del RUC se valida la **estructura por tipo de contribuyente**, no el DV: la ficha no publica el
+  algoritmo. El sandbox rechazó con `1601` un RUC que pasa la estructura: la DGI sigue siendo la
+  última palabra. Antes de producción, contrastar con `sql/verificacion/produccion-ruc-clientes-autorizados.sql`.
+- 🔴 **Todo envío al PAC pasa por `enviar-a-la-dgi.ts`**: bloquea el reenvío de un documento de un
+  mes anterior («Consultar con el contador»), revalida y guarda el motivo (`fe_motivo_pendiente`,
+  085), que se limpia al autorizar. 🔒 Un test falla si una ruta llama directo a los orquestadores.
+- `/finanzas/pendientes-dgi` (admin y abogada reintentan; el contador ve), desde
+  `PENDIENTES_DGI_DESDE = 2026-06-01`. Aviso en el listado de facturas (cuenta `no_emitida` y
+  `error`), en el hub de reportes y en el dashboard Legal (la abogada, sólo las suyas).
+- **Formatos de RUC aceptados** (contrastados con los 22 jurídicos autorizados en producción, 03/10):
+  jurídica en tres grupos numéricos o **NT** (propiedad horizontal, `8-NT-2-735096`); natural con
+  cédula, prefijos `PE`/`E`/`N`/`AV`/`PI`, PE con tres grupos y NT. La consulta SQL repite los patrones.
+- 🔴 **El tipo de receptor se deduce en UN lugar**: `tipoReceptorEfectivo()`
+  (`mapper/derive-tipo-receptor-fe.ts`), para el mapper, el gate fiscal y las validaciones. Sin tipo
+  cargado: jurídica o natural con DV → `01`; natural sin DV → `02`. Caso CLI-036 de producción: antes
+  el gate exigía el tipo explícito y la factura quedaba «no emitida» sin aviso.
+
+### Bitácoras de auditoría (desde 2026-10-03 — `086` y `087` escritas, `088` sin aplicar a propósito)
+- **Dos bitácoras, una por módulo** (`auditoria.bitacora_contable`, `auditoria.bitacora_legal`), cada una
+  con su cadena de hash por bufete, sus anclas (diaria y, la contable, al cerrar un período) y su
+  verificador. Propuesta aprobada: `docs/finanzas/propuesta-bitacora-auditoria.md`.
+- 🔴 **Las escribe la BASE, por triggers** (`trg_auditoria` en 41 tablas, `auditoria.registrar`), nunca
+  la app. **Falla cerrado**: si la fila de bitácora no se puede escribir, el cambio se deshace.
+- 🔴 **`createAdminClient(usuario)`**: el usuario viaja en el header `x-actor-id` y la base sólo lo cree
+  con la clave de servicio. `null` sólo con un comentario `actor-ok: <motivo>` (cron, portal público).
+  🔒 `bitacora-actor.test.ts`. Sin usuario, la fila queda como «sistema».
+- **Ruteo (b.2):** clientes, gastos de trámite (y sus líneas) y usuarios van a la legal completos y a la
+  contable SÓLO con lo fiscal / lo que entra al asiento / los accesos a Finanzas, con el mismo `evento_id`.
+- **Nadie las edita ni las borra** (`trg_solo_agregar`, mecanismo de la `084`); se leen sólo por
+  `bitacora_leer` / `bitacora_verificar` (service_role), que vuelven a exigir el rol: contable admin y
+  contador, legal admin.
+- 🔒 **`sql/tests/verificacion-087-captura-41-tablas.sql` es obligatoria antes de cualquier ventana de producción**
+  (runbook, paso −1): INSERT, UPDATE y DELETE en las 41 tablas, en ROLLBACK, y cada operación en su
+  bitácora. Existe porque la `087` rompió comentarios y tareas en staging (error de tipos que sólo aparecía
+  al ejecutar esa rama; lo corrigió la `089`). Una tabla nueva con trigger se suma a la prueba.
+- 🔒 **Y `sql/tests/concurrencia-bitacora-libro.mjs`, también obligatoria**: dos sesiones, peor orden forzado, cero
+  `deadlock detected`. Regla de la `090`: **la bitácora toma primero el correlativo del libro y después su candado**
+  (`auditoria.tomar_candados`), el orden de `post_journal_entry`. Nada en `auditoria` toma el candado de la bitácora
+  por su cuenta; la verificación de la `090` lo exige. `--control` reproduce el orden viejo y debe trabarse.
+- Pantallas `/finanzas/auditoria` y `/legal/admin/auditoria` (la lectura vieja de `audit_log` queda en
+  `/anterior` hasta aplicar la `088`).
+
+### Inicio contable: lo anterior está «contabilizado fuera» (desde 2026-10-06 — `096` aplicada SOLO en staging)
+- 🔴 **`finanzas_parametros.fecha_inicio_contable` (01/07/2026)**. Lo anterior ya está en los libros del
+  contador (QuickBooks): **no genera asiento, no se crea, no se mueve a una fecha anterior, no se anula ni se
+  elimina**. Se compara la **fecha del DOCUMENTO** (issue_date, payment_date, expense_date, date,
+  supplier_document_date), cada documento con la suya. Sin excepciones (regla 3.3.5), FAC-EXT y NC de compra
+  incluidas. Se corrige con una NC (venta), una NC del proveedor (compra, gasto de trámite) o un asiento de
+  diario (cobro, pago), con fecha igual o posterior al inicio; esos SÍ postean (un cobro de agosto de una
+  factura de junio: HABER 100004 del cliente, que tiene que venir de la apertura).
+- **Una sola regla en `contabilidad/inicio-contable.ts`** (`asegurarFechaDesdeElInicio` en altas y ediciones,
+  antes del número; `asegurarQueNoEsContabilizadoFuera` en anular/eliminar; la matriz fiscal responde
+  `contabilizada_fuera` ANTES del PAC). La base lo vuelve a exigir con los MISMOS textos (triggers de la 096);
+  el del libro es el respaldo. 🔒 `inicio-contable.test.ts` lee el código y falla si un camino no pregunta.
+- **El inicio no se mueve si cruza documentos** (hacia adelante: con asiento; hacia atrás: sin asiento). Se
+  cambia en Configuración › Parámetros contables (admin y contador; la bitácora contable lo registra).
+- Etiqueta «Contabilizado fuera» en listados, detalles y antigüedad; los documentos siguen en la antigüedad
+  y el estado de cuenta, y el cuadre los nombra aparte de lo que falta cablear.
+- 🔴 **Ninguna migración ni paso de la ventana pasa al libro un documento existente**: lo de producción desde
+  el 01/07 hasta la ventana queda sin asiento hasta que se decida cómo entra (runbook §4 punto 9).
+- **Staging:** la 096 se aplicó con la llave `finanzas.inicio_contable_existentes = 'aceptar'` (10 asientos de
+  antes del corte). Las semillas bajan el inicio mientras siembran (`seed-data/inicio-contable-semilla.ts`).
+
+### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
+- 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
+  cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:
+  FAC-HON-000463 es real ante la DGI aunque su cliente sea 0TEST-FE-002. Desde el 07/10/2026 **0TEST-FE-002
+  no se marca** (un cliente marcado no recibe cobros ni NC nuevos, y la 463 quedaba sin salida); su factura
+  de sandbox FAC-HON-000460 se marca por número.
+- 🔒 **Toda consulta de un reporte a esas tablas lleva `.eq(DE_PRUEBA, false)`** o declara
+  `// de-prueba-ok: <motivo>`; lo hace cumplir `documentos-de-prueba-filtrados.test.ts`, también con
+  `.from(tabla)` en variable (así se escapó el contador de Pendientes DGI la primera vez).
+- El libro no los recibe (`095`); emitir, cobrar, acreditar, anular y enviar a la DGI responden 409 antes
+  del número. En la ventana se marcan por número con `sql/ventana/marcar-datos-de-prueba.sql`. SOP-049.
 
 ### Errores de la DGI — prevenir y mostrar (desde 2026-09-23)
 - 🔴 **Descripción de línea: 2 a 500 caracteres** (`controles-dgi.ts`). El tope es de la DGI
@@ -741,18 +1001,49 @@ Acta de la reunión con RM:
 > corrección es **nota de crédito con fecha del día** — nunca con la fecha del
 > documento original.
 
-Y su par, que aplica a todo el módulo contable:
+Y su par, que aplicaba a todo el módulo contable y **ya no rige** (ver abajo):
 
-> **La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
-> que revierte.
+> ~~**La reversión lleva SIEMPRE la fecha en que se hace**, nunca la del asiento
+> que revierte.~~
+
+### Regla de la fecha de registro (revisión del 28/09/2026 y reunión del 30/09/2026)
+
+Josuarth la confirmó por escrito en la revisión del 28/09 y en la reunión del 30/09.
+**Reemplaza la segunda frase del acta del 09/09:**
+
+> **Reversiones, anulaciones y notas de crédito dejan de llevar siempre la fecha de hoy.**
+> El contador elige la **fecha de registro** (la contable, `journal_entries.transaction_date`),
+> **siempre dentro de un período abierto**. La pantalla propone por defecto **la fecha de hoy
+> en Panamá** (no la de UTC).
+
+- La fecha de registro de una reversión **nunca es anterior** a la del asiento que revierte.
+- La primera frase del acta sigue: una factura se anula sólo dentro del mismo mes; cerrado el
+  mes, se corrige con nota de crédito.
+- **Implementada en E1** (rama `feat/bloque1-contable`, 30/09/2026). ⚠️ Las migraciones
+  `068` (columna `accounting_date` en facturas, compras, gastos de trámite y NC de venta) y
+  `069` (los ocho RPC sin el candado de «hoy ±1 día») están **escritas y SIN APLICAR** en
+  staging hasta que Oliver diga «aplica»; en producción van en la ventana del despliegue.
+- **Dos fechas en todo documento tipo factura:** la del DOCUMENTO (informativa: la que va a la
+  DGI, base del vencimiento y de las 182 h) y la de REGISTRO (`accounting_date`, la del asiento).
+  En la NC de compra la de registro es `issue_date` y la del proveedor `supplier_document_date`.
+- 🔴 **El período se valida ANTES de tomar un correlativo y ANTES de hablar con el PAC**
+  (`api/fecha-de-registro.ts`). Validarla recién en el libro dejaría una factura o una NC
+  anulada ante la DGI y viva en el libro. La base lo vuelve a exigir.
+- 🔴 **Ninguna fecha de registro posterior a hoy** (Josuarth 02/10, K-5 / P-1c):
+  `PERMITIR_FECHA_DE_REGISTRO_FUTURA = false` (`contabilidad/fecha-de-registro.ts`), la única
+  llave. La respetan `resolverFechaDeRegistro`, el alta de un asiento manual y la importación de
+  asientos. La base no mira el futuro.
+- **«Hoy» se calcula con `hoyEnPanama()`** (`lib/utils/hoy-en-panama.ts`), nunca con
+  `toISOString()`: desde las 19:00 de Panamá el día UTC ya es mañana. Hay un test que lo fija.
+  Detalle en `sop.md` SOP-045.
 
 ### Estado actual (desde `794e686` / `dcbdd23`, staging)
 
 Las abogadas y admins anulan y emiten notas de crédito desde el detalle de la factura:
 - **"Anular factura"** visible cuando status ∈ {emitida, parcialmente_pagada, pagada}, **el mes de
-  `issue_date` está abierto y la factura no tiene NC** (053). Modal con motivo obligatorio (3–1000).
+  la fecha de registro (`accounting_date`) está abierto y la factura no tiene NC** (053, 069). Modal con motivo obligatorio (3–1000).
   Con pagos aplicados el modal bloquea ("reverse los pagos primero").
-- La anulación es **NC total automática + reversión del asiento con fecha de hoy + `anulada`**, en
+- La anulación es **NC total automática + reversión del asiento con la fecha de registro elegida + `anulada`**, en
   UNA transacción (RPC `cancel_invoice_with_reversal`, 052; `cancelInvoice()` en
   `api/invoices.ts` con DELETE compensatorio de la NC si el RPC falla). Sin asiento propio para la NC.
 - **"Nota de crédito"** (por líneas con cantidad) convive con Anular cuando el mes está abierto y

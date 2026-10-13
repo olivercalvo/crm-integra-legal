@@ -99,6 +99,8 @@ function fake(g: Guion) {
     switch (nombre) {
       case "journal_entries":
         return { data: g.tieneAsiento ? { entry_number: 7 } : null, error: null };
+      case "suppliers":
+        return { data: { id: "d2222222-2222-2222-2222-222222222222", payment_terms_days: 0 }, error: null };
       case "business_expenses":
         return {
           data: {
@@ -107,6 +109,7 @@ function fake(g: Guion) {
             expense_date: "2026-09-04",
             description: "Insumos",
             supplier_name: "PROV",
+            supplier_id: "d2222222-2222-2222-2222-222222222222",
             chart_account_code: null,
             status: "pendiente_pago",
           },
@@ -149,6 +152,8 @@ function fake(g: Guion) {
   const db = {
     from: (n: string) => tabla(n),
     rpc: async (fn: string) => {
+      // 071 (E3): el número FAC-CO- de la compra.
+      if (fn === "get_next_sequence_number") return { data: 5, error: null };
       if (fn === "post_journal_entry") {
         reg.posteos++;
         if (!g.postea || g.postea === "ok") return { data: "je-1", error: null };
@@ -165,7 +170,8 @@ function fake(g: Guion) {
 const INPUT = {
   expense_date: "2026-09-04",
   due_date: null,
-  supplier_id: null,
+  // E3: obligatorio (200001 nunca sin tercero).
+  supplier_id: "d2222222-2222-2222-2222-222222222222",
   supplier_name: "PROV",
   supplier_ruc: null,
     supplier_invoice_number: null,

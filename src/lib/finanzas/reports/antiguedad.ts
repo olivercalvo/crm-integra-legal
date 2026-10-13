@@ -82,10 +82,24 @@ export interface DocumentoPendiente {
   fechaReferencia: string;
   /** Días transcurridos. Negativo o 0 = todavía no vence. */
   diasVencido: number;
-  /** Lo que falta cobrar o pagar. Siempre positivo. */
+  /**
+   * Lo que falta cobrar o pagar. Positivo en un documento; NEGATIVO en un saldo
+   * a favor del cliente (074: lo que un cobro dejó sin aplicar), que resta en
+   * la fila de ese cliente.
+   */
   saldo: number;
   /** `source_type` del ledger, para armar el enlace al documento. */
   sourceType: string;
+  /**
+   * E9: una PARTIDA DE DIARIO o de APERTURA no tiene documento; su enlace es el
+   * asiento. Sólo viene en esas partidas.
+   */
+  entryId?: string;
+  /**
+   * 096: documento anterior al inicio contable. Sigue en la antigüedad; su saldo
+   * está en el saldo inicial de la cuenta control, no en un asiento del CRM.
+   */
+  contabilizadoFuera?: boolean;
 }
 
 export interface FilaTercero {
@@ -138,6 +152,13 @@ export interface SinAsiento {
    * traen (054), sin repetir, para que el contador sepa a quién mirar.
    */
   manuales?: ConteoConTerceros;
+  /**
+   * 096: de los documentos y cobros (o pagos) sin asiento, los CONTABILIZADOS
+   * FUERA: anteriores al inicio contable. Están incluidos en `documentos` y
+   * `cobros`; se cuentan aparte para nombrarlos, porque no son cableado que
+   * falta: su efecto está (o va a estar) en el saldo inicial.
+   */
+  contabilizadosFuera?: { documentos: Conteo; cobros: Conteo };
 }
 
 /** Un conteo que además dice a quiénes nombra. */

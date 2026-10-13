@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { BackButton } from "@/components/ui/back-button";
+import { cuentasParaLineaDeCompra } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import {
   getBusinessExpenseById,
   listExpenseAccountOptions,
@@ -14,7 +15,7 @@ import { BusinessExpenseForm } from "../../_components/business-expense-form";
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Editar gasto · Finanzas",
+  title: "Editar compra · Finanzas",
 };
 import type {
   BusinessExpensePaymentMethod,
@@ -69,7 +70,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           showLabel
         />
         <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Editar gasto</h1>
+          <h1 className="text-2xl font-bold text-integra-navy">Editar compra</h1>
           <p className="text-sm text-gray-500 truncate max-w-[600px]">
             {expense.description}
           </p>
@@ -79,12 +80,16 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
       <BusinessExpenseForm
         mode="edit"
         bancos={[]}
-        accounts={accounts}
+        accounts={cuentasParaLineaDeCompra(
+          accounts,
+          (lineasDeLaCompra ?? []).map((l) => l.chart_account_code)
+        )}
         suppliers={suppliers}
         taxCodes={taxCodes}
         initial={{
           id: expense.id,
           expense_date: expense.expense_date,
+          accounting_date: expense.accounting_date ?? expense.expense_date,
           due_date: expense.due_date,
           supplier_id: expense.supplier_id,
           supplier_name: expense.supplier_name,

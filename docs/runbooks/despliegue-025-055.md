@@ -1,5 +1,12 @@
 # Runbook del despliegue 025 → 055
 
+> 🧭 **ORDEN FINAL (05/10/2026): `docs/finanzas/runbooks/ventana-bloque-1.md`.** Ensayado contra una
+> base local igual a producción: las 64 migraciones de la `025` a la `095` en tres bloques (A, B y
+> C), las bitácoras en una ventana aparte y el tiempo estimado. Este archivo sigue siendo el
+> detalle de cada paso (pre-flight, respaldo, qué anotar, rollback); el ORDEN y el paso −1 son los
+> de allá. Cambios: la verificación de la `067` va después de la `025`; el paso «Reasignar» de P-15
+> ya no va (lo hacen la `079` y la `082`); el paso −1 es el ensayo local.
+
 **Qué es:** la corrida completa de las **42** migraciones contables pendientes a
 la base de producción, más el merge de `develop` a `main`:
 **`025` a `055`, `057` y `058` a `067`** — toda la cola que existe hoy en `develop`.
@@ -14,6 +21,54 @@ la base de producción, más el merge de `develop` a `main`:
 > iniciales (§P-2(b)), que depende de la respuesta de Josuarth Torres. Es un
 > **hueco a propósito**, no un olvido: si Josuarth contesta después del despliegue, la
 > `056` se aplica sola más adelante; nada de la cola la necesita antes.
+>
+> 🔴 **La `071` (Bloque 1, E3: motor v4), 01/10/2026. NO es compatible con el código de
+> `main`: va EN LA VENTANA, en el mismo despliegue que el código de E3, sin nadie operando.**
+> Rehace `post_journal_entry` (13 → 14 parámetros) y le agrega dos candados que el código
+> anterior no cumple:
+> - **Tercero obligatorio en 100004 y 200001** (salvo reversiones). Sin excepción para
+>   compras, gastos de trámite ni pagos (01/10/2026): una compra o un gasto sin ficha de
+>   proveedor **no se registra**. Los constructores ya lo mandan desde E2.
+> - ⚠️ **Los gastos de trámite sin proveedor no entran al libro.** En producción son los 137
+>   (la `036` crea `supplier_id` vacío). 📋 **PASO PREVIO A ABRIR EL LIBRO:** con la cola ya
+>   aplicada y ANTES del merge, una persona corre en el SQL Editor de producción
+>   `sql/verificacion/gastos-tramite-sin-proveedor.sql` (SOLO LECTURA: resumen + lista por
+>   caso). La abogada o el contador asignan el proveedor a cada uno (crean la ficha si falta;
+>   siempre se exige) antes de registrarlos con «Registrar en el libro contable».
+>
+> 🔴 **La `073` (tasa con su cuenta) y la `074` (cobro con excedente), 01/10/2026.** Van después
+> de la `072`, en la ventana y con el código. La `073` hace `account_code` NOT NULL: el alta de
+> una tasa desde el código de `main` (sin cuenta) fallaría. La `074` exige la referencia al
+> crear un cobro: el formulario de `main` la deja vacía y fallaría. Antes de la `073`, en solo
+> lectura: el texto `x->>'account_code' = '200003'` aparece UNA vez en
+> `create_supplier_credit_note`. En producción `ISC_5` y cualquier otra tasa quedan en 200003
+> (backfill); si Josuarth quiere otra cuenta para alguna, se crea una tasa nueva.
+>
+> 🔴 **La `072` (hash v5 y verificador que recalcula), 01/10/2026.** Va inmediatamente
+> después de la `071` y en la misma ventana. No toca el libro: detecta la versión de cada
+> asiento viejo (en producción no hay ninguno) y parcha el motor. Aborta si el verificador
+> nuevo encuentra un solo problema. Después: `sql/tests/verificacion-072-hash-v5-verificador.sql`.
+> - 🔴 **Mientras la rama no se mezcle, `develop` es incompatible con STAGING** (donde la `071`
+>   ya está aplicada desde el 01/10): sus Preview fallan al emitir facturas y NC, cobrar,
+>   registrar compras, gastos de trámite y pagos, y cargar asientos manuales. Ver
+>   `task_plan.md`.
+> - **`p_reference` vacío en `manual`/`apertura`/`cierre`**: el `AD-` lo pone el motor. El
+>   formulario de `main` manda la referencia libre en `reference` y **fallaría al registrar**.
+>
+> Orden: `068` → `069` → `070` → **`071`** → merge del código → recién entonces se vuelve a
+> operar. Antes de aplicarla, en solo lectura: los tres patrones del parche (lote `067`,
+> `'NCP-' || lpad` y el `RETURN NEW; END $function$` del trigger de gastos de trámite) tienen
+> que aparecer **una vez** cada uno. Después: `sql/tests/verificacion-071-motor-v4.sql` y
+> `verify_accounting_chain` en 0 filas (la cadena vieja sigue verde: el verificador no
+> recalcula `content_hash`). En producción el libro está vacío, así que el primer asiento ya
+> nace con la v4.
+>
+> 🆕 **La `068` y la `069` (Bloque 1, E1: fecha de registro), 30/09/2026.** Todavía en la
+> rama `feat/bloque1-contable`, sin aplicar en ningún lado. Van **después de la `067`** y
+> **antes del merge**: el código de E1 lee `accounting_date` y sin la `068` falla. Son
+> compatibles con el código de `main` (el trigger completa `accounting_date`; `main` manda la
+> fecha de hoy, que la `069` sigue aceptando), así que no abren una ventana propia. Antes de
+> la `069`, correr sus conteos en solo lectura: cada patrón tiene que aparecer una vez.
 >
 > 🆕 **La `066` (NC de compra) y la `067` (importar asientos), 25/09/2026, noche.**
 > La `066` toca `business_expenses` (saldo derivado, guard, recálculo de la `048`):
@@ -135,6 +190,8 @@ los puntos donde **se para**.
 | −2 | Josuarth elige la cuenta de los servicios de P-15 | correo | si no decide: esos servicios quedan sin facturar |
 | −2 | Respuestas por escrito de Josuarth: P-1(b) y P-2 | correo | alguna sigue abierta → **no hay día D** |
 | −1 | `develop` verde: `tsc`, `npm test`, lint contra la lista base, `npm run build` | máquina | algo en rojo |
+| −1 | 🔴 `node scripts/run-sql.mjs sql/tests/verificacion-087-captura-41-tablas.sql` en staging, con el mismo esquema que va a producción (obligatoria en **cualquier** ventana desde el 03/10/2026) | máquina → staging | alguna `FALLA`, una tabla sin captura o la cadena no íntegra: la bitácora falla cerrado y en producción eso bloquea guardar |
+| −1 | 🔴 `node sql/tests/concurrencia-bitacora-libro.mjs` en staging (20 rondas por combinación; importación de asientos y NC de compra contra emisión, cobro y gasto de trámite, con dos sesiones), con el mismo esquema que va a producción (obligatoria en **cualquier** ventana desde el 03/10/2026, junto con la de las 41 tablas) | máquina → staging | un solo `deadlock detected` u otro error: bitácora y libro no toman los candados en el mismo orden (090) |
 | −1 | Avisar al bufete la ventana (hora de inicio y fin, qué no se puede hacer) | — | — |
 | D·0 | P-0: uuid del tenant | SQL Editor | no coincide |
 | D·1 | 🔴 **Respaldo** (§2), y abrirlo para comprobar que se lee | panel de Supabase | no se puede leer → **se termina el día acá** |

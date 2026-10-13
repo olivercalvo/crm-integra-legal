@@ -2,15 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Download, Upload } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Download, Upload } from "lucide-react";
 import { fmtImporte } from "@/lib/utils/importe";
 import { formatDate } from "@/lib/utils/format-date";
-import type { AsientoImportado, ErrorDeFila } from "@/lib/finanzas/import/asientos-import";
+import {
+  FORMATO_DE_FECHA_POR_DEFECTO,
+  fechaEnPalabras,
+  type AsientoImportado,
+  type ErrorDeFila,
+  type FormatoDeFecha,
+} from "@/lib/finanzas/import/asientos-import";
 
 interface VistaPrevia {
   hash: string;
   yaImportado: string | null;
-  resultado: { errores: ErrorDeFila[]; asientos: AsientoImportado[]; filasLeidas: number; totalDebitos: number };
+  resultado: { errores: ErrorDeFila[]; advertencias?: ErrorDeFila[]; asientos: AsientoImportado[]; filasLeidas: number; totalDebitos: number };
 }
 
 /**
@@ -23,8 +29,12 @@ export function ImportarAsientos() {
   const [vista, setVista] = useState<VistaPrevia | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Decisión (c) del 30/09: el formato de `nn/nn/AAAA` lo elige la persona.
+  // Cambiarlo con un archivo ya subido vuelve a leerlo: la vista previa y el
+  // registro tienen que leer las MISMAS fechas.
+  const [formato, setFormato] = useState<FormatoDeFecha>(FORMATO_DE_FECHA_POR_DEFECTO);
 
-  function previsualizar(f: File) {
+  function previsualizar(f: File, conFormato: FormatoDeFecha = formato) {
     setArchivo(f);
     setVista(null);
     setError(null);
@@ -32,6 +42,7 @@ export function ImportarAsientos() {
       const fd = new FormData();
       fd.append("file", f);
       fd.append("mode", "preview");
+      fd.append("date_format", conFormato);
       const res = await fetch("/api/finanzas/asientos/importar", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -50,6 +61,7 @@ export function ImportarAsientos() {
       fd.append("file", archivo);
       fd.append("mode", "commit");
       fd.append("hash", vista.hash);
+      fd.append("date_format", formato);
       const res = await fetch("/api/finanzas/asientos/importar", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -62,6 +74,7 @@ export function ImportarAsientos() {
 
   const errores = vista?.resultado.errores ?? [];
   const asientos = vista?.resultado.asientos ?? [];
+  const advertencias = vista?.resultado.advertencias ?? [];
   const bloqueo = !vista
     ? null
     : errores.length > 0
@@ -95,6 +108,21 @@ export function ImportarAsientos() {
             }}
           />
         </label>
+        <label className="inline-flex min-h-[48px] items-center gap-2 text-sm text-gray-700">
+          Formato de fecha del archivo
+          <select
+            value={formato}
+            onChange={(e) => {
+              const f = e.target.value as FormatoDeFecha;
+              setFormato(f);
+              if (archivo) previsualizar(archivo, f);
+            }}
+            className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm"
+          >
+            <option value="MM/DD">MM/DD/AAAA (mes primero)</option>
+            <option value="DD/MM">DD/MM/AAAA (día primero)</option>
+          </select>
+        </label>
         {archivo && <span className="text-sm text-gray-600">{archivo.name}</span>}
         {isPending && <span className="text-sm text-gray-500">Procesando…</span>}
       </section>
@@ -112,6 +140,9 @@ export function ImportarAsientos() {
           <p className="text-sm text-gray-600">
             {vista.resultado.filasLeidas} fila{vista.resultado.filasLeidas === 1 ? "" : "s"} · {asientos.length} asiento
             {asientos.length === 1 ? "" : "s"} · débitos B/. {fmtImporte(vista.resultado.totalDebitos)}
+            {advertencias.length > 0 && (
+              <> · {advertencias.length} advertencia{advertencias.length === 1 ? "" : "s"}</>
+            )}
           </p>
 
           {errores.length > 0 && (
@@ -137,6 +168,34 @@ export function ImportarAsientos() {
             </div>
           )}
 
+          {/* Avisos que NO bloquean: la importación se puede contabilizar igual. */}
+          {advertencias.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-amber-200">
+              <p className="flex items-center gap-2 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <AlertTriangle size={16} className="shrink-0" />
+                Advertencias: no impiden contabilizar, pero conviene revisarlas.
+              </p>
+              <table className="w-full text-sm">
+                <thead className="bg-amber-50 text-left text-xs uppercase tracking-wider text-amber-800">
+                  <tr>
+                    <th className="px-3 py-2">Fila</th>
+                    <th className="px-3 py-2">Columna</th>
+                    <th className="px-3 py-2">Advertencia</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100">
+                  {advertencias.map((a, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-1.5 font-mono">{a.fila}</td>
+                      <td className="px-3 py-1.5">{a.columna ?? ""}</td>
+                      <td className="px-3 py-1.5 text-amber-900">{a.mensaje}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {asientos.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -144,7 +203,7 @@ export function ImportarAsientos() {
                   <tr>
                     <th className="pb-2 pr-2">Asiento</th>
                     <th className="pb-2 pr-2">Filas</th>
-                    <th className="pb-2 pr-2">Fecha</th>
+                    <th className="pb-2 pr-2">Fecha leída</th>
                     <th className="pb-2 pr-2">Descripción</th>
                     <th className="pb-2 pr-2 text-right">Líneas</th>
                     <th className="pb-2 text-right">Total</th>
@@ -157,7 +216,21 @@ export function ImportarAsientos() {
                       <td className="py-1.5 pr-2 text-gray-500">
                         {a.first_row} a {a.last_row}
                       </td>
-                      <td className="py-1.5 pr-2">{a.transaction_date ? formatDate(a.transaction_date) : ""}</td>
+                      {/* La fecha YA INTERPRETADA, en palabras, y cómo venía en el
+                          archivo: si 03/04/2026 se leyó como 4 de marzo, se ve acá. */}
+                      <td className="py-1.5 pr-2">
+                        {a.transaction_date ? (
+                          <>
+                            <span className="font-medium">{fechaEnPalabras(a.transaction_date)}</span>
+                            <span className="block text-xs text-gray-500">
+                              {formatDate(a.transaction_date)}
+                              {a.fecha_en_archivo ? ` · en el archivo: ${a.fecha_en_archivo}` : ""}
+                            </span>
+                          </>
+                        ) : (
+                          ""
+                        )}
+                      </td>
                       <td className="py-1.5 pr-2">{a.description}</td>
                       <td className="py-1.5 pr-2 text-right">{a.lines.length}</td>
                       <td className="py-1.5 text-right font-mono">{fmtImporte(a.total)}</td>

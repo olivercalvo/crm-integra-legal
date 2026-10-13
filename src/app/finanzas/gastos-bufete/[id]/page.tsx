@@ -1,3 +1,7 @@
+import { ContabilizadoFueraBadge } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
+import { cargarInicioContable, esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ShoppingBag, Calendar, User, Wallet, FileText, StickyNote, ArrowLeft, Plus } from "lucide-react";
@@ -26,7 +30,7 @@ import { cargarCompraParaNc, listSupplierCreditNotesForExpense } from "@/lib/fin
  * todas, y con seis pestañas abiertas no se distingue cuál es cuál.
  */
 export const metadata = {
-  title: "Gasto del bufete · Finanzas",
+  title: "Compra · Finanzas",
 };
 interface PageProps {
   params: { id: string };
@@ -53,6 +57,8 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   }
 
   const expense = await getBusinessExpenseById(ctx.db, ctx.tenantId, params.id);
+  // 096: para la etiqueta «Contabilizado fuera» de la compra y de sus pagos.
+  const inicio = await cargarInicioContable(ctx.db, ctx.tenantId);
   if (!expense) notFound();
   const pagos = await getSupplierPaymentsForExpense(ctx.db, ctx.tenantId, params.id);
   // NC del proveedor (3.5, 066): la lista y las líneas con lo ya acreditado.
@@ -62,6 +68,8 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   ]);
 
   const canMutate = MUTATING_ROLES.includes(ctx.userRole);
+  // Requerimiento 5: el asiento de la compra (source_type 'gasto').
+  const asiento = await cargarAsientoDelDocumento(ctx.db, ctx.tenantId, "gasto", params.id);
   const proveedor = proveedorDelDetalle(expense);
 
   // El comprobante YA NO se firma acá.
@@ -109,7 +117,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/finanzas/gastos-bufete"
-            aria-label="Volver a Gastos del Bufete"
+            aria-label="Volver a Compras"
             className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-md text-integra-navy hover:bg-gray-100"
           >
             <ArrowLeft size={20} />
@@ -125,10 +133,12 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               <Calendar size={14} />
               <span>{formatDate(expense.expense_date)}</span>
               <BusinessExpenseStatusBadge status={expense.status} />
+              {esContabilizadoFuera(expense.expense_date, inicio) && <ContabilizadoFueraBadge inicio={inicio} />}
             </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <VerAsiento asiento={asiento} puedeAbrir={ctx.userRole === "admin" || ctx.userRole === "contador"} />
           {canMutate && (
             <Link href="/finanzas/gastos-bufete/nuevo">
               <Button
@@ -136,11 +146,19 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                 className="min-h-[44px] border-integra-navy/30 text-integra-navy hover:bg-integra-navy/5"
               >
                 <Plus size={16} className="mr-1.5" />
-                Nuevo gasto
+                Nueva compra
               </Button>
             </Link>
           )}
-          <BusinessExpenseActions id={expense.id} canMutate={canMutate} />
+          <BusinessExpenseActions
+            id={expense.id}
+            canMutate={canMutate}
+            bloqueoEliminar={
+              esContabilizadoFuera(expense.expense_date, inicio)
+                ? mensajeContabilizadoFueraNoSeAnula("compra", expense.description ?? null, expense.expense_date, inicio)
+                : null
+            }
+          />
         </div>
       </div>
 
@@ -187,6 +205,13 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
                 label="DV"
                 value={proveedor.dv ? <span className="font-mono">{proveedor.dv}</span> : "—"}
               />
+              {/* E3 (071): el número PROPIO de la compra, el del libro. */}
+              {expense.purchase_number && (
+                <Item
+                  label="N.º de compra"
+                  value={<span className="font-mono">{expense.purchase_number}</span>}
+                />
+              )}
               {/* El comprobante que respalda la compra (migración `044`): es lo
                   que se busca al conciliar contra el proveedor. */}
               <Item
@@ -292,14 +317,13 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
             payments={pagos}
             bancos={bancos}
             canMutate={canMutate}
+            inicio={inicio}
           />
 
           {compraParaNc && (
             <SupplierCreditNotesSection
               compraId={expense.id}
-              compraLabel={expense.description}
               notas={notasProveedor}
-              lineas={compraParaNc.lineas}
               saldo={compraParaNc.balance_due}
               canMutate={canMutate}
             />

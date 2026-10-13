@@ -19,6 +19,7 @@ import assert from "node:assert/strict";
 
 import {
   cuentasClasificables,
+  cuentasParaLineaDeCompra,
   cuentasSugeridasParaTramite,
   esCuentaValidaComoDefaultDeProveedor,
   esTipoValidoComoDefaultDeProveedor,
@@ -327,5 +328,24 @@ test("el rechazo EXPLICA, y distingue desactivada de tipo equivocado", () => {
     }),
     null,
     "una cuenta de gasto activa no tiene motivo de rechazo"
+  );
+});
+
+test("compra y NC de proveedor: sin cuentas control ni bancos; lo ya guardado se sigue ofreciendo", () => {
+  const cuentas = [
+    { code: "100001", name: "Banco General Operativa", account_type: "asset", cuenta_control: null },
+    { code: "100004", name: "Cuentas por Cobrar Clientes", account_type: "asset", cuenta_control: "clientes" },
+    { code: "110001", name: "Mobiliario y equipo", account_type: "asset", cuenta_control: null },
+    { code: "610005", name: "Internet", account_type: "expense", cuenta_control: null },
+    { code: "700001", name: "Gastos Bancarios", account_type: "expense", cuenta_control: null },
+  ];
+  assert.deepEqual(
+    cuentasParaLineaDeCompra(cuentas).map((c) => c.code),
+    ["110001", "610005", "700001"]
+  );
+  // Editar una compra vieja contra un banco no la reclasifica en silencio.
+  assert.deepEqual(
+    cuentasParaLineaDeCompra(cuentas, ["100001", null]).map((c) => c.code),
+    ["100001", "110001", "610005", "700001"]
   );
 });

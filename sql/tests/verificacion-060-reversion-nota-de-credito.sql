@@ -145,12 +145,15 @@ BEGIN
   END;
 
   BEGIN
+    -- Desde la 069 la fecha la elige el contador; lo que se rechaza es ir antes
+    -- del asiento de la NC.
     v_res := public.reverse_credit_note(v_tenant, v_nc_a, 'motivo válido',
-                                        current_date - 30, 'x', v_lineas, NULL);
-    RAISE NOTICE '[2] fecha de hace 30 días ..................... ⚠️ PASÓ (debía fallar)';
+      (SELECT transaction_date - 1 FROM public.journal_entries
+        WHERE source_type = 'nota_credito' AND source_id = v_nc_a), 'x', v_lineas, NULL);
+    RAISE NOTICE '[2] fecha anterior al original ................ ⚠️ PASÓ (debía fallar)';
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    RAISE NOTICE '[2] fecha de hace 30 días ..................... ✅ RECHAZADA: %', left(v_err, 60);
+    RAISE NOTICE '[2] fecha anterior al original ................ ✅ RECHAZADA: %', left(v_err, 60);
   END;
 
   BEGIN

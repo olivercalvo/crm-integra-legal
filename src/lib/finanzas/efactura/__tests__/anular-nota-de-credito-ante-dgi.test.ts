@@ -12,6 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { reversarNotaDeCredito } from "../orchestration/anular-nota-de-credito-ante-dgi";
+import { MutationError } from "@/lib/finanzas/api/errors";
 
 Object.assign(process.env, {
   EFACTURA_EMISOR_RUC: "1234567",
@@ -93,6 +94,7 @@ function deps(diario: string[], pac: () => unknown, libro: () => Promise<unknown
     tieneAsientoPropio: async () => true,
     anularEnPac: async () => { diario.push("POST CreateCancellation"); return pac(); },
     reversarEnElLibro: async () => { diario.push("RPC reverse_credit_note"); return libro() as never; },
+    resolverFecha: async () => "2026-09-25",
   };
 }
 
@@ -176,4 +178,68 @@ test("🔒 la ruta pasa por el orquestador, nunca por reverseCreditNote directo"
   );
   assert.match(ruta, /reversarNotaDeCredito\(/);
   assert.doesNotMatch(ruta, /reverseCreditNote\(/);
+});
+
+test("🔴 fecha de registro rechazada: se corta ANTES del intento y del PAC (nada cambia)", async () => {
+  const { db, diario } = escenario(AUTORIZADA);
+  await assert.rejects(
+    reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, MOTIVO_DGI, AHORA, {
+      ...deps(diario, () => [{ codigo: "0600", mensaje: "Evento registrado con éxito" }]),
+      resolverFecha: async () => {
+        diario.push("fecha rechazada");
+        throw new Error("El período 2026-08 está cerrado");
+      },
+    }, "2026-08-31"),
+    /2026-08 está cerrado/
+  );
+  assert.deepEqual(diario, ["fecha rechazada"], "ni intento, ni PAC, ni canceled, ni libro");
+});
+
+test("la fecha elegida llega tal cual al libro", async () => {
+  const { db, diario } = escenario(AUTORIZADA);
+  let fechaDelLibro = "";
+  await reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, MOTIVO_DGI, AHORA, {
+    ...deps(diario, () => [{ codigo: "0600", mensaje: "Evento registrado con éxito" }]),
+    resolverFecha: async (p) => String(p),
+    reversarEnElLibro: async (_m, f) => { fechaDelLibro = f; return LIBRO_OK() as never; },
+  }, "2026-10-02");
+  assert.equal(fechaDelLibro, "2026-10-02");
+});
+
+// ---------------------------------------------------------------------------
+// LOS MENSAJES DICEN SÓLO LO QUE PASÓ (06/10/2026)
+// ---------------------------------------------------------------------------
+
+test("🔴 sin DGI de por medio: el éxito dice por qué no se envió nada", async () => {
+  for (const [fe, porque] of [
+    ["no_emitida", /no estaba autorizada por la DGI/],
+    ["interna", /documento interno/],
+  ] as const) {
+    const { db, diario } = escenario({ fe_estado: fe, dgi_cufe: null });
+    const r = await reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, "Monto mal", AHORA,
+      deps(diario, () => { throw new Error("no debería llamarse"); }));
+    assert.equal(r.estado, "reversada");
+    assert.match(r.mensaje, /No se envió nada a la DGI/);
+    assert.match(r.mensaje, porque);
+    assert.doesNotMatch(r.mensaje, /anulada ante la DGI/i);
+  }
+});
+
+test("🔴 sin DGI de por medio y el libro falla: no nombra a la DGI ni deja estado intermedio", async () => {
+  const { db, diario, estado } = escenario({ fe_estado: "no_emitida", dgi_cufe: null });
+  await assert.rejects(
+    reversarNotaDeCredito(db as never, db as never, TENANT, USER, NC, "Monto mal", AHORA,
+      deps(diario, () => { throw new Error("no debería llamarse"); },
+        async () => { throw new MutationError("El período 2026-09 está cerrado", 409); })),
+    (e: unknown) => {
+      const m = String((e as Error).message);
+      assert.match(m, /no se completó en el libro contable/);
+      assert.match(m, /sigue vigente, sin cambios/);
+      assert.doesNotMatch(m, /DGI/);
+      assert.equal((e as MutationError).status, 409);
+      return true;
+    }
+  );
+  assert.deepEqual(diario, ["RPC reverse_credit_note"], "ni intento ni PAC ni marca");
+  assert.equal(estado.nc.fe_estado, "no_emitida");
 });

@@ -433,6 +433,15 @@ entre la cabecera y el detalle: le agrega las líneas que faltan, siempre que si
 `borrador`.
 
 Para regenerar todo de cero: `node scripts/apply-staging-sql.mjs --reset` y de nuevo el seed.
+
+**Inicio contable (096, 06/10/2026).** La semilla crea documentos de marzo a junio, anteriores al inicio
+contable. `seed:staging`, `seed:asientos` y `seed-gasto-tramite-demo` bajan el inicio a 01/01/2025 al
+empezar y lo devuelven al 01/07/2026 al terminar, también si fallan
+(`scripts/seed-data/inicio-contable-semilla.ts`, con el guard del parámetro desactivado dentro de una
+transacción: es la misma aceptación que la llave de la 096 en staging). Necesitan `.env.staging-db.local`.
+Si la 096 todavía no está en la base, no hacen nada y la 096 se aplica después con
+`RUN_SQL_SET="finanzas.inicio_contable_existentes=aceptar" node scripts/run-sql.mjs sql/pending/096_inicio_contable.sql`.
+⚠️ El `--reset` aplica hasta la `048`; de la `049` a la `096` no hay un paso escrito (pendiente).
 El `--reset` dropea el esquema `public` y lo recrea con los grants de Supabase; **no toca
 `auth`**, así que los usuarios de prueba sobreviven y no hay que volver a repartir claves.
 
@@ -809,18 +818,29 @@ Dentro del RPC, el `SELECT ... FOR UPDATE` sobre la fila de `accounting_sequence
 las dos cosas con un solo candado: el correlativo sin huecos y la cadena. `sha256()` es nativo
 desde PostgreSQL 11 (la base corre 17.6), así que no hace falta pgcrypto.
 
-### 🔬 Las tres versiones de la fórmula del `content_hash`
+### 🔬 Las cinco versiones de la fórmula del `content_hash`
 
 `content_hash` se computa dentro de `post_journal_entry` sobre un `concat_ws('|', …)` de la
-cabecera más un `string_agg` de las líneas. **Esa fórmula cambió dos veces**, y quien alguna vez
+cabecera más un `string_agg` de las líneas. **Esa fórmula cambió tres veces**, y quien alguna vez
 escriba un verificador que RECALCULE el contenido desde las columnas —el actual no lo hace—
-tiene que conocer las tres versiones o va a reportar como adulterados todos los asientos viejos:
+tiene que conocer las cuatro versiones o va a reportar como adulterados todos los asientos viejos:
 
 | Desde | Migración | Qué se agregó | Línea hasheada |
 |---|---|---|---|
 | **2026-08-27** | `028` | la fórmula original | `code:debit:credit:descr` |
 | **2026-09-03** | `039` | `reference` en la cabecera (`idempotency_key` **no**: es transporte, no contabilidad) | `code:debit:credit:descr` |
 | **2026-09-22** | `054` | `client_id` y `supplier_id` de cada línea | `code:debit:credit:descr:client_id:supplier_id` |
+| **2026-10-01** (al aplicar la `071`) | `071` | `referencia_externa` en la cabecera, justo después de `reference`, siempre (vacía si no hay). El `reference` que entra es el que quedó grabado: en `manual`/`apertura`/`cierre`, el `AD-` que pone el motor | sin cambio |
+| **al aplicar la `072`** | `072` | **v5: JSON canónico** (`finanzas_contenido_v5`): cada campo con su clave, NULL como null, textos escapados por jsonb. Ya no hay separador que mover entre campos. La descripción entra tal como se graba (`btrim`). Se guarda `hash_version = 5` | objeto `{cuenta, debito, credito, descripcion, cliente, proveedor}` (`finanzas_linea_v5`) |
+
+🔒 **Desde la `072` el verificador SÍ recalcula** (`verify_accounting_chain` v2): para cada
+asiento usa la versión de su columna `hash_version` o, si es anterior, la del tramo de
+`accounting_hash_versions`, reconstruye el contenido con `finanzas_contenido_de_asiento` y
+compara. En staging, antes de la `072`, los 98 asientos se reprodujeron (v1 1–11, v2 12–49,
+v3 50–98; diagnóstico en `sql/verificacion/recalculo-content-hash.sql`). Lo que sigue sin
+detectarse: una reescritura completa de la cadena desde un punto (hace falta un ancla externa:
+el respaldo o el último hash publicado) y los campos que no entran (`idempotency_key`,
+`created_by`, `created_at`).
 
 Los dos campos del tercero se concatenan **siempre**, también vacíos: una fórmula de forma
 variable no se puede auditar.
@@ -1439,6 +1459,12 @@ Números con los que quedó staging. Si alguno no coincide, el ambiente se tocó
 | Estado de Resultado — utilidad operativa | −244,476.91 |
 | Plan de cuentas | 64 activas |
 | Desfases de `amount_paid` | 0 |
+
+### Registro de ventanas
+
+| Ventana | Se abrió | Se cerró | Nota |
+|---|---|---|---|
+| Revisión de Josuarth del sistema contable | Correo con el acceso (26/09/2026) | **30/09/2026, formalmente, por Oliver.** La revisión terminó el 28/09 y la reunión fue el 30/09 | El paso 4 («resetear y volver a sembrar») **no se hizo**: staging conserva los datos de la revisión. Con la ventana ya cerrada, el mismo 30/09 se aplicaron en staging la `068` (fecha de registro) y la `069` (reversiones con fecha elegida) del Bloque 1, E1. `develop` sigue sin push: E1 vive en la rama `feat/bloque1-contable` |
 
 ---
 
@@ -2274,13 +2300,13 @@ lo prueba con un trigger que revienta entre el paso 4 y el 5.
 
 ### La fecha
 
-La de la reversión (`current_date` ±1 día de tolerancia entre el reloj del servidor y el de la
-base). Nunca la del original: acta del 09/09. El servidor y el diálogo calculan "hoy" con la misma
-fórmula del resto del módulo (`new Date().toISOString().slice(0, 10)`, UTC).
+🔄 **Cambió el 30/09/2026 (E1, migración `069`).** Hasta ese día era la de hoy (`current_date`
+±1 día, acta del 09/09) y se calculaba en UTC. Ahora la ELIGE el contador: período abierto,
+nunca antes del original, hoy en Panamá por defecto. Ver SOP-045.
 
 ### El espejo se arma UNA vez
 
-`construirAsientoDeReversion(original, { hoy, motivo, source_id })` en
+`construirAsientoDeReversion(original, { fecha, motivo, source_id })` en
 `contabilidad/reversion.ts`. Lo llama el diálogo para la vista previa y el helper para postear.
 Si la pantalla necesita mostrar algo distinto de lo que devuelve esa función, **la función está
 mal, no la pantalla**: se corrige ahí y cambia en los dos lados.
@@ -2364,7 +2390,7 @@ después, así que una colisión aparece antes de tocar el libro y el DELETE com
 No hay que "emparejarlos" con esto.
 
 ⚠️ **Un asiento mal posteado NO se borra: se reversa.** `scripts/reversar-asiento-huerfano.ts`
-postea el espejo con `construirAsientoDeReversion` (fecha de hoy, `reverses_entry_id`), que es la
+postea el espejo con `construirAsientoDeReversion` (hoy en Panamá, `reverses_entry_id`), que es la
 misma función del diálogo de cobros y de la anulación. Solo staging.
 
 ### 3. Dos puertas, un formulario, dos rutas a la misma función
@@ -3173,6 +3199,24 @@ ser el mismo.
 Y **la pantalla ya no decide**: `showCancel` sale de `decidirAccionFiscal` (SOP-038), la misma
 función que usa el servidor.
 
+### Los mensajes dicen sólo lo que pasó (06/10/2026)
+
+Cinco caminos terminan en el libro (`cerrarEnElLibro`) y antes compartían los mensajes. Por eso una
+factura **sin CUFE** con el libro fallando decía «quedó ANULADO ante la DGI» sin que se le hablara al
+PAC. Ahora el orquestador le dice al libro qué pasó del lado de la DGI (`LadoDgi`):
+
+| Lado | Éxito | Falla del libro |
+|---|---|---|
+| PAC anuló / `0622` / reintento confirmado | «anulada ante la DGI y en el libro» (o «la DGI informó que ya estaba anulada») | estado intermedio, 409, «quedó ANULADA ante la DGI…» |
+| Sin CUFE, interna, emitida fuera | «quedó anulada en el CRM… No se envió nada a la DGI: <por qué>» | `no_se_anulo_en_el_libro`, el código del error, «no se completó en el libro contable… sigue emitida, sin cambios», **sin nombrar a la DGI** |
+| Marca `canceled` sin CUFE | «se completó en el libro… No se consultó a la DGI» | estado intermedio, sin decir que la DGI anuló |
+
+Sin DGI de por medio no hay estado intermedio: `cancelInvoice` es una transacción y la NC total se
+compensa. Igual se relee la factura: si la compensación también falló (`credited_total` ≠ 0), el
+mensaje pide soporte en vez de decir «sin cambios». El éxito trae `alcance` (`dgi_y_libro` |
+`solo_crm`) y el aviso de la pantalla sale de ahí, nunca del texto. La reversión de una NC sin DGI de
+por medio sigue el mismo criterio. Prueba en staging: `scripts/verificar-anulacion-sin-cufe.mts`.
+
 
 ---
 
@@ -3452,13 +3496,222 @@ misma factura del sandbox.
 **NC de compra (066).** Se registra desde el detalle de la compra. Una transacción en la base
 (`create_supplier_credit_note`). El asiento es el de la compra al revés y la base lo verifica.
 El saldo de la compra es `balance_due` (derivado): nadie calcula `total − amount_paid` a mano.
-Se anula con Reversar (fecha de hoy). Defaults de Josuarth en el encabezado de la `066`.
+Se anula con Reversar (fecha de registro elegida, SOP-045). Defaults de Josuarth en el encabezado de la `066`.
 
 **Resumen de ITBMS.** La regla está en `reports/vat-calculo.ts`: facturas emitidas no anuladas
 menos NC de venta autorizadas y vigentes (mes de la NC); compras menos NC de compra vigentes.
-Las anuladas no cuentan.
+Las anuladas no cuentan. Desde E1 el mes de cada documento es el de su **fecha de registro**
+(P-1a, 30/09/2026), no el del documento.
 
 **Importar asientos (067).** Vista previa obligatoria, todo o nada, deshacer completo con
-reversiones fechadas hoy. Si un lote falla a mitad, no queda nada: no hay que limpiar.
+reversiones con la fecha de registro elegida (no antes del último asiento del lote, SOP-045). Si un lote falla a mitad, no queda nada: no hay que limpiar.
 
 **Emisión.** Las cuentas del asiento se validan antes de pedir el número de factura.
+
+---
+
+## SOP-045: Fecha de documento y fecha de registro (Bloque 1, E1, 30/09/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09 y reunión del 30/09) pidió dos fechas en todo
+documento tipo factura y que la fecha de registro de reversiones, anulaciones y notas la elija el
+contador. Reemplaza la segunda frase del acta del 09/09 ("la reversión lleva SIEMPRE la fecha en
+que se hace"). La primera frase sigue: una factura se anula dentro del mismo mes; cerrado el mes,
+se corrige con nota de crédito.
+
+### Las dos fechas
+
+| Documento | Fecha del DOCUMENTO (informativa) | Fecha de REGISTRO (la del asiento) |
+|---|---|---|
+| Factura (HON y REI) | `issue_date` (va a la DGI; 182 h; vencimiento) | `accounting_date` (068) |
+| Compra | `expense_date` (factura del proveedor; vencimiento) | `accounting_date` (068) |
+| Gasto de trámite | `date` (vencimiento) | `accounting_date` (068) |
+| NC de venta | `issue_date` = hoy en Panamá (va a la DGI) | `accounting_date` (068), elegida |
+| NC de compra | `supplier_document_date` | `issue_date` (ya lo era desde la 066) |
+| Reversión / anulación | — | `p_transaction_date` del RPC, elegida |
+
+⚠️ La "fecha de registro" es `journal_entries.transaction_date`. **No** es `record_date`, que es
+el sello de grabación (`current_date`) y no lo elige nadie.
+
+### Las reglas, y dónde vive cada una
+
+1. **Período abierto.** Lo exige `post_journal_entry` (sin cambios). La app lo valida ANTES en
+   `api/fecha-de-registro.ts` (`resolverFechaDeRegistro`) para: (a) contestar 422 sin quemar
+   correlativo (`FAC-`, `NC-`, `NCP-`); (b) cortar ANTES de hablar con el PAC en
+   `anular-factura-ante-dgi.ts` y `anular-nota-de-credito-ante-dgi.ts`. Validarla recién en el
+   libro dejaría el documento anulado ante la DGI y vivo en el libro (el estado D4).
+2. **Una reversión nunca antes de su original.** La exigen los RPC (sin cambios) y
+   `construirAsientoDeReversion`. Deshacer una importación: no antes del último asiento del lote.
+   Una NC: no antes de la fecha de registro de su factura.
+3. **Futuro en un mes abierto:** `PERMITIR_FECHA_DE_REGISTRO_FUTURA`
+   (`contabilidad/fecha-de-registro.ts`), hoy `true`. Es la ÚNICA llave; un test lo fija.
+4. **"El mes de la factura"** para anular es el de su `accounting_date` (069).
+5. **Resumen de ITBMS:** por fecha de registro (P-1a).
+6. **Congelada al emitir o postear:** T4 (facturas), T5 (NC) y el trigger de la 049 (gastos de
+   trámite) la tienen en su lista desde la 068. La compra la cuida `gateContable`.
+
+### Hoy es hoy en Panamá
+
+`hoyEnPanama()` (`lib/utils/hoy-en-panama.ts`), con `Intl` y `America/Panama`. Nunca
+`new Date().toISOString().slice(0, 10)`: desde las 19:00 de Panamá ese es el día de mañana
+(FND-012). Un test recorre el módulo contable y falla si vuelve a aparecer.
+
+### La 069 es un parche verificado, no una copia
+
+Toma la definición vigente de cada RPC, reemplaza sólo el candado y aborta si el texto no aparece
+exactamente una vez. Las migraciones 046…067 quedan como historia; la definición vigente es la de
+la base. Antes de aplicarla, correr los conteos del encabezado en modo solo lectura.
+
+### Verificación
+
+`sql/tests/verificacion-068-069-fecha-de-registro.sql` (todo en ROLLBACK). Las verificaciones de
+la 046, 050, 055 y 060 se reescribieron: lo que se rechaza ahora es la fecha anterior al original.
+
+---
+
+## SOP-046: El tercero y la descripción en el asiento (Bloque 1, E2, 30/09/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09, punto 3) pidió que la columna Nombre del Mayor
+diga el cliente o proveedor de la transacción y la Descripción, la de cada línea del documento.
+Hasta E2 el nombre salía de un heurístico (el texto de la línea de control) y las líneas de
+ingreso y gasto se agrupaban por cuenta, sin descripción propia.
+
+### Lo nuevo se guarda; lo viejo se resuelve
+
+| | Asientos desde E2 | Asientos anteriores |
+|---|---|---|
+| Tercero | En la línea de 100004 / 200001 (`client_id` / `supplier_id`, 054) | Del documento de origen, al leer (`resolverTercerosFiscales`) |
+| Descripción | La de cada línea del documento | La que quedó grabada (inmutable) |
+
+El libro no se actualiza nunca. `resolverTercerosFiscales` cubre: factura, cobro (directo por
+`payments.client_id`, así un cobro reversado sigue teniendo cliente), NC de venta, compra, gasto
+de trámite, pago a proveedor (por lo que paga), NC de compra y reversiones (por el tipo del asiento
+que revierten). Pantalla y Excel usan el mismo resultado.
+
+### Reglas
+
+1. **Una línea del libro por cada línea del documento** en factura y compra. No se agrupa.
+2. **El espejo de una reversión conserva el tercero.** Si se agrega un reversor nuevo, su
+   payload al RPC tiene que llevar `client_id` / `supplier_id`.
+3. **"Fecha de registro" en pantalla es la contable.** El sello de grabación es "Grabado el".
+4. **Sin ficha de proveedor no hay tercero.** No se inventa a partir del nombre escrito; el Mayor
+   muestra ese nombre como respaldo, sin RUC.
+
+---
+
+## SOP-047: Número de documento, referencia externa y tercero obligatorio (Bloque 1, E3, 01/10/2026)
+
+**Por qué existe:** Josuarth (revisión del 28/09, puntos 2 y 10) filtra el Mayor por tipo de
+transacción como en QuickBooks (Transaction Type · Num · Trans #) y necesita que la antigüedad
+cuadre contra 100004/200001. Hasta E3 el número del documento, la referencia libre y el
+correlativo estaban mezclados, y un asiento manual podía mover 100004 sin decir de quién.
+
+### Las tres columnas
+
+| Concepto | Dónde | Ejemplos |
+|---|---|---|
+| Módulo | **derivado** (`moduloDelAsiento`) | FAC-ING, FAC-CO, NC-ING, NC-CO, CO, PA, AD, AP, CA |
+| N.º de documento | `journal_entries.reference` | FAC-HON-000026, CO-000011, PA-000008, FAC-CO-000001, AD-000001 |
+| N.º de transacción | `entry_number` | 99 |
+| Referencia externa | `journal_entries.referencia_externa` (071) | F-123, CHQ-551, MEMO-2026-014 |
+
+### Reglas
+
+1. **Las secuencias no se reinician al cambiar de prefijo.** `REC-` → `CO-` y `CE-` → `PA-`
+   siguen el mismo contador: nunca conviven dos documentos con el mismo número.
+2. **El `AD-` lo pone el motor**, adentro de la transacción. Quien llame a `post_journal_entry`
+   con `manual`/`apertura`/`cierre` manda `p_reference` vacío y la referencia libre en
+   `p_referencia_externa`; si no, el RPC rechaza.
+3. **Tercero en 100004/200001, siempre** (salvo reversiones y compras sin ficha, SOP-033). Lo
+   exige el RPC; el formulario (`tercerosFaltantes`) y la importación (columna Tercero, código
+   CLI-/PRV-) lo dicen antes con el número de línea de la pantalla.
+4. **`FAC-CO-` se toma antes de postear.** Compra: antes del INSERT (un alta que falla deja
+   hueco, SOP-031). Gasto de trámite: se escribe en el gasto antes del asiento y el reintento
+   reusa el número.
+5. **La importación lee `nn/nn/AAAA` en el formato que elige la persona** (MM/DD por defecto,
+   decisión (c)). La vista previa y el registro usan el MISMO formato: viaja en los dos pedidos.
+6. **Sin tercero, Nombre vacío.** El Mayor ya no copia el texto de la línea de control.
+
+### Pendiente (E9)
+
+- El **filtro** por módulo del Mayor y del Diario (las columnas ya están).
+- La referencia externa de la NC de compra (hoy la arma el SQL de la 066 sin ella).
+
+### Agregado del 01/10/2026: 200001 nunca sin proveedor
+
+7. **El proveedor es obligatorio en compras y gastos de trámite**, porque los dos acreditan 200001.
+   Se corta en cuatro lugares: formulario, ruta (400 antes de insertar), constructor
+   (`sin_proveedor`, antes de tomar `FAC-CO-`) y motor (071, sin excepción salvo reversiones).
+   Reemplaza la regla de SOP-033 §«sin proveedor no se bloquea». El pago de un documento viejo
+   sin proveedor tampoco se registra hasta asignárselo.
+8. **La `071` hace incompatible a `develop` con staging** hasta mezclar la rama (task_plan.md).
+
+---
+
+## SOP-048: La cuenta de cada tasa y el saldo a favor del cliente (Bloque 1, 01/10/2026)
+
+### La tasa con su cuenta (`073`)
+
+1. **La cuenta del impuesto la dice la tasa** (`tax_codes.account_code`), no el constructor. Una
+   factura con dos tasas de cuentas distintas lleva dos líneas de impuesto.
+2. **Una implementación:** `contabilidad/impuesto-por-cuenta.ts` (`lineasDeImpuesto`). Los
+   loaders resuelven la cuenta con `cuentasDeTasas` (factura, NC de venta, compra, NC de compra).
+   🔒 `impuesto-por-cuenta.test.ts` falla si un constructor vuelve a escribir la cuenta en duro.
+3. **Una vez usada, la cuenta de una tasa no cambia** (trigger): una NC invierte la factura con
+   la cuenta de la tasa al día de la NC.
+4. La NC de compra verifica en la base contra las cuentas de las tasas de esa compra.
+
+### El cobro con excedente (`074`)
+
+1. **El excedente queda en `payments.amount_unapplied`** (T7b/T7c lo derivan desde siempre). El
+   asiento del cobro es por el TOTAL, así que ya está en 100004 con el cliente.
+2. **Antigüedad por cobrar:** cada saldo a favor de un cobro contabilizado resta en la fila del
+   cliente, en el tramo corriente. Sin eso el auxiliar no cuadraría con 100004.
+3. **Aplicar el saldo a favor** = `apply_payment_credit` (una transacción, bloquea cobro y
+   facturas, mismo cliente, no más que el saldo de cada factura ni que lo disponible). **No
+   postea**: el dinero ya está en 100004. Admin, abogada y contador (Oliver, 01/10/2026).
+4. **Reversar** un cobro con saldo aplicado después lo reversa ENTERO: la `046` borra todas sus
+   aplicaciones, también las agregadas con «Aplicar saldo a favor».
+5. **Referencia obligatoria** al crear (validador, pantalla, trigger). Un cobro viejo sin
+   referencia se sigue pudiendo reversar.
+
+
+---
+
+## SOP-049: Desactivar un usuario, compras que nacen pendientes y documentos de prueba (05/10/2026)
+
+### Desactivar = bloquear en Auth
+
+1. **«Desactivar» en Administración › Usuarios bloquea al usuario en Supabase Auth** (`ban_duration`),
+   además de `public.users.active = false`. Reactivar lo desbloquea. Una implementación:
+   `src/lib/auth/acceso-de-usuario.ts` (`sincronizarAccesoEnAuth`), que llaman el `DELETE` y el `PATCH`
+   de `/api/admin/users/[id]`, **antes** de tocar el perfil: si Auth falla, no se marca inactivo.
+2. Por qué: ni el login ni el middleware leen `active` (el middleware autoriza con el rol del JWT).
+   Hasta el 05/10 un usuario «inactivo» seguía entrando; medido en staging.
+3. Una sesión ya abierta dura hasta que vence su token (1 h); el bloqueo corta la renovación.
+4. Usuarios desactivados antes de este cambio NO quedaron bloqueados: se reactivan y se vuelven a
+   desactivar. `sql/verificacion/produccion-accesos-contador.sql` los lista («inactivo pero puede entrar»).
+5. No hay invitación por correo: un usuario nuevo se crea con una contraseña descartable que nadie
+   conoce y define la suya con «¿Olvidaste tu contraseña?» (runbook `ventana-bloque-1.md` §6).
+
+### Una compra nace pendiente
+
+`ESTADO_INICIAL_DE_COMPRA = "pendiente_pago"` (`validators/business-expense.ts`): la pantalla arranca
+ahí, la API toma un alta sin `status` como pendiente y la base lo dice desde la `093`. «Pagado» en el
+alta sigue existiendo y sigue siendo «registrar el pago al crear, con banco».
+
+### Documentos de prueba (`094`)
+
+La marca que cuenta es la del DOCUMENTO (`de_prueba`); la del cliente (`es_de_prueba`) sólo hace nacer
+de prueba lo nuevo. Se marca por número, nunca un documento con asiento, y se desmarca sólo con la
+llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-quickbooks.md` §9.
+
+1. **Todo reporte filtra** con `.eq(DE_PRUEBA, false)` (`lib/finanzas/documentos-de-prueba.ts`): antigüedad
+   y su cuadre, estado de cuenta, ITBMS, Pendientes DGI y sus contadores, aviso de errores DGI, selectores.
+   Un reporte nuevo que lea `invoices`, `credit_notes`, `payments`, `client_payments` o `expenses` lo
+   agrega, o declara `// de-prueba-ok: <motivo>`; si no, falla `documentos-de-prueba-filtrados.test.ts`.
+   **Nunca se filtra por el cliente**: FAC-HON-000463 es real con cliente de prueba.
+2. **El libro no filtra: no los recibe** (`095`). Un asiento de un documento de prueba lo rechaza la base.
+3. **No se emite, cobra, acredita, anula ni manda a la DGI** un documento de prueba, ni se crea un cobro o
+   una NC para un cliente de prueba: 409 antes del número (no deja huecos). Para facturarle algo real a un
+   cliente marcado, primero se lo desmarca con la llave.
+4. Listados: se ven, con el badge «Prueba». Detalle: banda gris, sin botones de acción.

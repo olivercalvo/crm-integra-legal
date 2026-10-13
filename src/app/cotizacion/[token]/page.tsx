@@ -168,7 +168,8 @@ export default async function CotizacionPublicPage({ params }: PageProps) {
     );
   }
 
-  const db = createAdminClient();
+  // actor-ok: página pública de la cotización, sólo lectura.
+  const db = createAdminClient(null);
   const quote = await getQuoteForPortal(db, token);
 
   if (!quote) {

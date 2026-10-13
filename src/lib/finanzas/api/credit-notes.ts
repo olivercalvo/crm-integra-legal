@@ -15,12 +15,21 @@
  * UPDATE manual de subtotal_total / tax_total / grand_total.
  */
 
+import { clienteDePrueba, mensajeDeClienteDePrueba, mensajeDeDocumentoDePrueba } from "@/lib/finanzas/documentos-de-prueba";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarParaLaDgi, resumirProblemas, erroresPorCampo } from "@/lib/finanzas/efactura/validaciones-previas";
+import { cargarReceptor } from "@/lib/finanzas/efactura/data/datos-para-validar";
 import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { asegurarFechaDesdeElInicio } from "@/lib/finanzas/contabilidad/inicio-contable";
 import {
+  MENSAJE_NC_VENTA_SIN_FACTURA,
+  PERMITIR_NC_VENTA_SIN_FACTURA,
   validarLineasDeNotaDeCredito,
   type CreateCreditNoteInput,
   type LineaFacturada,
+  type TasaDelCatalogo,
 } from "@/lib/finanzas/validators/credit-note";
 import { postJournalEntry } from "@/lib/finanzas/contabilidad/posting";
 import { construirAsientoDeNotaDeCredito } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
@@ -89,68 +98,169 @@ export async function createCreditNote(
   db: DB,
   tenantId: string,
   userId: string,
-  input: CreateCreditNoteInput
+  input: CreateCreditNoteInput,
+  /** `validarParaDgi`: la NC va a la DGI (03/10/2026). La interna no se valida. */
+  opciones?: { validarParaDgi?: boolean }
 ): Promise<{ id: string; credit_note_number: string; total: number }> {
-  // 1. La factura y sus líneas
-  const { data: invoice, error: errInv } = await db
-    .from("invoices")
-    .select("id, client_id, invoice_number, status, balance_due")
-    .eq("tenant_id", tenantId)
-    .eq("id", input.invoice_id)
-    .maybeSingle();
-  if (errInv) {
-    throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
-  }
-  if (!invoice) {
-    throw new MutationError("Factura no encontrada", 404);
+  // 1. La factura (opcional) y sus líneas. Sin factura, el cliente del pedido.
+  type FacturaParaNc = {
+    id: string;
+    client_id: string;
+    invoice_number: string;
+    status: string;
+    balance_due: number;
+    issue_date: string;
+    accounting_date: string | null;
+    dgi_cufe: string | null;
+  };
+  let invoice: FacturaParaNc | null = null;
+  let facturadas: LineaFacturada[] = [];
+  let acreditadoPorLinea = new Map<string, number>();
+  let clientId: string;
+
+  if (input.invoice_id) {
+    const { data: inv, error: errInv } = await db
+      .from("invoices")
+      .select("id, client_id, invoice_number, status, balance_due, issue_date, accounting_date, dgi_cufe, de_prueba")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.invoice_id)
+      .maybeSingle();
+    if (errInv) {
+      throw new MutationError(pgErrorToMessage(errInv), 500, errInv);
+    }
+    if (!inv) {
+      throw new MutationError("Factura no encontrada", 404);
+    }
+    // Factura de prueba: su NC nacería de prueba (095) y no tendría qué acreditar en el libro.
+    if ((inv as { de_prueba?: boolean }).de_prueba === true) {
+      throw new MutationError(mensajeDeDocumentoDePrueba(String(inv.invoice_number ?? "")), 409);
+    }
+    invoice = { ...(inv as Record<string, unknown>), balance_due: Number(inv.balance_due ?? 0) } as FacturaParaNc;
+    if (input.client_id && input.client_id !== invoice.client_id) {
+      throw new MutationError("La factura es de otro cliente.", 400, undefined, { invoice_id: "La factura es de otro cliente." });
+    }
+    clientId = invoice.client_id;
+
+    const { data: invoiceLines, error: errLines } = await db
+      .from("invoice_lines")
+      .select(
+        `id, line_order, service_id, description, quantity, unit_price,
+         tax_code, tax_rate, tax_code_id`
+      )
+      .eq("tenant_id", tenantId)
+      .eq("invoice_id", input.invoice_id)
+      .order("line_order", { ascending: true });
+    if (errLines) {
+      throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
+    }
+    if (!invoiceLines || invoiceLines.length === 0) {
+      throw new MutationError("La factura no tiene líneas para generar la nota de crédito.", 400);
+    }
+    facturadas = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
+      id: String(ln.id),
+      line_order: Number(ln.line_order),
+      service_id: (ln.service_id as string | null) ?? null,
+      description: String(ln.description ?? ""),
+      quantity: Number(ln.quantity),
+      unit_price: Number(ln.unit_price),
+      tax_code: String(ln.tax_code ?? ""),
+      tax_rate: Number(ln.tax_rate ?? 0),
+      tax_code_id: (ln.tax_code_id as string | null) ?? null,
+    }));
+
+    // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
+    acreditadoPorLinea = await acreditadoPorLineaDeFactura(db, tenantId, input.invoice_id);
+  } else {
+    // 🔴 P-4a: la NC de venta sin factura está apagada. El validador de forma
+    //    ya la corta; esto es por si alguien llama a la función directo.
+    if (!PERMITIR_NC_VENTA_SIN_FACTURA) {
+      throw new MutationError(MENSAJE_NC_VENTA_SIN_FACTURA, 409);
+    }
+    if (!input.client_id) {
+      throw new MutationError("Elige el cliente de la nota de crédito.", 400, undefined, { client_id: "Elige el cliente." });
+    }
+    const { data: cli } = await db
+      .from("clients")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("id", input.client_id)
+      .maybeSingle();
+    if (!cli) throw new MutationError("Cliente no encontrado", 404);
+    clientId = input.client_id;
   }
 
-  const { data: invoiceLines, error: errLines } = await db
-    .from("invoice_lines")
-    .select(
-      `id, line_order, service_id, description, quantity, unit_price,
-       tax_code, tax_rate, tax_code_id`
-    )
-    .eq("tenant_id", tenantId)
-    .eq("invoice_id", input.invoice_id)
-    .order("line_order", { ascending: true });
-  if (errLines) {
-    throw new MutationError(pgErrorToMessage(errLines), 500, errLines);
-  }
-  if (!invoiceLines || invoiceLines.length === 0) {
-    throw new MutationError("La factura no tiene líneas para generar la nota de crédito.", 400);
+  // Cliente de prueba: la NC nacería de prueba y no entraría al libro (094/095).
+  // Se corta antes del número NC-.
+  const clienteMarcado = await clienteDePrueba(db, tenantId, clientId);
+  if (clienteMarcado !== null) {
+    throw new MutationError(mensajeDeClienteDePrueba(clienteMarcado), 409);
   }
 
-  // 2. Lo ya acreditado por línea (NC anteriores de esta factura)
-  const acreditadoPorLinea = await acreditadoPorLineaDeFactura(db, tenantId, input.invoice_id);
-
-  // 3. La regla contable (pura)
-  const facturadas: LineaFacturada[] = (invoiceLines as Record<string, unknown>[]).map((ln) => ({
-    id: String(ln.id),
-    line_order: Number(ln.line_order),
-    service_id: (ln.service_id as string | null) ?? null,
-    description: String(ln.description ?? ""),
-    quantity: Number(ln.quantity),
-    unit_price: Number(ln.unit_price),
-    tax_code: String(ln.tax_code ?? ""),
-    tax_rate: Number(ln.tax_rate ?? 0),
-    tax_code_id: (ln.tax_code_id as string | null) ?? null,
-  }));
+  // 3. La regla contable (pura), con el catálogo de tasas: la tasa de una línea
+  //    editada sale de acá, nunca del body.
+  const tasas = await tasasDelCatalogo(db, tenantId);
   const validacion = validarLineasDeNotaDeCredito({
-    factura: {
-      invoice_number: String(invoice.invoice_number ?? ""),
-      status: String(invoice.status),
-      balance_due: Number(invoice.balance_due ?? 0),
-    },
+    factura: invoice
+      ? { invoice_number: String(invoice.invoice_number ?? ""), status: String(invoice.status), balance_due: invoice.balance_due }
+      : null,
     facturadas,
     acreditadoPorLinea,
     pedido: input.lineas,
+    tasas,
   });
   if (!validacion.ok) {
     throw new MutationError(validacion.mensaje, validacion.status, undefined, validacion.fieldErrors);
   }
 
+  // 3.a 🔴 LO QUE LA DGI RECHAZARÍA, ANTES DEL NÚMERO (03/10/2026). Sólo si la NC
+  //     va a la DGI: la interna no se valida. Como todavía no existe, un rechazo
+  //     acá no deja nada creado: el formulario muestra el motivo y lo marca.
+  if (opciones?.validarParaDgi) {
+    const problemas = validarParaLaDgi({
+      clase: "nota_credito",
+      receptor: await cargarReceptor(db, tenantId, clientId),
+      lineas: validacion.lineas.map((l) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_rate: l.tax_rate,
+      })),
+      totales: null,
+      fechaDocumento: hoyEnPanama(),
+      referencia: invoice
+        ? { numero: String(invoice.invoice_number), fecha: String(invoice.issue_date), cufe: invoice.dgi_cufe ?? null }
+        : null,
+    });
+    if (problemas.length > 0) {
+      throw new MutationError(
+        `No se puede emitir la nota de crédito para la DGI. Corrija esto o emítala como interna:
+${resumirProblemas(problemas)}`,
+        422,
+        undefined,
+        Object.fromEntries(
+          Object.entries(erroresPorCampo(problemas)).map(([k, v]) => [k.replace(/^lines\./, "lineas."), v])
+        )
+      );
+    }
+  }
+
+  // 3.b La fecha de REGISTRO: la elige el contador, en un período abierto y
+  //     nunca antes del registro de la factura que corrige. Antes del número:
+  //     un 422 por mes cerrado no quema correlativo.
+  const registroDeLaFactura = invoice ? String(invoice.accounting_date ?? invoice.issue_date) : null;
+  const fechaDeRegistro = await resolverFechaDeRegistro(db, tenantId, input.fecha_registro, {
+    ...(registroDeLaFactura
+      ? { noAntesDe: { fecha: registroDeLaFactura, etiqueta: `la factura ${invoice?.invoice_number}` } }
+      : {}),
+    que: "la nota de crédito",
+    campo: "fecha_registro",
+  });
+
   // 4. El número, después de todas las validaciones (un 400 no quema correlativo)
+  // 096: la NC nace con la fecha de hoy. Si el inicio contable estuviera en el
+  // futuro, la base rechazaría el alta DESPUÉS del número: se dice antes.
+  await asegurarFechaDesdeElInicio(db, tenantId, "nota_credito", hoyEnPanama(), "issue_date");
+
   const { data: nextNumber, error: errSeq } = await db.rpc("get_next_sequence_number", {
     p_tenant_id: tenantId,
     p_sequence_type: "credit_note",
@@ -160,16 +270,19 @@ export async function createCreditNote(
   }
   const formattedNumber = `NC-${String(nextNumber).padStart(6, "0")}`;
 
-  // 5. Cabecera con la fecha de HOY (totales = 0; T8c los recalcula con las líneas)
-  const issueDateIso = new Date().toISOString().slice(0, 10);
+  // 5. Cabecera (totales = 0; T8c los recalcula con las líneas). Dos fechas:
+  //    la del DOCUMENTO es el día en que se emite (hoy en Panamá: es la que va
+  //    a la DGI) y la de REGISTRO es la elegida.
+  const issueDateIso = hoyEnPanama();
   const { data: cnHeader, error: errCn } = await db
     .from("credit_notes")
     .insert({
       tenant_id: tenantId,
       credit_note_number: formattedNumber,
       invoice_id: input.invoice_id,
-      client_id: invoice.client_id,
+      client_id: clientId,
       issue_date: issueDateIso,
+      accounting_date: fechaDeRegistro,
       reason: input.reason,
       observations: input.observations,
       status: "emitida",
@@ -183,7 +296,7 @@ export async function createCreditNote(
   }
   const creditNoteId = cnHeader.id as string;
 
-  // 6. Las líneas. T8c recalcula totales; la 051 deriva credited_total.
+  // 6. Las líneas. T8c recalcula totales; la 051/076 deriva credited_total.
   const { error: errCnLines } = await db.from("credit_note_lines").insert(
     validacion.lineas.map((ln) => ({
       tenant_id: tenantId,
@@ -216,6 +329,46 @@ export async function createCreditNote(
   }
 
   return { id: creditNoteId, credit_note_number: formattedNumber, total: validacion.total };
+}
+
+/** El catálogo de tasas del bufete, por id (activas e inactivas: el validador decide). */
+async function tasasDelCatalogo(db: DB, tenantId: string): Promise<Map<string, TasaDelCatalogo>> {
+  const { data, error } = await db.from("tax_codes").select("id, code, rate, active").eq("tenant_id", tenantId);
+  if (error) throw new MutationError(pgErrorToMessage(error), 500, error);
+  return new Map(
+    ((data ?? []) as { id: string; code: string; rate: number | string; active: boolean }[]).map((t) => [
+      t.id,
+      { code: t.code, rate: Number(t.rate), active: Boolean(t.active) },
+    ])
+  );
+}
+
+/**
+ * APLICAR el saldo a favor de una NC (E8, `076`): una NC sin factura se aplica
+ * a una factura del mismo cliente. NO genera asiento (el crédito ya está en
+ * 100004 a nombre del cliente); el RPC bloquea las dos filas y valida los dos
+ * saldos. Va con el cliente de SERVICIO (SOP-014).
+ */
+export async function applyCreditNote(
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  creditNoteId: string,
+  invoiceId: string,
+  amount: number
+): Promise<{ aplicado: number; saldo_a_favor: number; invoice_number: string }> {
+  const { data, error } = await ledgerDb.rpc("apply_credit_note", {
+    p_tenant_id: tenantId,
+    p_credit_note_id: creditNoteId,
+    p_invoice_id: invoiceId,
+    p_amount: amount,
+    p_created_by: userId,
+  });
+  if (error) {
+    throw new MutationError(error.message || "No se pudo aplicar el saldo de la nota de crédito.", 422, error);
+  }
+  const r = data as { aplicado: number | string; saldo_a_favor: number | string; invoice_number: string };
+  return { aplicado: Number(r.aplicado), saldo_a_favor: Number(r.saldo_a_favor), invoice_number: r.invoice_number };
 }
 
 /**
@@ -262,9 +415,10 @@ export async function emitCreditNote(
   ledgerDb: DB,
   tenantId: string,
   userId: string,
-  input: CreateCreditNoteInput
+  input: CreateCreditNoteInput,
+  opciones?: { validarParaDgi?: boolean }
 ): Promise<{ id: string; credit_note_number: string; total: number; entry_id: string }> {
-  const nc = await createCreditNote(db, tenantId, userId, input);
+  const nc = await createCreditNote(db, tenantId, userId, input, opciones);
 
   const datos = await cargarNotaDeCreditoParaAsiento(ledgerDb, tenantId, nc.id);
   if (!datos) {
@@ -298,7 +452,9 @@ export async function createCreditNoteFromInvoice(
   userId: string,
   invoiceId: string,
   reason: string,
-  observations: string | null = null
+  observations: string | null = null,
+  /** Fecha de registro de la anulación que la genera. Sin ella, hoy en Panamá. */
+  fechaDeRegistro: string | null = null
 ): Promise<{ id: string; credit_note_number: string }> {
   const { data: inv, error: errInv } = await db
     .from("invoices")
@@ -338,6 +494,7 @@ export async function createCreditNoteFromInvoice(
     invoice_id: invoiceId,
     reason,
     observations,
+    fecha_registro: fechaDeRegistro,
     lineas: ((lines ?? []) as { id: string; quantity: number | string }[]).map((l) => ({
       invoice_line_id: l.id,
       quantity: Number(l.quantity),
@@ -359,10 +516,10 @@ export async function getCreditNoteById(
     .from("credit_notes")
     .select(
       `
-        id, credit_note_number, invoice_id, client_id, issue_date, reason,
+        id, credit_note_number, invoice_id, client_id, issue_date, accounting_date, reason,
         observations, status, currency, subtotal_total, tax_total, grand_total,
         fe_estado, dgi_cufe, dgi_fecha_autorizacion,
-        created_at, created_by,
+        created_at, created_by, fe_motivo_pendiente, fe_motivo_pendiente_en,
         invoice:invoices!credit_notes_invoice_id_fkey(
           id, invoice_number, invoice_kind, issue_date, status, grand_total
         ),
@@ -526,7 +683,9 @@ export async function reverseCreditNote(
   tenantId: string,
   userId: string,
   creditNoteId: string,
-  reason: string
+  reason: string,
+  /** Fecha de registro elegida. Sin ella, hoy en Panamá. */
+  fechaDeRegistro?: unknown
 ): Promise<ReverseCreditNoteResult> {
   // 1. La NC existe y es de este tenant. El RPC lo vuelve a chequear con
   //    candado; acá es para contestar 404 en vez de un error opaco.
@@ -559,10 +718,15 @@ export async function reverseCreditNote(
     );
   }
 
-  // 3. El espejo, con la fecha de HOY (acta del 09/09: nunca la del original).
-  const hoy = new Date().toISOString().slice(0, 10);
+  // 3. La fecha de registro elegida (revisión del 28/09 y reunión del 30/09):
+  //    período abierto y nunca antes del original. El RPC lo vuelve a exigir.
+  const fecha = await resolverFechaDeRegistro(db, tenantId, fechaDeRegistro, {
+    noAntesDe: { fecha: original.transaction_date, etiqueta: `el asiento ${original.entry_number}` },
+    que: "la reversión",
+    campo: "fecha_registro",
+  });
   const armado = construirAsientoDeReversion(original, {
-    hoy,
+    fecha,
     motivo: reason,
     source_id: creditNoteId,
   });
@@ -582,6 +746,9 @@ export async function reverseCreditNote(
       debit: l.debit,
       credit: l.credit,
       description: l.description ?? null,
+      // E2: el tercero de la línea viaja al RPC (el espejo lo conserva).
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     })),
     p_created_by: userId,
   });

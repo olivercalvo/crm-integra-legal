@@ -55,15 +55,16 @@ BEGIN
     v_ok := v_ok + 1;
   END;
 
-  -- [2] Fecha que no es la de hoy → rechazado (acta del 09/09).
+  -- [2] Fecha ANTERIOR al original → rechazado. (El original es de hoy; desde la
+  --     069 la fecha la elige el contador, pero nunca antes del original.)
   BEGIN
     PERFORM reverse_journal_entry(v_tenant, v_manual, 'Verificación 055',
       current_date - 30, 'Reversión', v_espejo, v_user);
-    RAISE NOTICE '[2] fecha del original ......................... ❌ PASÓ (debía fallar)';
+    RAISE NOTICE '[2] fecha anterior al original ................. ❌ PASÓ (debía fallar)';
     v_fail := v_fail + 1;
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    RAISE NOTICE '[2] fecha del original ......................... ✅ RECHAZADO: %', left(v_err, 55);
+    RAISE NOTICE '[2] fecha anterior al original ................. ✅ RECHAZADO: %', left(v_err, 55);
     v_ok := v_ok + 1;
   END;
 

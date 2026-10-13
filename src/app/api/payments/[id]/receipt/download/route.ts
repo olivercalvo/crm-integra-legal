@@ -13,10 +13,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serveStorageFile } from "@/lib/storage/serve-file";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
-export async function GET(
+export const GET = conManejoDeAuditoria(async function GET(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -29,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -64,4 +65,4 @@ export async function GET(
     console.error("[payments/receipt/download] error", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

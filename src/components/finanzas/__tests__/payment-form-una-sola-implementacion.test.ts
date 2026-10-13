@@ -80,10 +80,14 @@ for (const rel of PUERTAS) {
   });
 }
 
-test("el módulo compartido replica la regla del servidor: banco obligatorio y cap por saldo", () => {
+test("el módulo compartido replica la regla del servidor: banco y referencia obligatorios, excedente permitido", () => {
   const src = leer(COMPARTIDO);
   assert.match(src, /payment_account_code\s*=\s*"Elija la cuenta bancaria/);
-  assert.match(src, /amountNum\s*>\s*balanceDue\s*\+\s*0\.001/);
+  // 074: superar el saldo ya no es error (queda a favor del cliente)…
+  assert.doesNotMatch(src, /errors\.amount\s*=\s*`El monto no puede superar el saldo/);
+  assert.match(src, /export function excedenteDelCobro/);
+  // …y la referencia es obligatoria, como en el servidor.
+  assert.match(src, /errors\.reference\s*=\s*"La referencia es obligatoria/);
   // Sin default de banco, a propósito (Rose, 25/08).
   assert.match(src, /payment_account_code:\s*""/);
 });

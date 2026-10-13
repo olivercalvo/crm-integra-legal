@@ -42,19 +42,22 @@ test("🔴 el filtro a `manual` está en las TRES capas", () => {
   assert.match(sql, /REVOKE EXECUTE ON FUNCTION\s*\n?\s*public\.reverse_journal_entry/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION\s*\n?\s*public\.reverse_journal_entry\(uuid, uuid, text, date, text, jsonb, uuid\)\s*\n?\s*TO service_role;/);
 
-  // 2. El helper, para el mensaje.
+  // 2. El helper, para el mensaje. Desde la 080 la lista es manual + cierre
+  //    (SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO), y cierre-anual.test.ts la
+  //    cruza con el parche del RPC.
   const src = leer(HELPER);
-  assert.match(src, /original\.source_type !== "manual"/);
+  assert.match(src, /!SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO\.includes\(original\.source_type\)/);
   assert.match(src, /salió de un documento/);
 
   // 3. La pantalla, que no ofrece el botón.
   const page = leer("src/app/finanzas/asientos/[id]/page.tsx");
-  assert.match(page, /\{esManual && !yaReversado && \(\s*<ReversePaymentDialog/);
+  assert.match(page, /\{esReversable && !yaReversado && \(\s*<ReversePaymentDialog/);
+  assert.match(page, /SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO\.includes\(asiento\.source_type\)/);
 });
 
 test("source_id va NULL: el vínculo es reverses_entry_id", () => {
   const src = leer(HELPER);
-  assert.match(src, /\{ hoy, motivo: reason, source_id: null \}/);
+  assert.match(src, /\{ fecha, motivo: reason, source_id: null \}/);
   const sql = leer(SQL);
   assert.match(sql, /NULL, NULL, p_entry_id, btrim\(p_reason\)/);
 });
@@ -71,7 +74,7 @@ test("un asiento ya reversado se rechaza antes de llamar al RPC", () => {
 test("la ruta: admin y contador, el tenant del contexto y el cliente de servicio", () => {
   const src = leer(RUTA);
   assert.match(src, /const MUTATING_ROLES = \["admin", "contador"\] as const;/);
-  assert.match(src, /createAdminClient\(\)/);
+  assert.match(src, /createAdminClient\(ctx\.userId\)/);
   assert.match(src, /ctx\.tenantId/);
   assert.doesNotMatch(src, /body.*tenant_id|tenant_id.*body/, "el tenant nunca sale del body");
   // El motivo se valida con el mismo rango que las otras tres reversiones.

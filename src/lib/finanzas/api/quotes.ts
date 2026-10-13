@@ -13,6 +13,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
+import { vencimientoPorPlazo } from "@/lib/finanzas/types/supplier";
 import type {
   CreateQuoteInput,
   UpdateQuoteInput,
@@ -1381,12 +1383,12 @@ export async function convertToInvoices(
   }
 
   // 3. Calcular due_date desde default_payment_terms_days (default = 0 = al acto).
-  const today = new Date();
-  const issueDateStr = today.toISOString().slice(0, 10);
+  //    La fecha es HOY EN PANAMÁ (no UTC: después de las 7 p. m. el día UTC ya
+  //    es mañana). La de registro no se pasa: el trigger de la `068` la iguala
+  //    a la del documento, y se puede cambiar en el borrador antes de emitir.
+  const issueDateStr = hoyEnPanama();
   const termDays = client.default_payment_terms_days ?? 0;
-  const dueDate = new Date(today);
-  dueDate.setDate(dueDate.getDate() + termDays);
-  const dueDateStr = dueDate.toISOString().slice(0, 10);
+  const dueDateStr = vencimientoPorPlazo(issueDateStr, termDays);
 
   // 4. Crear facturas (HON primero, después REI).
   const createdInvoiceIds: string[] = [];

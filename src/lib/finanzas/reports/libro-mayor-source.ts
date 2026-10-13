@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { aperturaRegistrada, saldoInicialEfectivo } from "@/lib/finanzas/reports/apertura-registrada";
 
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import { claveDeTercero } from "@/lib/finanzas/reports/tercero-fiscal";
@@ -68,8 +69,10 @@ export async function loadCuentaDelMayor(
   if (!data) return null;
 
   const r = data as Record<string, unknown>;
-  const saldoInicial = Number(r.saldo_inicial ?? 0);
-  const saldoInicialFecha = (r.saldo_inicial_fecha as string | null) ?? null;
+  // 100: con apertura, el saldo inicial de la cuenta ya no cuenta (está en el libro).
+  const conApertura = await aperturaRegistrada(db, tenantId);
+  const saldoInicial = saldoInicialEfectivo(r.saldo_inicial as number | string | null, conApertura);
+  const saldoInicialFecha = conApertura ? null : (r.saldo_inicial_fecha as string | null) ?? null;
 
   const previos = rango.desde
     ? await sumaMovimientosAnteriores(db, tenantId, r.id as string, rango.desde)
@@ -180,7 +183,7 @@ export async function loadMovimientosDeCuenta(
     .select(
       "id, entry_id, line_order, debit, credit, line_description, client_id, supplier_id, " +
         "clients(name), suppliers(legal_name), " +
-        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id)"
+        "journal_entries!inner(id, entry_number, transaction_date, description, source_type, source_id, reverses_entry_id, reference, referencia_externa)"
     )
     .eq("tenant_id", tenantId)
     .eq("account_id", accountId);
@@ -211,10 +214,34 @@ export async function loadMovimientosDeCuenta(
       description: string;
       source_type: string;
       source_id: string | null;
+      reverses_entry_id: string | null;
+      reference: string | null;
+      referencia_externa: string | null;
     };
   };
   const filas = propias as unknown as FilaPropia[];
   const entryIds = Array.from(new Set(filas.map((f) => f.entry_id)));
+
+  // -- 1.b) E2: el tipo del asiento que revierte cada REVERSIÓN ---------------
+  // Sin embed: el self-join de journal_entries por FK da PGRST200 (21/09).
+  const idsRevertidos = Array.from(
+    new Set(
+      filas
+        .map((f) => f.journal_entries.reverses_entry_id)
+        .filter((v): v is string => !!v)
+    )
+  );
+  const tipoDelRevertido = new Map<string, string>();
+  if (idsRevertidos.length > 0) {
+    const { data: originales } = await db
+      .from("journal_entries")
+      .select("id, source_type")
+      .eq("tenant_id", tenantId)
+      .in("id", idsRevertidos);
+    for (const o of (originales ?? []) as { id: string; source_type: string }[]) {
+      tipoDelRevertido.set(o.id, o.source_type);
+    }
+  }
 
   // -- 2) TODAS las líneas de esos asientos (para la contrapartida) -----------
   const { data: todas, error: errTodas } = await db
@@ -279,6 +306,11 @@ export async function loadMovimientosDeCuenta(
     hermanas: porAsiento.get(f.entry_id) ?? [],
     terceroClave: claveDeTercero(f.client_id, f.supplier_id),
     terceroNombre: f.clients?.name ?? f.suppliers?.legal_name ?? null,
+    reverses_source_type: f.journal_entries.reverses_entry_id
+      ? tipoDelRevertido.get(f.journal_entries.reverses_entry_id) ?? null
+      : null,
+    reference: f.journal_entries.reference ?? null,
+    referencia_externa: f.journal_entries.referencia_externa ?? null,
   }));
 }
 
@@ -365,6 +397,7 @@ export async function loadDestinosDeOrigen(
     const ids = idsPorTipo.get(tipo);
     if (!ids || ids.size === 0) continue;
 
+    // de-prueba-ok: enlace al documento de un asiento; uno de prueba no tiene asiento (095)
     const { data, error } = await db
       .from(tabla)
       .select("id")
@@ -420,6 +453,7 @@ export async function loadDestinosDeOrigen(
   //    que exista y se enlaza a su pantalla, igual que el asiento original.
   const idsReversion = Array.from(idsPorTipo.get("reversion") ?? []).filter((id) => !destinos.has(id));
   if (idsReversion.length > 0) {
+    // de-prueba-ok: resuelve el documento de un asiento; uno de prueba no tiene asiento (095)
     const [facs, tramites, ncps] = await Promise.all([
       db.from("invoices").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
       db.from("expenses").select("id").eq("tenant_id", tenantId).in("id", idsReversion),
@@ -480,6 +514,7 @@ export async function loadDestinosDeOrigen(
       }
     }
     if (multiples.length > 0) {
+      // de-prueba-ok: resuelve el documento de un asiento; uno de prueba no tiene asiento (095)
       const { data: recibos, error: errRecibos } = await db
         .from("payments")
         .select("id, payment_number")

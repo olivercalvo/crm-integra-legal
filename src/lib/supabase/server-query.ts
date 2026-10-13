@@ -85,7 +85,7 @@ export async function getAuthenticatedContext() {
     redirect("/login");
   }
 
-  const admin = createAdminClient();
+  const admin = createAdminClient(user.id);
 
   const { data: profile } = await admin
     .from("users")

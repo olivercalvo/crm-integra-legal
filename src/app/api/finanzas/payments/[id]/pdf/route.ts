@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { serveStorageFile } from "@/lib/storage/serve-file";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { ensureReceiptPdfRow, receiptPdfBucket } from "@/lib/finanzas/pdf/ensure-receipt-pdf";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -29,7 +30,7 @@ export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -63,4 +64,4 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas/pdf] receipt GET failed", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

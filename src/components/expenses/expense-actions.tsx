@@ -26,13 +26,18 @@ interface ExpenseActionsProps {
   expense: ExpenseData;
   canEdit: boolean;
   colorClass?: string;
+  /**
+   * 096: si el gasto está contabilizado fuera (anterior al inicio contable), el
+   * motivo. No se ofrece eliminarlo; la ruta responde 409 y la base lo rechaza.
+   */
+  bloqueoEliminar?: string | null;
 }
 
 function formatCurrency(amount: number) {
   return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600" }: ExpenseActionsProps) {
+export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloqueoEliminar = null }: ExpenseActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [mode, setMode] = useState<"view" | "edit" | "delete">("view");
@@ -234,8 +239,10 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600" }: Ex
                 </button>
                 <button
                   onClick={() => { setMode("delete"); setError(null); }}
-                  className="rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                  title="Eliminar gasto"
+                  disabled={!!bloqueoEliminar}
+                  className="rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                  title={bloqueoEliminar ?? "Eliminar gasto"}
+                  aria-label={bloqueoEliminar ? "No se elimina: contabilizado fuera" : "Eliminar gasto"}
                 >
                   <Trash2 size={14} />
                 </button>

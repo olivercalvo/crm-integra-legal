@@ -18,11 +18,14 @@ import { fmtImporte } from "@/lib/utils/importe";
 import { getCreditNoteById } from "@/lib/finanzas/api/credit-notes";
 import { cargarAsientosPorOrigen } from "@/lib/finanzas/queries/payments";
 import { SOURCE_TYPE_NOTA_CREDITO } from "@/lib/finanzas/contabilidad/asiento-nota-credito";
+import { MotivoPendienteDgi } from "@/components/finanzas/motivo-pendiente-dgi";
 import { NcFeEstadoBadge } from "@/components/finanzas/nc-fe-estado-badge";
 import { CreditNotePdfButton } from "@/components/finanzas/credit-note-pdf-button";
 import { EnviarNcALaDgiButton } from "./_components/enviar-nc-a-la-dgi-button";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
 import { MOTIVO_ANULACION_MIN } from "@/lib/finanzas/validators/cancel-invoice";
+import { AplicarSaldoDeNc } from "@/components/finanzas/aplicar-saldo-de-nc";
+import { facturasConSaldoDelCliente, saldoDeNotaDeCredito } from "@/lib/finanzas/queries/notas-credito";
 import {
   decidirAccionSobreNotaDeCredito,
   type FeEstado,
@@ -64,14 +67,16 @@ const READING_ROLES = ["admin", "abogada", "contador"];
 
 interface PageProps {
   params: { id: string };
-  searchParams?: { emitida?: string };
+  searchParams?: { emitida?: string; envio?: string };
 }
 
 interface NcDetalle {
   id: string;
   credit_note_number: string;
-  invoice_id: string;
+  invoice_id: string | null;
   issue_date: string;
+  /** Fecha de REGISTRO (`068`): la del asiento. */
+  accounting_date?: string | null;
   reason: string;
   observations: string | null;
   status: string;
@@ -83,6 +88,8 @@ interface NcDetalle {
   dgi_cufe: string | null;
   dgi_fecha_autorizacion: string | null;
   created_at: string;
+  fe_motivo_pendiente?: string | null;
+  fe_motivo_pendiente_en?: string | null;
   invoice: {
     id: string;
     invoice_number: string;
@@ -123,6 +130,9 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
   const nc = raw as unknown as NcDetalle;
 
   const noEmitida = nc.fe_estado === "no_emitida";
+  // 083: emitida a propósito como interna. Misma banda, otro texto: no es que
+  // «todavía» no se mandó, es que no se va a mandar.
+  const interna = nc.fe_estado === "interna";
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
 
   // Su asiento propio (NC posterior o parcial, D5) o, si acompaña una
@@ -149,6 +159,17 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
     Number(nc.grand_total) >= Number(nc.invoice.grand_total) - 0.005;
 
   const recienEmitida = searchParams?.emitida === "1";
+
+  // E8: una NC sin factura es saldo a favor del cliente (hoy apagada, P-4a).
+  const sinFactura = !nc.invoice_id;
+  const { aplicaciones, aplicado } = sinFactura
+    ? await saldoDeNotaDeCredito(db, tenantId, nc.id, "venta")
+    : { aplicaciones: [], aplicado: 0 };
+  const saldoAFavor = sinFactura ? Math.round((Number(nc.grand_total) - aplicado) * 100) / 100 : 0;
+  const facturasParaAplicar =
+    sinFactura && nc.status === "emitida" && saldoAFavor > 0.005 && nc.client && asiento
+      ? await facturasConSaldoDelCliente(db, tenantId, nc.client.id)
+      : [];
 
   // ── Qué se puede hacer con esta nota de crédito ──────────────────────────
   //
@@ -186,6 +207,16 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
   return (
     <div className="space-y-5">
+      {searchParams?.envio === "fallo" && (
+        <div role="alert" className="flex items-start gap-2 rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            La nota de crédito se emitió y está en el libro, pero el envío a la DGI no se completó. Revisa su
+            estado fiscal abajo y vuelve a enviarla cuando se pueda.
+          </span>
+        </div>
+      )}
+
       {recienEmitida && (
         <div
           role="status"
@@ -220,7 +251,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                 </span>
               ) : (
                 <span className="inline-flex items-center rounded-full border border-integra-gold/60 bg-integra-gold/10 px-2.5 py-0.5 text-xs font-semibold text-integra-navy">
-                  {acreditaElTotal ? "Total" : "Parcial"}
+                  {sinFactura ? "Sin factura" : acreditaElTotal ? "Total" : "Parcial"}
                 </span>
               )}
             </div>
@@ -230,11 +261,12 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
 
         <div className="flex flex-wrap items-center gap-2">
           <CreditNotePdfButton creditNoteId={nc.id} />
-          {puedeEnviarALaDgi && nc.invoice && (
+          {/* Sin factura también: va como 06 genérica (03/10/2026). */}
+          {puedeEnviarALaDgi && (
             <EnviarNcALaDgiButton
               creditNoteId={nc.id}
               creditNoteNumber={nc.credit_note_number}
-              invoiceNumber={nc.invoice.invoice_number}
+              invoiceNumber={nc.invoice?.invoice_number ?? null}
               esReintento={nc.fe_estado === "error"}
             />
           )}
@@ -299,6 +331,24 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
       )}
 
       {/* D1: documento interno */}
+      <MotivoPendienteDgi motivo={nc.fe_motivo_pendiente} en={nc.fe_motivo_pendiente_en} />
+
+      {interna && (
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-md border-l-4 border-slate-500 bg-slate-50 p-4 text-sm text-slate-900"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-slate-600" />
+          <div>
+            <p className="font-semibold uppercase tracking-wide">Documento interno: no se envía a la DGI</p>
+            <p className="mt-1">
+              Esta nota de crédito se emitió como interna: consta en los libros del bufete y no se manda a la
+              DGI. No tiene CUFE ni vale como comprobante fiscal electrónico; el PDF lleva la misma marca.
+            </p>
+          </div>
+        </div>
+      )}
+
       {noEmitida && (
         <div
           role="note"
@@ -336,7 +386,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                       </span>
                     </Link>
                   ) : (
-                    "—"
+                    "Sin factura asociada"
                   )}
                 </dd>
               </div>
@@ -376,9 +426,18 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                  <Calendar size={12} /> Fecha de la nota
+                  <Calendar size={12} /> Fecha del documento
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(nc.issue_date)}</dd>
+              </div>
+              <div>
+                {/* La de REGISTRO define el mes del asiento y del resumen de ITBMS. */}
+                <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                  <Calendar size={12} /> Fecha de registro
+                </dt>
+                <dd className="mt-1 font-medium text-gray-900">
+                  {formatDate(nc.accounting_date ?? nc.issue_date)}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500">Moneda</dt>
@@ -399,6 +458,44 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
             </dl>
           </section>
 
+          {sinFactura && (
+            <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+              <h2 className="text-base font-semibold text-integra-navy">Saldo a favor del cliente</h2>
+              {nc.status === "anulada" ? (
+                // Anulada no deja saldo a favor: las aplicaciones quedan como historia.
+                <p className="text-sm text-gray-700">
+                  Esta nota de crédito está anulada: ya no deja saldo a favor del cliente.
+                  {aplicaciones.length > 0 && " Antes de anularla se había aplicado a:"}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-700">
+                  Esta nota de crédito no está asociada a una factura: queda como saldo a favor de{" "}
+                  <span className="font-mono font-semibold">B/. {fmtImporte(saldoAFavor)}</span>
+                  {aplicado > 0 && <> (ya se aplicaron B/. {fmtImporte(aplicado)})</>}.
+                </p>
+              )}
+              {aplicaciones.length > 0 && (
+                <ul className="divide-y rounded-md border text-sm">
+                  {aplicaciones.map((a, i) => (
+                    <li key={i} className="flex justify-between px-3 py-2">
+                      <span className="font-mono">{a.documento_numero}</span>
+                      <span className="font-mono">B/. {fmtImporte(a.amount_applied)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {nc.status === "emitida" && saldoAFavor > 0.005 && asiento && (
+                <AplicarSaldoDeNc
+                  endpoint={`/api/finanzas/credit-notes/${nc.id}/apply`}
+                  campo="invoice_id"
+                  documentos={facturasParaAplicar}
+                  saldo={saldoAFavor}
+                  queDocumento="factura"
+                />
+              )}
+            </section>
+          )}
+
           {/* Líneas */}
           <section className="rounded-xl border bg-white p-5 shadow-sm">
             <h2 className="text-base font-semibold text-integra-navy mb-4">Líneas acreditadas</h2>
@@ -415,16 +512,18 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {nc.lines.map((ln) => (
+                  {nc.lines.map((ln, i) => (
                     <tr key={ln.id}>
-                      <td className="py-2 pr-3 text-gray-500">{ln.line_order + 1}</td>
+                      {/* La posición en pantalla, no `line_order`: las NC viejas lo guardan
+                          desde 0 y las de E8 desde 1, y «+1» mostraba 2 en una NC de una línea. */}
+                      <td className="py-2 pr-3 text-gray-500">{i + 1}</td>
                       <td className="py-2 pr-3 text-gray-900">{ln.description}</td>
                       <td className="py-2 pr-3 text-right font-mono">{Number(ln.quantity).toFixed(2)}</td>
-                      <td className="py-2 pr-3 text-right font-mono">${fmtImporte(Number(ln.unit_price))}</td>
+                      <td className="py-2 pr-3 text-right font-mono">B/. {fmtImporte(Number(ln.unit_price))}</td>
                       <td className="py-2 pr-3 text-gray-600">
                         {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                       </td>
-                      <td className="py-2 text-right font-mono font-medium">${fmtImporte(Number(ln.line_total))}</td>
+                      <td className="py-2 text-right font-mono font-medium">B/. {fmtImporte(Number(ln.line_total))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -455,7 +554,7 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
               </p>
             ) : (
               <p className="text-sm text-amber-800">
-                Sin asiento en el libro. Si la emisión falló después de crear la nota, avisale a Oliver: no
+                Sin asiento en el libro. Si la emisión falló después de crear la nota, avísale a Oliver: no
                 debería existir una nota de crédito parcial sin su asiento.
               </p>
             )}
@@ -469,16 +568,16 @@ export default async function NotaDeCreditoDetallePage({ params, searchParams }:
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
-                <dd className="font-mono font-medium text-gray-900">${fmtImporte(Number(nc.subtotal_total))}</dd>
+                <dd className="font-mono font-medium text-gray-900">B/. {fmtImporte(Number(nc.subtotal_total))}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-600">Impuestos</dt>
-                <dd className="font-mono font-medium text-gray-900">${fmtImporte(Number(nc.tax_total))}</dd>
+                <dd className="font-mono font-medium text-gray-900">B/. {fmtImporte(Number(nc.tax_total))}</dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total acreditado</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${fmtImporte(Number(nc.grand_total))}
+                  B/. {fmtImporte(Number(nc.grand_total))}
                 </dd>
               </div>
             </dl>

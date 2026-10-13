@@ -1,3 +1,4 @@
+import { asegurarFechaDesdeElInicio } from "@/lib/finanzas/contabilidad/inicio-contable";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -8,6 +9,8 @@ import { motivoDeRechazo } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
 import { resolverCodigosDeImpuesto } from "@/lib/finanzas/api/tax-codes";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
+import { resolverFechaDeRegistro } from "@/lib/finanzas/api/fecha-de-registro";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 // Gastos es admin/abogada. El contador tiene su propio módulo
 // (/finanzas/gastos-bufete) y el asistente quedó fuera del alcance de gastos
@@ -15,7 +18,7 @@ import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
 // autenticado podía crear un gasto llamando el endpoint directamente.
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(request: NextRequest) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   try {
     const supabase = createClient();
 
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     // Get user's tenant_id + role
     const { data: profile, error: profileError } = await admin
@@ -42,11 +45,39 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
 
     const body = await request.json();
-    const { case_id, concept, date, expense_type, supplier_id, due_date } = body;
+    const { case_id, concept, date, expense_type, supplier_id, due_date, accounting_date } = body;
+    // 070 (E2): el número de la factura del proveedor. Opcional; sólo el largo,
+    // nunca el formato (mismo criterio que las compras, 044).
+    const supplierInvoiceNumber =
+      typeof body.supplier_invoice_number === "string" && body.supplier_invoice_number.trim() !== ""
+        ? body.supplier_invoice_number.trim()
+        : null;
+    if (supplierInvoiceNumber && supplierInvoiceNumber.length > 50) {
+      return NextResponse.json(
+        {
+          error: "El número de factura del proveedor no puede pasar de 50 caracteres.",
+          fieldErrors: { supplier_invoice_number: "Máximo 50 caracteres." },
+        },
+        { status: 400 }
+      );
+    }
     const lineasRaw = body?.lines;
 
     if (!case_id || !concept || !date) {
       return NextResponse.json({ error: "Faltan campos requeridos: case_id, concept, date" }, { status: 400 });
+    }
+    // 🔴 E3 (01/10/2026): el gasto se postea al crearse contra 200001, y ahí no
+    // hay líneas sin proveedor. Se corta ANTES de insertar.
+    if (typeof supplier_id !== "string" || supplier_id.trim() === "") {
+      return NextResponse.json(
+        {
+          error:
+            "Elige el proveedor: el gasto va a Cuentas por pagar y ahí cada movimiento dice de quién es. " +
+            "Si todavía no tiene ficha, créala en Proveedores.",
+          fieldErrors: { supplier_id: "Elige el proveedor." },
+        },
+        { status: 400 }
+      );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -176,6 +207,26 @@ export async function POST(request: NextRequest) {
     // es el detalle: nunca se toma un monto que venga del request.
     const total = validadas.data.totales.total;
 
+    // La fecha de REGISTRO (Bloque 1, E1): la del asiento, que define el
+    // período. Si no viene, la del documento. Se valida ANTES del insert: un
+    // mes cerrado no tiene que llegar al DELETE compensatorio de más abajo.
+    let fechaDeRegistro: string;
+    try {
+      // 096 (regla 3.3.5): un gasto nuevo no lleva fecha anterior al inicio contable.
+      await asegurarFechaDesdeElInicio(admin, profile.tenant_id, "gasto_tramite", date, "date");
+      fechaDeRegistro = await resolverFechaDeRegistro(
+        admin,
+        profile.tenant_id,
+        typeof accounting_date === "string" && accounting_date ? accounting_date : date,
+        { que: "el gasto", campo: "accounting_date" }
+      );
+    } catch (err) {
+      if (err instanceof MutationError) {
+        return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
+      }
+      throw err;
+    }
+
     const { data: expense, error: insertError } = await admin
       .from("expenses")
       .insert({
@@ -184,10 +235,12 @@ export async function POST(request: NextRequest) {
         amount: total,
         concept: concept.trim(),
         date,
+        accounting_date: fechaDeRegistro,
         expense_type: expense_type === "administrativo" ? "administrativo" : "tramite",
         registered_by: user.id,
         supplier_id: typeof supplier_id === "string" && supplier_id ? supplier_id : null,
         due_date: typeof due_date === "string" && due_date ? due_date : null,
+        supplier_invoice_number: supplierInvoiceNumber,
       })
       .select()
       .single();
@@ -269,4 +322,4 @@ export async function POST(request: NextRequest) {
     console.error("Unexpected error in POST /api/expenses:", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

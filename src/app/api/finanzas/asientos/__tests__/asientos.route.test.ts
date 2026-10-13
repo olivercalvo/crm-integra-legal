@@ -63,6 +63,16 @@ function makeAdmin() {
 
     const resolve = () => {
       if (table === "users") return { data: state.profile, error: null };
+      // 071 (E3): las cuentas control del plan, para el tercero obligatorio.
+      if (table === "chart_of_accounts") {
+        return {
+          data: [
+            { code: "100004", cuenta_control: "clientes" },
+            { code: "200001", cuenta_control: "proveedores" },
+          ],
+          error: null,
+        };
+      }
       if (table === "journal_entries") {
         if (state.fallaLookup) return { data: null, error: { message: "boom" } };
         if ("idempotency_key" in filtros) {
@@ -75,6 +85,7 @@ function makeAdmin() {
             entry_number: 42,
             record_date: "2026-09-03",
             transaction_date: "2026-03-15",
+            reference: "AD-000001",
           },
           error: null,
         };
@@ -83,6 +94,7 @@ function makeAdmin() {
     };
     const b: Record<string, unknown> = {
       select: () => b,
+      not: () => b,
       eq: (campo: string, valor: unknown) => {
         filtros[campo] = valor;
         return b;
@@ -133,7 +145,7 @@ function req(body: unknown): NextRequest {
 
 const LINEAS = [
   { key: "a", account_code: "610001", debit: "100", credit: "", description: "Alquiler" },
-  { key: "b", account_code: "200001", debit: "", credit: "100", description: "" },
+  { key: "b", account_code: "200001", debit: "", credit: "100", description: "", tercero: "proveedor:prov-1" },
 ];
 const BASE = {
   transaction_date: "2026-03-15",
@@ -261,16 +273,50 @@ test("el asiento va como `manual` y SIN source_id", { skip: skipNoMocks }, async
   assert.equal(state.capturado.rpcArgs?.p_source_id, null);
 });
 
-test("la referencia llega al RPC", { skip: skipNoMocks }, async () => {
+test("071: la referencia llega al RPC como REFERENCIA EXTERNA y `p_reference` va vacío (el AD- lo pone el motor)", { skip: skipNoMocks }, async () => {
   reset();
   await POST(req(BASE));
-  assert.equal(state.capturado.rpcArgs?.p_reference, "MEMO-2026-014");
+  assert.equal(state.capturado.rpcArgs?.p_referencia_externa, "MEMO-2026-014");
+  assert.equal(state.capturado.rpcArgs?.p_reference, null);
+});
+
+test("071: el campo nuevo `referencia_externa` también se acepta", { skip: skipNoMocks }, async () => {
+  reset();
+  const sinViejo: Record<string, unknown> = { ...BASE };
+  delete sinViejo.reference;
+  await POST(req({ ...sinViejo, referencia_externa: "CHQ-551" }));
+  assert.equal(state.capturado.rpcArgs?.p_referencia_externa, "CHQ-551");
 });
 
 test("sin referencia va NULL, no cadena vacía", { skip: skipNoMocks }, async () => {
   reset();
   await POST(req({ ...BASE, reference: "   " }));
+  assert.equal(state.capturado.rpcArgs?.p_referencia_externa, null);
   assert.equal(state.capturado.rpcArgs?.p_reference, null);
+});
+
+test("🔴 071: 100004 sin cliente → 400 con la línea de la PANTALLA, y no llega al RPC", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(
+    req({
+      ...BASE,
+      lines: [
+        { key: "a", account_code: "100004", debit: "10", credit: "", description: "", tercero: "" },
+        { key: "b", account_code: "600001", debit: "", credit: "10", description: "", tercero: "" },
+      ],
+    })
+  );
+  assert.equal(res.status, 400);
+  const body = (await res.json()) as { error: string };
+  assert.match(body.error, /Elige el cliente de la línea 1: la cuenta 100004 es de clientes/);
+  assert.equal(state.capturado.rpcLlamado, false);
+});
+
+test("071: la respuesta trae el AD- que puso el motor", { skip: skipNoMocks }, async () => {
+  reset();
+  const res = await POST(req(BASE));
+  const body = (await res.json()) as { reference: string | null };
+  assert.equal(body.reference, "AD-000001");
 });
 
 // ===========================================================================
@@ -293,7 +339,7 @@ test(
         ...BASE,
         lines: [
           { key: "a", account_code: "610001", debit: "100", credit: "", description: "" },
-          { key: "b", account_code: "200001", debit: "", credit: "90", description: "" },
+          { key: "b", account_code: "200001", debit: "", credit: "90", description: "", tercero: "proveedor:prov-1" },
         ],
       })
     );

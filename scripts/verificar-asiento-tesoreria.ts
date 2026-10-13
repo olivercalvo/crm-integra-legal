@@ -101,6 +101,7 @@ async function cargar(paymentId: string): Promise<CobroParaAsiento> {
     payment_date: new Date(p.payment_date).toISOString().slice(0, 10),
     amount: Number(p.amount),
     client_name: p.client_name,
+    client_id: p.client_id ?? null,
     facturas,
     payment_account_code: p.payment_account_code,
     banco_valido: esCuentaDeBancoValida(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { validateUpdateInvoice } from "@/lib/finanzas/validators/invoice";
 import { updateInvoice, deleteInvoice, InvoiceMutationError } from "@/lib/finanzas/api/invoices";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -11,7 +12,7 @@ interface RouteParams {
  * PATCH /api/finanzas/invoices/[id]
  * Actualiza una factura en estado borrador (T4 enforza el guard server-side).
  */
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -46,13 +47,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] updateInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});
 
 /**
  * DELETE /api/finanzas/invoices/[id]
  * Elimina una factura. T6 rechaza si no es borrador.
  */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!["admin", "abogada"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -69,4 +70,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas] deleteInvoice unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

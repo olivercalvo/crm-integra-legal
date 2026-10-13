@@ -49,6 +49,7 @@ import { JOSUAR_ACCOUNTS } from "../src/lib/finanzas/reports/__tests__/josuar-ac
 import { PROD_PROJECT_REFS, projectRefOf } from "../src/lib/env/app-env";
 import { inicioPeriodoFiscal } from "../src/lib/finanzas/contabilidad/periodo-fiscal";
 import { verificarAmountPaidDerivado } from "../src/lib/finanzas/integridad/verificar-amount-paid";
+import { bajarInicioParaSembrar } from "./seed-data/inicio-contable-semilla";
 import {
   SEED_CASES,
   SEED_CLASSIFICATIONS,
@@ -405,7 +406,25 @@ const CUENTAS_FASE1 = [
     code: "300004",
     name: "Distribución a Socias",
     account_type: "equity" as const,
-    subcategoria: "patrimonio" as const,
+    // E6 (079): el valor por defecto mientras Josuarth no diga dónde va (P-8a).
+    subcategoria: "otras_reservas" as const,
+    saldo: 0,
+  },
+  // E6 (079): la cuenta de Familia y la de otros ingresos. La migración también
+  // las crea, pero en un --reset corre antes que el seed y el barrido de abajo
+  // las desactivaría si no estuvieran en esta lista.
+  {
+    code: "400009",
+    name: "Derecho de Familia",
+    account_type: "income" as const,
+    subcategoria: "ingresos_operativos" as const,
+    saldo: 0,
+  },
+  {
+    code: "440001",
+    name: "Otros ingresos",
+    account_type: "income" as const,
+    subcategoria: "ingresos_operativos" as const,
     saldo: 0,
   },
 ];
@@ -498,6 +517,7 @@ async function seedChartOfAccounts(): Promise<void> {
   );
 
   await apuntarReembolsosAFondosLegales();
+  await serviciosDeFamiliaYOtrosIngresos();
 }
 
 /**
@@ -553,6 +573,46 @@ async function apuntarReembolsosAFondosLegales(): Promise<void> {
       : `✅ Reembolsos — ${movidos} servicio(s) movidos a ${CUENTA_REEMBOLSO} ` +
           `(${data!.map((s) => s.code).join(", ")})`
   );
+}
+
+/**
+ * E6 (079): HON-FAM a su cuenta de Familia (400009), HON-OTROS a 440001 si su
+ * cuenta está inactiva, y el servicio OTR-ING. Es la MISMA regla de la
+ * migración, repetida acá por el orden del --reset (las migraciones corren
+ * antes que el plan de cuentas del seed). Reemplaza al script de
+ * `sql/datos-staging/2026-09-25_hon_fam_a_derecho_civil.sql`.
+ */
+async function serviciosDeFamiliaYOtrosIngresos(): Promise<void> {
+  const { error: e1 } = await db
+    .from("services_catalog")
+    .update({ revenue_account: "400009" })
+    .eq("tenant_id", TENANT_ID)
+    .eq("code", "HON-FAM");
+  if (e1) throw new Error(`HON-FAM a 400009: ${e1.message}`);
+
+  const { error: e2 } = await db
+    .from("services_catalog")
+    .update({ revenue_account: "440001" })
+    .eq("tenant_id", TENANT_ID)
+    .eq("code", "HON-OTROS")
+    .eq("revenue_account", "4101");
+  if (e2) throw new Error(`HON-OTROS a 440001: ${e2.message}`);
+
+  const { error: e3 } = await db.from("services_catalog").upsert(
+    {
+      tenant_id: TENANT_ID,
+      code: "OTR-ING",
+      name: "Otros ingresos",
+      service_type: "honorarios",
+      revenue_account: "440001",
+      default_tax_code: "ITBMS_7",
+      active: true,
+      sort_order: 65,
+    },
+    { onConflict: "tenant_id,code", ignoreDuplicates: true }
+  );
+  if (e3) throw new Error(`OTR-ING: ${e3.message}`);
+  console.log("✅ E6 — HON-FAM en 400009, HON-OTROS y OTR-ING en 440001");
 }
 
 const clientIds = new Map<number, string>();
@@ -1297,14 +1357,23 @@ async function main(): Promise<void> {
   });
 
   await seedTenant();
-  await seedUsers();
-  await seedCatalogs();
-  await seedChartOfAccounts();
-  await seedClients();
-  await seedCases();
-  await seedExpenses();
-  await seedTasks();
-  await seedFinanzas();
+
+  // 096: la semilla crea documentos de marzo a junio, anteriores al inicio
+  // contable. Se baja el inicio mientras se siembra y se devuelve al 01/07/2026
+  // al terminar, también si algo falla. Ver `seed-data/inicio-contable-semilla.ts`.
+  const restaurarInicio = await bajarInicioParaSembrar(TENANT_ID);
+  try {
+    await seedUsers();
+    await seedCatalogs();
+    await seedChartOfAccounts();
+    await seedClients();
+    await seedCases();
+    await seedExpenses();
+    await seedTasks();
+    await seedFinanzas();
+  } finally {
+    await restaurarInicio();
+  }
 
   // CIERRE — que una siembra incoherente falle acá y no en una pantalla dentro
   // de seis días. Ver `sop.md` SOP-017.

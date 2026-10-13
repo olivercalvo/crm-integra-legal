@@ -452,6 +452,25 @@ const EXPORTS = [
     archivo: "src/app/api/finanzas/reportes/vat-summary/export/route.ts",
     pantalla: "/finanzas/reportes/vat-summary",
   },
+  // Bitácoras de auditoría (03/10/2026).
+  {
+    archivo: "src/app/api/finanzas/auditoria/export/route.ts",
+    pantalla: "/finanzas/auditoria",
+  },
+  {
+    archivo: "src/app/api/admin/auditoria/export/route.ts",
+    pantalla: "/legal/admin/auditoria",
+  },
+  // Posteo de documentos existentes, por mes: el Excel en seco (097).
+  {
+    archivo: "src/app/api/finanzas/asientos/documentos-existentes/route.ts",
+    pantalla: "/finanzas/asientos/documentos-existentes",
+  },
+  // El «Cuadre al corte» de la apertura (100).
+  {
+    archivo: "src/app/api/finanzas/asientos/apertura/cuadre/export/route.ts",
+    pantalla: "/finanzas/asientos/apertura",
+  },
 ];
 
 /** Extrae la lista de roles declarada en el archivo de la ruta. */

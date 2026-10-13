@@ -14,6 +14,7 @@ import {
   repartirPorAntiguedad,
   validarReparto,
   aplicacionesParaEnviar,
+  mensajeDeExcedente,
   ordenarPorAntiguedad,
   type Reparto,
 } from "@/lib/finanzas/cobros/repartir-por-antiguedad";
@@ -141,6 +142,13 @@ export function NuevoCobroForm({ cobrables, bancos, initialClientId, initialInvo
   }));
   const amountNum = Number(values.amount) || 0;
   const estadoReparto = varias ? validarReparto(amountNum, repartoActual, seleccionadas) : null;
+  // 074: lo que queda a favor del cliente. Con una factura, lo que pasa su
+  // saldo; con varias, lo que el reparto no alcanza a aplicar.
+  const excedente = varias
+    ? estadoReparto?.excedente ?? 0
+    : seleccionadas.length === 1 && amountNum > Number(seleccionadas[0].balance_due) + 0.005
+      ? Math.round((amountNum - Number(seleccionadas[0].balance_due)) * 100) / 100
+      : 0;
 
   function cambiarValores(next: PaymentFormValues) {
     if (varias && next.amount !== values.amount) {
@@ -179,7 +187,13 @@ export function NuevoCobroForm({ cobrables, bancos, initialClientId, initialInvo
       if (!v.ok && !errs.amount) errs.amount = v.mensaje ?? "Revise el reparto.";
       applications = aplicacionesParaEnviar(repartoActual);
     } else {
-      applications = [{ invoice_id: seleccionadas[0].id, amount: total }];
+      // 074: lo aplicado nunca pasa el saldo; el resto queda a favor del cliente.
+      applications = [
+        {
+          invoice_id: seleccionadas[0].id,
+          amount: Math.min(total, Math.round(Number(seleccionadas[0].balance_due) * 100) / 100),
+        },
+      ];
     }
     setFieldErrors(errs);
     if (!ok || Object.keys(errs).length > 0) return;
@@ -449,6 +463,17 @@ export function NuevoCobroForm({ cobrables, bancos, initialClientId, initialInvo
             }
             afterAmount={tablaReparto}
           />
+
+          {/* 074: el excedente se avisa en la misma pantalla, antes de guardar. No bloquea. */}
+          {excedente > 0 && (
+            <p
+              role="status"
+              data-testid="aviso-excedente"
+              className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+            >
+              {mensajeDeExcedente(excedente, seleccionadas[0]?.client_name ?? null)}
+            </p>
+          )}
 
           {submitError && (
             <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

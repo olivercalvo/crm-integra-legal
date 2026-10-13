@@ -1,0 +1,61 @@
+▶ inicio contable de staging: 2026-07-01 · hoy: 2026-10-06
+
+0. Fixture FAC-HON-900002: factura del 20/06, emitida, con saldo y sin asiento
+    {
+  status: 'parcialmente_pagada',
+  balance_due: '3.35',
+  issue_date: '2026-06-20'
+}
+   ✅ FAC-HON-900002: del 20/06 y sin asiento
+
+A. Altas con fecha anterior al inicio → 422, sin número ni asiento
+   ✅ factura del 30/06: 422 · La fecha de la factura (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ nota de débito del 30/06: 422 · La fecha de la nota de débito (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ cobro del 30/06: 422 · La fecha del cobro (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ compra del 15/06: 422 · La fecha de la compra (15/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ pago a proveedor del 30/06: 422 · La fecha del pago al proveedor (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ factura emitida fuera (FAC-EXT) del 30/06: 422 · La fecha de la factura emitida fuera (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ NC de compra con documento del 30/06: 422 · La fecha de la nota de crédito del proveedor (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ gasto de trámite del 15/06 (HTTP): 422 · La fecha del gasto de trámite (15/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+   ✅ ninguna secuencia se movió (no se quemó ningún número)
+
+B. Un borrador de hoy movido al 30/06
+   ✅ updateInvoice al 30/06: 422 · La fecha de la factura (30/06/2026) es anterior al inicio contable (01/07/2026). Lo anterior al inicio está en los libros del contador: no se registran documentos con esa fecha.
+
+C. Anular FAC-HON-900002 por POST /api/finanzas/invoices/[id]/cancel
+   ✅ HTTP 409 · La factura FAC-HON-900002 (20/06/2026) está contabilizada fuera: su fecha es anterior al inicio contable (01/07/2026). No se anula: se corrige con una nota de crédito con fecha igual o posterior al inicio.
+   ✅ ni un intento ante el PAC
+   ✅ la base también: La factura FAC-HON-900002 (20/06/2026) está contabilizada fuera: su fecha es anterior al inicio contable (01/07/2026). No se anula: se corrige con una nota de crédito con fecha igual o posterior al inicio.
+
+D. NC de hoy de FAC-HON-900002
+   ✅ NC-000027: CON asiento
+   ✅ HABER 100004 del cliente
+
+E. Cobro de hoy aplicado a FAC-HON-900002
+   ✅ CO-000014: HABER 100004 del cliente por 2.00
+
+F. Eliminar un cobro y un gasto de trámite anteriores
+   ✅ deletePayment REC-000002 (20/04): 409 · El cobro REC-000002 (20/04/2026) está contabilizado fuera: su fecha es anterior al inicio contable (01/07/2026). No se elimina: se corrige con un asiento de diario con fecha igual o posterior al inicio.
+   ✅ DELETE gasto de trámite (HTTP): 409 · El gasto de trámite Tasas migratorias de personal de obra (4 permisos) (25/06/2026) está contabilizado fuera: su fecha es anterior al inicio contable (01/07/2026). No se elimina: se corrige con una nota de crédito del proveedor con fecha igual o posterior al inicio.
+   ✅ la base también rechaza el DELETE
+
+G. «Registrar en el libro» de un gasto de trámite anterior
+   ✅ HTTP 409 · Este gasto está contabilizado fuera. Su fecha es anterior al inicio contable (01/07/2026): ya está en los libros del contador y el CRM no le genera asiento.
+
+H. Mover el inicio contable por la ruta (admin)
+   ✅ FAC-HON-000033 (01/07): CON asiento
+   → 2026-07-02: HTTP 409 · No se puede mover el inicio contable del 01/07/2026 al 02/07/2026: 1 documento(s) quedarían del lado equivocado. factura FAC-HON-000033 (01/07/2026): tiene el asiento 136 y quedaría antes del inicio.
+   ✅ bloqueado, y nombra FAC-HON-000033
+   → 2026-06-20: HTTP 409 · No se puede mover el inicio contable del 01/07/2026 al 20/06/2026: 2 documento(s) quedarían del lado equivocado. factura FAC-HON-900002 (20/06/2026): no tiene asiento y quedaría después del inicio; gasto de trámite Tasas migratorias de personal de obra (4 permisos) (25/06/2026): no tiene asiento y quedaría después del inicio.
+   ✅ bloqueado, y nombra FAC-HON-900002
+   ✅ el inicio sigue en el 01/07/2026
+
+Documentos que quedan en staging: {
+  fixture: 'FAC-HON-900002',
+  nc: 'NC-000027',
+  cobro: 'CO-000014',
+  julio: 'FAC-HON-000033',
+  borrador: 'd7c7705d-2ba5-486c-840c-0837e612466b'
+}
+
+✅ TODO OK

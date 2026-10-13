@@ -24,7 +24,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *   · **Server-side.** Es un route handler. `postJournalEntry` no se importa
  *     nunca desde un client component.
- *   · **Cliente de servicio.** `createAdminClient()`. Desde la migración `030` el
+ *   · **Cliente de servicio.** `createAdminClient(user.id)`. Desde la migración `030` el
  *     RPC tiene `EXECUTE` solo para `service_role`: no es llamable desde la
  *     sesión del usuario.
  *   · **`tenant_id` del PERFIL, nunca del body.** Se lee de `users` con el id del
@@ -70,6 +70,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * Quién puede REGISTRAR el gasto en el libro. Coincide con `EXPENSE_WRITE_ROLES`
@@ -78,7 +79,7 @@ import { postearGastoTramite } from "@/lib/finanzas/api/expense-tramite";
  */
 const EXPENSE_WRITE_ROLES = ["admin", "abogada"] as const;
 
-export async function POST(
+export const POST = conManejoDeAuditoria(async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -91,7 +92,7 @@ export async function POST(
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
     const { data: profile } = await admin
       .from("users")
       .select("tenant_id, role")
@@ -126,4 +127,4 @@ export async function POST(
     console.error("[expenses/post-to-ledger] unexpected", err);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

@@ -29,9 +29,11 @@ const NC: NotaDeCreditoParaAsiento = {
   id: "nc-1",
   credit_note_number: "NC-000001",
   issue_date: "2026-09-22",
+  accounting_date: "2026-09-22",
   grand_total: 414,
   invoice_number: "FAC-HON-000011",
   client_name: "Aurelio Barría Quintero",
+  client_id: "c1111111-1111-1111-1111-111111111111",
   lineas: [
     // 2 × 100 al 7% = 214 (ingreso 400004)
     { line_order: 1, description: "Honorarios", subtotal: 200, tax_amount: 14, service_code: "HON-CORP", revenue_account: "400004", cuenta_valida: true },
@@ -103,12 +105,13 @@ test("🔒 cancelInvoice: sin el gate del 02/09, con el bloqueo por mes cerrado,
 
 test("el texto del mes cerrado es el de D4", () => {
   const src = leer("src/lib/finanzas/api/invoices.ts");
-  assert.match(src, /está cerrado: no se anula, `\s*\+\s*`se emite una nota de crédito con fecha de hoy\./);
+  // Desde E1 la NC ya no lleva "la fecha de hoy": lleva la fecha de registro elegida.
+  assert.match(src, /está cerrado: no se anula, `\s*\+\s*`se corrige con una nota de crédito\./);
 });
 
 test("la ruta de anulación pasa el cliente de SERVICIO y la ruta de NC declara admin y abogada", () => {
   const cancel = leer("src/app/api/finanzas/invoices/[id]/cancel/route.ts");
-  assert.match(cancel, /createAdminClient\(\)/);
+  assert.match(cancel, /createAdminClient\(ctx\.userId\)/);
   const nc = leer("src/app/api/finanzas/credit-notes/route.ts");
   assert.match(nc, /const MUTATING_ROLES = \["admin", "abogada"\] as const;/);
   assert.match(nc, /emitCreditNote\(/);
@@ -124,4 +127,13 @@ test("emitCreditNote postea con construirAsientoDeNotaDeCredito y compensa si el
   assert.match(fn, /compensarNotaDeCredito\(/);
   const comp = src.slice(src.indexOf("export async function compensarNotaDeCredito"), src.indexOf("export async function emitCreditNote"));
   assert.match(comp, /"finanzas_compensar_nota_de_credito"/, "la válvula y el DELETE van juntos, en la base");
+});
+
+test("E2: la NC lleva al cliente en la línea de 100004", () => {
+  const r = construirAsientoDeNotaDeCredito(NC);
+  assert.equal(r.ok, true);
+  if (!r.ok) return;
+  const control = r.asiento.lines.find((l) => l.account_code === "100004");
+  assert.equal(control?.client_id, "c1111111-1111-1111-1111-111111111111");
+  assert.ok((control?.credit ?? 0) > 0, "la NC acredita 100004");
 });

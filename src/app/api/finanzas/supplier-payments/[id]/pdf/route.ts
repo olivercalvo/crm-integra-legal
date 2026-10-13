@@ -25,6 +25,7 @@ import {
   ensureSupplierPaymentPdfRow,
   supplierPaymentPdfBucket,
 } from "@/lib/finanzas/pdf/ensure-supplier-payment-pdf";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -36,7 +37,7 @@ export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -80,4 +81,4 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas/pdf] supplier payment GET failed", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

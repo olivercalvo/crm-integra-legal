@@ -83,18 +83,20 @@ BEGIN
     v_ok := v_ok + 1;
   END;
 
-  -- [3] Fecha que no es hoy → rechazada.
+  -- [3] Fecha ANTERIOR al original → rechazada (desde la 069 la fecha la elige
+  --     el contador; lo que se rechaza es reversar antes del asiento original).
   BEGIN
-    PERFORM reverse_expense_tramite(v_tenant, v_gasto, 'Verificación 050', current_date - 10, 'x', v_espejo, v_user);
-    RAISE NOTICE '[3] fecha que no es hoy ....................... ❌ PASÓ (debía fallar)';
+    PERFORM reverse_expense_tramite(v_tenant, v_gasto, 'Verificación 050',
+      (SELECT transaction_date - 1 FROM journal_entries WHERE id = v_entry), 'x', v_espejo, v_user);
+    RAISE NOTICE '[3] fecha anterior al original ................ ❌ PASÓ (debía fallar)';
     v_fail := v_fail + 1;
   EXCEPTION WHEN OTHERS THEN
     GET STACKED DIAGNOSTICS v_err = MESSAGE_TEXT;
-    IF v_err LIKE '%fecha en que se hace%' THEN
-      RAISE NOTICE '[3] fecha que no es hoy ....................... ✅ RECHAZADA';
+    IF v_err LIKE '%no puede ser anterior al asiento que revierte%' THEN
+      RAISE NOTICE '[3] fecha anterior al original ................ ✅ RECHAZADA';
       v_ok := v_ok + 1;
     ELSE
-      RAISE NOTICE '[3] fecha que no es hoy ....................... ❌ falló por otra cosa: %', v_err;
+      RAISE NOTICE '[3] fecha anterior al original ................ ❌ falló por otra cosa: %', v_err;
       v_fail := v_fail + 1;
     END IF;
   END;

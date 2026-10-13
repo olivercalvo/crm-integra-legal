@@ -5,6 +5,7 @@ import {
   updateTermsTemplate,
 } from "@/lib/finanzas/api/quote-terms";
 import { MutationError } from "@/lib/finanzas/api/errors";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const READ_ROLES = ["admin", "abogada", "contador"] as const;
 const WRITE_ROLES = ["admin"] as const;
@@ -14,7 +15,7 @@ const WRITE_ROLES = ["admin"] as const;
  * Devuelve el template T&C del tenant para preview en la pantalla de
  * configuración o para el editor. Permisos: admin, abogada, contador.
  */
-export async function GET() {
+export const GET = conManejoDeAuditoria(async function GET() {
   const ctx = await getAuthenticatedContext();
   if (!READ_ROLES.includes(ctx.userRole as (typeof READ_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -22,7 +23,7 @@ export async function GET() {
 
   const row = await getTermsTemplateRow(ctx.db, ctx.tenantId);
   return NextResponse.json(row);
-}
+});
 
 /**
  * PUT /api/finanzas/configuracion/terms-template
@@ -30,7 +31,7 @@ export async function GET() {
  *
  * Body: { content: string }
  */
-export async function PUT(request: NextRequest) {
+export const PUT = conManejoDeAuditoria(async function PUT(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!WRITE_ROLES.includes(ctx.userRole as (typeof WRITE_ROLES)[number])) {
     return NextResponse.json(
@@ -65,4 +66,4 @@ export async function PUT(request: NextRequest) {
     console.error("[finanzas] updateTermsTemplate unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

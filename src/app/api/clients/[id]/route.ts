@@ -5,12 +5,13 @@ import { validateFiscalFields, validateClientType } from "@/lib/clients/fiscal-f
 import { findActiveClientByRuc, rucConflictMessage } from "@/lib/clients/ruc-lookup";
 import { rucFieldWrites } from "@/lib/clients/ruc-sync";
 import { requireRole } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteContext {
   params: { id: string };
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export const PATCH = conManejoDeAuditoria(async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const supabase = createClient();
 
@@ -22,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     const { data: profile, error: profileError } = await admin
       .from("users")
@@ -239,9 +240,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     console.error("Unexpected error in PATCH /api/clients/[id]:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(_request: NextRequest, { params }: RouteContext) {
+export const DELETE = conManejoDeAuditoria(async function DELETE(_request: NextRequest, { params }: RouteContext) {
   try {
     const supabase = createClient();
 
@@ -253,7 +254,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    const admin = createAdminClient(user.id);
 
     const { data: profile, error: profileError } = await admin
       .from("users")
@@ -313,4 +314,4 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     console.error("Unexpected error in DELETE /api/clients/[id]:", error);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
-}
+});

@@ -60,6 +60,7 @@
  */
 
 import type { AsientoInput, LineaAsiento } from "@/lib/finanzas/contabilidad/posting";
+import { lineasDeImpuesto } from "@/lib/finanzas/contabilidad/impuesto-por-cuenta";
 
 /**
  * ITBMS, una sola cuenta para ventas y compras. Ver el encabezado.
@@ -71,7 +72,7 @@ import type { AsientoInput, LineaAsiento } from "@/lib/finanzas/contabilidad/pos
  * que la decisión se aplicó en los dos lados, no de que hay una constante que
  * alguien puede cambiar y mover los dos sin darse cuenta.
  */
-export const CUENTA_ITBMS = "200003";
+export const CUENTA_ITBMS = "200003"; // 073: sólo para líneas con impuesto y sin tasa.
 
 /** Cuenta control de proveedores. El crédito de toda compra va acá. */
 export const CUENTA_POR_PAGAR = "200001";
@@ -96,6 +97,10 @@ export interface LineaCompraParaAsiento {
   amount: number;
   /** ITBMS de la línea. Cero en las exentas. */
   tax_amount: number;
+  /** 073: la cuenta del impuesto de la tasa de la línea (`tax_codes.account_code`). */
+  tax_account?: string | null;
+  /** 073: el código de la tasa, para nombrar la línea si hay varias cuentas. */
+  tax_code?: string | null;
   chart_account_code: string | null;
   /**
    * ¿La cuenta existe, está activa, y es de un tipo que puede recibir un
@@ -106,11 +111,20 @@ export interface LineaCompraParaAsiento {
 
 export interface CompraParaAsiento {
   id: string;
+  /** Fecha del DOCUMENTO (la factura del proveedor). Informativa. */
   expense_date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   description: string;
   /** `business_expenses.total` — la base más el impuesto. */
   total: number;
   supplier_name: string | null;
+  /** El proveedor (E2): va en la línea de 200001. `null` en una compra sin ficha. */
+  supplier_id: string | null;
+  /** `FAC-CO-000001` (071): la `reference` del asiento. `null` en las viejas. */
+  purchase_number?: string | null;
+  /** N.º de la factura del proveedor: la `referencia_externa` del asiento (071). */
+  supplier_invoice_number?: string | null;
   lineas: LineaCompraParaAsiento[];
 }
 
@@ -151,6 +165,19 @@ export function claveIdempotenteDeCompra(compraId: string): string {
 export function construirAsientoDeCompra(
   c: CompraParaAsiento
 ): ResultadoAsientoCompra {
+  // 🔴 E3 (01/10/2026, Oliver): ninguna línea en 200001 sin proveedor. La compra
+  // SIEMPRE acredita 200001 (el pago es la segunda transacción), así que sin
+  // ficha no se registra. El motor (071) lo vuelve a exigir.
+  if (!c.supplier_id) {
+    return {
+      ok: false,
+      motivo: "sin_proveedor",
+      mensaje:
+        `La compra se registra en Cuentas por pagar (200001), y cada movimiento ahí tiene ` +
+        `que decir de qué proveedor es. Elige el proveedor; si todavía no tiene ficha, créala ` +
+        `en Proveedores.`,
+    };
+  }
   if (c.lineas.length === 0) {
     return {
       ok: false,
@@ -197,37 +224,31 @@ export function construirAsientoDeCompra(
     };
   }
 
-  // ---- 3) Agrupar los débitos POR CUENTA -----------------------------------
-  // Dos líneas pueden apuntar a la misma cuenta. Una línea de asiento por
-  // cuenta: el mayor de esa cuenta se lee mejor y el asiento no crece con el
-  // detalle de la compra.
-  const porCuenta = new Map<string, number>();
-  for (const l of c.lineas) {
-    const cuenta = l.chart_account_code as string;
-    porCuenta.set(cuenta, round2((porCuenta.get(cuenta) ?? 0) + l.amount));
-  }
-
-  const itbms = round2(c.lineas.reduce((s, l) => s + l.tax_amount, 0));
+  // ---- 3) UNA LÍNEA DEL LIBRO POR CADA LÍNEA DE LA COMPRA (E2) -------------
+  // Antes se agrupaba por cuenta. Josuarth (28/09, punto 3) pidió ver en el
+  // Mayor la descripción de CADA línea del documento; agrupando se perdía.
   const haber = round2(c.total);
 
   const lines: LineaAsiento[] = [];
-  for (const [cuenta, monto] of Array.from(porCuenta.entries()).sort()) {
+  for (const l of [...c.lineas].sort((a, b) => a.line_order - b.line_order)) {
+    const monto = round2(l.amount);
     if (monto === 0) continue;
-    lines.push({ account_code: cuenta, debit: monto, credit: 0, description: null });
-  }
-  if (itbms > 0) {
     lines.push({
-      account_code: CUENTA_ITBMS,
-      debit: itbms,
+      account_code: l.chart_account_code as string,
+      debit: monto,
       credit: 0,
-      description: "ITBMS de compras (crédito fiscal)",
+      description: l.description?.trim() || null,
     });
   }
+  // 073: una línea de impuesto POR CUENTA (la de la tasa de cada línea).
+  lines.push(...lineasDeImpuesto(c.lineas, "debit", "ITBMS de compras (crédito fiscal)"));
   lines.push({
     account_code: CUENTA_POR_PAGAR,
     debit: 0,
     credit: haber,
     description: c.supplier_name,
+    // E2: el proveedor en la cuenta control, como dato y no como texto.
+    supplier_id: c.supplier_id,
   });
 
   // ---- 4) Red contra un error de redondeo DE ESTE ARCHIVO ------------------
@@ -247,11 +268,14 @@ export function construirAsientoDeCompra(
   return {
     ok: true,
     asiento: {
-      transaction_date: c.expense_date,
+      transaction_date: c.accounting_date,
       description: descripcionDelAsientoDeCompra(c),
       source_type: SOURCE_TYPE_COMPRA,
       lines,
       source_id: c.id,
+      // E3 (071): el número propio y el del proveedor, cada uno en su columna.
+      reference: c.purchase_number ?? null,
+      referencia_externa: c.supplier_invoice_number?.trim() || null,
       idempotency_key: claveIdempotenteDeCompra(c.id),
     },
   };

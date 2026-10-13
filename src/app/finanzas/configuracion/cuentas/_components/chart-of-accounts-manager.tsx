@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import {
   cuentaControlLabel,
   isSubcategoriaValidaParaTipo,
   requiereSubcategoria,
+  esTipoResultado,
   subcategoriaLabel,
   subcategoriasParaTipo,
   type AccountType,
@@ -51,6 +52,8 @@ const API_BASE = "/api/finanzas/configuracion/chart-of-accounts";
 interface Props {
   initialAccounts: ChartAccountRow[];
   canMutate: boolean;
+  /** 100: con un asiento de apertura el saldo inicial ya no se usa ni se edita. */
+  conApertura?: boolean;
 }
 
 type FormState = {
@@ -101,7 +104,7 @@ function formatSaldo(n: number): string {
 const selectClass =
   "block w-full rounded-md border px-3 min-h-[44px] text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none border-gray-300";
 
-export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
+export function ChartOfAccountsManager({ initialAccounts, canMutate, conApertura = false }: Props) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<ChartAccountRow[]>(initialAccounts);
   const [search, setSearch] = useState("");
@@ -121,6 +124,13 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  // El formulario vive ARRIBA de la tabla. Sin llevar la pantalla hasta él,
+  // «Editar» en una fila de abajo parecía no hacer nada (recorrido del 03/10).
+  const formRef = useRef<HTMLDivElement>(null);
+  const formTarget = form ? (form.mode === "edit" ? form.id : "nueva") : null;
+  useEffect(() => {
+    if (formTarget) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [formTarget]);
   const [importing, setImporting] = useState(false);
 
   /**
@@ -441,7 +451,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
 
       {/* Form crear/editar */}
       {form && (
-        <div className="rounded-lg border border-integra-gold/40 bg-integra-gold/5 p-4 space-y-4">
+        <div ref={formRef} className="scroll-mt-24 rounded-lg border border-integra-gold/40 bg-integra-gold/5 p-4 space-y-4">
           <p className="text-sm font-semibold text-integra-navy">
             {form.mode === "create" ? "Nueva cuenta" : `Editar cuenta ${form.code}`}
           </p>
@@ -460,7 +470,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
               />
               {form.mode === "edit" && (
                 <p className="mt-1 text-xs text-gray-500">
-                  El código no se puede modificar. Si está mal, desactivá la cuenta y creá una nueva.
+                  El código no se puede modificar. Si está mal, desactiva la cuenta y crea una nueva.
                 </p>
               )}
               {fieldErrors.code && (
@@ -536,9 +546,9 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 ))}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                {requiereSubcategoria(form.account_type)
+                {esTipoResultado(form.account_type)
                   ? "NIIF 18: clasifica la cuenta por actividad (operación, inversión o financiamiento)."
-                  : "Agrupa el Balance General (corriente, no corriente, propiedad planta y equipo)."}
+                  : "Agrupa el Balance General. La depreciación acumulada va en Propiedad, planta y equipo."}
               </p>
               {fieldErrors.subcategoria && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.subcategoria}</p>
@@ -584,7 +594,7 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 allowNegative
                 value={form.saldo_inicial}
                 onChange={(e) => setForm({ ...form, saldo_inicial: e.target.value })}
-                disabled={saving}
+                disabled={saving || conApertura}
                 placeholder="0.00"
                 className={
                   "text-right font-mono " +
@@ -592,7 +602,9 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 }
               />
               <p className="mt-1 text-xs text-gray-500">
-                Monto de apertura. Admite negativos.
+                {conApertura
+                  ? "Ya no se usa: el bufete tiene un asiento de apertura (Finanzas › Configuración › Saldos iniciales) y los saldos al corte están en el libro."
+                  : "Monto de apertura. Admite negativos."}
               </p>
               {fieldErrors.saldo_inicial && (
                 <p className="mt-1 text-xs text-red-600">{fieldErrors.saldo_inicial}</p>
@@ -610,13 +622,13 @@ export function ChartOfAccountsManager({ initialAccounts, canMutate }: Props) {
                 onChange={(e) =>
                   setForm({ ...form, saldo_inicial_fecha: e.target.value })
                 }
-                disabled={saving || !saldoNoEsCero}
+                disabled={saving || !saldoNoEsCero || conApertura}
                 className={fieldErrors.saldo_inicial_fecha ? "border-red-300" : ""}
               />
               <p className="mt-1 text-xs text-gray-500">
                 {saldoNoEsCero
                   ? "A qué día corresponde el monto. El período fiscal va del 1 de enero al 31 de diciembre."
-                  : "Se habilita cuando cargás un saldo distinto de 0."}
+                  : "Se habilita cuando cargas un saldo distinto de 0."}
               </p>
               {fieldErrors.saldo_inicial_fecha && (
                 <p className="mt-1 text-xs text-red-600">

@@ -80,7 +80,7 @@ test("🔒 el asiento de una NC TOTAL es exactamente el de la compra al revés",
   if (!calc.ok) return;
   const nc = construirAsientoDeNotaDeCompra(COMPRA, HOY, calc);
   const compra = construirAsientoDeCompra({
-    id: "c1", expense_date: HOY, description: COMPRA.description, total: 157, supplier_name: COMPRA.supplier_name,
+    id: "c1", expense_date: HOY, accounting_date: HOY, description: COMPRA.description, total: 157, supplier_name: COMPRA.supplier_name, supplier_id: COMPRA.supplier_id,
     lineas: lineas.map((l) => ({ line_order: l.line_order, description: l.description, amount: l.amount, tax_amount: l.tax_amount, chart_account_code: l.chart_account_code, cuenta_valida: true })),
   });
   assert.ok(nc.ok && compra.ok);
@@ -121,7 +121,8 @@ test("una cuenta inactiva en la línea: rechaza con el mensaje de la compra", ()
 
 test("🔒 una sola implementación: la pantalla y el servidor usan calcularNcDeCompra", () => {
   const raiz = path.resolve(__dirname, "../../../../..");
-  const pantalla = readFileSync(path.join(raiz, "src/app/finanzas/gastos-bufete/_components/supplier-credit-notes-section.tsx"), "utf8");
+  // E8: la pantalla es el formulario del módulo (el detalle de la compra enlaza a él).
+  const pantalla = readFileSync(path.join(raiz, "src/app/finanzas/notas-credito-proveedor/_components/nc-de-proveedor-form.tsx"), "utf8");
   const api = readFileSync(path.join(raiz, "src/lib/finanzas/api/supplier-credit-notes.ts"), "utf8");
   assert.match(pantalla, /calcularNcDeCompra\(/);
   assert.match(api, /calcularNcDeCompra\(/);

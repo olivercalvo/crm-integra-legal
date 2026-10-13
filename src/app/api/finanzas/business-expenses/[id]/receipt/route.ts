@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = [
@@ -18,7 +19,7 @@ const MUTATING_ROLES = ["admin", "abogada", "contador"] as const;
  * con prefix "business-expenses/{id}/{timestamp}_{filename}".
  * Si ya había un receipt, lo borra antes de subir el nuevo.
  */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -109,14 +110,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     { receipt_url: storagePath, receipt_filename: file.name },
     { status: 201 }
   );
-}
+});
 
 /**
  * DELETE /api/finanzas/business-expenses/[id]/receipt
  *
  * Elimina el comprobante asociado (storage + referencia en la fila).
  */
-export async function DELETE(
+export const DELETE = conManejoDeAuditoria(async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -164,4 +165,4 @@ export async function DELETE(
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });
-}
+});

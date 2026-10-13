@@ -90,6 +90,8 @@
  */
 
 /** Ventana de anulación ante la DGI. ideati, 22/09/2026. */
+import { esContabilizadoFuera, mensajeContabilizadoFueraNoSeAnula } from "@/lib/finanzas/contabilidad/inicio-contable";
+
 export const HORAS_PARA_ANULAR = 182;
 
 /**
@@ -110,7 +112,7 @@ const HUSO_PANAMA = "-05:00";
 
 const MS_POR_HORA = 3_600_000;
 
-export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error";
+export type FeEstado = "no_emitida" | "pending" | "authorized" | "canceled" | "error" | "interna";
 
 /** Lo que la base sabe de la factura. Nada más que esto entra a la decisión. */
 export interface EstadoDeFactura {
@@ -135,6 +137,23 @@ export interface EstadoDeFactura {
   amountPaid: number;
   /** ¿El período contable del mes de `issue_date` está cerrado? */
   mesCerrado: boolean;
+  /**
+   * `invoices.dgi_cufe_origen = 'externo'` (092): la DGI la autorizó desde OTRO
+   * punto (QuickBooks, portal) y el CRM sólo la registró. Nunca se anula ante
+   * la DGI desde acá: dentro de plazo y sin bloqueos se anula sólo en el libro,
+   * avisando que hay que anularla también donde se emitió.
+   */
+  emitidaFueraDelCrm?: boolean;
+  /**
+   * 096: el inicio contable del bufete (`YYYY-MM-DD`). Con `issueDate` anterior,
+   * la factura está CONTABILIZADA FUERA (QuickBooks) y no se anula: se corrige
+   * con una nota de crédito posterior al inicio. Sin el dato no se decide nada
+   * por esto (los llamadores viejos y los tests de la matriz).
+   */
+  inicioContable?: string | null;
+  /** Para el mensaje: nota de débito o factura, y su número. */
+  esNotaDeDebito?: boolean;
+  numero?: string | null;
 }
 
 export interface Ventana {
@@ -180,7 +199,13 @@ export type AccionSobreFactura =
   /** Borrador o cancelada antes de emitir: no hay documento que corregir. */
   | { accion: "no_aplica"; mensaje: string }
   /** Los datos se contradicen. Nadie debería actuar sobre esto sin mirarlo. */
-  | { accion: "inconsistente"; mensaje: string };
+  | { accion: "inconsistente"; mensaje: string }
+  /**
+   * 096: anterior al inicio contable. No se anula (ni ante la DGI ni en el
+   * libro): se corrige con una nota de crédito con fecha igual o posterior al
+   * inicio, que sí postea.
+   */
+  | { accion: "contabilizada_fuera"; mensaje: string };
 
 export type ClaveDeAccion = AccionSobreFactura["accion"];
 
@@ -203,6 +228,26 @@ export function decidirAccionFiscal(
       mensaje:
         "Esta factura todavía no se emitió: no hay nada que anular ni que acreditar. " +
         "Para descartarla está el botón Eliminar.",
+    };
+  }
+
+  // 0.b 096: CONTABILIZADA FUERA. Antes que todo lo demás, incluso que el estado
+  //     intermedio: la base rechaza la anulación de una factura anterior al
+  //     inicio (trigger de la 096), así que ofrecer «Completar anulación» sería
+  //     ofrecer algo que falla. Una ya anulada sigue en «nada que hacer».
+  if (
+    estado.inicioContable &&
+    estado.status !== "anulada" &&
+    esContabilizadoFuera(estado.issueDate, estado.inicioContable)
+  ) {
+    return {
+      accion: "contabilizada_fuera",
+      mensaje: mensajeContabilizadoFueraNoSeAnula(
+        estado.esNotaDeDebito ? "nota_debito" : "factura",
+        estado.numero ?? null,
+        String(estado.issueDate),
+        estado.inicioContable
+      ),
     };
   }
 
@@ -281,6 +326,28 @@ export function decidirAccionFiscal(
     motivos.push("el mes de la factura está cerrado");
   }
 
+  // 6b. 083: emitida a propósito como INTERNA. A diferencia del caso 7, acá SÍ
+  //     sabemos que nunca llegó a la DGI: no hay portal que mirar ni CUFE que
+  //     pedir. Sin bloqueos se anula en el libro; con bloqueos se corrige con
+  //     una nota de crédito (interna también), que la pantalla ya ofrece.
+  if (estado.feEstado === "interna") {
+    if (motivos.length === 0) {
+      return {
+        accion: "anular_solo_en_el_libro",
+        mensaje:
+          "Este documento se emitió como interno: se anula en el libro contable y se genera su " +
+          "nota de crédito total. No hay nada que anular ante la DGI.",
+        advertencia: "",
+      };
+    }
+    return {
+      accion: "no_aplica",
+      mensaje:
+        `Este documento se emitió como interno y no se puede anular: ${motivos.join("; ")}. ` +
+        "Se corrige con una nota de crédito.",
+    };
+  }
+
   // 7. Sin CUFE: puede ser una factura que nunca llegó a la DGI, o una emitida
   //    a mano en el portal de ideati (punto 050) cuyo CUFE el CRM no guardó.
   //    Se ven igual. Se pide el dato en vez de inventarlo.
@@ -328,6 +395,19 @@ export function decidirAccionFiscal(
   }
   if (ventana.vencida) {
     motivos.push(`venció el plazo de ${HORAS_PARA_ANULAR} horas para anular ante la DGI`);
+  }
+
+  // 8b. 🔴 Emitida FUERA del CRM (092): no se habla con el PAC. Se anula en el
+  //     libro y la pantalla avisa que el documento sigue vivo ante la DGI hasta
+  //     que se anule en el sistema que lo emitió.
+  if (motivos.length === 0 && estado.emitidaFueraDelCrm) {
+    return {
+      accion: "anular_solo_en_el_libro",
+      mensaje: "Esta factura se anula en el libro contable y se genera su nota de crédito total.",
+      advertencia:
+        "Esta factura se emitió fuera del CRM. Anularla acá NO la anula ante la DGI: hay que " +
+        "anularla también en el sistema donde se emitió (QuickBooks o el portal de facturación).",
+    };
   }
 
   if (motivos.length === 0) {

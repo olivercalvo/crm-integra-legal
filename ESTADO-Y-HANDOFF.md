@@ -4,6 +4,24 @@
 
 ---
 
+## ▶ CIERRE DEL 08/10/2026: Bloque 1 en revisión de Josuarth
+
+- **Rama:** `feat/bloque1-contable`, último commit el de estas notas de cierre (la guía simplificada es `5e1d5b9`).
+  `develop` (`b000141`) y `main` (`9b00b12`) sin cambios: sin merge ni PR.
+- **Revisión de Josuarth en curso:** hoy recibe el guion de pruebas y el enlace del Preview de la rama, y la guía
+  de carga (`docs/finanzas/guia-carga-enero-junio.md` y su Word en «Adjuntos para Josuarth»).
+- 🔒 **Rama congelada mientras Josuarth revisa:** no se hace push a `feat/bloque1-contable` (cada push cambia el
+  Preview que él usa). Todo cambio nuevo va en otra rama local hasta que Oliver lo diga.
+- **Interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO`:** encendido en Preview, sólo para la rama
+  `feat/bloque1-contable` (lo encendió Oliver). En Production se agrega durante la ventana, como último paso del
+  runbook (`docs/finanzas/runbooks/ventana-bloque-1.md` §7).
+- **Pendientes del Bloque 2 que salieron hoy:**
+  - el contador ve Clientes (lista y ficha comercial, sin casos ni documentos legales);
+  - las notas de débito visibles en Notas de crédito, si Josuarth lo pide (hoy salen en Facturación);
+  - la plantilla de la apertura marca qué clientes tienen saldo (hoy lista todos los clientes con código).
+
+---
+
 ## ✅ CERRADO — desactivar una tasa desde la pantalla (23/09/2026)
 
 Resuelto en `3c9cb47` y **verificado con clics** en la URL fija de la rama:

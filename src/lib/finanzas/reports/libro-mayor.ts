@@ -45,6 +45,13 @@ import {
   esNaturalezaAcreedora,
   type AccountType,
 } from "@/lib/finanzas/types/chart-of-account";
+import {
+  entraEnElFiltro,
+  etiquetaDeModulo,
+  moduloDelAsiento,
+  type Modulo,
+  type ModuloDelAsiento,
+} from "@/lib/finanzas/contabilidad/modulo-del-asiento";
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -94,6 +101,16 @@ export interface MovimientoCrudo {
   /** 054: el tercero de ESTA línea. */
   terceroClave?: string | null;
   terceroNombre?: string | null;
+  /**
+   * E2: si el asiento es una REVERSIÓN, el `source_type` del asiento que
+   * revierte. La reversión conserva el `source_id` del documento, pero su tipo
+   * es `reversion`: sin esto no se sabe en qué tabla buscar al tercero.
+   */
+  reverses_source_type?: string | null;
+  /** E3: el número PROPIO del documento (`journal_entries.reference`). */
+  reference?: string | null;
+  /** E3 (071): cheque, factura del proveedor, referencia libre. NULL en lo viejo. */
+  referencia_externa?: string | null;
 }
 
 export interface CuentaDelMayor {
@@ -270,6 +287,17 @@ export interface FilaMayor {
   /** Columna "Nombre": el tercero. Ver `nombreDelTercero()`. */
   nombre: string;
   /**
+   * E3: el MÓDULO (FAC-ING, FAC-CO, CO, PA, AD…), derivado del `source_type`
+   * con `moduloDelAsiento()`. Una reversión: "CO · Reversión".
+   */
+  modulo: string;
+  /** E9: el módulo sin formato, para el filtro. null en la fila de saldo inicial. */
+  moduloDerivado: ModuloDelAsiento | null;
+  /** E3: N.º de documento (FAC-HON-000026, CO-000011, AD-000001). Vacío en lo viejo sin número. */
+  numeroDocumento: string;
+  /** E3 (071): referencia externa (cheque, factura del proveedor). */
+  referenciaExterna: string;
+  /**
    * 054: el tercero de la línea como clave (`"cliente:<uuid>"`), cuando lo
    * tiene. La exportación la usa para poner RUC y DV de la ficha; la pantalla
    * ya tiene el nombre en `nombre`.
@@ -336,6 +364,8 @@ export interface MayorDeCuenta {
   totales: TotalesPie;
   /** Cuántos movimientos entraron (sin contar la fila de saldo inicial). */
   cantidadMovimientos: number;
+  /** E9: los módulos por los que se filtró. Vacío = la cuenta completa. */
+  filtroModulos: Modulo[];
 }
 
 /** Etiqueta en español del `source_type` del asiento. */
@@ -350,6 +380,7 @@ const TIPO_TRANSACCION_ES: Record<string, string> = {
   manual: "Asiento de diario",
   reversion: "Reversión",
   apertura: "Asiento de apertura",
+  cierre: "Cierre anual",
 };
 
 export function tipoTransaccionLabel(sourceType: string): string {
@@ -357,7 +388,12 @@ export function tipoTransaccionLabel(sourceType: string): string {
 }
 
 /**
- * Columna "Nombre" — el tercero de la operación, en tres escalones.
+ * Columna "Nombre" — el tercero de la operación, en tres escalones (E3).
+ *
+ * Desde E3 (01/10/2026) ya NO hay un cuarto escalón: el heurístico que copiaba
+ * la descripción de la línea de cuenta control ponía "Cuentas por pagar" o
+ * "Reversión" como si fueran un nombre (asientos 33, 34, 36 a 39 y 51 de
+ * staging). Josuarth estuvo de acuerdo: sin tercero, la celda queda VACÍA.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * 1º EL TERCERO DE LA PROPIA LÍNEA (migración `054`, 22/09/2026)
@@ -365,30 +401,46 @@ export function tipoTransaccionLabel(sourceType: string): string {
  * Desde el Bloque 7 una línea puede nombrar al cliente o al proveedor con una
  * FK. Es un dato, no una deducción: manda sobre todo lo demás.
  *
- * 2º EL TERCERO DE LA LÍNEA DE CUENTA CONTROL del mismo asiento. Si la línea
- *    que se está mirando es la de gasto y la de 100004 dice de quién es, el
- *    renglón lo muestra igual: es el mismo asiento.
+ * 2º EL TERCERO DEL DOCUMENTO DE ORIGEN (E2, 30/09/2026). La factura, el
+ *    cobro, la compra, el gasto de trámite, el pago o la nota de crédito dicen
+ *    de quién son. Es la MISMA resolución que ya usaba el Excel
+ *    (`resolverTercerosFiscales`): la pantalla y el archivo dicen lo mismo. Es
+ *    lo que le pone nombre a los asientos anteriores a E2 SIN TOCARLOS, y a
+ *    todas las líneas del asiento, también a la del banco (Josuarth, punto 3).
  *
- * 3º LA DESCRIPCIÓN de la línea de cuenta control — el heurístico viejo, de
- *    cuando el ledger no tenía tercero. Sigue vivo porque **los asientos
- *    anteriores a la 054 no tienen FK** y son la mayoría del libro; sacarlo
- *    dejaría esa columna vacía en todo lo ya registrado.
+ * 3º EL TERCERO DE LA LÍNEA DE CUENTA CONTROL del mismo asiento. Hasta E2 este
+ *    escalón tomaba el de CUALQUIER línea hermana aunque el comentario dijera
+ *    "de cuenta control"; ahora mira primero la de control y, si no hay, sólo
+ *    acepta un tercero si es el ÚNICO del asiento (un asiento manual con dos
+ *    clientes no es de ninguno de los dos).
  *
- * Si no hay nada de eso, queda vacío en vez de inventar algo.
+ * Si no hay nada de eso, queda vacío en vez de inventar algo. Desde la 071 un
+ * asiento nuevo contra 100004 / 200001 no puede quedar sin tercero (salvo una
+ * compra sin ficha de proveedor, SOP-033), así que el vacío es cosa de lo viejo.
  */
 export function nombreDelTercero(
   hermanas: LineaHermana[],
   controlPorCodigo: Record<string, string | null>,
-  propia?: LineaHermana | null
+  propia?: LineaHermana | null,
+  delDocumento?: string | null
 ): string {
   const deLaPropia = propia?.terceroNombre?.trim();
   if (deLaPropia) return deLaPropia;
 
-  const conTercero = hermanas.find((l) => l.terceroNombre?.trim());
-  if (conTercero?.terceroNombre) return conTercero.terceroNombre.trim();
+  const doc = delDocumento?.trim();
+  if (doc) return doc;
 
-  const control = hermanas.find((l) => controlPorCodigo[l.code]);
-  return control?.descripcion?.trim() || "";
+  const controlConTercero = hermanas.find(
+    (l) => controlPorCodigo[l.code] && l.terceroNombre?.trim()
+  );
+  if (controlConTercero?.terceroNombre) return controlConTercero.terceroNombre.trim();
+
+  const distintos = Array.from(
+    new Set(hermanas.map((l) => l.terceroNombre?.trim()).filter((n): n is string => !!n))
+  );
+  if (distintos.length === 1) return distintos[0];
+
+  return "";
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +450,11 @@ export function nombreDelTercero(
 export interface LibroMayorOptions {
   /** code → cuenta_control ('clientes' | 'proveedores' | null). */
   controlPorCodigo?: Record<string, string | null>;
+  /**
+   * E2: entry_id → nombre del tercero de su DOCUMENTO DE ORIGEN
+   * (`resolverTercerosFiscales`). Segundo escalón de `nombreDelTercero`.
+   */
+  nombrePorAsiento?: Map<string, string>;
 }
 
 /**
@@ -438,6 +495,10 @@ export function buildMayorDeCuenta(
     tipoTransaccion: "",
     numero: "",
     nombre: "",
+    modulo: "",
+    moduloDerivado: null,
+    numeroDocumento: "",
+    referenciaExterna: "",
     // La fila de saldo inicial no es un movimiento: no tiene tercero.
     terceroClave: null,
     descripcion: "Saldo inicial",
@@ -464,7 +525,12 @@ export function buildMayorDeCuenta(
     const propia =
       m.hermanas.find((h) => h.line_order === m.line_order) ?? m.hermanas[0];
 
-    const nombre = nombreDelTercero(m.hermanas, control, propia);
+    const nombre = nombreDelTercero(
+      m.hermanas,
+      control,
+      propia,
+      options.nombrePorAsiento?.get(m.entry_id) ?? null
+    );
     const propiaDescripcion = m.line_description?.trim() || "";
 
     // Si la línea que se está mostrando ES la de la cuenta control, su
@@ -483,6 +549,10 @@ export function buildMayorDeCuenta(
       tipoTransaccion: tipoTransaccionLabel(m.source_type),
       numero: String(m.entry_number),
       nombre,
+      modulo: etiquetaDeModulo(moduloDelAsiento(m.source_type, m.reverses_source_type)),
+      moduloDerivado: moduloDelAsiento(m.source_type, m.reverses_source_type),
+      numeroDocumento: m.reference?.trim() || "",
+      referenciaExterna: m.referencia_externa?.trim() || "",
       // 054: la clave del tercero de la línea, para que el Excel le ponga RUC
       // y DV de la ficha. Si la línea no lo tiene, se mira el del asiento —la
       // resolución por documento de origen— como hasta ahora.
@@ -519,6 +589,38 @@ export function buildMayorDeCuenta(
       saldoFinal: saldoSegunNaturaleza(pie.saldoFinal, cuenta.account_type),
     },
     cantidadMovimientos: ordenados.length,
+    filtroModulos: [],
+  };
+}
+
+/**
+ * E9: el Mayor FILTRADO por módulo (FAC-ING, CO, AD…).
+ *
+ * Se filtra DESPUÉS de armar el mayor, a propósito: el saldo corrido de cada
+ * fila sigue siendo el saldo real de la cuenta después de ese movimiento. Si se
+ * filtrara antes, la columna Saldo inventaría una cuenta que sólo tiene cobros.
+ * Lo que sí se recalcula es el pie (débitos, créditos y neto de lo que se ve);
+ * el saldo final sigue siendo el de la cuenta completa.
+ */
+export function filtrarMayorPorModulos(mayor: MayorDeCuenta, elegidos: readonly Modulo[]): MayorDeCuenta {
+  if (elegidos.length === 0) return mayor;
+  const filas = mayor.filas.filter(
+    (f) => f.kind === "saldo-inicial" || (f.moduloDerivado !== null && entraEnElFiltro(f.moduloDerivado, elegidos))
+  );
+  const movimientos = filas.filter((f) => f.kind === "movimiento");
+  const totalDebitos = round2(movimientos.reduce((s, f) => s + f.debito, 0));
+  const totalCreditos = round2(movimientos.reduce((s, f) => s + f.credito, 0));
+  return {
+    ...mayor,
+    filas,
+    totales: {
+      ...mayor.totales,
+      totalDebitos,
+      totalCreditos,
+      netoDelPeriodo: saldoSegunNaturaleza(round2(totalDebitos - totalCreditos), mayor.cuenta.account_type),
+    },
+    cantidadMovimientos: movimientos.length,
+    filtroModulos: [...elegidos],
   };
 }
 

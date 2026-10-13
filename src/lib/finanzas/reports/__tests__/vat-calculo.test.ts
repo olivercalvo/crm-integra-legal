@@ -109,3 +109,26 @@ test("🔒 el reporte usa estas funciones, no una suma propia", async () => {
   assert.match(src, /from\("credit_notes"\)/, "el reporte lee las notas de crédito");
   assert.doesNotMatch(src, /taxCollectedPos|taxCollectedNeg/, "no queda la suma vieja");
 });
+
+// ---------------------------------------------------------------------------
+// P-1a (30/09/2026): el mes es el de la FECHA DE REGISTRO
+// ---------------------------------------------------------------------------
+
+test("P-1a: una factura de septiembre registrada en octubre cuenta en OCTUBRE", () => {
+  const facturas = [factura({ issue_date: "2026-09-28", accounting_date: "2026-10-01" })];
+  assert.equal(ventasDelPeriodo(facturas, [], "2026-09").itbms, 0, "no cuenta en el mes del documento");
+  assert.ok(ventasDelPeriodo(facturas, [], "2026-10").itbms > 0, "cuenta en el mes de registro");
+});
+
+test("P-1a: una NC cuenta en el mes de SU fecha de registro, no en el de su documento", () => {
+  const facturas = [factura({ issue_date: "2026-08-15", accounting_date: "2026-08-15" })];
+  const notas = [nc({ issue_date: "2026-10-02", accounting_date: "2026-09-30", subtotal_total: 400, tax_total: 28 })];
+  assert.equal(ventasDelPeriodo([], notas, "2026-09").itbms, -28);
+  assert.equal(ventasDelPeriodo([], notas, "2026-10").itbms, 0);
+  assert.ok(facturas.length === 1);
+});
+
+test("sin fecha de registro (datos anteriores a la 068) manda la del documento", () => {
+  const facturas = [factura({ issue_date: "2026-09-10" })];
+  assert.ok(ventasDelPeriodo(facturas, [], "2026-09").itbms > 0);
+});

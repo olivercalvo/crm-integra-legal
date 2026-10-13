@@ -53,20 +53,36 @@ export function BalanceStatement({ bg }: { bg: BalanceGeneral }) {
           emptyLabel={filtered ? EMPTY_FILTERED : undefined}
         />
 
-        <StatementSection
-          section={pasivos}
-          emptyLabel={filtered ? EMPTY_FILTERED : undefined}
-        />
+        {/* E10: con tasa de ISR distinta de 0, el impuesto CALCULADO entra al
+            pasivo como renglón calculado (no es un asiento). Con tasa 0 la
+            sección se dibuja como siempre. */}
+        {Math.abs(bg.isrPorPagarCalculado) >= 0.005 ? (
+          <>
+            <SectionHeaderRow label={pasivos.label} />
+            <SectionAccountRows section={pasivos} />
+            <ComputedRow
+              label="Impuesto sobre la renta por pagar"
+              value={bg.isrPorPagarCalculado}
+              note="calculado con la tasa del bufete, no registrado en el libro"
+            />
+            <SectionTotalRow label={pasivos.totalLabel} value={pasivos.total} />
+          </>
+        ) : (
+          <StatementSection
+            section={pasivos}
+            emptyLabel={filtered ? EMPTY_FILTERED : undefined}
+          />
+        )}
 
         {/* PATRIMONIO se compone a mano porque intercala un renglón CALCULADO
-            (la utilidad del ejercicio) entre las cuentas y el total. Ese renglón
+            (la utilidad neta) entre las cuentas y el total. Ese renglón
             se muestra en las dos vistas: no es una cuenta. */}
         <SectionHeaderRow label={patrimonio.label} />
         <SectionAccountRows section={patrimonio} />
         <ComputedRow
-          label="Utilidad del Ejercicio"
+          label="Utilidad neta"
           value={bg.utilidadDelEjercicio}
-          note="del Estado de Resultado (operativa)"
+          note="del Estado de Resultado, acumulada mientras no haya cierre anual"
         />
         <SectionTotalRow label={patrimonio.totalLabel} value={patrimonio.total} />
 

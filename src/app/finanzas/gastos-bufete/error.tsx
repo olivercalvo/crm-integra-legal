@@ -23,7 +23,7 @@ export default function Error({
     <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
       <AlertTriangle size={32} className="mx-auto text-red-600 mb-2" />
       <h2 className="text-lg font-semibold text-red-700">
-        Algo salió mal en Gastos del Bufete
+        Algo salió mal en Compras
       </h2>
       <p className="mt-1 text-sm text-red-600">
         {error.message || "Error inesperado. Intente recargar la página."}

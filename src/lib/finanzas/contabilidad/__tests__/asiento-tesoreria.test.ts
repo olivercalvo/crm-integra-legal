@@ -39,6 +39,7 @@ function cobro(p: Partial<CobroParaAsiento> = {}): CobroParaAsiento {
     payment_date: "2026-09-04",
     amount: 1070,
     client_name: "Cliente S.A.",
+    client_id: "c1111111-1111-1111-1111-111111111111",
     facturas: ["FAC-HON-000001"],
     payment_account_code: "100001",
     banco_valido: true,
@@ -56,6 +57,7 @@ function pago(p: Partial<PagoProveedorParaAsiento> = {}): PagoProveedorParaAsien
     documento_id: COMPRA_ID,
     documento_description: "Insumos de septiembre",
     supplier_name: "PROVEEDOR, S.A.",
+    supplier_id: "d2222222-2222-2222-2222-222222222222",
     supplier_invoice_number: "F-1001",
     payment_date: "2026-09-04",
     amount: 321,
@@ -241,4 +243,17 @@ test("los dos asientos son deterministas", () => {
     construirAsientoDePagoProveedor(pago()),
     construirAsientoDePagoProveedor(pago())
   );
+});
+
+test("E2: el cobro lleva al cliente en la línea de 100004; el pago, al proveedor en la de 200001", () => {
+  const c = construirAsientoDeCobro(cobro());
+  assert.equal(c.ok, true);
+  if (!c.ok) return;
+  assert.equal(c.asiento.lines.find((l) => l.account_code === "100004")?.client_id, "c1111111-1111-1111-1111-111111111111");
+  assert.equal(c.asiento.lines.find((l) => l.account_code === "100001")?.client_id ?? null, null, "el banco no lleva tercero");
+
+  const p = construirAsientoDePagoProveedor(pago());
+  assert.equal(p.ok, true);
+  if (!p.ok) return;
+  assert.equal(p.asiento.lines.find((l) => l.account_code === "200001")?.supplier_id, "d2222222-2222-2222-2222-222222222222");
 });

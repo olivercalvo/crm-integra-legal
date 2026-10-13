@@ -18,6 +18,7 @@ import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
 import { tipoTransaccionLabel } from "@/lib/finanzas/reports/libro-mayor";
 import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 import { ReversePaymentDialog } from "@/app/finanzas/facturas/_components/reverse-payment-dialog";
+import { SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO } from "@/lib/finanzas/contabilidad/cierre-anual";
 
 /**
  * DETALLE DE UN ASIENTO DEL LIBRO — solo lectura (Bloque 7, commit 4).
@@ -59,6 +60,8 @@ export default async function AsientoDetallePage({ params }: PageProps) {
   if (!asiento) notFound();
 
   const esManual = asiento.source_type === "manual";
+  // 080: el cierre anual se reversa igual que un manual (pero no se clona).
+  const esReversable = SOURCE_TYPES_REVERSABLES_DESDE_EL_ASIENTO.includes(asiento.source_type);
   const yaReversado = asiento.reversadoPor !== null;
   // El documento que originó el asiento, cuando lo tiene. Es el mismo
   // resolvedor que usan el Mayor y el Diario: una sola tabla de destinos.
@@ -88,7 +91,7 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               )}
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Registrado el {formatDateTime(asiento.created_at)}
+              Grabado el {formatDateTime(asiento.created_at)}
             </p>
           </div>
         </div>
@@ -107,12 +110,12 @@ export default async function AsientoDetallePage({ params }: PageProps) {
               Clonar
             </Link>
           )}
-          {/* REVERSAR (7.6). Solo un asiento manual que todavía no fue
-              reversado. El diálogo es el MISMO de cobros, pagos y gastos, con
+          {/* REVERSAR (7.6). Solo un asiento manual (o, desde la 080, un cierre
+              anual) que todavía no fue reversado. El diálogo es el MISMO de cobros, pagos y gastos, con
               su cuarta variante: la vista previa del espejo sale de
               `construirAsientoDeReversion`, la misma función que postea el
               servidor (`reversion-una-sola-implementacion.test.ts`). */}
-          {esManual && !yaReversado && (
+          {esReversable && !yaReversado && (
             <ReversePaymentDialog
               variante="asiento"
               paymentId={asiento.id}
@@ -185,23 +188,36 @@ export default async function AsientoDetallePage({ params }: PageProps) {
                 <dd className="mt-1 font-medium text-gray-900">{asiento.description}</dd>
               </div>
               <div>
+                {/* Vocabulario de Josuarth (E1/E2): la «fecha de registro» es la
+                    CONTABLE (`transaction_date`, define el período). El día en que
+                    se grabó el asiento (`record_date`) es otra cosa: «Grabado el». */}
                 <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                  <CalendarDays size={12} /> Fecha de la operación
+                  <CalendarDays size={12} /> Fecha de registro
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(asiento.transaction_date)}</dd>
               </div>
               <div>
                 <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                  <CalendarDays size={12} /> Fecha de registro
+                  <CalendarDays size={12} /> Grabado el
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">{formatDate(asiento.record_date)}</dd>
               </div>
               {asiento.reference && (
                 <div>
+                  {/* E3: el número PROPIO del documento (FAC-HON-, CO-, AD-…). */}
                   <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
-                    <Hash size={12} /> Referencia
+                    <Hash size={12} /> N.º de documento
                   </dt>
                   <dd className="mt-1 font-mono text-gray-900">{asiento.reference}</dd>
+                </div>
+              )}
+              {asiento.referencia_externa && (
+                <div>
+                  {/* 071: cheque, factura del proveedor o la referencia libre. */}
+                  <dt className="flex items-center gap-1 text-xs uppercase tracking-wider text-gray-500">
+                    <Hash size={12} /> Referencia externa
+                  </dt>
+                  <dd className="mt-1 font-mono text-gray-900">{asiento.referencia_externa}</dd>
                 </div>
               )}
               {rutaDocumento && (

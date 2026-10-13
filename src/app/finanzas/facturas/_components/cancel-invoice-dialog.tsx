@@ -16,6 +16,8 @@ import {
   invoiceHasAuthorizedCufe,
   isCancelConfirmDisabled,
 } from "./cancel-invoice-dialog.logic";
+import { CampoFechaDeRegistro } from "@/components/finanzas/campo-fecha-de-registro";
+import { hoyEnPanama } from "@/lib/utils/hoy-en-panama";
 import {
   MOTIVO_ANULACION_MIN,
   MOTIVO_ANULACION_MAX,
@@ -58,6 +60,11 @@ interface Props {
    * `decidirAccionFiscal`, no se recalcula acá.
    */
   horasRestantes?: number | null;
+  /**
+   * La fecha de registro de la factura (su asiento). La anulación no puede ir
+   * antes: el campo la usa como mínimo, y el servidor lo vuelve a verificar.
+   */
+  fechaMinima?: string | null;
 }
 
 /**
@@ -83,6 +90,7 @@ export function CancelInvoiceDialog({
   variante = "anular",
   motivoInicial,
   horasRestantes,
+  fechaMinima,
 }: Props) {
   const completando = variante === "completar";
   const router = useRouter();
@@ -93,6 +101,10 @@ export function CancelInvoiceDialog({
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [observationsError, setObservationsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // La fecha de registro de la anulación (revisión del 28/09 y reunión del
+  // 30/09): la elige el contador, hoy en Panamá por defecto.
+  const [fecha, setFecha] = useState(() => hoyEnPanama());
+  const [fechaError, setFechaError] = useState<string | null>(null);
   // Confirmación DGI: solo relevante para facturas con CUFE autorizado.
   const [dgiConfirmed, setDgiConfirmed] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -111,6 +123,8 @@ export function CancelInvoiceDialog({
   // ConfirmationModal se monta después del onClick.
   useEffect(() => {
     if (!open) return;
+    setFecha(hoyEnPanama());
+    setFechaError(null);
     const t = setTimeout(() => textareaRef.current?.focus(), 50);
     return () => clearTimeout(t);
   }, [open]);
@@ -167,6 +181,7 @@ export function CancelInvoiceDialog({
           body: JSON.stringify({
             reason: trimmed,
             observations: trimmedObs || null,
+            fecha_registro: fecha,
           }),
         });
         const data = await res.json().catch(() => ({}));
@@ -178,6 +193,9 @@ export function CancelInvoiceDialog({
           if (data.fieldErrors?.observations) {
             setObservationsError(data.fieldErrors.observations);
           }
+          if (data.fieldErrors?.fecha_registro) {
+            setFechaError(data.fieldErrors.fecha_registro);
+          }
           setSubmitError(data.error ?? "No se pudo anular la factura.");
           return;
         }
@@ -186,7 +204,12 @@ export function CancelInvoiceDialog({
         // surface el mensaje. router.refresh recarga el server component.
         setOpen(false);
         const url = new URL(window.location.href);
-        url.searchParams.set("cancelled", "1");
+        // `alcance` dice si la DGI anuló o si fue sólo en el CRM: el aviso no
+        // puede decir «ante la DGI» de una factura sin CUFE (06/10/2026).
+        url.searchParams.set(
+          "cancelled",
+          data.alcance === "dgi_y_libro" || data.alcance === "solo_crm" ? data.alcance : "1"
+        );
         router.replace(url.pathname + url.search, { scroll: false });
         router.refresh();
       } catch {
@@ -285,7 +308,7 @@ export function CancelInvoiceDialog({
                 <div className="flex justify-between">
                   <span className="text-gray-500">Total facturado</span>
                   <span className="font-mono text-gray-900">
-                    ${fmtImporte(grandTotal)}
+                    B/. {fmtImporte(grandTotal)}
                   </span>
                 </div>
                 <div className="flex justify-between border-t pt-2">
@@ -293,7 +316,7 @@ export function CancelInvoiceDialog({
                     Total pagado
                   </span>
                   <span className="font-mono font-semibold text-amber-700">
-                    ${fmtImporte(amountPaid)}
+                    B/. {fmtImporte(amountPaid)}
                   </span>
                 </div>
               </div>
@@ -344,8 +367,8 @@ export function CancelInvoiceDialog({
                     Esta factura está autorizada por la DGI. Al confirmar, el
                     sistema la anula primero ante la DGI y después en el CRM:
                     genera la nota de crédito interna y el asiento de reversión
-                    con fecha de hoy. Si la DGI no acepta la anulación, no se
-                    cambia nada.
+                    con la fecha de registro que elijas. Si la DGI no acepta la
+                    anulación, no se cambia nada.
                   </p>
                 </div>
               )}
@@ -390,10 +413,24 @@ export function CancelInvoiceDialog({
                 <div className="flex justify-between border-t pt-2">
                   <span className="text-gray-500">Total</span>
                   <span className="font-mono font-semibold text-gray-900">
-                    ${fmtImporte(grandTotal)}
+                    B/. {fmtImporte(grandTotal)}
                   </span>
                 </div>
               </div>
+
+              {/* La fecha de registro de la anulación (NC + reversión) */}
+              <CampoFechaDeRegistro
+                id="cancel_fecha_registro"
+                value={fecha}
+                onChange={(v) => {
+                  setFecha(v);
+                  if (fechaError) setFechaError(null);
+                }}
+                min={fechaMinima ?? undefined}
+                error={fechaError}
+                disabled={isPending}
+                ayuda="La nota de crédito y la reversión entran al libro con esta fecha. Tiene que caer en un período abierto y no puede ser anterior a la factura."
+              />
 
               {/* Form: textarea con razón */}
               <div>

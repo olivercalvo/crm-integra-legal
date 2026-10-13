@@ -32,7 +32,7 @@ const STATUSES: InvoiceStatus[] = [
   "cancelada_pre_emision",
 ];
 
-const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO"];
+const KINDS: InvoiceKind[] = ["HONORARIOS", "REEMBOLSO", "NOTA_DEBITO"];
 
 /**
  * Filtros de la lista de facturas. Cada cambio reescribe los searchParams

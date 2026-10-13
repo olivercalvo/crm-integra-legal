@@ -23,6 +23,7 @@ import {
   ensureInvoicePdfRow,
   invoicePdfBucket,
 } from "@/lib/finanzas/pdf/ensure-invoice-pdf";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { id: string };
@@ -35,10 +36,26 @@ export const maxDuration = 30;
 
 const ALLOWED_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export const GET = conManejoDeAuditoria(async function GET(_request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!ALLOWED_ROLES.includes(ctx.userRole as (typeof ALLOWED_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
+  }
+
+  // 092: una factura emitida fuera del CRM no tiene PDF del CRM. Su comprobante
+  // fiscal es el del sistema que la emitió; un PDF con el número FAC-EXT- se
+  // podría entregar como si fuera el fiscal.
+  const { data: origen } = await ctx.db
+    .from("invoices")
+    .select("dgi_cufe_origen")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", params.id)
+    .maybeSingle();
+  if ((origen as { dgi_cufe_origen?: string | null } | null)?.dgi_cufe_origen === "externo") {
+    return NextResponse.json(
+      { error: "Esta factura se emitió fuera del CRM: su comprobante es el del sistema que la emitió." },
+      { status: 409 }
+    );
   }
 
   try {
@@ -87,4 +104,4 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     console.error("[finanzas/pdf] invoice GET failed", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

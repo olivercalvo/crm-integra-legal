@@ -1,7 +1,7 @@
 /**
  * POST /api/finanzas/asientos/[id]/reverse — reversa un asiento MANUAL.
  *
- * Bloque 7 (22/09/2026). Body: `{ reason }`. Delega en `reverseJournalEntry`
+ * Bloque 7 (22/09/2026). Body: `{ reason, fecha_registro? }`. Delega en `reverseJournalEntry`
  * → RPC `reverse_journal_entry` (055): espejo verificado, fecha de hoy,
  * `reverses_entry_id`. Esta ruta no arma líneas.
  *
@@ -21,6 +21,7 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { reverseJournalEntry } from "@/lib/finanzas/api/asientos";
 import { MutationError } from "@/lib/finanzas/api/errors";
 import { MOTIVO_MAX, MOTIVO_MIN } from "@/lib/finanzas/contabilidad/reversion";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,7 @@ interface RouteParams {
 /** Tiene que coincidir con la ruta de alta y con route-access.ts. */
 const MUTATING_ROLES = ["admin", "contador"] as const;
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
   if (!MUTATING_ROLES.includes(ctx.userRole as (typeof MUTATING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -61,19 +62,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const result = await reverseJournalEntry(
       ctx.db,
-      createAdminClient(),
+      createAdminClient(ctx.userId),
       ctx.tenantId,
       ctx.userId,
       params.id,
-      reason
+      reason,
+      (body as { fecha_registro?: unknown } | null)?.fecha_registro
     );
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     if (err instanceof MutationError) {
       console.error("[finanzas/asientos] reverse failed:", err.message, err.detail);
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: err.message, fieldErrors: err.fieldErrors }, { status: err.status });
     }
     console.error("[finanzas/asientos] reverse unexpected error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
-}
+});

@@ -79,16 +79,24 @@ export function StatementHeader({
  */
 export function OpeningBalancesNotice({
   conFiltroDeFechas = false,
+  conFechaDeCorte = false,
 }: {
   /** true en las pantallas que muestran el filtro de fechas. */
   conFiltroDeFechas?: boolean;
+  /** true en la antigüedad, que tiene el campo «Al» (requerimiento 41). */
+  conFechaDeCorte?: boolean;
 }) {
   return (
     <p className="rounded-md border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-      Este reporte suma los <strong>saldos de apertura</strong> del Plan de Cuentas{" "}
+      Este reporte suma los <strong>saldos de apertura</strong> (el asiento de apertura; mientras no exista, el
+      saldo inicial del Plan de Cuentas){" "}
       <strong>más todos los movimientos registrados</strong> en el libro mayor. Los mismos
       números que muestra el mayor de cada cuenta.{" "}
-      {conFiltroDeFechas ? (
+      {conFechaDeCorte ? (
+        <>
+          La fecha <strong>«Al»</strong> recorta lo que se incluye: sólo lo registrado hasta ese día.
+        </>
+      ) : conFiltroDeFechas ? (
         <>
           El <strong>rango de fechas</strong> de abajo recorta lo que se incluye.
         </>

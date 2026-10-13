@@ -61,17 +61,15 @@
  */
 
 import type { AsientoInput, LineaAsiento } from "@/lib/finanzas/contabilidad/posting";
+import { lineasDeImpuesto } from "@/lib/finanzas/contabilidad/impuesto-por-cuenta";
 
 /** Cuenta control de clientes. El débito de toda factura va acá. */
 export const CUENTA_POR_COBRAR = "100004";
 
 /**
- * ITBMS, una sola cuenta para ventas y compras. Ver el encabezado.
- *
- * ⚠️ Coincide con el `200003` del resumen de ventas e ITBMS, pero NO se importa
- * de ahí ni se exporta hacia allá: son dos lecturas independientes de la misma
- * decisión del contador. Unificarlas en una constante compartida haría que un
- * cambio en el reporte moviera el asiento en silencio.
+ * ⚠️ Desde la `073` el impuesto va a la cuenta DE SU TASA (`tax_account` de cada
+ * línea; ver `impuesto-por-cuenta.ts`). Esta constante queda como la cuenta de
+ * una línea con impuesto y SIN tasa, que es a donde fue siempre.
  */
 export const CUENTA_ITBMS = "200003";
 
@@ -84,6 +82,10 @@ export interface LineaFacturaParaAsiento {
   subtotal: number;
   /** ITBMS de la línea. Cero en los exentos. */
   tax_amount: number;
+  /** 073: la cuenta del impuesto de la tasa de la línea (`tax_codes.account_code`). */
+  tax_account?: string | null;
+  /** 073: el código de la tasa, para nombrar la línea si hay varias cuentas. */
+  tax_code?: string | null;
   /** `services_catalog.code`. `null` si la línea no tiene servicio. */
   service_code: string | null;
   /** `services_catalog.name`, para nombrar el servicio en palabras en un rechazo. */
@@ -103,9 +105,17 @@ export interface FacturaParaAsiento {
   id: string;
   /** El correlativo YA generado. Ver `emitInvoice`. */
   invoice_number: string;
+  /** Fecha del DOCUMENTO (la que va a la DGI). Informativa en el libro. */
   issue_date: string;
+  /** Fecha de REGISTRO: la del asiento, define el período (`068`). */
+  accounting_date: string;
   grand_total: number;
   client_name: string;
+  /**
+   * El cliente de la factura (E2). Va en la línea de 100004 para que el Mayor
+   * y la antigüedad sepan de quién es sin adivinar por el texto.
+   */
+  client_id: string | null;
   lineas: LineaFacturaParaAsiento[];
 }
 
@@ -217,17 +227,12 @@ export function construirAsientoDeFactura(
     return { ok: false, motivo: "cuenta_invalida", mensaje };
   }
 
-  // ---- 3) Agrupar los créditos de ingreso POR CUENTA -----------------------
-  // Dos servicios distintos pueden apuntar a la misma cuenta. Una línea por
-  // cuenta y no una por línea de factura: el mayor de esa cuenta se lee mejor y
-  // el asiento no crece con el detalle comercial de la factura.
-  const porCuenta = new Map<string, number>();
-  for (const l of f.lineas) {
-    const cuenta = l.revenue_account as string;
-    porCuenta.set(cuenta, round2((porCuenta.get(cuenta) ?? 0) + l.subtotal));
-  }
-
-  const itbms = round2(f.lineas.reduce((s, l) => s + l.tax_amount, 0));
+  // ---- 3) UNA LÍNEA DEL LIBRO POR CADA LÍNEA DE LA FACTURA (E2) ------------
+  // Hasta el Bloque 1 se agrupaba por cuenta de ingreso ("el asiento no crece
+  // con el detalle comercial"). Josuarth pidió lo contrario (revisión del
+  // 28/09, punto 3): en la columna Descripción del Mayor, la descripción de
+  // CADA línea del documento, no la del encabezado. Agrupando, esa descripción
+  // se perdía. El total por cuenta no cambia: el Mayor suma igual.
   const debe = round2(f.grand_total);
 
   const lines: LineaAsiento[] = [
@@ -236,20 +241,22 @@ export function construirAsientoDeFactura(
       debit: debe,
       credit: 0,
       description: `Factura ${f.invoice_number}`,
+      // E2: el cliente en la cuenta control, como dato y no como texto.
+      client_id: f.client_id,
     },
   ];
-  for (const [cuenta, monto] of Array.from(porCuenta.entries()).sort()) {
+  for (const l of [...f.lineas].sort((a, b) => a.line_order - b.line_order)) {
+    const monto = round2(l.subtotal);
     if (monto === 0) continue;
-    lines.push({ account_code: cuenta, debit: 0, credit: monto, description: null });
-  }
-  if (itbms > 0) {
     lines.push({
-      account_code: CUENTA_ITBMS,
+      account_code: l.revenue_account as string,
       debit: 0,
-      credit: itbms,
-      description: "ITBMS facturado",
+      credit: monto,
+      description: l.description?.trim() || null,
     });
   }
+  // 073: una línea de impuesto POR CUENTA (la de la tasa de cada línea).
+  lines.push(...lineasDeImpuesto(f.lineas, "credit", "ITBMS facturado"));
 
   // ---- 4) Red contra un error de redondeo DE ESTE ARCHIVO ------------------
   // El RPC vuelve a verificar el cuadre y es la autoridad. Se chequea acá igual
@@ -271,7 +278,7 @@ export function construirAsientoDeFactura(
   return {
     ok: true,
     asiento: {
-      transaction_date: f.issue_date,
+      transaction_date: f.accounting_date,
       description: descripcionDelAsientoDeFactura(f),
       source_type: "factura",
       lines,

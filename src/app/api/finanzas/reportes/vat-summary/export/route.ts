@@ -6,6 +6,7 @@ import {
 } from "@/lib/finanzas/reports/vat-summary";
 import { generateVatSummaryXlsxBuffer } from "@/lib/finanzas/reports/vat-summary-xlsx";
 import { generateVatSummaryPdfBuffer } from "@/lib/finanzas/pdf/generate-vat-summary-pdf";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 /**
  * GET /api/finanzas/reportes/vat-summary/export?month=YYYY-MM&format=xlsx|pdf
@@ -20,7 +21,7 @@ export const runtime = "nodejs";
 
 const READING_ROLES = ["admin", "abogada", "contador"] as const;
 
-export async function GET(request: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
   if (!READING_ROLES.includes(ctx.userRole as (typeof READING_ROLES)[number])) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
@@ -84,4 +85,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   }
 
   // Use admin client to bypass RLS for user profile lookup
-  const admin = createAdminClient();
+  const admin = createAdminClient(user.id);
   const { data: profile } = await admin
     .from("users")
     .select("full_name, role, tenant_id")

@@ -4,10 +4,10 @@
  * Lo que fija:
  *   · una o varias aplicaciones, sin repetir, cada monto > 0 (el CHECK de la
  *     tabla lo prohíbe: una fila en 0 se saca, no se manda);
- *   · `amount` == suma de las aplicaciones. El EXCEDENTE se rechaza —no hay
- *     dónde ponerlo hasta que Josuarth defina anticipos— y el mensaje dice los
- *     dos montos y la salida (SOP-027): otra factura del mismo cliente por el
- *     resto, o ajustar el monto. El faltante también se rechaza.
+ *   · `amount` ≥ suma de las aplicaciones. Desde la 074 (Oliver, 01/10/2026) el
+ *     EXCEDENTE se permite: queda como saldo a favor del cliente. Lo que se
+ *     sigue rechazando es aplicar más de lo que entró.
+ *   · La referencia es OBLIGATORIA (074).
  */
 
 import { test } from "node:test";
@@ -22,7 +22,7 @@ const base = {
   payment_date: "2026-09-21",
   method: "transferencia",
   payment_account_code: "100001",
-  reference: null,
+  reference: "TRF-001",
   notes: null,
 };
 
@@ -45,20 +45,23 @@ test("dos facturas cuya suma es el total: pasa, con montos redondeados", () => {
   assert.deepEqual(r.data?.applications.map((a) => a.amount), [1070, 430]);
 });
 
-test("🔴 excedente: la transferencia supera la suma → rechazo que nombra los dos montos y la salida", () => {
+test("🟢 074: excedente: la transferencia supera la suma → PASA (el resto queda a favor del cliente)", () => {
   const r = validateCreatePayment({
     ...base,
     amount: 1500,
     applications: [{ invoice_id: F1, amount: 1355 }],
   } as never);
-  assert.equal(r.ok, false);
-  const msg = r.errors?.amount ?? "";
-  assert.match(msg, /1,500\.00/);
-  assert.match(msg, /1,355\.00/);
-  assert.match(msg, /145\.00/, "dice cuánto falta aplicar");
-  assert.match(msg, /otra factura pendiente del mismo cliente/);
-  assert.match(msg, /ajuste el monto/);
-  assert.match(msg, /concili/, "explica por qué: la conciliación bancaria");
+  assert.equal(r.ok, true);
+  assert.equal(r.data?.amount, 1500);
+  assert.deepEqual(r.data?.applications, [{ invoice_id: F1, amount: 1355 }]);
+});
+
+test("🔴 074: sin referencia → rechazo (es lo que concilia contra el banco)", () => {
+  for (const reference of [null, "", "   "]) {
+    const r = validateCreatePayment({ ...base, reference, amount: 250, applications: [{ invoice_id: F1, amount: 250 }] } as never);
+    assert.equal(r.ok, false);
+    assert.match(r.errors?.reference ?? "", /obligatoria/);
+  }
 });
 
 test("faltante: lo aplicado supera el total → rechazo", () => {

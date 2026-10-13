@@ -32,6 +32,7 @@ import type {
   ReversionDeCobro,
 } from "@/lib/finanzas/types/payment";
 import { SOURCE_TYPE_COBRO } from "@/lib/finanzas/contabilidad/asiento-tesoreria";
+import { DE_PRUEBA } from "@/lib/finanzas/documentos-de-prueba";
 
 type DB = SupabaseClient;
 
@@ -125,7 +126,9 @@ export async function cargarAsientosPorOrigen(
 
   const { data: lineas, error: errLineas } = await db
     .from("journal_entry_lines")
-    .select("entry_id, line_order, debit, credit, line_description, chart_of_accounts!inner(code, name)")
+    .select(
+      "entry_id, line_order, debit, credit, line_description, client_id, supplier_id, chart_of_accounts!inner(code, name)"
+    )
     .eq("tenant_id", tenantId)
     .in(
       "entry_id",
@@ -144,6 +147,8 @@ export async function cargarAsientosPorOrigen(
     debit: number | string;
     credit: number | string;
     line_description: string | null;
+    client_id: string | null;
+    supplier_id: string | null;
     chart_of_accounts: { code: string; name: string };
   };
   const porAsiento = new Map<string, AsientoDeCobro["lines"]>();
@@ -155,6 +160,9 @@ export async function cargarAsientosPorOrigen(
       debit: num(l.debit),
       credit: num(l.credit),
       description: l.line_description,
+      // E2: el espejo de la reversión conserva el tercero de cada línea.
+      client_id: l.client_id ?? null,
+      supplier_id: l.supplier_id ?? null,
     });
     porAsiento.set(l.entry_id, lista);
   }
@@ -362,6 +370,7 @@ export async function listPayments(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  // de-prueba-ok: listado de cobros: los de prueba se ven con su badge
   let q = db
     .from("payments")
     .select(
@@ -531,6 +540,7 @@ export async function listInvoicesCobrables(
         "client:clients!invoices_client_id_fkey(name, client_number)"
     )
     .eq("tenant_id", tenantId)
+    .eq(DE_PRUEBA, false)
     .in("status", ["emitida", "parcialmente_pagada"])
     .gt("balance_due", 0)
     .order("issue_date", { ascending: true });

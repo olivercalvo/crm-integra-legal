@@ -1,0 +1,455 @@
+/**
+ * ENSAYO DE LA VENTANA DE PRODUCCIÓN contra una base Postgres LOCAL.
+ *
+ *   node scripts/ensayo-ventana/ensayo.mjs base        → arma `prod_024`: igual a producción
+ *   node scripts/ensayo-ventana/ensayo.mjs ventana     → copia `prod_024` a `ventana` y aplica A, B y C
+ *   node scripts/ensayo-ventana/ensayo.mjs bitacoras   → sobre `ventana`, la ventana aparte de las bitácoras
+ *   node scripts/ensayo-ventana/ensayo.mjs marcar-pruebas → copia `prod_024` a `pruebas` con datos
+ *        equivalentes a los de prueba de producción, aplica A, B y C y ensaya el paso
+ *        sql/ventana/marcar-datos-de-prueba.sql con su consulta de antes y después
+ *
+ * La base local: Postgres 17 en localhost:54329 (ENSAYO_PORT), superusuario
+ * `supabase_admin` y `postgres` SIN superusuario, como en Supabase. Cómo se
+ * levanta: docs/finanzas/runbooks/ventana-bloque-1.md, «Cómo se ensaya».
+ *
+ * 🛑 Sólo escribe en localhost. De staging sólo LEE (sesión READ ONLY) para
+ * copiar los datos del seed de pruebas; producción no se toca.
+ *
+ * Cada paso deja su registro en docs/finanzas/ensayo-ventana/<fase>.json:
+ * archivo, bloque, milisegundos, NOTICE/WARNING y el error si lo hubo.
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
+import pg from "pg";
+
+import {
+  COMMIT_PRODUCCION, BASE_PRODUCCION, HOTFIX_PRODUCCION,
+  BLOQUE_A, BLOQUE_B, BLOQUE_C, BITACORAS, VERIFICACIONES,
+} from "./orden.mjs";
+import { PRELUDE_SQL } from "../staging-public-helpers.mjs";
+import { aplicarFixups } from "../staging-fixups.mjs";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PORT = Number(process.env.ENSAYO_PORT ?? 54329);
+const LOCAL = { host: "localhost", port: PORT };
+const T = "a0000000-0000-0000-0000-000000000001";
+const SALIDA = resolve(ROOT, "docs/finanzas/ensayo-ventana");
+
+const cliente = async (user, database) => {
+  const c = new pg.Client({ ...LOCAL, user, database });
+  await c.connect();
+  return c;
+};
+const sql = (ruta, commit) =>
+  commit
+    ? execSync(`git show ${commit}:${ruta}`, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+    : readFileSync(resolve(ROOT, ruta), "utf8");
+
+/** Corre un archivo entero en una conexión nueva y devuelve el registro. */
+async function correr(user, database, ruta, { commit, bloque, fixups } = {}) {
+  const c = await cliente(user, database);
+  const avisos = [];
+  c.on("notice", (n) => avisos.push({ nivel: n.severity, texto: n.message }));
+  let texto = sql(ruta, commit);
+  // Los dos parches de staging-fixups.mjs describen cómo quedó PRODUCCIÓN al
+  // aplicar a mano esos archivos (verificado allí): sólo para la base.
+  if (fixups) {
+    const f = aplicarFixups(ruta, texto);
+    texto = f.sql;
+    for (const a of f.aplicados) avisos.push({ nivel: "FIXUP", texto: a });
+  }
+  const t0 = performance.now();
+  let error = null;
+  try {
+    await c.query(texto);
+  } catch (e) {
+    error = { mensaje: e.message, detalle: e.detail ?? null, donde: e.where ?? null, codigo: e.code ?? null };
+  }
+  const ms = Math.round(performance.now() - t0);
+  await c.end().catch(() => {});
+  return { archivo: ruta.replace(/^.*\//, ""), bloque, ms, error, avisos };
+}
+
+/** Una consulta de SÓLO LECTURA (archivo con un SELECT): devuelve las filas. */
+async function consultar(database, ruta) {
+  const c = await cliente("postgres", database);
+  await c.query("BEGIN READ ONLY");
+  try {
+    return (await c.query(sql(ruta))).rows;
+  } finally {
+    await c.query("ROLLBACK").catch(() => {});
+    await c.end().catch(() => {});
+  }
+}
+
+function imprimir(r) {
+  const advert = r.avisos.filter((a) => a.nivel === "WARNING").length;
+  const marca = r.error ? "❌" : advert ? "⚠️" : "✅";
+  console.log(`${marca} ${r.bloque.padEnd(14)} ${r.archivo.padEnd(56)} ${String(r.ms).padStart(6)} ms · ${r.avisos.length} avisos${advert ? ` (${advert} WARNING)` : ""}`);
+  if (r.error) console.log(`     ${r.error.codigo ?? ""} ${r.error.mensaje}${r.error.detalle ? `\n     detalle: ${r.error.detalle}` : ""}${r.error.donde ? `\n     en: ${r.error.donde.split("\n")[0]}` : ""}`);
+}
+
+function guardar(fase, datos) {
+  mkdirSync(SALIDA, { recursive: true });
+  writeFileSync(resolve(SALIDA, `${fase}.json`), JSON.stringify(datos, null, 2) + "\n");
+}
+
+async function recrear(nombre, plantilla) {
+  const a = await cliente("supabase_admin", "postgres");
+  await a.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`, [nombre]);
+  await a.query(`DROP DATABASE IF EXISTS ${nombre}`);
+  await a.query(`CREATE DATABASE ${nombre} OWNER postgres${plantilla ? ` TEMPLATE ${plantilla}` : ""}`);
+  await a.end();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Datos: el seed de pruebas de staging, recortado a lo que producción tiene
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tablas que en producción están VACÍAS hoy (relevamiento del 22/09). */
+const VACIAS_EN_PRODUCCION = new Set([
+  // El libro: «journal_entries 0, el motor entra en una base limpia».
+  "journal_entries", "journal_entry_lines", "accounting_periods", "accounting_sequences", "accounting_legajos",
+  // «business_expenses 0: el módulo de compras nunca se usó».
+  "business_expenses",
+]);
+
+/**
+ * Filas que crea una migración o una función POSTERIOR a la 024: en producción
+ * todavía no existen. Las facturas FAC-EXT- (092) pasan los CHECK de la 024
+ * (la columna del origen no existe todavía) pero su secuencia no: sin este
+ * filtro la 092 numera desde 1 y choca con ellas.
+ */
+const facturasPosteriores = new Set();
+const CREADAS_DESPUES = {
+  chart_of_accounts: (f) => ["200004", "300004", "400009", "440001", "400010"].includes(f.code),
+  services_catalog: (f) => ["OTR-ING"].includes(f.code),
+  invoices: (f) => facturasPosteriores.has(f.id),
+  invoice_lines: (f) => facturasPosteriores.has(f.invoice_id),
+  fe_emisiones: (f) => facturasPosteriores.has(f.invoice_id),
+  payment_applications: (f) => facturasPosteriores.has(f.invoice_id),
+};
+
+/**
+ * Valores que staging tiene porque ya pasó por migraciones posteriores, vueltos
+ * a como estaban en la 024. Sólo lo que la 024 rechazaría; el resto se copia tal cual.
+ */
+const A_LA_024 = {
+  chart_of_accounts: (f) => ({ ...f, account_type: f.account_type === "cost" ? "expense" : f.account_type }),
+};
+
+async function cargarDatos(db) {
+  const env = readFileSync(resolve(ROOT, ".env.staging-db.local"), "utf8");
+  const CONN = (env.match(/^STAGING_DATABASE_URL=(.*)$/m) || [])[1]?.trim().replace(/^["']|["']$/g, "");
+  if (!CONN || CONN.includes("uqmmkklbhzxqybljiecs") || !CONN.includes("xtyenhakplrkyifbcaow")) {
+    throw new Error("La fuente de datos tiene que ser STAGING (xtyenhakplrkyifbcaow).");
+  }
+  const st = new pg.Client({ connectionString: CONN });
+  await st.connect();
+  await st.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY");
+  for (const r of (await st.query("SELECT id FROM public.invoices WHERE invoice_number LIKE 'FAC-EXT-%'")).rows) {
+    facturasPosteriores.add(r.id);
+  }
+
+  const loc = await cliente("supabase_admin", db);
+  const tablas = (await loc.query(`
+    SELECT c.relname AS tabla
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY 1`)).rows.map((r) => r.tabla);
+
+  // Lo que dejaron las migraciones de la base (catálogos del seed_data, el
+  // tenant) se reemplaza por lo de staging, que es el mismo seed más completo.
+  await loc.query(`TRUNCATE ${tablas.map((t) => `public."${t}"`).join(", ")} CASCADE`);
+  await loc.query("SET session_replication_role = replica");
+  await loc.query("BEGIN");
+
+  const informe = [];
+  for (const t of tablas) {
+    if (VACIAS_EN_PRODUCCION.has(t)) { informe.push({ tabla: t, staging: null, cargadas: 0, nota: "vacía en producción" }); continue; }
+    const colsLoc = (await loc.query(`
+      SELECT a.attname FROM pg_attribute a
+       WHERE a.attrelid = $1::regclass AND a.attnum > 0 AND NOT a.attisdropped AND a.attgenerated = ''`, [`public."${t}"`])).rows.map((r) => r.attname);
+    const colsSt = new Set((await st.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`, [t])).rows.map((r) => r.column_name));
+    if (colsSt.size === 0) { informe.push({ tabla: t, staging: null, cargadas: 0, nota: "no existe en staging" }); continue; }
+    const cols = colsLoc.filter((c) => colsSt.has(c));
+    let filas = (await st.query(`SELECT ${cols.map((c) => `"${c}"`).join(", ")} FROM public."${t}"`)).rows;
+    const total = filas.length;
+    const fuera = CREADAS_DESPUES[t] ? filas.filter(CREADAS_DESPUES[t]).length : 0;
+    if (CREADAS_DESPUES[t]) filas = filas.filter((f) => !CREADAS_DESPUES[t](f));
+    if (A_LA_024[t]) filas = filas.map(A_LA_024[t]);
+
+    const lista = cols.map((c) => `"${c}"`).join(", ");
+    const insertar = (lote) =>
+      loc.query(`INSERT INTO public."${t}" (${lista}) SELECT ${lista} FROM json_populate_recordset(NULL::public."${t}", $1::json)`, [JSON.stringify(lote)]);
+    let cargadas = 0;
+    const rechazos = [];
+    if (filas.length) {
+      try {
+        await loc.query("SAVEPOINT lote");
+        await insertar(filas);
+        cargadas = filas.length;
+      } catch {
+        await loc.query("ROLLBACK TO SAVEPOINT lote");
+        for (const f of filas) {
+          try {
+            await loc.query("SAVEPOINT fila");
+            await insertar([f]);
+            cargadas += 1;
+          } catch (e) {
+            await loc.query("ROLLBACK TO SAVEPOINT fila");
+            rechazos.push(e.message);
+          }
+        }
+      }
+    }
+    const motivos = [...new Set(rechazos)].slice(0, 3);
+    informe.push({ tabla: t, staging: total, cargadas, creadas_despues: fuera || undefined, rechazadas: rechazos.length || undefined, motivos: motivos.length ? motivos : undefined });
+  }
+
+  // auth.users para cada usuario (la FK de users), con el tenant y el rol en app_metadata.
+  const usuarios = (await st.query("SELECT id, email, tenant_id, role FROM public.users")).rows;
+  for (const u of usuarios) {
+    await loc.query(
+      `INSERT INTO auth.users (id, email, aud, role, raw_app_meta_data) VALUES ($1, $2, 'authenticated', 'authenticated', $3::jsonb)
+       ON CONFLICT (id) DO NOTHING`,
+      [u.id, u.email, JSON.stringify({ tenant_id: u.tenant_id, user_role: u.role })]);
+  }
+
+  // Secuencias de columnas serial/identity al máximo cargado.
+  const seqs = (await loc.query(`
+    SELECT c.relname AS tabla, a.attname AS col, pg_get_serial_sequence(format('public.%I', c.relname), a.attname) AS seq
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_attribute a ON a.attrelid = c.oid
+     WHERE n.nspname = 'public' AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
+       AND pg_get_serial_sequence(format('public.%I', c.relname), a.attname) IS NOT NULL`)).rows;
+  for (const s of seqs) {
+    await loc.query(`SELECT setval($1, greatest(1, coalesce((SELECT max("${s.col}") FROM public."${s.tabla}"), 0)), (SELECT count(*) > 0 FROM public."${s.tabla}"))`, [s.seq]);
+  }
+
+  await loc.query("COMMIT");
+  await loc.query("SET session_replication_role = origin");
+  await loc.end();
+  await st.end();
+  return { informe, usuarios: usuarios.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const fase = process.argv[2];
+
+if (fase === "base") {
+  const registro = [];
+  // El rol postgres tiene que existir antes de crear la base con él de dueño.
+  const a = await cliente("supabase_admin", "postgres");
+  await a.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres')
+                 THEN CREATE ROLE postgres LOGIN CREATEROLE CREATEDB REPLICATION BYPASSRLS; END IF; END $$`);
+  await a.end();
+  await recrear("prod_024");
+
+  const shim = await correr("supabase_admin", "prod_024", "scripts/ensayo-ventana/supabase-shim.sql", { bloque: "shim" });
+  imprimir(shim); registro.push(shim);
+  if (shim.error) process.exit(1);
+
+  // get_tenant_id/get_user_role: DEFAULT de las tablas de Finanzas. En producción
+  // existen (vienen del consolidado histórico); acá se toman del prelude de staging,
+  // SIN la segunda mitad (tenant_id/user_role en public: en producción viven en auth).
+  const prelude = PRELUDE_SQL.slice(0, PRELUDE_SQL.indexOf("-- Los de RLS se crean igual"));
+  const c = await cliente("postgres", "prod_024");
+  await c.query(prelude);
+  await c.end();
+
+  for (const ruta of BASE_PRODUCCION) {
+    const r = await correr("postgres", "prod_024", ruta, { commit: COMMIT_PRODUCCION, bloque: "base 024", fixups: true });
+    imprimir(r); registro.push(r);
+    if (r.error) { guardar("base", registro); process.exit(1); }
+  }
+
+  console.log("\n▶ Datos: seed de pruebas de staging (sólo lectura), recortado a lo que producción tiene a la 024…");
+  const datos = await cargarDatos("prod_024");
+  for (const i of datos.informe) {
+    if (i.staging === null) continue;
+    console.log(`   ${i.tabla.padEnd(32)} ${String(i.cargadas).padStart(4)}/${String(i.staging).padEnd(4)}${i.creadas_despues ? ` · ${i.creadas_despues} creadas por una migración posterior` : ""}${i.rechazadas ? ` · ${i.rechazadas} rechazadas: ${i.motivos.join(" | ")}` : ""}`);
+  }
+
+  for (const ruta of HOTFIX_PRODUCCION) {
+    const r = await correr("postgres", "prod_024", ruta, { bloque: "hotfix 084" });
+    imprimir(r); registro.push(r);
+    if (r.error) { guardar("base", registro); process.exit(1); }
+  }
+  guardar("base", { pasos: registro, datos });
+  console.log("\n✅ prod_024 lista (plantilla de la ventana).");
+}
+
+if (fase === "ventana" || fase === "bitacoras") {
+  const seguir = process.argv.includes("--seguir");
+  const grupos = fase === "ventana"
+    ? [["A (app arriba)", BLOQUE_A], ["B (congelado)", BLOQUE_B], ["C (congelado)", BLOQUE_C]]
+    : [["bitácoras", BITACORAS]];
+  if (fase === "ventana") await recrear("ventana", "prod_024");
+  const registro = [];
+  const t0 = performance.now();
+  let fallo = false;
+  for (const [bloque, lista] of grupos) {
+    console.log(`\n── Bloque ${bloque}: ${lista.length} migraciones`);
+    for (const ruta of lista) {
+      const r = await correr("postgres", "ventana", ruta, { bloque });
+      imprimir(r); registro.push(r);
+      if (r.error) { fallo = true; if (!seguir) break; }
+      for (const v of VERIFICACIONES[ruta] ?? []) {
+        if (!existsSync(resolve(ROOT, v))) continue;
+        const rv = await correr("postgres", "ventana", v, { bloque: "  verificación" });
+        imprimir(rv); registro.push(rv);
+      }
+    }
+    if (fallo && !seguir) break;
+  }
+  const total = Math.round(performance.now() - t0);
+  guardar(fase, { total_ms: total, pasos: registro });
+  console.log(`\n${fallo ? "❌ Se detuvo en un error" : "✅ Sin errores"} · ${registro.length} pasos · ${(total / 1000).toFixed(1)} s`);
+  process.exit(fallo ? 1 : 0);
+}
+
+if (fase === "verificar") {
+  // Después de la ventana: el «primer uso» (proveedor, compra, asientos, banco)
+  // y TODAS las verificaciones otra vez, sobre el esquema completo.
+  const registro = [];
+  if (process.argv.includes("--primer-uso")) {
+    const r = await correr("postgres", "ventana", "scripts/ensayo-ventana/datos-primer-uso.sql", { bloque: "primer uso" });
+    imprimir(r); registro.push(r);
+    for (const a of r.avisos) console.log(`     ${a.texto}`);
+    if (r.error) process.exit(1);
+  }
+  const todas = [...new Set(Object.values(VERIFICACIONES).flat())];
+  for (const v of todas) {
+    const r = await correr("postgres", "ventana", v, { bloque: "verificación" });
+    imprimir(r); registro.push(r);
+    const nada = r.avisos.find((a) => /nada que verificar|Hace falta/i.test(a.texto));
+    if (nada) console.log(`     ⚪ ${nada.texto}`);
+  }
+  guardar(process.argv.includes("--primer-uso") ? "verificar-primer-uso" : "verificar", { pasos: registro });
+}
+
+if (fase === "marcar-pruebas") {
+  const CONSULTA = "sql/verificacion/produccion-datos-de-prueba-a-marcar.sql";
+  const PASO = "sql/ventana/marcar-datos-de-prueba.sql";
+  const registro = { pasos: [], consultas: {} };
+  const paso = (r) => { imprimir(r); registro.pasos.push(r); for (const a of r.avisos.filter((x) => !/does not exist, skipping/.test(x.texto))) console.log(`     ${a.texto}`); return r; };
+  const mostrar = (titulo, filas) => {
+    registro.consultas[titulo] = filas.map(({ id, ...f }) => f);
+    console.log(`\n   ${titulo}: ${filas.length} filas`);
+    for (const f of filas) console.log(`     ${[f.plan.padEnd(16), f.tabla.padEnd(9), String(f.referencia).padEnd(15), `marca=${f.marca_hoy ?? "—"}`, `asiento=${f.con_asiento}`, f.monto ?? ""].join(" ")}`);
+  };
+  const quedan = (filas) => filas.filter((f) => ["REVISAR", "NO ENCONTRADO"].includes(f.plan)).length;
+
+  await recrear("pruebas", "prod_024");
+  if (paso(await correr("supabase_admin", "pruebas", "scripts/ensayo-ventana/datos-de-prueba-equivalentes.sql", { bloque: "datos" })).error) process.exit(1);
+
+  const hoy = await consultar("pruebas", CONSULTA);
+  mostrar("antes, esquema de hoy (024)", hoy);
+
+  console.log("\n── Ventana A → B → C (sin verificaciones: las corre la fase `ventana`)");
+  let ms = 0;
+  for (const ruta of [...BLOQUE_A, ...BLOQUE_B, ...BLOQUE_C]) {
+    const r = await correr("postgres", "pruebas", ruta, { bloque: "ventana" });
+    ms += r.ms;
+    if (r.error) { imprimir(r); process.exit(1); }
+  }
+  console.log(`✅ ${BLOQUE_A.length + BLOQUE_B.length + BLOQUE_C.length} migraciones, ${ms} ms`);
+
+  const antes = await consultar("pruebas", CONSULTA);
+  mostrar("antes del paso (después de la 094)", antes);
+
+  // El paso tiene que ABORTAR si un cliente de prueba tiene algo que no está en la lista.
+  console.log("\n── Caso de aborto: un cobro de CLI-066 que nadie decidió");
+  const a = await cliente("supabase_admin", "pruebas");
+  await a.query(`SET session_replication_role = replica`);
+  const { rows: [extra] } = await a.query(
+    `INSERT INTO payments (tenant_id, client_id, payment_date, amount, method, reference, status)
+     SELECT tenant_id, id, current_date, 1.07, 'transferencia', 'ENSAYO-ABORTO', 'registrado' FROM clients WHERE client_number = 'CLI-066'
+     RETURNING id`);
+  const aborto = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso (aborta)" }));
+  const { rows: [m] } = await a.query(`SELECT (SELECT count(*) FROM invoices WHERE de_prueba)::int f, (SELECT count(*) FROM clients WHERE es_de_prueba)::int c`);
+  await a.query(`DELETE FROM payments WHERE id = $1`, [extra.id]);
+  await a.end();
+  registro.aborto = { abortó: Boolean(aborto.error), marcas_despues: m };
+  console.log(`     ${aborto.error ? "✅ abortó" : "❌ NO abortó"} · marcas después: ${m.f} facturas, ${m.c} clientes`);
+
+  console.log("\n── El paso");
+  const r1 = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso" }));
+  const despues = await consultar("pruebas", CONSULTA);
+  mostrar("después del paso", despues);
+  const r2 = paso(await correr("postgres", "pruebas", PASO, { bloque: "paso (otra vez)" }));
+
+  // 07/10/2026: 0TEST-FE-002 se queda real para que FAC-HON-000463 se pueda cobrar
+  // y acreditar después de la ventana. Cada caso en su transacción, con ROLLBACK.
+  console.log("\n── FAC-HON-000463 después del paso (cobrar y acreditar, en ROLLBACK)");
+  const v = await cliente("postgres", "pruebas");
+  const uno = async (sql, p) => (await v.query(sql, p)).rows[0];
+  const f463 = await uno(`SELECT i.id, i.tenant_id, i.client_id, i.grand_total, i.de_prueba, c.es_de_prueba
+                            FROM invoices i JOIN clients c ON c.id = i.client_id WHERE i.invoice_number = 'FAC-HON-000463'`);
+  const casos463 = {};
+  // a) Cobro: nace real, se aplica a la 463 y su asiento entra al libro.
+  await v.query("BEGIN");
+  try {
+    const banco = (await uno(`SELECT code FROM chart_of_accounts WHERE tenant_id = $1 AND active AND account_type = 'asset'
+                               AND name ~* '(banco|caja|efectivo)' ORDER BY code LIMIT 1`, [f463.tenant_id])).code;
+    const p = await uno(`INSERT INTO payments (tenant_id, client_id, payment_date, amount, amount_unapplied, method, reference,
+                           status, payment_account_code)
+                         VALUES ($1, $2, current_date, $3, 0, 'transferencia', 'ENSAYO-COBRO-463', 'registrado', $4)
+                         RETURNING id, de_prueba`, [f463.tenant_id, f463.client_id, f463.grand_total, banco]);
+    await v.query(`INSERT INTO payment_applications (tenant_id, payment_id, invoice_id, amount_applied) VALUES ($1, $2, $3, $4)`,
+      [f463.tenant_id, p.id, f463.id, f463.grand_total]);
+    await v.query(`SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true)`);
+    const e = await uno(`SELECT public.post_journal_entry($1, current_date, 'Cobro de la 463 (ensayo)', 'pago',
+                           jsonb_build_array(
+                             jsonb_build_object('account_code', $2::text, 'debit', $3::numeric, 'credit', 0, 'description', 'Cobro'),
+                             jsonb_build_object('account_code', '100004', 'debit', 0, 'credit', $3::numeric, 'description', 'Cobro', 'client_id', $4::uuid)),
+                           $5::uuid, NULL, NULL, NULL, NULL, NULL, 'ENSAYO-COBRO-463', 'cobro:' || $5::text, NULL) AS id`,
+      [f463.tenant_id, banco, f463.grand_total, f463.client_id, p.id]);
+    const fac = await uno(`SELECT status, amount_paid FROM invoices WHERE id = $1`, [f463.id]);
+    casos463.cobro = { ok: p.de_prueba === false && !!e.id && fac.status === "pagada", cobro_de_prueba: p.de_prueba, factura: fac };
+  } catch (err) {
+    casos463.cobro = { ok: false, error: err.message };
+  }
+  await v.query("ROLLBACK");
+  // b) Nota de crédito: nace real (no hereda marca del cliente ni de la factura) y acredita la 463.
+  await v.query("BEGIN");
+  try {
+    const cols = (await uno(`SELECT string_agg(quote_ident(column_name), ', ' ORDER BY ordinal_position) c FROM information_schema.columns
+                              WHERE table_schema = 'public' AND table_name = 'credit_notes' AND is_generated = 'NEVER'`)).c;
+    const n = await uno(`INSERT INTO credit_notes (tenant_id, credit_note_number, invoice_id, client_id, issue_date, accounting_date,
+                           reason, status, currency, subtotal_total, tax_total, grand_total)
+                         VALUES ($1, 'NC-ENSAYO-463', $2, $3, current_date, current_date, 'Ensayo: acreditar la 463', 'emitida', 'USD',
+                           1.00, 0.07, 1.07)
+                         RETURNING id, de_prueba`, [f463.tenant_id, f463.id, f463.client_id]).catch(async (err) => {
+      throw new Error(`${err.message} (columnas: ${cols})`);
+    });
+    const fac = await uno(`SELECT credited_total, balance_due FROM invoices WHERE id = $1`, [f463.id]);
+    casos463.nota_de_credito = { ok: n.de_prueba === false && Number(fac.credited_total) === Number(f463.grand_total), nc_de_prueba: n.de_prueba, factura: fac };
+  } catch (err) {
+    casos463.nota_de_credito = { ok: false, error: err.message };
+  }
+  await v.query("ROLLBACK");
+  await v.end();
+  const ok463 = f463.de_prueba === false && f463.es_de_prueba === false && casos463.cobro.ok && casos463.nota_de_credito.ok;
+  registro.factura_463 = { ok: ok463, factura_de_prueba: f463.de_prueba, cliente_de_prueba: f463.es_de_prueba, ...casos463 };
+  console.log(`     ${ok463 ? "✅" : "❌"} 463: factura de_prueba=${f463.de_prueba}, cliente es_de_prueba=${f463.es_de_prueba}`);
+  console.log(`        cobro: ${JSON.stringify(casos463.cobro)}`);
+  console.log(`        NC:    ${JSON.stringify(casos463.nota_de_credito)}`);
+
+  const mal = despues.filter((f) =>
+    (f.plan === "marcar de prueba" && f.marca_hoy !== "true") || (f.plan === "se queda real" && f.marca_hoy !== "false"));
+  const ok = !r1.error && !r2.error && aborto.error && m.f === 0 && m.c === 0 && quedan(antes) === 0 && mal.length === 0 && ok463;
+  registro.resultado = { ok, revisar_antes: quedan(antes), marcas_incorrectas: mal.length, factura_463: ok463 };
+  guardar("marcar-pruebas", registro);
+  console.log(`\n${ok ? "✅" : "❌"} marcar-pruebas · ${mal.length} marcas incorrectas · ${quedan(antes)} filas REVISAR/NO ENCONTRADO antes`);
+  process.exit(ok ? 0 : 1);
+}
+
+if (!["base", "ventana", "bitacoras", "verificar", "marcar-pruebas"].includes(fase)) {
+  console.error("uso: node scripts/ensayo-ventana/ensayo.mjs base | ventana [--seguir] | bitacoras [--seguir] | verificar [--primer-uso] | marcar-pruebas");
+  process.exit(1);
+}

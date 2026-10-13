@@ -7,6 +7,7 @@ import {
   type SummaryTask,
 } from "@/lib/email/daily-summary-template";
 import { getPublicAppUrl } from "@/lib/utils/public-url";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -207,7 +208,7 @@ async function fetchRecentActivity(
     .slice(0, 15);
 }
 
-export async function GET(req: NextRequest) {
+export const GET = conManejoDeAuditoria(async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -223,7 +224,8 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const isTest = url.searchParams.get("test") === "true";
 
-    const db = createAdminClient();
+    // actor-ok: el cron no tiene un usuario detrás; sólo lee y manda el resumen.
+    const db = createAdminClient(null);
     const resend = getResend();
 
     const results: Array<{ email: string; status: "sent" | "error"; error?: string }> = [];
@@ -283,4 +285,4 @@ export async function GET(req: NextRequest) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: "Internal error", detail: message }, { status: 500 });
   }
-}
+});

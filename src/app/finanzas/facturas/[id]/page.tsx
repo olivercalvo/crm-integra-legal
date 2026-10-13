@@ -1,4 +1,9 @@
+import { ContabilizadoFueraBadge, ContabilizadoFueraBanda } from "@/components/finanzas/contabilizado-fuera-badge";
+import { VerAsiento } from "@/components/finanzas/ver-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
+import { cargarInicioContable, esContabilizadoFuera } from "@/lib/finanzas/contabilidad/inicio-contable";
 import Link from "next/link";
+import { DePruebaBadge, DePruebaBanda } from "@/components/finanzas/de-prueba-badge";
 import { notFound } from "next/navigation";
 import {
   Pencil,
@@ -8,6 +13,7 @@ import {
   Calendar,
   FileText,
   XCircle,
+  FileMinus,
 } from "lucide-react";
 import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { Button } from "@/components/ui/button";
@@ -38,10 +44,14 @@ import { traducirRechazo } from "@/lib/finanzas/efactura/mensajes-dgi";
 import { InvoiceSuccessToast } from "../_components/invoice-success-toast";
 import { DgiDataCard } from "../_components/dgi-data-card";
 import { EfacturaCard } from "../_components/efactura-card";
+import { NOMBRE_DE_PUNTO } from "@/lib/finanzas/efactura/cufe/leer-cufe";
+import { MotivoPendienteDgi } from "@/components/finanzas/motivo-pendiente-dgi";
+import { MENSAJE_ND_SIN_DGI, PERMITIR_ND_A_LA_DGI } from "@/lib/finanzas/efactura/orchestration/emit-invoice-to-efactura";
+import { notasDeDebitoDeLaFactura, referenciaDeNotaDeDebito } from "@/lib/finanzas/queries/invoices";
 import { PaymentsSection } from "../_components/payments-section";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
+import { listarSaldosAFavor } from "@/lib/finanzas/api/saldo-a-favor";
 import { CreditNotesSection } from "../_components/credit-notes-section";
-import { CreditNoteDialog, type LineaAcreditable } from "../_components/credit-note-dialog";
 import { AcreditadaTotalBadge } from "@/components/finanzas/acreditada-total-badge";
 import { DownloadInvoicePdfButton } from "../_components/download-invoice-pdf-button";
 import { fmtImporte } from "@/lib/utils/importe";
@@ -74,8 +84,23 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // Las rutas de API le responden 403 igual, pero un botón que falla al
   // apretarlo es exactamente el problema que este cambio vino a resolver.
   const puedeAccionar = userRole === "admin" || userRole === "abogada";
+  // Requerimiento 5: el asiento que generó (factura o ND, source_type 'factura').
+  const asiento = await cargarAsientoDelDocumento(db, tenantId, "factura", invoice.id);
+  // 094: una factura de prueba no se emite, no se cobra, no se acredita, no se
+  // anula ni va a la DGI (el servidor responde 409; acá no se ofrece).
+  const esDePrueba = invoice.de_prueba === true;
+  // 096: fecha del documento anterior al inicio contable → contabilizada fuera:
+  // no tiene asiento ni lo va a tener (tampoco al emitirla o anularla). La de
+  // prueba lleva su propia banda. Un BORRADOR todavía no es un documento: se
+  // edita y, con la fecha movida a una posterior al inicio, se emite y postea
+  // (07/10/2026, caso DRAFT-cb03c1386ba0). Emitirlo con la fecha vieja lo
+  // rechaza el servidor con su mensaje.
+  const inicio = await cargarInicioContable(db, tenantId);
+  const contabilizadaFuera =
+    !esDePrueba && !["cancelada_pre_emision", "borrador"].includes(invoice.status) &&
+    esContabilizadoFuera(invoice.issue_date, inicio);
   const editable = puedeAccionar && isEditable(invoice.status);
-  const emittable = puedeAccionar && isEmittable(invoice.status);
+  const emittable = puedeAccionar && isEmittable(invoice.status) && !esDePrueba;
   const deletable = puedeAccionar && isDeletable(invoice.status);
   const isEmitida = invoice.status === "emitida";
   const isAnulada = invoice.status === "anulada";
@@ -90,13 +115,17 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     invoice.status === "pagada";
   // Sprint 2C, D4: solo admin + abogada pueden registrar/eliminar pagos
   // y anular facturas. Asistente y contador → READ-only.
-  const canMutate = puedeAccionar;
+  const canMutate = puedeAccionar && !esDePrueba;
   // REVERSAR un cobro contabilizado es otra bandera, y el contador SÍ la tiene
   // (17/09/2026): corregir el libro es su trabajo por la guía de RM, igual que
   // los asientos manuales y los períodos. Es el ÚNICO botón de mutación que ve
   // en esta pantalla. Se mueve junto con el guard de
   // `/api/finanzas/payments/[id]/reverse` y la tabla de CLAUDE.md.
   const canReverse = puedeAccionar || userRole === "contador";
+  // 074 (Oliver, 01/10/2026): aplicar el saldo a favor de un cliente también lo
+  // hace el contador: no registra dinero nuevo, sólo dice qué factura cancela un
+  // cobro que ya está en el libro. Es una bandera aparte de `canMutate`.
+  const canApplyCredit = (puedeAccionar || userRole === "contador") && !esDePrueba;
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -108,11 +137,14 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   const creditedTotal = Number(invoice.credited_total ?? 0);
   const acreditadaTotal = !isAnulada && grandTotal > 0 && creditedTotal >= grandTotal - 0.005;
   const puedeTenerNc = cancellable || isAnulada;
+  // La fecha de REGISTRO de la factura (su asiento, `068`). Es la que define "el
+  // mes de la factura" para anular, y el mínimo de la anulación y de sus NC.
+  const registroDeLaFactura = String(invoice.accounting_date ?? invoice.issue_date);
 
   // Cargar pagos, NC, lo ya acreditado por línea y el período, en paralelo.
   // El período solo importa si esta persona puede anular (D4: cerrado el mes
   // de la factura, el botón "Anular" se reemplaza por "Nota de crédito").
-  const [payments, creditNotes, acreditadoPorLinea, mesCerrado] = await Promise.all([
+  const [payments, creditNotes, acreditadoPorLinea, mesCerrado, saldosAFavor] = await Promise.all([
     showPaymentsSection
       ? getPaymentsForInvoice(db, tenantId, invoice.id)
       : Promise.resolve([]),
@@ -121,8 +153,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       ? acreditadoPorLineaDeFactura(db, tenantId, invoice.id)
       : Promise.resolve(new Map<string, number>()),
     cancellable && canMutate
-      ? periodoDeLaFacturaCerrado(db, tenantId, String(invoice.issue_date))
+      ? periodoDeLaFacturaCerrado(db, tenantId, registroDeLaFactura)
       : Promise.resolve(false),
+    // 074: los cobros del cliente con saldo a favor, para aplicarlos acá.
+    showPaymentsSection && canApplyCredit && invoice.client_id && Number(invoice.balance_due) > 0.005
+      ? listarSaldosAFavor(db, tenantId, String(invoice.client_id))
+      : Promise.resolve([]),
   ]);
 
   // 🔴 QUÉ SE PUEDE HACER CON ESTA FACTURA — lo decide la matriz, no el JSX.
@@ -130,6 +166,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   //    sueltas, y el servidor las volvía a evaluar por su cuenta. Ahora la
   //    pantalla y la ruta llaman a la MISMA función (SOP-038): si discrepan, es
   //    un bug de una sola implementación, no de dos que se desincronizaron.
+  // 092: registrada con «Registrar factura emitida fuera». La DGI la autorizó
+  //      desde otro punto: el CRM no la envía ni la anula ante la DGI.
+  const emitidaFuera = invoice.dgi_cufe_origen === "externo";
   const accionFiscal = decidirAccionFiscal(
     {
       status: invoice.status,
@@ -140,6 +179,11 @@ export default async function FacturaDetallePage({ params }: PageProps) {
       creditedTotal,
       amountPaid: Number(invoice.amount_paid ?? 0),
       mesCerrado,
+      emitidaFueraDelCrm: emitidaFuera,
+      // 096: anterior al inicio contable → no se anula; se corrige con una NC.
+      inicioContable: esDePrueba ? null : inicio,
+      esNotaDeDebito: invoice.invoice_kind === "NOTA_DEBITO",
+      numero: invoice.invoice_number ?? null,
     },
     new Date()
   );
@@ -167,17 +211,12 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     ? traducirRechazo(envioFallido.codigos, invoice.client?.name ?? null)
     : null;
 
-  // Lo que el diálogo de NC puede ofrecer: facturado menos ya acreditado, por
-  // línea. Sale de la MISMA consulta que usa el servidor para validar.
-  const lineasAcreditables: LineaAcreditable[] = invoice.lines.map((ln) => ({
-    invoice_line_id: ln.id,
-    line_order: ln.line_order,
-    description: ln.description,
-    quantity: Number(ln.quantity),
-    unit_price: Number(ln.unit_price),
-    tax_rate: Number(ln.tax_rate ?? 0),
-    disponible: Math.round((Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0)) * 100) / 100,
-  }));
+  // Lo que queda por acreditar de cada línea: facturado menos ya acreditado.
+  // Sale de la MISMA consulta que usa el servidor para validar. Si no queda
+  // nada, el botón de NC no se ofrece.
+  const quedaPorAcreditar = invoice.lines.some(
+    (ln) => Number(ln.quantity) - (acreditadoPorLinea.get(ln.id) ?? 0) > 0.0001
+  );
   // "Anular" aparece cuando la matriz dice que se puede anular — con la DGI o
   // sólo en el libro, según la factura tenga CUFE o no. Los motivos por los que
   // no se puede (mes cerrado, NC previa, plazo vencido) los junta la matriz y
@@ -191,7 +230,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     canMutate &&
     !anulacionAMedias &&
     !acreditadaTotal &&
-    lineasAcreditables.some((l) => l.disponible > 0);
+    quedaPorAcreditar;
   // Card "Facturación Electrónica" (PAC) — visible en facturas emitidas y
   // en anuladas que hayan llegado a interactuar con DGI (para conservar
   // historial post-anulación).
@@ -199,7 +238,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
     isEmitida || (isAnulada && invoice.fe_estado !== "no_emitida");
   // Permiso para disparar envío al PAC (D7 del sprint 2E.2 / consistente
   // con route handler que devuelve 403 a roles no permitidos).
-  const canEmitToPac = puedeAccionar;
+  // 077: la nota de débito todavía no va a la DGI (PERMITIR_ND_A_LA_DGI).
+  const ndSinDgi = invoice.invoice_kind === "NOTA_DEBITO" && !PERMITIR_ND_A_LA_DGI;
+  const canEmitToPac = puedeAccionar && !ndSinDgi;
+  const ajustaA =
+    invoice.invoice_kind === "NOTA_DEBITO" ? await referenciaDeNotaDeDebito(db, tenantId, invoice.id) : null;
+  const notasDeDebito =
+    invoice.invoice_kind !== "NOTA_DEBITO" ? await notasDeDebitoDeLaFactura(db, tenantId, invoice.id) : [];
   // Card DGI manual — legacy MVP pre-integración PAC. Queda visible SOLO
   // si la abogada efectivamente cargó datos manuales (hay al menos un
   // campo DGI manual presente) y la factura nunca entró al flujo
@@ -255,6 +300,8 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               </h1>
               <InvoiceStatusBadge status={invoice.status} />
               {acreditadaTotal && <AcreditadaTotalBadge />}
+              {invoice.de_prueba && <DePruebaBadge />}
+              {contabilizadaFuera && <ContabilizadoFueraBadge inicio={inicio} />}
             </div>
             <p className="mt-1 text-sm text-gray-500">
               Creada el {formatDateTime(invoice.created_at)}
@@ -263,11 +310,17 @@ export default async function FacturaDetallePage({ params }: PageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Descargar PDF disponible en todos los estados — documento interno. */}
-          <DownloadInvoicePdfButton
-            invoiceId={invoice.id}
-            invoiceLabel={displayNumber}
-          />
+          {/* Descargar PDF disponible en todos los estados — documento interno.
+              Salvo la emitida fuera (092): su comprobante es el del sistema que
+              la emitió, y un PDF del CRM con otro número se podría entregar
+              como si fuera el fiscal. */}
+          <VerAsiento asiento={asiento} puedeAbrir={userRole === "admin" || userRole === "contador"} />
+          {!emitidaFuera && (
+            <DownloadInvoicePdfButton
+              invoiceId={invoice.id}
+              invoiceLabel={displayNumber}
+            />
+          )}
           {editable && (
             <Link href={`/finanzas/facturas/${invoice.id}/editar`}>
               <Button variant="outline" className="min-h-[48px]">
@@ -288,16 +341,26 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               invoiceKind={invoice.invoice_kind}
               nextNumberPreview={numberPreview}
               grandTotal={Number(invoice.grand_total)}
+              sinDgi={ndSinDgi}
+              elegirEnvio={invoice.invoice_kind === "NOTA_DEBITO" && !ndSinDgi}
             />
           )}
+          {/* E8: la NC es un módulo propio. El botón se queda y abre la MISMA
+              pantalla que el listado, con la factura precargada: un solo
+              formulario. Mismo criterio de visibilidad que el diálogo de antes. */}
           {showCreditNote && (
-            <CreditNoteDialog
-              invoiceId={invoice.id}
-              invoiceNumber={invoice.invoice_number}
-              balanceDue={Number(invoice.balance_due)}
-              lineas={lineasAcreditables}
-              mesCerrado={mesCerrado}
-            />
+            <Link
+              href={`/finanzas/notas-credito/nueva?factura=${invoice.id}`}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-integra-navy/30 bg-white px-4 text-sm font-semibold text-integra-navy hover:bg-integra-navy hover:text-white"
+              title={
+                mesCerrado
+                  ? "El mes de esta factura está cerrado: no se anula, se emite una nota de crédito"
+                  : "Emitir una nota de crédito sobre esta factura"
+              }
+            >
+              <FileMinus size={16} />
+              Nota de crédito
+            </Link>
           )}
           {showCancel && (
             <CancelInvoiceDialog
@@ -313,6 +376,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   ? accionFiscal.ventana.horasRestantes
                   : null
               }
+              fechaMinima={registroDeLaFactura}
             />
           )}
           {/* 🔴 D4: la factura está anulada ante la DGI y falta el libro. */}
@@ -327,6 +391,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               amountPaid={Number(invoice.amount_paid)}
               feEstado={invoice.fe_estado}
               dgiCufe={invoice.dgi_cufe}
+              fechaMinima={registroDeLaFactura}
             />
           )}
         </div>
@@ -350,6 +415,29 @@ export default async function FacturaDetallePage({ params }: PageProps) {
             </span>
           )}
         </div>
+      )}
+
+      {esDePrueba && <DePruebaBanda motivo={invoice.de_prueba_motivo} />}
+      {contabilizadaFuera && <ContabilizadoFueraBanda inicio={inicio} />}
+
+      {emitidaFuera && (
+        <div role="note" className="rounded-md border-l-4 border-integra-gold bg-integra-gold/10 p-3 text-sm text-integra-navy">
+          <p className="font-semibold">Factura emitida fuera del CRM</p>
+          <p className="mt-1">
+            La DGI la autorizó desde el punto {invoice.punto_facturacion}
+            {invoice.punto_facturacion && NOMBRE_DE_PUNTO[invoice.punto_facturacion]
+              ? ` (${NOMBRE_DE_PUNTO[invoice.punto_facturacion]})`
+              : ""}
+            , documento n.º {invoice.numero_documento}. El CRM la registra en sus libros con el número{" "}
+            {invoice.invoice_number}: no la envía a la DGI ni la anula ante la DGI. Su comprobante fiscal es
+            el del sistema que la emitió.
+          </p>
+        </div>
+      )}
+
+      {/* 03/10/2026: por qué no se emitió o no llegó a la DGI, guardado (085). */}
+      {!esDePrueba && (
+        <MotivoPendienteDgi motivo={invoice.fe_motivo_pendiente} en={invoice.fe_motivo_pendiente_en} />
       )}
 
       {/* 🔴 SIN CUFE NO HAY NOTA DE CRÉDITO ELECTRÓNICA (Bloque 9C).
@@ -391,6 +479,40 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   {INVOICE_KIND_LABEL[invoice.invoice_kind]}
                 </dd>
               </div>
+              {invoice.invoice_kind === "NOTA_DEBITO" && (
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-gray-500">Ajusta la factura</dt>
+                  <dd className="mt-1 font-medium text-gray-900">
+                    {ajustaA ? (
+                      <Link href={`/finanzas/facturas/${ajustaA.id}`} className="font-mono hover:underline">
+                        {ajustaA.invoice_number}
+                      </Link>
+                    ) : (
+                      "Sin factura asociada"
+                    )}
+                  </dd>
+                </div>
+              )}
+              {notasDeDebito.length > 0 && (
+                <div>
+                  <dt className="text-xs uppercase tracking-wider text-gray-500">
+                    {notasDeDebito.length === 1 ? "Nota de débito que la ajusta" : "Notas de débito que la ajustan"}
+                  </dt>
+                  <dd className="mt-1 space-y-0.5 font-medium text-gray-900">
+                    {notasDeDebito.map((nd) => (
+                      <div key={nd.id}>
+                        <Link href={`/finanzas/facturas/${nd.id}`} className="font-mono hover:underline">
+                          {nd.invoice_number ?? "ND sin número"}
+                        </Link>{" "}
+                        <span className="text-sm font-normal text-gray-500">
+                          B/. {fmtImporte(nd.grand_total)}
+                          {nd.status === "anulada" ? " (anulada)" : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500">Moneda</dt>
                 <dd className="mt-1 font-medium text-gray-900">{invoice.currency}</dd>
@@ -440,10 +562,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               )}
               <div>
                 <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
-                  <Calendar size={12} /> Emisión
+                  <Calendar size={12} /> Fecha del documento
                 </dt>
                 <dd className="mt-1 font-medium text-gray-900">
                   {formatDate(invoice.issue_date)}
+                </dd>
+              </div>
+              <div>
+                {/* La de REGISTRO (068): define el mes del asiento y del resumen de ITBMS. */}
+                <dt className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1">
+                  <Calendar size={12} /> Fecha de registro
+                </dt>
+                <dd className="mt-1 font-medium text-gray-900">
+                  {formatDate(registroDeLaFactura)}
                 </dd>
               </div>
               <div>
@@ -496,13 +627,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                           {Number(ln.quantity).toFixed(2)}
                         </td>
                         <td className="py-2 pr-3 text-right font-mono">
-                          ${fmtImporte(Number(ln.unit_price))}
+                          B/. {fmtImporte(Number(ln.unit_price))}
                         </td>
                         <td className="py-2 pr-3 text-gray-600">
                           {ln.tax_code} ({(Number(ln.tax_rate) * 100).toFixed(0)}%)
                         </td>
                         <td className="py-2 text-right font-mono font-medium">
-                          ${fmtImporte(Number(ln.line_total))}
+                          B/. {fmtImporte(Number(ln.line_total))}
                         </td>
                       </tr>
                     ))}
@@ -531,6 +662,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               balanceDue={Number(invoice.balance_due)}
               canMutate={canMutate && !anulacionAMedias}
               canReverse={canReverse}
+              saldosAFavor={saldosAFavor}
+              canApplyCredit={canApplyCredit && !anulacionAMedias}
+              inicio={inicio}
             />
           )}
 
@@ -538,7 +672,13 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               Muestra el estado fiscal real (no_emitida / pending / authorized /
               error / canceled) y el CTA "Enviar a la DGI" o "Reintentar" según
               corresponda. */}
-          {showEfacturaCard && (
+          {ndSinDgi && isEmitida && (
+            <p role="note" className="rounded-md border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+              {MENSAJE_ND_SIN_DGI}
+            </p>
+          )}
+          {/* La ND sin DGI no muestra la tarjeta: hablaría de «enviarla» con un botón que no existe. */}
+          {showEfacturaCard && !ndSinDgi && (
             <EfacturaCard
               invoiceId={invoice.id}
               invoiceNumber={invoice.invoice_number}
@@ -552,7 +692,9 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               qrContent={invoice.qr_content}
               puntoFacturacion={invoice.punto_facturacion}
               numeroDocumento={invoice.numero_documento}
-              canEmitToPac={canEmitToPac}
+              canEmitToPac={canEmitToPac && !emitidaFuera && !esDePrueba}
+              emitidaFuera={emitidaFuera}
+              cufeOrigen={invoice.dgi_cufe_origen ?? null}
               rechazo={rechazoDgi}
             />
           )}
@@ -638,19 +780,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               <div className="flex justify-between">
                 <dt className="text-gray-600">Subtotal</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${fmtImporte(Number(invoice.subtotal_total))}
+                  B/. {fmtImporte(Number(invoice.subtotal_total))}
                 </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-gray-600">Impuestos</dt>
                 <dd className="font-mono font-medium text-gray-900">
-                  ${fmtImporte(Number(invoice.tax_total))}
+                  B/. {fmtImporte(Number(invoice.tax_total))}
                 </dd>
               </div>
               <div className="border-t border-integra-gold/30 pt-2 flex justify-between">
                 <dt className="font-semibold text-integra-navy">Total</dt>
                 <dd className="font-mono text-lg font-bold text-integra-navy">
-                  ${fmtImporte(Number(invoice.grand_total))}
+                  B/. {fmtImporte(Number(invoice.grand_total))}
                 </dd>
               </div>
               {(Number(invoice.amount_paid) > 0 || (creditedTotal > 0 && !isAnulada)) && (
@@ -658,19 +800,19 @@ export default async function FacturaDetallePage({ params }: PageProps) {
                   {Number(invoice.amount_paid) > 0 && (
                     <div className="flex justify-between text-xs text-gray-600 pt-2">
                       <dt>Pagado</dt>
-                      <dd className="font-mono">${fmtImporte(Number(invoice.amount_paid))}</dd>
+                      <dd className="font-mono">B/. {fmtImporte(Number(invoice.amount_paid))}</dd>
                     </div>
                   )}
                   {creditedTotal > 0 && !isAnulada && (
                     <div className="flex justify-between text-xs text-gray-600 pt-2">
                       <dt>Acreditado (NC)</dt>
-                      <dd className="font-mono">-${fmtImporte(creditedTotal)}</dd>
+                      <dd className="font-mono">−B/. {fmtImporte(creditedTotal)}</dd>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold">
                     <dt className={acreditadaTotal ? "text-gray-600" : "text-amber-700"}>Saldo</dt>
                     <dd className={`font-mono ${acreditadaTotal ? "text-gray-600" : "text-amber-700"}`}>
-                      ${fmtImporte(Number(invoice.balance_due))}
+                      B/. {fmtImporte(Number(invoice.balance_due))}
                     </dd>
                   </div>
                 </>
@@ -680,13 +822,17 @@ export default async function FacturaDetallePage({ params }: PageProps) {
 
           {!editable && !isAnulada && (
             <div className="rounded-lg border bg-white p-4 text-xs text-gray-500">
-              <p className="font-semibold text-gray-700 mb-1">Factura inmutable</p>
+              <p className="font-semibold text-gray-700 mb-1">
+                {invoice.invoice_kind === "NOTA_DEBITO" ? "Nota de débito inmutable" : "Factura inmutable"}
+              </p>
               <p>
                 En estado{" "}
                 <span className="font-mono">{invoice.status}</span> no se permite
-                editar líneas ni cabecera. Para corregirla: anularla dentro del
-                mes (genera la nota de crédito total) o emitir una nota de
-                crédito por las líneas que correspondan.
+                editar líneas ni cabecera.{" "}
+                {contabilizadaFuera
+                  ? // 096: no se anula; sólo una NC con fecha igual o posterior al inicio.
+                    "Para corregirla: emitir una nota de crédito por las líneas que correspondan, con fecha igual o posterior al inicio contable."
+                  : "Para corregirla: anularla dentro del mes (genera la nota de crédito total) o emitir una nota de crédito por las líneas que correspondan."}
               </p>
             </div>
           )}

@@ -23,6 +23,7 @@ import {
   validateAcceptInput,
 } from "@/lib/finanzas/api/quote-portal";
 import { runAcceptanceCascade } from "@/lib/finanzas/api/quote-portal-cascade";
+import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
 
 interface RouteParams {
   params: { token: string };
@@ -44,7 +45,7 @@ function extractIp(req: NextRequest): string | null {
   return (req as unknown as { ip?: string | null }).ip ?? null;
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const token = params.token?.trim() ?? "";
   if (!UUID_RE.test(token)) {
     return NextResponse.json(
@@ -73,7 +74,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const db = createAdminClient();
+  // actor-ok: lo hace el cliente desde el link público, sin sesión. La bitácora lo
+  // registra como «sistema» y el detalle de la aceptación (IP, nombre) queda en su tabla.
+  const db = createAdminClient(null);
 
   const ctx = {
     ip_address: extractIp(request),
@@ -129,4 +132,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { status: 500 }
     );
   }
-}
+});

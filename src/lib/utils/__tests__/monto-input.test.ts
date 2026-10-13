@@ -5,6 +5,7 @@ import {
   formatearMonto,
   normalizarMonto,
   sanearMonto,
+  textoEnFoco,
 } from "@/lib/utils/monto-input";
 
 /**
@@ -102,5 +103,40 @@ describe("🔴 el valor que viaja siempre lo entiende Number()", () => {
     assert.equal(formatearMonto(canonico), "1,234.56");
     // Y lo que se ve formateado, al reeditarlo, vuelve al mismo canónico.
     assert.equal(normalizarMonto(sanearMonto(formatearMonto(canonico))), canonico);
+  });
+});
+
+describe("textoEnFoco — el punto decimal no se borra (hotfix 13/10/2026)", () => {
+  // Simula un llamador que guarda NÚMERO: lo que vuelve es String(Number(tecleado)).
+  const vuelveComoNumero = (tecleado: string) => String(Number(tecleado));
+
+  test("25. y 25.0 se siguen viendo mientras se escribe 25.50", () => {
+    for (const t of ["2", "25", "25.", "25.5", "25.50"]) {
+      assert.equal(textoEnFoco(t, vuelveComoNumero(t)), t);
+    }
+    assert.equal(textoEnFoco("25.0", vuelveComoNumero("25.0")), "25.0");
+  });
+
+  test("0.05, 100.10 y .5 tecla por tecla", () => {
+    for (const t of ["0", "0.", "0.0", "0.05", "1", "10", "100", "100.", "100.1", "100.10", ".", ".5"]) {
+      assert.equal(textoEnFoco(t, vuelveComoNumero(t)), t);
+    }
+  });
+
+  test("borrar el campo deja el campo vacío, no un 0", () => {
+    assert.equal(textoEnFoco("", vuelveComoNumero("")), "");
+  });
+
+  test("si el valor cambia desde afuera, gana el valor nuevo", () => {
+    // Elegir un servicio precarga el precio.
+    assert.equal(textoEnFoco("25.", "150"), "150");
+  });
+
+  test("sin nada tecleado se muestra el canónico", () => {
+    assert.equal(textoEnFoco(null, "1234.5"), "1234.5");
+  });
+
+  test("con un llamador que guarda texto no cambia nada", () => {
+    assert.equal(textoEnFoco("25.", "25."), "25.");
   });
 });

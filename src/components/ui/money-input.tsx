@@ -9,6 +9,7 @@ import {
   formatearMonto,
   normalizarMonto,
   sanearMonto,
+  textoEnFoco,
 } from "@/lib/utils/monto-input";
 
 /**
@@ -85,6 +86,10 @@ export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(
     ref
   ) {
     const [enFoco, setEnFoco] = useState(false);
+    // Lo que la persona tecleó, mientras el campo tiene el foco. Hace falta
+    // porque hay llamadores que guardan número (`unit_price`) y `"25."` les
+    // vuelve como `25`: sin esto el punto decimal se borra. Ver `textoEnFoco`.
+    const [tecleado, setTecleado] = useState<string | null>(null);
     const canonico = value === null || value === undefined ? "" : String(value);
 
     const emitir = useCallback(
@@ -110,11 +115,16 @@ export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(
         // `className` va al final para que el llamador pueda seguir ajustando
         // alto y borde de error como hasta ahora.
         className={cn("text-right tabular-nums", className)}
-        value={enFoco ? canonico : formatearMonto(canonico)}
-        onChange={(e) => emitir(e.currentTarget, sanearMonto(e.currentTarget.value, allowNegative))}
+        value={enFoco ? textoEnFoco(tecleado, canonico) : formatearMonto(canonico)}
+        onChange={(e) => {
+          const saneado = sanearMonto(e.currentTarget.value, allowNegative);
+          setTecleado(saneado);
+          emitir(e.currentTarget, saneado);
+        }}
         onFocus={(e: FocusEvent<HTMLInputElement>) => {
           const el = e.currentTarget;
           setEnFoco(true);
+          setTecleado(canonico);
 
           // ⚠️ SINCRÓNICO, Y NO ES UN DETALLE DE ESTILO.
           //
@@ -139,6 +149,7 @@ export const MoneyInput = forwardRef<HTMLInputElement, MoneyInputProps>(
         }}
         onBlur={(e: FocusEvent<HTMLInputElement>) => {
           setEnFoco(false);
+          setTecleado(null);
           const cerrado = normalizarMonto(canonico);
           if (cerrado !== canonico) emitir(e.currentTarget, cerrado);
           onBlur?.(e);

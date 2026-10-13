@@ -1,5 +1,17 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Hotfix: el punto decimal del precio en la factura] - 2026-10-13
+
+Rama `hotfix/punto-decimal-precio` desde `main` (`d33cd4b`). Sin migraciones.
+- **Síntoma (producción):** en «Precio unit.» de la factura no se podía escribir 25.50: al teclear «25.» el punto
+  desaparecía y quedaba 2550. Mismo efecto en nota de crédito, factura emitida fuera y cotización.
+- **Causa:** esas líneas guardan `unit_price` como número y convierten con `Number()` en cada tecla; `"25."` volvía
+  como `25` y `MoneyInput` pintaba el valor que le devolvían.
+- **Arreglo:** `MoneyInput` guarda lo tecleado mientras tiene el foco y lo muestra mientras valga lo mismo que
+  `value` (`textoEnFoco`, en `lib/utils/monto-input.ts`); si `value` cambia desde afuera, gana el nuevo. Al perder el
+  foco, igual que antes. Ningún llamador cambió. Tests en `monto-input.test.ts`.
+- Cantidad (`NumberInput`, `type="number"`) ya dejaba escribir 1.5: sin cambios.
+
 ## [Cierre del día: guía simplificada y revisión de Josuarth] - 2026-10-08
 
 - Guía de carga enero a junio reescrita por Oliver, más simple, con la sección «Las fechas» que separa pantallas

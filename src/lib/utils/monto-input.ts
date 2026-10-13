@@ -108,3 +108,26 @@ export function formatearMonto(canonico: string): string {
     maximumFractionDigits: DECIMALES,
   });
 }
+
+/**
+ * Qué se pinta mientras el campo TIENE el foco: lo que la persona tecleó, si
+ * todavía vale lo mismo que `value`; si no, el `value` nuevo.
+ *
+ * 🔴 Existe por el hotfix del 13/10/2026: en la factura no se podía escribir
+ *    `25.50`. Las líneas de factura y de cotización guardan `unit_price` como
+ *    NÚMERO y convierten con `Number()` en cada tecla, así que `"25."` volvía
+ *    como `25` y el punto desaparecía (y `"25.0"` también). Comparar por valor
+ *    numérico en vez de por texto lo arregla para cualquier llamador que
+ *    convierta, sin tocarlo.
+ *
+ * Si `value` cambió desde afuera (elegir un servicio precarga el precio), los
+ * números ya no coinciden y gana el `value`. Dos `NaN` cuentan como iguales:
+ * `"."` a mitad de tipeo vuelve como `NaN` y tiene que seguir viéndose `"."`.
+ */
+export function textoEnFoco(tecleado: string | null, canonico: string): string {
+  if (tecleado === null) return canonico;
+  const a = Number(tecleado);
+  const b = Number(canonico);
+  const mismoValor = a === b || (Number.isNaN(a) && Number.isNaN(b));
+  return mismoValor ? tecleado : canonico;
+}

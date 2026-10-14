@@ -57,3 +57,7 @@ supabase/.temp/
 # a partir de archivos que YA estan versionados. Commitearlos duplicaria
 # ~8.000 lineas de SQL y ensuciaria el diff de cada migracion futura.
 sql/staging/
+
+# Salidas de las sesiones de Claude (bitácoras, pendientes y archivos de trabajo).
+# Tiene un Excel con datos de producción: nunca se versiona.
+Claude outputs/

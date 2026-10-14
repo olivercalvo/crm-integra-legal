@@ -26,7 +26,7 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
   const groups = getSidebarGroups(activeTab, userRole);
   const activeHref = getActiveItemHref(items, pathname);
   // Los MISMOS grupos abiertos que el sidebar (14/10/2026).
-  const { abiertos, alternar } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
+  const { abiertos, alternar, activo } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
 
   return (
     <>
@@ -108,8 +108,10 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
                     type="button"
                     onClick={() => alternar(group)}
                     aria-expanded={abierto}
+                    aria-current={group === activo ? "true" : undefined}
                     className={cn(
-                      "flex w-full min-h-[48px] items-center gap-2 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-wider text-integra-gold/80 hover:text-integra-gold",
+                      "flex w-full min-h-[48px] items-center gap-2 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-wider hover:text-integra-gold",
+                      group === activo ? "bg-white/10 text-integra-gold" : "text-integra-gold/70",
                       gi > 0 && "mt-1"
                     )}
                   >

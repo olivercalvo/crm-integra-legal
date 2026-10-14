@@ -64,9 +64,10 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
   const items = getSidebarItems(activeTab, userRole);
   const groups = getSidebarGroups(activeTab, userRole);
   const activeHref = getActiveItemHref(items, pathname);
-  // 14/10/2026 (Josuarth): cada grupo se abre y se cierra; por defecto sólo el
-  // de la página actual, y se recuerda lo que la persona dejó abierto.
-  const { abiertos, alternar } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
+  // 14/10/2026 (Josuarth, ajuste de Oliver): cada grupo se abre y se cierra;
+  // todos arrancan cerrados, se recuerda lo que la persona abrió, y el título
+  // del grupo de la página actual va resaltado.
+  const { abiertos, alternar, activo } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
 
   // No mostrar sidebar si no hay items para este tab/rol (ej: estás en `/`
   // sin tab activo). El layout sigue funcionando sin él.
@@ -104,8 +105,10 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
                   type="button"
                   onClick={() => alternar(group)}
                   aria-expanded={abierto}
+                  aria-current={group === activo ? "true" : undefined}
                   className={cn(
-                    "flex w-full min-h-[36px] items-center gap-1.5 rounded-md px-3 pb-1 text-left text-[11px] font-semibold uppercase tracking-wider text-integra-gold/80 hover:text-integra-gold",
+                    "flex w-full min-h-[36px] items-center gap-1.5 rounded-md px-3 pb-1 text-left text-[11px] font-semibold uppercase tracking-wider hover:text-integra-gold",
+                    group === activo ? "bg-white/10 text-integra-gold" : "text-integra-gold/70",
                     gi > 0 ? "pt-3" : "pt-1"
                   )}
                 >

@@ -3,11 +3,12 @@
  *
  * Lógica PURA, sin React ni localStorage: la usan el sidebar y el menú del
  * celular (por `useGruposAbiertos`) y los tests.
- *   · Por defecto, todos cerrados menos el grupo de la página actual.
- *   · Lo que la persona dejó abierto se recuerda (localStorage, por módulo y
- *     rol); si no hay nada guardado o no se puede leer, el comportamiento por
- *     defecto.
- *   · El grupo de la página actual se abre siempre, aunque lo hubiera cerrado.
+ *   · Todos arrancan CERRADOS, también el de la página actual (Oliver,
+ *     14/10/2026, después del smoke test).
+ *   · Sólo quedan abiertos los que la persona abrió a mano (localStorage, por
+ *     módulo y rol); si no hay nada guardado o no se puede leer, todos cerrados.
+ *   · Para no perder la orientación, el TÍTULO del grupo de la página actual
+ *     queda resaltado aunque esté cerrado (`grupoActivo`).
  */
 
 import type { NavItem } from "@/lib/nav-config";
@@ -35,11 +36,12 @@ export function leerGuardados(crudo: string | null): string[] | null {
   }
 }
 
-/** Los grupos abiertos: lo guardado (sólo grupos que existen) más el de la página actual. */
-export function gruposAbiertos(guardados: string[] | null, activo: string | null, existentes: string[]): Set<string> {
-  const abiertos = new Set((guardados ?? []).filter((g) => existentes.includes(g)));
-  if (activo) abiertos.add(activo);
-  return abiertos;
+/**
+ * Los grupos abiertos: SÓLO lo guardado (y sólo grupos que este rol tiene). El
+ * de la página actual no se abre solo: se resalta su título (`grupoActivo`).
+ */
+export function gruposAbiertos(guardados: string[] | null, existentes: string[]): Set<string> {
+  return new Set((guardados ?? []).filter((g) => existentes.includes(g)));
 }
 
 /** Abrir o cerrar uno. Devuelve un conjunto nuevo. */

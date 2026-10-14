@@ -1,8 +1,8 @@
 /**
- * 🔒 MENÚ COLAPSABLE (Josuarth, 14/10/2026): por defecto sólo el grupo de la
- * página actual; lo guardado se respeta; el grupo actual se abre siempre; un
- * almacenamiento roto da el comportamiento por defecto; el sidebar y el menú del
- * celular usan el MISMO hook.
+ * 🔒 MENÚ COLAPSABLE (Josuarth, 14/10/2026; ajuste de Oliver el mismo día):
+ * todos arrancan cerrados, también el de la página actual; sólo queda abierto
+ * lo guardado; el título del grupo actual se resalta; un almacenamiento roto da
+ * todos cerrados; el sidebar y el menú del celular usan el MISMO hook.
  */
 
 import test from "node:test";
@@ -15,19 +15,18 @@ import { alternarGrupo, claveDeGrupos, grupoActivo, gruposAbiertos, leerGuardado
 
 const leer = (p: string) => readFileSync(path.join(process.cwd(), p), "utf8");
 
-test("por defecto, sólo el grupo de la página actual", () => {
+test("sin nada guardado, todos cerrados: también el de la página actual, que sólo se resalta", () => {
   const grupos = getSidebarGroups("finanzas", "contador");
   const activo = grupoActivo(grupos, getActiveItemHref(getSidebarItems("finanzas", "contador"), "/finanzas/reportes/mayor"));
-  assert.equal(activo, "Reportes");
-  assert.deepEqual(Array.from(gruposAbiertos(null, activo, grupos.map((g) => g.group!))), ["Reportes"]);
+  assert.equal(activo, "Reportes", "el título que se resalta");
+  assert.deepEqual(Array.from(gruposAbiertos(null, grupos.map((g) => g.group!))), []);
 });
 
-test("lo guardado se respeta, y el grupo actual se abre aunque lo hubiera cerrado", () => {
+test("sólo queda abierto lo guardado; el grupo actual no se abre solo", () => {
   const existentes = ["Ventas", "Compras", "Asientos", "Reportes", "Configuración"];
-  const a = gruposAbiertos(["Compras"], "Ventas", existentes);
-  assert.deepEqual(Array.from(a).sort(), ["Compras", "Ventas"]);
+  assert.deepEqual(Array.from(gruposAbiertos(["Compras"], existentes)), ["Compras"]);
   // Un grupo guardado que el rol ya no tiene no aparece.
-  assert.deepEqual(Array.from(gruposAbiertos(["Asientos"], null, ["Ventas", "Reportes"])), []);
+  assert.deepEqual(Array.from(gruposAbiertos(["Asientos"], ["Ventas", "Reportes"])), []);
 });
 
 test("un valor guardado roto es el comportamiento por defecto", () => {
@@ -53,6 +52,7 @@ test("🔒 el sidebar y el menú del celular usan el mismo hook, y localStorage 
     const s = leer(c);
     assert.match(s, /useGruposAbiertos\(/, c);
     assert.match(s, /aria-expanded=\{abierto\}/, c);
+    assert.match(s, /group === activo \? "bg-white\/10 text-integra-gold"/, c);
   }
   const hook = leer("src/components/layout/use-grupos-abiertos.ts");
   assert.equal((hook.match(/localStorage\./g) ?? []).length, (hook.match(/try \{/g) ?? []).length);

@@ -13,8 +13,9 @@ Rama `hotfix/contador-cobros-proveedores` desde `main` (`0554b42`). Sin migracio
   pagar de hoy (`cargarSaldosDeProveedores`: `loadAntiguedad` + `buildAntiguedad`), así entran las partidas de
   200001 que llegan por importación o apertura y cada saldo es el de su fila en el reporte. La ficha suma «Saldo por
   pagar» con cada documento o partida y su enlace; la lista de compras del módulo queda como historial.
-- **Menú de Finanzas colapsable (Josuarth):** cada grupo se abre y se cierra con su título (flecha); por defecto
-  sólo el de la página actual; se recuerda en localStorage por módulo y rol (`nav-grupos-abiertos:<tab>:<rol>`,
+- **Menú de Finanzas colapsable (Josuarth):** cada grupo se abre y se cierra con su título (flecha). Todos
+  arrancan CERRADOS, también el de la página actual, cuyo título va resaltado (ajuste de Oliver tras el smoke test);
+  sólo queda abierto lo que la persona abrió, en localStorage por módulo y rol (`nav-grupos-abiertos:<tab>:<rol>`,
   con try/catch). La lógica es una (`lib/nav-grupos.ts`) y el sidebar y el menú del celular usan el mismo hook.
 - Tests: `nav-grupos.test.ts`, `saldos-de-proveedores.test.ts`, `reversar-cobro-roles.test.ts` y
   `nav-guard.test.ts` actualizados.

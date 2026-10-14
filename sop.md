@@ -3742,5 +3742,6 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
    `business_expenses`: usan `cargarSaldosDeProveedores`. Si la antigüedad cambia, cambian los dos.
 3. **El conteo cuenta documentos con saldo positivo.** Un pago cargado como asiento manual no se empareja con un
    documento: resta del saldo pero no del conteo. Se resuelve con la pantalla de pagos a proveedores (req. 23).
-4. **Menú:** la regla de qué grupo se abre vive en `lib/nav-grupos.ts`. localStorage siempre con try/catch.
+4. **Menú:** todos los grupos arrancan cerrados; sólo se abre lo guardado; el grupo de la página actual se
+   resalta, no se abre. La regla vive en `lib/nav-grupos.ts`. localStorage siempre con try/catch.
 

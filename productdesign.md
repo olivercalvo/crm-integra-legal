@@ -918,3 +918,17 @@ vencimiento, débito y crédito. Se agregan y quitan líneas; el pie muestra los
 escribe. «Revisar» aplica las reglas del Excel, marca los errores debajo de cada línea y muestra el saldo por cuenta
 antes y después. Recién sin errores aparecen el motivo (obligatorio) y «Guardar la corrección», con confirmación.
 Al pie, «Historial de la apertura»: cada versión con su origen, motivo, usuario, fecha y reversión.
+
+## Corregir una compra contabilizada (14/10/2026)
+
+En el detalle de una compra que ya está en el libro, el botón dice **«Corregir»** (no «Editar»). Abre el mismo
+formulario con un aviso arriba («al guardar no se edita el libro…») y una sección **Motivo de la corrección**
+obligatoria; el botón dice «Guardar la corrección». Si la compra tiene pagos, notas de crédito o el mes de su asiento
+está cerrado, «Corregir» aparece deshabilitado y debajo se lee por qué y qué hacer primero. Al guardar vuelve al
+detalle con «Compra corregida (versión N)» y la sección **Historial de versiones**: cada versión con su asiento,
+usuario, fecha, motivo y la lista de lo que cambió.
+
+## Libro Mayor: desplazamiento horizontal (14/10/2026)
+
+El encabezado de columnas queda fijo debajo de la cabecera de la app y la barra para desplazar a los lados queda fija
+al pie de la ventana mientras se ve la tabla. Ya no hay que bajar hasta la última fila para correr la tabla.

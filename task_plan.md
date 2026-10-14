@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Partes 2 y 3)
+
+- **Rama:** `feat/correcciones-compras` desde `23f0a72` (la Parte 1). Sin merge.
+- **Parte 2 (corregir compras):** hecha y probada en staging. `103` aplicada SOLO en staging; va a producción después
+  de la 102, con `sql/tests/verificacion-103-produccion.sql`.
+- **Staging:** la compra «prueba» (176bf1b2…) quedó con sus cifras de antes (versión 4 = versión 1); las versiones 2 y
+  3 son de la prueba. Septiembre se cerró y se reabrió durante la prueba (deja un ancla de cierre, como todo cierre).
+- **Parte 3 (Libro Mayor):** encabezado fijo y barra horizontal fija al pie. No entra en 1366 sin desplazar.
+- **Pendiente de decidir (Oliver):** «Editar gasto» en la pestaña Gastos del caso (`expense-actions.tsx`) se ofrece
+  también en gastos de trámite contabilizados, y al guardar falla (la 038/049 congela monto y fecha). Mismo defecto
+  que tenía la compra. No se tocó.
+
+
 ## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 lista)
 
 - **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`). Sin merge a `develop` ni a `main`.

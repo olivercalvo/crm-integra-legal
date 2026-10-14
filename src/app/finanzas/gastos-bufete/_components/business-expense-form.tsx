@@ -56,6 +56,13 @@ interface CreateProps extends BaseProps {
 interface EditProps extends BaseProps {
   mode: "edit";
   initial: CreateBusinessExpenseInput & { id: string };
+  /**
+   * 103: la compra está contabilizada. El mismo formulario CORRIGE: pide el
+   * motivo y guarda por `/corregir`, que reversa el asiento vigente y registra
+   * el corregido en una transacción. `entryEsperado` es el asiento que se está
+   * corrigiendo: si otra persona lo corrigió antes, la base lo rechaza.
+   */
+  correccion?: { entryEsperado: string; asientoNumero: number };
 }
 
 type Props = CreateProps | EditProps;
@@ -200,6 +207,9 @@ export function BusinessExpenseForm(props: Props) {
   //    Sin default: lo elige quien registra. Va al PAGO, no a la compra (048).
   const [bankAccount, setBankAccount] = useState<string>("");
   const esEdicion = props.mode === "edit";
+  const correccion = props.mode === "edit" ? props.correccion ?? null : null;
+  const [motivo, setMotivo] = useState<string>("");
+  const [motivoError, setMotivoError] = useState<string | null>(null);
   const [notes, setNotes] = useState<string>(init?.notes ?? "");
 
   // ---- Errors / submit state ----------------------------------------------
@@ -295,19 +305,31 @@ export function BusinessExpenseForm(props: Props) {
       return;
     }
     setErrors({});
+    if (correccion && motivo.trim().length < 3) {
+      setMotivoError("Escribe el motivo de la corrección (al menos 3 caracteres).");
+      requestAnimationFrame(() => document.getElementById("motivo-correccion")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      return;
+    }
+    setMotivoError(null);
 
     startTransition(async () => {
       try {
         const url =
           props.mode === "create"
             ? "/api/finanzas/business-expenses"
-            : `/api/finanzas/business-expenses/${props.initial.id}`;
-        const method = props.mode === "create" ? "POST" : "PATCH";
+            : correccion
+              ? `/api/finanzas/business-expenses/${props.initial.id}/corregir`
+              : `/api/finanzas/business-expenses/${props.initial.id}`;
+        const method = props.mode === "create" || correccion ? "POST" : "PATCH";
 
         const res = await fetch(url, {
           method,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(validation.data),
+          body: JSON.stringify(
+            correccion
+              ? { ...validation.data, motivo: motivo.trim(), entry_esperado: correccion.entryEsperado }
+              : validation.data
+          ),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -326,7 +348,10 @@ export function BusinessExpenseForm(props: Props) {
           return;
         }
         const id = data.id ?? (props.mode === "edit" ? props.initial.id : null);
-        if (id) {
+        if (id && correccion) {
+          router.push(`/finanzas/gastos-bufete/${id}?corregida=${data.version ?? ""}`);
+          router.refresh();
+        } else if (id) {
           router.push(`/finanzas/gastos-bufete/${id}?saved=1`);
           router.refresh();
         }
@@ -345,6 +370,14 @@ export function BusinessExpenseForm(props: Props) {
         handleSubmit();
       }}
     >
+      {correccion && (
+        <p className="rounded-md border border-integra-gold/50 bg-amber-50 p-3 text-sm text-amber-900" role="note">
+          Esta compra está en el libro contable (asiento {correccion.asientoNumero}). Al guardar no se edita el libro:
+          se reversa ese asiento con su fecha y se registra el corregido, en un solo paso. El motivo es obligatorio y
+          queda en el historial de la compra.
+        </p>
+      )}
+
       {/* ── Sección: Datos del gasto ────────────────────────────────────── */}
       <section className="space-y-4 rounded-xl border bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-integra-navy">Datos del gasto</h2>
@@ -849,6 +882,29 @@ export function BusinessExpenseForm(props: Props) {
         )}
       </section>
 
+      {correccion && (
+        <section className="space-y-2 rounded-xl border border-integra-gold/50 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-integra-navy">Motivo de la corrección</h2>
+          <label htmlFor="motivo-correccion" className="block text-xs text-gray-600">
+            Obligatorio. Queda en el libro (en la reversión), en el historial de la compra y en la bitácora.
+          </label>
+          <textarea
+            id="motivo-correccion"
+            value={motivo}
+            onChange={(e) => { setMotivo(e.target.value); if (motivoError) setMotivoError(null); }}
+            disabled={isPending}
+            rows={2}
+            maxLength={1000}
+            className={
+              "block w-full rounded-md border px-3 py-2 text-sm bg-white hover:border-integra-navy focus:border-integra-navy focus:outline-none " +
+              (motivoError ? "border-red-300" : "border-gray-300")
+            }
+            placeholder="Ej.: la factura del proveedor dice 120.00, no 100.00"
+          />
+          {motivoError && <p className="text-xs text-red-600">{motivoError}</p>}
+        </section>
+      )}
+
       {/* POR QUÉ NO SE GUARDÓ. Los errores de campo se pintan arriba, en cada
           línea; esta frase los resume al lado del botón, que es donde está
           mirando quien acaba de apretar. Mismo patrón que el asiento manual
@@ -867,7 +923,7 @@ export function BusinessExpenseForm(props: Props) {
         <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">No se pudo guardar el gasto</p>
+            <p className="font-medium">{correccion ? "No se corrigió la compra" : "No se pudo guardar el gasto"}</p>
             <p className="mt-1">{submitError}</p>
           </div>
         </div>
@@ -897,7 +953,7 @@ export function BusinessExpenseForm(props: Props) {
           ) : (
             <>
               <Save size={16} className="mr-2" />
-              {props.mode === "create" ? "Guardar gasto" : "Guardar cambios"}
+              {props.mode === "create" ? "Guardar gasto" : correccion ? "Guardar la corrección" : "Guardar cambios"}
             </>
           )}
         </Button>

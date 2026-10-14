@@ -98,7 +98,7 @@ function fake(g: Guion) {
   function resolver(nombre: string) {
     switch (nombre) {
       case "journal_entries":
-        return { data: g.tieneAsiento ? { entry_number: 7 } : null, error: null };
+        return { data: g.tieneAsiento ? { id: "e7", entry_number: 7, reference: null, transaction_date: "2026-09-04" } : null, error: null };
       case "suppliers":
         return { data: { id: "d2222222-2222-2222-2222-222222222222", payment_terms_days: 0 }, error: null };
       case "business_expenses":
@@ -206,7 +206,8 @@ test("🔴 editar una compra CON asiento → 409, nombrando el asiento", async (
     (e: Error & { status?: number }) => {
       assert.equal(e.status, 409);
       assert.match(e.message, /asiento 7/);
-      assert.match(e.message, /no se puede editar/);
+      // 103: la compra contabilizada se CORRIGE (su propia ruta, con motivo).
+      assert.match(e.message, /no se edita, se corrige/);
       return true;
     }
   );

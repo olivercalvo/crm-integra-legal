@@ -1,5 +1,19 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Deploy log: 102 en producción y merge de la Parte 1] - 2026-10-14
+
+**Migración `102_corregir_apertura.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de
+Supabase, con el paquete de `sql/tests/` (`95f339c`), en cuatro queries:
+1. Pre-flight (`preflight-102-produccion.sql`), antes: `true` en las tres columnas de la 100/101, `false` en las dos
+   de la 102; después de aplicar: `true` en las cinco.
+2. Apertura vigente (`apertura-vigente-produccion.sql`): **SIN APERTURA VIGENTE, 0 aperturas**, igual antes y
+   después de la verificación (la verificación no dejó nada escrito).
+3. La `102` (sin comentarios: el SQL Editor los pierde al pegar; nada depende de ellos).
+4. Verificación (`verificacion-102-produccion.sql`): **«102: todos los casos pasaron.»** con 11 ✅.
+
+Fecha de la apertura en producción: **30/06/2026** (por defecto: el día anterior al inicio contable, sin parámetro).
+Después: merge `--no-ff` de `feat/correcciones-contables` a `main` y a `develop` («sí, merge» de Oliver).
+
 ## [Corregir la apertura desde la pantalla (Parte 1 de correcciones contables)] - 2026-10-14
 
 Rama `feat/correcciones-contables` desde `main` (`233cf35`). Migración **`102_corregir_apertura.sql`, aplicada SOLO en

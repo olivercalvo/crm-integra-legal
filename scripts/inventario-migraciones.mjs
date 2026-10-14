@@ -392,7 +392,7 @@ const MARCADORES = {
   "102_corregir_apertura.sql": {
     que: "Corregir la apertura desde la pantalla: corregir_apertura (service_role) reversa la vigente (101) y postea la nueva (100) en una transaccion; aperturas.corrige_apertura_id liga la nueva a la que corrige",
     tipo: "funcion", nombre: "corregir_apertura",
-    nota: "14/10. Despues de la 101. Aplicada en staging el 14/10. No toca datos.",
+    nota: "14/10. Despues de la 101. Aplicada en staging y en PRODUCCION el 14/10 (Oliver, SQL Editor). No toca datos.",
   },
   "099_solo_importados_bloquean_y_banco_del_cobro.sql": {
     que: "post_documentos_existentes se niega solo con asientos IMPORTADOS vigentes (los manuales de ajuste se listan, no bloquean); el banco de un cobro con asiento no cambia (trigger)",

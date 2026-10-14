@@ -1,10 +1,12 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 lista)
+## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 en producción)
 
-- **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`). Sin merge a `develop` ni a `main`.
-- **Parte 1 (corregir la apertura): hecha y probada en staging.** `102` aplicada SOLO en staging. Va a producción en
-  la ventana, después de la 101 (está en `scripts/ensayo-ventana/orden.mjs` con su verificación).
+- **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`), mergeada a `main` y `develop` el 14/10 con el
+  «sí, merge» de Oliver.
+- **Parte 1 (corregir la apertura): en producción.** La `102` la aplicó Oliver en producción el 14/10 desde el SQL
+  Editor, con su verificación (ver el deploy log en `changelog.md`).
+- **Partes 2 y 3** (compras contabilizadas y Libro Mayor): en `feat/correcciones-compras`, desde `23f0a72`, sin mezclar.
 - **Staging:** la apertura quedó con sus cifras de antes de la prueba (versión 7, AD-000013, 3,000.00); las versiones
   5 y 6 son las de la prueba (CxC 100,000 → 90,000).
 - **Preview:** el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO` está encendido sólo para la rama

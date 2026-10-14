@@ -2,7 +2,8 @@
 
 ## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Partes 2 y 3)
 
-- **Rama:** `feat/correcciones-compras` desde `23f0a72` (la Parte 1). Sin merge.
+- **Rama:** `feat/correcciones-compras` desde `23f0a72` (la Parte 1), con `main` (`33fd1ac`) mergeado el
+  14/10. Sin merge a `main` hasta que la `103` pase en producción y Oliver diga «sí, merge».
 - **Parte 2 (corregir compras):** hecha y probada en staging. `103` aplicada SOLO en staging; va a producción después
   de la 102, con `sql/tests/verificacion-103-produccion.sql`.
 - **Staging:** la compra «prueba» (176bf1b2…) quedó con sus cifras de antes (versión 4 = versión 1); las versiones 2 y
@@ -12,12 +13,21 @@
   también en gastos de trámite contabilizados, y al guardar falla (la 038/049 congela monto y fecha). Mismo defecto
   que tenía la compra. No se tocó.
 
+## ▶ PARA RETOMAR (14/10/2026: hotfix del contador, proveedores y menú)
 
-## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 lista)
+- **Rama:** `hotfix/contador-cobros-proveedores` desde `main` (`0554b42`). Sin migraciones. Sin merge hasta el
+  «sí, merge» de Oliver.
+- **Staging quedó con datos de prueba:** proveedor PRV-004 «Panamá Star (prueba staging)» con la importación
+  `bfe8d40b` (asiento 185, 600.00 en 200001), y el cobro CO-000016 del contador sobre FAC-HON-000031 (asiento 186).
+- **Pendiente (req. 23):** pantalla de pagos a proveedores que pague compras y partidas importadas.
 
-- **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`). Sin merge a `develop` ni a `main`.
-- **Parte 1 (corregir la apertura): hecha y probada en staging.** `102` aplicada SOLO en staging. Va a producción en
-  la ventana, después de la 101 (está en `scripts/ensayo-ventana/orden.mjs` con su verificación).
+## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 en producción)
+
+- **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`), mergeada a `main` y `develop` el 14/10 con el
+  «sí, merge» de Oliver.
+- **Parte 1 (corregir la apertura): en producción.** La `102` la aplicó Oliver en producción el 14/10 desde el SQL
+  Editor, con su verificación (ver el deploy log en `changelog.md`).
+- **Partes 2 y 3** (compras contabilizadas y Libro Mayor): en `feat/correcciones-compras`, desde `23f0a72`, sin mezclar.
 - **Staging:** la apertura quedó con sus cifras de antes de la prueba (versión 7, AD-000013, 3,000.00); las versiones
   5 y 6 son las de la prueba (CxC 100,000 → 90,000).
 - **Preview:** el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO` está encendido sólo para la rama

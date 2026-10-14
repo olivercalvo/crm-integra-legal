@@ -392,7 +392,7 @@ const MARCADORES = {
   "102_corregir_apertura.sql": {
     que: "Corregir la apertura desde la pantalla: corregir_apertura (service_role) reversa la vigente (101) y postea la nueva (100) en una transaccion; aperturas.corrige_apertura_id liga la nueva a la que corrige",
     tipo: "funcion", nombre: "corregir_apertura",
-    nota: "14/10. Despues de la 101. Aplicada en staging el 14/10. No toca datos.",
+    nota: "14/10. Despues de la 101. Aplicada en staging y en PRODUCCION el 14/10 (Oliver, SQL Editor). No toca datos.",
   },
   "103_corregir_compra.sql": {
     que: "Corregir una compra contabilizada: corregir_compra (service_role) reversa el asiento vigente con su fecha, actualiza la compra y postea el corregido en una transaccion; compra_correcciones guarda cada version; el UNIQUE de un asiento por documento deja afuera las correcciones",

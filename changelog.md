@@ -35,6 +35,39 @@ motivo e historial de versiones.
 - Verificaciones: `sql/tests/verificacion-103-corregir-compra.sql` (staging, ROLLBACK) y
   `sql/tests/verificacion-103-produccion.sql` (SQL Editor, se deshace sola), 13 casos. Test `correccion-de-compra.test.ts`.
 
+## [Hotfix: el contador registra cobros, saldo de proveedores desde la antigüedad, menú colapsable] - 2026-10-14
+
+Rama `hotfix/contador-cobros-proveedores` desde `main` (`0554b42`). Sin migraciones.
+- **Cobros (Oliver, 14/10/2026; reemplaza la del 21/09):** el contador REGISTRA cobros. `route-access.ts` suma el
+  patrón exacto `/finanzas/cobros/nuevo`; la página del alta, `POST /api/finanzas/payments` y
+  `POST /api/finanzas/invoices/[id]/payments` aceptan `contador`; el botón del listado y el del detalle de la factura
+  usan `canRegister`, una bandera aparte de `canMutate`. Siguen cerrados para el contador (verificado en pantalla y
+  API 403): anular, emitir NC, enviar a la DGI, cargar CUFE, editar o eliminar factura, eliminar cobro, crear o
+  editar clientes.
+- **Proveedores:** «Docs. pendientes» y «Saldo por pagar» (antes «Gastos» y «Pendiente») salen de la antigüedad por
+  pagar de hoy (`cargarSaldosDeProveedores`: `loadAntiguedad` + `buildAntiguedad`), así entran las partidas de
+  200001 que llegan por importación o apertura y cada saldo es el de su fila en el reporte. La ficha suma «Saldo por
+  pagar» con cada documento o partida y su enlace; la lista de compras del módulo queda como historial.
+- **Menú de Finanzas colapsable (Josuarth):** cada grupo se abre y se cierra con su título (flecha). Todos
+  arrancan CERRADOS, también el de la página actual, cuyo título va resaltado (ajuste de Oliver tras el smoke test);
+  sólo queda abierto lo que la persona abrió, en localStorage por módulo y rol (`nav-grupos-abiertos:<tab>:<rol>`,
+  con try/catch). La lógica es una (`lib/nav-grupos.ts`) y el sidebar y el menú del celular usan el mismo hook.
+- Tests: `nav-grupos.test.ts`, `saldos-de-proveedores.test.ts`, `reversar-cobro-roles.test.ts` y
+  `nav-guard.test.ts` actualizados.
+
+## [Deploy log: 102 en producción y merge de la Parte 1] - 2026-10-14
+
+**Migración `102_corregir_apertura.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de
+Supabase, con el paquete de `sql/tests/` (`95f339c`), en cuatro queries:
+1. Pre-flight (`preflight-102-produccion.sql`), antes: `true` en las tres columnas de la 100/101, `false` en las dos
+   de la 102; después de aplicar: `true` en las cinco.
+2. Apertura vigente (`apertura-vigente-produccion.sql`): **SIN APERTURA VIGENTE, 0 aperturas**, igual antes y
+   después de la verificación (la verificación no dejó nada escrito).
+3. La `102` (sin comentarios: el SQL Editor los pierde al pegar; nada depende de ellos).
+4. Verificación (`verificacion-102-produccion.sql`): **«102: todos los casos pasaron.»** con 11 ✅.
+
+Fecha de la apertura en producción: **30/06/2026** (por defecto: el día anterior al inicio contable, sin parámetro).
+Después: merge `--no-ff` de `feat/correcciones-contables` a `main` y a `develop` («sí, merge» de Oliver).
 
 ## [Corregir la apertura desde la pantalla (Parte 1 de correcciones contables)] - 2026-10-14
 

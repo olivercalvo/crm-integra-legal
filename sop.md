@@ -3733,7 +3733,19 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
 6. **Interruptor:** guardar pasa por `FINANZAS_POSTEO_HISTORICO_HABILITADO`, como contabilizar y reversar la apertura.
    Revisar no.
 
-## SOP-051: Corregir una compra contabilizada (14/10/2026)
+## SOP-051: Cobros del contador, saldo de proveedores y menú colapsable (14/10/2026)
+
+1. **Registrar un cobro: admin, abogada y contador.** En el detalle de la factura es `canRegister`, NO `canMutate`:
+   `canMutate` sigue siendo anular, eliminar cobros, emitir y las demás acciones de admin y abogada. Si alguien
+   vuelve a unirlas, el contador gana anular facturas. Lo fija `reversar-cobro-roles.test.ts`.
+2. **El saldo de un proveedor es el de su fila en la antigüedad por pagar.** Ni el listado ni la ficha suman
+   `business_expenses`: usan `cargarSaldosDeProveedores`. Si la antigüedad cambia, cambian los dos.
+3. **El conteo cuenta documentos con saldo positivo.** Un pago cargado como asiento manual no se empareja con un
+   documento: resta del saldo pero no del conteo. Se resuelve con la pantalla de pagos a proveedores (req. 23).
+4. **Menú:** todos los grupos arrancan cerrados; sólo se abre lo guardado; el grupo de la página actual se
+   resalta, no se abre. La regla vive en `lib/nav-grupos.ts`. localStorage siempre con try/catch.
+
+## SOP-052: Corregir una compra contabilizada (14/10/2026)
 
 1. **Corregir nunca edita el libro.** `corregir_compra` (103), en UNA transacción: reversa el asiento vigente con
    SU fecha (el auxiliar y el mayor coinciden en cualquier corte), actualiza la compra y sus líneas, y postea el
@@ -3752,4 +3764,3 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
    (`cargarAsientoDelDocumento`, o `NOT EXISTS reversión` en SQL), nunca `maybeSingle()` sobre (source_type, source_id).
 6. **Historial:** `compra_correcciones` (versión 2, 3…) con la foto antes y después; la versión 1 es el asiento original.
    Inmutable.
-

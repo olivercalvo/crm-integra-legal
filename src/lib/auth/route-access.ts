@@ -186,16 +186,18 @@ export const CONTADOR_FINANZAS_ALLOWED_PATTERNS: RegExp[] = [
   // antigüedad cuadre contra el mayor, y los recibos son la otra mitad de esa
   // cuenta.
   //
-  // SOLO LECTURA: registrar un cobro sigue siendo de admin y abogada
-  // (`canMutate`), por el mismo reparto del detalle de factura. Lo que el
-  // contador hace ahí es lo que ya hacía desde la factura —bajar el recibo en
-  // PDF y REVERSAR (`canReverse`)— pero viendo todos los cobros juntos.
+  // 🔁 Desde el 14/10/2026 (decisión de Oliver, reemplaza la del 21/09) el
+  // contador también REGISTRA cobros: la página del alta, el botón del listado,
+  // el del detalle de la factura (`canRegister`, aparte de `canMutate`) y las
+  // dos rutas POST de cobros. Sigue SIN eliminar cobros, anular facturas,
+  // emitir ante la DGI ni editar clientes: eso es `canMutate`, admin y abogada.
   //
-  // Es un PATRÓN exacto y no un prefijo, a propósito:
+  // Son PATRONES exactos y no un prefijo, a propósito:
   //   ✅ /finanzas/cobros          (el listado)
-  //   ❌ /finanzas/cobros/nuevo    (el alta es de admin y abogada; la página
-  //                                 además redirige, y la API responde 403)
+  //   ✅ /finanzas/cobros/nuevo    (el alta, desde el 14/10/2026)
+  //   ❌ cualquier otra cosa bajo /finanzas/cobros, si algún día existe
   /^\/finanzas\/cobros$/,
+  /^\/finanzas\/cobros\/nuevo$/,
   // ───────────────────────────────────────────────────────────────────────────
   // Detalle de una NOTA DE CRÉDITO (Bloque 5, 22/09/2026)
   // ───────────────────────────────────────────────────────────────────────────

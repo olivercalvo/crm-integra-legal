@@ -63,6 +63,8 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
   // contador reversa.
   const canMutate = userRole === "admin" || userRole === "abogada";
   const canReverse = canMutate || userRole === "contador";
+  // Registrar: también el contador (Oliver, 14/10/2026).
+  const canRegister = canMutate || userRole === "contador";
 
   return (
     <div className="space-y-5">
@@ -83,8 +85,7 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
             </p>
           </div>
         </div>
-        {canMutate && (
-          /* nav-guard-ok: dentro de canMutate — el contador ve esta pantalla pero no /nuevo */
+        {canRegister && (
           <Link href="/finanzas/cobros/nuevo">
             <Button className="bg-integra-gold text-integra-navy hover:bg-integra-gold/90 min-h-[48px]">
               <Plus size={18} className="mr-1" />
@@ -105,7 +106,7 @@ export default async function CobrosListPage({ searchParams }: PageProps) {
           emptyMessage={
             hasFilters
               ? "No hay cobros que coincidan con los filtros aplicados."
-              : canMutate
+              : canRegister
                 ? "Aún no hay cobros. El primero se registra con el botón de arriba, o desde el detalle de una factura."
                 : "Aún no hay cobros registrados."
           }

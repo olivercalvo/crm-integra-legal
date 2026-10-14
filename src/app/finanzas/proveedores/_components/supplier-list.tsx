@@ -9,6 +9,9 @@ import { paymentTermsLabel } from "@/lib/finanzas/types/supplier";
  *
  * 🔴 RUC y DV se muestran en DOS COLUMNAS, igual que se guardan y que los pide
  * el formulario de la DGI. No hay ningún punto de esta tabla donde se junten.
+ *
+ * «Docs. pendientes» y «Saldo por pagar» salen de la antigüedad por pagar de
+ * hoy: compras, gastos de trámite y partidas importadas (14/10/2026).
  */
 
 function money(n: number): string {
@@ -33,8 +36,12 @@ export function SupplierList({
             <th className="px-3 py-2 font-semibold">RUC</th>
             <th className="px-3 py-2 font-semibold">DV</th>
             <th className="px-3 py-2 font-semibold">Plazo</th>
-            <th className="px-3 py-2 text-right font-semibold">Gastos</th>
-            <th className="px-3 py-2 text-right font-semibold">Pendiente</th>
+            <th className="px-3 py-2 text-right font-semibold" title="Documentos con saldo por pagar hoy: compras, gastos de trámite y partidas importadas">
+              Docs. pendientes
+            </th>
+            <th className="px-3 py-2 text-right font-semibold" title="El mismo saldo de la antigüedad por pagar de hoy">
+              Saldo por pagar
+            </th>
             <th className="px-3 py-2 font-semibold">Estado</th>
           </tr>
         </thead>
@@ -81,11 +88,11 @@ export function SupplierList({
                 </td>
 
                 <td className="px-3 py-2 text-right font-mono text-sm tabular-nums text-gray-700">
-                  {p.expense_count}
+                  {p.pendientes_count}
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-sm tabular-nums text-gray-800">
-                  {p.pending_total > 0.005 ? (
-                    money(p.pending_total)
+                  {Math.abs(p.saldo) > 0.005 ? (
+                    money(p.saldo)
                   ) : (
                     <span className="text-gray-300">—</span>
                   )}

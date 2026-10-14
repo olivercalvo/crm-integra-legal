@@ -20,13 +20,13 @@ export const runtime = "nodejs";
  * `POST /api/finanzas/invoices/[id]/payments` (el atajo de una factura del
  * diálogo del detalle): un solo helper, un solo correlativo, un solo asiento.
  *
- * Permisos: admin + abogada. Contador y asistente → 403 (el contador ve el
- * listado de cobros pero no registra). El tenant sale del contexto
- * autenticado, nunca del body.
+ * Permisos: admin, abogada y contador (el contador registra cobros desde el
+ * 14/10/2026, Oliver). Asistente → 403. Eliminar un cobro sigue siendo de admin
+ * y abogada. El tenant sale del contexto autenticado, nunca del body.
  */
 export const POST = conManejoDeAuditoria(async function POST(request: NextRequest) {
   const ctx = await getAuthenticatedContext();
-  if (!["admin", "abogada"].includes(ctx.userRole)) {
+  if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 

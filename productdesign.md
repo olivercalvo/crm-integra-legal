@@ -932,3 +932,13 @@ usuario, fecha, motivo y la lista de lo que cambió.
 
 El encabezado de columnas queda fijo debajo de la cabecera de la app y la barra para desplazar a los lados queda fija
 al pie de la ventana mientras se ve la tabla. Ya no hay que bajar hasta la última fila para correr la tabla.
+
+## Menú de Finanzas colapsable y saldo de proveedores (14/10/2026)
+
+- Cada grupo del menú (Ventas, Compras, Asientos, Reportes, Configuración) se abre y se cierra con su título, que
+  lleva una flecha. Todos arrancan cerrados; el título del grupo de la página actual va resaltado. Sólo quedan
+  abiertos los que la persona abrió, y se recuerdan en ese navegador. Igual en el menú del celular.
+- Proveedores: «Docs. pendientes» y «Saldo por pagar», los mismos de la antigüedad por pagar de hoy. La ficha muestra
+  «Saldo por pagar» con cada documento o partida del libro, y debajo «Compras registradas», el historial del módulo.
+- El contador ve «Registrar cobro» en Cobros y en el detalle de la factura.
+

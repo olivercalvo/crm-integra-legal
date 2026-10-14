@@ -42,6 +42,12 @@
 -- ============================================================================
 BEGIN;
 
+-- DROP INDEX toma un candado ACCESS EXCLUSIVE sobre journal_entries hasta el
+-- COMMIT (lecturas y escrituras esperan). Con el libro chico dura menos de un
+-- segundo; si alguien tiene la tabla tomada, mejor fallar a los 5 s sin haber
+-- cambiado nada que dejar a todos en cola detrás de la migración.
+SET LOCAL lock_timeout = '5s';
+
 -- ── 1. Un asiento por documento, salvo las correcciones ────────────────────
 DROP INDEX IF EXISTS public.journal_entries_un_asiento_por_documento;
 CREATE UNIQUE INDEX journal_entries_un_asiento_por_documento

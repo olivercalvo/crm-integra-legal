@@ -39,18 +39,18 @@ export function CuerpoMayor({
           // No pertenece a ningún asiento, así que no se expande.
           return (
             <tr key={`inicial-${i}`} className="border-b border-gray-200 bg-integra-navy/5">
-              <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
+              <td className="max-w-[150px] px-2 py-2 font-mono text-xs text-gray-500">
                 {f.cuentaDistribucion}
               </td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-500">{f.fecha ?? "—"}</td>
-              <td className="px-3 py-2 text-sm" colSpan={8}>
+              <td className="px-2 py-2 font-mono text-xs text-gray-500">{f.fecha ?? "—"}</td>
+              <td className="px-2 py-2 text-sm" colSpan={8}>
                 <span className="font-semibold text-integra-navy">{rotuloArranque}</span>
               </td>
               {/* El saldo inicial no es un movimiento: no tiene débito ni
                   crédito propios. */}
-              <td className="px-3 py-2 text-right text-gray-400">—</td>
-              <td className="px-3 py-2 text-right text-gray-400">—</td>
-              <td className="px-3 py-2 text-right">
+              <td className="px-2 py-2 text-right text-gray-400">—</td>
+              <td className="px-2 py-2 text-right text-gray-400">—</td>
+              <td className="px-2 py-2 text-right">
                 <span className="font-mono text-sm font-bold tabular-nums text-gray-800">
                   {fmtImporte(f.saldo)}
                 </span>

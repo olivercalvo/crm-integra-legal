@@ -1,5 +1,57 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Deploy log: 103 en producción y merge de las Partes 2 y 3] - 2026-10-14
+
+**Migración `103_corregir_compra.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de
+Supabase, con el paquete de `sql/tests/` (`12b7f06`), en cuatro queries:
+1. Pre-flight (`preflight-103-produccion.sql`): las siete primeras en `true`, 21 asientos, 0 sesiones activas.
+   Después de aplicar: `ya_tiene_103` en `true` y el índice `journal_entries_un_asiento_por_documento` con
+   `correccion:%`.
+2. La `103` (sin comentarios, con `lock_timeout = '5s'`): Success, sin lock timeout.
+3. Verificación (`verificacion-103-produccion.sql`): **«103: todos los casos pasaron.»** con ✅ en [1] a [9], [11],
+   [12] y [13], y ⏭ en [10] (producción no tiene compras con nota de crédito).
+4. Rastro (`rastro-103-produccion.sql`), idéntico antes y después de la verificación: 21 asientos, correlativo 21,
+   13 compras, 170 líneas, 0 pagos, 18 proveedores, 0 períodos cerrados, 1 ancla, 0 correcciones, bitácora `null`
+   (producción no tiene el esquema `auditoria`).
+
+Después: merge `--no-ff` de `feat/correcciones-compras` a `main` y a `develop` («sí, merge» de Oliver).
+**Pendiente:** «Editar gasto» en gastos de trámite contabilizados responde 500 al guardar (ver `task_plan.md`).
+
+## [Libro Mayor: encabezado fijo y barra horizontal siempre visible (Parte 3)] - 2026-10-14
+
+Rama `feat/correcciones-compras`. Sin migraciones.
+- La barra horizontal del Libro Mayor sólo aparecía al final de la tabla. Ahora la página se desplaza como siempre;
+  el encabezado de columnas queda fijo bajo la cabecera de la app y una barra horizontal «espejo» queda fija al pie
+  de la ventana mientras la tabla está a la vista, sincronizada con la tabla (`mayor-desplazable.tsx`).
+- Encabezado y cuerpo son dos tablas `table-fixed` con el mismo `<colgroup>` (`ANCHOS_DE_COLUMNA`, los mínimos de cada
+  columna): siempre alineadas. Columnas más angostas (relleno 8 px; cuenta y módulo parten línea).
+- 1366 px: las 13 columnas del modelo de Josuarth necesitan ~1500 px y el área útil a 1366 es ~1090, así que sigue
+  habiendo desplazamiento horizontal, ahora con la barra siempre a mano.
+- Test: `libro-mayor-desplazable.test.ts`.
+
+## [Corregir compras contabilizadas (Parte 2 de correcciones contables)] - 2026-10-14
+
+Rama `feat/correcciones-compras` desde `23f0a72`. Migración **`103_corregir_compra.sql`, aplicada SOLO en staging** el
+14/10. Mismo criterio que la apertura: corregir nunca edita el libro, reversa + asiento nuevo en una transacción, con
+motivo e historial de versiones.
+- La compra contabilizada ofrece **«Corregir»** en lugar de «Editar» (antes «Editar» abría el formulario y al guardar
+  respondía 409). Mismo formulario, todos los campos, más el **motivo** obligatorio.
+- Si no se puede (pagos registrados, notas de crédito del proveedor, mes del asiento cerrado) el botón queda
+  deshabilitado con el motivo, ANTES de editar; la página de edición muestra el aviso sin formulario.
+- **Base (`103`):** `corregir_compra(...)`, SECURITY DEFINER, sólo `service_role`: candado del correlativo, asiento
+  vigente esperado, sin pagos ni NC, los dos meses abiertos, espejo VERIFICADO posteado con la fecha del asiento
+  original, compra y líneas actualizadas, asiento nuevo verificado (200001 por el total con el proveedor) y posteado
+  con la fecha de registro nueva, versión en `compra_correcciones` (inmutable). El UNIQUE «un asiento por documento»
+  (034) deja afuera las correcciones (`idempotency_key 'correccion:%'`); cada versión es única por su llave.
+- **App:** `corregirBusinessExpense` usa las validaciones del alta (`validarCuentasDeLineas`, ahora compartida), arma
+  el asiento con `construirAsientoDeCompra` (vía `armarCompraParaAsiento`, la misma carga del alta) y el espejo con
+  `construirAsientoDeReversion`. Ruta `POST /api/finanzas/business-expenses/[id]/corregir` (admin, abogada, contador).
+- **Historial de versiones** en el detalle de la compra: versión, asiento, usuario, fecha, motivo y qué cambió.
+- `cargarAsientoDelDocumento` devuelve el asiento VIGENTE (el que nadie reversó).
+- Detalle de la compra: la grilla usa `minmax(0,1fr)`; la sección de Pagos desbordaba la página a lo ancho.
+- Verificaciones: `sql/tests/verificacion-103-corregir-compra.sql` (staging, ROLLBACK) y
+  `sql/tests/verificacion-103-produccion.sql` (SQL Editor, se deshace sola), 13 casos. Test `correccion-de-compra.test.ts`.
+
 ## [Hotfix: el contador registra cobros, saldo de proveedores desde la antigüedad, menú colapsable] - 2026-10-14
 
 Rama `hotfix/contador-cobros-proveedores` desde `main` (`0554b42`). Sin migraciones.

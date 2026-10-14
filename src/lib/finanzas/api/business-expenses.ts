@@ -28,7 +28,11 @@ import {
   construirAsientoDeCompra,
   SOURCE_TYPE_COMPRA,
 } from "@/lib/finanzas/contabilidad/asiento-compra";
-import { cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asiento";
+import { armarCompraParaAsiento, cargarCompraParaAsiento } from "@/lib/finanzas/queries/compra-para-asiento";
+import { cargarAsientoDelDocumento } from "@/lib/finanzas/queries/asiento-del-documento";
+import { getAsientoDelLibro } from "@/lib/finanzas/queries/asiento-manual";
+import { construirAsientoDeReversion } from "@/lib/finanzas/contabilidad/reversion";
+import { motivoParaNoCorregir } from "@/lib/finanzas/contabilidad/correccion-de-compra";
 import { createSupplierPayment } from "@/lib/finanzas/api/supplier-payments";
 
 /** Centavos, y una sola vez. */
@@ -131,24 +135,74 @@ async function proveedorValido(db: DB, tenantId: string, id: string): Promise<bo
  * en staging ya tenían el suyo. El agujero estaba abierto, no era teórico.
  */
 async function gateContable(db: DB, tenantId: string, id: string, verbo: string) {
-  const { data: asiento } = await db
-    .from("journal_entries")
-    .select("entry_number")
-    .eq("tenant_id", tenantId)
-    .eq("source_type", SOURCE_TYPE_COMPRA)
-    .eq("source_id", id)
-    .maybeSingle();
+  // 103: una compra corregida tiene varios asientos `gasto`; vale el vigente.
+  const asiento = await cargarAsientoDelDocumento(db, tenantId, SOURCE_TYPE_COMPRA, id);
 
   if (asiento) {
-    const numero = (asiento as { entry_number: number }).entry_number;
+    const numero = asiento.entryNumber;
+    // 103: la corrección existe, por su propia ruta y con motivo. La pantalla
+    // ofrece «Corregir» en lugar de «Editar» en una compra contabilizada.
     throw new MutationError(
-      `Esta compra ya está registrada en el libro contable (asiento ${numero}), ` +
-        `así que no se puede ${verbo}. Los asientos son inmutables por ley. ` +
-        `La corrección de compras contabilizadas se habilita junto con el asiento ` +
-        `de reversión.`,
+      verbo === "editar"
+        ? `Esta compra ya está registrada en el libro contable (asiento ${numero}): no se edita, se corrige. ` +
+            `Usa «Corregir», que reversa el asiento y registra el corregido, con motivo.`
+        : `Esta compra ya está registrada en el libro contable (asiento ${numero}), así que no se puede ${verbo}. ` +
+            `Los asientos son inmutables por ley. Si tiene un error, se corrige con «Corregir».`,
       409
     );
   }
+}
+
+/**
+ * La cuenta de cada línea: existe, está activa y admite un desembolso. Alta y
+ * corrección (103) usan esta misma función.
+ */
+async function validarCuentasDeLineas(db: DB, tenantId: string, lineasIn: LineaDeCompraInput[]) {
+  const input = { lineas: lineasIn };
+  // Validación cross-tabla POR LÍNEA: la cuenta debe existir, estar activa y ser
+  // de un tipo que pueda recibir un desembolso — gasto, costo o ACTIVO, que es
+  // lo que pide el acta del 25/08 ("la cuenta de gasto, costo o activo que elija
+  // el usuario"). La FK es lógica (no hay constraint de BD), por eso se verifica
+  // a mano. Se recorren TODAS y se informa la primera que falla, nombrando su
+  // número de línea: con varias líneas, "la cuenta X está inactiva" sin decir
+  // cuál línea obliga a adivinar.
+  for (let i = 0; i < input.lineas.length; i++) {
+    const l = input.lineas[i];
+    const nro = i + 1;
+    if (!l.chart_account_code) {
+      throw new MutationError(
+        `La línea ${nro} ("${l.description}") no tiene cuenta contable. ` +
+          `Cada línea de una compra tiene que decir contra qué cuenta se imputa.`,
+        400
+      );
+    }
+    // Distingue "no existe" de "existe pero está inactiva": son dos errores
+    // distintos, y el segundo tiene que explicar POR QUÉ o la persona vuelve a
+    // elegir la misma cuenta del plan viejo.
+    const veredicto = await validarCuentaDeGasto(db, tenantId, l.chart_account_code);
+    if (veredicto.estado === "no-existe") {
+      throw new MutationError(
+        `Línea ${nro}: la cuenta contable "${l.chart_account_code}" no existe en el Plan de Cuentas.`,
+        400
+      );
+    }
+    // El tipo se informa con su MOTIVO, que ya viene redactado desde
+    // `cuentas-de-gasto.ts`. Antes este caso caía en "no existe o no es de tipo
+    // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
+    // estaba ahí y el problema era otro.
+    if (veredicto.estado === "tipo-invalido") {
+      throw new MutationError(`Línea ${nro}: ${veredicto.mensaje}`, 400);
+    }
+    if (veredicto.estado === "inactiva") {
+      throw new MutationError(
+        `Línea ${nro}: la cuenta "${l.chart_account_code}" está inactiva en el Plan de ` +
+          `Cuentas: es del plan contable anterior y no se puede usar para clasificar ` +
+          `gastos nuevos. Seleccione una cuenta activa.`,
+        400
+      );
+    }
+  }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -203,49 +257,7 @@ export async function createBusinessExpense(
     throw new MutationError("La compra necesita al menos una línea.", 400);
   }
 
-  // Validación cross-tabla POR LÍNEA: la cuenta debe existir, estar activa y ser
-  // de un tipo que pueda recibir un desembolso — gasto, costo o ACTIVO, que es
-  // lo que pide el acta del 25/08 ("la cuenta de gasto, costo o activo que elija
-  // el usuario"). La FK es lógica (no hay constraint de BD), por eso se verifica
-  // a mano. Se recorren TODAS y se informa la primera que falla, nombrando su
-  // número de línea: con varias líneas, "la cuenta X está inactiva" sin decir
-  // cuál línea obliga a adivinar.
-  for (let i = 0; i < input.lineas.length; i++) {
-    const l = input.lineas[i];
-    const nro = i + 1;
-    if (!l.chart_account_code) {
-      throw new MutationError(
-        `La línea ${nro} ("${l.description}") no tiene cuenta contable. ` +
-          `Cada línea de una compra tiene que decir contra qué cuenta se imputa.`,
-        400
-      );
-    }
-    // Distingue "no existe" de "existe pero está inactiva": son dos errores
-    // distintos, y el segundo tiene que explicar POR QUÉ o la persona vuelve a
-    // elegir la misma cuenta del plan viejo.
-    const veredicto = await validarCuentaDeGasto(db, tenantId, l.chart_account_code);
-    if (veredicto.estado === "no-existe") {
-      throw new MutationError(
-        `Línea ${nro}: la cuenta contable "${l.chart_account_code}" no existe en el Plan de Cuentas.`,
-        400
-      );
-    }
-    // El tipo se informa con su MOTIVO, que ya viene redactado desde
-    // `cuentas-de-gasto.ts`. Antes este caso caía en "no existe o no es de tipo
-    // gasto": el mensaje mandaba a buscar la cuenta en el plan cuando la cuenta
-    // estaba ahí y el problema era otro.
-    if (veredicto.estado === "tipo-invalido") {
-      throw new MutationError(`Línea ${nro}: ${veredicto.mensaje}`, 400);
-    }
-    if (veredicto.estado === "inactiva") {
-      throw new MutationError(
-        `Línea ${nro}: la cuenta "${l.chart_account_code}" está inactiva en el Plan de ` +
-          `Cuentas: es del plan contable anterior y no se puede usar para clasificar ` +
-          `gastos nuevos. Seleccione una cuenta activa.`,
-        400
-      );
-    }
-  }
+  await validarCuentasDeLineas(db, tenantId, input.lineas);
 
   // 🔴 E3 (01/10/2026): sin proveedor no hay compra. Acredita 200001 y ahí no
   // hay líneas sin proveedor. Se corta acá, ANTES de consumir el número FAC-CO-.
@@ -671,6 +683,223 @@ export async function updateBusinessExpense(
   }
 
   return { id };
+}
+
+// ---------------------------------------------------------------------------
+// CORREGIR una compra contabilizada (103)
+// ---------------------------------------------------------------------------
+
+export interface EstadoDeCorreccionDeCompra {
+  /** ¿Tiene asiento vigente? Si no, se edita como siempre. */
+  contabilizada: boolean;
+  asiento: { id: string; entryNumber: number; fecha: string } | null;
+  /** Por qué no se corrige (pagos, NC, mes cerrado), o null. Se muestra ANTES de editar. */
+  bloqueo: string | null;
+}
+
+/**
+ * Lo que la pantalla necesita saber ANTES de ofrecer «Corregir»: el asiento
+ * vigente y, si no se puede, por qué. La base vuelve a exigir lo mismo.
+ */
+export async function estadoDeCorreccionDeCompra(db: DB, tenantId: string, id: string): Promise<EstadoDeCorreccionDeCompra> {
+  const asiento = await cargarAsientoDelDocumento(db, tenantId, SOURCE_TYPE_COMPRA, id);
+  if (!asiento) return { contabilizada: false, asiento: null, bloqueo: null };
+  const [pagos, notas, aplicaciones, periodo] = await Promise.all([
+    db.from("supplier_payments").select("payment_number, payment_date")
+      .eq("tenant_id", tenantId).eq("business_expense_id", id).eq("status", "registrado").order("payment_date"),
+    db.from("supplier_credit_notes").select("credit_note_number")
+      .eq("tenant_id", tenantId).eq("business_expense_id", id).eq("status", "emitida"),
+    db.from("supplier_credit_note_applications").select("supplier_credit_notes!inner(credit_note_number, status)")
+      .eq("tenant_id", tenantId).eq("business_expense_id", id).eq("supplier_credit_notes.status", "emitida"),
+    db.from("accounting_periods").select("status").eq("tenant_id", tenantId)
+      .eq("year", Number(asiento.fecha.slice(0, 4))).eq("month", Number(asiento.fecha.slice(5, 7))).maybeSingle(),
+  ]);
+  for (const r of [pagos, notas, aplicaciones, periodo]) if (r.error) throw new MutationError(pgErrorToMessage(r.error), 500, r.error);
+  const nc = new Set<string>();
+  for (const n of (notas.data ?? []) as { credit_note_number: string | null }[]) nc.add(n.credit_note_number ?? "sin número");
+  for (const a of (aplicaciones.data ?? []) as unknown as { supplier_credit_notes: { credit_note_number: string | null } | null }[]) {
+    nc.add(a.supplier_credit_notes?.credit_note_number ?? "sin número");
+  }
+  const st = (periodo.data as { status: string } | null)?.status ?? "abierto";
+  return {
+    contabilizada: true,
+    asiento: { id: asiento.id, entryNumber: asiento.entryNumber, fecha: asiento.fecha },
+    bloqueo: motivoParaNoCorregir({
+      pagos: ((pagos.data ?? []) as { payment_number: string | null }[]).map((p) => p.payment_number ?? "saldo heredado"),
+      notasDeCredito: Array.from(nc),
+      mesCerrado: st === "abierto" ? null : `${asiento.fecha.slice(5, 7)}/${asiento.fecha.slice(0, 4)}`,
+    }),
+  };
+}
+
+/**
+ * Corrige una compra contabilizada. NUNCA edita el libro: `corregir_compra`
+ * (103) reversa el asiento vigente con su fecha y postea el corregido con la
+ * fecha de registro nueva, en UNA transacción, y guarda la versión.
+ *
+ * Las validaciones son las del alta (cuentas, proveedor, tasas del catálogo,
+ * inicio contable, período y fecha de registro), y el asiento lo arma
+ * `construirAsientoDeCompra`, la misma función del alta, sobre la compra ya
+ * corregida. El espejo, `construirAsientoDeReversion`; la base lo verifica.
+ */
+export async function corregirBusinessExpense(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  id: string,
+  input: UpdateBusinessExpenseInput,
+  motivo: unknown,
+  entryEsperado: unknown
+) {
+  const texto = typeof motivo === "string" ? motivo.trim() : "";
+  if (texto.length < 3 || texto.length > 1000) {
+    throw new MutationError("Escribe el motivo de la corrección (de 3 a 1000 caracteres).", 400, undefined, {
+      motivo: "Escribe el motivo de la corrección.",
+    });
+  }
+  const { data: actual, error: errActual } = await db
+    .from("business_expenses")
+    .select("id, expense_date, purchase_number")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (errActual) throw new MutationError(pgErrorToMessage(errActual), 500, errActual);
+  if (!actual) throw new MutationError("Compra no encontrada", 404);
+
+  const estado = await estadoDeCorreccionDeCompra(db, tenantId, id);
+  if (!estado.contabilizada || !estado.asiento) {
+    throw new MutationError("Esta compra no está registrada en el libro contable: no se corrige, se edita.", 409);
+  }
+  if (estado.bloqueo) throw new MutationError(estado.bloqueo, 409);
+  if (entryEsperado !== estado.asiento.id) {
+    throw new MutationError("La compra cambió mientras la corregías (otra persona la corrigió). Vuelve a abrir «Corregir».", 409);
+  }
+
+  // Las mismas validaciones que el alta.
+  if (input.lineas.length === 0) throw new MutationError("La compra necesita al menos una línea.", 400);
+  await validarCuentasDeLineas(db, tenantId, input.lineas);
+  if (!input.supplier_id) {
+    throw new MutationError(
+      "Elige el proveedor: la compra va a Cuentas por pagar y ahí cada movimiento dice de quién es. " +
+        "Si todavía no tiene ficha, créala en Proveedores.",
+      400
+    );
+  }
+  if (!(await proveedorValido(db, tenantId, input.supplier_id))) {
+    throw new MutationError("El proveedor seleccionado no existe.", 400);
+  }
+  if (input.expense_date !== String((actual as { expense_date: string }).expense_date).slice(0, 10)) {
+    await asegurarFechaDesdeElInicio(db, tenantId, "compra", input.expense_date, "expense_date");
+  }
+  // La fecha de registro nueva: período abierto y no futura, ANTES de tocar el libro.
+  const fechaDeRegistro = await resolverFechaDeRegistro(db, tenantId, input.accounting_date ?? input.expense_date, {
+    que: "la compra",
+    campo: "accounting_date",
+  });
+  const dueDate = await resolverVencimiento(db, tenantId, input);
+  const lineas = await resolverLineasDeCompra(db, tenantId, input.lineas);
+  const { subtotal, taxAmount, taxRate } = importesDelEncabezado(lineas);
+
+  // El asiento corregido: construirAsientoDeCompra sobre la compra ya corregida.
+  const compra = await armarCompraParaAsiento(
+    db,
+    tenantId,
+    {
+      id,
+      expense_date: input.expense_date,
+      accounting_date: fechaDeRegistro,
+      description: input.description,
+      supplier_id: input.supplier_id,
+      total: round2(subtotal + taxAmount),
+      supplier_name: input.supplier_name,
+      purchase_number: (actual as { purchase_number: string | null }).purchase_number ?? null,
+      supplier_invoice_number: input.supplier_invoice_number,
+    },
+    lineas.map((l, i) => ({
+      line_order: i + 1,
+      description: l.description,
+      amount: l.amount,
+      tax_amount: l.tax_amount,
+      chart_account_code: l.chart_account_code,
+      tax_code_id: l.tax_code_id,
+    }))
+  );
+  const armado = construirAsientoDeCompra(compra);
+  if (!armado.ok) throw new MutationError(armado.mensaje, 422);
+
+  // El espejo del asiento vigente, con SU fecha: auxiliar y mayor coinciden en cualquier corte.
+  const original = await getAsientoDelLibro(db, tenantId, estado.asiento.id);
+  if (!original) throw new MutationError("No se encontró el asiento de la compra.", 404);
+  const espejo = construirAsientoDeReversion(
+    {
+      id: original.id,
+      entry_number: original.entry_number,
+      transaction_date: original.transaction_date,
+      description: original.description,
+      reference: original.reference,
+      lines: original.lineas.map((l) => ({
+        account_code: l.account_code, account_name: l.account_name, debit: l.debit, credit: l.credit,
+        description: l.descripcion, client_id: l.client_id, supplier_id: l.supplier_id,
+      })),
+    },
+    { fecha: original.transaction_date, motivo: `Corrección de la compra: ${texto}`, source_id: id }
+  );
+  if (!espejo.ok) throw new MutationError(espejo.mensaje, 422);
+
+  const aLinea = (l: { account_code: string; debit: number; credit: number; description?: string | null;
+    client_id?: string | null; supplier_id?: string | null }) => ({
+    account_code: l.account_code, debit: l.debit, credit: l.credit, description: l.description ?? null,
+    client_id: l.client_id ?? null, supplier_id: l.supplier_id ?? null,
+  });
+  const { data, error } = await ledgerDb.rpc("corregir_compra", {
+    p_tenant_id: tenantId,
+    p_compra_id: id,
+    p_entry_esperado: estado.asiento.id,
+    p_motivo: texto,
+    p_cabecera: {
+      expense_date: input.expense_date,
+      accounting_date: fechaDeRegistro,
+      due_date: dueDate,
+      supplier_id: input.supplier_id,
+      supplier_name: input.supplier_name,
+      supplier_ruc: input.supplier_ruc,
+      supplier_invoice_number: input.supplier_invoice_number,
+      description: input.description,
+      subtotal,
+      tax_rate: taxRate,
+      tax_amount: taxAmount,
+      payment_method: input.payment_method,
+      notes: input.notes,
+    },
+    p_lineas: lineas.map((l) => ({
+      description: l.description,
+      chart_account_code: l.chart_account_code,
+      amount: l.amount,
+      tax_code_id: l.tax_code_id,
+      tax_rate: l.tax_rate,
+      tax_amount: l.tax_amount,
+    })),
+    p_espejo: espejo.asiento.lines.map(aLinea),
+    p_asiento: {
+      transaction_date: armado.asiento.transaction_date,
+      description: armado.asiento.description,
+      lines: armado.asiento.lines.map(aLinea),
+    },
+    p_created_by: userId,
+  });
+  if (error) {
+    // Los mensajes de la base ya están en castellano, y no se escribió nada.
+    throw new MutationError(`No se corrigió nada: ${error.message}`, error.code === "23514" ? 409 : 422, error);
+  }
+  const r = (data ?? {}) as Record<string, unknown>;
+  return {
+    id,
+    version: Number(r.version),
+    entry_number: Number(r.entry_number),
+    reversal_entry_number: Number(r.reversal_entry_number),
+    reversed_entry_number: Number(r.reversed_entry_number),
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -23,6 +23,8 @@ import { getSupplierPaymentsForExpense } from "@/lib/finanzas/queries/supplier-p
 import { ReceiptUploader } from "../_components/receipt-uploader";
 import { SupplierCreditNotesSection } from "../_components/supplier-credit-notes-section";
 import { cargarCompraParaNc, listSupplierCreditNotesForExpense } from "@/lib/finanzas/api/supplier-credit-notes";
+import { estadoDeCorreccionDeCompra } from "@/lib/finanzas/api/business-expenses";
+import { listarVersionesDeCompra } from "@/lib/finanzas/queries/compra-correcciones";
 
 
 /**
@@ -34,11 +36,18 @@ export const metadata = {
 };
 interface PageProps {
   params: { id: string };
-  searchParams: { saved?: string; pago_error?: string };
+  searchParams: { saved?: string; pago_error?: string; corregida?: string };
 }
 
 const READING_ROLES = ["admin", "abogada", "contador"];
 const MUTATING_ROLES = ["admin", "abogada", "contador"];
+
+/** DD/MM/AAAA HH:MM en Panamá. */
+function fechaHora(iso: string): string {
+  return new Date(iso).toLocaleString("es-ES", {
+    timeZone: "America/Panama", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
 
 function fmtMoney(n: number | string): string {
   return Number(n).toLocaleString("en-US", {
@@ -71,6 +80,11 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
   // Requerimiento 5: el asiento de la compra (source_type 'gasto').
   const asiento = await cargarAsientoDelDocumento(ctx.db, ctx.tenantId, "gasto", params.id);
   const proveedor = proveedorDelDetalle(expense);
+  // 103: contabilizada → «Corregir» (con el motivo si no se puede) e historial de versiones.
+  const [correccion, versiones] = await Promise.all([
+    estadoDeCorreccionDeCompra(ctx.db, ctx.tenantId, params.id),
+    listarVersionesDeCompra(ctx.db, ctx.tenantId, params.id),
+  ]);
 
   // El comprobante YA NO se firma acá.
   //
@@ -88,6 +102,12 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
       {/* Toast simple via mensaje arriba — sin componente reusable porque
           el patrón existente (DeleteSuccessToast) usa client component;
           acá un banner estático es suficiente. */}
+      {searchParams.corregida && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">
+          Compra corregida{searchParams.corregida ? ` (versión ${searchParams.corregida})` : ""}: el asiento anterior quedó
+          reversado y el corregido registrado. El detalle está en el historial de versiones.
+        </div>
+      )}
       {savedFlag && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Gasto guardado correctamente.
@@ -153,6 +173,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
           <BusinessExpenseActions
             id={expense.id}
             canMutate={canMutate}
+            correccion={{ contabilizada: correccion.contabilizada, bloqueo: correccion.bloqueo }}
             bloqueoEliminar={
               esContabilizadoFuera(expense.expense_date, inicio)
                 ? mensajeContabilizadoFueraNoSeAnula("compra", expense.description ?? null, expense.expense_date, inicio)
@@ -163,7 +184,7 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
       </div>
 
       {/* Grid de dos columnas en desktop */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
           {/* Datos del gasto */}
           <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
@@ -327,6 +348,42 @@ export default async function GastoBufeteDetailPage({ params, searchParams }: Pa
               saldo={compraParaNc.balance_due}
               canMutate={canMutate}
             />
+          )}
+
+          {/* 103: cada corrección es una versión. La 1 es el asiento original. */}
+          {versiones.length > 1 && (
+            <section className="space-y-3 rounded-xl border bg-white p-5 shadow-sm">
+              <h2 className="text-base font-semibold text-integra-navy">Historial de versiones</h2>
+              <p className="text-xs text-gray-500">
+                Una compra contabilizada no se edita: se corrige. Cada corrección reversa el asiento anterior con su
+                fecha y registra el nuevo; ninguno se borra del libro.
+              </p>
+              <ol className="divide-y text-sm">
+                {versiones.map((v) => (
+                  <li key={v.version} className="space-y-1 py-2">
+                    <p>
+                      <span className="font-semibold">Versión {v.version}</span>
+                      {v.asientoNumero !== null && <> · asiento {v.asientoNumero}</>}
+                      {v.asientoFecha && <> al {formatDate(v.asientoFecha)}</>} ·{" "}
+                      <span className={v.vigente ? "font-semibold text-emerald-700" : "text-gray-500"}>
+                        {v.vigente ? "Vigente" : `Reversada con el asiento ${v.reversadaPor ?? ""}`}
+                      </span>
+                    </p>
+                    <p className="text-gray-600">
+                      {v.motivo ? <>Corrección: «{v.motivo}»</> : <>Registro original</>}
+                      {" · "}
+                      {v.usuario ? `${v.usuario}, ` : ""}
+                      {fechaHora(v.el)}
+                    </p>
+                    {v.cambios.length > 0 && (
+                      <ul className="list-disc pl-5 text-xs text-gray-600">
+                        {v.cambios.map((c) => <li key={c}>{c}</li>)}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </section>
           )}
 
           {/* Notas */}

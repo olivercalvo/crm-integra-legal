@@ -21,7 +21,7 @@ import type {
 
 type DB = SupabaseClient;
 
-interface FilaLinea {
+export interface FilaLinea {
   line_order: number;
   description: string;
   amount: number | string | null;
@@ -68,8 +68,44 @@ export async function cargarCompraParaAsiento(
     .order("line_order", { ascending: true });
 
   if (errLin) throw errLin;
-  const crudas = (filas ?? []) as unknown as FilaLinea[];
 
+  const row = be as unknown as {
+    id: string;
+    expense_date: string;
+    accounting_date: string | null;
+    description: string;
+    supplier_id: string | null;
+    total: number | string;
+    supplier_name: string | null;
+    purchase_number: string | null;
+    supplier_invoice_number: string | null;
+  };
+
+  return armarCompraParaAsiento(db, tenantId, {
+    id: row.id,
+    expense_date: row.expense_date,
+    accounting_date: row.accounting_date ?? row.expense_date,
+    description: row.description,
+    supplier_id: row.supplier_id ?? null,
+    total: num(row.total),
+    supplier_name: row.supplier_name,
+    purchase_number: row.purchase_number ?? null,
+    supplier_invoice_number: row.supplier_invoice_number ?? null,
+  }, (filas ?? []) as unknown as FilaLinea[]);
+}
+
+/**
+ * Las líneas de una compra (guardadas o, en una corrección, las que se van a
+ * guardar) con la validez de su cuenta y la cuenta de su tasa resueltas: lo que
+ * necesita `construirAsientoDeCompra()`. Una sola implementación para el alta y
+ * para «Corregir» (103).
+ */
+export async function armarCompraParaAsiento(
+  db: DB,
+  tenantId: string,
+  cabecera: Omit<CompraParaAsiento, "lineas">,
+  crudas: FilaLinea[]
+): Promise<CompraParaAsiento> {
   const codigos = Array.from(
     new Set(crudas.map((l) => l.chart_account_code).filter((x): x is string => !!x))
   );
@@ -106,28 +142,5 @@ export async function cargarCompraParaAsiento(
     cuenta_valida: l.chart_account_code !== null && validas.has(l.chart_account_code),
   }));
 
-  const row = be as unknown as {
-    id: string;
-    expense_date: string;
-    accounting_date: string | null;
-    description: string;
-    supplier_id: string | null;
-    total: number | string;
-    supplier_name: string | null;
-    purchase_number: string | null;
-    supplier_invoice_number: string | null;
-  };
-
-  return {
-    id: row.id,
-    expense_date: row.expense_date,
-    accounting_date: row.accounting_date ?? row.expense_date,
-    description: row.description,
-    supplier_id: row.supplier_id ?? null,
-    total: num(row.total),
-    supplier_name: row.supplier_name,
-    purchase_number: row.purchase_number ?? null,
-    supplier_invoice_number: row.supplier_invoice_number ?? null,
-    lineas,
-  };
+  return { ...cabecera, lineas };
 }

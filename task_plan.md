@@ -1,5 +1,18 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 lista)
+
+- **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`). Sin merge a `develop` ni a `main`.
+- **Parte 1 (corregir la apertura): hecha y probada en staging.** `102` aplicada SOLO en staging. Va a producción en
+  la ventana, después de la 101 (está en `scripts/ensayo-ventana/orden.mjs` con su verificación).
+- **Staging:** la apertura quedó con sus cifras de antes de la prueba (versión 7, AD-000013, 3,000.00); las versiones
+  5 y 6 son las de la prueba (CxC 100,000 → 90,000).
+- **Preview:** el interruptor `FINANZAS_POSTEO_HISTORICO_HABILITADO` está encendido sólo para la rama
+  `feat/bloque1-contable`. Para guardar una corrección en el Preview de esta rama hay que encenderlo para ella
+  (decisión de Oliver: es la cuenta de Vercel del cliente).
+- **Esperando a Oliver** para seguir con la Parte 2 (corregir compras contabilizadas) y la Parte 3 (Libro Mayor).
+
+
 ## ▶ PARA RETOMAR (cierre del 08/10/2026: revisión de Josuarth en curso, rama congelada)
 
 - **Rama:** `feat/bloque1-contable`, último commit el de estas notas de cierre (la guía simplificada es `5e1d5b9`).

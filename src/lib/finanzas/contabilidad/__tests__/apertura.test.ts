@@ -174,12 +174,16 @@ test("con apertura el saldo_inicial deja de contar, en las tres fuentes", () => 
 });
 
 test("🔴 la reversión de la apertura lleva SIEMPRE la fecha de la apertura", () => {
-  const s = readFileSync(path.join(process.cwd(), "src/lib/finanzas/api/apertura.ts"), "utf8");
+  const s = readFileSync(path.join(process.cwd(), "src/lib/finanzas/api/apertura.ts"), "utf8").replace(/\r\n/g, "\n");
   const i = s.indexOf("export async function reversarApertura");
   const cuerpo = s.slice(i, s.indexOf("\n}\n", i));
-  assert.match(cuerpo, /fecha: original\.transaction_date/);
+  // El espejo (con la fecha) lo arma un helper que comparte con «Corregir la apertura» (102).
+  const j = s.indexOf("async function espejoDeLaApertura");
+  const espejo = s.slice(j, s.indexOf("\n}\n", j));
+  assert.match(cuerpo, /espejoDeLaApertura\(/);
+  assert.match(espejo, /fecha: original\.transaction_date/);
   assert.match(cuerpo, /if \(!estado\.mesAbierto\)/);
-  assert.doesNotMatch(cuerpo, /resolverFechaDeRegistro|hoyEnPanama/);
+  assert.doesNotMatch(cuerpo + espejo, /resolverFechaDeRegistro|hoyEnPanama/);
   const m = readFileSync(path.join(process.cwd(), "sql/pending/101_reversar_apertura.sql"), "utf8");
   assert.match(m, /p_transaction_date <> v_orig_date/);
 });

@@ -110,21 +110,21 @@ export function FilaExpandible({
         aria-expanded={abierta}
         title={abierta ? "Cerrar el asiento" : "Ver de dónde sale este número"}
       >
-        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-500">
+        <td className="max-w-[150px] px-2 py-2 font-mono text-xs text-gray-500">
           {fila.cuentaDistribucion}
         </td>
-        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-600">
+        <td className="whitespace-nowrap px-2 py-2 font-mono text-xs text-gray-600">
           {fila.fecha}
         </td>
-        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-700">{fila.modulo}</td>
-        <td className="px-3 py-2 text-sm text-gray-700">{fila.tipoTransaccion}</td>
-        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-700">{fila.numeroDocumento}</td>
-        <td className="px-3 py-2 font-mono text-xs text-gray-500">{fila.numero}</td>
-        <td className="px-3 py-2 font-mono text-xs text-gray-600">{fila.referenciaExterna}</td>
+        <td className="max-w-[90px] px-2 py-2 font-mono text-xs text-gray-700">{fila.modulo}</td>
+        <td className="px-2 py-2 text-sm text-gray-700">{fila.tipoTransaccion}</td>
+        <td className="whitespace-nowrap px-2 py-2 font-mono text-xs text-gray-700">{fila.numeroDocumento}</td>
+        <td className="px-2 py-2 font-mono text-xs text-gray-500">{fila.numero}</td>
+        <td className="px-2 py-2 font-mono text-xs text-gray-600">{fila.referenciaExterna}</td>
         {/* E3: sin tercero la celda queda VACÍA (Josuarth, 01/10/2026). */}
-        <td className="px-3 py-2 text-sm text-gray-700">{fila.nombre}</td>
-        <td className="px-3 py-2 text-sm text-gray-600">{fila.descripcion}</td>
-        <td className="px-3 py-2 text-sm text-gray-600">
+        <td className="px-2 py-2 text-sm text-gray-700">{fila.nombre}</td>
+        <td className="min-w-[180px] px-2 py-2 text-sm text-gray-600">{fila.descripcion}</td>
+        <td className="px-2 py-2 text-sm text-gray-600">
           {fila.contrapartida}
           {fila.contrapartidaAmbigua && (
             <span
@@ -135,13 +135,13 @@ export function FilaExpandible({
             </span>
           )}
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="whitespace-nowrap px-2 py-2 text-right">
           <CeldaImporte value={fila.debito} abierta={abierta} />
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="whitespace-nowrap px-2 py-2 text-right">
           <CeldaImporte value={fila.credito} abierta={abierta} />
         </td>
-        <td className="px-3 py-2 text-right">
+        <td className="whitespace-nowrap px-2 py-2 text-right">
           <Monto value={fila.saldo} />
         </td>
       </tr>

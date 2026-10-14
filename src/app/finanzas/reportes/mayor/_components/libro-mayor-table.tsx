@@ -2,6 +2,10 @@ import { AlertTriangle } from "lucide-react";
 import { fmtImporte } from "@/lib/utils/importe";
 import type { MayorDeCuenta } from "@/lib/finanzas/reports/libro-mayor";
 import { CuerpoMayor } from "./cuerpo-mayor";
+import { MayorDesplazable } from "./mayor-desplazable";
+
+/** Ancho mínimo (px) de cada columna, en su orden: el de su contenido, medido el 14/10/2026. */
+const ANCHOS_DE_COLUMNA = [110, 108, 76, 108, 120, 108, 108, 133, 180, 123, 116, 116, 108];
 
 /**
  * Tabla del Libro Mayor, con las columnas del modelo de Josuar y en su orden.
@@ -70,27 +74,33 @@ export function LibroMayorTable({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px]">
+        {/* PARTE 3 (14/10/2026): la página se desplaza como siempre; el
+            encabezado de columnas queda fijo bajo la cabecera de la app y la
+            barra horizontal, fija al pie de la ventana (MayorDesplazable).
+            Los anchos son los mínimos de cada columna: las 13 del modelo de
+            Josuarth no entran en 1366 px sin desplazar. */}
+        <MayorDesplazable
+          anchos={ANCHOS_DE_COLUMNA}
+          encabezado={
             <thead>
               {/* Orden y nombres EXACTOS del modelo que mandó Josuarth el
                   26/08/2026 (`Temas Contables/image001.png`). No reordenar sin
                   mirar esa captura: la revisa contra su propio reporte. */}
               <tr className="border-b bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-3 py-2 font-semibold">Cuenta de distribución</th>
-                <th className="px-3 py-2 font-semibold">Fecha de la transacción</th>
+                <th className="px-2 py-2 font-semibold">Cuenta de distribución</th>
+                <th className="px-2 py-2 font-semibold">Fecha de la transacción</th>
                 {/* E3 (01/10/2026), punto 2 de Josuarth: el esquema de su
                     Mayor de QuickBooks, Transaction Type · Num · Trans #. El
                     módulo es el que filtra; el N.º de documento es el propio
                     (FAC-HON-, CO-, AD-); el de transacción, el correlativo. */}
-                <th className="px-3 py-2 font-semibold">Módulo</th>
-                <th className="px-3 py-2 font-semibold">Tipo de transacción</th>
-                <th className="px-3 py-2 font-semibold">N.º documento</th>
-                <th className="px-3 py-2 font-semibold">N.º transacción</th>
-                <th className="px-3 py-2 font-semibold">Ref. externa</th>
-                <th className="px-3 py-2 font-semibold">Nombre</th>
-                <th className="px-3 py-2 font-semibold">Descripción</th>
-                <th className="px-3 py-2 font-semibold">Cuenta de contrapartida</th>
+                <th className="px-2 py-2 font-semibold">Módulo</th>
+                <th className="px-2 py-2 font-semibold">Tipo de transacción</th>
+                <th className="px-2 py-2 font-semibold">N.º documento</th>
+                <th className="px-2 py-2 font-semibold">N.º transacción</th>
+                <th className="px-2 py-2 font-semibold">Ref. externa</th>
+                <th className="px-2 py-2 font-semibold">Nombre</th>
+                <th className="px-2 py-2 font-semibold">Descripción</th>
+                <th className="px-2 py-2 font-semibold">Cuenta de contrapartida</th>
                 {/* DÉBITO Y CRÉDITO EN COLUMNAS PROPIAS (09/09/2026).
                     Antes había una sola columna «Importe», con el crédito en
                     negativo. Josuarth: «debería decir débito y crédito… debe
@@ -99,11 +109,13 @@ export function LibroMayorTable({
                     lo primero que mira un contador.
                     La exportación a Excel sigue con UNA columna con signo: no
                     se toca el archivo que él ya usa. */}
-                <th className="px-3 py-2 text-right font-semibold">Débito</th>
-                <th className="px-3 py-2 text-right font-semibold">Crédito</th>
-                <th className="px-3 py-2 text-right font-semibold">Saldo</th>
+                <th className="px-2 py-2 text-right font-semibold">Débito</th>
+                <th className="px-2 py-2 text-right font-semibold">Crédito</th>
+                <th className="px-2 py-2 text-right font-semibold">Saldo</th>
               </tr>
             </thead>
+          }
+        >
             <CuerpoMayor
               filas={filas}
               destinos={Object.fromEntries(destinos)}
@@ -121,31 +133,30 @@ export function LibroMayorTable({
                 columna Saldo, que es donde él lo lee.
               */}
               <tr className="border-t-2 border-integra-navy/20 bg-gray-50/60">
-                <td colSpan={10} className="px-3 py-2 text-right text-sm text-gray-600">
+                <td colSpan={10} className="px-2 py-2 text-right text-sm text-gray-600">
                   Neto del período
                 </td>
                 {/* Con las columnas separadas, los totales de débito y de
                     crédito van cada uno bajo la suya: repetirlos en el texto de
                     la izquierda sería decir dos veces lo mismo. */}
-                <td className="px-3 py-2 text-right">
+                <td className="px-2 py-2 text-right">
                   <span className="font-mono text-sm font-semibold tabular-nums text-gray-700">
                     {fmtImporte(totales.totalDebitos)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-2 py-2 text-right">
                   <span className="font-mono text-sm font-semibold tabular-nums text-gray-700">
                     {fmtImporte(totales.totalCreditos)}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-2 py-2 text-right">
                   <span className="inline-block rounded border-2 border-integra-navy/40 px-2 py-1">
                     <Monto value={totales.netoDelPeriodo} bold />
                   </span>
                 </td>
               </tr>
             </tfoot>
-          </table>
-        </div>
+        </MayorDesplazable>
       </div>
 
       {hayAmbiguas && (

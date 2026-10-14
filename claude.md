@@ -740,6 +740,13 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **Staging:** la 096 se aplicó con la llave `finanzas.inicio_contable_existentes = 'aceptar'` (10 asientos de
   antes del corte). Las semillas bajan el inicio mientras siembran (`seed-data/inicio-contable-semilla.ts`).
 
+### Corregir la apertura (desde 2026-10-14 — `102` aplicada en staging y en PRODUCCIÓN el 14/10)
+- 🔴 **Corregir nunca edita el libro**: `corregir_apertura` (SECURITY DEFINER, sólo `service_role`) reversa la vigente
+  (lógica de la 101, misma fecha) y postea la corregida (lógica de la 100) en UNA transacción, con motivo. Admin y
+  contador, mes abierto, sin límite de veces. La nueva queda ligada (`aperturas.corrige_apertura_id`).
+- **La tabla se valida con `validarApertura`, la MISMA regla del Excel** (`validarFilasEditables`). «Revisar» es en
+  seco y su hash ata «Guardar». El Excel sigue como estaba. SOP-050.
+
 ### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
 - 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
   cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:

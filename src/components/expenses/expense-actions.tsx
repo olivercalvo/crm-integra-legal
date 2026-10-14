@@ -29,20 +29,28 @@ interface ExpenseActionsProps {
   /**
    * 096: si el gasto está contabilizado fuera (anterior al inicio contable), el
    * motivo. No se ofrece eliminarlo; la ruta responde 409 y la base lo rechaza.
+   * Desde el 14/10/2026 también si el gasto está en el libro contable.
    */
   bloqueoEliminar?: string | null;
+  /**
+   * 14/10/2026: si el gasto está en el libro contable, el motivo. El lápiz sale
+   * deshabilitado (no abre el formulario) y la ruta responde 409.
+   */
+  bloqueoEditar?: string | null;
 }
 
 function formatCurrency(amount: number) {
   return `B/. ${amount.toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloqueoEliminar = null }: ExpenseActionsProps) {
+export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloqueoEliminar = null, bloqueoEditar = null }: ExpenseActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [mode, setMode] = useState<"view" | "edit" | "delete">("view");
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // El motivo de un botón deshabilitado, para quien toca en vez de pasar el mouse.
+  const [aviso, setAviso] = useState<string | null>(null);
 
   // Edit state
   const [editAmount, setEditAmount] = useState("");
@@ -59,6 +67,11 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloq
   };
 
   const startEdit = () => {
+    // Un gasto en el libro no abre el formulario.
+    if (bloqueoEditar) {
+      setAviso(bloqueoEditar);
+      return;
+    }
     setEditAmount(String(expense.amount));
     setEditConcept(expense.concept);
     setEditDate(expense.date);
@@ -230,19 +243,35 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloq
                     e.target.value = "";
                   }}
                 />
+                {/* Deshabilitados con aria-disabled y no con `disabled`: un botón
+                    `disabled` no recibe el toque, y en el celular el motivo no se
+                    vería nunca. Tocarlo muestra el motivo; no abre nada. */}
                 <button
                   onClick={startEdit}
-                  className="rounded p-1.5 text-gray-400 hover:text-integra-navy hover:bg-gray-100 transition-colors"
-                  title="Editar gasto"
+                  aria-disabled={bloqueoEditar ? true : undefined}
+                  className={
+                    bloqueoEditar
+                      ? "rounded p-1.5 text-gray-400 opacity-40 cursor-not-allowed"
+                      : "rounded p-1.5 text-gray-400 hover:text-integra-navy hover:bg-gray-100 transition-colors"
+                  }
+                  title={bloqueoEditar ?? "Editar gasto"}
+                  aria-label={bloqueoEditar ? `No se edita: ${bloqueoEditar}` : "Editar gasto"}
                 >
                   <Pencil size={14} />
                 </button>
                 <button
-                  onClick={() => { setMode("delete"); setError(null); }}
-                  disabled={!!bloqueoEliminar}
-                  className="rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                  onClick={() => {
+                    if (bloqueoEliminar) { setAviso(bloqueoEliminar); return; }
+                    setMode("delete"); setError(null);
+                  }}
+                  aria-disabled={bloqueoEliminar ? true : undefined}
+                  className={
+                    bloqueoEliminar
+                      ? "rounded p-1.5 text-gray-400 opacity-40 cursor-not-allowed"
+                      : "rounded p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  }
                   title={bloqueoEliminar ?? "Eliminar gasto"}
-                  aria-label={bloqueoEliminar ? "No se elimina: contabilizado fuera" : "Eliminar gasto"}
+                  aria-label={bloqueoEliminar ? `No se elimina: ${bloqueoEliminar}` : "Eliminar gasto"}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -255,6 +284,14 @@ export function ExpenseRow({ expense, canEdit, colorClass = "text-red-600", bloq
         )}
         {error && (
           <p className="mt-1 text-xs text-red-600">{error}</p>
+        )}
+        {aviso && (
+          <p className="mt-1 flex items-start gap-1 text-xs text-amber-800" role="status">
+            <span className="flex-1">{aviso}</span>
+            <button type="button" onClick={() => setAviso(null)} aria-label="Cerrar aviso" className="text-amber-700 hover:text-amber-900">
+              <X size={12} />
+            </button>
+          </p>
         )}
       </div>
     );

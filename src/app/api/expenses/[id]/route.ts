@@ -5,6 +5,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/supabase/server-query";
 import { conManejoDeAuditoria } from "@/lib/auditoria/error-de-auditoria";
+import {
+  MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA,
+  MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA,
+  MENSAJE_NUMERO_DE_FACTURA_CONGELADO,
+  cambiaNumeroDeFacturaCargado,
+  gastosConAsiento,
+  tocaCamposCongelados,
+} from "@/lib/finanzas/contabilidad/gasto-tramite-en-el-libro";
+
+/**
+ * La base congela un gasto en el libro (`reject_expense_mutation_si_asentado`,
+ * ERRCODE restrict_violation = 23001). Si un pedido llega igual hasta ahí, es un
+ * 409 con el mensaje de la pantalla, nunca un 500.
+ */
+const ES_GASTO_CONGELADO = (e: { code?: string } | null) => e?.code === "23001";
 
 // Mismo criterio que POST /api/expenses: gastos es admin/abogada. El asistente
 // quedó fuera del alcance de gastos el 24/08/2026, el contador tiene su propio
@@ -53,6 +68,17 @@ export const PATCH = conManejoDeAuditoria(async function PATCH(
 
     const body = await request.json();
     const { amount, concept, date, accounting_date, receipt_url, receipt_filename, supplier_invoice_number } = body;
+
+    // 14/10/2026: un gasto en el libro no se edita (monto, concepto, fechas). El
+    // comprobante y completar el N.º de factura vacío sí: el alta adjunta el
+    // comprobante con este PATCH después de postear el gasto.
+    const enElLibro = (await gastosConAsiento(admin, profile.tenant_id, [expenseId])).has(expenseId);
+    if (enElLibro && tocaCamposCongelados(existing, { amount, concept, date, accounting_date })) {
+      return NextResponse.json({ error: MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA }, { status: 409 });
+    }
+    if (enElLibro && cambiaNumeroDeFacturaCargado(existing.supplier_invoice_number, supplier_invoice_number)) {
+      return NextResponse.json({ error: MENSAJE_NUMERO_DE_FACTURA_CONGELADO }, { status: 409 });
+    }
 
     const updates: Record<string, unknown> = {};
     const auditEntries: { field: string; old_value: string | null; new_value: string | null }[] = [];
@@ -132,6 +158,9 @@ export const PATCH = conManejoDeAuditoria(async function PATCH(
 
     if (updateError) {
       console.error("Error updating expense:", updateError);
+      if (ES_GASTO_CONGELADO(updateError)) {
+        return NextResponse.json({ error: MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA }, { status: 409 });
+      }
       return NextResponse.json({ error: "Error al actualizar el gasto" }, { status: 500 });
     }
 
@@ -196,6 +225,13 @@ export const DELETE = conManejoDeAuditoria(async function DELETE(
       return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
     }
 
+    // 14/10/2026: un gasto en el libro no se elimina. ANTES de tocar el storage:
+    // hasta hoy el comprobante se borraba y después fallaba el DELETE (500), y el
+    // gasto quedaba sin su archivo.
+    if ((await gastosConAsiento(admin, profile.tenant_id, [expenseId])).has(expenseId)) {
+      return NextResponse.json({ error: MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA }, { status: 409 });
+    }
+
     // 096: un gasto contabilizado fuera (anterior al inicio) no se elimina. Antes
     // de tocar el storage.
     try {
@@ -221,6 +257,9 @@ export const DELETE = conManejoDeAuditoria(async function DELETE(
 
     if (deleteError) {
       console.error("Error deleting expense:", deleteError);
+      if (ES_GASTO_CONGELADO(deleteError)) {
+        return NextResponse.json({ error: MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA }, { status: 409 });
+      }
       return NextResponse.json({ error: "Error al eliminar el gasto" }, { status: 500 });
     }
 

@@ -1,5 +1,21 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Hotfix: un gasto de trámite en el libro no se edita ni se elimina] - 2026-10-14
+
+Rama `hotfix/editar-gasto-tramite` desde `main` (`9976b03`). Sin migraciones.
+- **Antes:** en la pestaña Gastos del caso, el lápiz y la papelera se ofrecían también en gastos con asiento; al
+  guardar o eliminar, `/api/expenses/[id]` respondía **500** (la base congela el gasto). Peor en el borrado: el
+  comprobante se borraba del almacenamiento ANTES de que fallara el DELETE, y el gasto quedaba sin su archivo.
+- **Ahora:** con el gasto en el libro, el lápiz y la papelera salen deshabilitados; al pasar el mouse o tocarlos
+  dicen «Este gasto ya está en el libro contable y no se edita (no se elimina). Si hay un error, el contador lo
+  corrige con un asiento de diario.» y no abren nada. La ruta responde **409** con el mismo texto: el PATCH si toca
+  monto, concepto o fechas (o un N.º de factura ya cargado); el DELETE siempre, y antes de tocar el comprobante. Si
+  igual llega a la base, el congelado (23001) se traduce a 409.
+- **Sigue igual:** los gastos sin asiento se editan y se eliminan; adjuntar o cambiar el comprobante de un gasto en
+  el libro (el alta lo adjunta con un PATCH después de postear) y completar el N.º de factura vacío.
+- Regla en `contabilidad/gasto-tramite-en-el-libro.ts` (el criterio de `gasto_tramite_tiene_asiento`). Test:
+  `gasto-tramite-en-el-libro.test.ts`.
+
 ## [Deploy log: 103 en producción y merge de las Partes 2 y 3] - 2026-10-14
 
 **Migración `103_corregir_compra.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de

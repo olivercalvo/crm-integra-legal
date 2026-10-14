@@ -908,3 +908,13 @@ Las dos unidades a la vista al mismo tiempo. Es lo que evita cargar 700%: el ser
 igual, pero un rechazo al final del formulario enseña menos que ver el decimal mientras se
 escribe. El pie aclara que la tasa aparece sola en los tres selectores, que su ITBMS va a
 `200003`, y que una tasa **no se borra: se desactiva**.
+
+## Corregir la apertura (Saldos iniciales, 14/10/2026)
+
+En **Finanzas › Configuración › Saldos iniciales**, con la apertura vigente y su mes abierto, «Corregir la apertura»
+(al lado de «Reversar la apertura») abre una tabla con las líneas de la vigente: cuenta, tercero (clientes en
+100004, proveedores en 200001, cualquiera o ninguno en el resto), documento externo, fecha del documento,
+vencimiento, débito y crédito. Se agregan y quitan líneas; el pie muestra los totales y la diferencia mientras se
+escribe. «Revisar» aplica las reglas del Excel, marca los errores debajo de cada línea y muestra el saldo por cuenta
+antes y después. Recién sin errores aparecen el motivo (obligatorio) y «Guardar la corrección», con confirmación.
+Al pie, «Historial de la apertura»: cada versión con su origen, motivo, usuario, fecha y reversión.

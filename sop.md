@@ -3715,3 +3715,21 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
    una NC para un cliente de prueba: 409 antes del número (no deja huecos). Para facturarle algo real a un
    cliente marcado, primero se lo desmarca con la llave.
 4. Listados: se ven, con el badge «Prueba». Detalle: banda gris, sin botones de acción.
+
+## SOP-050: Corregir la apertura desde la pantalla (14/10/2026)
+
+1. **Corregir NUNCA edita el libro.** `corregir_apertura` (102) reversa la apertura vigente con su misma fecha (101) y
+   postea la corregida (100) en UNA transacción. Si algo falla (no cuadra, falta documento, espejo distinto, mes
+   cerrado, otra persona la corrigió antes), no queda nada: ni reversión, ni apertura nueva, ni número.
+2. **Las reglas son las del Excel.** La tabla se convierte en la matriz de la plantilla y pasa por `validarApertura`.
+   No hay una segunda validación: si cambia una regla de la apertura, cambia para las dos puertas.
+3. **«Revisar» antes de guardar.** El hash es `sha256(apertura | firma de las líneas)`; guardar con otro hash da 409.
+   «Sin cambios» es un bloqueo (la firma compara lo que va al libro y a las partidas).
+4. **Mes cerrado:** ni corregir ni reversar. El ajuste va con un asiento de diario en un mes abierto, o el contador
+   reabre el mes en Períodos contables.
+5. **Historial:** cada fila de `aperturas` es una versión (orden de registro). `corrige_apertura_id` + `motivo_correccion`
+   dicen qué corrige y por qué; la reversión lleva «Corrección de la apertura: <motivo>». La liga sólo la escribe la
+   función (válvula de transacción `finanzas.corregir_apertura`); por fuera, el trigger la rechaza.
+6. **Interruptor:** guardar pasa por `FINANZAS_POSTEO_HISTORICO_HABILITADO`, como contabilizar y reversar la apertura.
+   Revisar no.
+

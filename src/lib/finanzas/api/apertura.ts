@@ -8,6 +8,9 @@
  *    servicio y el usuario en `x-actor-id` (bitácora).
  * 🔴 La reversión lleva SIEMPRE la fecha de la apertura y sólo con su mes
  *    abierto (101). Con el mes cerrado, la corrección es un ajuste a mano.
+ * 🔴 «Corregir la apertura» (102) nunca edita el libro: reversa la vigente y
+ *    registra la corregida en UNA transacción (corregir_apertura), con las
+ *    MISMAS reglas que el Excel (validarApertura) y el mismo espejo que Reversar.
  */
 
 import { createHash } from "node:crypto";
@@ -17,8 +20,11 @@ import { MutationError, pgErrorToMessage } from "@/lib/finanzas/api/errors";
 import { cargarInicioContable, fechaCorta } from "@/lib/finanzas/contabilidad/inicio-contable";
 import {
   cuadreAlCorte,
+  firmaDeLasLineas,
   saldosDeLasLineas,
   validarApertura,
+  validarFilasEditables,
+  type FilaEditableDeApertura,
   type ContextoDeApertura,
   type CuadreAlCorte,
   type CuentaDeApertura,
@@ -35,8 +41,8 @@ type DB = SupabaseClient;
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 export const MENSAJE_MES_DE_APERTURA_CERRADO = (fecha: string) =>
-  `El mes de la apertura (${fechaCorta(fecha).slice(3)}) está cerrado: la apertura ya no se reversa. ` +
-  "Si hay que corregir un saldo, se hace con un asiento de ajuste a mano en Asientos de Diario.";
+  `El mes de la apertura (${fechaCorta(fecha).slice(3)}) está cerrado: la apertura ya no se corrige ni se reversa. ` +
+  "El ajuste va con un asiento de diario en un mes abierto, o el contador reabre el mes en Períodos contables.";
 
 // ---------------------------------------------------------------------------
 // Fecha y estado
@@ -77,6 +83,10 @@ export interface AperturaRegistrada {
   estado: "vigente" | "reversada";
   creadaEl: string;
   creadaPor: string | null;
+  /** 1, 2, 3… en el orden en que se registraron (Excel o corrección). */
+  version: number;
+  /** 102: la apertura que esta corrige, y por qué. */
+  corrige: { id: string; version: number | null; motivo: string } | null;
   reversion: { entryNumber: number | null; motivo: string | null; el: string | null; por: string | null } | null;
 }
 
@@ -85,6 +95,7 @@ export async function listarAperturas(db: DB, tenantId: string): Promise<Apertur
     .from("aperturas")
     .select(
       "id, entry_id, fecha, file_name, lineas, total_debitos, estado, created_at, motivo_reversion, reversed_at, " +
+        "corrige_apertura_id, motivo_correccion, " +
         "creador:users!aperturas_created_by_fkey(full_name), reversor:users!aperturas_reversed_by_fkey(full_name), " +
         "asiento:journal_entries!aperturas_entry_id_fkey(entry_number, reference), " +
         "reversion:journal_entries!aperturas_reversal_entry_id_fkey(entry_number)"
@@ -95,10 +106,14 @@ export async function listarAperturas(db: DB, tenantId: string): Promise<Apertur
   type Fila = {
     id: string; entry_id: string; fecha: string; file_name: string; lineas: number; total_debitos: number | string;
     estado: "vigente" | "reversada"; created_at: string; motivo_reversion: string | null; reversed_at: string | null;
+    corrige_apertura_id: string | null; motivo_correccion: string | null;
     creador: { full_name: string } | null; reversor: { full_name: string } | null;
     asiento: { entry_number: number; reference: string | null } | null; reversion: { entry_number: number } | null;
   };
-  return ((data ?? []) as unknown as Fila[]).map((a) => ({
+  const filas = (data ?? []) as unknown as Fila[];
+  // La versión: el orden de registro (la consulta viene de la más nueva a la más vieja).
+  const version = new Map(filas.map((a, i) => [a.id, filas.length - i]));
+  return filas.map((a) => ({
     id: a.id,
     entryId: a.entry_id,
     entryNumber: Number(a.asiento?.entry_number ?? 0),
@@ -110,6 +125,10 @@ export async function listarAperturas(db: DB, tenantId: string): Promise<Apertur
     estado: a.estado,
     creadaEl: a.created_at,
     creadaPor: a.creador?.full_name ?? null,
+    version: version.get(a.id) ?? 0,
+    corrige: a.corrige_apertura_id
+      ? { id: a.corrige_apertura_id, version: version.get(a.corrige_apertura_id) ?? null, motivo: a.motivo_correccion ?? "" }
+      : null,
     reversion: a.estado === "reversada"
       ? { entryNumber: a.reversion?.entry_number ?? null, motivo: a.motivo_reversion, el: a.reversed_at, por: a.reversor?.full_name ?? null }
       : null,
@@ -341,17 +360,7 @@ export async function contabilizarApertura(
   const { data, error } = await ledgerDb.rpc("post_apertura", {
     p_tenant_id: tenantId,
     p_description: `Asiento de apertura al ${fechaCorta(v.fecha)}`,
-    p_lines: v.resultado.lineas.map((l) => ({
-      account_code: l.account_code,
-      debit: l.debit,
-      credit: l.credit,
-      description: l.description,
-      client_id: l.client_id,
-      supplier_id: l.supplier_id,
-      documento_externo: l.documento_externo,
-      fecha_documento: l.fecha_documento,
-      vencimiento: l.vencimiento,
-    })),
+    p_lines: lineasParaElLibro(v.resultado.lineas),
     p_file_name: fileName,
     p_file_hash: v.hash,
     p_created_by: userId,
@@ -368,14 +377,13 @@ export async function contabilizarApertura(
 // Reversar (101): la misma fecha, el mes abierto
 // ---------------------------------------------------------------------------
 
-export async function reversarApertura(db: DB, ledgerDb: DB, tenantId: string, userId: string, motivo: unknown) {
-  const texto = typeof motivo === "string" ? motivo.trim() : "";
-  if (texto.length < 3 || texto.length > 1000) throw new MutationError("El motivo va de 3 a 1000 caracteres.", 400);
-  const estado = await cargarEstadoDeLaApertura(db, tenantId);
-  if (!estado.vigente) throw new MutationError("No hay una apertura vigente para reversar.", 404);
-  if (!estado.mesAbierto) throw new MutationError(MENSAJE_MES_DE_APERTURA_CERRADO(estado.vigente.fecha), 409);
-
-  const original = await getAsientoDelLibro(db, tenantId, estado.vigente.entryId);
+/**
+ * El espejo de la apertura, con su MISMA fecha (101). Lo arma
+ * `construirAsientoDeReversion`, la función de toda reversión, y la base lo
+ * verifica. Lo usan «Reversar la apertura» y «Corregir la apertura» (102).
+ */
+async function espejoDeLaApertura(db: DB, tenantId: string, entryId: string, motivo: string) {
+  const original = await getAsientoDelLibro(db, tenantId, entryId);
   if (!original) throw new MutationError("No se encontró el asiento de la apertura.", 404);
   const armado = construirAsientoDeReversion(
     {
@@ -390,25 +398,215 @@ export async function reversarApertura(db: DB, ledgerDb: DB, tenantId: string, u
       })),
     },
     // 101: la MISMA fecha que la apertura, siempre.
-    { fecha: original.transaction_date, motivo: texto, source_id: null }
+    { fecha: original.transaction_date, motivo, source_id: null }
   );
   if (!armado.ok) throw new MutationError(armado.mensaje, 422);
-
-  const { data, error } = await ledgerDb.rpc("reverse_journal_entry", {
-    p_tenant_id: tenantId,
-    p_entry_id: original.id,
-    p_reason: armado.asiento.reversal_reason,
-    p_transaction_date: armado.asiento.transaction_date,
-    p_description: `Reversión de la apertura al ${fechaCorta(original.transaction_date)}`,
-    p_lines: armado.asiento.lines.map((l) => ({
+  return {
+    original,
+    asiento: armado.asiento,
+    lineas: armado.asiento.lines.map((l) => ({
       account_code: l.account_code, debit: l.debit, credit: l.credit, description: l.description ?? null,
       client_id: l.client_id ?? null, supplier_id: l.supplier_id ?? null,
     })),
+  };
+}
+
+export async function reversarApertura(db: DB, ledgerDb: DB, tenantId: string, userId: string, motivo: unknown) {
+  const texto = typeof motivo === "string" ? motivo.trim() : "";
+  if (texto.length < 3 || texto.length > 1000) throw new MutationError("El motivo va de 3 a 1000 caracteres.", 400);
+  const estado = await cargarEstadoDeLaApertura(db, tenantId);
+  if (!estado.vigente) throw new MutationError("No hay una apertura vigente para reversar.", 404);
+  if (!estado.mesAbierto) throw new MutationError(MENSAJE_MES_DE_APERTURA_CERRADO(estado.vigente.fecha), 409);
+
+  const { original, asiento, lineas } = await espejoDeLaApertura(db, tenantId, estado.vigente.entryId, texto);
+  const { data, error } = await ledgerDb.rpc("reverse_journal_entry", {
+    p_tenant_id: tenantId,
+    p_entry_id: original.id,
+    p_reason: asiento.reversal_reason,
+    p_transaction_date: asiento.transaction_date,
+    p_description: `Reversión de la apertura al ${fechaCorta(original.transaction_date)}`,
+    p_lines: lineas,
     p_created_by: userId,
   });
   if (error) throw new MutationError(error.message ?? "No se pudo reversar la apertura.", 409, error);
   const r = (data ?? {}) as Record<string, unknown>;
   return { entry_number: Number(r.entry_number), transaction_date: String(r.transaction_date) };
+}
+
+// ---------------------------------------------------------------------------
+// Corregir (102): reversa la vigente y registra la corregida, en UNA transacción
+// ---------------------------------------------------------------------------
+
+/**
+ * Las líneas de una apertura como filas de la tabla editable: el libro (cuenta,
+ * montos, tercero) más las partidas (documento, fecha, vencimiento).
+ */
+export async function cargarFilasDeLaApertura(db: DB, tenantId: string, aperturaId: string): Promise<FilaEditableDeApertura[]> {
+  const { data: ap, error: e0 } = await db.from("aperturas").select("entry_id").eq("tenant_id", tenantId).eq("id", aperturaId).maybeSingle();
+  if (e0) throw new MutationError(pgErrorToMessage(e0), 500, e0);
+  if (!ap) throw new MutationError("No se encontró la apertura.", 404);
+  const entryId = (ap as { entry_id: string }).entry_id;
+  const [lineas, partidas] = await Promise.all([
+    db.from("journal_entry_lines")
+      .select("line_order, debit, credit, clients(client_number), suppliers(supplier_number), chart_of_accounts!inner(code)")
+      .eq("tenant_id", tenantId).eq("entry_id", entryId).order("line_order"),
+    db.from("apertura_partidas")
+      .select("line_order, documento_externo, fecha_documento, vencimiento")
+      .eq("tenant_id", tenantId).eq("apertura_id", aperturaId),
+  ]);
+  for (const r of [lineas, partidas]) if (r.error) throw new MutationError(pgErrorToMessage(r.error), 500, r.error);
+  type Partida = { line_order: number; documento_externo: string | null; fecha_documento: string | null; vencimiento: string | null };
+  const porLinea = new Map(((partidas.data ?? []) as Partida[]).map((p) => [p.line_order, p]));
+  return ((lineas.data ?? []) as unknown as {
+    line_order: number; debit: number | string; credit: number | string;
+    clients: { client_number: string | null } | null; suppliers: { supplier_number: string | null } | null;
+    chart_of_accounts: { code: string };
+  }[]).map((l) => {
+    const p = porLinea.get(l.line_order);
+    return {
+      cuenta: l.chart_of_accounts.code,
+      tercero: l.clients?.client_number ?? l.suppliers?.supplier_number ?? "",
+      documento: p?.documento_externo ?? "",
+      fecha: p?.fecha_documento ? String(p.fecha_documento).slice(0, 10) : "",
+      vencimiento: p?.vencimiento ? String(p.vencimiento).slice(0, 10) : "",
+      debito: Number(l.debit),
+      credito: Number(l.credit),
+    };
+  });
+}
+
+/** Lo que se le manda a post_apertura (100): igual desde el Excel que desde la tabla. */
+function lineasParaElLibro(lineas: ResultadoDeApertura["lineas"]) {
+  return lineas.map((l) => ({
+    account_code: l.account_code,
+    debit: l.debit,
+    credit: l.credit,
+    description: l.description,
+    client_id: l.client_id,
+    supplier_id: l.supplier_id,
+    documento_externo: l.documento_externo,
+    fecha_documento: l.fecha_documento,
+    vencimiento: l.vencimiento,
+  }));
+}
+
+export interface VistaPreviaDeCorreccion extends VistaPreviaDeApertura {
+  /** El saldo por cuenta antes y después, sólo de las cuentas que cambian. */
+  cambios: { cuenta: string; nombre: string; antes: number; despues: number }[];
+}
+
+export const MAX_FILAS_DE_CORRECCION = 2000;
+
+function filasDelPedido(filas: unknown): FilaEditableDeApertura[] {
+  if (!Array.isArray(filas) || filas.length === 0) throw new MutationError("La apertura corregida no tiene líneas.", 400);
+  if (filas.length > MAX_FILAS_DE_CORRECCION) {
+    throw new MutationError(`Son más de ${MAX_FILAS_DE_CORRECCION} líneas: para tantas, reversa la apertura y súbela por Excel.`, 400);
+  }
+  const txt = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  return filas.map((f) => {
+    const o = (f ?? {}) as Record<string, unknown>;
+    return { cuenta: txt(o.cuenta), tercero: txt(o.tercero), documento: txt(o.documento), fecha: txt(o.fecha),
+      vencimiento: txt(o.vencimiento), debito: num(o.debito), credito: num(o.credito) };
+  });
+}
+
+/**
+ * «Revisar» EN SECO: no escribe nada. Las MISMAS reglas que el Excel
+ * (validarApertura) y lo que impide guardar. El hash ata «Guardar» a lo que se
+ * revisó: si la tabla cambia después, hay que volver a revisar.
+ */
+export async function previsualizarCorreccion(db: DB, tenantId: string, aperturaId: string, filasCrudas: unknown): Promise<VistaPreviaDeCorreccion> {
+  const filas = filasDelPedido(filasCrudas);
+  const estado = await cargarEstadoDeLaApertura(db, tenantId);
+  const fecha = estado.vigente?.fecha ?? estado.fecha;
+  const ctx = await cargarContextoDeApertura(db, tenantId, fecha);
+  const resultado = validarFilasEditables(filas, ctx);
+
+  const bloqueos: string[] = [];
+  if (!estado.vigente || estado.vigente.id !== aperturaId) {
+    bloqueos.push("La apertura cambió mientras la corregías (otra persona la corrigió o la reversó). Vuelve a abrir «Corregir la apertura».");
+  }
+  if (!estado.mesAbierto) bloqueos.push(MENSAJE_MES_DE_APERTURA_CERRADO(fecha));
+
+  const actuales = estado.vigente ? validarFilasEditables(await cargarFilasDeLaApertura(db, tenantId, estado.vigente.id), ctx) : null;
+  const firma = firmaDeLasLineas(resultado.lineas, ctx.cuentas);
+  if (actuales && firma === firmaDeLasLineas(actuales.lineas, ctx.cuentas)) {
+    bloqueos.push("No cambiaste nada: la apertura corregida es igual a la vigente.");
+  }
+
+  const antes = new Map((actuales?.porCuenta ?? []).map((c) => [c.cuenta, c]));
+  const despues = new Map(resultado.porCuenta.map((c) => [c.cuenta, c]));
+  const cambios = Array.from(new Set([...Array.from(antes.keys()), ...Array.from(despues.keys())]))
+    .map((cuenta) => {
+      const a = antes.get(cuenta);
+      const d = despues.get(cuenta);
+      return { cuenta, nombre: (d ?? a)?.nombre ?? "", antes: r2((a?.debito ?? 0) - (a?.credito ?? 0)), despues: r2((d?.debito ?? 0) - (d?.credito ?? 0)) };
+    })
+    .filter((c) => Math.abs(c.antes - c.despues) >= 0.005)
+    .sort((x, y) => x.cuenta.localeCompare(y.cuenta));
+
+  const crm = await saldosCrmAlCorte(db, tenantId, fecha);
+  return {
+    hash: createHash("sha256").update(`${aperturaId}|${firma}`).digest("hex"),
+    fecha,
+    resultado,
+    cuadre: cuadreAlCorte(saldosDeLasLineas(resultado.lineas, ctx.cuentas), crm),
+    bloqueos,
+    cambios,
+  };
+}
+
+export async function corregirApertura(
+  db: DB,
+  ledgerDb: DB,
+  tenantId: string,
+  userId: string,
+  aperturaId: string,
+  filasCrudas: unknown,
+  motivo: unknown,
+  hashDeLaVistaPrevia: string
+): Promise<{ apertura_id: string; entry_number: number; reference: string; fecha: string; total_debitos: number;
+  version: number; reversion_entry_number: number }> {
+  const texto = typeof motivo === "string" ? motivo.trim() : "";
+  if (texto.length < 3 || texto.length > 1000) throw new MutationError("El motivo de la corrección va de 3 a 1000 caracteres.", 400);
+  const v = await previsualizarCorreccion(db, tenantId, aperturaId, filasCrudas);
+  if (v.hash !== hashDeLaVistaPrevia) {
+    throw new MutationError("La tabla cambió después de revisarla. Vuelve a apretar «Revisar» antes de guardar.", 409);
+  }
+  if (v.resultado.errores.length > 0) {
+    throw new MutationError(`La corrección tiene ${v.resultado.errores.length} error(es). No se registró nada.`, 422);
+  }
+  if (v.bloqueos.length > 0) throw new MutationError(v.bloqueos.join(" "), 409);
+
+  const { data: ap } = await db.from("aperturas").select("entry_id").eq("tenant_id", tenantId).eq("id", aperturaId).maybeSingle();
+  if (!ap) throw new MutationError("No se encontró la apertura.", 404);
+  const { lineas: espejo } = await espejoDeLaApertura(db, tenantId, (ap as { entry_id: string }).entry_id,
+    `Corrección de la apertura: ${texto}`);
+
+  const { data, error } = await ledgerDb.rpc("corregir_apertura", {
+    p_tenant_id: tenantId,
+    p_apertura_id: aperturaId,
+    p_motivo: texto,
+    p_espejo: espejo,
+    p_lines: lineasParaElLibro(v.resultado.lineas),
+    p_file_hash: v.hash,
+    p_created_by: userId,
+  });
+  if (error) {
+    // Los mensajes de la base ya están en castellano; y no se escribió nada.
+    throw new MutationError(`No se registró nada: ${error.message}`, error.code === "23514" ? 409 : 422, error);
+  }
+  const r = (data ?? {}) as Record<string, unknown>;
+  return {
+    apertura_id: String(r.apertura_id),
+    entry_number: Number(r.entry_number),
+    reference: String(r.reference),
+    fecha: String(r.fecha),
+    total_debitos: Number(r.total_debitos),
+    version: Number(r.version),
+    reversion_entry_number: Number(r.reversion_entry_number),
+  };
 }
 
 // ---------------------------------------------------------------------------

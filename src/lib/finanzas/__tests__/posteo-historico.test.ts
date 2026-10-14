@@ -53,6 +53,7 @@ test("🔴 cada ruta que escribe en el libro pregunta ANTES de escribir", () => 
     ["src/app/api/finanzas/asientos/documentos-existentes/route.ts", "contabilizarPlan("],
     ["src/app/api/finanzas/asientos/apertura/route.ts", "contabilizarApertura("],
     ["src/app/api/finanzas/asientos/apertura/reversar/route.ts", "reversarApertura("],
+    ["src/app/api/finanzas/asientos/apertura/corregir/route.ts", "corregirApertura("],
   ];
   for (const [archivo, escritura] of casos) {
     const f = leer(archivo);
@@ -77,6 +78,7 @@ test("las pantallas reciben el estado y deshabilitan el botón con el mensaje", 
     ["src/app/finanzas/asientos/documentos-existentes/page.tsx", "src/app/finanzas/asientos/documentos-existentes/_components/contabilizar-mes.tsx"],
     ["src/app/finanzas/asientos/apertura/page.tsx", "src/app/finanzas/asientos/apertura/_components/apertura-panel.tsx"],
     ["src/app/finanzas/asientos/apertura/page.tsx", "src/app/finanzas/asientos/apertura/_components/reversar-apertura.tsx"],
+    ["src/app/finanzas/asientos/apertura/page.tsx", "src/app/finanzas/asientos/apertura/_components/corregir-apertura.tsx"],
   ]) {
     assert.match(leer(pagina), /posteoHistoricoHabilitado\(\)/);
     const c = leer(componente);

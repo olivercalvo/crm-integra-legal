@@ -1,5 +1,42 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Deploy log: 102 en producción y merge de la Parte 1] - 2026-10-14
+
+**Migración `102_corregir_apertura.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de
+Supabase, con el paquete de `sql/tests/` (`95f339c`), en cuatro queries:
+1. Pre-flight (`preflight-102-produccion.sql`), antes: `true` en las tres columnas de la 100/101, `false` en las dos
+   de la 102; después de aplicar: `true` en las cinco.
+2. Apertura vigente (`apertura-vigente-produccion.sql`): **SIN APERTURA VIGENTE, 0 aperturas**, igual antes y
+   después de la verificación (la verificación no dejó nada escrito).
+3. La `102` (sin comentarios: el SQL Editor los pierde al pegar; nada depende de ellos).
+4. Verificación (`verificacion-102-produccion.sql`): **«102: todos los casos pasaron.»** con 11 ✅.
+
+Fecha de la apertura en producción: **30/06/2026** (por defecto: el día anterior al inicio contable, sin parámetro).
+Después: merge `--no-ff` de `feat/correcciones-contables` a `main` y a `develop` («sí, merge» de Oliver).
+
+## [Corregir la apertura desde la pantalla (Parte 1 de correcciones contables)] - 2026-10-14
+
+Rama `feat/correcciones-contables` desde `main` (`233cf35`). Migración **`102_corregir_apertura.sql`, aplicada SOLO en
+staging** el 14/10. Criterio de Oliver con Josuarth (14/10): un documento contabilizado se CORRIGE desde la pantalla,
+sin límite de veces, con el período abierto; corregir nunca edita el libro (reversa + asiento nuevo, en una
+transacción), con motivo y con historial de versiones.
+- **Saldos iniciales** (`/finanzas/asientos/apertura`): botón «Corregir la apertura» junto a «Reversar la apertura».
+  Abre las líneas de la vigente en una tabla editable (cuenta, tercero, documento, fecha, vencimiento, débito,
+  crédito; agregar y quitar líneas), con el total y la diferencia en vivo. «Revisar» valida EN SECO con
+  `validarApertura`, la MISMA regla del Excel (`validarFilasEditables`), y muestra el saldo por cuenta antes y
+  después y el cuadre al corte. «Guardar la corrección» pide motivo y exige el hash de la última revisión.
+- **Base (`102`):** `corregir_apertura(...)`, SECURITY DEFINER, EXECUTE sólo `service_role`: candado del correlativo,
+  la apertura tiene que ser la vigente, mes abierto, `reverse_journal_entry` (la lógica de la 101) y `post_apertura`
+  (la de la 100) en una transacción; la nueva queda ligada (`aperturas.corrige_apertura_id`, `motivo_correccion`) con
+  la válvula `finanzas.corregir_apertura`. 100 y 101 no cambian.
+- **Historial** en la misma pantalla: versión 1, 2, 3…, con origen (Excel o corrección y su motivo), usuario, fecha y
+  la reversión. Las fechas salen DD/MM/AAAA (antes `es-PA` las mostraba MM/DD).
+- Con el mes cerrado la pantalla no ofrece corregir ni reversar y lo dice antes; la API responde 409.
+- El camino del Excel no cambia. `reversarApertura` y la corrección comparten el espejo (`espejoDeLaApertura`).
+- Verificación `sql/tests/verificacion-102-corregir-apertura.sql` (11 casos, log en `v_log`, `RAISE EXCEPTION` si
+  falla). Tests: `apertura-correccion.test.ts`; `posteo-historico.test.ts` suma la ruta nueva.
+
+
 ## [Hotfix: el punto decimal del precio en la factura] - 2026-10-13
 
 Rama `hotfix/punto-decimal-precio` desde `main` (`d33cd4b`). Sin migraciones.

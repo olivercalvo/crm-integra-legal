@@ -341,3 +341,70 @@ export function saldosDeLasLineas(lineas: LineaDeApertura[], cuentas: Map<string
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Corregir la apertura desde la pantalla (102)
+// ---------------------------------------------------------------------------
+
+/**
+ * Una fila de la tabla editable de «Corregir la apertura». Son las mismas
+ * columnas de la plantilla, con las fechas en AAAA-MM-DD y los montos como
+ * número: la tabla se valida con `validarApertura`, la MISMA regla del Excel,
+ * para que las dos puertas no discrepen nunca.
+ */
+export interface FilaEditableDeApertura {
+  cuenta: string;
+  /** Código del cliente o proveedor (CLI-…, PRV-…), o vacío. */
+  tercero: string;
+  documento: string;
+  /** AAAA-MM-DD o vacío. */
+  fecha: string;
+  /** AAAA-MM-DD o vacío. */
+  vencimiento: string;
+  debito: number;
+  credito: number;
+}
+
+/** La tabla como la matriz de la plantilla (encabezados + una fila por línea). */
+export function matrizDeFilasEditables(filas: FilaEditableDeApertura[]): unknown[][] {
+  return [
+    [...ENCABEZADOS_APERTURA],
+    ...filas.map((f) => [
+      f.cuenta ?? "",
+      f.tercero ?? "",
+      f.documento ?? "",
+      f.fecha ?? "",
+      f.vencimiento ?? "",
+      f.debito ? f.debito : "",
+      f.credito ? f.credito : "",
+    ]),
+  ];
+}
+
+/**
+ * Valida la tabla con `validarApertura`. En la plantilla la fila 1 es el
+ * encabezado; acá cada error lleva el número de LÍNEA de la tabla (fila − 1), y
+ * 0 para lo que es de toda la apertura (el cuadre).
+ */
+export function validarFilasEditables(filas: FilaEditableDeApertura[], ctx: ContextoDeApertura): ResultadoDeApertura {
+  // Una fila vacía de la tabla también es una línea que se quiere quitar: se omite
+  // igual que en el Excel, pero la numeración tiene que seguir la de la pantalla.
+  const r = validarApertura(matrizDeFilasEditables(filas), { ...ctx, formatoDeFecha: "DD/MM" });
+  return {
+    ...r,
+    errores: r.errores.map((e) => ({ ...e, fila: e.fila <= 1 ? 0 : e.fila - 1 })),
+    lineas: r.lineas.map((l) => ({ ...l, fila: l.fila - 1 })),
+  };
+}
+
+/** ¿La corrección cambia algo? Compara lo que entra al libro y a las partidas. */
+export function firmaDeLasLineas(lineas: Pick<LineaDeApertura,
+  "account_code" | "debit" | "credit" | "client_id" | "supplier_id" | "documento_externo" | "fecha_documento" | "vencimiento">[],
+  cuentas: Map<string, CuentaDeApertura>): string {
+  return JSON.stringify(lineas.map((l) => {
+    // La fecha de una línea sin cuenta control ni documento no se guarda: no cuenta.
+    const guardaFecha = !!(cuentas.get(l.account_code)?.cuenta_control || l.documento_externo || l.client_id || l.supplier_id);
+    return [l.account_code, r2(l.debit), r2(l.credit), l.client_id ?? null, l.supplier_id ?? null,
+      l.documento_externo ?? null, guardaFecha ? l.fecha_documento ?? null : null, l.vencimiento ?? null];
+  }));
+}

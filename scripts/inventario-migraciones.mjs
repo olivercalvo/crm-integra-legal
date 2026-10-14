@@ -389,6 +389,11 @@ const MARCADORES = {
     tipo: "funcion", nombre: "reverse_journal_entry",
     nota: "07/10. Ventana del Bloque 1, despues de la 100. No toca datos.",
   },
+  "102_corregir_apertura.sql": {
+    que: "Corregir la apertura desde la pantalla: corregir_apertura (service_role) reversa la vigente (101) y postea la nueva (100) en una transaccion; aperturas.corrige_apertura_id liga la nueva a la que corrige",
+    tipo: "funcion", nombre: "corregir_apertura",
+    nota: "14/10. Despues de la 101. Aplicada en staging y en PRODUCCION el 14/10 (Oliver, SQL Editor). No toca datos.",
+  },
   "099_solo_importados_bloquean_y_banco_del_cobro.sql": {
     que: "post_documentos_existentes se niega solo con asientos IMPORTADOS vigentes (los manuales de ajuste se listan, no bloquean); el banco de un cobro con asiento no cambia (trigger)",
     tipo: "funcion", nombre: "finanzas_banco_de_cobro_contabilizado",

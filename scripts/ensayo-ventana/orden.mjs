@@ -91,6 +91,8 @@ export const BLOQUE_C = [
   // cuando Josuarth revise cada mes y confirme la fecha de la apertura.
   "097_posteo_de_documentos_existentes", "098_un_mes_un_metodo_en_los_dos_sentidos",
   "099_solo_importados_bloquean_y_banco_del_cobro", "100_apertura", "101_reversar_apertura",
+  // 14/10: corregir la apertura desde la pantalla (reversa + nueva, una transacción).
+  "102_corregir_apertura",
 ].map((n) => p(`${n}.sql`));
 
 /** Ventana APARTE, después de la del Bloque 1. La 088 (legado) no va todavía. */
@@ -145,5 +147,6 @@ export const VERIFICACIONES = {
   // 07/10: la del posteo con la 098 y la 099 ya aplicadas (sus casos 4, 4b, 8, 9 y 10).
   [p("099_solo_importados_bloquean_y_banco_del_cobro.sql")]: ["sql/tests/verificacion-097-posteo-de-documentos-existentes.sql"],
   [p("101_reversar_apertura.sql")]: ["sql/tests/verificacion-100-101-apertura.sql"],
+  [p("102_corregir_apertura.sql")]: ["sql/tests/verificacion-102-corregir-apertura.sql"],
   [p("084_audit_log_solo_agregar.sql")]: ["sql/tests/verificacion-084-audit-log-solo-agregar.sql"],
 };

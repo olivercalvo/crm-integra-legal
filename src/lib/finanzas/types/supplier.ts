@@ -64,10 +64,14 @@ export interface SupplierRow {
 
 /** Item del listado, con el resumen de sus gastos. */
 export interface SupplierListItem extends SupplierRow {
-  /** Cuántos gastos tiene registrados. */
-  expense_count: number;
-  /** Cuánto se le debe hoy (gastos pendientes de pago). */
-  pending_total: number;
+  /**
+   * Documentos con saldo por pagar hoy: compras, gastos de trámite y partidas
+   * del libro (importación de asientos, apertura) con este proveedor como
+   * tercero. Sale de la antigüedad por pagar (14/10/2026).
+   */
+  pendientes_count: number;
+  /** Saldo por pagar hoy, el MISMO de su fila en la antigüedad por pagar. */
+  saldo: number;
 }
 
 /** Payload de creación. */

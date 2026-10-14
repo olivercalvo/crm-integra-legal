@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ExternalLink, Pin, PinOff } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Pin, PinOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getActiveItemHref, getActiveTab, getSidebarGroups, getSidebarItems } from "@/lib/nav-config";
+import { useGruposAbiertos } from "./use-grupos-abiertos";
 
 const STORAGE_KEY = "nav-sidebar-mode";
 type Mode = "pinned" | "auto";
@@ -63,6 +64,10 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
   const items = getSidebarItems(activeTab, userRole);
   const groups = getSidebarGroups(activeTab, userRole);
   const activeHref = getActiveItemHref(items, pathname);
+  // 14/10/2026 (Josuarth, ajuste de Oliver): cada grupo se abre y se cierra;
+  // todos arrancan cerrados, se recuerda lo que la persona abrió, y el título
+  // del grupo de la página actual va resaltado.
+  const { abiertos, alternar, activo } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
 
   // No mostrar sidebar si no hay items para este tab/rol (ej: estás en `/`
   // sin tab activo). El layout sigue funcionando sin él.
@@ -87,19 +92,33 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
       )}
     >
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-3 space-y-1">
-        {groups.map(({ group, items: delGrupo }, gi) => (
+        {groups.map(({ group, items: delGrupo }, gi) => {
+          const abierto = !group || abiertos.has(group);
+          return (
           <div key={group ?? "items"} className="space-y-1">
             {/* Requerimiento 44: el menú de Finanzas va por proceso. Expandido,
-                el título del grupo; colapsado, una línea entre grupos. */}
+                el título del grupo, que lo abre y lo cierra (14/10/2026);
+                colapsado, una línea entre grupos. */}
             {group &&
               (expanded ? (
-                <p className={cn("px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-integra-gold/80", gi > 0 ? "pt-3" : "pt-1")}>
+                <button
+                  type="button"
+                  onClick={() => alternar(group)}
+                  aria-expanded={abierto}
+                  aria-current={group === activo ? "true" : undefined}
+                  className={cn(
+                    "flex w-full min-h-[36px] items-center gap-1.5 rounded-md px-3 pb-1 text-left text-[11px] font-semibold uppercase tracking-wider hover:text-integra-gold",
+                    group === activo ? "bg-white/10 text-integra-gold" : "text-integra-gold/70",
+                    gi > 0 ? "pt-3" : "pt-1"
+                  )}
+                >
+                  {abierto ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
                   {group}
-                </p>
+                </button>
               ) : (
                 gi > 0 && <div className="mx-3 my-2 border-t border-white/15" aria-hidden />
               ))}
-        {delGrupo.map((item) => {
+        {abierto && delGrupo.map((item) => {
           const Icon = item.icon;
           const active = item.href === activeHref;
           return (
@@ -148,7 +167,8 @@ export function ContextualSidebar({ userRole, onModeChange }: ContextualSidebarP
           );
         })}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="border-t border-white/10 p-2">

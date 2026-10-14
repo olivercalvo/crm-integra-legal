@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SupplierListItem, SupplierRow } from "@/lib/finanzas/types/supplier";
 import { TIPOS_VALIDOS_COMO_DEFAULT_DE_PROVEEDOR } from "@/lib/finanzas/contabilidad/cuentas-de-gasto";
+import { cargarSaldosDeProveedores } from "@/lib/finanzas/queries/saldos-de-proveedores";
 import type { AccountType } from "@/lib/finanzas/types/chart-of-account";
 
 type DB = SupabaseClient;
@@ -27,11 +28,12 @@ export interface ListSuppliersParams {
 }
 
 /**
- * Listado con el resumen de gastos de cada proveedor.
+ * Listado con el saldo por pagar de cada proveedor.
  *
- * Los totales se agregan en la app y no en SQL a propósito: son pocos
- * proveedores y así el listado no depende de una vista que después haya que
- * mantener en dos bases.
+ * 🔴 El saldo y el conteo salen de la ANTIGÜEDAD POR PAGAR de hoy
+ * (`cargarSaldosDeProveedores`), no de las compras del módulo: así cuentan
+ * también las partidas de 200001 que entraron por la importación de asientos o
+ * por la apertura, y el número cuadra con el reporte (14/10/2026).
  */
 export async function listSuppliers(
   db: DB,
@@ -58,30 +60,14 @@ export async function listSuppliers(
   const filas = (data ?? []) as unknown as SupplierRow[];
   if (filas.length === 0) return [];
 
-  const { data: gastos } = await db
-    .from("business_expenses")
-    .select("supplier_id, total, status")
-    .eq("tenant_id", tenantId)
-    .not("supplier_id", "is", null);
-
-  const resumen = new Map<string, { count: number; pending: number }>();
-  for (const g of (gastos ?? []) as {
-    supplier_id: string;
-    total: number | string;
-    status: string;
-  }[]) {
-    const r = resumen.get(g.supplier_id) ?? { count: 0, pending: 0 };
-    r.count += 1;
-    if (g.status === "pendiente_pago") r.pending += Number(g.total);
-    resumen.set(g.supplier_id, r);
-  }
+  const saldos = await cargarSaldosDeProveedores(db, tenantId);
 
   return filas.map((s) => {
-    const r = resumen.get(s.id);
+    const r = saldos.get(s.id);
     return {
       ...s,
-      expense_count: r?.count ?? 0,
-      pending_total: round2(r?.pending ?? 0),
+      pendientes_count: r?.pendientes ?? 0,
+      saldo: round2(r?.saldo ?? 0),
     };
   });
 }

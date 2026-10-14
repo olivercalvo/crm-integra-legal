@@ -41,11 +41,18 @@ test("reversar: admin, abogada y contador. Asistente no", () => {
   assert.deepEqual(rolesDelGuard(leer(RUTA_REVERSAR)), ["admin", "abogada", "contador"]);
 });
 
-test("registrar un cobro es admin y abogada: el contador NO, aunque desde el 21/09 vea el listado", () => {
-  assert.deepEqual(rolesDelGuard(leer(RUTA_REGISTRAR)), ["admin", "abogada"]);
+test("registrar un cobro: admin, abogada y, desde el 14/10/2026 (Oliver), el contador", () => {
+  assert.deepEqual(rolesDelGuard(leer(RUTA_REGISTRAR)), ["admin", "abogada", "contador"]);
   // La ruta multi-factura (Parte B) tiene EXACTAMENTE el mismo guard: son dos
   // puertas a la misma createPayment.
-  assert.deepEqual(rolesDelGuard(leer(RUTA_REGISTRAR_MULTI)), ["admin", "abogada"]);
+  assert.deepEqual(rolesDelGuard(leer(RUTA_REGISTRAR_MULTI)), ["admin", "abogada", "contador"]);
+});
+
+test("🔴 registrar es una bandera aparte: canMutate (anular, eliminar, emitir) sigue sin el contador", () => {
+  const src = leer(PAGINA);
+  assert.match(src, /const canRegister = \(puedeAccionar \|\| userRole === "contador"\) && !esDePrueba;/);
+  assert.match(src, /canRegister=\{canRegister && !anulacionAMedias\}/);
+  assert.match(leer(SECCION), /const showRegisterButton = canRegister && balanceDue > 0\.001;/);
 });
 
 test("eliminar un cobro sigue siendo admin y abogada: el contador NO", () => {

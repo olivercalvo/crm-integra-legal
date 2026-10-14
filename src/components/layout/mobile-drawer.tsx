@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getActiveItemHref, getActiveTab, getSidebarGroups, getSidebarItems, getVisibleTabs } from "@/lib/nav-config";
+import { useGruposAbiertos } from "./use-grupos-abiertos";
 
 interface MobileDrawerProps {
   userRole: string;
@@ -24,6 +25,8 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
   const items = getSidebarItems(activeTab, userRole);
   const groups = getSidebarGroups(activeTab, userRole);
   const activeHref = getActiveItemHref(items, pathname);
+  // Los MISMOS grupos abiertos que el sidebar (14/10/2026).
+  const { abiertos, alternar, activo } = useGruposAbiertos(activeTab, userRole, groups, activeHref);
 
   return (
     <>
@@ -96,14 +99,27 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
               Selecciona un módulo arriba para ver las opciones.
             </p>
           ) : (
-            groups.map(({ group, items: delGrupo }, gi) => (
+            groups.map(({ group, items: delGrupo }, gi) => {
+              const abierto = !group || abiertos.has(group);
+              return (
               <div key={group ?? "items"} className="space-y-1">
                 {group && (
-                  <p className={cn("px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-integra-gold/80", gi > 0 ? "pt-3" : "pt-1")}>
+                  <button
+                    type="button"
+                    onClick={() => alternar(group)}
+                    aria-expanded={abierto}
+                    aria-current={group === activo ? "true" : undefined}
+                    className={cn(
+                      "flex w-full min-h-[48px] items-center gap-2 rounded-md px-3 text-left text-xs font-semibold uppercase tracking-wider hover:text-integra-gold",
+                      group === activo ? "bg-white/10 text-integra-gold" : "text-integra-gold/70",
+                      gi > 0 && "mt-1"
+                    )}
+                  >
+                    {abierto ? <ChevronDown size={16} aria-hidden /> : <ChevronRight size={16} aria-hidden />}
                     {group}
-                  </p>
+                  </button>
                 )}
-            {delGrupo.map((item) => {
+            {abierto && delGrupo.map((item) => {
               const Icon = item.icon;
               const active = item.href === activeHref;
               return (
@@ -124,7 +140,8 @@ export function MobileDrawer({ userRole, open, onClose }: MobileDrawerProps) {
               );
             })}
               </div>
-            ))
+              );
+            })
           )}
         </nav>
       </aside>

@@ -9,6 +9,11 @@ import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { listarCuentasDeBanco } from "@/lib/finanzas/queries/tesoreria-para-asiento";
 import { ExpenseRow } from "@/components/expenses/expense-actions";
+import {
+  MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA,
+  MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA,
+  gastosConAsiento,
+} from "@/lib/finanzas/contabilidad/gasto-tramite-en-el-libro";
 import { PaymentRow } from "@/components/expenses/payment-actions";
 import { AddTaskForm, CompleteTaskButton } from "@/components/cases/add-task-form";
 import { CaseStatusChanger } from "@/components/cases/case-status-changer";
@@ -226,6 +231,9 @@ export default async function ExpedienteDetailPage({
     .filter((u) => u.role === "abogada")
     .map((u) => ({ id: u.id, full_name: u.name }));
 
+  // 14/10/2026: un gasto en el libro no se edita ni se elimina (el lápiz y la
+  // papelera salen deshabilitados con el motivo; la ruta responde 409).
+  const enElLibro = await gastosConAsiento(db, tenantId, expenses.map((e) => e.id as string));
   const expensesTramite = expenses.filter((e) => (e as Record<string, unknown>).expense_type !== "administrativo");
   const expensesAdmin = expenses.filter((e) => (e as Record<string, unknown>).expense_type === "administrativo");
   const totalTramite = expensesTramite.reduce((sum, e) => sum + Number(e.amount), 0);
@@ -701,10 +709,13 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEditar={enElLibro.has(e.id) ? MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA : null}
                           bloqueoEliminar={
-                            esContabilizadoFuera(e.date, inicio)
-                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
-                              : null
+                            enElLibro.has(e.id)
+                              ? MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA
+                              : esContabilizadoFuera(e.date, inicio)
+                                ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                                : null
                           }
                           colorClass="text-red-600"
                         />
@@ -806,10 +817,13 @@ export default async function ExpedienteDetailPage({
                             receipt_filename: (e as Record<string, unknown>).receipt_filename as string | null,
                           }}
                           canEdit={userRole === "admin" || userRole === "abogada"}
+                          bloqueoEditar={enElLibro.has(e.id) ? MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_EDITA : null}
                           bloqueoEliminar={
-                            esContabilizadoFuera(e.date, inicio)
-                              ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
-                              : null
+                            enElLibro.has(e.id)
+                              ? MENSAJE_GASTO_EN_EL_LIBRO_NO_SE_ELIMINA
+                              : esContabilizadoFuera(e.date, inicio)
+                                ? mensajeContabilizadoFueraNoSeAnula("gasto_tramite", e.concept ?? null, e.date, inicio)
+                                : null
                           }
                           colorClass="text-red-600"
                         />

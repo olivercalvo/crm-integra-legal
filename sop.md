@@ -3764,3 +3764,14 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
    (`cargarAsientoDelDocumento`, o `NOT EXISTS reversión` en SQL), nunca `maybeSingle()` sobre (source_type, source_id).
 6. **Historial:** `compra_correcciones` (versión 2, 3…) con la foto antes y después; la versión 1 es el asiento original.
    Inmutable.
+
+## SOP-053: Un gasto de trámite en el libro no se edita ni se elimina (14/10/2026)
+
+1. «En el libro» = existe un asiento `gasto_tramite` del gasto (`gastosConAsiento`), el mismo criterio de la base
+   (`gasto_tramite_tiene_asiento`); también si se reversó.
+2. La ruta responde 409 con el mensaje de la pantalla, nunca 500: PATCH si toca monto, concepto, fecha, fecha de
+   registro o un N.º de factura ya cargado; DELETE siempre, y ANTES de borrar el comprobante del almacenamiento.
+3. El comprobante NO se bloquea: el alta lo adjunta con un PATCH después de postear el gasto.
+4. En pantalla, deshabilitado con `aria-disabled` (no `disabled`), para que el toque en el celular muestre el motivo.
+5. Corregir un gasto contabilizado (reversa + asiento nuevo + historial) es la próxima iteración (ver `task_plan.md`).
+

@@ -1,13 +1,13 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
-## ▶ PENDIENTE: «Editar gasto» en gastos de trámite contabilizados (defecto, 14/10/2026)
+## ▶ PRÓXIMA ITERACIÓN: corregir gastos de trámite contabilizados
 
-- El lápiz «Editar gasto» de la pestaña Gastos del caso (`src/components/expenses/expense-actions.tsx`) se ofrece
-  también en gastos de trámite que ya tienen asiento. Al guardar, `PATCH /api/expenses/[id]` responde **500** («Error
-  al actualizar el gasto»): la 038/049 congela monto, concepto y fecha de un gasto en el libro. Es el mismo defecto
-  que tenía la compra antes de la 103. Visto en el código; no se probó en el navegador.
-- Camino: «Corregir» con el criterio de la 102/103 (reversa + asiento nuevo, motivo, historial), o mientras tanto
-  no ofrecer el lápiz en un gasto contabilizado y mandar a reversarlo.
+- **Corregir gastos de trámite contabilizados igual que compras (reversa + asiento nuevo + historial).** Mismo
+  criterio que la 102/103: en UNA transacción, motivo obligatorio, período abierto en la fecha original y en la
+  nueva, sin pagos aplicados.
+- Mientras tanto (hotfix `hotfix/editar-gasto-tramite`, 14/10/2026): con el gasto en el libro, el lápiz y la
+  papelera de la pestaña Gastos del caso salen deshabilitados con el motivo, y `PATCH`/`DELETE /api/expenses/[id]`
+  responden 409 (antes 500). El comprobante se sigue adjuntando.
 
 ## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Partes 2 y 3)
 

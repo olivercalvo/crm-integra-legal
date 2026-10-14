@@ -918,3 +918,13 @@ vencimiento, débito y crédito. Se agregan y quitan líneas; el pie muestra los
 escribe. «Revisar» aplica las reglas del Excel, marca los errores debajo de cada línea y muestra el saldo por cuenta
 antes y después. Recién sin errores aparecen el motivo (obligatorio) y «Guardar la corrección», con confirmación.
 Al pie, «Historial de la apertura»: cada versión con su origen, motivo, usuario, fecha y reversión.
+
+## Menú de Finanzas colapsable y saldo de proveedores (14/10/2026)
+
+- Cada grupo del menú (Ventas, Compras, Asientos, Reportes, Configuración) se abre y se cierra con su título, que
+  lleva una flecha. Al entrar, sólo está abierto el grupo de la página actual; lo que la persona deja abierto se
+  recuerda en ese navegador. Igual en el menú del celular.
+- Proveedores: «Docs. pendientes» y «Saldo por pagar», los mismos de la antigüedad por pagar de hoy. La ficha muestra
+  «Saldo por pagar» con cada documento o partida del libro, y debajo «Compras registradas», el historial del módulo.
+- El contador ve «Registrar cobro» en Cobros y en el detalle de la factura.
+

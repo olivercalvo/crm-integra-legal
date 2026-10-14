@@ -1,5 +1,13 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PARA RETOMAR (14/10/2026: hotfix del contador, proveedores y menú)
+
+- **Rama:** `hotfix/contador-cobros-proveedores` desde `main` (`0554b42`). Sin migraciones. Sin merge hasta el
+  «sí, merge» de Oliver.
+- **Staging quedó con datos de prueba:** proveedor PRV-004 «Panamá Star (prueba staging)» con la importación
+  `bfe8d40b` (asiento 185, 600.00 en 200001), y el cobro CO-000016 del contador sobre FAC-HON-000031 (asiento 186).
+- **Pendiente (req. 23):** pantalla de pagos a proveedores que pague compras y partidas importadas.
+
 ## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Parte 1 en producción)
 
 - **Rama:** `feat/correcciones-contables` desde `main` (`233cf35`), mergeada a `main` y `develop` el 14/10 con el

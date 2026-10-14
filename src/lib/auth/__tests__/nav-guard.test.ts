@@ -418,9 +418,10 @@ test("el contador puede abrir el detalle de una factura, pero no el módulo de v
   );
 });
 
-test("el contador abre el listado de cobros (21/09/2026, Josuarth), pero no el alta", () => {
+test("el contador abre el listado de cobros (21/09/2026) y registra (14/10/2026, Oliver)", () => {
   assert.equal(puedeAccederA("contador", "/finanzas/cobros"), true, "el listado sí");
-  assert.equal(puedeAccederA("contador", "/finanzas/cobros/nuevo"), false, "registrar no");
+  assert.equal(puedeAccederA("contador", "/finanzas/cobros/nuevo"), true, "registrar sí, desde el 14/10");
+  assert.equal(puedeAccederA("contador", "/finanzas/cobros/otra-cosa"), false, "sólo los dos patrones exactos");
   // Y el menú se lo ofrece: si alguien saca el rol de nav-config sin sacar el
   // patrón (o al revés), el test de arriba que cruza sidebar contra rutas grita.
   assert.equal(puedeAccederA("abogada", "/finanzas/cobros/nuevo"), true);

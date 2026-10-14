@@ -23,8 +23,13 @@ interface Props {
   balanceDue: number;
   /** Las cuentas ofrecidas como banco del cobro. */
   bancos: { code: string; name: string }[];
-  /** True si el rol del usuario actual puede registrar/eliminar pagos. */
+  /** True si el rol del usuario actual puede ELIMINAR cobros sin asiento (admin y abogada). */
   canMutate: boolean;
+  /**
+   * True si puede REGISTRAR un cobro: admin, abogada y, desde el 14/10/2026,
+   * el contador. Sin el dato, la de `canMutate`.
+   */
+  canRegister?: boolean;
   /**
    * True si puede REVERSAR un cobro contabilizado. Es una bandera aparte de
    * `canMutate` a propósito: el contador reversa (corregir el libro es su
@@ -47,7 +52,7 @@ interface Props {
  * Sección "Pagos registrados" del detalle de factura.
  * Visible cuando status ∈ emitida/parc/pagada. Muestra:
  *   - Resumen Total / Pagado / Saldo
- *   - Botón "Registrar cobro" (visible solo si balance_due > 0 y canMutate). Un pago es dinero que sale; esto es un cobro.
+ *   - Botón "Registrar cobro" (visible solo si balance_due > 0 y canRegister). Un pago es dinero que sale; esto es un cobro.
  *   - Tabla con fila por pago (fecha, monto, método, referencia, registrado por)
  *   - Acción por fila, según el cobro:
  *       · sin asiento en el libro → Eliminar (canMutate)
@@ -63,6 +68,7 @@ export function PaymentsSection({
   amountPaid,
   balanceDue,
   canMutate,
+  canRegister = canMutate,
   canReverse,
   saldosAFavor = [],
   canApplyCredit = false,
@@ -71,7 +77,7 @@ export function PaymentsSection({
   const vigentes = payments.filter((p) => !p.reversion);
   const reversados = payments.length - vigentes.length;
   const hasPayments = payments.length > 0;
-  const showRegisterButton = canMutate && balanceDue > 0.001;
+  const showRegisterButton = canRegister && balanceDue > 0.001;
   // La columna de acciones siempre existe: el recibo en PDF lo baja cualquiera
   // que vea esta pantalla (admin, abogada, contador). Reversar/Eliminar siguen
   // gateados por canReverse / canMutate.

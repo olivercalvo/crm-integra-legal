@@ -93,6 +93,8 @@ export const BLOQUE_C = [
   "099_solo_importados_bloquean_y_banco_del_cobro", "100_apertura", "101_reversar_apertura",
   // 14/10: corregir la apertura desde la pantalla (reversa + nueva, una transacción).
   "102_corregir_apertura",
+  // 14/10: corregir una compra contabilizada (reversa + asiento nuevo, una transacción).
+  "103_corregir_compra",
 ].map((n) => p(`${n}.sql`));
 
 /** Ventana APARTE, después de la del Bloque 1. La 088 (legado) no va todavía. */
@@ -148,5 +150,6 @@ export const VERIFICACIONES = {
   [p("099_solo_importados_bloquean_y_banco_del_cobro.sql")]: ["sql/tests/verificacion-097-posteo-de-documentos-existentes.sql"],
   [p("101_reversar_apertura.sql")]: ["sql/tests/verificacion-100-101-apertura.sql"],
   [p("102_corregir_apertura.sql")]: ["sql/tests/verificacion-102-corregir-apertura.sql"],
+  [p("103_corregir_compra.sql")]: ["sql/tests/verificacion-103-corregir-compra.sql"],
   [p("084_audit_log_solo_agregar.sql")]: ["sql/tests/verificacion-084-audit-log-solo-agregar.sql"],
 };

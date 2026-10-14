@@ -747,6 +747,13 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **La tabla se valida con `validarApertura`, la MISMA regla del Excel** (`validarFilasEditables`). «Revisar» es en
   seco y su hash ata «Guardar». El Excel sigue como estaba. SOP-050.
 
+### Corregir una compra contabilizada (desde 2026-10-14 — `103` aplicada en staging y en PRODUCCIÓN el 14/10)
+- 🔴 **«Corregir» en vez de «Editar»** en una compra con asiento: `corregir_compra` reversa el asiento vigente con SU
+  fecha, actualiza la compra y postea el corregido en UNA transacción, con motivo y versión (`compra_correcciones`).
+  Con pagos, NC o el mes cerrado, no: la pantalla lo dice antes de editar. SOP-052.
+- 🔴 **Una compra puede tener varios asientos `gasto`** (uno por versión). El vigente es el que nadie reversó
+  (`cargarAsientoDelDocumento`); el UNIQUE de la 034 excluye las llaves `correccion:%`.
+
 ### Documentos de prueba (desde 2026-10-05 — `094` aplicada en staging, `095` escrita)
 - 🔴 **La marca es del DOCUMENTO** (`de_prueba` en facturas/ND, NC, cobros, cobros y gastos del caso). La del
   cliente (`es_de_prueba`) sólo hace nacer de prueba lo nuevo y **ningún reporte filtra por ella**:

@@ -3745,3 +3745,22 @@ llave `finanzas.de_prueba_override`. Detalle: `docs/finanzas/propuesta-corte-qui
 4. **Menú:** todos los grupos arrancan cerrados; sólo se abre lo guardado; el grupo de la página actual se
    resalta, no se abre. La regla vive en `lib/nav-grupos.ts`. localStorage siempre con try/catch.
 
+## SOP-052: Corregir una compra contabilizada (14/10/2026)
+
+1. **Corregir nunca edita el libro.** `corregir_compra` (103), en UNA transacción: reversa el asiento vigente con
+   SU fecha (el auxiliar y el mayor coinciden en cualquier corte), actualiza la compra y sus líneas, y postea el
+   asiento corregido con la fecha de registro nueva. Si algo falla, no queda nada.
+2. **Nada reimplementado.** Validaciones del alta (`validarCuentasDeLineas`, `resolverLineasDeCompra`,
+   `resolverFechaDeRegistro`, `asegurarFechaDesdeElInicio`), asiento de `construirAsientoDeCompra` (con
+   `armarCompraParaAsiento`), espejo de `construirAsientoDeReversion`. La base verifica el espejo contra el libro y
+   que el asiento nuevo acredite 200001 por el total con el proveedor.
+3. **No se corrige** con pagos registrados (también un saldo heredado), con NC del proveedor (con o sin aplicación) o
+   con el mes del asiento vigente cerrado. El mensaje dice qué reversar primero. La pantalla lo muestra ANTES de
+   editar (`estadoDeCorreccionDeCompra`); la base lo vuelve a exigir con el mismo texto.
+4. **Un asiento por documento, salvo correcciones.** El UNIQUE de la 034 excluye `idempotency_key LIKE 'correccion:%'`;
+   cada versión lleva `correccion:gasto:<compra>:v<n>` (y `:reversa`), única por el UNIQUE de idempotency_key. Fuera
+   de una corrección, un segundo asiento `gasto` de la misma compra sigue rechazado.
+5. **Varios asientos `gasto` por compra.** Quien busque «el» asiento de una compra usa el vigente
+   (`cargarAsientoDelDocumento`, o `NOT EXISTS reversión` en SQL), nunca `maybeSingle()` sobre (source_type, source_id).
+6. **Historial:** `compra_correcciones` (versión 2, 3…) con la foto antes y después; la versión 1 es el asiento original.
+   Inmutable.

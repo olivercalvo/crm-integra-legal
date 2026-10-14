@@ -9,6 +9,7 @@ import {
 import { listSupplierOptions } from "@/lib/finanzas/queries/suppliers";
 import { listTaxCodesActive } from "@/lib/finanzas/queries/catalogs";
 import { BusinessExpenseForm } from "../../_components/business-expense-form";
+import { estadoDeCorreccionDeCompra } from "@/lib/finanzas/api/business-expenses";
 
 /**
  * El título de la pestaña. Sin esto el navegador muestra "CRM Integra Legal" en
@@ -61,6 +62,10 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
   );
   if (!expense) notFound();
 
+  // 103: contabilizada → se CORRIGE (reversa + asiento nuevo, con motivo). Si no
+  // se puede (pagos, NC, mes cerrado), se dice acá y no se ofrece el formulario.
+  const correccion = await estadoDeCorreccionDeCompra(ctx.db, ctx.tenantId, params.id);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
@@ -70,15 +75,28 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           showLabel
         />
         <div>
-          <h1 className="text-2xl font-bold text-integra-navy">Editar compra</h1>
+          <h1 className="text-2xl font-bold text-integra-navy">
+            {correccion.contabilizada ? "Corregir compra" : "Editar compra"}
+          </h1>
           <p className="text-sm text-gray-500 truncate max-w-[600px]">
             {expense.description}
           </p>
         </div>
       </div>
 
+      {correccion.contabilizada && correccion.bloqueo ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="note">
+          <p className="font-semibold">Esta compra no se puede corregir todavía.</p>
+          <p className="mt-1">{correccion.bloqueo}</p>
+        </div>
+      ) : (
       <BusinessExpenseForm
         mode="edit"
+        correccion={
+          correccion.contabilizada && correccion.asiento
+            ? { entryEsperado: correccion.asiento.id, asientoNumero: correccion.asiento.entryNumber }
+            : undefined
+        }
         bancos={[]}
         accounts={cuentasParaLineaDeCompra(
           accounts,
@@ -114,6 +132,7 @@ export default async function EditarGastoBufetePage({ params }: PageProps) {
           notes: expense.notes,
         }}
       />
+      )}
     </div>
   );
 }

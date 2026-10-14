@@ -747,7 +747,7 @@ Analyze → Document en `findings.md` → Patch → Test → Update SOP → Comm
 - **La tabla se valida con `validarApertura`, la MISMA regla del Excel** (`validarFilasEditables`). «Revisar» es en
   seco y su hash ata «Guardar». El Excel sigue como estaba. SOP-050.
 
-### Corregir una compra contabilizada (desde 2026-10-14 — `103` aplicada SOLO en staging)
+### Corregir una compra contabilizada (desde 2026-10-14 — `103` aplicada en staging y en PRODUCCIÓN el 14/10)
 - 🔴 **«Corregir» en vez de «Editar»** en una compra con asiento: `corregir_compra` reversa el asiento vigente con SU
   fecha, actualiza la compra y postea el corregido en UNA transacción, con motivo y versión (`compra_correcciones`).
   Con pagos, NC o el mes cerrado, no: la pantalla lo dice antes de editar. SOP-052.

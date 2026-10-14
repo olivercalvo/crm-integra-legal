@@ -1,17 +1,23 @@
 # TASK_PLAN.MD — CRM INTEGRA LEGAL
 
+## ▶ PENDIENTE: «Editar gasto» en gastos de trámite contabilizados (defecto, 14/10/2026)
+
+- El lápiz «Editar gasto» de la pestaña Gastos del caso (`src/components/expenses/expense-actions.tsx`) se ofrece
+  también en gastos de trámite que ya tienen asiento. Al guardar, `PATCH /api/expenses/[id]` responde **500** («Error
+  al actualizar el gasto»): la 038/049 congela monto, concepto y fecha de un gasto en el libro. Es el mismo defecto
+  que tenía la compra antes de la 103. Visto en el código; no se probó en el navegador.
+- Camino: «Corregir» con el criterio de la 102/103 (reversa + asiento nuevo, motivo, historial), o mientras tanto
+  no ofrecer el lápiz en un gasto contabilizado y mandar a reversarlo.
+
 ## ▶ PARA RETOMAR (14/10/2026: correcciones contables, Partes 2 y 3)
 
-- **Rama:** `feat/correcciones-compras` desde `23f0a72` (la Parte 1), con `main` (`33fd1ac`) mergeado el
-  14/10. Sin merge a `main` hasta que la `103` pase en producción y Oliver diga «sí, merge».
-- **Parte 2 (corregir compras):** hecha y probada en staging. `103` aplicada SOLO en staging; va a producción después
-  de la 102, con `sql/tests/verificacion-103-produccion.sql`.
+- **Rama:** `feat/correcciones-compras`, mergeada a `main` y `develop` el 14/10 con el «sí, merge» de Oliver.
+- **Parte 2 (corregir compras): en producción.** La `103` la aplicó Oliver en producción el 14/10 (deploy log en
+  `changelog.md`).
 - **Staging:** la compra «prueba» (176bf1b2…) quedó con sus cifras de antes (versión 4 = versión 1); las versiones 2 y
   3 son de la prueba. Septiembre se cerró y se reabrió durante la prueba (deja un ancla de cierre, como todo cierre).
 - **Parte 3 (Libro Mayor):** encabezado fijo y barra horizontal fija al pie. No entra en 1366 sin desplazar.
-- **Pendiente de decidir (Oliver):** «Editar gasto» en la pestaña Gastos del caso (`expense-actions.tsx`) se ofrece
-  también en gastos de trámite contabilizados, y al guardar falla (la 038/049 congela monto y fecha). Mismo defecto
-  que tenía la compra. No se tocó.
+- **Pendiente:** «Editar gasto» en gastos de trámite contabilizados (ver arriba).
 
 ## ▶ PARA RETOMAR (14/10/2026: hotfix del contador, proveedores y menú)
 

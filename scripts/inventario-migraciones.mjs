@@ -397,7 +397,7 @@ const MARCADORES = {
   "103_corregir_compra.sql": {
     que: "Corregir una compra contabilizada: corregir_compra (service_role) reversa el asiento vigente con su fecha, actualiza la compra y postea el corregido en una transaccion; compra_correcciones guarda cada version; el UNIQUE de un asiento por documento deja afuera las correcciones",
     tipo: "funcion", nombre: "corregir_compra",
-    nota: "14/10. Despues de la 102. Aplicada en staging el 14/10. No toca datos. Recrea el indice journal_entries_un_asiento_por_documento.",
+    nota: "14/10. Despues de la 102. Aplicada en staging y en PRODUCCION el 14/10 (Oliver, SQL Editor, sin lock timeout). No toca datos. Recrea el indice journal_entries_un_asiento_por_documento.",
   },
   "099_solo_importados_bloquean_y_banco_del_cobro.sql": {
     que: "post_documentos_existentes se niega solo con asientos IMPORTADOS vigentes (los manuales de ajuste se listan, no bloquean); el banco de un cobro con asiento no cambia (trigger)",

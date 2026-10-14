@@ -1,5 +1,22 @@
 # CHANGELOG.MD — CRM INTEGRA LEGAL
 
+## [Deploy log: 103 en producción y merge de las Partes 2 y 3] - 2026-10-14
+
+**Migración `103_corregir_compra.sql` aplicada en PRODUCCIÓN el 14/10/2026** por Oliver desde el SQL Editor de
+Supabase, con el paquete de `sql/tests/` (`12b7f06`), en cuatro queries:
+1. Pre-flight (`preflight-103-produccion.sql`): las siete primeras en `true`, 21 asientos, 0 sesiones activas.
+   Después de aplicar: `ya_tiene_103` en `true` y el índice `journal_entries_un_asiento_por_documento` con
+   `correccion:%`.
+2. La `103` (sin comentarios, con `lock_timeout = '5s'`): Success, sin lock timeout.
+3. Verificación (`verificacion-103-produccion.sql`): **«103: todos los casos pasaron.»** con ✅ en [1] a [9], [11],
+   [12] y [13], y ⏭ en [10] (producción no tiene compras con nota de crédito).
+4. Rastro (`rastro-103-produccion.sql`), idéntico antes y después de la verificación: 21 asientos, correlativo 21,
+   13 compras, 170 líneas, 0 pagos, 18 proveedores, 0 períodos cerrados, 1 ancla, 0 correcciones, bitácora `null`
+   (producción no tiene el esquema `auditoria`).
+
+Después: merge `--no-ff` de `feat/correcciones-compras` a `main` y a `develop` («sí, merge» de Oliver).
+**Pendiente:** «Editar gasto» en gastos de trámite contabilizados responde 500 al guardar (ver `task_plan.md`).
+
 ## [Libro Mayor: encabezado fijo y barra horizontal siempre visible (Parte 3)] - 2026-10-14
 
 Rama `feat/correcciones-compras`. Sin migraciones.

@@ -31,7 +31,7 @@ export function SupplierExpenses({ gastos, plazo }: { gastos: Gasto[]; plazo: nu
   if (gastos.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-        <p className="text-sm font-medium text-integra-navy">Sin gastos registrados</p>
+        <p className="text-sm font-medium text-integra-navy">Sin compras registradas en el módulo</p>
         <p className="mt-1 text-xs text-gray-500">
           Cuando se cargue un gasto con este proveedor va a aparecer acá, con su vencimiento
           calculado a {paymentTermsLabel(plazo).toLowerCase()}.
@@ -40,19 +40,14 @@ export function SupplierExpenses({ gastos, plazo }: { gastos: Gasto[]; plazo: nu
     );
   }
 
-  const pendiente = gastos
-    .filter((g) => g.status === "pendiente_pago")
-    .reduce((s, g) => s + Number(g.total), 0);
-
   return (
     <div className="overflow-hidden rounded-xl border bg-white">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b bg-gray-50 px-4 py-2.5">
         <h2 className="text-sm font-semibold text-integra-navy">
-          Gastos ({gastos.length})
+          Compras registradas ({gastos.length})
         </h2>
         <p className="text-xs text-gray-600">
-          Pendiente de pago:{" "}
-          <span className="font-mono font-semibold text-gray-900">{money(pendiente)}</span>
+          Todas, pagadas o no. Lo que se debe está arriba, en «Saldo por pagar».
         </p>
       </div>
 
@@ -106,12 +101,12 @@ export function SupplierExpenses({ gastos, plazo }: { gastos: Gasto[]; plazo: nu
                     <span
                       className={
                         "inline-flex rounded-full px-2 py-0.5 text-xs font-medium " +
-                        (g.status === "pendiente_pago"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-green-100 text-green-800")
+                        (g.status === "pagado"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-amber-100 text-amber-800")
                       }
                     >
-                      {g.status === "pendiente_pago" ? "Pendiente" : "Pagado"}
+                      {g.status === "pagado" ? "Pagado" : g.status === "parcialmente_pagado" ? "Pago parcial" : "Pendiente"}
                     </span>
                   </td>
                 </tr>

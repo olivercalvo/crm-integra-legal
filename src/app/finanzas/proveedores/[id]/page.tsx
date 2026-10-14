@@ -6,6 +6,9 @@ import { getAuthenticatedContext } from "@/lib/supabase/server-query";
 import { getSupplier, proveedoresConRucRepetido } from "@/lib/finanzas/queries/suppliers";
 import { paymentTermsLabel } from "@/lib/finanzas/types/supplier";
 import { SupplierExpenses } from "../_components/supplier-expenses";
+import { SupplierPendientes } from "../_components/supplier-pendientes";
+import { cargarSaldosDeProveedores } from "@/lib/finanzas/queries/saldos-de-proveedores";
+import { RUTA_DEL_DOCUMENTO } from "@/lib/finanzas/reports/destino-documento";
 
 const ROLES = ["admin", "abogada", "contador"];
 
@@ -36,6 +39,22 @@ export default async function ProveedorDetallePage({ params }: { params: { id: s
 
   const rucRepetidos = await proveedoresConRucRepetido(ctx.db, ctx.tenantId);
   const gemelos = rucRepetidos.get(proveedor.id) ?? [];
+
+  // El saldo por pagar sale de la antigüedad (14/10/2026): incluye las partidas
+  // del libro que entraron por importación, que no son compras del módulo.
+  const saldo = (await cargarSaldosDeProveedores(ctx.db, ctx.tenantId)).get(proveedor.id) ?? null;
+  const pendientes = (saldo?.documentos ?? []).filter((d) => Math.abs(d.saldo) > 0.005);
+  // Mismo enlace que la antigüedad: el documento, o el asiento (admin y contador).
+  // nav-guard-ok: el enlace al asiento se arma sólo si `puedeAbrirElAsiento`.
+  const puedeAbrirElAsiento = ctx.userRole === "admin" || ctx.userRole === "contador";
+  const destinos = new Map<string, string>();
+  for (const d of pendientes) {
+    if (d.entryId) {
+      if (puedeAbrirElAsiento) destinos.set(d.id, `/finanzas/asientos/${d.entryId}`);
+    } else if (RUTA_DEL_DOCUMENTO[d.sourceType]) {
+      destinos.set(d.id, RUTA_DEL_DOCUMENTO[d.sourceType](d.id));
+    }
+  }
 
   const { data: gastos } = await ctx.db
     .from("business_expenses")
@@ -165,6 +184,19 @@ export default async function ProveedorDetallePage({ params }: { params: { id: s
           <p className="whitespace-pre-wrap text-sm text-gray-700">{proveedor.notes}</p>
         </div>
       )}
+
+      <SupplierPendientes
+        saldo={saldo?.saldo ?? 0}
+        documentos={pendientes.map((d) => ({
+          id: d.id,
+          numero: d.numero,
+          fecha: d.fechaReferencia,
+          diasVencido: d.diasVencido,
+          saldo: d.saldo,
+          esPartida: !!d.entryId,
+          href: destinos.get(d.id) ?? null,
+        }))}
+      />
 
       <SupplierExpenses
         gastos={(gastos ?? []) as never}

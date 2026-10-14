@@ -27,7 +27,8 @@ interface PageProps {
  */
 export default async function NuevoCobroPage({ searchParams }: PageProps) {
   const ctx = await getAuthenticatedContext();
-  if (!["admin", "abogada"].includes(ctx.userRole)) {
+  // El contador registra cobros desde el 14/10/2026 (Oliver).
+  if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     redirect("/finanzas/cobros");
   }
   const { db, tenantId } = ctx;

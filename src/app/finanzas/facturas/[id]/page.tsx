@@ -126,6 +126,10 @@ export default async function FacturaDetallePage({ params }: PageProps) {
   // hace el contador: no registra dinero nuevo, sólo dice qué factura cancela un
   // cobro que ya está en el libro. Es una bandera aparte de `canMutate`.
   const canApplyCredit = (puedeAccionar || userRole === "contador") && !esDePrueba;
+  // REGISTRAR un cobro: también el contador (Oliver, 14/10/2026). Bandera
+  // aparte de `canMutate`, que sigue siendo anular, eliminar cobros, emitir y
+  // las demás acciones de admin y abogada.
+  const canRegister = (puedeAccionar || userRole === "contador") && !esDePrueba;
   const showPaymentsSection = isEmitida ||
     invoice.status === "parcialmente_pagada" ||
     invoice.status === "pagada";
@@ -661,6 +665,7 @@ export default async function FacturaDetallePage({ params }: PageProps) {
               amountPaid={Number(invoice.amount_paid)}
               balanceDue={Number(invoice.balance_due)}
               canMutate={canMutate && !anulacionAMedias}
+              canRegister={canRegister && !anulacionAMedias}
               canReverse={canReverse}
               saldosAFavor={saldosAFavor}
               canApplyCredit={canApplyCredit && !anulacionAMedias}

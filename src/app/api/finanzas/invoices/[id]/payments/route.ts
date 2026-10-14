@@ -30,7 +30,8 @@ interface RouteParams {
  */
 export const POST = conManejoDeAuditoria(async function POST(request: NextRequest, { params }: RouteParams) {
   const ctx = await getAuthenticatedContext();
-  if (!["admin", "abogada"].includes(ctx.userRole)) {
+  // Admin, abogada y contador (el contador registra cobros desde el 14/10/2026).
+  if (!["admin", "abogada", "contador"].includes(ctx.userRole)) {
     return NextResponse.json({ error: "Sin permiso" }, { status: 403 });
   }
 
